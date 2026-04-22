@@ -60,7 +60,7 @@ Checklist:
 - [x] Keep inline message limits and oversized-paste-to-attachment behavior intact.
 - [x] Keep allowed attachment types and object-store ACL/download boundaries intact.
 - [x] Rebuild the post-call chat/files modal with the shared modal style and responsive layout.
-- [ ] Add Playwright coverage for text send, emoji send, unread badge, attachment upload/download, and read-only archive modal.
+- [x] Add Playwright coverage for text send, emoji send, unread badge, attachment upload/download, and read-only archive modal.
 
 Done:
 - [ ] Chat is usable live, notifies other participants, and the archive modal matches product modal standards on desktop and mobile.
