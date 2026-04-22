@@ -1,5 +1,5 @@
 --TEST--
-King HTTP/3 runtime can perform real local HTTPS roundtrips directly and over the dispatcher
+King HTTP/3 LSQUIC runtime can perform real local HTTPS roundtrips directly and over the dispatcher
 --SKIPIF--
 <?php
 if (trim((string) shell_exec('command -v openssl')) === '') {
@@ -11,9 +11,9 @@ if (!is_string($server) || $server === '' || !is_executable($server)) {
     echo "skip KING_QUICHE_SERVER must point at a prebuilt quiche-server binary";
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
 }
 ?>
 --INI--
@@ -99,14 +99,14 @@ var_dump($dispatcherResponse['body_bytes']);
 --EXPECT--
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 string(13) "direct-http3
 "
 int(13)
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 string(15) "dispatch-http3
 "

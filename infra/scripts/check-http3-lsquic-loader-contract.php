@@ -14,6 +14,7 @@ $runtimeInitPath = $root . '/extension/src/client/http3/runtime_init.inc';
 $requestResponsePath = $root . '/extension/src/client/http3/request_response.inc';
 $dispatchPath = $root . '/extension/src/client/http3/dispatch_api.inc';
 $errorsAndValidationPath = $root . '/extension/src/client/http3/errors_and_validation.inc';
+$oneShotWireTestPath = $root . '/extension/tests/190-http3-request-send-roundtrip.phpt';
 $errors = [];
 
 function king_http3_loader_fail(string $message): void
@@ -140,6 +141,7 @@ $runtimeInit = king_http3_loader_require_file($runtimeInitPath, $errors);
 $requestResponse = king_http3_loader_require_file($requestResponsePath, $errors);
 $dispatch = king_http3_loader_require_file($dispatchPath, $errors);
 $errorsAndValidation = king_http3_loader_require_file($errorsAndValidationPath, $errors);
+$oneShotWireTest = king_http3_loader_require_file($oneShotWireTestPath, $errors);
 
 if ($errors !== []) {
     king_http3_loader_fail(implode(PHP_EOL, $errors));
@@ -517,6 +519,25 @@ foreach ([
     'king_ce_protocol_exception',
 ] as $needle) {
     king_http3_loader_require_contains('HTTP/3 error mapper', $errorsAndValidation, $needle, $errors);
+}
+
+foreach ([
+    'king_http3_request_send(',
+    'king_client_send_request(',
+    'KING_LSQUIC_LIBRARY',
+    'lsquic_h3',
+    "string(9) \"lsquic_h3\"",
+] as $needle) {
+    king_http3_loader_require_contains('HTTP/3 one-shot wire test', $oneShotWireTest, $needle, $errors);
+}
+
+foreach ([
+    'KING_QUICHE_LIBRARY',
+    'string(9) "quiche_h3"',
+] as $forbidden) {
+    if (str_contains($oneShotWireTest, $forbidden)) {
+        $errors[] = 'HTTP/3 one-shot wire test must target LSQUIC client runtime, not ' . $forbidden;
+    }
 }
 
 if ($errors !== []) {

@@ -118,7 +118,8 @@ Done:
 - [x] LSQUIC stream callbacks now resolve a `king_http3_lsquic_request_state_t` from stream context instead of reading mutable request fields from the shared runtime.
 - [x] The active LSQUIC client path now drives one-shot and multi-request dispatch through shared runtime init, a stream-state queue, ticket reuse, transport stats, and response materialization.
 - [x] The active LSQUIC client path uses King-owned HTTP/3 request headers and excludes Quiche headers, handles, loader, init, dispatch, ticket, and stats code via backend guards.
-- [ ] `king_http3_request_send()` uses the new stack in real wire tests.
+- [x] `king_http3_request_send()` uses the new stack in real wire tests.
+- [x] `extension/tests/190-http3-request-send-roundtrip.phpt` now loads `KING_LSQUIC_LIBRARY`, exercises `king_http3_request_send()` on the wire, and asserts `transport_backend = lsquic_h3`.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
 - [x] Old Quiche loader is no longer referenced by any active include.
 
