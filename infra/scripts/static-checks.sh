@@ -74,6 +74,9 @@ ruby infra/scripts/check-ci-builds-http3-stack.rb
 echo "Checking CI HTTP/3 contract suite coverage..."
 ruby infra/scripts/check-ci-http3-contract-suites.rb
 
+echo "Checking CI migration guardrails..."
+ruby infra/scripts/check-ci-migration-guardrails.rb
+
 echo "Checking macOS/dev dependency path policy..."
 ruby infra/scripts/check-dev-path-configuration.rb
 

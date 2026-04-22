@@ -76,6 +76,7 @@ active_files = [
   '.github/workflows/ci.yml',
   '.github/workflows/release-merge-publish.yml',
   'README.md',
+  'documentation/01-hetzner-self-bootstrapping-edge-cluster/controller_demo.php',
   'documentation/operations-and-release.md',
   'documentation/pie-install.md'
 ]
@@ -87,10 +88,20 @@ forbidden = {
   'HOMEBREW_PREFIX' => 'repo build logic must not depend on Homebrew-specific env'
 }
 
+local_absolute_path_patterns = {
+  %r{/home/[A-Za-z0-9._-]+/} => 'user home absolute path',
+  %r{/Users/[A-Za-z0-9._-]+/} => 'macOS user home absolute path',
+  %r{[A-Za-z]:\\Users\\[^\\]+\\} => 'Windows user home absolute path'
+}
+
 active_files.each do |relative_path|
   source = read_repo_file(relative_path)
   forbidden.each do |literal, reason|
     failures << "#{relative_path} contains #{reason}: #{literal}" if source.include?(literal)
+  end
+
+  local_absolute_path_patterns.each do |pattern, reason|
+    failures << "#{relative_path} contains #{reason}: #{pattern.source}" if source.match?(pattern)
   end
 end
 
