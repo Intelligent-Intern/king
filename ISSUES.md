@@ -22,11 +22,26 @@ Ziel:
 - Reproduzierbare Pins fuer den neuen QUIC/HTTP3-Stack schaffen.
 
 Checklist:
-- [ ] Release-/Commit-Pins fuer den neuen Stack festlegen.
+- [x] Release-/Commit-Pins fuer den neuen Stack festlegen.
 - [ ] Checksums und Quellen in `DEPENDENCY_PROVENANCE.md` dokumentieren.
 - [ ] Neues Bootstrap-Lockfile erstellen, z. B. `infra/scripts/lsquic-bootstrap.lock`.
 - [ ] Alte `quiche-bootstrap.lock` und `quiche-workspace.Cargo.lock` als zu entfernende Quiche-Artefakte erfassen.
 - [ ] Offline-/CI-Validierung fuer Pins und Checksums ergaenzen.
+
+Pin-Entscheidung:
+
+| Komponente | Quelle | Pin | Commit | Zweck |
+| --- | --- | --- | --- | --- |
+| LSQUIC | `https://github.com/litespeedtech/lsquic.git` | `v4.6.1` | `c1ca7980107b1495298c93ab54e798fa050c3c7b` | C-basierter QUIC/HTTP3-Stack fuer den aktiven Produktpfad; aktueller Release-Pin oberhalb der dokumentierten `v4.3.1`-Mindestlinie. |
+| BoringSSL | `https://github.com/google/boringssl.git` | `0.20260413.0` | `e1acfa3193d44166ce77df74c5285afea983fc63` | Reproduzierbarer TLS-Backend-Pin ohne System-ABI- oder Homebrew-Abhaengigkeit. |
+| LSQUIC-Submodule | rekursiv aus LSQUIC `v4.6.1` | wird im neuen Lockfile fixiert | wird im neuen Lockfile fixiert | Keine floating Submodule; `git submodule status --recursive` muss in `lsquic-bootstrap.lock` einfliessen. |
+
+Pin-Regeln:
+
+- Keine floating Branches wie `master`, `main` oder lokale Checkout-Pfade.
+- Das neue Bootstrap-Lockfile muss URLs, Tags, Commits, rekursive Submodule, Checksums und Lizenzquellen festhalten.
+- Wenn `v4.6.1` die King-v1-Paritaet fuer 0-RTT, STOP_SENDING, Stream-Lifecycle, Stats oder WebSocket-over-HTTP3 nicht traegt, ist das ein Blocker und kein Grund fuer Vertragsabbau.
+- Die Pins wurden am 2026-04-22 per `git ls-remote --tags --refs` gegen die Upstream-Repositories verifiziert.
 
 Done:
 - [ ] Dependencies koennen aus Repo-eigenen Pins reproduzierbar bezogen werden.
