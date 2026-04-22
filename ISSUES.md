@@ -24,7 +24,7 @@ Ziel:
 Checklist:
 - [x] Entscheidung dokumentieren: `LSQUIC + BoringSSL` oder begruendeter Alternativstack.
 - [x] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
-- [ ] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
+- [x] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
 - [ ] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
 - [ ] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
 
@@ -57,6 +57,23 @@ Feature-Parity-Pruefung:
 Parity-Suchbasis:
 - King-Vertrag: `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/quic-and-tls.md`, `documentation/runtime-configuration.md`, `stubs/king.php`, `extension/tests/*http3*.phpt`.
 - LSQUIC API: `https://lsquic.readthedocs.io/en/stable/apiref.html`.
+
+Unsupported-/Risiko-Register:
+
+| Bereich | Status | Pflichtbehandlung |
+|---|---|---|
+| 0-RTT accepted early-data + server-disabled fallback | Blocker bis am gepinnten LSQUIC-/BoringSSL-Stand per Wire-Test bewiesen. | Kein Fallback auf normale Resumption als Ersatz; #Q-5/#Q-8/#Q-11 muessen beide Phasen wieder nachweisen. |
+| QUIC `STOP_SENDING` vs. Stream-Reset | Umsetzungsaufgabe. | `STOP_SENDING` darf nicht in generisches Reset/Close verschwinden; Mapping aus LSQUIC callbacks/read-write errors in #Q-5/#Q-8 explizit testen. |
+| Live-Stats `quic_lost_bytes` und `quic_stream_retransmitted_bytes` | Umsetzungsaufgabe mit Blocker-Fallback. | Wenn LSQUIC die Werte nicht direkt liefert, muss der Adapter sie aus echten packet-/stream-accounting Daten bilden; stale zeroes oder Dummy-Counter sind unzulaessig. |
+| Congestion-Control `bbr` | Umsetzungsaufgabe. | LSQUIC-BBR ist als BBRv1-Semantik zu dokumentieren; falls King bisher staerkere BBR-Semantik verspricht, wird das in #Q-7 Blocker statt stiller Aenderung. |
+| Feingranulare `quic.*` Optionen | Umsetzungsaufgabe. | Jede Option wird in #Q-7 gemappt; nicht abbildbare Optionen fail-closed mit Diagnose statt Ignorieren. |
+| Datagram-Optionen | Umsetzungsaufgabe. | `quic.datagrams_enable` und Queue-Limits muessen auf LSQUIC-Datagram-Callbacks/Settings abgebildet oder in #Q-7 fail-closed markiert werden. |
+| TLS reload und Server-0-RTT-Cache | Blocker bis Server-Wire-Test. | #Q-6/#Q-11 muessen zeigen, dass Reload und Cache-Verhalten aktive Listener nicht brechen. |
+| WebSocket-over-HTTP3 Honesty | Umsetzungsaufgabe. | Lokale und on-wire H3-Honesty-Slices bleiben Pflicht; keine Reduktion auf HTTP/1-/HTTP/2-WebSocket. |
+| Runtime-Backendname | Umsetzungsaufgabe. | `quiche_h3` verschwindet aus neuen Runtime-Antworten; neuer Name muss echte LSQUIC-Nutzung bedeuten, kein Alias. |
+
+Regel fuer alle Eintraege:
+- Wenn ein Punkt am Zielstack nicht korrekt belegbar ist, wird er in diesem Sprint zum Blocker oder zu einem neuen Issue. Er wird nicht aus Tests, Docs, Stubs oder Public API entfernt, um Gruen zu bekommen.
 
 Done:
 - [ ] Der Zielstack ist entschieden.
