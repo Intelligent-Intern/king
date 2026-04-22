@@ -113,7 +113,7 @@ Artefakt-Suchbasis:
 - `git ls-files | rg -i '(libquiche\\.so|quiche-server|target/|compat-artifacts|extension/quiche|^quiche/|\\.rlib$|/\\.fingerprint/|Cargo\\.lock$|quiche-workspace\\.Cargo\\.lock)'`
 
 Done:
-- [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
+- [x] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
 - [ ] Es ist klar, welche Dateien bei der Quiche-Entfernung betroffen sind.
 
 ---
