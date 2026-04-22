@@ -380,7 +380,8 @@ async function installFakeLayoutSocket(page, options = {}) {
   }, options);
 }
 
-test('admin sidebar switches layout mode and activity strategy in the call UI', async ({ page }) => {
+test('mobile admin switches layout strategy in the sidebar and moves the mini-video strip', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
   await installLayoutApiRoutes(page);
   await installFakeLayoutSocket(page);
   await page.addInitScript(
@@ -399,16 +400,29 @@ test('admin sidebar switches layout mode and activity strategy in the call UI', 
   );
 
   await page.goto('/workspace/call/room-layout-ui');
-  const layoutControls = page.locator('.call-left-layout-controls');
-  await expect(layoutControls).toBeVisible();
+  const stage = page.locator('.workspace-stage');
+  await expect(page.locator('.workspace-mini-strip')).toBeVisible();
+  await expect(stage).toHaveClass(/has-mini-strip/);
 
-  await layoutControls.getByLabel('Video layout mode').selectOption('grid');
+  const miniStripToggle = page.getByRole('button', { name: 'Move mini videos above main video' });
+  await expect(miniStripToggle).toBeVisible();
+  await miniStripToggle.click();
+  await expect(stage).toHaveClass(/mini-strip-above/);
+  await expect(page.getByRole('button', { name: 'Move mini videos below main video' })).toBeVisible();
+
+  const callSettings = page.locator('.call-left-owner-edit-block');
+  if (!(await callSettings.isVisible())) {
+    await page.getByRole('button', { name: 'Open left sidebar' }).click();
+  }
+  await expect(callSettings).toBeVisible();
+
+  await callSettings.getByLabel('Video layout mode').selectOption('grid');
   await expect(page.locator('.workspace-stage.layout-grid')).toBeVisible();
 
-  await layoutControls.getByLabel('Activity strategy').selectOption('active_speaker_main');
-  await expect(layoutControls.getByLabel('Activity strategy')).toHaveValue('active_speaker_main');
+  await callSettings.getByLabel('Activity strategy').selectOption('active_speaker_main');
+  await expect(callSettings.getByLabel('Activity strategy')).toHaveValue('active_speaker_main');
 
-  await layoutControls.getByLabel('Video layout mode').selectOption('main_only');
+  await callSettings.getByLabel('Video layout mode').selectOption('main_only');
   await expect(page.locator('.workspace-stage.layout-main-only')).toBeVisible();
 });
 

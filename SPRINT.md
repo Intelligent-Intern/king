@@ -94,7 +94,7 @@ Checklist:
 - [x] Move activity strategy controls into the left sidebar call-settings area using the existing select/control styling.
 - [x] Remove ad-hoc overlay, border, background, and color treatments that diverge from the current design system.
 - [x] Ensure call settings width aligns with neighboring sidebar controls.
-- [ ] Add responsive Playwright coverage for mobile call creation with participants, mini-video toggle, and call-settings strategy selection.
+- [x] Add responsive Playwright coverage for mobile call creation with participants, mini-video toggle, and call-settings strategy selection.
 
 Done:
 - [ ] Mobile and desktop call-management flows are feature-equivalent and visually consistent.
