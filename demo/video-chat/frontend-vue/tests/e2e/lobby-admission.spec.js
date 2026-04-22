@@ -98,6 +98,7 @@ async function installSocketInstrumentation(context) {
 
     const events = [];
     window.__videoCallSocketEvents = events;
+    window.__videoCallSockets = [];
 
     const snapshotFrame = (data) => {
       if (typeof data === 'string') {
@@ -140,6 +141,7 @@ async function installSocketInstrumentation(context) {
           super(url, protocols);
         }
         this.__kingVideoChatUrl = String(url || '');
+        window.__videoCallSockets.push(this);
         this.addEventListener('message', (event) => {
           record('in', this.__kingVideoChatUrl, event.data);
         });
@@ -376,6 +378,49 @@ async function expectRenderedLocalAndRemoteMedia(page, label) {
   ).toMatchObject({ hasLocal: true, hasRemote: true });
 }
 
+async function sendOpenSocketFrame(page, payload, urlPart = '/ws') {
+  return page.evaluate(
+    ({ payload: framePayload, urlPart: socketUrlPart }) => {
+      const sockets = Array.isArray(window.__videoCallSockets) ? window.__videoCallSockets : [];
+      const socket = [...sockets].reverse().find((candidate) => (
+        candidate
+        && candidate.readyState === WebSocket.OPEN
+        && String(candidate.url || candidate.__kingVideoChatUrl || '').includes(socketUrlPart)
+      ));
+      if (!socket) return false;
+
+      socket.send(JSON.stringify(framePayload));
+      return true;
+    },
+    { payload, urlPart },
+  );
+}
+
+async function incomingSocketErrorCount(page, { code = '', commandType = '' } = {}) {
+  return page.evaluate(
+    ({ code: expectedCode, commandType: expectedCommandType }) => {
+      const events = Array.isArray(window.__videoCallSocketEvents) ? window.__videoCallSocketEvents : [];
+      return events.filter((event) => {
+        const frame = event?.frame && typeof event.frame === 'object' ? event.frame : {};
+        if (String(event?.direction || '') !== 'in') return false;
+        if (String(frame.type || '').trim().toLowerCase() !== 'system/error') return false;
+        if (expectedCode !== '' && String(frame.code || '').trim().toLowerCase() !== expectedCode) return false;
+        if (
+          expectedCommandType !== ''
+          && String(frame?.details?.type || '').trim().toLowerCase() !== expectedCommandType
+        ) {
+          return false;
+        }
+        return true;
+      }).length;
+    },
+    {
+      code: String(code || '').trim().toLowerCase(),
+      commandType: String(commandType || '').trim().toLowerCase(),
+    },
+  );
+}
+
 async function waitForCallRow(page, callTitle) {
   const searchCalls = async () => {
     await page.getByPlaceholder('Search call title').fill(callTitle);
@@ -585,6 +630,73 @@ test('waiting admission resets to invited when the websocket disappears before a
   ).toBe('invited');
 });
 
+test('plain waiting user cannot self-admit without an authorized grant', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const adminStoredSession = await fetchStoredSession(adminCredentials.email, adminCredentials.password);
+  const callTitle = `E2E Admission Auth ${Date.now()}`;
+  const callId = await createInvitedCallViaApi({
+    sessionToken: adminStoredSession.sessionToken,
+    title: callTitle,
+    participantUserId: 2,
+  });
+  const userJoinPath = await createPersonalAccessJoinPath({
+    callId,
+    sessionToken: adminStoredSession.sessionToken,
+    participantUserId: 2,
+  });
+  const { context: userContext, page: userPage, storedSession: userStoredSession } = await createAuthenticatedPage(browser, baseURL, userCredentials);
+
+  try {
+    await userPage.goto(userJoinPath);
+    const joinCallModal = userPage.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinCallModal).toBeVisible({ timeout: 15_000 });
+    await joinCallModal.getByRole('button', { name: /Join call/i }).click();
+    await expect(joinCallModal).toContainText(/Call owner has been notified|Waiting for host/i, { timeout: 15_000 });
+    await expect.poll(
+      () => fetchInternalParticipantInviteState({
+        callId,
+        sessionToken: userStoredSession.sessionToken,
+        participantUserId: 2,
+      }),
+      {
+        timeout: 15_000,
+        message: 'Join call should queue the invited participant before malicious allow is attempted',
+      },
+    ).toBe('pending');
+
+    await expect.poll(
+      () => sendOpenSocketFrame(userPage, { type: 'lobby/allow', target_user_id: 2 }),
+      {
+        timeout: 10_000,
+        message: 'waiting user admission websocket should be open before the malicious allow attempt',
+      },
+    ).toBe(true);
+    await expect.poll(
+      () => incomingSocketErrorCount(userPage, { code: 'lobby_command_failed', commandType: 'lobby/allow' }),
+      {
+        timeout: 10_000,
+        message: 'plain waiting user should receive a lobby allow failure',
+      },
+    ).toBeGreaterThan(0);
+    await expect(joinCallModal).toBeVisible({ timeout: 10_000 });
+    await expect(userPage).toHaveURL(/\/join\/[a-f0-9-]+/);
+    await expect.poll(
+      () => fetchInternalParticipantInviteState({
+        callId,
+        sessionToken: userStoredSession.sessionToken,
+        participantUserId: 2,
+      }),
+      {
+        timeout: 15_000,
+        message: 'unauthorized allow must not change pending participant state',
+      },
+    ).toBe('pending');
+  } finally {
+    await userContext.close();
+  }
+});
+
 test('admin creates/invites and admits user from lobby, both browsers share roster and media signals', async ({ browser }) => {
   test.setTimeout(180_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
@@ -665,7 +777,10 @@ test('admin creates/invites and admits user from lobby, both browsers share rost
     await expect(allowUserButton).toBeVisible({ timeout: 20_000 });
     await allowUserButton.click();
 
-    await userPage.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callRef)}(?:[/?#].*)?$|/workspace/call/[^/]+$`), { timeout: 30_000 });
+    await userPage.waitForURL(new RegExp(`/workspace/call/${escapeRegExp(callId)}(?:[/?#].*)?$`), { timeout: 30_000 });
+    const userCallRef = decodeURIComponent((userPage.url().split('/workspace/call/')[1] || '').split(/[?#]/)[0] || '');
+    expect(userCallRef).toBe(callId);
+    expect(callRef).toBe(callId);
     await expect(userPage.locator('.workspace-main-video')).toBeVisible({ timeout: 12_000 });
 
     const miniStrip = adminPage.locator('.workspace-mini-strip');
