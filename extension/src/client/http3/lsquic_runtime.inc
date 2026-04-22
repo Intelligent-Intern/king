@@ -253,6 +253,10 @@ static zend_result king_http3_lsquic_runtime_init(
     runtime->quic_stream_retransmitted_bytes = 0;
 
     king_http3_lsquic.lsquic_engine_init_settings_fn(&runtime->lsquic_settings, engine_flags);
+    if (king_http3_lsquic_apply_quic_options(runtime, options, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
     memset(settings_error, 0, sizeof(settings_error));
     if (king_http3_lsquic.lsquic_engine_check_settings_fn(
             &runtime->lsquic_settings,

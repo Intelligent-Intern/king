@@ -157,7 +157,7 @@ Goal:
 
 Checklist:
 - [x] `extension/tests/684-quic-option-inventory-contract.phpt` inventories all 24 `quic.*` options across defaults, php.ini directives, userland overrides, key routing, `King\Config` reads/exports, HTTP/3 option snapshots, and current LSQUIC server settings.
-- [ ] Handle unsupported options fail-closed or with explicit diagnostics.
+- [x] `extension/tests/685-quic-lsquic-option-diagnostics-contract.phpt` proves LSQUIC client/server paths apply supported `quic.*` settings, reject unsupported non-default settings with explicit diagnostics, and validate before engine settings are accepted.
 - [ ] Bind live stats to real runtime counters.
 - [ ] Verify congestion control, pacing, flow control, and idle timeout.
 - [ ] Prevent stale bookkeeping fields or permanently zeroed counters.

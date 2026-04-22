@@ -98,6 +98,10 @@ static zend_result king_server_http3_lsquic_runtime_init(
     }
 
     king_server_http3_lsquic.lsquic_engine_init_settings_fn(&runtime->lsquic_settings, engine_flags);
+    if (king_server_http3_lsquic_apply_quic_options(runtime, options, function_name) != SUCCESS) {
+        return FAILURE;
+    }
+
     idle_timeout_seconds = (unsigned) ((options->timeout_ms + 999) / 1000);
     if (idle_timeout_seconds == 0) {
         idle_timeout_seconds = 1;
@@ -107,20 +111,6 @@ static zend_result king_server_http3_lsquic_runtime_init(
     runtime->lsquic_settings.es_idle_timeout = idle_timeout_seconds;
     runtime->lsquic_settings.es_idle_conn_to = (unsigned long) options->timeout_ms * 1000UL;
     runtime->lsquic_settings.es_max_header_list_size = KING_SERVER_HTTP3_MAX_HEADER_BYTES;
-    runtime->lsquic_settings.es_init_max_data = (unsigned) options->quic_initial_max_data;
-    runtime->lsquic_settings.es_init_max_stream_data_bidi_local =
-        (unsigned) options->quic_initial_max_stream_data_bidi_local;
-    runtime->lsquic_settings.es_init_max_stream_data_bidi_remote =
-        (unsigned) options->quic_initial_max_stream_data_bidi_remote;
-    runtime->lsquic_settings.es_init_max_stream_data_uni =
-        (unsigned) options->quic_initial_max_stream_data_uni;
-    runtime->lsquic_settings.es_init_max_streams_bidi =
-        (unsigned) options->quic_initial_max_streams_bidi;
-    runtime->lsquic_settings.es_init_max_streams_uni =
-        (unsigned) options->quic_initial_max_streams_uni;
-    runtime->lsquic_settings.es_datagrams = options->quic_datagrams_enable ? 1 : 0;
-    runtime->lsquic_settings.es_pace_packets = options->quic_pacing_enable ? 1 : 0;
-    runtime->lsquic_settings.es_grease_quic_bit = options->quic_grease_enable ? 1 : 0;
     runtime->lsquic_settings.es_max_udp_payload_size_rx = KING_SERVER_HTTP3_MAX_DATAGRAM_SIZE;
     runtime->lsquic_settings.es_allow_migration = 0;
     runtime->lsquic_settings.es_support_push = 0;

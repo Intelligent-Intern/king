@@ -59,6 +59,7 @@ $clientOptions = read_source($root . '/extension/src/client/http3/errors_and_val
 $server = read_source($root . '/extension/src/server/http3.c');
 $serverOptions = read_source($root . '/extension/src/server/http3/options_and_runtime.inc');
 $serverLsquicRuntime = read_source($root . '/extension/src/server/http3/lsquic_runtime.inc');
+$serverLsquicDiagnostics = read_source($root . '/extension/src/server/http3/lsquic_option_diagnostics.inc');
 
 preg_match_all('/^\s*(?:char\s+\*\s*|zend_long\s+|bool\s+)([a-z0-9_]+);/m', $base, $matches);
 $structFields = $matches[1];
@@ -82,19 +83,22 @@ foreach ($fields as $field => $meta) {
 }
 
 $serverLsquicMapped = [
+    'cc_algorithm' => 'es_cc_algo',
     'pacing_enable' => 'es_pace_packets',
+    'ping_interval_ms' => 'es_ping_period',
     'initial_max_data' => 'es_init_max_data',
     'initial_max_stream_data_bidi_local' => 'es_init_max_stream_data_bidi_local',
     'initial_max_stream_data_bidi_remote' => 'es_init_max_stream_data_bidi_remote',
     'initial_max_stream_data_uni' => 'es_init_max_stream_data_uni',
     'initial_max_streams_bidi' => 'es_init_max_streams_bidi',
     'initial_max_streams_uni' => 'es_init_max_streams_uni',
+    'stateless_retry_enable' => 'es_support_srej',
     'grease_enable' => 'es_grease_quic_bit',
     'datagrams_enable' => 'es_datagrams',
 ];
 foreach ($serverLsquicMapped as $field => $setting) {
-    require_contains('Server LSQUIC runtime setting for ' . $field, $serverLsquicRuntime, 'options->quic_' . $field);
-    require_contains('Server LSQUIC runtime setting for ' . $field, $serverLsquicRuntime, $setting);
+    require_contains('Server LSQUIC runtime setting for ' . $field, $serverLsquicRuntime . $serverLsquicDiagnostics, 'options->quic_' . $field);
+    require_contains('Server LSQUIC runtime setting for ' . $field, $serverLsquicRuntime . $serverLsquicDiagnostics, $setting);
 }
 
 $config = new King\Config($overrides);

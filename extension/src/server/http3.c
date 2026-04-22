@@ -35,6 +35,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <netdb.h>
 #include <poll.h>
 #include <stdarg.h>
@@ -212,6 +213,7 @@ static king_server_http3_lsquic_api_t king_server_http3_lsquic = {0};
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 #include "http3/lsquic_tls.inc"
 #include "http3/lsquic_stream_runtime.inc"
+#include "http3/lsquic_option_diagnostics.inc"
 #include "http3/lsquic_runtime.inc"
 #include "http3/lsquic_listen_once.inc"
 #endif
