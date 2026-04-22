@@ -75,7 +75,7 @@ Checklist:
 - [x] Correct live call and participant counts from current call/session/SFU state.
 - [x] Keep public health responses safe for production and hide schema/user/internal runtime detail unless authorized.
 - [x] Keep deployment configuration in `.env.local` and make deploy wizard reruns idempotent for known-host, cert, DNS, and compose/service state.
-- [ ] Verify HTTPS redirect, certificate renewal hooks, API, websocket, and SFU endpoints with scripted `curl`/websocket smoke checks.
+- [x] Verify HTTPS redirect, certificate renewal hooks, API, websocket, and SFU endpoints with scripted `curl`/websocket smoke checks.
 - [ ] Investigate and eliminate runaway `/app/edge.php` CPU spin under production routing.
 - [ ] Keep Hetzner-specific discovery behind provider abstractions so Kubernetes or other providers can be added later.
 

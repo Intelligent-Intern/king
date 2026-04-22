@@ -639,6 +639,19 @@ VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
 demo/video-chat/scripts/deploy.sh status
 ```
 
+Run the production endpoint smoke after `deploy` or `wizard`:
+
+```bash
+demo/video-chat/scripts/deploy-smoke.sh
+```
+
+The smoke loads `demo/video-chat/.env.local`, then verifies the HTTP to HTTPS
+redirect, HTTPS frontend, public API health allow-list, protected admin runtime
+boundary, API version endpoint, lobby websocket routing, SFU websocket routing,
+the remote Certbot renewal hook, and certificate SANs for the root domain plus
+`api/ws/sfu/turn`. Set `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1` to skip the SSH
+Certbot hook/SAN check when only public endpoints should be tested.
+
 ```bash
 VIDEOCHAT_DEPLOY_HOST=203.0.113.10 \
 VIDEOCHAT_DEPLOY_DOMAIN=video.example.com \
