@@ -1,5 +1,5 @@
 --TEST--
-King OO Http3Client wrapper uses the active HTTP/3 runtime and returns Response objects
+King OO Http3Client wrapper uses the active LSQUIC HTTP/3 runtime and returns Response objects
 --SKIPIF--
 <?php
 if (trim((string) shell_exec('command -v openssl')) === '') {
@@ -11,9 +11,9 @@ if (!is_string($server) || $server === '' || !is_executable($server)) {
     echo "skip KING_QUICHE_SERVER must point at a prebuilt quiche-server binary";
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
 }
 ?>
 --INI--
@@ -39,7 +39,7 @@ try {
     $firstUrl = king_http3_test_server_url($server, '/first.txt');
     $secondUrl = king_http3_test_server_url($server, '/second.txt');
 
-    king_http3_request_with_retry(
+    $warmup = king_http3_request_with_retry(
         static fn () => king_http3_request_send(
             $firstUrl,
             'GET',
@@ -61,6 +61,8 @@ try {
     king_http3_destroy_fixture($fixture);
 }
 
+var_dump($warmup['transport_backend']);
+
 var_dump($first instanceof King\Response);
 var_dump($first->getStatusCode());
 var_dump($first->getHeaders()['content-length']);
@@ -72,6 +74,7 @@ var_dump($second->getHeaders()['content-length']);
 var_dump($second->getBody());
 ?>
 --EXPECT--
+string(9) "lsquic_h3"
 bool(true)
 int(200)
 string(2) "12"

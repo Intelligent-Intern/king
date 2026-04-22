@@ -120,7 +120,8 @@ Done:
 - [x] The active LSQUIC client path uses King-owned HTTP/3 request headers and excludes Quiche headers, handles, loader, init, dispatch, ticket, and stats code via backend guards.
 - [x] `king_http3_request_send()` uses the new stack in real wire tests.
 - [x] `extension/tests/190-http3-request-send-roundtrip.phpt` now loads `KING_LSQUIC_LIBRARY`, exercises `king_http3_request_send()` on the wire, and asserts `transport_backend = lsquic_h3`.
-- [ ] OO HTTP3 client uses the new stack in real wire tests.
+- [x] OO HTTP3 client uses the new stack in real wire tests.
+- [x] `extension/tests/191-oo-http3-client-runtime.phpt` now loads `KING_LSQUIC_LIBRARY`, checks a same-fixture `lsquic_h3` warmup, and exercises `King\Client\Http3Client` on the wire.
 - [x] Old Quiche loader is no longer referenced by any active include.
 
 ---
