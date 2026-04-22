@@ -23,7 +23,7 @@ Goal:
 
 Checklist:
 - [x] Verify the joined user is admitted into the owner's existing call room instead of creating or resolving a separate room/session.
-- [ ] Fix SFU publish/subscribe fanout so remote audio and video tracks are delivered across browser sessions.
+- [x] Fix SFU publish/subscribe fanout so remote audio and video tracks are delivered across browser sessions.
 - [x] Ensure remote participants render in mini-video slots unless pinned/promoted to the main stage.
 - [ ] Ensure participant roster entries are derived from stable server-authoritative presence and do not jitter on polling/reconnect ticks.
 - [ ] Keep admin rights equivalent to call-owner rights inside the call.

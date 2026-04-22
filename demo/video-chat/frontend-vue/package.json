@@ -7,6 +7,7 @@
     "dev": "vite --config ./vite.config.js",
     "build": "vite build",
     "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs",
+    "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:ui-parity": "playwright test tests/e2e/auth-navigation.spec.js tests/e2e/login-backend-contract.spec.js tests/e2e/ui-parity-journeys.spec.js tests/e2e/lobby-admission.spec.js tests/e2e/chat-attachments.spec.js tests/e2e/chat-archive.spec.js tests/e2e/chat-activity-matrix.spec.js tests/e2e/call-layout-strategies.spec.js",

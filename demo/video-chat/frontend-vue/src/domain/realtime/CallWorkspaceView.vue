@@ -5210,6 +5210,12 @@ async function syncNativePeerLocalTracks(peer) {
   }
 }
 
+async function ensureLocalMediaForNativeNegotiation() {
+  if (!isNativeWebRtcRuntimePath()) return false;
+  if (localStreamRef.value instanceof MediaStream) return true;
+  return publishLocalTracks();
+}
+
 async function flushNativePendingIce(peer) {
   if (!peer?.pc) return;
   if (!peer.pc.remoteDescription || !peer.pc.remoteDescription.type) return;
@@ -5346,6 +5352,7 @@ async function sendNativeOffer(peer) {
 
   peer.negotiating = true;
   try {
+    await ensureLocalMediaForNativeNegotiation();
     let local = peer.pc.localDescription;
     if (!(peer.pc.signalingState === 'have-local-offer' && local?.type === 'offer' && local?.sdp)) {
       await syncNativePeerLocalTracks(peer);
@@ -5518,6 +5525,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
 
   try {
     resetNativeOfferRetry(peer);
+    await ensureLocalMediaForNativeNegotiation();
     await syncNativePeerLocalTracks(peer);
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
     await flushNativePendingIce(peer);
@@ -6273,7 +6281,11 @@ async function publishLocalTracks() {
     if (isNativeWebRtcRuntimePath()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
-        void syncNativePeerLocalTracks(peer);
+        void syncNativePeerLocalTracks(peer).then(() => {
+          if (peer.initiator && !peer.negotiating) {
+            void sendNativeOffer(peer);
+          }
+        });
       }
     }
 
@@ -6453,6 +6465,9 @@ async function reconfigureLocalBackgroundFilterOnly() {
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
           await syncNativePeerLocalTracks(peer);
+          if (peer.initiator && !peer.negotiating) {
+            void sendNativeOffer(peer);
+          }
         }
       }
 
@@ -6536,6 +6551,9 @@ async function reconfigureLocalTracksFromSelectedDevices() {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
         await syncNativePeerLocalTracks(peer);
+        if (peer.initiator && !peer.negotiating) {
+          void sendNativeOffer(peer);
+        }
       }
     }
 
