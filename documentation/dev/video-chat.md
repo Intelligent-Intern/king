@@ -247,6 +247,7 @@ Ops hardening baseline:
 - Backend HTTP/WS/SFU compose services accept OTLP collector binding through `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`.
 - Admin operations expose a provider-neutral infrastructure inventory at `GET /api/admin/infrastructure`.
   It reports deployment domains, providers, nodes, service roles, OpenTelemetry export configuration, and read-only SFU scaling readiness.
+  The backend collects inventory through `videochat_infra_provider_adapters()`, so Hetzner Cloud discovery, Kubernetes detection, and static/self-hosted fallback stay behind the same provider adapter contract.
   The DTO supports static/self-hosted nodes now, Hetzner Cloud inventory when `VIDEOCHAT_INFRA_HETZNER_TOKEN` or `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is available, and Kubernetes detection for later replica actions.
 - Admin video operations expose live call concurrency at `GET /api/admin/video-operations`.
   It counts only participants with an open join presence (`joined_at` set and `left_at` empty), so invited or assigned users do not inflate live calls or concurrent participant metrics.
@@ -527,7 +528,9 @@ For Hetzner-backed inventory, the deploy token is reused by default. Use
 `VIDEOCHAT_INFRA_HETZNER_TOKEN` if inventory should use a separate read-only
 token. For Kubernetes deployments, set `VIDEOCHAT_INFRA_PROVIDER=kubernetes`
 and project pod/namespace metadata through environment variables until the
-audited Kubernetes API reader is enabled.
+audited Kubernetes API reader is enabled. New infrastructure providers should
+be added as backend provider adapters instead of branching the admin endpoint or
+frontend operations page.
 
 Disable automatic DNS mutation and only print/wait for the required record:
 

@@ -35,6 +35,17 @@ try {
     putenv('VIDEOCHAT_OTEL_METRICS_ENABLE=1');
     putenv('VIDEOCHAT_OTEL_LOGS_ENABLE=1');
 
+    $adapters = videochat_infra_provider_adapters();
+    foreach (['hetzner', 'kubernetes', 'static'] as $adapterId) {
+        videochat_admin_infra_assert(isset($adapters[$adapterId]), "missing provider adapter {$adapterId}");
+        videochat_admin_infra_assert(is_callable($adapters[$adapterId]['inventory'] ?? null), "provider adapter {$adapterId} inventory must be callable");
+        videochat_admin_infra_assert(is_array($adapters[$adapterId]['modes'] ?? null), "provider adapter {$adapterId} modes must be declared");
+    }
+    videochat_admin_infra_assert(
+        in_array('kubernetes', (array) ($adapters['kubernetes']['modes'] ?? []), true),
+        'kubernetes adapter must be selectable without changing endpoint code'
+    );
+
     $jsonResponse = static function (int $status, array $payload): array {
         return [
             'status' => $status,
@@ -91,6 +102,35 @@ try {
         (bool) (($payload['scaling'] ?? [])['write_actions_enabled'] ?? true) === false,
         'scaling write actions must be disabled in inventory contract'
     );
+
+    putenv('VIDEOCHAT_INFRA_PROVIDER=kubernetes');
+    putenv('VIDEOCHAT_INFRA_KUBERNETES_ENABLE=1');
+    putenv('HOSTNAME=pod-contract-1');
+    $kubernetesResponse = videochat_handle_infrastructure_routes(
+        '/api/admin/infrastructure',
+        'GET',
+        $jsonResponse,
+        $errorResponse
+    );
+    videochat_admin_infra_assert(is_array($kubernetesResponse), 'kubernetes provider response should be handled');
+    $kubernetesPayload = videochat_admin_infra_decode($kubernetesResponse);
+    $providerIds = array_map(
+        static fn (array $provider): string => (string) ($provider['id'] ?? ''),
+        array_filter((array) ($kubernetesPayload['providers'] ?? []), 'is_array')
+    );
+    videochat_admin_infra_assert(in_array('kubernetes', $providerIds, true), 'kubernetes provider should be reported by adapter');
+    videochat_admin_infra_assert(in_array('static', $providerIds, true), 'static provider should remain the safe node fallback');
+    videochat_admin_infra_assert(count((array) ($kubernetesPayload['nodes'] ?? [])) === 1, 'kubernetes mode should keep static node fallback until node reader exists');
+    foreach ((array) ($kubernetesPayload['providers'] ?? []) as $provider) {
+        if (!is_array($provider) || (string) ($provider['id'] ?? '') !== 'kubernetes') {
+            continue;
+        }
+        videochat_admin_infra_assert((string) ($provider['status'] ?? '') === 'detected', 'kubernetes provider should be detected when enabled');
+        videochat_admin_infra_assert(
+            (bool) (($provider['capabilities'] ?? [])['scale_sfu_deployment'] ?? false) === true,
+            'kubernetes adapter should report future SFU scaling capability'
+        );
+    }
 
     fwrite(STDOUT, "[admin-infrastructure-contract] PASS\n");
     exit(0);

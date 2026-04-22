@@ -77,7 +77,7 @@ Checklist:
 - [x] Keep deployment configuration in `.env.local` and make deploy wizard reruns idempotent for known-host, cert, DNS, and compose/service state.
 - [x] Verify HTTPS redirect, certificate renewal hooks, API, websocket, and SFU endpoints with scripted `curl`/websocket smoke checks.
 - [x] Investigate and eliminate runaway `/app/edge.php` CPU spin under production routing.
-- [ ] Keep Hetzner-specific discovery behind provider abstractions so Kubernetes or other providers can be added later.
+- [x] Keep Hetzner-specific discovery behind provider abstractions so Kubernetes or other providers can be added later.
 
 Done:
 - [ ] A fresh production deploy is repeatable and the admin operations page reports real safe state.
