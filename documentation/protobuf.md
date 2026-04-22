@@ -145,6 +145,17 @@ uint8x4_t has_continue = vtst_u8(data, 0x80);
 
 ## WebSocket Speedups
 
+### Dual Transport on `/ws` and `/sfu`
+
+Realtime endpoints now run a shared dual-transport contract:
+
+- `/ws` and `/sfu` both accept `transport=iibin|json`
+- default transport remains `json` for backward compatibility
+- server auto-detects IIBIN frames via `IIB` + version-byte (`0x01`) header
+- responses are encoded per socket using the currently detected transport
+
+This keeps legacy JSON clients working while enabling binary IIBIN framing for lower payload overhead.
+
 ### Recent Commits
 
 | Commit | Change |
@@ -181,6 +192,8 @@ foreach (explode("\n", $frames) as $frame) {
 ```
 
 Reduces `recv()` syscalls when many frames arrive in quick succession.
+
+For JSON, newline-delimited frames are still supported; for IIBIN, each binary frame carries one message envelope.
 
 ## Performance Summary
 

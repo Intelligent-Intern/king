@@ -36,7 +36,7 @@ GossipMesh is a **decentralized SFU (Selective Forwarding Unit)** that enables v
 │                        ▼                                        │
 │   ┌───────────────────────────────────────────────────┐              │
 │   │        PHP BACKEND (King Extension)              │              │
-│   │        /sfu signaling                       │   SFU       │
+│   │        /ws + /sfu (JSON/IIBIN dual transport)   │   SFU       │
 │   │        - Bootstrap peer discovery             │   (signaling) │
 │   │        - Relay WebRTC offer/answer/ICE     │              │
 │   │        - Relay fallback when P2P fails   │              │
@@ -203,7 +203,9 @@ This ensures 100% connectivity even when NAT traversal fails.
 ### Backend Integration
 
 - `demo/video-chat/backend-king-php/http/module_realtime.php` 
-  - `/sfu` endpoint enhanced with WebRTC signaling relay
+  - `/ws` and `/sfu` support dual transport (`transport=iibin|json`)
+  - `/ws` auto-detects IIBIN binary frames and keeps JSON fallback
+  - `/sfu` signaling relay supports the same transport contract
   - Added: `ping`, `neighbors`, `offer`, `answer`, `ice-candidate`, `relay/request` message types
 
 ### Frontend
@@ -220,6 +222,7 @@ const client = new GossipMeshClient({
     roomId: 'my-call-room',
     peerId: 'user-123',
     sfuUrl: 'wss://backend.example.com/sfu',
+    transport: 'iibin', // optional: defaults to JSON fallback
     ttl: 4,
     forwardCount: 2,
     iceServers: [
@@ -272,12 +275,19 @@ await client.connect(sessionToken);
 
 The GossipMesh integrates with the existing video-chat demo:
 
-1. **Existing `/ws`** - Chat and presence (unchanged)
-2. **Existing `/sfu`** - Enhanced with WebRTC signaling relay
+1. **`/ws`** - Chat/presence/signaling with JSON or IIBIN framing
+2. **`/sfu`** - WebRTC signaling relay with the same JSON/IIBIN dual transport
 3. **Frontend** - `GossipMeshClient` for video forwarding
 
 To enable video:
 1. Start backend: `cd demo/video-chat/backend-king-php && ./run-dev.sh`
-2. Frontend connects to `/sfu` for video signaling
+2. Frontend connects to `/sfu?transport=iibin` (or omit for JSON fallback)
 3. WebRTC data channels carry encoded video frames
 4. GossipMesh propagates through the mesh
+
+## Transport Contract
+
+- `transport` query parameter is supported on both `/ws` and `/sfu`.
+- Allowed values: `iibin` or `json`; invalid/unknown values fall back to `json`.
+- Server also auto-detects IIBIN frames by the `IIB` + version-byte header.
+- Outbound frames are encoded per-connection in the negotiated or detected transport.

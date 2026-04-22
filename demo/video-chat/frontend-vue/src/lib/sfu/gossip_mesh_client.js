@@ -199,7 +199,7 @@ class GossipMeshClient {
      */
     async connect(sessionToken) {
         return new Promise((resolve, reject) => {
-            this.peerConnection = new WebSocket(`${this.sfuUrl}?token=${sessionToken}`);
+            this.peerConnection = new WebSocket(this.buildSfuUrl(sessionToken));
             this.peerConnection.binaryType = 'arraybuffer';
             
             this.peerConnection.onopen = () => {
@@ -230,6 +230,12 @@ class GossipMeshClient {
                 this.handleDisconnect();
             };
         });
+    }
+
+    buildSfuUrl(sessionToken) {
+        const separator = this.sfuUrl.includes('?') ? '&' : '?';
+        const transport = this.transportCodec ? 'iibin' : 'json';
+        return `${this.sfuUrl}${separator}token=${encodeURIComponent(sessionToken)}&transport=${transport}`;
     }
     
     /**
@@ -677,7 +683,7 @@ class GossipMeshClient {
     
     sendToSFU(message) {
         if (this.peerConnection && this.peerConnection.readyState === WebSocket.OPEN) {
-            this.peerConnection.send(JSON.stringify(message));
+            this.peerConnection.send(this.encodeTransportMessage(message));
         }
     }
     

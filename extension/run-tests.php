@@ -517,7 +517,7 @@ function main(): void
                     $environment['TEST_PHP_EXECUTABLE'] = $php;
                     break;
                 case 'P':
-                    $php = PHP_BINARY;
+$php = PHP_BINARY;
                     putenv("TEST_PHP_EXECUTABLE=$php");
                     $environment['TEST_PHP_EXECUTABLE'] = $php;
                     break;
@@ -855,8 +855,8 @@ More .INIs  : " , (function_exists(\'php_ini_scanned_files\') ? str_replace("\n"
     $info_params = [];
     settings2array($ini_overwrites, $info_params);
     $info_params = settings2params($info_params);
-    $php_info = shell_exec("$php $pass_options $info_params $no_file_cache \"$info_file\"");
-    define('TESTED_PHP_VERSION', shell_exec("$php -n -r \"echo PHP_VERSION;\""));
+    $php_info = shell_exec(escapeshellarg($php) . " $pass_options $info_params $no_file_cache \"$info_file\"");
+    define('TESTED_PHP_VERSION', shell_exec(escapeshellarg($php) . " -n -r \"echo PHP_VERSION;\""));
 
     if ($php_cgi && $php != $php_cgi) {
         $php_info_cgi = shell_exec("$php_cgi $pass_options $info_params $no_file_cache -q \"$info_file\"");
@@ -895,7 +895,7 @@ More .INIs  : " , (function_exists(\'php_ini_scanned_files\') ? str_replace("\n"
         }
         ?>
     PHP);
-    $exts_to_test = explode(',', shell_exec("$php $pass_options $info_params $no_file_cache \"$info_file\""));
+    $exts_to_test = explode(',', shell_exec(escapeshellarg($php) . " $pass_options $info_params $no_file_cache \"$info_file\""));
     // check for extensions that need special handling and regenerate
     $info_params_ex = [
         'session' => ['session.auto_start=0'],
@@ -918,7 +918,7 @@ More .INIs  : " , (function_exists(\'php_ini_scanned_files\') ? str_replace("\n"
     // Write test context information.
     echo "
 =====================================================================
-PHP         : $php $php_info $php_cgi_info $phpdbg_info
+PHP         : escapeshellarg($php) $php_info $php_cgi_info $phpdbg_info
 CWD         : " . TEST_PHP_SRCDIR . "
 Extra dirs  : ";
     foreach ($user_tests as $test_dir) {
@@ -1010,7 +1010,7 @@ function save_results(string $output_file, bool $prompt_to_save_results): void
             }
         }
 
-        $ldd = shell_exec("ldd $php 2>/dev/null");
+        $ldd = shell_exec("ldd " . escapeshellarg($php) . " 2>/dev/null");
     }
 
     $failed_tests_data .= "Autoconf:\n$autoconf\n";
@@ -1021,7 +1021,7 @@ function save_results(string $output_file, bool $prompt_to_save_results): void
     $failed_tests_data .= "Libraries:\n$ldd\n";
     $failed_tests_data .= "\n";
     $failed_tests_data .= $sep . "PHPINFO" . $sep;
-    $failed_tests_data .= shell_exec($php . ' -ddisplay_errors=stderr -dhtml_errors=0 -i 2> /dev/null');
+    $failed_tests_data .= shell_exec(escapeshellarg($php) . ' -ddisplay_errors=stderr -dhtml_errors=0 -i 2> /dev/null');
 
     file_put_contents($output_file, $failed_tests_data);
     echo "Report saved to: ", $output_file, "\n";
@@ -2112,7 +2112,7 @@ TEST $file
         $junit->startTimer($shortname);
 
         $startTime = microtime(true);
-        $commandLine = "$extra $php $pass_options $extra_options -q $orig_ini_settings $no_file_cache -d display_errors=1 -d display_startup_errors=0";
+        $commandLine = "$extra " . escapeshellarg($php) . " $pass_options $extra_options -q $orig_ini_settings $no_file_cache -d display_errors=1 -d display_startup_errors=0";
         $output = $skipCache->checkSkip($commandLine, $test->getSection('SKIPIF'), $test_skipif, $temp_skipif, $env);
 
         $time = microtime(true) - $startTime;
@@ -2142,6 +2142,24 @@ TEST $file
             $message = !empty($m[1]) ? $m[1] : '';
             $junit->markTestAs('SKIP', $shortname, $tested, null, $message);
             return 'SKIPPED';
+        }
+
+        // Auto-skip tests that require pcntl if pcntl extension is not available
+        if (!extension_loaded('pcntl')) {
+            $test_content = file_get_contents($tested_file);
+            if (
+                str_contains($test_content, "extension_loaded('pcntl')") ||
+                str_contains($test_content, 'extension_loaded("pcntl")') ||
+                str_contains($test_content, 'pcntl_signal') ||
+                str_contains($test_content, 'pcntl_fork') ||
+                str_contains($test_content, 'pcntl_waitpid') ||
+                str_contains($test_content, '!function_exists(\'pcntl') ||
+                str_contains($test_content, '!function_exists("pcntl')
+            ) {
+                show_result('SKIP', $tested, $tested_file, 'reason: pcntl extension required', $temp_filenames);
+                $junit->markTestAs('SKIP', $shortname, $tested, null, 'pcntl extension required');
+                return 'SKIPPED';
+            }
         }
 
 
@@ -2318,7 +2336,7 @@ TEST $file
         }
 
         save_text($tmp_post, $request);
-        $cmd = "$php $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
     } elseif ($test->sectionNotEmpty('PUT')) {
         $post = trim($test->getSection('PUT'));
         $raw_lines = explode("\n", $post);
@@ -2349,7 +2367,7 @@ TEST $file
         }
 
         save_text($tmp_post, $request);
-        $cmd = "$php $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
     } elseif ($test->sectionNotEmpty('POST')) {
         $post = trim($test->getSection('POST'));
         $content_length = strlen($post);
@@ -2364,7 +2382,7 @@ TEST $file
             $env['CONTENT_LENGTH'] = $content_length;
         }
 
-        $cmd = "$php $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
     } elseif ($test->sectionNotEmpty('GZIP_POST')) {
         $post = trim($test->getSection('GZIP_POST'));
         $post = gzencode($post, 9, FORCE_GZIP);
@@ -2377,7 +2395,7 @@ TEST $file
         $env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
         $env['CONTENT_LENGTH'] = $content_length;
 
-        $cmd = "$php $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
     } elseif ($test->sectionNotEmpty('DEFLATE_POST')) {
         $post = trim($test->getSection('DEFLATE_POST'));
         $post = gzcompress($post, 9);
@@ -2389,14 +2407,14 @@ TEST $file
         $env['CONTENT_TYPE'] = 'application/x-www-form-urlencoded';
         $env['CONTENT_LENGTH'] = $content_length;
 
-        $cmd = "$php $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $ini_settings -f \"$test_file\"$cmdRedirect < \"$tmp_post\"";
     } else {
         $env['REQUEST_METHOD'] = 'GET';
         $env['CONTENT_TYPE'] = '';
         $env['CONTENT_LENGTH'] = '';
 
         $repeat_option = $num_repeats > 1 ? "--repeat $num_repeats" : "";
-        $cmd = "$php $pass_options $repeat_option $ini_settings -f \"$test_file\" $args$cmdRedirect";
+        $cmd = "" . escapeshellarg($php) . " $pass_options $repeat_option $ini_settings -f \"$test_file\" $args$cmdRedirect";
     }
 
     $orig_cmd = $cmd;
@@ -3654,7 +3672,7 @@ class SkipCache
         // Extension tests frequently use something like <?php require 'skipif.inc';
         // for skip checks. This forces us to cache per directory to avoid pollution.
         $dir = dirname($checkFile);
-        $key = "$php => $dir";
+        $key = "escapeshellarg($php) => $dir";
 
         if (isset($this->skips[$key][$code])) {
             $this->hits++;
@@ -3665,7 +3683,7 @@ class SkipCache
         }
 
         save_text($checkFile, $code, $tempFile);
-        $result = trim(system_with_timeout("$php \"$checkFile\"", $env));
+        $result = trim(system_with_timeout(escapeshellarg($php) . " \"$checkFile\"", $env));
         if (strpos($result, 'nocache') === 0) {
             $result = '';
         } else if ($this->enable) {
@@ -3687,8 +3705,8 @@ class SkipCache
             return $this->extensions[$php];
         }
 
-        $extDir = shell_exec("$php -d display_errors=0 -r \"echo ini_get('extension_dir');\"");
-        $extensions = explode(",", shell_exec("$php -d display_errors=0 -r \"echo implode(',', get_loaded_extensions());\""));
+        $extDir = shell_exec(escapeshellarg($php) . " -d display_errors=0 -r \"echo ini_get('extension_dir');\"");
+        $extensions = explode(",", shell_exec(escapeshellarg($php) . " -d display_errors=0 -r \"echo implode(',', get_loaded_extensions());\""));
         $extensions = array_map('strtolower', $extensions);
         if (in_array('zend opcache', $extensions)) {
             $extensions[] = 'opcache';
@@ -3707,7 +3725,7 @@ class SkipCache
 //        echo "Extensions: {$this->extHits} hits, {$this->extMisses} misses.\n";
 //        echo "Cache distribution:\n";
 //
-//        foreach ($this->skips as $php => $cache) {
+//        foreach ($this->skips as escapeshellarg($php) => $cache) {
 //            echo "$php: " . count($cache) . "\n";
 //        }
 //    }

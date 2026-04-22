@@ -171,6 +171,81 @@ function videochat_presence_room_participants(array $state, string $roomId): arr
     return $participants;
 }
 
+/**
+ * @return array<string, string>
+ */
+function &videochat_presence_socket_transport_registry(): array
+{
+    static $registry = [];
+    return $registry;
+}
+
+function videochat_presence_normalize_transport(string $transport): string
+{
+    return strtolower(trim($transport)) === 'iibin' ? 'iibin' : 'json';
+}
+
+function videochat_presence_socket_transport_key(mixed $socket): string
+{
+    if (is_object($socket)) {
+        return 'o:' . spl_object_id($socket);
+    }
+    if (is_resource($socket)) {
+        return 'r:' . get_resource_id($socket);
+    }
+
+    return '';
+}
+
+function videochat_presence_register_socket_transport(mixed $socket, string $transport): void
+{
+    $key = videochat_presence_socket_transport_key($socket);
+    if ($key === '') {
+        return;
+    }
+
+    $registry = &videochat_presence_socket_transport_registry();
+    $registry[$key] = videochat_presence_normalize_transport($transport);
+}
+
+function videochat_presence_unregister_socket_transport(mixed $socket): void
+{
+    $key = videochat_presence_socket_transport_key($socket);
+    if ($key === '') {
+        return;
+    }
+
+    $registry = &videochat_presence_socket_transport_registry();
+    unset($registry[$key]);
+}
+
+function videochat_presence_resolve_socket_transport(mixed $socket): string
+{
+    $key = videochat_presence_socket_transport_key($socket);
+    if ($key === '') {
+        return 'json';
+    }
+
+    $registry = &videochat_presence_socket_transport_registry();
+    return isset($registry[$key]) ? videochat_presence_normalize_transport($registry[$key]) : 'json';
+}
+
+/**
+ * @return array<string, mixed>|null
+ */
+function videochat_realtime_decode_client_payload(mixed $frame): ?array
+{
+    if (is_array($frame)) {
+        return $frame;
+    }
+    if (!is_string($frame) || $frame === '') {
+        return null;
+    }
+
+    $decoded = json_decode($frame, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
 function videochat_presence_send_frame(mixed $socket, array $payload, ?callable $sender = null): bool
 {
     if ($sender !== null) {
@@ -183,6 +258,18 @@ function videochat_presence_send_frame(mixed $socket, array $payload, ?callable 
 
     if (!function_exists('king_websocket_send')) {
         return false;
+    }
+
+    $transport = videochat_presence_resolve_socket_transport($socket);
+    if ($transport === 'iibin' && function_exists('videochat_realtime_iibin_encode_frame')) {
+        $encodedBinary = videochat_realtime_iibin_encode_frame($payload);
+        if (is_string($encodedBinary)) {
+            try {
+                return king_websocket_send($socket, $encodedBinary, true) === true;
+            } catch (Throwable) {
+                return false;
+            }
+        }
     }
 
     $encodedPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
@@ -391,9 +478,9 @@ function videochat_presence_remove_connection(
  *   error: string
  * }
  */
-function videochat_presence_decode_client_frame(string $frame): array
+function videochat_presence_decode_client_frame(mixed $frame): array
 {
-    $decoded = json_decode($frame, true);
+    $decoded = videochat_realtime_decode_client_payload($frame);
     if (!is_array($decoded)) {
         return [
             'ok' => false,

@@ -315,7 +315,7 @@ echo "READY\n";
 flush();
 king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
 
-while (($client = @stream_socket_accept($server, -1)) !== false) {
+while (($client = @stream_socket_accept($server, 300)) !== false) {
     $peer = stream_socket_get_name($client, true);
     $line = fgets($client);
 

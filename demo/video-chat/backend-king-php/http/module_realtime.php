@@ -275,6 +275,382 @@ function videochat_realtime_validate_session_liveness(
     ];
 }
 
+function videochat_realtime_sfu_iibin_has_header(string $payload): bool
+{
+    return strlen($payload) >= 4
+        && $payload[0] === 'I'
+        && $payload[1] === 'I'
+        && $payload[2] === 'B'
+        && ord($payload[3]) === 0x01;
+}
+
+function videochat_realtime_sfu_iibin_read_bytes(string $payload, int &$offset, int $length): string
+{
+    $payloadLength = strlen($payload);
+    if ($length < 0 || $offset < 0 || ($payloadLength - $offset) < $length) {
+        throw new RuntimeException('IIBIN frame is truncated.');
+    }
+
+    $chunk = substr($payload, $offset, $length);
+    $offset += $length;
+
+    return $chunk;
+}
+
+function videochat_realtime_sfu_iibin_read_uint8(string $payload, int &$offset): int
+{
+    $chunk = videochat_realtime_sfu_iibin_read_bytes($payload, $offset, 1);
+    return ord($chunk[0]);
+}
+
+function videochat_realtime_sfu_iibin_read_uint16_le(string $payload, int &$offset): int
+{
+    $chunk = videochat_realtime_sfu_iibin_read_bytes($payload, $offset, 2);
+    $decoded = unpack('vvalue', $chunk);
+    if (!is_array($decoded) || !isset($decoded['value'])) {
+        throw new RuntimeException('IIBIN uint16 decode failed.');
+    }
+
+    return (int) $decoded['value'];
+}
+
+function videochat_realtime_sfu_iibin_read_uint32_le(string $payload, int &$offset): int
+{
+    $chunk = videochat_realtime_sfu_iibin_read_bytes($payload, $offset, 4);
+    $decoded = unpack('Vvalue', $chunk);
+    if (!is_array($decoded) || !isset($decoded['value'])) {
+        throw new RuntimeException('IIBIN uint32 decode failed.');
+    }
+
+    return (int) $decoded['value'];
+}
+
+function videochat_realtime_sfu_iibin_read_float32_le(string $payload, int &$offset): float
+{
+    $chunk = videochat_realtime_sfu_iibin_read_bytes($payload, $offset, 4);
+    $decoded = unpack('gvalue', $chunk);
+    if (!is_array($decoded) || !isset($decoded['value'])) {
+        throw new RuntimeException('IIBIN float32 decode failed.');
+    }
+
+    return (float) $decoded['value'];
+}
+
+function videochat_realtime_sfu_iibin_read_float64_le(string $payload, int &$offset): float
+{
+    $chunk = videochat_realtime_sfu_iibin_read_bytes($payload, $offset, 8);
+    $decoded = unpack('evalue', $chunk);
+    if (!is_array($decoded) || !isset($decoded['value'])) {
+        throw new RuntimeException('IIBIN float64 decode failed.');
+    }
+
+    return (float) $decoded['value'];
+}
+
+function videochat_realtime_sfu_iibin_read_string(string $payload, int &$offset): string
+{
+    $length = videochat_realtime_sfu_iibin_read_uint32_le($payload, $offset);
+    return videochat_realtime_sfu_iibin_read_bytes($payload, $offset, $length);
+}
+
+function videochat_realtime_sfu_iibin_read_value(string $payload, int &$offset): mixed
+{
+    $dataType = videochat_realtime_sfu_iibin_read_uint8($payload, $offset);
+
+    switch ($dataType) {
+        case 0x00: // NULL
+            return null;
+        case 0x01: // BOOLEAN
+            return videochat_realtime_sfu_iibin_read_uint8($payload, $offset) === 1;
+        case 0x02: { // INT8
+            $int8 = videochat_realtime_sfu_iibin_read_uint8($payload, $offset);
+            return $int8 > 127 ? $int8 - 256 : $int8;
+        }
+        case 0x03: { // INT16
+            $int16 = videochat_realtime_sfu_iibin_read_uint16_le($payload, $offset);
+            return $int16 > 32767 ? $int16 - 65536 : $int16;
+        }
+        case 0x04: { // INT32
+            $int32 = videochat_realtime_sfu_iibin_read_uint32_le($payload, $offset);
+            return $int32 > 2147483647 ? $int32 - 4294967296 : $int32;
+        }
+        case 0x05: // INT64 stored as float64 by the JS codec
+        case 0x07: // FLOAT64
+        case 0x0C: // TIMESTAMP
+            return videochat_realtime_sfu_iibin_read_float64_le($payload, $offset);
+        case 0x06: // FLOAT32
+            return videochat_realtime_sfu_iibin_read_float32_le($payload, $offset);
+        case 0x08: // STRING
+            return videochat_realtime_sfu_iibin_read_string($payload, $offset);
+        case 0x09: { // BINARY
+            $length = videochat_realtime_sfu_iibin_read_uint32_le($payload, $offset);
+            return videochat_realtime_sfu_iibin_read_bytes($payload, $offset, $length);
+        }
+        case 0x0A: { // ARRAY
+            $length = videochat_realtime_sfu_iibin_read_uint32_le($payload, $offset);
+            $items = [];
+            for ($i = 0; $i < $length; $i++) {
+                $items[] = videochat_realtime_sfu_iibin_read_value($payload, $offset);
+            }
+            return $items;
+        }
+        case 0x0B: { // OBJECT
+            $length = videochat_realtime_sfu_iibin_read_uint32_le($payload, $offset);
+            $object = [];
+            for ($i = 0; $i < $length; $i++) {
+                $key = videochat_realtime_sfu_iibin_read_string($payload, $offset);
+                $object[$key] = videochat_realtime_sfu_iibin_read_value($payload, $offset);
+            }
+            return $object;
+        }
+        default:
+            throw new RuntimeException('Unsupported IIBIN data type.');
+    }
+}
+
+/**
+ * @return array<string, mixed>|null
+ */
+function videochat_realtime_sfu_iibin_decode_frame(string $payload): ?array
+{
+    if (!videochat_realtime_sfu_iibin_has_header($payload)) {
+        return null;
+    }
+
+    try {
+        $offset = 4; // "IIB" + version
+        videochat_realtime_sfu_iibin_read_uint8($payload, $offset); // message type
+        $hasId = videochat_realtime_sfu_iibin_read_uint8($payload, $offset);
+        if ($hasId === 1) {
+            videochat_realtime_sfu_iibin_read_string($payload, $offset);
+        }
+
+        videochat_realtime_sfu_iibin_read_float64_le($payload, $offset); // timestamp
+        $data = videochat_realtime_sfu_iibin_read_value($payload, $offset);
+
+        $hasMetadata = videochat_realtime_sfu_iibin_read_uint8($payload, $offset);
+        if ($hasMetadata === 1) {
+            videochat_realtime_sfu_iibin_read_value($payload, $offset);
+        }
+
+        if (!is_array($data)) {
+            return null;
+        }
+
+        return $data;
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function videochat_realtime_sfu_iibin_write_uint8(string &$buffer, int $value): void
+{
+    $buffer .= chr($value & 0xff);
+}
+
+function videochat_realtime_sfu_iibin_write_uint16_le(string &$buffer, int $value): void
+{
+    $buffer .= pack('v', $value & 0xffff);
+}
+
+function videochat_realtime_sfu_iibin_write_uint32_le(string &$buffer, int $value): void
+{
+    $buffer .= pack('V', $value & 0xffffffff);
+}
+
+function videochat_realtime_sfu_iibin_write_float64_le(string &$buffer, float $value): void
+{
+    $buffer .= pack('e', $value);
+}
+
+function videochat_realtime_sfu_iibin_write_string(string &$buffer, string $value): void
+{
+    videochat_realtime_sfu_iibin_write_uint32_le($buffer, strlen($value));
+    $buffer .= $value;
+}
+
+function videochat_realtime_sfu_iibin_write_value(string &$buffer, mixed $value): void
+{
+    if ($value === null) {
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x00);
+        return;
+    }
+
+    if (is_bool($value)) {
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x01);
+        videochat_realtime_sfu_iibin_write_uint8($buffer, $value ? 1 : 0);
+        return;
+    }
+
+    if (is_int($value)) {
+        if ($value >= -128 && $value <= 127) {
+            videochat_realtime_sfu_iibin_write_uint8($buffer, 0x02);
+            videochat_realtime_sfu_iibin_write_uint8($buffer, $value & 0xff);
+            return;
+        }
+        if ($value >= -32768 && $value <= 32767) {
+            videochat_realtime_sfu_iibin_write_uint8($buffer, 0x03);
+            videochat_realtime_sfu_iibin_write_uint16_le($buffer, $value & 0xffff);
+            return;
+        }
+        if ($value >= -2147483648 && $value <= 2147483647) {
+            videochat_realtime_sfu_iibin_write_uint8($buffer, 0x04);
+            videochat_realtime_sfu_iibin_write_uint32_le($buffer, $value & 0xffffffff);
+            return;
+        }
+
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x05);
+        videochat_realtime_sfu_iibin_write_float64_le($buffer, (float) $value);
+        return;
+    }
+
+    if (is_float($value)) {
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x07);
+        videochat_realtime_sfu_iibin_write_float64_le($buffer, $value);
+        return;
+    }
+
+    if (is_string($value)) {
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x08);
+        videochat_realtime_sfu_iibin_write_string($buffer, $value);
+        return;
+    }
+
+    if (is_object($value)) {
+        $value = get_object_vars($value);
+    }
+
+    if (is_array($value)) {
+        if (array_is_list($value)) {
+            videochat_realtime_sfu_iibin_write_uint8($buffer, 0x0A);
+            videochat_realtime_sfu_iibin_write_uint32_le($buffer, count($value));
+            foreach ($value as $item) {
+                videochat_realtime_sfu_iibin_write_value($buffer, $item);
+            }
+            return;
+        }
+
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x0B);
+        videochat_realtime_sfu_iibin_write_uint32_le($buffer, count($value));
+        foreach ($value as $key => $item) {
+            videochat_realtime_sfu_iibin_write_string($buffer, (string) $key);
+            videochat_realtime_sfu_iibin_write_value($buffer, $item);
+        }
+        return;
+    }
+
+    videochat_realtime_sfu_iibin_write_uint8($buffer, 0x08);
+    videochat_realtime_sfu_iibin_write_string($buffer, (string) $value);
+}
+
+function videochat_realtime_sfu_iibin_encode_frame(array $payload): ?string
+{
+    try {
+        $buffer = "IIB\x01";
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0x01); // TEXT_MESSAGE
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0); // has id
+        videochat_realtime_sfu_iibin_write_float64_le($buffer, microtime(true) * 1000.0);
+        videochat_realtime_sfu_iibin_write_value($buffer, $payload);
+        videochat_realtime_sfu_iibin_write_uint8($buffer, 0); // has metadata
+        return $buffer;
+    } catch (Throwable) {
+        return null;
+    }
+}
+
+function videochat_realtime_normalize_transport(?string $transport): string
+{
+    return strtolower(trim((string) $transport)) === 'iibin' ? 'iibin' : 'json';
+}
+
+function videochat_realtime_iibin_has_header(string $payload): bool
+{
+    return videochat_realtime_sfu_iibin_has_header($payload);
+}
+
+/**
+ * @return array<string, mixed>|null
+ */
+function videochat_realtime_iibin_decode_frame(string $payload): ?array
+{
+    return videochat_realtime_sfu_iibin_decode_frame($payload);
+}
+
+function videochat_realtime_iibin_encode_frame(array $payload): ?string
+{
+    return videochat_realtime_sfu_iibin_encode_frame($payload);
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function videochat_realtime_decode_json_messages(string $frame, string &$buffer): array
+{
+    return videochat_realtime_sfu_decode_json_messages($frame, $buffer);
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function videochat_realtime_decode_transport_messages(string $frame, string &$buffer): array
+{
+    if (videochat_realtime_iibin_has_header($frame)) {
+        $buffer = '';
+        $decodedIibin = videochat_realtime_iibin_decode_frame($frame);
+        return is_array($decodedIibin) ? [$decodedIibin] : [];
+    }
+
+    return videochat_realtime_decode_json_messages($frame, $buffer);
+}
+
+function videochat_realtime_sfu_send_payload(mixed $websocket, array $payload, string $transport = 'json'): bool
+{
+    $transport = videochat_realtime_normalize_transport($transport);
+    if ($transport === 'iibin') {
+        $encoded = videochat_realtime_sfu_iibin_encode_frame($payload);
+        if (is_string($encoded)) {
+            return king_websocket_send($websocket, $encoded, true) === true;
+        }
+    }
+
+    $json = json_encode($payload);
+    if (!is_string($json)) {
+        return false;
+    }
+
+    return king_websocket_send($websocket, $json) === true;
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function videochat_realtime_sfu_decode_json_messages(string $frame, string &$buffer): array
+{
+    $direct = json_decode($frame, true);
+    if (is_array($direct)) {
+        $buffer = '';
+        return [$direct];
+    }
+
+    $buffer .= $frame;
+    $parts = explode("\n", $buffer);
+    $buffer = (string) array_pop($parts);
+
+    $decoded = [];
+    foreach ($parts as $msgJson) {
+        if (trim($msgJson) === '') {
+            continue;
+        }
+
+        $msg = json_decode($msgJson, true);
+        if (is_array($msg)) {
+            $decoded[] = $msg;
+        }
+    }
+
+    return $decoded;
+}
+
 function videochat_handle_realtime_routes(
     string $path,
     array $request,
@@ -344,6 +720,9 @@ function videochat_handle_realtime_routes(
         if (is_string($queryParams['room'] ?? null)) {
             $requestedRoomId = (string) $queryParams['room'];
         }
+        $transport = videochat_realtime_normalize_transport(
+            is_string($queryParams['transport'] ?? null) ? (string) $queryParams['transport'] : 'json'
+        );
 
         $initialRoomId = videochat_presence_normalize_room_id($requestedRoomId);
         try {
@@ -379,7 +758,9 @@ function videochat_handle_realtime_routes(
         );
         $presenceConnection = (array) ($presenceJoin['connection'] ?? $presenceConnection);
         $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+        $presenceConnection['transport'] = $transport;
         $presenceState['connections'][$connectionId] = $presenceConnection;
+        videochat_presence_register_socket_transport($websocket, $transport);
         $presenceDetached = false;
         $detachWebsocket = static function () use (
             &$presenceDetached,
@@ -415,6 +796,7 @@ function videochat_handle_realtime_routes(
             );
             videochat_unregister_active_websocket($activeWebsocketsBySession, $authSessionId, $connectionId);
             videochat_presence_remove_connection($presenceState, $connectionId);
+            videochat_presence_unregister_socket_transport($presenceConnection['socket'] ?? null);
         };
 
         if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
@@ -485,6 +867,7 @@ function videochat_handle_realtime_routes(
         );
         videochat_lobby_send_snapshot_to_connection($lobbyState, $presenceConnection, 'joined_room');
 
+        $messageBuffer = '';
         try {
             while (true) {
                 $sessionLiveness = videochat_realtime_validate_session_liveness(
@@ -535,14 +918,30 @@ function videochat_handle_realtime_routes(
                     continue;
                 }
 
-                if (!is_string($frame) || trim($frame) === '') {
+                if (!is_string($frame) || $frame === '') {
                     continue;
                 }
 
-                $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
-                $presenceState['connections'][$connectionId] = $presenceConnection;
+                $messages = videochat_realtime_decode_transport_messages($frame, $messageBuffer);
+                if ($messages === []) {
+                    continue;
+                }
+                $detectedTransport = videochat_realtime_iibin_has_header($frame) ? 'iibin' : 'json';
+                if ((string) ($presenceConnection['transport'] ?? 'json') !== $detectedTransport) {
+                    $presenceConnection['transport'] = $detectedTransport;
+                    $presenceState['connections'][$connectionId] = $presenceConnection;
+                    videochat_presence_register_socket_transport($websocket, $detectedTransport);
+                }
 
-                $presenceCommand = videochat_presence_decode_client_frame($frame);
+                foreach ($messages as $commandPayload) {
+                    if (!is_array($commandPayload)) {
+                        continue;
+                    }
+
+                    $presenceConnection = videochat_realtime_connection_with_call_context($presenceConnection, $openDatabase);
+                    $presenceState['connections'][$connectionId] = $presenceConnection;
+
+                    $presenceCommand = videochat_presence_decode_client_frame($commandPayload);
                 $commandType = (string) ($presenceCommand['type'] ?? '');
                 $commandError = (string) ($presenceCommand['error'] ?? 'invalid_command');
 
@@ -552,7 +951,7 @@ function videochat_handle_realtime_routes(
                 $reactionCommand = null;
                 $lobbyCommand = null;
                 if (!(bool) ($presenceCommand['ok'] ?? false) && $commandError === 'unsupported_type') {
-                    $chatCommand = videochat_chat_decode_client_frame($frame);
+                    $chatCommand = videochat_chat_decode_client_frame($commandPayload);
                     if ((bool) ($chatCommand['ok'] ?? false)) {
                         $chatPublish = videochat_chat_publish(
                             $presenceState,
@@ -592,7 +991,7 @@ function videochat_handle_realtime_routes(
                     }
 
                     if ((string) ($chatCommand['error'] ?? '') === 'unsupported_type') {
-                        $typingCommand = videochat_typing_decode_client_frame($frame);
+                        $typingCommand = videochat_typing_decode_client_frame($commandPayload);
                         if ((bool) ($typingCommand['ok'] ?? false)) {
                             $typingResult = videochat_typing_apply_command(
                                 $typingState,
@@ -619,7 +1018,7 @@ function videochat_handle_realtime_routes(
                         }
 
                         if ((string) ($typingCommand['error'] ?? '') === 'unsupported_type') {
-                            $signalingCommand = videochat_signaling_decode_client_frame($frame);
+                            $signalingCommand = videochat_signaling_decode_client_frame($commandPayload);
                             if ((bool) ($signalingCommand['ok'] ?? false)) {
                                 $signalingPublish = videochat_signaling_publish(
                                     $presenceState,
@@ -665,7 +1064,7 @@ function videochat_handle_realtime_routes(
                             }
 
                             if ((string) ($signalingCommand['error'] ?? '') === 'unsupported_type') {
-                                $reactionCommand = videochat_reaction_decode_client_frame($frame);
+                                $reactionCommand = videochat_reaction_decode_client_frame($commandPayload);
                                 if ((bool) ($reactionCommand['ok'] ?? false)) {
                                     $reactionPublish = videochat_reaction_publish(
                                         $reactionState,
@@ -699,7 +1098,7 @@ function videochat_handle_realtime_routes(
                                 }
 
                                 if ((string) ($reactionCommand['error'] ?? '') === 'unsupported_type') {
-                                    $lobbyCommand = videochat_lobby_decode_client_frame($frame);
+                                    $lobbyCommand = videochat_lobby_decode_client_frame($commandPayload);
                                     if ((bool) ($lobbyCommand['ok'] ?? false)) {
                                         $lobbyResult = videochat_lobby_apply_command(
                                             $lobbyState,
@@ -862,6 +1261,7 @@ function videochat_handle_realtime_routes(
                     continue;
                 }
             }
+            }
         } finally {
             $detachWebsocket();
         }
@@ -921,6 +1321,9 @@ function videochat_handle_sfu_routes(
         ? trim($userNameCandidate)
         : 'Anonymous';
     $role = is_string($queryParams['role'] ?? null) ? (string) $queryParams['role'] : 'publisher';
+    $transport = videochat_realtime_normalize_transport(
+        is_string($queryParams['transport'] ?? null) ? (string) $queryParams['transport'] : 'json'
+    );
 
     static $sfuClients = [];
     static $sfuRooms = [];
@@ -946,6 +1349,7 @@ function videochat_handle_sfu_routes(
         'room_id' => $roomId,
         'role' => $role,
         'tracks' => [],
+        'transport' => $transport,
     ];
 
     if ($role === 'publisher') {
@@ -954,30 +1358,30 @@ function videochat_handle_sfu_routes(
         $sfuRooms[$roomId]['subscribers'][$clientId] = &$sfuClients[$clientId];
     }
 
-    king_websocket_send($websocket, json_encode([
+    videochat_realtime_sfu_send_payload($websocket, [
         'type' => 'sfu/welcome',
         'user_id' => $userId,
         'name' => $userName,
         'room_id' => $roomId,
         'server_time' => time(),
-    ]));
+    ], (string) ($sfuClients[$clientId]['transport'] ?? 'json'));
 
     $publishersInRoom = array_keys($sfuRooms[$roomId]['publishers'] ?? []);
     if (!empty($publishersInRoom)) {
-        king_websocket_send($websocket, json_encode([
+        videochat_realtime_sfu_send_payload($websocket, [
             'type' => 'sfu/joined',
             'room_id' => $roomId,
             'publishers' => $publishersInRoom,
-        ]));
+        ], (string) ($sfuClients[$clientId]['transport'] ?? 'json'));
     }
 
     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
         if ($subClientId !== $clientId) {
-            king_websocket_send($subClient['websocket'], json_encode([
+            videochat_realtime_sfu_send_payload($subClient['websocket'], [
                 'type' => 'sfu/joined',
                 'room_id' => $roomId,
                 'publishers' => $publishersInRoom,
-            ]));
+            ], (string) ($subClient['transport'] ?? 'json'));
         }
     }
 
@@ -995,16 +1399,21 @@ function videochat_handle_sfu_routes(
             continue;
         }
 
-        $buffer .= $frame;
-        $messages = explode("\n", $buffer);
-        $buffer = array_pop($messages);
-
-        foreach ($messages as $msgJson) {
-            if (trim($msgJson) === '') {
-                continue;
+        $messages = [];
+        if (videochat_realtime_sfu_iibin_has_header($frame)) {
+            $decodedIibin = videochat_realtime_sfu_iibin_decode_frame($frame);
+            if (is_array($decodedIibin)) {
+                $messages[] = $decodedIibin;
+                $sfuClients[$clientId]['transport'] = 'iibin';
             }
+        } else {
+            $messages = videochat_realtime_sfu_decode_json_messages($frame, $buffer);
+            if (!empty($messages) && (string) ($sfuClients[$clientId]['transport'] ?? 'json') !== 'iibin') {
+                $sfuClients[$clientId]['transport'] = 'json';
+            }
+        }
 
-            $msg = json_decode($msgJson, true);
+        foreach ($messages as $msg) {
             if (!is_array($msg)) {
                 continue;
             }
@@ -1014,10 +1423,10 @@ function videochat_handle_sfu_routes(
             switch ($msgType) {
                 case 'ping':
                     $sfuClients[$clientId]['last_seen'] = time();
-                    king_websocket_send($websocket, json_encode([
+                    videochat_realtime_sfu_send_payload($websocket, [
                         'type' => 'pong',
                         'server_time' => time(),
-                    ]));
+                    ], (string) ($sfuClients[$clientId]['transport'] ?? 'json'));
                     break;
 
                 case 'neighbors':
@@ -1028,33 +1437,33 @@ function videochat_handle_sfu_routes(
                 case 'offer':
                     $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
                     if ($targetPeer && isset($sfuClients[$targetPeer])) {
-                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                        videochat_realtime_sfu_send_payload($sfuClients[$targetPeer]['websocket'], [
                             'type' => 'offer',
                             'from_peer_id' => $clientId,
                             'sdp' => $msg['sdp'] ?? null,
-                        ]));
+                        ], (string) ($sfuClients[$targetPeer]['transport'] ?? 'json'));
                     }
                     break;
 
                 case 'answer':
                     $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
                     if ($targetPeer && isset($sfuClients[$targetPeer])) {
-                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                        videochat_realtime_sfu_send_payload($sfuClients[$targetPeer]['websocket'], [
                             'type' => 'answer',
                             'from_peer_id' => $clientId,
                             'sdp' => $msg['sdp'] ?? null,
-                        ]));
+                        ], (string) ($sfuClients[$targetPeer]['transport'] ?? 'json'));
                     }
                     break;
 
                 case 'ice-candidate':
                     $targetPeer = (int) ($msg['target_peer_id'] ?? 0);
                     if ($targetPeer && isset($sfuClients[$targetPeer])) {
-                        king_websocket_send($sfuClients[$targetPeer]['websocket'], json_encode([
+                        videochat_realtime_sfu_send_payload($sfuClients[$targetPeer]['websocket'], [
                             'type' => 'ice-candidate',
                             'from_peer_id' => $clientId,
                             'candidate' => $msg['candidate'] ?? null,
-                        ]));
+                        ], (string) ($sfuClients[$targetPeer]['transport'] ?? 'json'));
                     }
                     break;
 
@@ -1069,33 +1478,33 @@ function videochat_handle_sfu_routes(
                         'label' => $label,
                     ];
 
-                    king_websocket_send($websocket, json_encode([
+                    videochat_realtime_sfu_send_payload($websocket, [
                         'type' => 'sfu/published',
                         'track_id' => $trackId,
                         'server_time' => time(),
-                    ]));
+                    ], (string) ($sfuClients[$clientId]['transport'] ?? 'json'));
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-                        king_websocket_send($subClient['websocket'], json_encode([
+                        videochat_realtime_sfu_send_payload($subClient['websocket'], [
                             'type' => 'sfu/tracks',
                             'room_id' => $roomId,
                             'publisher_id' => $clientId,
                             'publisher_name' => $userName,
                             'tracks' => array_values($sfuClients[$clientId]['tracks']),
-                        ]));
+                        ], (string) ($subClient['transport'] ?? 'json'));
                     }
                     break;
 
                 case 'sfu/subscribe':
                     $publisherId = $msg['publisher_id'] ?? null;
                     if (isset($sfuRooms[$roomId]['publishers'][$publisherId])) {
-                        king_websocket_send($websocket, json_encode([
+                        videochat_realtime_sfu_send_payload($websocket, [
                             'type' => 'sfu/tracks',
                             'room_id' => $roomId,
                             'publisher_id' => $publisherId,
                             'publisher_name' => $sfuClients[$publisherId]['user_name'],
                             'tracks' => array_values($sfuClients[$publisherId]['tracks']),
-                        ]));
+                        ], (string) ($sfuClients[$clientId]['transport'] ?? 'json'));
                     }
                     break;
 
@@ -1104,11 +1513,11 @@ function videochat_handle_sfu_routes(
                     unset($sfuClients[$clientId]['tracks'][$trackId]);
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-                        king_websocket_send($subClient['websocket'], json_encode([
+                        videochat_realtime_sfu_send_payload($subClient['websocket'], [
                             'type' => 'sfu/unpublished',
                             'publisher_id' => $clientId,
                             'track_id' => $trackId,
-                        ]));
+                        ], (string) ($subClient['transport'] ?? 'json'));
                     }
                     break;
 
@@ -1120,14 +1529,14 @@ function videochat_handle_sfu_routes(
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
                         if ($subClientId !== $clientId) {
-                            king_websocket_send($subClient['websocket'], json_encode([
+                            videochat_realtime_sfu_send_payload($subClient['websocket'], [
                                 'type' => 'sfu/frame',
                                 'publisher_id' => $clientId,
                                 'track_id' => $trackId,
                                 'timestamp' => $timestamp,
                                 'data' => $frameData,
                                 'frameType' => $frameType,
-                            ]));
+                            ], (string) ($subClient['transport'] ?? 'json'));
                         }
                     }
                     break;
@@ -1142,10 +1551,10 @@ function videochat_handle_sfu_routes(
     if (isset($sfuRooms[$roomId]['publishers'][$clientId])) {
         unset($sfuRooms[$roomId]['publishers'][$clientId]);
         foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-            king_websocket_send($subClient['websocket'], json_encode([
+            videochat_realtime_sfu_send_payload($subClient['websocket'], [
                 'type' => 'sfu/publisher_left',
                 'publisher_id' => $clientId,
-            ]));
+            ], (string) ($subClient['transport'] ?? 'json'));
         }
     }
     if (isset($sfuRooms[$roomId]['subscribers'][$clientId])) {
