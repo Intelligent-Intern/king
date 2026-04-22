@@ -171,6 +171,50 @@ static zend_bool king_server_websocket_is_secure(
     return 0;
 }
 
+static zend_bool king_server_websocket_session_alpn_is(
+    const king_client_session_t *session,
+    const char *alpn
+)
+{
+    size_t alpn_len;
+
+    if (session->negotiated_alpn == NULL || alpn == NULL) {
+        return 0;
+    }
+
+    alpn_len = strlen(alpn);
+    return ZSTR_LEN(session->negotiated_alpn) == alpn_len
+        && memcmp(ZSTR_VAL(session->negotiated_alpn), alpn, alpn_len) == 0;
+}
+
+static zend_result king_server_websocket_reject_unsupported_on_wire_upgrade(
+    const king_client_session_t *session,
+    const char *function_name
+)
+{
+    if (king_server_websocket_session_alpn_is(session, "h3")) {
+        king_server_control_set_errorf(
+            "%s() does not support on-wire HTTP/3 WebSocket Extended CONNECT upgrades yet.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    if (king_server_websocket_session_alpn_is(session, "h2")) {
+        king_server_control_set_errorf(
+            "%s() does not support on-wire HTTP/2 WebSocket Extended CONNECT upgrades yet.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    king_server_control_set_errorf(
+        "%s() requires an active HTTP/1 websocket upgrade request on on-wire server sessions.",
+        function_name
+    );
+    return FAILURE;
+}
+
 static zend_string *king_server_websocket_compute_accept(
     zend_string *client_key
 )
@@ -301,11 +345,10 @@ zend_result king_server_websocket_upgrade_session(
         && session->server_pending_websocket_key != NULL
         && session->transport_socket_fd >= 0;
     if (session->transport_socket_fd >= 0 && !on_wire_upgrade) {
-        king_server_control_set_errorf(
-            "%s() requires an active HTTP/1 websocket upgrade request on on-wire server sessions.",
+        return king_server_websocket_reject_unsupported_on_wire_upgrade(
+            session,
             function_name
         );
-        return FAILURE;
     }
     scheme = secure ? "wss" : "ws";
     authority = king_server_websocket_build_authority(

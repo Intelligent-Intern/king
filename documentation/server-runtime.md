@@ -351,6 +351,12 @@ repo now carries dedicated local honesty contracts for both secure listener
 families, so that transport claim is explicit rather than inherited only from
 the broader mixed helper coverage.
 
+On-wire HTTP/3 WebSocket support is also fenced explicitly. Until King owns the
+HTTP/3 Extended CONNECT stream as a real bidirectional peer channel,
+`king_server_upgrade_to_websocket()` rejects an on-wire `h3` session instead of
+silently returning a local queue-backed resource that would look connected but
+would not speak to the remote peer.
+
 Those server-owned upgrade resources are also request-boundary scoped. If user
 code retains the returned resource after the handler returns, the runtime
 force-closes it and clears any queued local frames before the next request or

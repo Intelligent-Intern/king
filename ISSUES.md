@@ -136,7 +136,7 @@ Checklist:
 - [x] Move `king_http3_server_listen_once` and listener paths to the new runtime context.
 - [x] Prove request headers, body drain, early hints, response normalization, and CORS behavior stay unchanged.
 - [x] Preserve TLS reload, cancel, and shutdown paths.
-- [ ] Keep WebSocket-over-HTTP3 honesty slices covered.
+- [x] Keep WebSocket-over-HTTP3 honesty slices covered.
 
 Done:
 - [x] `extension/src/server/http3/lsquic_loader.inc` binds real LSQUIC server symbols via `dlsym()` and initializes server globals with `lsquic_global_init(KING_LSQUIC_GLOBAL_SERVER)`.
@@ -144,6 +144,7 @@ Done:
 - [x] `king_http3_server_listen_once` dispatches LSQUIC builds through a server runtime context with LSQUIC engine settings, TLS context, stream callbacks, packet ingress, egress, and response writes.
 - [x] `extension/tests/680-server-http3-lsquic-behavior-contract.phpt` proves the LSQUIC listener keeps shared request header normalization, body-FIN gating, early-hints session state, response normalization, and CORS semantics.
 - [x] `extension/tests/681-server-http3-lsquic-lifecycle-contract.phpt` covers TLS option/reload semantics, LSQUIC cancel bridging, premature close handling, and shutdown cleanup without leaking unowned listener sockets.
+- [x] `extension/tests/682-server-websocket-http3-onwire-honesty-contract.phpt` keeps local HTTP/3 WebSocket upgrades explicit while rejecting fake on-wire HTTP/3 Extended CONNECT upgrades.
 - [ ] HTTP/3 server listeners run on the new stack against real clients/peers.
 - [ ] No server path needs Quiche code.
 
