@@ -31,7 +31,7 @@ Checklist:
 - [x] Update release package manifests for new artifacts and new provenance.
 
 Done:
-- [ ] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
+- [x] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
 - [ ] Fresh HTTP/3 build needs no local Homebrew paths.
 - [ ] CI blocks Quiche/Cargo bootstrap in the active HTTP/3 path.
 
@@ -71,6 +71,12 @@ Release Manifest Contract:
 - `manifest.json` records the active HTTP/3 stack as `lsquic` + `boringssl` and identifies `modules/king.so` as the PHP extension artifact.
 - `manifest.json` carries LSQUIC, BoringSSL, ls-qpack, and ls-hpack archive hashes plus dependency provenance from `infra/scripts/lsquic-bootstrap.lock`.
 - `verify-release-package.sh` validates the modern manifest shape, and `verify-release-supply-chain.sh` compares it against the local pinned lock.
+
+Fresh Build Contract:
+
+- PIE/user-facing install docs no longer require Rust, Cargo, `libquiche.so`, `quiche-server`, or `KING_QUICHE_TOOLCHAIN_CONFIRM`.
+- `infra/scripts/check-http3-product-build-path.rb` blocks Rust/Cargo/Quiche runtime bootstrap from active HTTP/3 build, release, CI, and install docs.
+- The remaining allowed Cargo/Quiche strings in source-packaging are artifact-exclusion hygiene lines only.
 
 ---
 
