@@ -111,7 +111,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -274,7 +274,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -389,7 +389,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -491,7 +491,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -588,7 +588,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -685,7 +685,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -781,7 +781,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -874,7 +874,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
+          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |

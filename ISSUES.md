@@ -24,7 +24,7 @@ Goal:
 
 Checklist:
 - [x] Update `extension/config.m4` to portable detection: pkg-config, env overrides, system paths, or vendored build outputs.
-- [ ] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
+- [x] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
 - [ ] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
 - [ ] Make CI build reproducibly on Linux amd64 and arm64.
 - [ ] Support macOS/dev only through documented env/pkg-config paths.
@@ -41,6 +41,12 @@ Detection Contract:
 - LSQUIC can be configured via `KING_LSQUIC_CFLAGS/KING_LSQUIC_LIBS`, `KING_LSQUIC_ROOT`, explicit include/library dirs, pkg-config (`lsquic` or `liblsquic`), or default system paths.
 - BoringSSL can be configured via `KING_BORINGSSL_CFLAGS/KING_BORINGSSL_LIBS`, `KING_BORINGSSL_ROOT`, explicit include/library dirs, or default system paths.
 - `config.m4` no longer injects an in-tree `../quiche/quiche/include` path.
+
+Bootstrap Contract:
+
+- `infra/scripts/bootstrap-lsquic.sh` is the active deterministic source bootstrap entrypoint.
+- `infra/scripts/check-lsquic-bootstrap.sh` validates LSQUIC, BoringSSL, ls-qpack, and ls-hpack against pinned archives.
+- The old Quiche script entrypoints are removed from the active tree.
 
 ---
 

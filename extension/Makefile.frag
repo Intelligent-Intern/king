@@ -6,8 +6,6 @@ KING_QUICHE_SERVER = $(KING_QUICHE_TARGET_DIR)/$(KING_QUICHE_PROFILE)/quiche-ser
 KING_QUICHE_RUNTIME_STAMP = $(KING_QUICHE_TARGET_DIR)/.king-quiche-runtime.stamp
 KING_RUNTIME_INSTALL_DIR = $(INSTALL_ROOT)$(EXTENSION_DIR)/king/runtime
 KING_CARGO_BUILD_COMPAT = $(srcdir)/../infra/scripts/cargo-build-compat.sh
-KING_QUICHE_TOOLCHAIN_ENSURE = $(srcdir)/../infra/scripts/ensure-quiche-toolchain.sh
-KING_QUICHE_TOOLCHAIN_CONFIRM ?= prompt
 
 all: king-quiche-runtime
 install: install-king-runtime
@@ -18,8 +16,6 @@ $(KING_QUICHE_RUNTIME_STAMP):
 		echo "Use the PIE pre-packaged source asset or a checkout with the bundled QUIC tree present." >&2; \
 		exit 1; \
 	fi
-	@KING_QUICHE_TOOLCHAIN_CONFIRM="$(KING_QUICHE_TOOLCHAIN_CONFIRM)" \
-		$(KING_QUICHE_TOOLCHAIN_ENSURE) "$(KING_QUICHE_SOURCE_ROOT)/quiche/Cargo.toml"
 	@echo "Building King QUIC runtime artifacts"
 	@CARGO_TARGET_DIR="$(KING_QUICHE_TARGET_DIR)" $(KING_CARGO_BUILD_COMPAT) cargo build \
 		--manifest-path "$(KING_QUICHE_SOURCE_ROOT)/quiche/Cargo.toml" \

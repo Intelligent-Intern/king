@@ -9,7 +9,7 @@ Usage: ./infra/scripts/package-pie-source.sh [--output-dir DIR] [--release-tag T
 Creates the PIE pre-packaged source asset:
   dist/php_king-<version>-src.tgz
 
-The archive contains the King source tree plus the bundled quiche checkout so
+The archive contains the King source tree plus the pinned LSQUIC/BoringSSL source cache so
 PIE can build the extension from source with `build-path = extension`.
 EOF
 }
@@ -67,21 +67,19 @@ if [[ -z "${VERSION}" ]]; then
     exit 1
 fi
 
-if [[ ! -f "${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" ]]; then
-    echo "Missing pinned quiche lock file: ${ROOT_DIR}/infra/scripts/quiche-bootstrap.lock" >&2
+if [[ ! -f "${ROOT_DIR}/infra/scripts/lsquic-bootstrap.lock" ]]; then
+    echo "Missing pinned LSQUIC lock file: ${ROOT_DIR}/infra/scripts/lsquic-bootstrap.lock" >&2
     exit 1
 fi
 
-if [[ ! -x "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" ]]; then
-    echo "Missing executable quiche bootstrap script: ${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" >&2
+if [[ ! -x "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" ]]; then
+    echo "Missing executable LSQUIC bootstrap script: ${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" >&2
     exit 1
 fi
 
-if [[ -d "${ROOT_DIR}/quiche/.git" ]]; then
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-lock
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh" --verify-current
-else
-    "${ROOT_DIR}/infra/scripts/bootstrap-quiche.sh"
+"${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" --verify-lock
+if ! "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" --verify-current; then
+    "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh"
 fi
 
 if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then

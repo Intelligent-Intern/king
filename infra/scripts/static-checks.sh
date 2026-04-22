@@ -60,9 +60,6 @@ done
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh
 
-echo "Checking deterministic quiche bootstrap..."
-infra/scripts/check-quiche-bootstrap.sh
-
 echo "Checking deterministic LSQUIC bootstrap..."
 infra/scripts/check-lsquic-bootstrap.sh
 

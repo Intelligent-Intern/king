@@ -40,7 +40,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 QUICHE_DIR="${ROOT_DIR}/quiche"
-QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
+LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
 TOOLCHAIN_LOCK_FILE="${SCRIPT_DIR}/toolchain.lock"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
@@ -415,22 +415,16 @@ if ! bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust; then
     bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
 fi
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
-    "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
+    "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
-    # CI checkouts may not contain a pre-populated quiche tree (for example
-    # when no gitlink-backed submodule is present in the fetched tree). Fall
-    # back to deterministic bootstrap from the pinned lock in that case.
-    if [[ -d "${QUICHE_DIR}" ]] && git -C "${QUICHE_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        if ! "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-current; then
-            echo "Pinned quiche checkout verification failed; bootstrapping pinned checkout." >&2
-            "${QUICHE_BOOTSTRAP_SCRIPT}"
-        fi
-    else
-        echo "Pinned quiche checkout is missing in CI; bootstrapping pinned checkout." >&2
-        "${QUICHE_BOOTSTRAP_SCRIPT}"
+    # CI checkouts may not contain the generated source cache. Rebuild it from
+    # the deterministic lock whenever the local cache is missing or stale.
+    if ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
+        echo "Pinned LSQUIC source cache is missing in CI; bootstrapping pinned source cache." >&2
+        "${LSQUIC_BOOTSTRAP_SCRIPT}"
     fi
 else
-    "${QUICHE_BOOTSTRAP_SCRIPT}"
+    "${LSQUIC_BOOTSTRAP_SCRIPT}"
 fi
 
 echo "Building King profile: ${PROFILE}"

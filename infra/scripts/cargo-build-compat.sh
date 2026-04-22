@@ -132,31 +132,26 @@ attempt_toolchain_fixup() {
         return 1
     fi
 
-    if [[ ! -x "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" ]]; then
-        if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
-            echo "cargo/rustc are missing in PATH. King requires a compatible Rust toolchain." >&2
-            print_install_solution >&2
-            if ! ensure_confirmation; then
-                echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
-                return 1
-            fi
-            if ! run_rust_upgrade; then
-                return 1
-            fi
-        elif ! ensure_confirmation; then
+    if ! command -v cargo >/dev/null 2>&1 || ! command -v rustc >/dev/null 2>&1; then
+        echo "cargo/rustc are missing in PATH. King requires a compatible Rust toolchain." >&2
+        print_install_solution >&2
+        if ! ensure_confirmation; then
             echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
             return 1
-        else
-            if ! run_rust_upgrade; then
-                echo "Failed to auto-upgrade rust toolchain for lockfile-v4 compatibility." >&2
-                return 1
-            fi
         fi
-        return 0
+        if ! run_rust_upgrade; then
+            return 1
+        fi
+    elif ! ensure_confirmation; then
+        echo "Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=${confirm})." >&2
+        return 1
+    else
+        if ! run_rust_upgrade; then
+            echo "Failed to auto-upgrade rust toolchain for lockfile-v4 compatibility." >&2
+            return 1
+        fi
     fi
-
-    KING_QUICHE_TOOLCHAIN_CONFIRM="${confirm}" \
-        "${SCRIPT_DIR}/ensure-quiche-toolchain.sh" "${MANIFEST_PATH}"
+    return 0
 }
 
 is_lockfile_version4_error() {
