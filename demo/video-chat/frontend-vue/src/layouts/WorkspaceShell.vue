@@ -177,7 +177,7 @@
               <section
                 v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate"
                 class="call-left-layout-controls"
-                aria-label="Video layout"
+                aria-label="Call settings video layout"
               >
                 <div class="call-left-settings-field">
                   <label for="call-left-layout-mode">Video layout</label>
