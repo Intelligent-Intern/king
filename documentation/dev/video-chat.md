@@ -447,6 +447,7 @@ The wizard asks for:
 - public domain, for example `video.example.com`
 - email address for Let's Encrypt/Certbot
 - Hetzner Cloud API token with read/write access
+- Hetzner DNS API token with read/write access if the helper should manage DNS
 - server name, server type, location, and image, with defaults offered by the
   script
 - optional API, lobby websocket, SFU, TURN, and CDN hostnames; by default the helper
@@ -456,8 +457,8 @@ The helper loads `demo/video-chat/.env.local` before it checks required deploy
 variables. The wizard and manual deploy actions write the effective deploy
 settings back to that same file, so later runs can reuse them without retyping
 everything. This includes the Hetzner API token, derived `api/ws/sfu/turn/cdn`
-hostnames, the SSH key path, selected server settings, and the resolved server
-IP. The file is ignored by git.
+hostnames, the optional Hetzner DNS API token, the SSH key path, selected server
+settings, and the resolved server IP. The file is ignored by git.
 
 The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
 Manual deploy actions also auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is

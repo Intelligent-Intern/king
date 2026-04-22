@@ -32,6 +32,7 @@ for marker in \
   'deploy_refresh_known_hosts_enabled' \
   'deploy_dns_targets' \
   'VIDEOCHAT_DEPLOY_CDN_DOMAIN' \
+  'VIDEOCHAT_DEPLOY_DNS_API_TOKEN' \
   'ensure_hcloud_dns_records_if_configured' \
   'resolved_ips_for_domain "${target}"' \
   'restore_certbot_stopped_services' \
@@ -46,6 +47,7 @@ for marker in \
   'persist_wizard_env' \
   'VIDEOCHAT_DEPLOY_HCLOUD_TOKEN' \
   'hcloud_set_videochat_subdomain_records' \
+  'hcloud_dns_api' \
   'wait_for_dns_to_server' \
   'refresh_known_hosts_for_target'
 do

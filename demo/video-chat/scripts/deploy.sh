@@ -63,6 +63,8 @@ Optional environment:
 Optional Hetzner wizard environment:
   VIDEOCHAT_DEPLOY_HCLOUD_TOKEN       Hetzner Cloud read/write API token.
   VIDEOCHAT_DEPLOY_HCLOUD_API_BASE    API base, default: https://api.hetzner.cloud/v1.
+  VIDEOCHAT_DEPLOY_DNS_API_TOKEN      Hetzner DNS API token for DNS-zone records.
+  VIDEOCHAT_DEPLOY_DNS_API_BASE       DNS API base, default: https://dns.hetzner.com/api/v1.
   VIDEOCHAT_DEPLOY_HCLOUD_LOCATION    Server location, default: fsn1.
   VIDEOCHAT_DEPLOY_HCLOUD_SERVER_TYPE Server type, default: cpx21.
   VIDEOCHAT_DEPLOY_HCLOUD_IMAGE       Server image, default: ubuntu-24.04.
@@ -331,13 +333,12 @@ ensure_hcloud_dns_records_if_configured() {
     *) return 0 ;;
   esac
 
-  [[ -n "${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}" && -n "${DEPLOY_PUBLIC_IP}" ]] || return 0
+  [[ -n "${VIDEOCHAT_DEPLOY_DNS_API_TOKEN:-${VIDEOCHAT_DEPLOY_HETZNER_DNS_TOKEN:-}}" && -n "${DEPLOY_PUBLIC_IP}" ]] || {
+    log "Hetzner DNS refresh skipped; set VIDEOCHAT_DEPLOY_DNS_API_TOKEN or create DNS records manually."
+    return 0
+  }
   require_cmd curl
   require_cmd jq
-
-  HCLOUD_TOKEN="${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN}"
-  HCLOUD_API_BASE="${VIDEOCHAT_DEPLOY_HCLOUD_API_BASE:-https://api.hetzner.cloud/v1}"
-  HCLOUD_API_BASE="${HCLOUD_API_BASE%/}"
 
   hcloud_set_dns_a_record || true
   hcloud_set_videochat_subdomain_records

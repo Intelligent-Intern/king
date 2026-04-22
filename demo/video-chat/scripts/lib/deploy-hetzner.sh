@@ -126,6 +126,8 @@ persist_wizard_env() {
     VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME
     VIDEOCHAT_DEPLOY_HCLOUD_SSH_KEY_NAME
     VIDEOCHAT_DEPLOY_HCLOUD_DNS
+    VIDEOCHAT_DEPLOY_DNS_API_TOKEN
+    VIDEOCHAT_DEPLOY_DNS_API_BASE
     VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS
   )
 
@@ -167,6 +169,56 @@ hcloud_api() {
       ;;
     *)
       printf '[videochat-deploy] Hetzner API error %s for %s %s\n' "${code}" "${method}" "${path}" >&2
+      cat "${tmp}" >&2 || true
+      printf '\n' >&2
+      rm -f "${tmp}"
+      return 1
+      ;;
+  esac
+}
+
+hcloud_dns_api_token() {
+  printf '%s' "${VIDEOCHAT_DEPLOY_DNS_API_TOKEN:-${VIDEOCHAT_DEPLOY_HETZNER_DNS_TOKEN:-}}"
+}
+
+hcloud_dns_api_base() {
+  local base="${VIDEOCHAT_DEPLOY_DNS_API_BASE:-https://dns.hetzner.com/api/v1}"
+  printf '%s' "${base%/}"
+}
+
+hcloud_dns_api() {
+  local method="$1" path="$2" body="${3-}" tmp code token
+  token="$(hcloud_dns_api_token)"
+  [[ -n "${token}" ]] || {
+    log "No Hetzner DNS API token configured; set VIDEOCHAT_DEPLOY_DNS_API_TOKEN or create DNS records manually."
+    return 1
+  }
+
+  tmp="$(mktemp)"
+  local curl_args=(
+    curl -sS -o "${tmp}" -w '%{http_code}'
+    -X "${method}"
+    -H "Auth-API-Token: ${token}"
+    -H "Content-Type: application/json"
+    "$(hcloud_dns_api_base)${path}"
+  )
+
+  if [[ $# -ge 3 ]]; then
+    curl_args+=(-d "${body}")
+  fi
+
+  if ! code="$("${curl_args[@]}")"; then
+    rm -f "${tmp}"
+    die "Hetzner DNS API request failed: ${method} ${path}"
+  fi
+
+  case "${code}" in
+    2*)
+      cat "${tmp}"
+      rm -f "${tmp}"
+      ;;
+    *)
+      printf '[videochat-deploy] Hetzner DNS API error %s for %s %s\n' "${code}" "${method}" "${path}" >&2
       cat "${tmp}" >&2 || true
       printf '\n' >&2
       rm -f "${tmp}"
@@ -353,7 +405,7 @@ wait_for_dns_to_server() {
 hcloud_find_zone_for_domain() {
   local target_domain="${1:-${DEPLOY_DOMAIN}}"
   local zones
-  zones="$(hcloud_api GET '/zones?per_page=100')" || return 1
+  zones="$(hcloud_dns_api GET '/zones?per_page=100')" || return 1
   jq -r --arg domain "${target_domain}" '
     [.zones[]? | select($domain == .name or ($domain | endswith("." + .name)))]
     | sort_by(.name | length)
@@ -367,7 +419,7 @@ hcloud_find_zone_for_domain() {
 
 hcloud_set_dns_a_record_for_domain() {
   local target_domain="$1"
-  local zone_line zone_id zone_name zone_mode rr_name zone_path rr_path rrsets exists action body
+  local zone_line zone_id zone_name zone_mode rr_name zone_path record_id records body
   zone_line="$(hcloud_find_zone_for_domain "${target_domain}" || true)"
   if [[ -z "${zone_line}" ]]; then
     log "No matching Hetzner DNS zone found for ${target_domain}; manual A record is required."
@@ -375,7 +427,7 @@ hcloud_set_dns_a_record_for_domain() {
   fi
 
   IFS=$'\t' read -r zone_id zone_name zone_mode <<<"${zone_line}"
-  if [[ "${zone_mode}" != "primary" ]]; then
+  if [[ -n "${zone_mode}" && "${zone_mode}" != "primary" ]]; then
     log "Hetzner DNS zone ${zone_name} is ${zone_mode}; manual A record is required."
     return 1
   fi
@@ -387,15 +439,22 @@ hcloud_set_dns_a_record_for_domain() {
   fi
 
   zone_path="$(urlencode_path_segment "${zone_id}")"
-  rr_path="$(urlencode_path_segment "${rr_name}")"
-  rrsets="$(hcloud_api GET "/zones/${zone_path}/rrsets?per_page=500")"
-  exists="$(jq -r --arg name "${rr_name}" '[.rrsets[]? | select(.name == $name and .type == "A")][0].name // empty' <<<"${rrsets}")"
-  action="add_records"
-  [[ -n "${exists}" ]] && action="set_records"
+  records="$(hcloud_dns_api GET "/records?zone_id=${zone_path}")"
+  record_id="$(jq -r --arg name "${rr_name}" '
+    [.records[]? | select(.name == $name and .type == "A")][0].id // empty
+  ' <<<"${records}")"
 
-  body="$(jq -n --arg ip "${DEPLOY_PUBLIC_IP}" \
-    '{records: [{value: $ip, comment: "King video chat"}]}')"
-  hcloud_api POST "/zones/${zone_path}/rrsets/${rr_path}/A/actions/${action}" "${body}" >/dev/null
+  body="$(jq -n \
+    --arg zone_id "${zone_id}" \
+    --arg name "${rr_name}" \
+    --arg value "${DEPLOY_PUBLIC_IP}" \
+    '{zone_id: $zone_id, type: "A", name: $name, value: $value, ttl: 60}')"
+
+  if [[ -n "${record_id}" ]]; then
+    hcloud_dns_api PUT "/records/$(urlencode_path_segment "${record_id}")" "${body}" >/dev/null
+  else
+    hcloud_dns_api POST '/records' "${body}" >/dev/null
+  fi
   log "Hetzner DNS A record set: ${target_domain} -> ${DEPLOY_PUBLIC_IP}"
 }
 
@@ -422,6 +481,12 @@ run_hcloud_dns_step() {
   fi
   VIDEOCHAT_DEPLOY_HCLOUD_DNS="${choice}"
   export VIDEOCHAT_DEPLOY_HCLOUD_DNS
+
+  if [[ "${choice}" == "1" || "${choice}" == "yes" || "${choice}" == "true" ]]; then
+    if [[ -z "${VIDEOCHAT_DEPLOY_DNS_API_TOKEN:-${VIDEOCHAT_DEPLOY_HETZNER_DNS_TOKEN:-}}" ]]; then
+      prompt_secret VIDEOCHAT_DEPLOY_DNS_API_TOKEN "Hetzner DNS API token with read/write access" 0
+    fi
+  fi
   persist_wizard_env
 
   if [[ "${choice}" == "1" || "${choice}" == "yes" || "${choice}" == "true" ]]; then
