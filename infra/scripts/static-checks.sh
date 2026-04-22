@@ -40,6 +40,7 @@ echo "Linting PHP entry surfaces..."
 php_lint stubs/king.php
 php_lint benchmarks/run.php
 php_lint infra/scripts/check-stub-parity.php
+php_lint infra/scripts/check-http3-lsquic-loader-contract.php
 php_lint infra/scripts/runtime-config-compatibility.php
 php_lint infra/scripts/runtime-install-smoke.php
 php_lint infra/scripts/runtime-persistence-migration.php
@@ -69,6 +70,9 @@ ruby infra/scripts/check-dev-path-configuration.rb
 
 echo "Checking HTTP/3 product build path for Rust/Cargo bootstrap..."
 ruby infra/scripts/check-http3-product-build-path.rb
+
+echo "Checking HTTP/3 LSQUIC loader contract..."
+php -n infra/scripts/check-http3-lsquic-loader-contract.php
 
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh
