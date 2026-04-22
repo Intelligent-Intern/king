@@ -28,8 +28,6 @@ $requiredHygieneGuards = [
     'Cargo build target directories must not be versioned',
     'Legacy Quiche runtime artifacts must not be versioned',
     'Unclassified Cargo manifests/locks must not be versioned',
-    'extension/tests/http3_ticket_server/Cargo.toml',
-    'extension/tests/http3_ticket_server/Cargo.lock',
 ];
 
 foreach ($requiredHygieneGuards as $guard) {
@@ -52,6 +50,15 @@ require_contains(
     "'(^|/)Cargo\\.(toml|lock)$'"
 );
 
+foreach ([
+    'extension/tests/http3_ticket_server/Cargo.toml',
+    'extension/tests/http3_ticket_server/Cargo.lock',
+] as $removedException) {
+    if (str_contains($hygiene, $removedException)) {
+        throw new RuntimeException('repo artifact hygiene gate still allows removed fixture: ' . $removedException);
+    }
+}
+
 require_contains(
     'static checks',
     source('infra/scripts/static-checks.sh'),
@@ -63,9 +70,9 @@ require_contains(
     'bash ./infra/scripts/check-repo-artifact-hygiene.sh'
 );
 require_contains(
-    'Q-9 issue leaf',
-    source('ISSUES.md'),
-    '- [x] Extend artifact hygiene gate for Quiche/Cargo artifacts.'
+    'Quiche/Cargo artifact hygiene closure',
+    source('READYNESS_TRACKER.md'),
+    'artifact hygiene gate blocks Quiche/Cargo artifacts'
 );
 
 echo "OK\n";

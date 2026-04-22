@@ -30,9 +30,9 @@ foreach ([
 }
 
 $benchmarkWrapper = (string) file_get_contents($root . '/benchmarks/run-canonical.sh');
-$benchmarkDoc = (string) file_get_contents($root . '/benchmarks/README.md');
+$benchmarkDoc = (string) file_get_contents($root . '/documentation/dev/benchmarks.md');
 $flakeClassifier = (string) file_get_contents($root . '/infra/scripts/classify-phpt-flakes.sh');
-$provenanceDoc = (string) file_get_contents($root . '/DEPENDENCY_PROVENANCE.md');
+$provenanceDoc = (string) file_get_contents($root . '/documentation/dependency-provenance.md');
 $provenanceCheck = (string) file_get_contents($root . '/infra/scripts/check-dependency-provenance-doc.sh');
 $contribute = (string) file_get_contents($root . '/CONTRIBUTE');
 $runtimeDockerfile = (string) file_get_contents($root . '/infra/php-runtime.Dockerfile');
@@ -40,7 +40,7 @@ $demoDockerfile = (string) file_get_contents($root . '/infra/demo-server/Dockerf
 $configHeader = (string) file_get_contents($root . '/extension/config.h.in')
     . "\n"
     . (string) file_get_contents($root . '/extension/config.h');
-$issues = (string) file_get_contents($root . '/ISSUES.md');
+$readiness = (string) file_get_contents($root . '/READYNESS_TRACKER.md');
 
 foreach ([
     'benchmark wrapper' => $benchmarkWrapper,
@@ -77,9 +77,9 @@ require_contains('demo server Dockerfile', $demoDockerfile, 'KING_LSQUIC_LIBRARY
 require_not_contains('generated config header template', $configHeader, 'HAVE_KING_QUICHE');
 require_not_contains('generated config header template', $configHeader, 'HAVE_LIBQUICHE');
 require_contains(
-    'Q-9 issue leaf',
-    $issues,
-    '- [x] Remove or replace Quiche-specific build scripts, locks, and docs.'
+    'Quiche cleanup closure',
+    $readiness,
+    'Quiche build scripts/locks'
 );
 
 echo "OK\n";

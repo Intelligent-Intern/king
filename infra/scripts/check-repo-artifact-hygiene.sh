@@ -9,26 +9,6 @@ cd "${ROOT_DIR}"
 
 mapfile -t tracked_files < <(git ls-files)
 
-allowed_cargo_manifests=(
-  "extension/tests/http3_ticket_server/Cargo.lock"
-  "extension/tests/http3_ticket_server/Cargo.toml"
-)
-
-is_allowed_tracked_file() {
-  local regex="$1"
-  local path="$2"
-
-  if [[ "${regex}" == '(^|/)Cargo\.(toml|lock)$' ]]; then
-    for allowed in "${allowed_cargo_manifests[@]}"; do
-      if [[ "${path}" == "${allowed}" ]]; then
-        return 0
-      fi
-    done
-  fi
-
-  return 1
-}
-
 descriptions=(
   "Vite cache directories must not be versioned (.vite)"
   "CMake build directories must not be versioned (CMakeFiles)"
@@ -66,14 +46,7 @@ for i in "${!descriptions[@]}"; do
   desc="${descriptions[i]}"
   regex="${patterns[i]}"
 
-  mapfile -t raw_matches < <(printf '%s\n' "${tracked_files[@]}" | grep -E "${regex}" || true)
-  matches=()
-  for path in "${raw_matches[@]}"; do
-    if is_allowed_tracked_file "${regex}" "${path}"; then
-      continue
-    fi
-    matches+=("${path}")
-  done
+  mapfile -t matches < <(printf '%s\n' "${tracked_files[@]}" | grep -E "${regex}" || true)
 
   if [[ "${#matches[@]}" -eq 0 ]]; then
     continue

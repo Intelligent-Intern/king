@@ -1,5 +1,5 @@
 --TEST--
-King HTTP/3 test peer replacement strategy is C/LSQUIC, repo-owned, and non-Cargo
+King HTTP/3 test peer strategy uses C/LSQUIC helpers and no remaining Rust/Cargo fixtures
 --FILE--
 <?php
 $root = dirname(__DIR__, 2);
@@ -27,6 +27,7 @@ $expectedHeader = [
     'product_bootstrap' => false,
     'dependency_lock' => 'infra/scripts/lsquic-bootstrap.lock',
     'expiry_issue' => '#Q-8',
+    'removed_temporary_fixture_issue' => '#Q-9',
 ];
 
 foreach ($expectedHeader as $field => $expected) {
@@ -45,21 +46,33 @@ if (!is_file($root . '/' . $header['dependency_lock'])) {
     king_http3_strategy_fail('selected dependency lock is missing');
 }
 
-$replacements = $strategy['replacements'] ?? null;
-if (!is_array($replacements)) {
-    king_http3_strategy_fail('replacement map missing');
+$buildScriptSource = file_get_contents($root . '/' . $header['future_build_script']);
+if (!is_string($buildScriptSource) || $buildScriptSource === '') {
+    king_http3_strategy_fail('could not read selected helper build script');
 }
 
-$classified = array_keys($classification);
-sort($classified);
-$replacementKeys = array_keys($replacements);
-sort($replacementKeys);
-if ($classified !== $replacementKeys) {
-    king_http3_strategy_fail(
-        "replacement map does not cover the classified temporary fixtures\n" .
-        'classified=' . json_encode($classified, JSON_UNESCAPED_SLASHES) . "\n" .
-        'replacements=' . json_encode($replacementKeys, JSON_UNESCAPED_SLASHES)
-    );
+if (!is_array($classification) || $classification !== []) {
+    king_http3_strategy_fail('temporary Rust/Cargo fixture classification must be empty');
+}
+
+$activeHelpers = $strategy['active_helpers'] ?? null;
+if (!is_array($activeHelpers) || $activeHelpers === []) {
+    king_http3_strategy_fail('active helper map missing');
+}
+
+$completedReplacements = $strategy['completed_replacements'] ?? null;
+if (!is_array($completedReplacements) || count($completedReplacements) !== 7) {
+    king_http3_strategy_fail('completed replacement map does not record all removed fixtures');
+}
+
+foreach ($completedReplacements as $legacyPath => $helper) {
+    if (is_file($root . '/' . $legacyPath)) {
+        king_http3_strategy_fail("legacy Rust/Cargo fixture still exists: {$legacyPath}");
+    }
+
+    if (!is_string($helper) || !isset($activeHelpers[$helper])) {
+        king_http3_strategy_fail("{$legacyPath} does not map to an active helper");
+    }
 }
 
 $allowedPaths = [
@@ -70,40 +83,46 @@ $allowedPaths = [
 ];
 
 $coveredCapabilities = [];
-foreach ($replacements as $source => $replacement) {
-    if (!is_array($replacement)) {
-        king_http3_strategy_fail("{$source} replacement is not an object");
+foreach ($activeHelpers as $helper => $metadata) {
+    if (!is_string($helper) || trim($helper) === '') {
+        king_http3_strategy_fail('active helper has invalid id');
     }
 
-    foreach (['target', 'helper', 'path', 'capabilities'] as $field) {
-        if (!array_key_exists($field, $replacement)) {
-            king_http3_strategy_fail("{$source} replacement has no {$field}");
+    if (!is_array($metadata)) {
+        king_http3_strategy_fail("{$helper} metadata is not an object");
+    }
+
+    foreach (['target', 'path', 'capabilities'] as $field) {
+        if (!array_key_exists($field, $metadata)) {
+            king_http3_strategy_fail("{$helper} has no {$field}");
         }
     }
 
-    if (!is_string($replacement['target']) || trim($replacement['target']) === '') {
-        king_http3_strategy_fail("{$source} replacement target missing");
+    if (!is_string($metadata['target']) || trim($metadata['target']) === '') {
+        king_http3_strategy_fail("{$helper} target missing");
     }
 
-    if (!is_string($replacement['helper']) || trim($replacement['helper']) === '') {
-        king_http3_strategy_fail("{$source} replacement helper missing");
+    $sourceName = basename($metadata['target']);
+    $isCompiledHelper = in_array($metadata['path'], ['c_lsquic_client_helper', 'c_lsquic_server_peer'], true);
+    if ($isCompiledHelper && !str_contains($buildScriptSource, "{$helper}:{$sourceName}")) {
+        king_http3_strategy_fail("{$helper} target is not listed in the deterministic helper build plan");
     }
 
-    if (!is_string($replacement['path']) || !isset($allowedPaths[$replacement['path']])) {
-        king_http3_strategy_fail("{$source} replacement path is invalid");
+    if (!is_string($metadata['path']) || !isset($allowedPaths[$metadata['path']])) {
+        king_http3_strategy_fail("{$helper} path is invalid");
     }
 
-    if (!is_array($replacement['capabilities'])) {
-        king_http3_strategy_fail("{$source} replacement capabilities are invalid");
+    if (!is_array($metadata['capabilities'])) {
+        king_http3_strategy_fail("{$helper} capabilities are invalid");
     }
 
-    if (str_contains($replacement['target'], 'quiche') || str_contains($replacement['target'], 'Cargo')) {
-        king_http3_strategy_fail("{$source} replacement target still points at Quiche/Cargo");
+    if (str_contains($metadata['target'], 'quiche') || str_contains($metadata['target'], 'Cargo')) {
+        king_http3_strategy_fail("{$helper} target still points at Quiche/Cargo");
     }
 
-    foreach ($replacement['capabilities'] as $capability) {
+    foreach ($metadata['capabilities'] as $capability) {
         if (!is_string($capability) || trim($capability) === '') {
-            king_http3_strategy_fail("{$source} replacement has an invalid capability");
+            king_http3_strategy_fail("{$helper} has an invalid capability");
         }
         $coveredCapabilities[$capability] = true;
     }

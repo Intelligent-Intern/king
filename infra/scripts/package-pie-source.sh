@@ -113,7 +113,6 @@ tar \
     --exclude='./.cargo' \
     --exclude='./extension/build' \
     --exclude='./extension/quiche/target' \
-    --exclude='./extension/tests/http3_ticket_server/target' \
     --exclude='./extension/modules' \
     --exclude='./extension/Makefile' \
     --exclude='./extension/config.cache' \

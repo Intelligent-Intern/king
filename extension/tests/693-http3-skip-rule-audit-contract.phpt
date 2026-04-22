@@ -167,17 +167,17 @@ if ($helperGateCount < 12) {
     king_http3_skip_audit_fail('helper-backed behavior coverage unexpectedly collapsed');
 }
 
-$issues = file_get_contents($root . '/ISSUES.md');
-if (!is_string($issues) || $issues === '') {
-    king_http3_skip_audit_fail('could not read ISSUES.md');
+$readiness = file_get_contents($root . '/READYNESS_TRACKER.md');
+if (!is_string($readiness) || $readiness === '') {
+    king_http3_skip_audit_fail('could not read READYNESS_TRACKER.md');
 }
 
 $doneCheckbox = preg_quote($audit['done_checkbox'] ?? '', '/');
-if ($legacyBlockerCount > 0 && preg_match('/- \[x\]\s+' . $doneCheckbox . '/', $issues) === 1) {
+if ($legacyBlockerCount > 0 && preg_match('/- \[x\]\s+' . $doneCheckbox . '/', $readiness) === 1) {
     king_http3_skip_audit_fail('final HTTP/3 done checkbox is checked while legacy skip blockers remain');
 }
 
-if ($legacyBlockerCount === 0 && preg_match('/- \[ \]\s+' . $doneCheckbox . '/', $issues) === 1) {
+if ($legacyBlockerCount === 0 && preg_match('/- \[ \]\s+' . $doneCheckbox . '/', $readiness) === 1) {
     king_http3_skip_audit_fail('final HTTP/3 done checkbox is still open after legacy skip blockers were removed');
 }
 

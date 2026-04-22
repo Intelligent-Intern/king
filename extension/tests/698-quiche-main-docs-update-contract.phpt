@@ -24,11 +24,10 @@ function require_contains_compacted(string $label, string $source, string $needl
 }
 
 $readme = (string) file_get_contents($root . '/README.md');
-$assessment = (string) file_get_contents($root . '/PROJECT_ASSESSMENT.md');
+$assessment = (string) file_get_contents($root . '/documentation/project-assessment.md');
 $readiness = (string) file_get_contents($root . '/READYNESS_TRACKER.md');
-$provenance = (string) file_get_contents($root . '/DEPENDENCY_PROVENANCE.md');
+$provenance = (string) file_get_contents($root . '/documentation/dependency-provenance.md');
 $quicDoc = (string) file_get_contents($root . '/documentation/quic-and-tls.md');
-$issues = (string) file_get_contents($root . '/ISSUES.md');
 
 require_contains('README', $readme, 'infra/scripts/lsquic-bootstrap.lock');
 require_contains_compacted(
@@ -65,9 +64,9 @@ require_not_contains('QUIC/TLS documentation', $quicDoc, 'active quiche event lo
 require_not_contains('QUIC/TLS documentation', $quicDoc, 'live quiche counters');
 
 require_contains(
-    'Q-9 issue leaf',
-    $issues,
-    '- [x] Update `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `DEPENDENCY_PROVENANCE.md`, and `documentation/quic-and-tls.md`.'
+    'readiness tracker',
+    $readiness,
+    'Recent Quiche cleanup closure:'
 );
 
 echo "OK\n";

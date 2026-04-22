@@ -52,19 +52,15 @@ function tracked_files(): array
     return $files;
 }
 
-function remaining_quiche_match_category(string $path, array $temporaryFixtures): ?string
+function remaining_quiche_match_category(string $path, array $removedFixtureClassification): ?string
 {
-    if (isset($temporaryFixtures[$path])) {
-        return 'temporary_test_fixture';
-    }
-
     if (in_array($path, [
+        'BACKLOG.md',
         'README.md',
-        'PROJECT_ASSESSMENT.md',
+        'documentation/project-assessment.md',
         'READYNESS_TRACKER.md',
-        'DEPENDENCY_PROVENANCE.md',
-        'benchmarks/README.md',
-        'ISSUES.md',
+        'documentation/dependency-provenance.md',
+        'documentation/dev/benchmarks.md',
     ], true)) {
         return 'historical_migration_note';
     }
@@ -72,6 +68,7 @@ function remaining_quiche_match_category(string $path, array $temporaryFixtures)
     if (in_array($path, [
         '.dockerignore',
         '.gitignore',
+        'CONTRIBUTE',
         'Makefile',
         'extension/Makefile.frag',
         'infra/scripts/check-ci-http3-contract-suites.rb',
@@ -90,7 +87,7 @@ function remaining_quiche_match_category(string $path, array $temporaryFixtures)
         'extension/tests/http3_peer_replacement_strategy.inc',
         'extension/tests/http3_rust_peer_classification.inc',
     ], true)) {
-        return 'temporary_fixture_migration_contract';
+        return 'fixture_migration_contract';
     }
 
     if (preg_match('#^extension/tests/[0-9]+-[^/]+\.phpt$#', $path) === 1
@@ -185,16 +182,20 @@ require_contains(
 
 $historicalDocs = [
     'README.md' => 'Legacy Quiche build scripts',
-    'PROJECT_ASSESSMENT.md' => 'legacy Quiche bootstrap inputs outside the active product path',
+    'documentation/project-assessment.md' => 'legacy Quiche bootstrap inputs outside the active product path',
     'READYNESS_TRACKER.md' => 'legacy Quiche bootstrap inputs',
-    'DEPENDENCY_PROVENANCE.md' => 'Legacy Quiche bootstrap locks are no longer provenance inputs.',
-    'benchmarks/README.md' => 'Cargo, or Quiche runtime environment.',
+    'documentation/dependency-provenance.md' => 'Legacy Quiche bootstrap locks are no longer provenance inputs.',
+    'documentation/dev/benchmarks.md' => 'Cargo, or Quiche runtime environment.',
 ];
 foreach ($historicalDocs as $path => $expectedHistoricalNote) {
     require_contains($path, source($path), $expectedHistoricalNote);
 }
 
 $classification = require $root . '/extension/tests/http3_rust_peer_classification.inc';
+if (!is_array($classification) || $classification !== []) {
+    throw new RuntimeException('HTTP/3 Rust/Cargo fixture classification must stay empty.');
+}
+
 foreach ($classification as $path => $entry) {
     if (($entry['active_product_path'] ?? null) !== false
         || ($entry['product_bootstrap'] ?? null) !== false
@@ -236,8 +237,7 @@ foreach ([
     'historical_migration_note',
     'guard_or_packaging_literal',
     'contract_test_literal',
-    'temporary_fixture_migration_contract',
-    'temporary_test_fixture',
+    'fixture_migration_contract',
 ] as $expectedCategory) {
     if (($categoryCounts[$expectedCategory] ?? 0) < 1) {
         throw new RuntimeException('Remaining Quiche match category not exercised: ' . $expectedCategory);
@@ -245,19 +245,19 @@ foreach ([
 }
 
 require_contains(
-    'Q-9 issue leaf',
-    source('ISSUES.md'),
-    '- [x] Mark remaining Quiche mentions as historical notes or remove them.'
+    'Quiche cleanup closure',
+    source('READYNESS_TRACKER.md'),
+    'remaining Quiche mentions are historical migration notes'
 );
 require_contains(
-    'Q-9 active product path leaf',
-    source('ISSUES.md'),
-    '- [x] `rg -n "quiche|QUICHE"` finds no active product-path references.'
+    'Quiche active product path closure',
+    source('READYNESS_TRACKER.md'),
+    'active product-path Quiche references'
 );
 require_contains(
-    'Q-9 remaining match classification leaf',
-    source('ISSUES.md'),
-    '- [x] Remaining `rg -n "quiche|QUICHE"` matches are classified as historical migration notes, release history, guard literals, contract-test literals, or temporary test fixtures.'
+    'Quiche remaining match classification closure',
+    source('READYNESS_TRACKER.md'),
+    'guard literals, contract-test literals, or migration contracts'
 );
 
 echo "OK\n";

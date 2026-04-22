@@ -1,5 +1,5 @@
 --TEST--
-King HTTP/3 temporary Rust helpers are quarantined outside product bootstrap and expire into the removal issue
+King HTTP/3 temporary Rust helpers are removed after C/LSQUIC replacement
 --FILE--
 <?php
 $root = dirname(__DIR__, 2);
@@ -13,65 +13,55 @@ function king_http3_expiry_fail(string $message): void
     exit(1);
 }
 
-if (($strategy['strategy']['temporary_fixture_expiry_issue'] ?? null) !== '#Q-9') {
-    king_http3_expiry_fail('replacement strategy does not hand temporary fixtures to #Q-9');
+if (($strategy['strategy']['removed_temporary_fixture_issue'] ?? null) !== '#Q-9') {
+    king_http3_expiry_fail('replacement strategy does not record temporary fixture removal in #Q-9');
 }
 
-$issues = file_get_contents($root . '/ISSUES.md');
-if (!is_string($issues) || $issues === '') {
-    king_http3_expiry_fail('could not read ISSUES.md');
+if (!is_array($classification) || $classification !== []) {
+    king_http3_expiry_fail('temporary Rust/Cargo fixture classification must be empty after removal');
+}
+
+$readiness = file_get_contents($root . '/READYNESS_TRACKER.md');
+if (!is_string($readiness) || $readiness === '') {
+    king_http3_expiry_fail('could not read READYNESS_TRACKER.md');
 }
 
 foreach ([
-    '### #Q-9 Remove Quiche From Source, Scripts, And Docs',
-    '- Fully remove Quiche as an active dependency.',
-    '- [x] Remove or replace Quiche-specific build scripts, locks, and docs.',
+    'Recent QUIC bootstrap closure:',
+    'legacy Quiche bootstrap inputs',
+    'unlocked Cargo retries',
+    'temporary Rust/Cargo HTTP/3 fixtures are removed',
 ] as $needle) {
-    if (!str_contains($issues, $needle)) {
-        king_http3_expiry_fail('expiry issue #Q-9 is missing required context: ' . $needle);
+    if (!str_contains($readiness, $needle)) {
+        king_http3_expiry_fail('temporary Rust/Cargo removal proof is missing required context: ' . $needle);
     }
 }
 
-$kindCounts = [
-    'rust_test_peer' => 0,
-    'cargo_manifest' => 0,
-    'cargo_lock' => 0,
-];
+$legacyFixturePaths = array_keys($strategy['completed_replacements'] ?? []);
+sort($legacyFixturePaths);
+if (count($legacyFixturePaths) !== 7) {
+    king_http3_expiry_fail('completed replacement map does not record all removed temporary fixtures');
+}
 
-foreach ($classification as $path => $entry) {
-    if (!is_array($entry)) {
-        king_http3_expiry_fail("{$path} classification is malformed");
-    }
-
-    if (!is_file($root . '/' . $path)) {
-        king_http3_expiry_fail("{$path} no longer exists but remains classified");
-    }
-
-    $kind = $entry['kind'] ?? null;
-    if (!is_string($kind) || !array_key_exists($kind, $kindCounts)) {
-        king_http3_expiry_fail("{$path} has invalid kind");
-    }
-    $kindCounts[$kind]++;
-
-    if (($entry['temporary'] ?? null) !== true) {
-        king_http3_expiry_fail("{$path} is not marked temporary");
-    }
-
-    if (($entry['product_bootstrap'] ?? null) !== false) {
-        king_http3_expiry_fail("{$path} is not excluded from product bootstrap");
-    }
-
-    if (($entry['active_product_path'] ?? null) !== false) {
-        king_http3_expiry_fail("{$path} is not excluded from the active product path");
-    }
-
-    if (($entry['expiry_issue'] ?? null) !== '#Q-9') {
-        king_http3_expiry_fail("{$path} does not expire into #Q-9");
+foreach ($legacyFixturePaths as $path) {
+    if (is_file($root . '/' . $path)) {
+        king_http3_expiry_fail("temporary Rust/Cargo fixture still exists: {$path}");
     }
 }
 
-if ($kindCounts !== ['rust_test_peer' => 5, 'cargo_manifest' => 1, 'cargo_lock' => 1]) {
-    king_http3_expiry_fail('temporary Rust/Cargo inventory count drifted: ' . json_encode($kindCounts));
+$iterator = new RecursiveIteratorIterator(
+    new RecursiveDirectoryIterator($testsDir, FilesystemIterator::SKIP_DOTS)
+);
+foreach ($iterator as $file) {
+    if (!$file->isFile()) {
+        continue;
+    }
+
+    $filename = $file->getFilename();
+    if (str_ends_with($filename, '.rs') || $filename === 'Cargo.toml' || $filename === 'Cargo.lock') {
+        $relative = str_replace($root . '/', '', $file->getPathname());
+        king_http3_expiry_fail("temporary Rust/Cargo fixture remains in tests: {$relative}");
+    }
 }
 
 $activeHarnessFiles = [
@@ -96,11 +86,11 @@ foreach ($activeHarnessFiles as $path) {
     }
 }
 
-if (!str_contains($issues, '- [x] Temporary Rust helpers are not product bootstrap and have an expiry issue.')) {
-    king_http3_expiry_fail('ISSUES.md does not mark the temporary Rust helper expiry done');
+if (!str_contains($readiness, 'Recent Quiche cleanup closure:')) {
+    king_http3_expiry_fail('READYNESS_TRACKER.md does not record the Quiche cleanup closure');
 }
 
-echo "HTTP/3 temporary Rust/Cargo fixtures are quarantined outside product bootstrap and expire into #Q-9.\n";
+echo "HTTP/3 temporary Rust/Cargo fixtures are removed; C/LSQUIC helpers remain active.\n";
 ?>
 --EXPECT--
-HTTP/3 temporary Rust/Cargo fixtures are quarantined outside product bootstrap and expire into #Q-9.
+HTTP/3 temporary Rust/Cargo fixtures are removed; C/LSQUIC helpers remain active.
