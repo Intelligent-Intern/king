@@ -239,6 +239,7 @@ static zend_result king_http3_lsquic_runtime_init(
 {
     const unsigned engine_flags = LSENG_HTTP;
     char settings_error[256];
+    unsigned idle_timeout_seconds;
 
     if (runtime == NULL || target == NULL || options == NULL) {
         king_http3_throw(
@@ -268,6 +269,15 @@ static zend_result king_http3_lsquic_runtime_init(
     if (king_http3_lsquic_apply_quic_options(runtime, options, function_name) != SUCCESS) {
         return FAILURE;
     }
+
+    idle_timeout_seconds = (unsigned) ((options->timeout_ms + 999) / 1000);
+    if (idle_timeout_seconds == 0) {
+        idle_timeout_seconds = 1;
+    } else if (idle_timeout_seconds > 600) {
+        idle_timeout_seconds = 600;
+    }
+    runtime->lsquic_settings.es_idle_timeout = idle_timeout_seconds;
+    runtime->lsquic_settings.es_idle_conn_to = (unsigned long) options->timeout_ms * 1000UL;
 
     memset(settings_error, 0, sizeof(settings_error));
     if (king_http3_lsquic.lsquic_engine_check_settings_fn(
