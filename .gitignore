@@ -3,6 +3,13 @@ quiche
 node_modules
 .cargo/
 
+# Local vendored source trees / dependency sandboxes (do not commit)
+boringssl/
+curl/
+php-8.2.3/
+extension/lsquic/
+extension/src/util/
+
 # Archived source snapshots
 extension/src_bak/
 
