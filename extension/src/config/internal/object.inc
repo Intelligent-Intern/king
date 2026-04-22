@@ -1,4 +1,5 @@
 #include "object/arginfo_and_override_guards.inc"
+#include "object/quic_snapshot.inc"
 #include "object/snapshot_read.inc"
 #include "object/snapshot_export.inc"
 #include "object/public_methods.inc"

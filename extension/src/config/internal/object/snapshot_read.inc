@@ -3,8 +3,7 @@ static zend_result king_config_object_snapshot_read(
     zend_string *canonical_key,
     zval *return_value)
 {
-    if (zend_string_equals_cstr(canonical_key, "quic.cc_algorithm", sizeof("quic.cc_algorithm") - 1)) {
-        ZVAL_STRING(return_value, cfg->quic.cc_algorithm != NULL ? cfg->quic.cc_algorithm : "");
+    if (king_config_object_read_quic_snapshot(&cfg->quic, canonical_key, return_value) == SUCCESS) {
         return SUCCESS;
     }
 

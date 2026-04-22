@@ -70,10 +70,16 @@ typedef struct _king_http3_request_options {
     const char *tls_default_key_file;
     const char *quic_cc_algorithm;
     zend_long quic_cc_initial_cwnd_packets;
+    zend_long quic_cc_min_cwnd_packets;
     bool quic_cc_enable_hystart_plus_plus;
     bool quic_pacing_enable;
+    zend_long quic_pacing_max_burst_packets;
     zend_long quic_max_ack_delay_ms;
     zend_long quic_ack_delay_exponent;
+    zend_long quic_pto_timeout_ms_initial;
+    zend_long quic_pto_timeout_ms_max;
+    zend_long quic_max_pto_probes;
+    zend_long quic_ping_interval_ms;
     zend_long quic_initial_max_data;
     zend_long quic_initial_max_stream_data_bidi_local;
     zend_long quic_initial_max_stream_data_bidi_remote;
@@ -81,6 +87,7 @@ typedef struct _king_http3_request_options {
     zend_long quic_initial_max_streams_bidi;
     zend_long quic_initial_max_streams_uni;
     zend_long quic_active_connection_id_limit;
+    bool quic_stateless_retry_enable;
     bool quic_grease_enable;
     bool quic_datagrams_enable;
     zend_long quic_dgram_recv_queue_len;

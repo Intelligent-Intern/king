@@ -156,7 +156,7 @@ Goal:
 - Correctly map existing `quic.*` configurations and live stats to the new stack.
 
 Checklist:
-- [ ] Inventory and map all `quic.*` options.
+- [x] `extension/tests/684-quic-option-inventory-contract.phpt` inventories all 24 `quic.*` options across defaults, php.ini directives, userland overrides, key routing, `King\Config` reads/exports, HTTP/3 option snapshots, and current LSQUIC server settings.
 - [ ] Handle unsupported options fail-closed or with explicit diagnostics.
 - [ ] Bind live stats to real runtime counters.
 - [ ] Verify congestion control, pacing, flow control, and idle timeout.
