@@ -69,12 +69,16 @@ require_text "${COMPOSE_FILE}" 'demo/video-chat/edge/Dockerfile'
 require_text "${COMPOSE_FILE}" 'VIDEOCHAT_KING_WS_PATH: /ws'
 require_text "${COMPOSE_FILE}" 'VIDEOCHAT_KING_WS_PATH: /sfu'
 require_text "${COMPOSE_FILE}" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
+require_text "${COMPOSE_FILE}" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" "'wasm' => 'application/wasm'"
 require_text "${EDGE_DIR}/edge.php" "str_starts_with(\$path, '/assets/')"
 require_text "${EDGE_DIR}/edge.php" "\$path === '/ws' || \$host === \$wsDomain"
 require_text "${EDGE_DIR}/edge.php" "\$path === '/sfu' || \$host === \$sfuDomain"
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
+require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" '$written === 0'
+require_text "${EDGE_DIR}/edge.php" "\$chunk === ''"
+require_text "${EDGE_DIR}/edge.php" '$needsBackoff'
 require_text "${EDGE_DIR}/edge.php" 'Connection: close'
 require_text "${ROOT_DIR}/frontend-vue/src/lib/wasm/wasm-codec.ts" "WASM_MIME_CACHE_BUSTER"
 

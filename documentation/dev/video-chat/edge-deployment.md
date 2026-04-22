@@ -24,6 +24,13 @@ zusaetzlich `videochat-edge-v1` als einzigen oeffentlichen Entry Point auf
 `:80` und `:443`. Die Backend-Ports werden im Production-Deploy nur auf
 `127.0.0.1` gebunden.
 
+Der Edge-Proxy laeuft bewusst mit Stall-Guards fuer Reads und Writes. Wenn ein
+non-blocking Socket von `stream_select()` als bereit gemeldet wird, danach aber
+wiederholt keine Bytes liefert und noch nicht als EOF markiert ist, greift
+`VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS` mit kurzem Backoff. Das verhindert
+runaway `php /app/edge.php` Worker bei halboffenen Browser-, WS- oder SFU-
+Verbindungen.
+
 ## Nicht Teil des aktiven Demo-Pfads
 
 Folgende externen Edge-Stacks bleiben verboten:
