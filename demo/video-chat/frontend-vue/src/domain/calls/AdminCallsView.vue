@@ -86,95 +86,21 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="table-wrap calls-table-wrap">
-      <table class="calls-list-table">
-        <thead>
-          <tr>
-            <th class="col-title">Call</th>
-            <th>Status</th>
-            <th>Window</th>
-            <th>Participants</th>
-            <th>Owner</th>
-            <th class="col-actions">Actions</th>
-          </tr>
-        </thead>
-        <tbody v-if="calls.length > 0">
-          <tr v-for="call in calls" :key="call.id">
-            <td data-label="Call">
-              <div class="call-title">{{ call.title || call.id }}</div>
-              <div class="call-subline code">{{ call.id }}</div>
-            </td>
-            <td data-label="Status">
-              <span class="tag" :class="statusTagClass(call.status)">
-                {{ call.status || 'unknown' }}
-              </span>
-            </td>
-            <td data-label="Window">{{ formatRange(call.starts_at, call.ends_at) }}</td>
-            <td data-label="Participants">
-              {{ call.participants?.total ?? 0 }}
-              <span class="call-subline">
-                in {{ call.participants?.internal ?? 0 }} / ex {{ call.participants?.external ?? 0 }}
-              </span>
-            </td>
-            <td data-label="Owner">
-              {{ call.owner?.display_name || 'Unknown' }}
-              <span class="call-subline">{{ call.owner?.email || 'n/a' }}</span>
-            </td>
-            <td data-label="Actions">
-              <div class="actions-inline">
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Edit call"
-                  :aria-label="`Edit call ${call.title || call.id}`"
-                  :disabled="!isEditable(call)"
-                  @click="openCompose('edit', call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Open chat archive"
-                  :aria-label="`Open chat archive for ${call.title || call.id}`"
-                  @click="openChatArchive(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn"
-                  type="button"
-                  title="Enter video call"
-                  :aria-label="`Enter video call ${call.title || call.id}`"
-                  :disabled="!isInvitable(call)"
-                  @click="openEnterCallModal(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Cancel call"
-                  :aria-label="`Cancel call ${call.title || call.id}`"
-                  :disabled="!isCancellable(call)"
-                  @click="openCancel(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
-                </button>
-                <button
-                  class="icon-mini-btn danger"
-                  type="button"
-                  title="Delete call"
-                  :aria-label="`Delete call ${call.title || call.id}`"
-                  :disabled="!isDeletable(call)"
-                  @click="openDelete(call)"
-                >
-                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <CallsListTable
+        :calls="calls"
+        :format-range="formatRange"
+        :status-tag-class="statusTagClass"
+        :is-editable="isEditable"
+        :is-invitable="isInvitable"
+        :is-cancellable="isCancellable"
+        :is-deletable="isDeletable"
+        admin-mode
+        @edit-call="(call) => openCompose('edit', call)"
+        @open-chat-archive="openChatArchive"
+        @enter-call="openEnterCallModal"
+        @cancel-call="openCancel"
+        @delete-call="openDelete"
+      />
 
       <section v-if="!loadingCalls && calls.length === 0" class="section calls-empty">
         No calls match the active filters.
@@ -198,27 +124,16 @@
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
-      <div class="pagination">
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasPrev || loadingCalls"
-          @click="goToPage(pagination.page - 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
-        </button>
-        <div class="page-info">
-          Page {{ pagination.page }} / {{ pagination.pageCount }} · {{ pagination.total }} total
-        </div>
-        <button
-          class="pager-btn pager-icon-btn"
-          type="button"
-          :disabled="!pagination.hasNext || loadingCalls"
-          @click="goToPage(pagination.page + 1)"
-        >
-          <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
-        </button>
-      </div>
+      <AppPagination
+        :page="pagination.page"
+        :page-count="pagination.pageCount"
+        :total="pagination.total"
+        total-label="total"
+        :has-prev="pagination.hasPrev"
+        :has-next="pagination.hasNext"
+        :disabled="loadingCalls"
+        @page-change="goToPage"
+      />
     </section>
 
     <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
@@ -690,8 +605,10 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
+import AppPagination from '../../components/AppPagination.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import ChatArchiveModal from './ChatArchiveModal.vue';
+import CallsListTable from './CallsListTable.vue';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
