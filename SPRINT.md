@@ -46,7 +46,7 @@ Checklist:
 - [x] Add role-boundary tests for owner, admin, moderator, invited user, and removed participant.
 
 Done:
-- [ ] The admission flow is gate-first, room-stable, and role-correct.
+- [x] The admission flow is gate-first, room-stable, and role-correct.
 
 ### #Q-18 Video-Chat Chat, Archive, Emoji, And Attachment Release Readiness
 
