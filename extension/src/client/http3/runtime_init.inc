@@ -120,6 +120,7 @@ static zend_result king_http3_runtime_open_udp_socket(
     return SUCCESS;
 }
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static zend_result king_http3_runtime_init(
     king_http3_request_runtime_t *runtime,
     const king_http3_request_target_t *target,
@@ -288,7 +289,9 @@ static zend_result king_http3_runtime_init(
 
     return SUCCESS;
 }
+#endif
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static zend_result king_http3_flush_egress(
     king_http3_request_runtime_t *runtime,
     const char *function_name)
@@ -358,3 +361,4 @@ static zend_result king_http3_flush_egress(
 
     return SUCCESS;
 }
+#endif

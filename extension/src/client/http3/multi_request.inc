@@ -1,3 +1,4 @@
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static zend_result king_http3_execute_multi_requests(
     zval *return_value,
     zval *requests_array,
@@ -611,3 +612,4 @@ failure:
     king_http3_multi_requests_destroy(requests, request_count);
     return FAILURE;
 }
+#endif

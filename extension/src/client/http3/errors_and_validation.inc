@@ -59,6 +59,7 @@ static void king_http3_throw_lsquic_unavailable(const char *function_name)
     );
 }
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static void king_http3_format_close_reason(
     const uint8_t *reason_bytes,
     size_t reason_len,
@@ -402,6 +403,7 @@ static void king_http3_throw_multi_request_stream_reset(
         ZSTR_VAL(url)
     );
 }
+#endif
 
 static bool king_http3_is_token_char(unsigned char c)
 {
@@ -439,34 +441,46 @@ static bool king_http3_string_has_crlf(const char *value, size_t value_len)
 static bool king_http3_runtime_is_in_early_data(
     const king_http3_request_runtime_t *runtime)
 {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    (void) runtime;
+    return false;
+#else
     return runtime != NULL
         && runtime->conn != NULL
         && king_http3_quiche.quiche_conn_is_in_early_data_fn != NULL
         && king_http3_quiche.quiche_conn_is_in_early_data_fn(runtime->conn);
+#endif
 }
 
 static bool king_http3_runtime_can_open_h3(
     const king_http3_request_runtime_t *runtime)
 {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    (void) runtime;
+    return false;
+#else
     return runtime != NULL
         && runtime->conn != NULL
         && (
             king_http3_quiche.quiche_conn_is_established_fn(runtime->conn)
             || king_http3_runtime_is_in_early_data(runtime)
         );
+#endif
 }
 
 static void king_http3_refresh_transport_stats(
     king_http3_request_runtime_t *runtime)
 {
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     king_http3_quiche_stats_t stats;
+#endif
 
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
     if (runtime != NULL && runtime->lsquic_backend_active) {
         king_http3_lsquic_refresh_transport_stats(runtime);
         return;
     }
-#endif
+#else
 
     if (runtime == NULL
         || runtime->conn == NULL
@@ -484,6 +498,7 @@ static void king_http3_refresh_transport_stats(
     runtime->quic_lost_bytes = (zend_long) stats.lost_bytes;
     runtime->quic_stream_retransmitted_bytes =
         (zend_long) stats.stream_retrans_bytes;
+#endif
 }
 
 static zend_result king_http3_validate_method(

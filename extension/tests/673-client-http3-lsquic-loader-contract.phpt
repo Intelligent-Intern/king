@@ -10,6 +10,11 @@ $loader = (string) file_get_contents($loaderPath);
 var_dump(file_exists($loaderPath));
 var_dump(str_contains($client, '#include "http3/lsquic_loader.inc"'));
 var_dump(str_contains($client, 'king_http3_lsquic_api_t'));
+var_dump(str_contains($client, 'typedef struct _king_http3_header'));
+var_dump(str_contains($client, 'king_http3_header_t *request_headers;'));
+var_dump(str_contains($client, "#if !defined(KING_HTTP3_BACKEND_LSQUIC)\n#include <quiche.h>"));
+var_dump(str_contains($client, "#if !defined(KING_HTTP3_BACKEND_LSQUIC)\n#include \"http3/quiche_loader.inc\""));
+var_dump(str_contains($client, 'quiche_h3_header'));
 var_dump(str_contains($loader, 'dlopen('));
 var_dump(str_contains($loader, 'dlsym('));
 var_dump(str_contains($loader, 'KING_LSQUIC_LIBRARY'));
@@ -51,6 +56,11 @@ var_dump(str_contains($loader, 'fake'));
 bool(true)
 bool(true)
 bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(true)
+bool(false)
 bool(true)
 bool(true)
 bool(true)

@@ -104,6 +104,32 @@ function king_http3_loader_require_order(
     }
 }
 
+function king_http3_loader_require_guarded_include(
+    string $label,
+    string $source,
+    string $guard,
+    string $include,
+    array &$errors
+): void {
+    $includePosition = strpos($source, $include);
+    if ($includePosition === false) {
+        $errors[] = $label . ' is missing guarded include ' . $include;
+        return;
+    }
+
+    $beforeInclude = substr($source, 0, $includePosition);
+    $guardPosition = strrpos($beforeInclude, $guard);
+    if ($guardPosition === false) {
+        $errors[] = $label . ' must guard ' . $include . ' with ' . $guard;
+        return;
+    }
+
+    $endifPosition = strpos($source, "\n#endif", $includePosition);
+    if ($endifPosition === false) {
+        $errors[] = $label . ' must close the guard around ' . $include;
+    }
+}
+
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
 $streamRuntime = king_http3_loader_require_file($streamRuntimePath, $errors);
@@ -167,6 +193,64 @@ king_http3_loader_require_contains(
     'load_error_kind',
     $errors
 );
+king_http3_loader_require_contains(
+    'Client HTTP/3 shared header contract',
+    $client,
+    'typedef struct _king_http3_header',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 shared header contract',
+    $client,
+    'king_http3_header_t *request_headers;',
+    $errors
+);
+king_http3_loader_require_contains(
+    'LSQUIC stream runtime header contract',
+    $streamRuntime,
+    'const king_http3_header_t *headers;',
+    $errors
+);
+king_http3_loader_require_contains(
+    'LSQUIC runtime header contract',
+    $runtime,
+    'const king_http3_header_t *headers',
+    $errors
+);
+king_http3_loader_require_contains(
+    'HTTP/3 request preparation header contract',
+    $requestResponse,
+    'king_http3_header_t **headers_out',
+    $errors
+);
+king_http3_loader_require_guarded_include(
+    'Client HTTP/3 source',
+    $client,
+    '#if !defined(KING_HTTP3_BACKEND_LSQUIC)',
+    '#include <quiche.h>',
+    $errors
+);
+king_http3_loader_require_guarded_include(
+    'Client HTTP/3 source',
+    $client,
+    '#if !defined(KING_HTTP3_BACKEND_LSQUIC)',
+    '#include "http3/quiche_loader.inc"',
+    $errors
+);
+
+foreach ([
+    'Client HTTP/3 source' => $client,
+    'HTTP/3 request/response helpers' => $requestResponse,
+    'HTTP/3 dispatch backend selector' => $dispatch,
+    'LSQUIC one-shot dispatch' => $lsquicDispatch,
+    'LSQUIC multi dispatch' => $lsquicMultiDispatch,
+    'LSQUIC runtime adapter' => $runtime,
+    'LSQUIC stream runtime bridge' => $streamRuntime,
+] as $label => $source) {
+    if (str_contains($source, 'quiche_h3_header')) {
+        $errors[] = $label . ' must use king_http3_header_t instead of quiche_h3_header.';
+    }
+}
 
 $requiredClientNeedles = [
     'void (*lsquic_engine_init_settings_fn)(void *, unsigned);',

@@ -3,7 +3,7 @@
 struct _king_http3_lsquic_request_state {
     king_http3_request_runtime_t *runtime;
     lsquic_stream_t *stream;
-    const quiche_h3_header *headers;
+    const king_http3_header_t *headers;
     size_t header_count;
     zend_string *body_string;
     size_t body_offset;
@@ -264,7 +264,7 @@ static zend_result king_http3_lsquic_send_headers(
     buffers = safe_emalloc(request->header_count, sizeof(*buffers), 0);
 
     for (size_t i = 0; i < request->header_count; ++i) {
-        const quiche_h3_header *source = &request->headers[i];
+        const king_http3_header_t *source = &request->headers[i];
         size_t buffer_len = source->name_len + source->value_len;
 
         buffers[i] = safe_emalloc(buffer_len, sizeof(char), 0);

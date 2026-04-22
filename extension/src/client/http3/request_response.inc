@@ -3,7 +3,7 @@ static zend_result king_http3_prepare_request_headers(
     const char *method_str,
     size_t method_len,
     zval *headers_array,
-    quiche_h3_header **headers_out,
+    king_http3_header_t **headers_out,
     size_t *header_count_out,
     zend_string ***owned_strings_out,
     size_t *owned_string_count_out,
@@ -11,7 +11,7 @@ static zend_result king_http3_prepare_request_headers(
 {
     size_t header_count = 4;
     size_t owned_count = 0;
-    quiche_h3_header *headers;
+    king_http3_header_t *headers;
     zend_string **owned_strings;
     size_t index = 0;
     zend_string *value_string;
@@ -136,7 +136,7 @@ failure:
 }
 
 static void king_http3_free_request_headers(
-    quiche_h3_header *headers,
+    king_http3_header_t *headers,
     zend_string **owned_strings,
     size_t owned_string_count)
 {
@@ -269,6 +269,7 @@ static zend_result king_http3_materialize_response(
     return SUCCESS;
 }
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static king_http3_multi_request_t *king_http3_multi_find_request_by_stream_id(
     king_http3_multi_request_t *requests,
     size_t request_count,
@@ -299,3 +300,4 @@ static bool king_http3_multi_all_responses_complete(
 
     return true;
 }
+#endif

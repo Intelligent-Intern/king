@@ -292,7 +292,7 @@ static zend_result king_http3_execute_request_lsquic(
     king_http3_request_runtime_t runtime;
     king_http3_lsquic_request_state_t request;
     king_http3_response_t response;
-    quiche_h3_header *request_headers = NULL;
+    king_http3_header_t *request_headers = NULL;
     zend_string **owned_strings = NULL;
     size_t request_header_count = 0;
     size_t owned_string_count = 0;

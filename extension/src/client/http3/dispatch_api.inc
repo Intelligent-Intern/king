@@ -1,3 +1,4 @@
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static zend_result king_http3_execute_request(
     zval *return_value,
     const char *url_str,
@@ -12,7 +13,7 @@ static zend_result king_http3_execute_request(
     king_http3_request_target_t target;
     king_http3_request_runtime_t runtime;
     king_http3_response_t response;
-    quiche_h3_header *request_headers = NULL;
+    king_http3_header_t *request_headers = NULL;
     zend_string **owned_strings = NULL;
     size_t request_header_count = 0;
     size_t owned_string_count = 0;
@@ -480,6 +481,7 @@ failure:
     }
     return FAILURE;
 }
+#endif
 
 zend_result king_http3_request_dispatch(
     zval *return_value,

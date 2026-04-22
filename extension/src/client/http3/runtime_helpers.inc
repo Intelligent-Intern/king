@@ -62,6 +62,7 @@ static void king_http3_runtime_destroy(king_http3_request_runtime_t *runtime)
     }
 #endif
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     if (runtime->h3_conn != NULL && king_http3_quiche.quiche_h3_conn_free_fn != NULL) {
         king_http3_quiche.quiche_h3_conn_free_fn(runtime->h3_conn);
     }
@@ -74,6 +75,7 @@ static void king_http3_runtime_destroy(king_http3_request_runtime_t *runtime)
     if (runtime->config != NULL && king_http3_quiche.quiche_config_free_fn != NULL) {
         king_http3_quiche.quiche_config_free_fn(runtime->config);
     }
+#endif
     if (runtime->socket_fd >= 0) {
         close(runtime->socket_fd);
     }
@@ -118,15 +120,17 @@ static zend_result king_http3_make_socket_nonblocking(int socket_fd)
 
 static void king_http3_seed_ticket_from_ring(king_http3_request_runtime_t *runtime)
 {
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     uint8_t ticket_buffer[KING_MAX_TICKET_SIZE];
     size_t ticket_len = sizeof(ticket_buffer);
+#endif
 
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
     if (runtime != NULL && runtime->lsquic_backend_active) {
         king_http3_lsquic_seed_ticket_from_ring(runtime);
         return;
     }
-#endif
+#else
 
     if (runtime == NULL
         || runtime->conn == NULL
@@ -144,12 +148,15 @@ static void king_http3_seed_ticket_from_ring(king_http3_request_runtime_t *runti
     }
 
     king_secure_zero(ticket_buffer, sizeof(ticket_buffer));
+#endif
 }
 
 static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
 {
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     const uint8_t *session_bytes = NULL;
     size_t session_len = 0;
+#endif
 
     if (runtime == NULL) {
         return;
@@ -161,7 +168,7 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
     if (runtime->lsquic_backend_active) {
         return;
     }
-#endif
+#else
 
     if (runtime->conn == NULL) {
         return;
@@ -193,8 +200,10 @@ static void king_http3_refresh_tls_state(king_http3_request_runtime_t *runtime)
         king_ticket_ring_put(session_bytes, session_len);
         runtime->tls_ticket_published = true;
     }
+#endif
 }
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static void king_http3_flush_egress_best_effort(king_http3_request_runtime_t *runtime)
 {
     uint8_t out[KING_HTTP3_MAX_DATAGRAM_SIZE];
@@ -237,10 +246,13 @@ static void king_http3_flush_egress_best_effort(king_http3_request_runtime_t *ru
         }
     }
 }
+#endif
 
 static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runtime)
 {
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     bool use_application_close;
+#endif
 
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
     if (runtime != NULL && runtime->lsquic_backend_active) {
@@ -252,7 +264,7 @@ static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runt
         }
         return;
     }
-#endif
+#else
 
     if (runtime == NULL
         || runtime->conn == NULL
@@ -275,11 +287,13 @@ static void king_http3_propagate_cancel_close(king_http3_request_runtime_t *runt
             KING_HTTP3_CANCEL_CLOSE_CODE,
             (const uint8_t *) KING_HTTP3_CANCEL_CLOSE_REASON,
             KING_HTTP3_CANCEL_CLOSE_REASON_LEN
-        ) == 0) {
+    ) == 0) {
         king_http3_flush_egress_best_effort(runtime);
     }
+#endif
 }
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static void king_http3_capture_post_response_tls_state(king_http3_request_runtime_t *runtime)
 {
     zend_long deadline_ms;
@@ -382,6 +396,7 @@ static void king_http3_capture_post_response_tls_state(king_http3_request_runtim
         king_http3_refresh_tls_state(runtime);
     }
 }
+#endif
 
 static zend_result king_http3_add_header_value(
     zval *headers,

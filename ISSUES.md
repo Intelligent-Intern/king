@@ -105,7 +105,7 @@ Checklist:
 - [x] Wire the one-shot `king_http3_request_send()` dispatch loop behind the configured LSQUIC backend.
 - [x] Move LSQUIC request lifecycle state onto stream-owned request contexts for future multi-stream dispatch.
 - [x] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
-- [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
+- [x] Remove or migrate old Quiche symbols, handles, and runtime names.
 
 Done:
 - [x] `extension/src/client/http3/lsquic_loader.inc` binds LSQUIC symbols via `dlsym()` and initializes client globals via `lsquic_global_init`.
@@ -117,9 +117,10 @@ Done:
 - [x] `king_http3_request_send()` now has a LSQUIC one-shot dispatch path with shared UDP socket init, packet ingress, egress processing, cancel close, response materialization, and LSQUIC backend metadata.
 - [x] LSQUIC stream callbacks now resolve a `king_http3_lsquic_request_state_t` from stream context instead of reading mutable request fields from the shared runtime.
 - [x] The active LSQUIC client path now drives one-shot and multi-request dispatch through shared runtime init, a stream-state queue, ticket reuse, transport stats, and response materialization.
+- [x] The active LSQUIC client path uses King-owned HTTP/3 request headers and excludes Quiche headers, handles, loader, init, dispatch, ticket, and stats code via backend guards.
 - [ ] `king_http3_request_send()` uses the new stack in real wire tests.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
-- [ ] Old Quiche loader is no longer referenced by any active include.
+- [x] Old Quiche loader is no longer referenced by any active include.
 
 ---
 

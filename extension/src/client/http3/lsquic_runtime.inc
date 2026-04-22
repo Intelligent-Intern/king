@@ -102,7 +102,7 @@ static zend_result king_http3_lsquic_runtime_process_egress(
 static void king_http3_lsquic_request_state_init(
     king_http3_lsquic_request_state_t *request,
     king_http3_request_runtime_t *runtime,
-    const quiche_h3_header *headers,
+    const king_http3_header_t *headers,
     size_t header_count,
     zend_string *body_string,
     king_http3_response_t *response)
@@ -163,7 +163,7 @@ static zend_result king_http3_lsquic_runtime_prepare_requests(
 static zend_result king_http3_lsquic_runtime_prepare_request(
     king_http3_request_runtime_t *runtime,
     king_http3_lsquic_request_state_t *request,
-    const quiche_h3_header *headers,
+    const king_http3_header_t *headers,
     size_t header_count,
     zend_string *body_string,
     king_http3_response_t *response,

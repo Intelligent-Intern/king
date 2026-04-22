@@ -15,7 +15,9 @@
 #include "php.h"
 #include "php_king.h"
 #include "include/client/http3.h"
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 #include <quiche.h>
+#endif
 #include "include/config/config.h"
 #include "include/config/quic_transport/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"
@@ -101,6 +103,13 @@ typedef struct _king_http3_response {
     bool response_complete;
 } king_http3_response_t;
 
+typedef struct _king_http3_header {
+    const uint8_t *name;
+    size_t name_len;
+    const uint8_t *value;
+    size_t value_len;
+} king_http3_header_t;
+
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 typedef struct _king_http3_lsquic_request_state king_http3_lsquic_request_state_t;
 #endif
@@ -111,10 +120,12 @@ typedef struct _king_http3_request_runtime {
     socklen_t peer_addr_len;
     struct sockaddr_storage local_addr;
     socklen_t local_addr_len;
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
     quiche_config *config;
     quiche_conn *conn;
     quiche_h3_config *h3_config;
     quiche_h3_conn *h3_conn;
+#endif
     const char *tls_ticket_source;
     zend_long tls_session_ticket_length;
     bool tls_has_session_ticket;
@@ -162,7 +173,7 @@ typedef struct _king_http3_multi_request {
     zend_string *method;
     zend_string *body_string;
     zval effective_headers;
-    quiche_h3_header *request_headers;
+    king_http3_header_t *request_headers;
     size_t request_header_count;
     zend_string **owned_strings;
     size_t owned_string_count;
@@ -173,6 +184,7 @@ typedef struct _king_http3_multi_request {
     bool request_headers_sent;
 } king_http3_multi_request_t;
 
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 typedef struct _king_http3_quiche_stats {
     size_t recv;
     size_t sent;
@@ -272,13 +284,14 @@ typedef struct _king_http3_quiche_api {
         void *
     );
     void (*quiche_h3_event_free_fn)(quiche_h3_event *);
-    int64_t (*quiche_h3_send_request_fn)(quiche_h3_conn *, quiche_conn *, const quiche_h3_header *, size_t, bool);
+    int64_t (*quiche_h3_send_request_fn)(quiche_h3_conn *, quiche_conn *, const king_http3_header_t *, size_t, bool);
     ssize_t (*quiche_h3_send_body_fn)(quiche_h3_conn *, quiche_conn *, uint64_t, const uint8_t *, size_t, bool);
     ssize_t (*quiche_h3_recv_body_fn)(quiche_h3_conn *, quiche_conn *, uint64_t, uint8_t *, size_t);
     void (*quiche_h3_conn_free_fn)(quiche_h3_conn *);
 } king_http3_quiche_api_t;
 
 static king_http3_quiche_api_t king_http3_quiche = {0};
+#endif
 
 typedef enum _king_http3_lsquic_load_error_kind {
     KING_HTTP3_LSQUIC_LOAD_ERROR_NONE = 0,
@@ -333,7 +346,7 @@ typedef struct _king_http3_lsquic_api {
 static king_http3_lsquic_api_t king_http3_lsquic = {0};
 
 static void king_http3_free_request_headers(
-    quiche_h3_header *headers,
+    king_http3_header_t *headers,
     zend_string **owned_strings,
     size_t owned_string_count);
 static void king_http3_request_target_destroy(
@@ -354,7 +367,9 @@ static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runt
 
 
 #include "http3/errors_and_validation.inc"
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 #include "http3/quiche_loader.inc"
+#endif
 #include "http3/lsquic_loader.inc"
 #include "http3/lsquic_stream_runtime.inc"
 #include "http3/lsquic_runtime.inc"
