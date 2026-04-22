@@ -475,14 +475,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
 $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
-    if ($host === $apiDomain || $path === '/api' || str_starts_with($path, '/api/') || $path === '/health') {
-        return $apiUpstream;
-    }
-    if ($host === $wsDomain || $path === '/ws') {
+    if ($path === '/ws' || $host === $wsDomain) {
         return $wsUpstream;
     }
-    if ($host === $sfuDomain || $path === '/sfu') {
+    if ($path === '/sfu' || $host === $sfuDomain) {
         return $sfuUpstream;
+    }
+    if ($host === $apiDomain || $path === '/api' || str_starts_with($path, '/api/') || $path === '/health') {
+        return $apiUpstream;
     }
     if ($host === $turnDomain) {
         return null;

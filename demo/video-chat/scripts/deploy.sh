@@ -934,9 +934,17 @@ wait_for_allowed_code wss-route /tmp/king-videochat-ws-probe.out \\
   --resolve "\${WS_DOMAIN}:443:127.0.0.1" \\
   "https://\${WS_DOMAIN}/ws"
 
+wait_for_allowed_code api-wss-route /tmp/king-videochat-api-ws-probe.out \\
+  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+  "https://\${API_DOMAIN}/ws"
+
 wait_for_allowed_code sfu-route /tmp/king-videochat-sfu-probe.out \\
   --resolve "\${SFU_DOMAIN}:443:127.0.0.1" \\
   "https://\${SFU_DOMAIN}/sfu"
+
+wait_for_allowed_code api-sfu-route /tmp/king-videochat-api-sfu-probe.out \\
+  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+  "https://\${API_DOMAIN}/sfu"
 
 wait_for_tcp() {
   local label="\$1"

@@ -71,6 +71,8 @@ require_text "${COMPOSE_FILE}" 'VIDEOCHAT_KING_WS_PATH: /sfu'
 require_text "${COMPOSE_FILE}" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" "'wasm' => 'application/wasm'"
 require_text "${EDGE_DIR}/edge.php" "str_starts_with(\$path, '/assets/')"
+require_text "${EDGE_DIR}/edge.php" "\$path === '/ws' || \$host === \$wsDomain"
+require_text "${EDGE_DIR}/edge.php" "\$path === '/sfu' || \$host === \$sfuDomain"
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" '$written === 0'
 require_text "${EDGE_DIR}/edge.php" 'Connection: close'
