@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LOCK_FILE="${SCRIPT_DIR}/lsquic-bootstrap.lock"
 DOC_FILE="${ROOT_DIR}/DEPENDENCY_PROVENANCE.md"
+MODE="${1:---check}"
 
 fail() {
     echo "LSQUIC bootstrap lock check failed: $*" >&2
@@ -74,6 +75,14 @@ validate_commit() {
 require_file "${LOCK_FILE}" "LSQUIC bootstrap lock file"
 require_file "${DOC_FILE}" "dependency provenance document"
 
+case "${MODE}" in
+    --check|--print-source-plan)
+        ;;
+    *)
+        fail "unsupported mode ${MODE}; expected --check or --print-source-plan"
+        ;;
+esac
+
 if grep -Eq '(^|[[:space:]])(master|main|branch[[:space:]]*=)|/opt/homebrew|/usr/local/Cellar|file://|~/' "${LOCK_FILE}"; then
     fail "lock file contains a floating branch or local path"
 fi
@@ -139,4 +148,24 @@ validate_archive KING_LSQUIC_LS_HPACK
 require_regex "${KING_LSQUIC_LS_QPACK_PATH}" '^src/liblsquic/ls-qpack$' "KING_LSQUIC_LS_QPACK_PATH"
 require_regex "${KING_LSQUIC_LS_HPACK_PATH}" '^src/lshpack$' "KING_LSQUIC_LS_HPACK_PATH"
 
-echo "LSQUIC bootstrap lock is deterministic and documented."
+if [[ "${MODE}" == "--print-source-plan" ]]; then
+    printf 'component\tarchive_url\tsha256\tbytes\n'
+    printf 'lsquic\t%s\t%s\t%s\n' \
+        "${KING_LSQUIC_ARCHIVE_URL}" \
+        "${KING_LSQUIC_ARCHIVE_SHA256}" \
+        "${KING_LSQUIC_ARCHIVE_BYTES}"
+    printf 'boringssl\t%s\t%s\t%s\n' \
+        "${KING_LSQUIC_BORINGSSL_ARCHIVE_URL}" \
+        "${KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256}" \
+        "${KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES}"
+    printf 'ls-qpack\t%s\t%s\t%s\n' \
+        "${KING_LSQUIC_LS_QPACK_ARCHIVE_URL}" \
+        "${KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256}" \
+        "${KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES}"
+    printf 'ls-hpack\t%s\t%s\t%s\n' \
+        "${KING_LSQUIC_LS_HPACK_ARCHIVE_URL}" \
+        "${KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256}" \
+        "${KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES}"
+else
+    echo "LSQUIC bootstrap lock is deterministic and documented."
+fi

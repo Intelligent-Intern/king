@@ -54,8 +54,13 @@ Quiche Artifact Inventory For Removal:
 Untracked local bootstrap caches such as `.cargo/`, `quiche/`, and `quiche/Cargo.lock` are excluded by `.gitignore` and remain non-sprint output.
 
 Done:
-- [ ] Dependencies can be reproduced from repository-owned pins.
+- [x] Dependencies can be reproduced from repository-owned pins.
 - [ ] Active provenance no longer names Quiche pins for the product path.
+
+Reproduction Evidence:
+
+- `infra/scripts/lsquic-bootstrap.lock` owns every source URL, tag, commit, archive SHA-256, archive byte size, and submodule gitlink for LSQUIC, BoringSSL, `ls-qpack`, and `ls-hpack`.
+- `infra/scripts/check-lsquic-bootstrap.sh --print-source-plan` emits the complete archive fetch plan from repository-owned pins without using network or external metadata.
 
 ---
 
