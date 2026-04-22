@@ -15,6 +15,7 @@ return [
         'future_source_root' => 'extension/tests/http3_peer_helpers',
         'future_output_root' => '.cache/king/http3-test-helpers',
         'expiry_issue' => '#Q-8',
+        'temporary_fixture_expiry_issue' => '#Q-9',
     ],
     'required_capabilities' => [
         'handshake_failure',

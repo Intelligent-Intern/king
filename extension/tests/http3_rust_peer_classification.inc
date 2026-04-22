@@ -8,7 +8,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_delayed_body_client.rs' => [
         'kind' => 'rust_test_peer',
@@ -17,7 +17,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_failure_peer.rs' => [
         'kind' => 'rust_test_peer',
@@ -26,7 +26,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_multi_peer.rs' => [
         'kind' => 'rust_test_peer',
@@ -35,7 +35,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_ticket_server/src/main.rs' => [
         'kind' => 'rust_test_peer',
@@ -44,7 +44,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_ticket_server/Cargo.toml' => [
         'kind' => 'cargo_manifest',
@@ -53,7 +53,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'extension/tests/http3_ticket_server/Cargo.lock' => [
         'kind' => 'cargo_lock',
@@ -62,7 +62,7 @@ return [
         'product_bootstrap' => false,
         'active_product_path' => false,
         'temporary' => true,
-        'expiry_issue' => '#Q-8',
+        'expiry_issue' => '#Q-9',
     ],
     'infra/scripts/quiche-workspace.Cargo.lock' => [
         'kind' => 'cargo_lock',

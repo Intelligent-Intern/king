@@ -182,7 +182,7 @@ Checklist:
 
 Done:
 - [x] HTTP/3 tests prove the new stack without Quiche or Cargo bootstrap.
-- [ ] Temporary Rust helpers are not product bootstrap and have an expiry issue.
+- [x] Temporary Rust helpers are not product bootstrap and have an expiry issue.
 
 ---
 
