@@ -43,7 +43,7 @@ Checklist:
 - [x] Show the host notification and lobby badge/list for pending users to call owner, admins, and moderators.
 - [x] Admit users only after an authorized owner/admin/moderator grants access, then redirect the waiting browser into the same call.
 - [x] Hide the lobby tab from plain invited users unless they are explicitly promoted to moderator or are the call owner/admin.
-- [ ] Add role-boundary tests for owner, admin, moderator, invited user, and removed participant.
+- [x] Add role-boundary tests for owner, admin, moderator, invited user, and removed participant.
 
 Done:
 - [ ] The admission flow is gate-first, room-stable, and role-correct.
