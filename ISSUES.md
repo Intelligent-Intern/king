@@ -26,7 +26,7 @@ Checklist:
 - [x] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
 - [x] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
 - [x] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
-- [ ] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
+- [x] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
 
 Backend-Entscheidung:
 - Zielstack ist `LSQUIC + BoringSSL`.
@@ -98,6 +98,24 @@ Exception-Mapping:
 | Aktiver `CancelToken` | `King\RuntimeException` mit Cancel-Text | Ja; muss aktive Transport-Cancel-Operation ausloesen. |
 | Congestion-Control-Blocker | `King\CongestionControlException extends King\QuicException` | Ja; falls LSQUIC-CC-Mapping scheitert, muss #Q-7 fail-closed statt still ignorieren. |
 | Validation / unsupported config | bestehende King Validation-/Runtime-Ausnahmen | Ja; nicht unterstuetzte `quic.*` Optionen muessen diagnostisch scheitern. |
+
+Lizenz-, Security- und Maintenance-Risiken:
+
+| Risiko | Bewertung | Sprint-Gate |
+|---|---|---|
+| LSQUIC Lizenz | LSQUIC ist MIT-lizenziert, fuehrt aber zusaetzliche Lizenzdateien wie `LICENSE.chrome`. | #Q-3/#Q-9 muessen alle Notices in `DEPENDENCY_PROVENANCE.md`, Release-Manifest und PIE-Paket aufnehmen. |
+| BoringSSL Lizenz | BoringSSL ist Apache-2.0-lizenziert. | Apache-2.0 Notice und Copyright muessen ins Release-Paket; kein stilles Mitliefern ohne Lizenztext. |
+| BoringSSL API/ABI-Stabilitaet | Offizielle BoringSSL-Doku warnt vor fehlender API-/ABI-Stabilitaet fuer Drittverbraucher. | BoringSSL wird nur ueber gepinnte Source-/Release-Version gebaut; keine System-ABI-Erwartung und keine lokalen Homebrew-Pfade. |
+| LSQUIC Security | LSQUIC vor `v4.3.1` war von `CVE-2025-54939` betroffen; UDP-Pakete konnten unbounded memory leak / DoS ausloesen. | Q-3 darf keinen LSQUIC-Pin unter `v4.3.1` akzeptieren; Release-Gates muessen CVE-/Advisory-Pruefung fuer LSQUIC und BoringSSL enthalten. |
+| TLS-/Crypto Supply Chain | BoringSSL ist sicherheitskritisch und muss mit LSQUIC kompatibel gepinnt werden. | `lsquic-bootstrap.lock` muss LSQUIC, BoringSSL, Submodule, Checksums und Quellen reproduzierbar festhalten. |
+| Maintenance Cadence | LSQUIC und BoringSSL bewegen sich aktiv; BoringSSL kann API-Brueche einfuehren. | Monatlicher Dependency-Review als Doku-/CI-Gate: neue Pins nur mit Build, Wire-Regression und Provenance-Update. |
+| Bundling/Linkage | LSQUIC-Beispiele nutzen libevent, King darf aber nicht versehentlich Beispielprogramme als Produktpfad koppeln. | Produktbuild linkt nur benoetigte Runtime-Libraries; libevent bleibt Test-/Example-Abhaengigkeit, ausser spaeter explizit als Produktdependency entschieden. |
+| Platform Support | LSQUIC deckt Linux/macOS/Windows/FreeBSD/Android ab; King-Release braucht mindestens Linux amd64/arm64 reproduzierbar. | #Q-4/#Q-10 muessen Linux amd64/arm64 bauen und macOS nur ueber dokumentierte pkg-config/env-Pfade erlauben. |
+
+Risiko-Quellen:
+- LSQUIC README / Lizenz / Build: `https://github.com/litespeedtech/lsquic`
+- BoringSSL README / Lizenz / Security-Prozess: `https://github.com/google/boringssl`
+- LSQUIC Security Update zu `CVE-2025-54939`: `https://blog.litespeedtech.com/2025/08/18/litespeed-security-update/`
 
 Done:
 - [ ] Der Zielstack ist entschieden.
