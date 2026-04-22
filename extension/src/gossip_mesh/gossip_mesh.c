@@ -2,7 +2,7 @@
  * GossipMesh Implementation - Decentralized SFU forwarding logic
  */
 
-#include "gossip_mesh.h"
+#include <gossip_mesh.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>

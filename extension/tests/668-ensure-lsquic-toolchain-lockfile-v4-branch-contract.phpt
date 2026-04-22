@@ -39,8 +39,8 @@ king_toolchain_668_cleanup($tempRoot);
 mkdir($tempRoot, 0700, true);
 mkdir($tempRoot . '/bin', 0700, true);
 
-$ensureSource = __DIR__ . '/../../infra/scripts/ensure-quiche-toolchain.sh';
-$ensureCopy = $tempRoot . '/ensure-quiche-toolchain.sh';
+$ensureSource = __DIR__ . '/../../infra/scripts/ensure-lsquic.sh';
+$ensureCopy = $tempRoot . '/ensure-lsquic.sh';
 copy($ensureSource, $ensureCopy);
 chmod($ensureCopy, 0700);
 

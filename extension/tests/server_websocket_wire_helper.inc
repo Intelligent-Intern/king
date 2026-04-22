@@ -71,11 +71,14 @@ function king_server_websocket_wire_launch(string $mode, int $iterations, int $p
         throw new RuntimeException('on-wire HTTP/1 websocket server failed: ' . trim($stderr));
     }
 
+usleep(200000);
     return [
         'process' => $process,
         'pipes' => $pipes,
         'capture' => $capture,
         'port' => (int) $port,
+        'host' => $bindHost,
+        'server_script' => $serverScript,
     ];
 }
 
@@ -109,7 +112,7 @@ function king_server_websocket_wire_stop_server(array $server): array
     return $capture;
 }
 
-function king_server_websocket_wire_connect_retry(string $url, int $timeoutMs = 3000)
+function king_server_websocket_wire_connect_retry(string $url, int $timeoutMs = 10000)
 {
     $deadline = microtime(true) + ($timeoutMs / 1000);
 
