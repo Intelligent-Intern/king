@@ -24,6 +24,11 @@
 
 #include "Zend/zend_smart_str.h"
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+#include <lsquic.h>
+#include <lsxpack_header.h>
+#endif
+
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <dlfcn.h>
@@ -177,9 +182,59 @@ typedef struct _king_server_http3_quiche_api {
 
 static king_server_http3_quiche_api_t king_server_http3_quiche = {0};
 
+typedef enum _king_server_http3_lsquic_load_error_kind {
+    KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_NONE = 0,
+    KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY,
+    KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL,
+    KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT
+} king_server_http3_lsquic_load_error_kind_t;
+
+typedef struct _king_server_http3_lsquic_api {
+    void *handle;
+    bool load_attempted;
+    bool ready;
+    bool global_initialized;
+    king_server_http3_lsquic_load_error_kind_t load_error_kind;
+    char load_error[KING_ERR_LEN];
+    int (*lsquic_global_init_fn)(int);
+    void (*lsquic_global_cleanup_fn)(void);
+    void (*lsquic_engine_init_settings_fn)(void *, unsigned);
+    int (*lsquic_engine_check_settings_fn)(const void *, unsigned, char *, size_t);
+    void *(*lsquic_engine_new_fn)(unsigned, const void *);
+    void (*lsquic_engine_destroy_fn)(void *);
+    int (*lsquic_engine_packet_in_fn)(void *, const unsigned char *, size_t, const struct sockaddr *, const struct sockaddr *, void *, int);
+    void (*lsquic_engine_process_conns_fn)(void *);
+    int (*lsquic_engine_has_unsent_packets_fn)(void *);
+    void (*lsquic_engine_send_unsent_packets_fn)(void *);
+    int (*lsquic_engine_earliest_adv_tick_fn)(void *, int *);
+    unsigned (*lsquic_engine_get_conns_count_fn)(void *);
+    unsigned (*lsquic_engine_count_attq_fn)(void *, int);
+    int (*lsquic_conn_status_fn)(void *, char *, size_t);
+    void (*lsquic_conn_close_fn)(void *);
+    void *(*lsquic_conn_get_ctx_fn)(const void *);
+    void (*lsquic_conn_set_ctx_fn)(void *, void *);
+    int (*lsquic_stream_send_headers_fn)(void *, const void *, int);
+    void *(*lsquic_stream_get_hset_fn)(void *);
+    ssize_t (*lsquic_stream_write_fn)(void *, const void *, size_t);
+    ssize_t (*lsquic_stream_read_fn)(void *, void *, size_t);
+    int (*lsquic_stream_flush_fn)(void *);
+    int (*lsquic_stream_shutdown_fn)(void *, int);
+    int (*lsquic_stream_close_fn)(void *);
+    int (*lsquic_stream_wantread_fn)(void *, int);
+    int (*lsquic_stream_wantwrite_fn)(void *, int);
+    void *(*lsquic_stream_get_ctx_fn)(const void *);
+    void (*lsquic_stream_set_ctx_fn)(void *, void *);
+    uint64_t (*lsquic_stream_id_fn)(const void *);
+} king_server_http3_lsquic_api_t;
+
+static king_server_http3_lsquic_api_t king_server_http3_lsquic = {0};
+
 
 #include "http3/local_listener_leaf.inc"
 #include "http3/quiche_loader.inc"
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+#include "http3/lsquic_loader.inc"
+#endif
 #include "http3/options_and_runtime.inc"
 #include "http3/request_response.inc"
 #include "http3/event_loop.inc"

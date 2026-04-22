@@ -6,6 +6,8 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
+$serverPath = $root . '/extension/src/server/http3.c';
+$serverLoaderPath = $root . '/extension/src/server/http3/lsquic_loader.inc';
 $streamRuntimePath = $root . '/extension/src/client/http3/lsquic_stream_runtime.inc';
 $runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
 $lsquicDispatchPath = $root . '/extension/src/client/http3/lsquic_dispatch.inc';
@@ -134,6 +136,8 @@ function king_http3_loader_require_guarded_include(
 
 $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
+$server = king_http3_loader_require_file($serverPath, $errors);
+$serverLoader = king_http3_loader_require_file($serverLoaderPath, $errors);
 $streamRuntime = king_http3_loader_require_file($streamRuntimePath, $errors);
 $runtime = king_http3_loader_require_file($runtimePath, $errors);
 $lsquicDispatch = king_http3_loader_require_file($lsquicDispatchPath, $errors);
@@ -359,6 +363,100 @@ foreach (['stub', 'fake', 'HAVE_KING_LSQUIC', 'KING_HTTP3_BACKEND_LSQUIC'] as $f
     if (stripos($loader, $forbidden) !== false) {
         $errors[] = 'LSQUIC loader must not contain feature-only or placeholder marker: ' . $forbidden;
     }
+}
+
+foreach ([
+    '#include <lsquic.h>',
+    '#include <lsxpack_header.h>',
+    'king_server_http3_lsquic_api_t',
+    'king_server_http3_lsquic_load_error_kind_t',
+    'king_server_http3_lsquic = {0}',
+    '#include "http3/lsquic_loader.inc"',
+] as $needle) {
+    king_http3_loader_require_contains('Server HTTP/3 source', $server, $needle, $errors);
+}
+
+king_http3_loader_require_guarded_include(
+    'Server HTTP/3 source',
+    $server,
+    '#if defined(KING_HTTP3_BACKEND_LSQUIC)',
+    '#include "http3/lsquic_loader.inc"',
+    $errors
+);
+
+foreach ([
+    'KING_LSQUIC_GLOBAL_SERVER',
+    'KING_LSQUIC_LIBRARY',
+    'dlopen(',
+    'dlsym(',
+    'lsquic_global_init',
+    'lsquic_global_cleanup',
+    'lsquic_engine_init_settings',
+    'lsquic_engine_check_settings',
+    'lsquic_engine_new',
+    'lsquic_engine_destroy',
+    'lsquic_engine_packet_in',
+    'lsquic_engine_process_conns',
+    'lsquic_engine_has_unsent_packets',
+    'lsquic_engine_send_unsent_packets',
+    'lsquic_engine_earliest_adv_tick',
+    'lsquic_engine_get_conns_count',
+    'lsquic_engine_count_attq',
+    'lsquic_conn_status',
+    'lsquic_conn_close',
+    'lsquic_conn_get_ctx',
+    'lsquic_conn_set_ctx',
+    'lsquic_stream_send_headers',
+    'lsquic_stream_get_hset',
+    'lsquic_stream_write',
+    'lsquic_stream_read',
+    'lsquic_stream_flush',
+    'lsquic_stream_shutdown',
+    'lsquic_stream_close',
+    'lsquic_stream_wantread',
+    'lsquic_stream_wantwrite',
+    'lsquic_stream_get_ctx',
+    'lsquic_stream_set_ctx',
+    'lsquic_stream_id',
+    'KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY',
+    'KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL',
+    'KING_SERVER_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT',
+    'king_server_http3_lsquic.global_initialized = true',
+    'king_server_http3_lsquic.ready = true',
+] as $needle) {
+    king_http3_loader_require_contains('Server LSQUIC loader', $serverLoader, $needle, $errors);
+}
+
+foreach (['stub', 'fake', 'HAVE_KING_LSQUIC', 'KING_HTTP3_BACKEND_LSQUIC'] as $forbidden) {
+    if (stripos($serverLoader, $forbidden) !== false) {
+        $errors[] = 'Server LSQUIC loader must not contain feature-only or placeholder marker: ' . $forbidden;
+    }
+}
+
+$serverEnsureBody = king_http3_loader_extract_function(
+    $serverLoader,
+    'static zend_result king_server_http3_ensure_lsquic_ready(void)'
+);
+if ($serverEnsureBody === null) {
+    $errors[] = 'Server LSQUIC loader must define king_server_http3_ensure_lsquic_ready().';
+} else {
+    if (preg_match('/\A\s*return\s+SUCCESS\s*;/s', $serverEnsureBody) === 1) {
+        $errors[] = 'king_server_http3_ensure_lsquic_ready() must not be an unconditional success path.';
+    }
+
+    king_http3_loader_require_order(
+        'king_server_http3_ensure_lsquic_ready()',
+        $serverEnsureBody,
+        [
+            'dlopen(',
+            'king_server_http3_lsquic_load_symbol',
+            'lsquic_global_init_fn',
+            'KING_LSQUIC_GLOBAL_SERVER',
+            'king_server_http3_lsquic.global_initialized = true',
+            'king_server_http3_lsquic.ready = true',
+        ],
+        $errors
+    );
 }
 
 $requiredStreamRuntimeNeedles = [
