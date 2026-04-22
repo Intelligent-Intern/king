@@ -910,6 +910,7 @@ const mobileMiniStripPlacement = ref('below');
 const workspaceError = ref('');
 const workspaceNotice = ref('');
 const viewerCallRole = ref('participant');
+const viewerCanModerateCall = ref(false);
 const activeCallId = ref('');
 const loadedCallId = ref('');
 const callParticipantRoles = reactive({});
@@ -986,6 +987,7 @@ const showAdmissionGate = computed(() => {
 });
 const canModerate = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
+  || viewerCanModerateCall.value
   || viewerCallRole.value === 'owner'
   || viewerCallRole.value === 'moderator'
 ));
@@ -3510,17 +3512,21 @@ function resetCallParticipantRoles() {
 }
 
 function applyViewerContext(viewerPayload) {
+  const viewer = viewerPayload && typeof viewerPayload === 'object' ? viewerPayload : {};
   const nextCallId = String(viewerPayload?.call_id || viewerPayload?.callId || '').trim();
   if (nextCallId !== activeCallId.value) {
     activeCallId.value = nextCallId;
     loadedCallId.value = '';
     resetCallParticipantRoles();
+    viewerCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
     if (nextCallId !== '') {
       void loadActiveCallDetails(true);
     }
   }
 
-  viewerCallRole.value = normalizeCallRole(viewerPayload?.call_role || viewerPayload?.callRole || viewerCallRole.value);
+  viewerCallRole.value = normalizeCallRole(viewer.call_role || viewer.callRole || 'participant');
+  viewerCanModerateCall.value = Boolean(viewer.can_moderate ?? viewer.canModerate ?? false);
 }
 
 function applyCallDetails(callPayload) {
@@ -3540,12 +3546,18 @@ function applyCallDetails(callPayload) {
   }
 
   if (callParticipantRoles[currentUserId.value]) {
-    viewerCallRole.value = normalizeCallRole(callParticipantRoles[currentUserId.value]);
+    const currentCallRole = normalizeCallRole(callParticipantRoles[currentUserId.value]);
+    viewerCallRole.value = currentCallRole;
+    viewerCanModerateCall.value = currentCallRole === 'owner' || currentCallRole === 'moderator';
     return;
   }
   const ownerUserId = Number(call?.owner?.user_id || 0);
   if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === currentUserId.value) {
     viewerCallRole.value = 'owner';
+    viewerCanModerateCall.value = true;
+  } else {
+    viewerCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
   }
 }
 
@@ -3555,6 +3567,7 @@ async function loadActiveCallDetails(force = false) {
     loadedCallId.value = '';
     resetCallParticipantRoles();
     viewerCallRole.value = 'participant';
+    viewerCanModerateCall.value = false;
     return;
   }
   if (!force && loadedCallId.value === callId) return;
