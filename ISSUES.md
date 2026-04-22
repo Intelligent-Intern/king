@@ -23,7 +23,7 @@ Ziel:
 
 Checklist:
 - [x] `quiche`-Referenzen in Source, Headers, Tests, Docs, CI, Release-Scripts und Provenance erfassen.
-- [ ] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
+- [x] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
 - [ ] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
 - [ ] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
 - [ ] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
@@ -45,6 +45,22 @@ Quiche-Fundstellen:
 Suchbasis:
 - `rg -l -i "quiche" --glob '!ISSUES.md' --glob '!extension/build/**' --glob '!compat-artifacts/**' --glob '!quiche/**' --glob '!extension/quiche/**'`
 - `git ls-files | rg -i 'quiche'`
+
+Rust-/Cargo-Fundstellen im HTTP/3-Kontext:
+
+| Bereich | Fundstellen | Folge |
+|---|---|---|
+| HTTP/3 Rust-Testclients | `extension/tests/http3_abort_client.rs`, `extension/tests/http3_delayed_body_client.rs`, `extension/tests/http3_failure_peer.rs`, `extension/tests/http3_multi_peer.rs` | In #Q-8 durch neuen reproduzierbaren Test-Harness ersetzen oder temporaer mit Ablauf-Issue markieren. |
+| HTTP/3 Ticket-Server-Testprojekt | `extension/tests/http3_ticket_server/Cargo.toml`, `extension/tests/http3_ticket_server/Cargo.lock`, `extension/tests/http3_ticket_server/src/main.rs` | In #Q-8 migrieren, weil dieser Harness Quiche/Cargo fuer Session-Ticket- und 0-RTT-Belege nutzt. |
+| Quiche Workspace Lock | `infra/scripts/quiche-workspace.Cargo.lock` | In #Q-3/#Q-9 durch neue Provenance ersetzen und danach entfernen. |
+| Cargo-/Rust-Bootstrap-Scripts | `infra/scripts/bootstrap-quiche.sh`, `infra/scripts/build-profile.sh`, `infra/scripts/cargo-build-compat.sh`, `infra/scripts/check-quiche-bootstrap.sh`, `infra/scripts/ensure-quiche-toolchain.sh`, `infra/scripts/package-pie-source.sh`, `infra/scripts/package-release.sh`, `infra/scripts/prebuild-http3-test-helpers.sh` | In #Q-4/#Q-10 entfernen oder auf neuen nicht-Cargo-HTTP3-Pfad umbauen. |
+| Extension Build Hook | `extension/Makefile.frag` | In #Q-4 entfernen oder ersetzen, weil dort `cargo build` fuer `quiche` und `quiche-server` verdrahtet ist. |
+| CI Rust/Cargo Cache/Toolchain | `.github/workflows/ci.yml`, `.github/workflows/release-merge-publish.yml` | In #Q-10 entfernen, falls Rust nur noch Quiche/HTTP3 dient; andernfalls auf unrelated Rust begrenzen. |
+| Docs/Tracker | `README.md`, `CONTRIBUTE`, `DEPENDENCY_PROVENANCE.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/pie-install.md` | In #Q-9 nach technischer Migration aktualisieren. |
+
+Suchbasis:
+- `git ls-files '*.rs' '**/Cargo.toml' '**/Cargo.lock' '*Cargo.lock'`
+- `git ls-files | rg '(^|/)(cargo-build-compat|ensure-quiche-toolchain|bootstrap-quiche|check-quiche-bootstrap|prebuild-http3-test-helpers|build-profile|package-release|package-pie-source|quiche-workspace\.Cargo\.lock)'`
 
 Done:
 - [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
