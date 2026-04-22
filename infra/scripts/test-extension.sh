@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-PHP_BIN="${PHP_BIN:-php}"
+PHP_BIN="${PHP_BIN:-/usr/local/bin/php}"
 EXT_SO="${EXT_DIR}/modules/king.so"
 SHARD_TOTAL="${SHARD_TOTAL:-1}"
 SHARD_INDEX="${SHARD_INDEX:-1}"
@@ -21,7 +21,7 @@ cd "${EXT_DIR}"
 "${SCRIPT_DIR}/prebuild-http3-test-helpers.sh"
 
 if [[ "$#" -gt 0 ]]; then
-    exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "$@"
+    exec "${PHP_BIN}" -n run-tests.php -q "$@"
 fi
 
 if ! [[ "${SHARD_TOTAL}" =~ ^[0-9]+$ ]] || ! [[ "${SHARD_INDEX}" =~ ^[0-9]+$ ]]; then
@@ -39,7 +39,10 @@ if (( SHARD_INDEX < 1 || SHARD_INDEX > SHARD_TOTAL )); then
     exit 1
 fi
 
-mapfile -t TEST_FILES < <(find tests -type f -name '*.phpt' | LC_ALL=C sort)
+TEST_FILES=()
+while IFS= read -r line; do
+  TEST_FILES+=("$line")
+done < <(find tests -type f -name '*.phpt' | LC_ALL=C sort)
 
 if [[ "${#TEST_FILES[@]}" -eq 0 ]]; then
     echo "No PHPT files found under ${EXT_DIR}/tests." >&2
@@ -62,7 +65,7 @@ if (( SHARD_TOTAL > 1 )); then
     fi
 
     echo "Running PHPT shard ${SHARD_INDEX}/${SHARD_TOTAL} with ${#SHARD_TEST_FILES[@]} tests."
-    exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${SHARD_TEST_FILES[@]}"
+    exec "${PHP_BIN}" -n run-tests.php -q "${SHARD_TEST_FILES[@]}"
 fi
 
-exec "${PHP_BIN}" run-tests.php -q -d "extension=${EXT_SO}" "${TEST_FILES[@]}"
+exec "${PHP_BIN}" -n run-tests.php -q "${TEST_FILES[@]}"

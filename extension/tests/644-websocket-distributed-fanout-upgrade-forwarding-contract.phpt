@@ -13,15 +13,7 @@ function king_websocket_644_assert(bool $condition, string $message): void
 
 function king_websocket_644_pick_port(): int
 {
-    $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-    if ($probe === false) {
-        throw new RuntimeException("failed to reserve websocket contract port: $errstr");
-    }
-
-    $name = stream_socket_get_name($probe, false);
-    fclose($probe);
-    [, $port] = explode(':', $name, 2);
-    return (int) $port;
+    return random_int(40000, 49999);
 }
 
 function king_websocket_644_run_node_phase(string $nodeId, int $port, int $peerCount): array

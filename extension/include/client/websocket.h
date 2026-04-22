@@ -136,5 +136,32 @@ void king_websocket_state_build_info_array(
     king_ws_state *state
 );
 
+/**
+ * @brief Low-level frame send for broadcast scatter.
+ *
+ * Writes a WebSocket frame (header + payload) without re-encoding.
+ *
+ * @param state Active websocket runtime.
+ * @param opcode Frame opcode (e.g., KING_WS_OPCODE_BINARY).
+ * @param payload Raw payload bytes.
+ * @param payload_len Length of payload.
+ * @param function_name Error-label prefix.
+ * @return SUCCESS on success, FAILURE on error.
+ */
+zend_result king_websocket_send_frame(
+    king_ws_state *state,
+    unsigned char opcode,
+    const unsigned char *payload,
+    size_t payload_len,
+    const char *function_name
+);
+
+/* WebSocket opcode constants */
+#define KING_WS_OPCODE_TEXT 0x1
+#define KING_WS_OPCODE_BINARY 0x2
+#define KING_WS_OPCODE_CLOSE 0x8
+#define KING_WS_OPCODE_PING 0x9
+#define KING_WS_OPCODE_PONG 0xA
+
 
 #endif // KING_CLIENT_WEBSOCKET_H

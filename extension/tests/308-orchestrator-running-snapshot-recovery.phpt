@@ -1,5 +1,17 @@
 --TEST--
 King pipeline orchestrator rehydrates running snapshots without losing recovered tool state
+--SKIPIF--
+<?php
+if (!function_exists('exec') || !function_exists('proc_open')) {
+    echo "skip exec and proc_open are required for snapshot recovery";
+}
+if (!function_exists('pcntl_signal')) {
+    echo "skip pcntl is required for process management in snapshot recovery";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

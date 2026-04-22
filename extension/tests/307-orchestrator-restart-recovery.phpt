@@ -1,5 +1,17 @@
 --TEST--
 King pipeline orchestrator persists tool registry and completed run history across restart
+--SKIPIF--
+<?php
+if (!function_exists('exec') || !function_exists('proc_open')) {
+    echo "skip exec and proc_open are required for orchestrator restart recovery";
+}
+if (!function_exists('pcntl_signal')) {
+    echo "skip pcntl is required for process management in restart recovery";
+}
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

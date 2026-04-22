@@ -5,6 +5,9 @@ King HTTP/1 one-shot listener emits server-side Early Hints on wire and into the
 if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
     echo "skip proc_open and stream_socket_server are required";
 }
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
 ?>
 --FILE--
 <?php

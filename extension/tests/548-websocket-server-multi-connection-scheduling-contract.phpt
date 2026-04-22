@@ -1,5 +1,11 @@
 --TEST--
 King WebSocket Server keeps repeated targeted and broadcast scheduling stable across many live accepted peers under load
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

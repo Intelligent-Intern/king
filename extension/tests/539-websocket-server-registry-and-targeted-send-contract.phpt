@@ -1,5 +1,14 @@
 --TEST--
 King WebSocket Server keeps a live connection registry and targets frames to one accepted peer without colliding same-URL connections
+--SKIPIF--
+<?php
+if (!function_exists('proc_open')) {
+    echo "skip proc_open required";
+}
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for websocket server tests";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

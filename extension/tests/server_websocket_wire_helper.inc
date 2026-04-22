@@ -5,22 +5,31 @@
 function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null): array
 {
     if ($fixedPort !== null) {
-        $port = $fixedPort;
-    } else {
-        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if ($probe === false) {
-            throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
-        }
-
-        $serverName = stream_socket_get_name($probe, false);
-        fclose($probe);
-        [, $port] = explode(':', $serverName, 2);
+        return king_server_websocket_wire_launch($mode, $iterations, $fixedPort);
     }
 
+    /* Avoid the probe-close-rebind race on macOS by picking a random port in
+     * the high range and retrying on collision.  Three attempts is enough —
+     * the 10000-port window makes collisions rare. */
+    $lastError = '';
+    for ($attempt = 0; $attempt < 3; $attempt++) {
+        $port = random_int(40000, 49999);
+        try {
+            return king_server_websocket_wire_launch($mode, $iterations, $port);
+        } catch (RuntimeException $e) {
+            $lastError = $e->getMessage();
+        }
+    }
+
+    throw new RuntimeException("failed to start server after 3 port attempts: $lastError");
+}
+
+function king_server_websocket_wire_launch(string $mode, int $iterations, int $port): array
+{
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $commandParts = [
-        escapeshellarg(PHP_BINARY),
+        '/usr/local/bin/php',
         '-n',
         '-d',
         escapeshellarg('extension=' . $extensionPath),

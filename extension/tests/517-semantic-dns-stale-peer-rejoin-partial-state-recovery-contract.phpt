@@ -1,5 +1,11 @@
 --TEST--
 King Smart-DNS stale peers restore partial durable-state loss without overwriting newer shared topology
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for multi-process tests";
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

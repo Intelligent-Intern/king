@@ -2,6 +2,12 @@
 King telemetry injects the live current span into outgoing HTTP/1, HTTP/2, and HTTP/3 client requests
 --INI--
 king.security_allow_config_override=1
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

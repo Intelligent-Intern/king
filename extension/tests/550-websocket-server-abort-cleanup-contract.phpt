@@ -1,5 +1,11 @@
 --TEST--
 King WebSocket Server cleans up aborted peers and keeps surviving peers schedulable after a crash-style disconnect
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';

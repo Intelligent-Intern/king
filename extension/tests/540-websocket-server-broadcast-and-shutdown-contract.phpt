@@ -1,10 +1,16 @@
 --TEST--
 King WebSocket Server broadcasts across live accepted peers and stop() drains a real shutdown handshake over those same connections
+--SKIPIF--
+<?php
+if (!extension_loaded('pcntl')) {
+    echo "skip pcntl extension required for websocket server tests";
+}
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';
 
-$server = king_server_websocket_wire_start_server('oo-broadcast-shutdown');
+$server = king_server_websocket_wire_start_server('oo-broadcast-shutdown', 1, 40540);
 $capture = [];
 $url = 'ws://127.0.0.1:' . $server['port'] . '/chat?room=broadcast';
 
@@ -45,6 +51,8 @@ var_dump($capture['broadcast_ok'] ?? false);
 var_dump($capture['broadcast_error'] ?? '');
 var_dump($capture['broadcast_binary_ok'] ?? false);
 var_dump($capture['broadcast_binary_error'] ?? '');
+var_dump($capture['broadcast_batch_ok'] ?? false);
+var_dump($capture['broadcast_batch_error'] ?? '');
 var_dump($capture['stop_error'] ?? '');
 var_dump($capture['registry_count_after_stop'] ?? -1);
 var_dump(isset($capture['registry_after_stop'][$capture['first_info']['connection_id']]));
