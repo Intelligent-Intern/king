@@ -4,11 +4,13 @@ import {
   backendOrigin,
   blockedFixtureNames,
   createMatrixPage,
+  corsHeaders,
   dropFilesOnChatComposer,
   fixtureBrowserPayload,
   fixtureExists,
   fixtureFileSpec,
   matrixCallId,
+  matrixCallRef,
   matrixUsers,
   openChatTab,
   openMatrixWorkspace,
@@ -58,6 +60,104 @@ async function waitForLastChatText(page, expectedText) {
   ), expectedText);
   await handle.dispose();
   return page.evaluate(() => window.__matrixLastChatMessage);
+}
+
+function escapedRegExp(input) {
+  return String(input).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+async function installJourneyArchiveRoutes(page, messages) {
+  const archivedMessages = messages.map((event, index) => ({
+    id: event?.message?.id || `journey-chat-${index + 1}`,
+    text: String(event?.message?.text || ''),
+    sender: event?.message?.sender || { user_id: matrixUsers.admin.id, display_name: matrixUsers.admin.displayName, role: matrixUsers.admin.role },
+    server_time: event?.message?.server_time || new Date(Date.now() + index).toISOString(),
+    attachments: Array.isArray(event?.message?.attachments) ? event.message.attachments : [],
+  }));
+  const files = archivedMessages.flatMap((message) => message.attachments.map((attachment) => ({
+    ...attachment,
+    sender: message.sender,
+    attached_at: message.server_time,
+  })));
+  const groups = {
+    images: files.filter((file) => file.kind === 'image'),
+    pdfs: files.filter((file) => file.kind === 'pdf'),
+    office: files.filter((file) => file.kind === 'document' && ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp'].includes(String(file.extension || '').toLowerCase())),
+    text: files.filter((file) => file.kind === 'text' || ['txt', 'csv', 'md'].includes(String(file.extension || '').toLowerCase())),
+    documents: files.filter((file) => !['image', 'pdf', 'text'].includes(String(file.kind || ''))),
+  };
+  const callListRoute = new RegExp(`${escapedRegExp(backendOrigin)}/api/calls(?:\\?.*)?$`);
+
+  await page.route(callListRoute, async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { ...corsHeaders(), 'content-type': 'application/json; charset=utf-8' },
+      json: {
+        status: 'ok',
+        calls: [
+          {
+            id: matrixCallId,
+            room_id: matrixCallRef,
+            title: 'Matrix UI Call',
+            access_mode: 'invite_only',
+            status: 'ended',
+            starts_at: '2026-04-19T12:00:00.000Z',
+            ends_at: '2026-04-19T13:00:00.000Z',
+            owner: {
+              user_id: matrixUsers.admin.id,
+              display_name: matrixUsers.admin.displayName,
+              email: matrixUsers.admin.email,
+            },
+            participants: {
+              total: 2,
+              internal: 2,
+              external: 0,
+            },
+            my_participation: {
+              call_role: 'participant',
+              invite_state: 'allowed',
+            },
+          },
+        ],
+        pagination: {
+          page: 1,
+          page_size: 10,
+          total: 1,
+          page_count: 1,
+          returned: 1,
+          has_prev: false,
+          has_next: false,
+        },
+        time: '2026-04-19T13:00:00.000Z',
+      },
+    });
+  });
+
+  await page.route(`**/api/calls/${matrixCallId}/chat-archive**`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { ...corsHeaders(), 'content-type': 'application/json; charset=utf-8' },
+      json: {
+        status: 'ok',
+        result: {
+          archive: {
+            call_id: matrixCallId,
+            room_id: matrixCallRef,
+            read_only: true,
+            messages: archivedMessages,
+            files: { groups },
+            pagination: {
+              cursor: 0,
+              limit: 50,
+              returned: archivedMessages.length,
+              has_next: false,
+              next_cursor: null,
+            },
+          },
+        },
+      },
+    });
+  });
 }
 
 async function waitForLastReactionEvent(page, expectedEmoji) {
@@ -185,6 +285,64 @@ test('first incoming chat message shows unread badge and chat icon notification 
     await expect(user.page.locator('.workspace-chat-message').last()).toContainText(firstMessage);
     await expect(user.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
     await expect(user.page.locator('.workspace-chat-toast')).toHaveCount(0);
+  } finally {
+    await Promise.allSettled([admin.context.close(), user.context.close()]);
+  }
+});
+
+test('chat journey covers text, emoji, unread badge, attachment, and read-only archive', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+  const user = await createMatrixPage(browser, baseURL, matrixUsers.user);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openMatrixWorkspace(user.page);
+    await openChatTab(admin.page);
+
+    const textMessage = `journey text ${Date.now()}`;
+    await admin.page.getByPlaceholder('Write a message').fill(textMessage);
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const textPayload = await waitForLastChatText(admin.page, textMessage);
+
+    await user.page.evaluate((event) => window.__matrixEmit(event), textPayload);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toBeVisible();
+    await expect(user.page.locator('.workspace-chat-toast')).toBeVisible();
+    await user.page.locator('.workspace-chat-toast').click();
+    await expect(user.page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText(textMessage);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
+
+    await openChatTab(admin.page);
+    await admin.page.locator('.chat-emoji-toggle').click();
+    await admin.page.locator('.workspace-chat-emoji-btn', { hasText: '🚀' }).click();
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const emojiPayload = await waitForLastChatText(admin.page, '🚀');
+    await user.page.evaluate((event) => window.__matrixEmit(event), emojiPayload);
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText('🚀');
+
+    await openChatTab(admin.page);
+    await admin.page.locator('input.workspace-chat-file-input').setInputFiles([fixtureFileSpec('allowed', 'note.txt')]);
+    await expect(admin.page.locator('.workspace-chat-draft')).toHaveCount(1);
+    await submitChat(admin.page);
+    const attachmentPayload = await waitForLastChatMessage(admin.page, 1);
+    await user.page.evaluate((event) => window.__matrixEmit(event), attachmentPayload);
+    await expect(user.page.locator('.workspace-chat-attachment', { hasText: 'note.txt' })).toBeVisible();
+
+    await installJourneyArchiveRoutes(user.page, [textPayload, emojiPayload, attachmentPayload]);
+    await user.page.goto('/user/dashboard');
+    await expect(user.page.getByText('Matrix UI Call')).toBeVisible();
+    await user.page.getByRole('button', { name: 'Open chat archive for Matrix UI Call' }).click();
+    await expect(user.page.getByTestId('chat-archive-modal')).toBeVisible();
+    await expect(user.page.getByLabel('Archived chat messages')).toContainText(textMessage);
+    await expect(user.page.getByLabel('Archived chat messages')).toContainText('🚀');
+    await expect(user.page.getByLabel('Archived chat messages')).toContainText('note.txt');
+    await expect(user.page.getByLabel('Archived chat files')).toContainText('Text');
+    await expect(user.page.getByLabel('Archived chat files')).toContainText('note.txt');
+    await expect(user.page.getByText('Read-only archive. Messages and files cannot be changed here.')).toBeVisible();
+    await expect(user.page.getByRole('button', { name: /^Send$/ })).toHaveCount(0);
+    await expect(user.page.getByRole('textbox', { name: /message/i })).toHaveCount(0);
   } finally {
     await Promise.allSettled([admin.context.close(), user.context.close()]);
   }
