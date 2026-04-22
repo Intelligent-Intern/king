@@ -345,6 +345,7 @@ function videochat_handle_sfu_routes(
                     $timestamp = $msg['timestamp'] ?? 0;
                     $frameData = $msg['data'] ?? [];
                     $frameType = $msg['frame_type'] ?? $msg['frameType'] ?? 'delta';
+                    $protectedMetadata = is_array($msg['protected'] ?? null) ? $msg['protected'] : [];
                     if ($sfuDatabase instanceof PDO && is_array($frameData)) {
                         try {
                             videochat_sfu_insert_frame(
@@ -355,7 +356,8 @@ function videochat_handle_sfu_routes(
                                 (string) $trackId,
                                 (int) $timestamp,
                                 (string) $frameType,
-                                $frameData
+                                $frameData,
+                                $protectedMetadata
                             );
                         } catch (Throwable) {
                             // best-effort cross-worker frame relay
@@ -364,7 +366,7 @@ function videochat_handle_sfu_routes(
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
                         if ((string) $subClientId !== (string) $clientId) {
-                            king_websocket_send($subClient['websocket'], json_encode([
+                            $outboundFrame = [
                                 'type' => 'sfu/frame',
                                 'publisher_id' => $clientId,
                                 'publisher_user_id' => $userIdString,
@@ -372,7 +374,11 @@ function videochat_handle_sfu_routes(
                                 'timestamp' => $timestamp,
                                 'data' => $frameData,
                                 'frame_type' => $frameType,
-                            ]));
+                            ];
+                            if ($protectedMetadata !== []) {
+                                $outboundFrame['protected'] = $protectedMetadata;
+                            }
+                            king_websocket_send($subClient['websocket'], json_encode($outboundFrame));
                         }
                     }
                     break;

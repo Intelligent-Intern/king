@@ -42,19 +42,19 @@ Goal:
 - Implement real media E2EE for both the native WebRTC path and the WLVC/SFU path so the server cannot decrypt protected media payloads.
 
 Checklist:
-- [ ] Implement client-side session key establishment and media epoch state.
-- [ ] Keep raw media keys client-side only in normal operation.
-- [ ] Implement sender-side media encryption for the native WebRTC path before remote delivery.
-- [ ] Implement receiver-side decryption and integrity validation for the native WebRTC path.
-- [ ] Implement sender-side media encryption for the WLVC/SFU path before `sfu/frame` transit.
-- [ ] Implement receiver-side decryption and integrity validation for the WLVC/SFU path.
-- [ ] Add participant join/leave/admission/removal/reconnect rekey behavior.
-- [ ] Reject wrong epoch, wrong key id, replayed units, tampered payloads, and stale post-removal material.
-- [ ] Add wire/packet-path verification proving the SFU forwards ciphertext and bounded public metadata only.
-- [ ] Add CI coverage for native sender->receiver success, tamper rejection, and WLVC/SFU ciphertext-only transit.
+- [x] Implement client-side session key establishment and media epoch state.
+- [x] Keep raw media keys client-side only in normal operation.
+- [x] Implement sender-side media encryption for the native WebRTC path before remote delivery.
+- [x] Implement receiver-side decryption and integrity validation for the native WebRTC path.
+- [x] Implement sender-side media encryption for the WLVC/SFU path before `sfu/frame` transit.
+- [x] Implement receiver-side decryption and integrity validation for the WLVC/SFU path.
+- [x] Add participant join/leave/admission/removal/reconnect rekey behavior.
+- [x] Reject wrong epoch, wrong key id, replayed units, tampered payloads, and stale post-removal material.
+- [x] Add wire/packet-path verification proving the SFU forwards ciphertext and bounded public metadata only.
+- [x] Add CI coverage for native sender->receiver success, tamper rejection, and WLVC/SFU ciphertext-only transit.
 
 Done:
-- [ ] The E2EE path protects media end-to-end and the server cannot decode call content.
+- [x] The E2EE path protects media end-to-end and the server cannot decode call content.
 
 ### #Q-24 Video-Chat Protected Media Transport Cleanup
 

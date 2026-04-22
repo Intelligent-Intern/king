@@ -171,6 +171,104 @@ function videochat_sfu_latest_frame_id(PDO $pdo, string $roomId): int
     return (int) ($statement->fetchColumn() ?: 0);
 }
 
+/**
+ * @return array{ok: bool, metadata: array<string, mixed>, error: string}
+ */
+function videochat_sfu_normalize_protected_metadata(mixed $metadata): array
+{
+    if ($metadata === null) {
+        return ['ok' => true, 'metadata' => [], 'error' => ''];
+    }
+    if (!is_array($metadata)) {
+        return ['ok' => false, 'metadata' => [], 'error' => 'invalid_protected_metadata'];
+    }
+
+    $forbidden = [
+        'raw_media_key',
+        'private_key',
+        'shared_secret',
+        'plaintext_frame',
+        'decoded_audio',
+        'decoded_video',
+    ];
+    foreach ($forbidden as $field) {
+        if (array_key_exists($field, $metadata)) {
+            return ['ok' => false, 'metadata' => [], 'error' => 'forbidden_protected_metadata'];
+        }
+    }
+
+    $allowed = [
+        'contract_name' => true,
+        'contract_version' => true,
+        'magic' => true,
+        'version' => true,
+        'runtime_path' => true,
+        'track_kind' => true,
+        'frame_kind' => true,
+        'kex_suite' => true,
+        'media_suite' => true,
+        'epoch' => true,
+        'sender_key_id' => true,
+        'sequence' => true,
+        'nonce' => true,
+        'aad_length' => true,
+        'ciphertext_length' => true,
+        'tag_length' => true,
+    ];
+    $normalized = [];
+    foreach ($metadata as $key => $value) {
+        $field = is_string($key) ? trim($key) : '';
+        if ($field === '' || !isset($allowed[$field])) {
+            return ['ok' => false, 'metadata' => [], 'error' => 'unknown_protected_metadata'];
+        }
+        if (!is_scalar($value) && $value !== null) {
+            return ['ok' => false, 'metadata' => [], 'error' => 'invalid_protected_metadata'];
+        }
+        $normalized[$field] = $value;
+    }
+
+    if ($normalized !== []) {
+        $encoded = json_encode($normalized, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        if (!is_string($encoded) || strlen($encoded) > 4096) {
+            return ['ok' => false, 'metadata' => [], 'error' => 'protected_metadata_too_large'];
+        }
+    }
+
+    return ['ok' => true, 'metadata' => $normalized, 'error' => ''];
+}
+
+/**
+ * @return array<int|string, mixed>
+ */
+function videochat_sfu_encode_stored_frame_payload(array $frameData, array $protectedMetadata = []): array
+{
+    if ($protectedMetadata === []) {
+        return $frameData;
+    }
+    return [
+        'data' => $frameData,
+        'protected' => $protectedMetadata,
+    ];
+}
+
+/**
+ * @return array{data: array<int, mixed>, protected: array<string, mixed>}
+ */
+function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
+{
+    if (array_key_exists('data', $decodedData) && is_array($decodedData['data'])) {
+        $protected = is_array($decodedData['protected'] ?? null) ? $decodedData['protected'] : [];
+        return [
+            'data' => $decodedData['data'],
+            'protected' => $protected,
+        ];
+    }
+    return [
+        'data' => $decodedData,
+        'protected' => [],
+    ];
+}
+
 function videochat_sfu_insert_frame(
     PDO $pdo,
     string $roomId,
@@ -179,9 +277,11 @@ function videochat_sfu_insert_frame(
     string $trackId,
     int $timestamp,
     string $frameType,
-    array $frameData
+    array $frameData,
+    array $protectedMetadata = []
 ): void {
-    $encodedData = json_encode($frameData, JSON_UNESCAPED_SLASHES);
+    $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedMetadata);
+    $encodedData = json_encode($storedPayload, JSON_UNESCAPED_SLASHES);
     if (!is_string($encodedData)) {
         return;
     }
@@ -340,6 +440,21 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
 
     $payload = $decoded;
     $payload['room_id'] = $normalizedBoundRoomId;
+    if ($type === 'sfu/frame') {
+        $protectedResult = videochat_sfu_normalize_protected_metadata($decoded['protected'] ?? null);
+        if (!(bool) ($protectedResult['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => (string) ($protectedResult['error'] ?? 'invalid_protected_metadata'),
+            ];
+        }
+        if (($protectedResult['metadata'] ?? []) !== []) {
+            $payload['protected'] = $protectedResult['metadata'];
+        }
+    }
     return [
         'ok' => true,
         'type' => $type,
@@ -406,14 +521,19 @@ function videochat_sfu_poll_broker(
         if (!is_array($decodedData)) {
             continue;
         }
-        videochat_presence_send_frame($websocket, [
+        $storedPayload = videochat_sfu_decode_stored_frame_payload($decodedData);
+        $outboundFrame = [
             'type' => 'sfu/frame',
             'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
             'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
             'track_id' => (string) ($frame['track_id'] ?? ''),
             'timestamp' => (int) ($frame['timestamp'] ?? 0),
-            'data' => $decodedData,
+            'data' => $storedPayload['data'],
             'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
-        ]);
+        ];
+        if (($storedPayload['protected'] ?? []) !== []) {
+            $outboundFrame['protected'] = $storedPayload['protected'];
+        }
+        videochat_presence_send_frame($websocket, $outboundFrame);
     }
 }

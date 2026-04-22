@@ -50,7 +50,7 @@ function videochat_signaling_decode_client_frame(string $frame): array
         ];
     }
 
-    if (!in_array($type, ['call/offer', 'call/answer', 'call/ice', 'call/hangup'], true)) {
+    if (!in_array($type, ['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'media-security/hello', 'media-security/sender-key'], true)) {
         return [
             'ok' => false,
             'type' => $type,

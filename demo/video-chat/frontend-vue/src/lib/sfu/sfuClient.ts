@@ -34,6 +34,7 @@ export interface SFUEncodedFrame {
   timestamp: number
   data: ArrayBuffer
   type: 'keyframe' | 'delta'
+  protected?: Record<string, unknown> | null
 }
 
 export interface SFUClientCallbacks {
@@ -199,7 +200,7 @@ export class SFUClient {
   }
 
   sendEncodedFrame(frame: SFUEncodedFrame): void {
-    const payload = {
+    const payload: Record<string, unknown> = {
       type: 'sfu/frame',
       publisher_id: frame.publisherId,
       publisher_user_id: frame.publisherUserId || '',
@@ -207,6 +208,9 @@ export class SFUClient {
       timestamp: frame.timestamp,
       data: Array.from(new Uint8Array(frame.data)),
       frame_type: frame.type,
+    }
+    if (frame.protected && typeof frame.protected === 'object') {
+      payload.protected = frame.protected
     }
     this.send(payload)
   }
@@ -276,6 +280,7 @@ export class SFUClient {
             timestamp: msg.timestamp,
             data: new Uint8Array(msg.data).buffer,
             type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
+            protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
           })
         }
         break

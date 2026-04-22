@@ -199,6 +199,50 @@ try {
         'room-alpha'
     );
     videochat_realtime_sfu_assert(!(bool) ($publishMismatch['ok'] ?? true), 'SFU publish room mismatch must fail');
+    $protectedMetadata = [
+        'contract_name' => 'king-video-chat-protected-media-frame',
+        'contract_version' => 'v1.0.0',
+        'magic' => 'KPMF',
+        'version' => 1,
+        'runtime_path' => 'wlvc_sfu',
+        'track_kind' => 'video',
+        'frame_kind' => 'delta',
+        'kex_suite' => 'x25519_hkdf_sha256_v1',
+        'media_suite' => 'aes_256_gcm_v1',
+        'epoch' => 1,
+        'sender_key_id' => 'sender-key-id',
+        'sequence' => 1,
+        'nonce' => 'nonce',
+        'aad_length' => 128,
+        'ciphertext_length' => 3,
+        'tag_length' => 16,
+    ];
+    $protectedFrameCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame',
+            'room_id' => 'room-alpha',
+            'track_id' => 'camera-a',
+            'data' => [11, 12, 13],
+            'protected' => $protectedMetadata,
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($protectedFrameCommand['ok'] ?? false), 'protected SFU frame metadata should decode');
+    videochat_realtime_sfu_assert(
+        (($protectedFrameCommand['payload'] ?? [])['protected'] ?? []) === $protectedMetadata,
+        'protected SFU frame metadata must survive decode unchanged'
+    );
+    $forbiddenProtectedFrameCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame',
+            'room_id' => 'room-alpha',
+            'track_id' => 'camera-a',
+            'data' => [11, 12, 13],
+            'protected' => ['plaintext_frame' => 'nope'],
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert(!(bool) ($forbiddenProtectedFrameCommand['ok'] ?? true), 'SFU must reject forbidden protected metadata');
 
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[realtime-sfu-contract] SKIP: pdo_sqlite is not available for persistence relay checks\n");
@@ -236,10 +280,16 @@ try {
 
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-a', '100', 'camera-a', 1000, 'keyframe', [1, 2, 3]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1001, 'delta', [4, 5, 6]);
+    videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1003, 'delta', [14, 15, 16], $protectedMetadata);
     videochat_sfu_insert_frame($pdo, 'room-beta', 'publisher-c', '300', 'camera-c', 1002, 'delta', [7, 8, 9]);
     $framesForA = videochat_sfu_fetch_frames_since($pdo, 'room-alpha', 0, 'publisher-a');
-    videochat_realtime_sfu_assert(count($framesForA) === 1, 'SFU frame relay must exclude self and cross-room frames');
+    videochat_realtime_sfu_assert(count($framesForA) === 2, 'SFU frame relay must exclude self and cross-room frames');
     videochat_realtime_sfu_assert((string) ($framesForA[0]['publisher_id'] ?? '') === 'publisher-b', 'SFU frame relay should include only remote same-room publisher');
+    $storedProtectedPayload = json_decode((string) ($framesForA[1]['data_json'] ?? ''), true);
+    videochat_realtime_sfu_assert(is_array($storedProtectedPayload), 'stored protected SFU payload must decode');
+    $decodedStoredProtectedPayload = videochat_sfu_decode_stored_frame_payload($storedProtectedPayload);
+    videochat_realtime_sfu_assert($decodedStoredProtectedPayload['data'] === [14, 15, 16], 'stored protected SFU payload data mismatch');
+    videochat_realtime_sfu_assert($decodedStoredProtectedPayload['protected'] === $protectedMetadata, 'stored protected SFU metadata mismatch');
 
     videochat_sfu_remove_track($pdo, 'room-alpha', 'publisher-b', 'mic-b');
     videochat_realtime_sfu_assert(count(videochat_sfu_fetch_tracks($pdo, 'room-alpha', 'publisher-b')) === 1, 'SFU unpublish should remove only target track');

@@ -674,6 +674,12 @@ run_step "frontend contract: WLVC wire envelope" bash -lc "
   npm run test:contract:wlvc
 "
 
+run_step "frontend contract: media security frame path" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:media-security
+"
+
 run_step "frontend scaffold boot check" bash -lc "
   set -euo pipefail
   tmp_log=\$(mktemp)
