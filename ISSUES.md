@@ -118,7 +118,7 @@ Risiko-Quellen:
 - LSQUIC Security Update zu `CVE-2025-54939`: `https://blog.litespeedtech.com/2025/08/18/litespeed-security-update/`
 
 Done:
-- [ ] Der Zielstack ist entschieden.
+- [x] Der Zielstack ist entschieden.
 - [ ] Kein bestehendes King-v1-Transportversprechen wird reduziert.
 
 ---
