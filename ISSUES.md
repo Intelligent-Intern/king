@@ -178,7 +178,7 @@ Checklist:
 - [x] `extension/tests/http3_peer_replacement_strategy.inc` and `690-http3-peer-replacement-strategy-contract.phpt` choose repo-owned C/LSQUIC test helpers with King-owned listeners only where equivalent, no CI binary artifacts, no Rust/Cargo bootstrap.
 - [x] `extension/tests/http3_behavior_preservation_matrix.inc` and `691-http3-behavior-preservation-matrix-contract.phpt` preserve the required HTTP/3 behavior regression matrix across 8 behaviors and 16 PHPTs.
 - [x] `infra/scripts/build-http3-test-helpers.sh`, `static-checks.sh`, and `692-http3-test-helper-deterministic-build-contract.phpt` build C helper binaries reproducibly under `.cache` and keep build leftovers out of Git.
-- [ ] Audit skip rules so a missing new stack cannot count as success.
+- [x] `extension/tests/http3_skip_rule_audit.inc` and `693-http3-skip-rule-audit-contract.phpt` audit all behavior-matrix skip rules and block final success while legacy Quiche/Cargo gates remain.
 
 Done:
 - [ ] HTTP/3 tests prove the new stack without Quiche or Cargo bootstrap.
