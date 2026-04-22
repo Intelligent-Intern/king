@@ -25,7 +25,7 @@ Checklist:
 - [x] `quiche`-Referenzen in Source, Headers, Tests, Docs, CI, Release-Scripts und Provenance erfassen.
 - [x] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
 - [x] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
-- [ ] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
+- [x] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
 - [ ] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
 
 Quiche-Fundstellen:
@@ -80,7 +80,20 @@ Klassifizierung:
 | `keep-temporary` | `extension/tests/http3_abort_client.rs`, `extension/tests/http3_delayed_body_client.rs`, `extension/tests/http3_failure_peer.rs`, `extension/tests/http3_multi_peer.rs`, `extension/tests/http3_ticket_server/**` | Bis #Q-8 ersetzt ist, bleiben sie nur als Test-Harness-Belege; nicht Produkt-Bootstrap. |
 | `replace` | `stubs/king.php`, `extension/src/php_king.c`, `extension/src/php_king/lifecycle.inc`, `extension/src/config/internal/snapshot.inc` | Oeffentliche Metadaten bleiben, aber Backendnamen/Diagnostics duerfen nicht mehr Quiche melden. |
 | `replace` | `README.md`, `CONTRIBUTE`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/quic-and-tls.md`, `documentation/operations-and-release.md`, `documentation/pie-install.md` | Dokumentation bleibt, aber aktive Quiche-/Cargo-Aussagen werden auf den neuen Stack umgeschrieben oder als Historie markiert. |
-| `keep-unrelated` | Noch nicht final getrennt; Kandidaten sind allgemeine Rust-/Cargo-Toolchain-Dokumente ohne HTTP/3-Produktbezug. | Wird in der naechsten Checkbox separat gegen Quiche-/HTTP3-Rust abgegrenzt. |
+| `keep-unrelated` | `infra/scripts/toolchain-lock.sh`, `infra/scripts/toolchain.lock`, `infra/php-matrix-runner.Dockerfile`, `infra/scripts/php-version-docker-matrix.sh` und nicht-aktive Rust-/Cargo-Dokumentation ohne HTTP/3-Produktbezug | Nicht automatisch loeschen; in #Q-10 nur Rust-Anteile entfernen, wenn nach Quiche kein anderer Verbraucher bleibt. |
+
+Rust-/Cargo-Abgrenzung:
+
+| Klasse | Fundstellen | Sprint-Behandlung |
+|---|---|---|
+| HTTP/3-/Quiche-Rust | `extension/tests/http3_*.rs`, `extension/tests/http3_ticket_server/**`, `infra/scripts/quiche-workspace.Cargo.lock`, `extension/tests/*http3*.phpt` mit `cargo`-Skip/Build, `extension/tests/http3_test_helper/**` | Q-Scope; in #Q-8 ersetzen oder temporaer mit Ablauf-Issue markieren. |
+| HTTP/3-/Quiche-Bootstrap | `extension/Makefile.frag`, `infra/scripts/bootstrap-quiche.sh`, `infra/scripts/check-quiche-bootstrap.sh`, `infra/scripts/ensure-quiche-toolchain.sh`, `infra/scripts/cargo-build-compat.sh`, Quiche/Cargo-Passagen in `build-profile.sh`, `package-release.sh`, `package-pie-source.sh`, `prebuild-http3-test-helpers.sh` | Q-Scope; in #Q-4/#Q-10 entfernen oder auf neuen nicht-Cargo-Pfad umbauen. |
+| Shared Toolchain-Infrastruktur | `infra/scripts/toolchain-lock.sh`, `infra/scripts/toolchain.lock`, `infra/php-matrix-runner.Dockerfile`, `infra/scripts/php-version-docker-matrix.sh`, Rust/Cargo Setup-Blöcke in CI | Nicht automatisch loeschen; in #Q-10 nur Rust-Anteile entfernen, wenn nach Quiche kein anderer Verbraucher bleibt. |
+| Dokumentation ohne aktive Buildwirkung | allgemeine Rust-/Cargo-Erwaehnungen in Docs/Tracker, sofern sie nicht aktive HTTP/3-/Quiche-Anleitung sind | In #Q-9 als Historie markieren oder auf neuen Stack anpassen; keine Source-Loeschaktion. |
+
+Abgrenzungsergebnis:
+- Getrackte Rust-Source-Dateien und Cargo-Manifeste sind aktuell HTTP/3-Testharness-bezogen.
+- Shared Toolchain-Dateien sind keine HTTP/3-Source, duerfen aber nach Quiche nicht mehr unnoetig Rust als Build-Voraussetzung erzwingen.
 
 Done:
 - [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
