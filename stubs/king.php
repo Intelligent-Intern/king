@@ -480,7 +480,7 @@ namespace {
     /**
      * Active one-shot on-wire HTTP/3 listener leaf.
      * Binds a real UDP socket, accepts exactly one QUIC connection, drives one
-     * HTTP/3 request stream over the active `quiche` runtime, materializes one
+     * HTTP/3 request stream over the active LSQUIC runtime, materializes one
      * `King\Session` snapshot over the accepted socket, invokes the handler
      * once with a normalized HTTP/3-style request array, writes one HTTP/3
      * response, sends a clean `GOAWAY`, and then closes the listener/session.

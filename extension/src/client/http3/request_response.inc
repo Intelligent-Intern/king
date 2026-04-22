@@ -194,7 +194,7 @@ static zend_result king_http3_materialize_response(
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
         runtime != NULL && runtime->lsquic_backend_active ? "lsquic_h3" :
 #endif
-        "quiche_h3"
+        "unavailable"
     );
     add_assoc_string(return_value, "effective_url", (char *) url_str);
     add_assoc_long(

@@ -243,7 +243,7 @@ PHP_MINFO_FUNCTION(king)
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
     php_info_print_table_row(2, "QUIC backend", "runtime-loaded LSQUIC");
 #else
-    php_info_print_table_row(2, "QUIC backend", "runtime-loaded libquiche");
+    php_info_print_table_row(2, "QUIC backend", "not built (LSQUIC required)");
 #endif
     php_info_print_table_row(2, "Active runtimes", king_get_active_runtime_summary());
     php_info_print_table_row(2, "Stubbed API groups", king_get_stubbed_api_summary());
