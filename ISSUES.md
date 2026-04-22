@@ -175,7 +175,7 @@ Goal:
 
 Checklist:
 - [x] `extension/tests/http3_rust_peer_classification.inc` and `689-http3-rust-peer-classification-contract.phpt` classify every tracked HTTP/3 Rust peer and Cargo lock as temporary, non-product-bootstrap test context.
-- [ ] Choose replacement strategy: C helper, King-owned listeners, CI artifacts with provenance, or another reproducible path.
+- [x] `extension/tests/http3_peer_replacement_strategy.inc` and `690-http3-peer-replacement-strategy-contract.phpt` choose repo-owned C/LSQUIC test helpers with King-owned listeners only where equivalent, no CI binary artifacts, no Rust/Cargo bootstrap.
 - [ ] Preserve tests for handshake failure, transport close, timeout, flow control, packet loss, 0-RTT, session tickets, and multi-stream fairness.
 - [ ] Build helper binaries deterministically and do not commit build leftovers.
 - [ ] Audit skip rules so a missing new stack cannot count as success.
