@@ -25,7 +25,7 @@ Checklist:
 - [x] Entscheidung dokumentieren: `LSQUIC + BoringSSL` oder begruendeter Alternativstack.
 - [x] Feature-Parity fuer Client, Server, Listener, TLS, Session-Tickets, 0-RTT, Stream-Reset, Stop-Sending, Flow-Control, Congestion-Control, Stats und Cancel pruefen.
 - [x] Unsupported Features als Blocker oder Umsetzungsaufgabe erfassen, nicht still entfernen.
-- [ ] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
+- [x] Public API und Exception-Mapping gegen den bestehenden Vertrag pruefen.
 - [ ] Lizenz-, Security- und Maintenance-Risiko dokumentieren.
 
 Backend-Entscheidung:
@@ -74,6 +74,30 @@ Unsupported-/Risiko-Register:
 
 Regel fuer alle Eintraege:
 - Wenn ein Punkt am Zielstack nicht korrekt belegbar ist, wird er in diesem Sprint zum Blocker oder zu einem neuen Issue. Er wird nicht aus Tests, Docs, Stubs oder Public API entfernt, um Gruen zu bekommen.
+
+Public-API- und Exception-Mapping:
+
+| Bereich | Bestehender Vertrag | LSQUIC-Migrationsregel |
+|---|---|---|
+| Direct HTTP/3 one-shot | `king_http3_request_send(string $url, ?string $method, ?array $headers, mixed $body, ?array $options): array|false` bleibt bestehen. | Signatur, Rueckgabeform und Response-Metadaten bleiben stabil; nur `transport_backend` wechselt von `quiche_h3` auf einen echten LSQUIC-Backendnamen. |
+| Direct HTTP/3 multi | `king_http3_request_send_multi(array $requests, ?array $options): array|false` bleibt ein gemeinsamer HTTP/3-/QUIC-Multiplex-Pfad. | Keine Aufspaltung in mehrere Einzelrequests; Stream-Pending/Fairness muss in #Q-5/#Q-11 wieder auf einem echten LSQUIC-Conn-Kontext laufen. |
+| Dispatcher | `king_send_request()` / interner Client-Dispatcher behalten HTTP/3-Fehlertexte und `king_get_last_error()`-Semantik. | Dispatcher darf nicht auf HTTP/1/2 downgraden, wenn HTTP/3 explizit gewaehlt oder per URL/Config verlangt ist. |
+| Server Listener | `king_http3_server_listen_once(string $host, int $port, mixed $config, callable $handler): bool` bleibt realer on-wire HTTP/3 Listener. | Handler-Requestshape, Response-Normalisierung, CORS/Header-Verhalten und Stats bleiben #Q-6/#Q-11 Pflicht. |
+| OO Client | `King\Client\Http3Client extends HttpClient` behaelt Constructor, `request()` und `close()`. | Kein neuer LSQUIC-spezifischer OO-Typ und kein Public-API-Bruch; Backendwechsel bleibt intern. |
+| CancelToken | `King\CancelToken` bleibt die oeffentliche aktive Abbruchsteuerung. | Cancel muss in aktive LSQUIC stream/connection close/abort Operationen mappen, nicht nur lokale Flags setzen. |
+| Response-Metadaten | `protocol`, `transport_backend`, `effective_url`, TLS-/Ticket-/0-RTT-Felder und `quic_*` Stats bleiben sichtbar. | Fehlende Felder sind Adapterarbeit in #Q-5/#Q-7, nicht Anlass zum Entfernen. |
+
+Exception-Mapping:
+
+| Fehlerfall | Oeffentliche Klasse | Muss erhalten bleiben |
+|---|---|---|
+| QUIC/TLS Handshake-Failure | `King\TlsException` | Ja; belegt durch `extension/tests/377-http3-handshake-failure-contract.phpt` und `536-oo-http3-client-error-mapping-matrix-contract.phpt`. |
+| QUIC `transport_close` | `King\QuicException` | Ja; darf nicht zu `ProtocolException` oder generischer Runtime werden. |
+| QUIC `application_close` / HTTP/3 Protocol Close | `King\ProtocolException` | Ja; bleibt getrennt von Transport-Close. |
+| Connect- und Response-Timeouts | `King\TimeoutException` | Ja; Timeout bleibt nicht `false` und nicht generische Runtime. |
+| Aktiver `CancelToken` | `King\RuntimeException` mit Cancel-Text | Ja; muss aktive Transport-Cancel-Operation ausloesen. |
+| Congestion-Control-Blocker | `King\CongestionControlException extends King\QuicException` | Ja; falls LSQUIC-CC-Mapping scheitert, muss #Q-7 fail-closed statt still ignorieren. |
+| Validation / unsupported config | bestehende King Validation-/Runtime-Ausnahmen | Ja; nicht unterstuetzte `quic.*` Optionen muessen diagnostisch scheitern. |
 
 Done:
 - [ ] Der Zielstack ist entschieden.
