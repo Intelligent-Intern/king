@@ -25,7 +25,7 @@ Goal:
 Checklist:
 - [x] Update `extension/config.m4` to portable detection: pkg-config, env overrides, system paths, or vendored build outputs.
 - [x] Remove or replace Quiche scripts: `bootstrap-quiche.sh`, `check-quiche-bootstrap.sh`, `ensure-quiche-toolchain.sh`.
-- [ ] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
+- [x] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
 - [ ] Make CI build reproducibly on Linux amd64 and arm64.
 - [ ] Support macOS/dev only through documented env/pkg-config paths.
 - [ ] Update release package manifests for new artifacts and new provenance.
@@ -47,6 +47,12 @@ Bootstrap Contract:
 - `infra/scripts/bootstrap-lsquic.sh` is the active deterministic source bootstrap entrypoint.
 - `infra/scripts/check-lsquic-bootstrap.sh` validates LSQUIC, BoringSSL, ls-qpack, and ls-hpack against pinned archives.
 - The old Quiche script entrypoints are removed from the active tree.
+
+Build Path Contract:
+
+- `infra/scripts/build-profile.sh` stages `king.so` without invoking Cargo, Rust, or Quiche runtime artifact builds.
+- `extension/Makefile.frag` no longer extends `all` or `install` with Quiche runtime targets.
+- Release packages no longer require or ship `runtime/libquiche.so` or `runtime/quiche-server`.
 
 ---
 

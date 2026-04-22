@@ -78,7 +78,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -89,14 +89,6 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
       - name: Verify dependency provenance documentation
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-dependency-provenance-doc.sh
@@ -104,14 +96,6 @@ jobs:
       - name: Verify repo artifact hygiene guardrails
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -134,8 +118,6 @@ jobs:
         run: |
           php -v
           phpize -v
-          cargo --version
-
       - name: Lint public PHP stub surface
         if: matrix.shard-index == 1
         run: php -l stubs/king.php
@@ -249,7 +231,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -259,22 +241,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -364,7 +330,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -374,22 +340,6 @@ jobs:
           php-version: "${{ matrix.php-version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -466,7 +416,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -476,22 +426,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -563,7 +497,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -573,22 +507,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -660,7 +578,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -670,22 +588,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -756,7 +658,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -766,22 +668,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -849,7 +735,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -859,22 +745,6 @@ jobs:
           php-version: "${{ steps.toolchain.outputs.canonical_php_version }}"
           coverage: none
           extensions: curl, mbstring, openssl, sockets
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |

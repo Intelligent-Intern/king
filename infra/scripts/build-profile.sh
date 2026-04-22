@@ -39,10 +39,7 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-QUICHE_DIR="${ROOT_DIR}/quiche"
 LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
-TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
-TOOLCHAIN_LOCK_FILE="${SCRIPT_DIR}/toolchain.lock"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
@@ -52,9 +49,6 @@ BASE_CPPFLAGS="${CPPFLAGS:-}"
 BASE_LDFLAGS="${LDFLAGS:-}"
 BASE_CC="${CC:-}"
 BASE_CXX="${CXX:-}"
-export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
-export CARGO_HOME="${CARGO_HOME:-${ROOT_DIR}/.cargo}"
-mkdir -p "${CARGO_HOME}"
 
 profile_cc=""
 profile_cxx=""
@@ -62,11 +56,8 @@ profile_cflags=""
 profile_cppflags="${BASE_CPPFLAGS}"
 profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_kind=""
-cargo_target="release"
-cargo_args=(--release)
 declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
 PHPIZE_SNAPSHOT_DIR=""
-PINNED_RUST_TOOLCHAIN=""
 
 trim_ascii_whitespace() {
     local value="$1"
@@ -99,64 +90,6 @@ load_phpize_generated_relative_paths() {
 
         PHPIZE_GENERATED_RELATIVE_PATHS+=("${normalized_line#extension/}")
     done < "${PHPIZE_GENERATED_LIST}"
-}
-
-load_pinned_toolchain_version() {
-    if [[ ! -f "${TOOLCHAIN_LOCK_FILE}" ]]; then
-        echo "Missing toolchain lock file: ${TOOLCHAIN_LOCK_FILE}" >&2
-        exit 1
-    fi
-
-    # shellcheck source=/dev/null
-    source "${TOOLCHAIN_LOCK_FILE}"
-
-    if [[ -z "${KING_RUST_TOOLCHAIN_VERSION:-}" ]]; then
-        echo "KING_RUST_TOOLCHAIN_VERSION is empty in ${TOOLCHAIN_LOCK_FILE}." >&2
-        exit 1
-    fi
-
-    PINNED_RUST_TOOLCHAIN="${KING_RUST_TOOLCHAIN_VERSION}"
-}
-
-activate_pinned_rust_toolchain() {
-    local rustup_bin=""
-    local rustc_version=""
-    local cargo_version=""
-    local toolchain_installed=0
-
-    if [[ -z "${PINNED_RUST_TOOLCHAIN}" ]]; then
-        return 1
-    fi
-
-    rustup_bin="$(command -v rustup || true)"
-    if [[ -z "${rustup_bin}" ]]; then
-        return 1
-    fi
-
-    if [[ ":${PATH}:" != *":${HOME}/.cargo/bin:"* && -d "${HOME}/.cargo/bin" ]]; then
-        export PATH="${HOME}/.cargo/bin:${PATH}"
-    fi
-
-    if rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -Fq "${PINNED_RUST_TOOLCHAIN}"; then
-        toolchain_installed=1
-    fi
-
-    if [[ "${toolchain_installed}" -ne 1 ]]; then
-        echo "Installing pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN} via rustup." >&2
-        rustup toolchain install "${PINNED_RUST_TOOLCHAIN}" --profile minimal
-    fi
-
-    export RUSTUP_TOOLCHAIN="${PINNED_RUST_TOOLCHAIN}"
-
-    rustc_version="$(rustc --version 2>/dev/null | awk '{print $2}')"
-    cargo_version="$(cargo --version 2>/dev/null | awk '{print $2}')"
-
-    if [[ "${rustc_version}" != "${PINNED_RUST_TOOLCHAIN}" || "${cargo_version}" != "${PINNED_RUST_TOOLCHAIN}" ]]; then
-        return 1
-    fi
-
-    echo "Activated pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
-    return 0
 }
 
 snapshot_phpize_generated_files() {
@@ -290,8 +223,6 @@ case "${PROFILE}" in
         profile_cc="${BASE_CC:-cc}"
         profile_cxx="${BASE_CXX:-c++}"
         profile_cflags="-O0 -g3"
-        cargo_target="debug"
-        cargo_args=()
         ;;
     asan)
         profile_cc="${BASE_CC:-clang}"
@@ -406,14 +337,6 @@ apply_pkg_config_curl_cppflags() {
 validate_curl_headers
 apply_pkg_config_curl_cppflags
 
-load_pinned_toolchain_version
-if ! bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust; then
-    if ! activate_pinned_rust_toolchain; then
-        echo "Unable to activate pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
-        exit 1
-    fi
-    bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
-fi
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
     "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
@@ -430,27 +353,6 @@ fi
 echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
 echo "Jobs: ${JOBS}"
-
-cargo fetch \
-    --locked \
-    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml"
-
-cargo fetch \
-    --locked \
-    --manifest-path "${QUICHE_DIR}/apps/Cargo.toml"
-
-cargo build \
-    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
-    --package quiche \
-    "${cargo_args[@]}" \
-    --locked \
-    --features ffi
-
-cargo build \
-    --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
-    "${cargo_args[@]}" \
-    --locked \
-    --bin quiche-server
 
 load_phpize_generated_relative_paths
 snapshot_phpize_generated_files
@@ -477,8 +379,6 @@ make -j"${JOBS}"
 
 mkdir -p "${PROFILE_DIR}"
 cp "${EXT_DIR}/modules/king.so" "${PROFILE_DIR}/king.so"
-cp "${QUICHE_DIR}/target/${cargo_target}/libquiche.so" "${PROFILE_DIR}/libquiche.so"
-cp "${QUICHE_DIR}/target/${cargo_target}/quiche-server" "${PROFILE_DIR}/quiche-server"
 
 if [[ -n "${sanitizer_kind}" ]]; then
     compiler_bin="${profile_cc%% *}"

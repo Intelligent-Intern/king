@@ -312,25 +312,9 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/bootstrap-lsquic.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |

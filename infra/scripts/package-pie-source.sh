@@ -9,8 +9,9 @@ Usage: ./infra/scripts/package-pie-source.sh [--output-dir DIR] [--release-tag T
 Creates the PIE pre-packaged source asset:
   dist/php_king-<version>-src.tgz
 
-The archive contains the King source tree plus the pinned LSQUIC/BoringSSL source cache so
-PIE can build the extension from source with `build-path = extension`.
+The archive contains the King source tree plus pinned LSQUIC/BoringSSL
+provenance so PIE can build the extension from source with
+`build-path = extension`.
 EOF
 }
 
@@ -82,21 +83,12 @@ if ! "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh" --verify-current; then
     "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh"
 fi
 
-if [[ -f "${ROOT_DIR}/quiche/quiche/Cargo.toml" ]]; then
-    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/quiche/Cargo.toml"
-elif [[ -f "${ROOT_DIR}/quiche/Cargo.toml" ]]; then
-    QUICHE_CORE_CARGO="${ROOT_DIR}/quiche/Cargo.toml"
-else
-    echo "Missing required PIE source-package input: ${ROOT_DIR}/quiche/Cargo.toml (and ${ROOT_DIR}/quiche/quiche/Cargo.toml)." >&2
-    exit 1
-fi
-
 for required in \
     "${ROOT_DIR}/composer.json" \
     "${ROOT_DIR}/extension/config.m4" \
     "${ROOT_DIR}/extension/Makefile.frag" \
-    "${QUICHE_CORE_CARGO}" \
-    "${ROOT_DIR}/quiche/apps/Cargo.toml"; do
+    "${ROOT_DIR}/infra/scripts/lsquic-bootstrap.lock" \
+    "${ROOT_DIR}/infra/scripts/bootstrap-lsquic.sh"; do
     if [[ ! -e "${required}" ]]; then
         echo "Missing required PIE source-package input: ${required}" >&2
         exit 1

@@ -20,7 +20,6 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-QUICHE_DIR="${KING_QUICHE_DIR:-${ROOT_DIR}/quiche}"
 LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/release"
 DEFAULT_OUTPUT_DIR="${ROOT_DIR}/dist"
@@ -205,8 +204,6 @@ ensure_release_git_lock_state() {
     fi
 
     for required_lock in \
-        "${SCRIPT_DIR}/toolchain.lock" \
-        "${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
         "${SCRIPT_DIR}/phpize-generated-files.list"
     do
         if [[ ! -f "${required_lock}" ]]; then
@@ -250,9 +247,7 @@ GIT_COMMIT="$(resolve_git_commit)"
 SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 SOURCE_DIRTY="$(resolve_dirty_state)"
 BUILD_REF="git.${GIT_SHORT}"
-PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
-PROVENANCE_TOOLCHAIN_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/toolchain.lock")"
-PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/quiche-workspace.Cargo.lock")"
+PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
 
 if [[ "${SOURCE_DIRTY}" == "1" ]]; then
     BUILD_REF="${BUILD_REF}.dirty"
@@ -266,8 +261,6 @@ require_release_profile() {
     local missing=0
     local required_files=(
         "${PROFILE_DIR}/king.so"
-        "${PROFILE_DIR}/libquiche.so"
-        "${PROFILE_DIR}/quiche-server"
     )
 
     if [[ "${REBUILD}" == "1" ]]; then
@@ -302,8 +295,6 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Contents
 
 - \`modules/king.so\`
-- \`runtime/libquiche.so\`
-- \`runtime/quiche-server\`
 - \`bin/smoke.sh\`
 - \`bin/smoke.php\`
 - \`manifest.json\`
@@ -312,16 +303,7 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Install
 
 1. Copy \`modules/king.so\` into your PHP extension directory or reference it by absolute path.
-2. Keep \`runtime/libquiche.so\` and \`runtime/quiche-server\` together with the extension package.
-3. Export the runtime paths before loading the extension:
-
-\`\`\`bash
-export KING_QUICHE_LIBRARY=/path/to/runtime/libquiche.so
-export KING_QUICHE_SERVER=/path/to/runtime/quiche-server
-export LD_LIBRARY_PATH=/path/to/runtime:\${LD_LIBRARY_PATH}
-\`\`\`
-
-4. Enable the extension in PHP:
+2. Enable the extension in PHP:
 
 \`\`\`ini
 extension=/absolute/path/to/modules/king.so
@@ -352,10 +334,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
 
-export KING_QUICHE_LIBRARY="${KING_QUICHE_LIBRARY:-${PACKAGE_DIR}/runtime/libquiche.so}"
-export KING_QUICHE_SERVER="${KING_QUICHE_SERVER:-${PACKAGE_DIR}/runtime/quiche-server}"
-export LD_LIBRARY_PATH="${PACKAGE_DIR}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-
 exec "${PHP_BIN}" \
     -d "extension=${PACKAGE_DIR}/modules/king.so" \
     -d "king.security_allow_config_override=1" \
@@ -384,9 +362,7 @@ generate_manifest() {
     PKG_OS="${OS_NAME}" \
     PKG_ARCH="${ARCH_NAME}" \
     PKG_PHP_API="${PHP_API}" \
-    PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256}" \
-    PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256="${PROVENANCE_TOOLCHAIN_LOCK_SHA256}" \
-    PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="${PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256}" \
+    PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256}" \
     php <<'PHP' > "${package_root}/manifest.json"
 <?php
 $root = getenv('PKG_ROOT');
@@ -398,8 +374,6 @@ foreach ([
     'bin/smoke.sh',
     'docs/INSTALL.md',
     'modules/king.so',
-    'runtime/libquiche.so',
-    'runtime/quiche-server',
 ] as $relative) {
     $full = $root . DIRECTORY_SEPARATOR . $relative;
     $files[$relative] = [
@@ -424,9 +398,7 @@ $manifest = [
         'php_api' => getenv('PKG_PHP_API'),
     ],
     'provenance' => [
-        'quiche_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256'),
-        'toolchain_lock_sha256' => getenv('PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256'),
-        'quiche_workspace_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256'),
+        'lsquic_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256'),
     ],
     'files' => $files,
 ];
@@ -445,8 +417,6 @@ write_inner_checksums() {
             bin/smoke.sh \
             docs/INSTALL.md \
             modules/king.so \
-            runtime/libquiche.so \
-            runtime/quiche-server \
         > SHA256SUMS
     )
 }
@@ -464,12 +434,9 @@ package_once() {
     mkdir -p \
         "${package_root}/bin" \
         "${package_root}/docs" \
-        "${package_root}/modules" \
-        "${package_root}/runtime"
+        "${package_root}/modules"
 
     install -m 0644 "${PROFILE_DIR}/king.so" "${package_root}/modules/king.so"
-    install -m 0644 "${PROFILE_DIR}/libquiche.so" "${package_root}/runtime/libquiche.so"
-    install -m 0755 "${PROFILE_DIR}/quiche-server" "${package_root}/runtime/quiche-server"
 
     generate_smoke_script "${package_root}/bin/smoke.sh"
     install_runtime_smoke_script "${package_root}/bin/smoke.php"
