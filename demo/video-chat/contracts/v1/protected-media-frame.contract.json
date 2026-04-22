@@ -3,6 +3,7 @@
   "contract_version": "v1.0.0",
   "scope": "application-media-protection-envelope",
   "wire_encoding": "typed_binary_envelope_v1",
+  "transport_envelope_contract": "king-video-chat-protected-media-transport-envelope",
   "endianness": "big-endian",
   "magic_ascii": "KPMF",
   "version": 1,

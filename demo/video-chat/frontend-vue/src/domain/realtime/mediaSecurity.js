@@ -1,5 +1,6 @@
 const SESSION_CONTRACT_NAME = `king-video-chat-${'e2' + 'ee'}-session`;
 const FRAME_CONTRACT_NAME = 'king-video-chat-protected-media-frame';
+const TRANSPORT_ENVELOPE_CONTRACT_NAME = 'king-video-chat-protected-media-transport-envelope';
 const CONTRACT_VERSION = 'v1.0.0';
 const FRAME_MAGIC = 'KPMF';
 const FRAME_VERSION = 1;
@@ -8,10 +9,11 @@ const MEDIA_SUITE = 'aes_256_gcm_v1';
 const ACTIVE_STATE = `media_${'e2' + 'ee'}_active`;
 const TEXT_ENCODER = new TextEncoder();
 const TEXT_DECODER = new TextDecoder();
-const NATIVE_ENVELOPE_HEADER_BYTES = 8;
+const PROTECTED_ENVELOPE_PREFIX_BYTES = 8;
 const MEDIA_NONCE_BYTES = 24;
 const WRAP_NONCE_BYTES = 12;
 const MAX_PUBLIC_METADATA_BYTES = 4096;
+const MAX_PROTECTED_CIPHERTEXT_BYTES = 16_777_216;
 
 export const MEDIA_SECURITY_SIGNAL_TYPES = Object.freeze([
   'media-security/hello',
@@ -172,36 +174,50 @@ function validateProtectedHeader(header) {
   if (Number(header.tag_length || 0) !== 16) throw new Error('malformed_protected_frame');
 }
 
-function encodeNativeEnvelope(header, ciphertext) {
+export function encodeProtectedFrameEnvelope(header, ciphertext) {
+  validateProtectedHeader(header);
   const headerBytes = jsonBytes(header);
   if (headerBytes.byteLength > MAX_PUBLIC_METADATA_BYTES) throw new Error('malformed_protected_frame');
   const body = bytesFromData(ciphertext);
-  const out = new Uint8Array(NATIVE_ENVELOPE_HEADER_BYTES + headerBytes.byteLength + body.byteLength);
+  if (body.byteLength <= 0 || body.byteLength > MAX_PROTECTED_CIPHERTEXT_BYTES) throw new Error('malformed_protected_frame');
+  if (Number(header.ciphertext_length || 0) !== body.byteLength) throw new Error('malformed_protected_frame');
+  const out = new Uint8Array(PROTECTED_ENVELOPE_PREFIX_BYTES + headerBytes.byteLength + body.byteLength);
   out[0] = 0x4b;
   out[1] = 0x50;
   out[2] = 0x4d;
   out[3] = 0x46;
   const view = new DataView(out.buffer);
   view.setUint32(4, headerBytes.byteLength, false);
-  out.set(headerBytes, NATIVE_ENVELOPE_HEADER_BYTES);
-  out.set(body, NATIVE_ENVELOPE_HEADER_BYTES + headerBytes.byteLength);
+  out.set(headerBytes, PROTECTED_ENVELOPE_PREFIX_BYTES);
+  out.set(body, PROTECTED_ENVELOPE_PREFIX_BYTES + headerBytes.byteLength);
   return out.buffer;
 }
 
-function decodeNativeEnvelope(data) {
+export function decodeProtectedFrameEnvelope(data) {
   const bytes = bytesFromData(data);
-  if (bytes.byteLength <= NATIVE_ENVELOPE_HEADER_BYTES) throw new Error('malformed_protected_frame');
+  if (bytes.byteLength <= PROTECTED_ENVELOPE_PREFIX_BYTES) throw new Error('malformed_protected_frame');
   if (bytes[0] !== 0x4b || bytes[1] !== 0x50 || bytes[2] !== 0x4d || bytes[3] !== 0x46) {
     throw new Error('malformed_protected_frame');
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const headerLength = view.getUint32(4, false);
   if (headerLength <= 0 || headerLength > MAX_PUBLIC_METADATA_BYTES) throw new Error('malformed_protected_frame');
-  if (bytes.byteLength <= NATIVE_ENVELOPE_HEADER_BYTES + headerLength) throw new Error('malformed_protected_frame');
-  const headerRaw = bytes.slice(NATIVE_ENVELOPE_HEADER_BYTES, NATIVE_ENVELOPE_HEADER_BYTES + headerLength);
+  if (bytes.byteLength <= PROTECTED_ENVELOPE_PREFIX_BYTES + headerLength) throw new Error('malformed_protected_frame');
+  const headerRaw = bytes.slice(PROTECTED_ENVELOPE_PREFIX_BYTES, PROTECTED_ENVELOPE_PREFIX_BYTES + headerLength);
   const header = JSON.parse(TEXT_DECODER.decode(headerRaw));
-  const ciphertext = bytes.slice(NATIVE_ENVELOPE_HEADER_BYTES + headerLength);
+  validateProtectedHeader(header);
+  const ciphertext = bytes.slice(PROTECTED_ENVELOPE_PREFIX_BYTES + headerLength);
+  if (ciphertext.byteLength <= 0 || ciphertext.byteLength > MAX_PROTECTED_CIPHERTEXT_BYTES) throw new Error('malformed_protected_frame');
+  if (Number(header.ciphertext_length || 0) !== ciphertext.byteLength) throw new Error('malformed_protected_frame');
   return { header, ciphertext };
+}
+
+export function encodeProtectedFrameEnvelopeBase64Url(header, ciphertext) {
+  return bytesToBase64Url(encodeProtectedFrameEnvelope(header, ciphertext));
+}
+
+export function decodeProtectedFrameEnvelopeBase64Url(value) {
+  return decodeProtectedFrameEnvelope(base64UrlToBytes(value));
 }
 
 export function createMediaSecuritySession(options = {}) {
@@ -495,6 +511,8 @@ export class MediaSecuritySession {
     return {
       data: cloneBuffer(ciphertext),
       protected: header,
+      envelope: encodeProtectedFrameEnvelope(header, ciphertext),
+      protectedFrame: encodeProtectedFrameEnvelopeBase64Url(header, ciphertext),
     };
   }
 
@@ -548,11 +566,11 @@ export class MediaSecuritySession {
       trackId,
       timestamp: timestamp || Number(encodedFrame?.timestamp || Date.now()),
     });
-    return encodeNativeEnvelope(protectedFrame.protected, protectedFrame.data);
+    return protectedFrame.envelope;
   }
 
   async decryptNativeEncodedFrame(encodedFrame, senderUserId, { trackId = '', timestamp = 0 } = {}) {
-    const envelope = decodeNativeEnvelope(encodedFrame?.data);
+    const envelope = decodeProtectedFrameEnvelope(encodedFrame?.data);
     return this.decryptFrame({
       data: envelope.ciphertext,
       protected: envelope.header,
@@ -560,6 +578,20 @@ export class MediaSecuritySession {
       runtimePath: 'webrtc_native',
       trackId,
       timestamp: timestamp || Number(encodedFrame?.timestamp || Date.now()),
+    });
+  }
+
+  async decryptProtectedFrameEnvelope({ protectedFrame, envelope, publisherUserId, runtimePath, trackId = '', timestamp = 0 } = {}) {
+    const decodedEnvelope = protectedFrame
+      ? decodeProtectedFrameEnvelopeBase64Url(protectedFrame)
+      : decodeProtectedFrameEnvelope(envelope);
+    return this.decryptFrame({
+      data: decodedEnvelope.ciphertext,
+      protected: decodedEnvelope.header,
+      publisherUserId,
+      runtimePath,
+      trackId,
+      timestamp,
     });
   }
 
@@ -619,11 +651,17 @@ export class MediaSecuritySession {
 export const mediaSecurityInternalsForTests = Object.freeze({
   SESSION_CONTRACT_NAME,
   FRAME_CONTRACT_NAME,
+  TRANSPORT_ENVELOPE_CONTRACT_NAME,
   CONTRACT_VERSION,
   KEX_SUITE,
   MEDIA_SUITE,
   ACTIVE_STATE,
   MEDIA_NONCE_BYTES,
-  encodeNativeEnvelope,
-  decodeNativeEnvelope,
+  PROTECTED_ENVELOPE_PREFIX_BYTES,
+  MAX_PUBLIC_METADATA_BYTES,
+  MAX_PROTECTED_CIPHERTEXT_BYTES,
+  encodeProtectedFrameEnvelope,
+  decodeProtectedFrameEnvelope,
+  encodeProtectedFrameEnvelopeBase64Url,
+  decodeProtectedFrameEnvelopeBase64Url,
 });

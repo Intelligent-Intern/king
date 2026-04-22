@@ -69,11 +69,14 @@ try {
 
     $session = videochat_media_security_json($root . '/contracts/v1/e2ee-session.contract.json', 'e2ee-session contract');
     $frame = videochat_media_security_json($root . '/contracts/v1/protected-media-frame.contract.json', 'protected-media-frame contract');
+    $transport = videochat_media_security_json($root . '/contracts/v1/protected-media-transport-envelope.contract.json', 'protected-media-transport-envelope contract');
 
     videochat_media_security_assert(($session['contract_name'] ?? null) === 'king-video-chat-e2ee-session', 'session contract_name mismatch');
     videochat_media_security_assert(($frame['contract_name'] ?? null) === 'king-video-chat-protected-media-frame', 'frame contract_name mismatch');
+    videochat_media_security_assert(($transport['contract_name'] ?? null) === 'king-video-chat-protected-media-transport-envelope', 'transport contract_name mismatch');
     videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($session['contract_version'] ?? '')) === 1, 'session contract_version must be v1 semver');
     videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($frame['contract_version'] ?? '')) === 1, 'frame contract_version must be v1 semver');
+    videochat_media_security_assert(preg_match('/^v1\.\d+\.\d+(?:-[A-Za-z0-9._-]+)?$/', (string) ($transport['contract_version'] ?? '')) === 1, 'transport contract_version must be v1 semver');
 
     $requiredStates = ['transport_only', 'protected_not_ready', 'media_e2ee_active', 'blocked_capability', 'rekeying', 'decrypt_error'];
     $stateIds = videochat_media_security_string_ids((array) ($session['security_states'] ?? []));
@@ -120,6 +123,7 @@ try {
 
     videochat_media_security_assert(($frame['magic_ascii'] ?? null) === 'KPMF', 'protected frame magic must be KPMF');
     videochat_media_security_assert(($frame['wire_encoding'] ?? null) === 'typed_binary_envelope_v1', 'protected frame wire encoding must be typed binary envelope');
+    videochat_media_security_assert(($frame['transport_envelope_contract'] ?? null) === 'king-video-chat-protected-media-transport-envelope', 'protected frame must pin transport envelope contract');
     videochat_media_security_assert((int) (($frame['header'] ?? [])['min_length_bytes'] ?? 0) >= 80, 'protected frame header must be bounded and explicit');
 
     $publicFields = [];
@@ -143,6 +147,42 @@ try {
         }
     }
     videochat_media_security_assert_contains_all($frameErrors, ['malformed_protected_frame', 'unsupported_capability', 'wrong_epoch', 'wrong_key_id', 'replay_detected', 'decrypt_failed'], 'protected frame error codes');
+
+    $transportLayers = (array) ($transport['layers'] ?? []);
+    videochat_media_security_assert(is_string($transportLayers['codec_frame'] ?? null) && (string) $transportLayers['codec_frame'] !== '', 'transport layer must separate codec frame');
+    videochat_media_security_assert(($transportLayers['protected_media_frame'] ?? null) === 'king-video-chat-protected-media-frame', 'transport layer must reference protected media frame');
+    videochat_media_security_assert(($transportLayers['transport_envelope'] ?? null) === 'king-video-chat-protected-media-transport-envelope', 'transport layer must reference itself');
+
+    $jsonCarriage = (array) ($transport['json_carriage'] ?? []);
+    videochat_media_security_assert(($jsonCarriage['field'] ?? null) === 'protected_frame', 'protected transport JSON field must be protected_frame');
+    videochat_media_security_assert(($jsonCarriage['encoding'] ?? null) === 'base64url', 'protected transport JSON field must be base64url');
+    videochat_media_security_assert(($jsonCarriage['plaintext_data_field_allowed_when_present'] ?? true) === false, 'protected transport must forbid data beside protected_frame');
+    videochat_media_security_assert(($jsonCarriage['legacy_data_field_allowed_only_in_state'] ?? null) === 'transport_only', 'legacy data field must be transport_only only');
+    videochat_media_security_assert(($jsonCarriage['required_mode_plaintext_fallback_allowed'] ?? true) === false, 'transport required mode must forbid plaintext fallback');
+
+    $binaryLayout = (array) ($transport['binary_layout'] ?? []);
+    videochat_media_security_assert(($binaryLayout['magic_ascii'] ?? null) === 'KPMF', 'transport binary magic must be KPMF');
+    videochat_media_security_assert((int) ($binaryLayout['version'] ?? 0) === 1, 'transport binary version must be 1');
+    videochat_media_security_assert((int) ($binaryLayout['prefix_bytes'] ?? 0) === 8, 'transport binary prefix must be eight bytes');
+    videochat_media_security_assert(($binaryLayout['header_length_encoding'] ?? null) === 'u32_be', 'transport header length must be u32_be');
+
+    $bounds = (array) ($transport['bounds'] ?? []);
+    videochat_media_security_assert((int) ($bounds['min_total_bytes'] ?? 0) >= 80, 'transport min total must be bounded');
+    videochat_media_security_assert((int) ($bounds['max_header_bytes'] ?? 0) === 4096, 'transport header max must be 4096');
+    videochat_media_security_assert((int) ($bounds['max_ciphertext_bytes'] ?? 0) === 16777216, 'transport ciphertext max must be 16MiB');
+    videochat_media_security_assert((int) ($bounds['max_total_bytes'] ?? 0) <= 16781320, 'transport total max must include only prefix, header, and ciphertext');
+
+    $visibility = (array) ($transport['sfu_visibility'] ?? []);
+    $visibleFields = (array) ($visibility['json_fields'] ?? []);
+    videochat_media_security_assert_contains_all($visibleFields, ['type', 'publisher_id', 'publisher_user_id', 'track_id', 'timestamp', 'frame_type', 'protection_mode', 'protected_frame'], 'transport visible JSON fields');
+    $forbiddenFields = (array) ($visibility['forbidden_json_fields_when_protected'] ?? []);
+    videochat_media_security_assert_contains_all($forbiddenFields, ['data', 'protected', 'raw_media_key', 'private_key', 'shared_secret', 'plaintext_frame', 'decoded_audio', 'decoded_video'], 'transport forbidden JSON fields');
+
+    $transportFailures = (array) ($transport['parse_failures'] ?? []);
+    videochat_media_security_assert_contains_all($transportFailures, ['missing_protected_frame', 'malformed_protected_frame', 'protected_frame_too_large', 'protected_frame_data_conflict', 'protected_frame_required', 'forbidden_protected_metadata'], 'transport parse failures');
+    $transportCompatibility = (array) ($transport['compatibility'] ?? []);
+    videochat_media_security_assert(($transportCompatibility['protected_or_required_mode_legacy_data_array_allowed'] ?? true) === false, 'protected transport must reject legacy data arrays');
+    videochat_media_security_assert(($transportCompatibility['required_mode_plaintext_fallback_allowed'] ?? true) === false, 'protected transport required mode must reject plaintext fallback');
 
     $sourcePaths = [
         $root . '/frontend-vue/src',

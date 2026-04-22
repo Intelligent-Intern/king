@@ -62,16 +62,16 @@ Goal:
 - Clean up the media transport layer so protected media is carried in a pinned typed/binary envelope rather than ad-hoc plaintext-oriented payload conventions.
 
 Checklist:
-- [ ] Separate codec-frame, transport-envelope, and protected-media contracts.
-- [ ] Replace any ad-hoc JSON byte-array carriage for protected media with a pinned typed or binary envelope.
-- [ ] Add bounded parse rules, malformed-frame rejection, and size ceilings for protected media transit.
-- [ ] Ensure `/sfu` never needs raw media keys and never accepts unauthenticated plaintext in E2EE mode.
-- [ ] Add contract tests for envelope parse/serialize parity and malformed-frame rejection.
-- [ ] Add relay-visible-field tests so only intentionally public metadata crosses the SFU.
-- [ ] Keep compatibility behavior explicit: no implicit fallback from protected envelope to plaintext media in `required` mode.
+- [x] Separate codec-frame, transport-envelope, and protected-media contracts.
+- [x] Replace any ad-hoc JSON byte-array carriage for protected media with a pinned typed or binary envelope.
+- [x] Add bounded parse rules, malformed-frame rejection, and size ceilings for protected media transit.
+- [x] Ensure `/sfu` never needs raw media keys and never accepts unauthenticated plaintext in E2EE mode.
+- [x] Add contract tests for envelope parse/serialize parity and malformed-frame rejection.
+- [x] Add relay-visible-field tests so only intentionally public metadata crosses the SFU.
+- [x] Keep compatibility behavior explicit: no implicit fallback from protected envelope to plaintext media in `required` mode.
 
 Done:
-- [ ] Protected media transit is pinned, bounded, and ready for stable E2EE rollout.
+- [x] Protected media transit is pinned, bounded, and ready for stable E2EE rollout.
 
 ### #Q-25 Video-Chat Algorithm-Agile And Hybrid Post-Quantum Key Agreement
 

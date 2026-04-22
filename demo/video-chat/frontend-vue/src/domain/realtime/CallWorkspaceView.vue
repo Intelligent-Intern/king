@@ -6717,9 +6717,10 @@ async function startEncodingPipeline(videoTrack) {
         publisherUserId: String(sessionState.userId),
         trackId: videoTrack.id,
         timestamp: encoded.timestamp,
-        data: protectedFrame.data,
+        data: new ArrayBuffer(0),
         type: encoded.type,
-        protected: protectedFrame.protected,
+        protectedFrame: protectedFrame.protectedFrame,
+        protectionMode: 'protected',
       });
       wlvcEncodeFailureCount = 0;
       wlvcEncodeFirstFailureAtMs = 0;
@@ -6945,7 +6946,20 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   }
 
   let frameData = frame.data;
-  if (frame?.protected && typeof frame.protected === 'object') {
+  if (frame?.protectedFrame) {
+    try {
+      frameData = await ensureMediaSecuritySession().decryptProtectedFrameEnvelope({
+        protectedFrame: frame.protectedFrame,
+        publisherUserId,
+        runtimePath: 'wlvc_sfu',
+        trackId: frame.trackId,
+        timestamp: frame.timestamp,
+      });
+    } catch (error) {
+      mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      return;
+    }
+  } else if (frame?.protected && typeof frame.protected === 'object') {
     try {
       frameData = await ensureMediaSecuritySession().decryptFrame({
         data: frame.data,

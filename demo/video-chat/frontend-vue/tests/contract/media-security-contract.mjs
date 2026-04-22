@@ -24,6 +24,8 @@ try {
   assert.equal(mediaSecurityInternalsForTests.KEX_SUITE, 'x25519_hkdf_sha256_v1');
   assert.equal(mediaSecurityInternalsForTests.MEDIA_SUITE, 'aes_256_gcm_v1');
   assert.equal(mediaSecurityInternalsForTests.MEDIA_NONCE_BYTES, 24);
+  assert.equal(mediaSecurityInternalsForTests.TRANSPORT_ENVELOPE_CONTRACT_NAME, 'king-video-chat-protected-media-transport-envelope');
+  assert.equal(mediaSecurityInternalsForTests.PROTECTED_ENVELOPE_PREFIX_BYTES, 8);
 
   const alice = createMediaSecuritySession({ callId: 'call-1', roomId: 'room-1', userId: 101 });
   const bob = createMediaSecuritySession({ callId: 'call-1', roomId: 'room-1', userId: 202 });
@@ -57,6 +59,8 @@ try {
   assert.notDeepEqual(Array.from(new Uint8Array(protectedFrame.data).slice(0, plaintext.length)), Array.from(plaintext), 'protected frame must not carry plaintext bytes');
   assert.equal(protectedFrame.protected.contract_name, 'king-video-chat-protected-media-frame');
   assert.equal(protectedFrame.protected.runtime_path, 'wlvc_sfu');
+  assert.ok(String(protectedFrame.protectedFrame || '').length > 40, 'protected frame must expose a transport envelope');
+  assert.equal(protectedFrame.envelope instanceof ArrayBuffer, true, 'protected frame must expose typed binary envelope bytes');
   for (const forbidden of ['raw_media_key', 'private_key', 'shared_secret', 'plaintext_frame', 'decoded_audio', 'decoded_video']) {
     assert.ok(!(forbidden in protectedFrame.protected), `protected frame metadata must not expose ${forbidden}`);
   }
@@ -99,10 +103,12 @@ try {
     'receiver must reject tampered ciphertext',
   );
 
-  const nativeEnvelope = mediaSecurityInternalsForTests.encodeNativeEnvelope(protectedFrame.protected, protectedFrame.data);
-  const decodedEnvelope = mediaSecurityInternalsForTests.decodeNativeEnvelope(nativeEnvelope);
+  const nativeEnvelope = mediaSecurityInternalsForTests.encodeProtectedFrameEnvelope(protectedFrame.protected, protectedFrame.data);
+  const decodedEnvelope = mediaSecurityInternalsForTests.decodeProtectedFrameEnvelope(nativeEnvelope);
   assert.equal(decodedEnvelope.header.contract_name, 'king-video-chat-protected-media-frame');
   assert.deepEqual(Array.from(new Uint8Array(decodedEnvelope.ciphertext)), Array.from(new Uint8Array(protectedFrame.data)));
+  const decodedBase64Envelope = mediaSecurityInternalsForTests.decodeProtectedFrameEnvelopeBase64Url(protectedFrame.protectedFrame);
+  assert.equal(decodedBase64Envelope.header.sequence, protectedFrame.protected.sequence, 'base64 transport envelope must parse back to header');
 
   bob.markPeerRemoved(101);
   await assert.rejects(
@@ -120,15 +126,16 @@ try {
 
   const workspaceSource = read('../../src/domain/realtime/CallWorkspaceView.vue');
   assert.match(workspaceSource, /MEDIA_SECURITY_SIGNAL_TYPES/, 'workspace must handle media-security signaling');
-  assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*sendEncodedFrame/, 'workspace must protect WLVC frames before SFU send');
-  assert.match(workspaceSource, /decryptFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'/, 'workspace must decrypt WLVC frames before decode');
+  assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*sendEncodedFrame\(\{[\s\S]*protectedFrame: protectedFrame\.protectedFrame/, 'workspace must protect WLVC frames before SFU send');
+  assert.match(workspaceSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'/, 'workspace must decrypt WLVC transport envelopes before decode');
   assert.match(workspaceSource, /attachNativeSenderTransform/, 'workspace must attach native sender transform hooks');
   assert.match(workspaceSource, /attachNativeReceiverTransform/, 'workspace must attach native receiver transform hooks');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
-  assert.match(sfuClientSource, /protected\?: Record<string, unknown> \| null/, 'SFU frame type must carry protected metadata');
-  assert.match(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must relay protected metadata');
-  assert.match(sfuClientSource, /protected: msg\.protected/, 'SFU receiver must surface protected metadata');
+  assert.match(sfuClientSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
+  assert.match(sfuClientSource, /payload\.protected_frame = frame\.protectedFrame/, 'SFU sender must relay protected transport envelope');
+  assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
+  assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
 
   process.stdout.write('[media-security-frontend-contract] PASS\n');
 } catch (error) {
