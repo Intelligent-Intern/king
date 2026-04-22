@@ -96,13 +96,14 @@ Goal:
 - Replace `extension/src/client/http3/quiche_loader.inc` with a real loader for the new stack.
 
 Checklist:
-- [ ] Implement a new loader with real symbol binding and initialization.
+- [x] Implement a new loader with real symbol binding and initialization.
 - [ ] Prevent failure stubs or fake feature checks.
 - [ ] Map error paths to existing King exceptions.
 - [ ] Wire runtime init, request/response, multi-request, ticket reuse, and stats.
 - [ ] Remove or migrate old Quiche symbols, handles, and runtime names.
 
 Done:
+- [x] `extension/src/client/http3/lsquic_loader.inc` binds LSQUIC symbols via `dlsym()` and initializes client globals via `lsquic_global_init`.
 - [ ] `king_http3_request_send()` uses the new stack in real wire tests.
 - [ ] OO HTTP3 client uses the new stack in real wire tests.
 - [ ] Old Quiche loader is no longer referenced by any active include.
