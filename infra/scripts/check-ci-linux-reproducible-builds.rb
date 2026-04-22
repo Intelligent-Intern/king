@@ -15,6 +15,17 @@ FORBIDDEN_PRODUCT_BOOTSTRAP = [
   "dtolnay/rust-toolchain",
   "toolchain-lock.sh --verify-rust",
   "cargo --version",
+  "cargo build",
+  "bootstrap-quiche.sh",
+  "check-quiche-bootstrap.sh",
+  "ensure-quiche-toolchain.sh",
+  "quiche-bootstrap.lock",
+  "quiche-workspace.Cargo.lock",
+  "KING_QUICHE_TOOLCHAIN_CONFIRM",
+  "KING_QUICHE_LIBRARY",
+  "KING_QUICHE_SERVER",
+  "libquiche.so",
+  "quiche-server",
 ].freeze
 WORKFLOWS = {
   "ci" => {
@@ -89,6 +100,15 @@ def require_job_steps(path, job)
   require_literal(combined, "king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}", "arch-specific release artifact upload")
 end
 
+
+def require_static_http3_product_gate
+  ci_source = File.read(File.join(ROOT_DIR, ".github/workflows/ci.yml"))
+  static_source = File.read(File.join(ROOT_DIR, "infra/scripts/static-checks.sh"))
+
+  require_literal(ci_source, "../infra/scripts/static-checks.sh", "CI static checks step")
+  require_literal(static_source, "ruby infra/scripts/check-http3-product-build-path.rb", "HTTP/3 product path static gate")
+end
+
 WORKFLOWS.each_value do |config|
   path = config.fetch(:path)
   source, data = load_workflow(path)
@@ -104,5 +124,7 @@ WORKFLOWS.each_value do |config|
   require_release_matrix(path, job)
   require_job_steps(path, job)
 end
+
+require_static_http3_product_gate
 
 puts "CI Linux reproducible build matrix covers PHP #{PHP_VERSIONS.join(', ')} on linux-amd64 and linux-arm64 without Rust/Cargo product bootstrap."

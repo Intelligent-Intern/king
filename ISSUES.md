@@ -33,7 +33,7 @@ Checklist:
 Done:
 - [x] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
 - [x] Fresh HTTP/3 build needs no local Homebrew paths.
-- [ ] CI blocks Quiche/Cargo bootstrap in the active HTTP/3 path.
+- [x] CI blocks Quiche/Cargo bootstrap in the active HTTP/3 path.
 
 Detection Contract:
 
@@ -82,6 +82,11 @@ Fresh Local Path Contract:
 
 - `documentation/pie-install.md` now follows the same Homebrew/Cellar rule as README and operations docs.
 - `infra/scripts/check-dev-path-configuration.rb` scans the fresh PIE/user install path for local Homebrew prefixes and Homebrew-specific env assumptions.
+
+CI Guard Contract:
+
+- `infra/scripts/check-ci-linux-reproducible-builds.rb` blocks Cargo build steps, old Quiche bootstrap entrypoints, Quiche locks, and Quiche runtime artifacts in package/release workflows.
+- The CI workflow runs `static-checks.sh`, and `static-checks.sh` runs `check-http3-product-build-path.rb`, so workflow changes cannot bypass the active HTTP/3 product-path guard.
 
 ---
 
