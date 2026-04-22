@@ -72,6 +72,8 @@ Run the relevant focused checks for the touched area. For core/runtime work, the
 ./infra/scripts/static-checks.sh
 ./infra/scripts/build-extension.sh
 ./infra/scripts/test-extension.sh
+./infra/scripts/container-smoke-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
+./infra/scripts/php-version-docker-matrix.sh --php-versions 8.1,8.2,8.3,8.4,8.5
 ```
 
 Before release packaging or runtime-surface changes, also run the relevant scripts under `infra/scripts/` for package, reproducibility, stub parity, compatibility, or go-live readiness.
