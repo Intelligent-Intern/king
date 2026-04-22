@@ -421,6 +421,8 @@ The build path above bootstraps the pinned QUIC dependency checkout recorded in
 [`infra/scripts/lsquic-bootstrap.lock`](infra/scripts/lsquic-bootstrap.lock).
 Do not replace it with ad hoc local LSQUIC/BoringSSL clones, local package
 manager paths, or unlocked source retries.
+Legacy Quiche build scripts, Cargo locks, and runtime binary fallbacks are no
+longer part of the active build or release contract.
 
 ### macOS / Dev Dependency Paths
 

@@ -5,8 +5,8 @@ inputs that must stay deterministic.
 
 The CI gate `infra/scripts/check-dependency-provenance-doc.sh` verifies that
 the values in this file match the lock files under `infra/scripts/`. The active
-HTTP/3 replacement provenance below is the migration target for the new
-C-based QUIC/HTTP3 stack.
+HTTP/3 replacement provenance below is the active LSQUIC/BoringSSL-based
+QUIC/HTTP3 stack. Legacy Quiche bootstrap locks are no longer provenance inputs.
 
 ## Canonical Toolchain Pins
 
@@ -36,5 +36,5 @@ pinned and hashed as separate rows.
   pins, checksums, byte sizes, HTTPS source URLs, and documentation drift
   without network access.
 - `infra/scripts/check-dependency-provenance-doc.sh` hard-fails when this
-  document diverges from the lock sources or the active HTTP/3 replacement
-  section names Quiche as the product-path stack.
+  document diverges from the lock sources or reintroduces Quiche provenance
+  into the active HTTP/3 replacement section.
