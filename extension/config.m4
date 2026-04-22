@@ -5,8 +5,8 @@ dnl PURPOSE:
 dnl This config.m4 drives the active King extension build with the current
 dnl runtime source list compiled into one shared module.
 dnl Mandatory inputs come from the PHP build toolchain plus the in-tree
-dnl headers the build already probes for, while external quiche paths can be
-dnl layered in for custom transport package layouts.
+dnl headers the build already probes for, while external LSQUIC/BoringSSL paths
+dnl can be layered in for custom transport package layouts.
 dnl
 dnl USE:
 dnl   cd extension
@@ -17,8 +17,8 @@ dnl
 dnl This runtime is the integration integrity check. All real subsystem
 dnl implementations are added here as they are transferred from src_bak/.
 dnl
-dnl Quiche linking paths are optional overrides. The bundled runtime remains the
-dnl default deployment path for PIE/install flows.
+dnl LSQUIC/BoringSSL linking paths are optional overrides. The bundled runtime
+dnl remains the default deployment path for PIE/install flows.
 dnl =========================================================================
 
 PHP_ARG_ENABLE([king],
@@ -26,59 +26,188 @@ PHP_ARG_ENABLE([king],
     [AS_HELP_STRING([--enable-king], [Enable King extension])],
     [yes])
 
-    PHP_ARG_WITH([king-quiche],
-    [optional quiche include/library root for extended transport builds],
-    [AS_HELP_STRING([--with-king-quiche[=DIR]], [Optional quiche include/library paths overriding the default bundled runtime path])],
+PHP_ARG_WITH([king-lsquic],
+    [optional LSQUIC include/library root for extended HTTP/3 builds],
+    [AS_HELP_STRING([--with-king-lsquic[=DIR]], [Optional LSQUIC root. Use yes for pkg-config/default paths, or set KING_LSQUIC_CFLAGS/KING_LSQUIC_LIBS.])],
+    [no],
+    [no])
+
+PHP_ARG_WITH([king-boringssl],
+    [optional BoringSSL include/library root for extended HTTP/3 builds],
+    [AS_HELP_STRING([--with-king-boringssl[=DIR]], [Optional BoringSSL root. Use yes for default paths, or set KING_BORINGSSL_CFLAGS/KING_BORINGSSL_LIBS.])],
     [no],
     [no])
 
 if test "$PHP_KING" != "no"; then
-    if test "$PHP_KING_QUICHE" != "no"; then
-        AC_MSG_CHECKING([for optional quiche build paths])
+    AC_PATH_PROG([PKG_CONFIG], [pkg-config], [no])
 
-        KING_QUICHE_INCLUDE_DIR=""
-        KING_QUICHE_LIBRARY_DIR=""
+    KING_LSQUIC_CONFIGURED="no"
+    KING_LSQUIC_INCLUDE_DIR="${KING_LSQUIC_INCLUDE_DIR:-}"
+    KING_LSQUIC_LIBRARY_DIR="${KING_LSQUIC_LIBRARY_DIR:-}"
+    KING_LSQUIC_ROOT="${KING_LSQUIC_ROOT:-}"
+    KING_LSQUIC_CFLAGS="${KING_LSQUIC_CFLAGS:-}"
+    KING_LSQUIC_LIBS="${KING_LSQUIC_LIBS:-}"
 
-        if test "$PHP_KING_QUICHE" = "yes"; then
-            AC_CHECK_HEADER([quiche.h], [
-                AC_CHECK_LIB([quiche], [quiche_config_new], [], [
-                    AC_MSG_ERROR([--with-king-quiche=yes was provided, but libquiche was not found in the default library paths.])
-                ])
-            ], [
-                AC_MSG_ERROR([--with-king-quiche=yes was provided, but quiche.h was not found in the default include paths.])
-            ])
-            PHP_ADD_LIBRARY([quiche], [1], [KING_SHARED_LIBADD])
-        else
-            for candidate in "$PHP_KING_QUICHE/include" "$PHP_KING_QUICHE"; do
-                if test -f "$candidate/quiche.h"; then
-                    KING_QUICHE_INCLUDE_DIR="$candidate"
-                    break
-                fi
-            done
+    if test "$PHP_KING_LSQUIC" != "no" || test -n "$KING_LSQUIC_ROOT$KING_LSQUIC_INCLUDE_DIR$KING_LSQUIC_LIBRARY_DIR$KING_LSQUIC_CFLAGS$KING_LSQUIC_LIBS"; then
+        AC_MSG_CHECKING([for optional LSQUIC build paths])
 
-            for candidate in "$PHP_KING_QUICHE/lib" "$PHP_KING_QUICHE/target/release" "$PHP_KING_QUICHE"; do
-                if test -f "$candidate/libquiche.a" || test -f "$candidate/libquiche.so"; then
-                    KING_QUICHE_LIBRARY_DIR="$candidate"
-                    break
-                fi
-            done
-
-            if test -z "$KING_QUICHE_INCLUDE_DIR"; then
-                AC_MSG_ERROR([Could not find quiche.h under --with-king-quiche=$PHP_KING_QUICHE.])
+        if test -n "$KING_LSQUIC_CFLAGS$KING_LSQUIC_LIBS"; then
+            if test -z "$KING_LSQUIC_CFLAGS" || test -z "$KING_LSQUIC_LIBS"; then
+                AC_MSG_ERROR([KING_LSQUIC_CFLAGS and KING_LSQUIC_LIBS must be provided together.])
             fi
-
-            if test -z "$KING_QUICHE_LIBRARY_DIR"; then
-                AC_MSG_ERROR([Could not find libquiche.a or libquiche.so under --with-king-quiche=$PHP_KING_QUICHE.])
-            fi
-
-            PHP_ADD_INCLUDE([$KING_QUICHE_INCLUDE_DIR])
-            PHP_ADD_LIBRARY_WITH_PATH([quiche], [$KING_QUICHE_LIBRARY_DIR], [KING_SHARED_LIBADD])
+            CFLAGS="$CFLAGS $KING_LSQUIC_CFLAGS"
+            KING_SHARED_LIBADD="$KING_SHARED_LIBADD $KING_LSQUIC_LIBS"
+            KING_LSQUIC_CONFIGURED="yes"
         fi
 
-        AC_DEFINE([HAVE_KING_QUICHE], [1], [Whether optional quiche build paths were configured])
+        if test "$KING_LSQUIC_CONFIGURED" = "no"; then
+            if test "$PHP_KING_LSQUIC" != "yes" && test "$PHP_KING_LSQUIC" != "no"; then
+                KING_LSQUIC_ROOT="$PHP_KING_LSQUIC"
+            fi
+
+            if test -n "$KING_LSQUIC_ROOT" && test -z "$KING_LSQUIC_INCLUDE_DIR"; then
+                for candidate in "$KING_LSQUIC_ROOT/include" "$KING_LSQUIC_ROOT"; do
+                    if test -f "$candidate/lsquic.h"; then
+                        KING_LSQUIC_INCLUDE_DIR="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if test -n "$KING_LSQUIC_ROOT" && test -z "$KING_LSQUIC_LIBRARY_DIR"; then
+                for candidate in "$KING_LSQUIC_ROOT/lib" "$KING_LSQUIC_ROOT/lib64" "$KING_LSQUIC_ROOT/build" "$KING_LSQUIC_ROOT/build/src/liblsquic" "$KING_LSQUIC_ROOT"; do
+                    if test -f "$candidate/liblsquic.a" || test -f "$candidate/liblsquic.so" || test -f "$candidate/liblsquic.dylib"; then
+                        KING_LSQUIC_LIBRARY_DIR="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if test -n "$KING_LSQUIC_INCLUDE_DIR" || test -n "$KING_LSQUIC_LIBRARY_DIR"; then
+                if test -z "$KING_LSQUIC_INCLUDE_DIR"; then
+                    AC_MSG_ERROR([KING_LSQUIC_LIBRARY_DIR was provided but no LSQUIC include directory was found.])
+                fi
+                if test -z "$KING_LSQUIC_LIBRARY_DIR"; then
+                    AC_MSG_ERROR([KING_LSQUIC_INCLUDE_DIR was provided but no LSQUIC library directory was found.])
+                fi
+                if test ! -f "$KING_LSQUIC_INCLUDE_DIR/lsquic.h"; then
+                    AC_MSG_ERROR([Could not find lsquic.h under KING_LSQUIC_INCLUDE_DIR=$KING_LSQUIC_INCLUDE_DIR.])
+                fi
+                PHP_ADD_INCLUDE([$KING_LSQUIC_INCLUDE_DIR])
+                PHP_ADD_LIBRARY_WITH_PATH([lsquic], [$KING_LSQUIC_LIBRARY_DIR], [KING_SHARED_LIBADD])
+                KING_LSQUIC_CONFIGURED="yes"
+            fi
+        fi
+
+        if test "$KING_LSQUIC_CONFIGURED" = "no" && test "$PKG_CONFIG" != "no"; then
+            for pc_name in lsquic liblsquic; do
+                if $PKG_CONFIG --exists "$pc_name"; then
+                    KING_LSQUIC_PC_CFLAGS=`$PKG_CONFIG --cflags "$pc_name"`
+                    KING_LSQUIC_PC_LIBS=`$PKG_CONFIG --libs "$pc_name"`
+                    CFLAGS="$CFLAGS $KING_LSQUIC_PC_CFLAGS"
+                    KING_SHARED_LIBADD="$KING_SHARED_LIBADD $KING_LSQUIC_PC_LIBS"
+                    KING_LSQUIC_CONFIGURED="yes"
+                    break
+                fi
+            done
+        fi
+
+        if test "$KING_LSQUIC_CONFIGURED" = "no"; then
+            AC_CHECK_HEADER([lsquic.h], [
+                AC_CHECK_LIB([lsquic], [lsquic_global_init], [
+                    PHP_ADD_LIBRARY([lsquic], [1], [KING_SHARED_LIBADD])
+                    KING_LSQUIC_CONFIGURED="yes"
+                ], [
+                    AC_MSG_ERROR([--with-king-lsquic=yes was provided, but liblsquic was not found in the default library paths.])
+                ])
+            ], [
+                AC_MSG_ERROR([--with-king-lsquic was requested, but lsquic.h was not found.])
+            ])
+        fi
+
+        AC_DEFINE([HAVE_KING_LSQUIC], [1], [Whether optional LSQUIC build paths were configured])
+        AC_DEFINE([KING_HTTP3_BACKEND_LSQUIC], [1], [Whether the HTTP/3 build is configured for LSQUIC])
         AC_MSG_RESULT([enabled])
     else
-        AC_MSG_NOTICE([Building king without --with-king-quiche; using the default bundled runtime paths.])
+        AC_MSG_NOTICE([Building king without --with-king-lsquic; HTTP/3 runtime loader work is configured in later migration steps.])
+    fi
+
+    KING_BORINGSSL_CFLAGS="${KING_BORINGSSL_CFLAGS:-}"
+    KING_BORINGSSL_LIBS="${KING_BORINGSSL_LIBS:-}"
+    KING_BORINGSSL_ROOT="${KING_BORINGSSL_ROOT:-}"
+    KING_BORINGSSL_INCLUDE_DIR="${KING_BORINGSSL_INCLUDE_DIR:-}"
+    KING_BORINGSSL_SSL_LIBRARY_DIR="${KING_BORINGSSL_SSL_LIBRARY_DIR:-}"
+    KING_BORINGSSL_CRYPTO_LIBRARY_DIR="${KING_BORINGSSL_CRYPTO_LIBRARY_DIR:-}"
+
+    if test "$PHP_KING_BORINGSSL" != "no" || test -n "$KING_BORINGSSL_ROOT$KING_BORINGSSL_INCLUDE_DIR$KING_BORINGSSL_SSL_LIBRARY_DIR$KING_BORINGSSL_CRYPTO_LIBRARY_DIR$KING_BORINGSSL_CFLAGS$KING_BORINGSSL_LIBS"; then
+        AC_MSG_CHECKING([for optional BoringSSL build paths])
+
+        if test -n "$KING_BORINGSSL_CFLAGS$KING_BORINGSSL_LIBS"; then
+            if test -z "$KING_BORINGSSL_CFLAGS" || test -z "$KING_BORINGSSL_LIBS"; then
+                AC_MSG_ERROR([KING_BORINGSSL_CFLAGS and KING_BORINGSSL_LIBS must be provided together.])
+            fi
+            CFLAGS="$CFLAGS $KING_BORINGSSL_CFLAGS"
+            KING_SHARED_LIBADD="$KING_SHARED_LIBADD $KING_BORINGSSL_LIBS"
+        else
+            if test "$PHP_KING_BORINGSSL" != "yes" && test "$PHP_KING_BORINGSSL" != "no"; then
+                KING_BORINGSSL_ROOT="$PHP_KING_BORINGSSL"
+            fi
+
+            if test -n "$KING_BORINGSSL_ROOT" && test -z "$KING_BORINGSSL_INCLUDE_DIR"; then
+                for candidate in "$KING_BORINGSSL_ROOT/include" "$KING_BORINGSSL_ROOT"; do
+                    if test -f "$candidate/openssl/ssl.h"; then
+                        KING_BORINGSSL_INCLUDE_DIR="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if test -n "$KING_BORINGSSL_ROOT" && test -z "$KING_BORINGSSL_SSL_LIBRARY_DIR"; then
+                for candidate in "$KING_BORINGSSL_ROOT/lib" "$KING_BORINGSSL_ROOT/lib64" "$KING_BORINGSSL_ROOT/build/ssl" "$KING_BORINGSSL_ROOT/build" "$KING_BORINGSSL_ROOT"; do
+                    if test -f "$candidate/libssl.a" || test -f "$candidate/libssl.so" || test -f "$candidate/libssl.dylib"; then
+                        KING_BORINGSSL_SSL_LIBRARY_DIR="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if test -n "$KING_BORINGSSL_ROOT" && test -z "$KING_BORINGSSL_CRYPTO_LIBRARY_DIR"; then
+                for candidate in "$KING_BORINGSSL_ROOT/lib" "$KING_BORINGSSL_ROOT/lib64" "$KING_BORINGSSL_ROOT/build/crypto" "$KING_BORINGSSL_ROOT/build" "$KING_BORINGSSL_ROOT"; do
+                    if test -f "$candidate/libcrypto.a" || test -f "$candidate/libcrypto.so" || test -f "$candidate/libcrypto.dylib"; then
+                        KING_BORINGSSL_CRYPTO_LIBRARY_DIR="$candidate"
+                        break
+                    fi
+                done
+            fi
+
+            if test -n "$KING_BORINGSSL_INCLUDE_DIR"; then
+                if test ! -f "$KING_BORINGSSL_INCLUDE_DIR/openssl/ssl.h"; then
+                    AC_MSG_ERROR([Could not find openssl/ssl.h under KING_BORINGSSL_INCLUDE_DIR=$KING_BORINGSSL_INCLUDE_DIR.])
+                fi
+                PHP_ADD_INCLUDE([$KING_BORINGSSL_INCLUDE_DIR])
+            fi
+
+            if test -n "$KING_BORINGSSL_SSL_LIBRARY_DIR" || test -n "$KING_BORINGSSL_CRYPTO_LIBRARY_DIR"; then
+                if test -z "$KING_BORINGSSL_SSL_LIBRARY_DIR" || test -z "$KING_BORINGSSL_CRYPTO_LIBRARY_DIR"; then
+                    AC_MSG_ERROR([Both KING_BORINGSSL_SSL_LIBRARY_DIR and KING_BORINGSSL_CRYPTO_LIBRARY_DIR are required for BoringSSL library paths.])
+                fi
+                PHP_ADD_LIBRARY_WITH_PATH([ssl], [$KING_BORINGSSL_SSL_LIBRARY_DIR], [KING_SHARED_LIBADD])
+                PHP_ADD_LIBRARY_WITH_PATH([crypto], [$KING_BORINGSSL_CRYPTO_LIBRARY_DIR], [KING_SHARED_LIBADD])
+            else
+                AC_CHECK_HEADER([openssl/ssl.h], [], [
+                    AC_MSG_ERROR([--with-king-boringssl=yes was provided, but openssl/ssl.h was not found.])
+                ])
+                AC_CHECK_LIB([ssl], [SSL_CTX_new], [
+                    PHP_ADD_LIBRARY([ssl], [1], [KING_SHARED_LIBADD])
+                    PHP_ADD_LIBRARY([crypto], [1], [KING_SHARED_LIBADD])
+                ], [
+                    AC_MSG_ERROR([--with-king-boringssl=yes was provided, but libssl/libcrypto were not found in default library paths.])
+                ], [-lcrypto])
+            fi
+        fi
+
+        AC_DEFINE([HAVE_KING_BORINGSSL], [1], [Whether optional BoringSSL build paths were configured])
+        AC_MSG_RESULT([enabled])
     fi
 
     dnl ---------------------------------------------------------------------------
@@ -303,7 +432,6 @@ if test "$PHP_KING" != "no"; then
     ], [
         AC_MSG_WARN([curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers.])
     ])
-    PHP_ADD_INCLUDE([$ext_srcdir/../quiche/quiche/include])
     PHP_ADD_LIBRARY([dl], [1], [KING_SHARED_LIBADD])
 
 fi
