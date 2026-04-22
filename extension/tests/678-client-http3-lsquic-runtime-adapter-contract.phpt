@@ -103,7 +103,7 @@ var_dump(str_contains($client, 'king_http3_header_t *request_headers;'));
 var_dump(str_contains($streamRuntime, 'const king_http3_header_t *headers;'));
 var_dump(str_contains($runtime, 'const king_http3_header_t *headers'));
 var_dump(str_contains($requestResponse, 'king_http3_header_t **headers_out'));
-var_dump(str_contains($dispatch, 'king_http3_header_t *request_headers = NULL;'));
+var_dump(!str_contains($dispatch, 'king_http3_header_t *request_headers = NULL;'));
 var_dump(str_contains(
     $client . $requestResponse . $dispatch . $lsquicDispatch . $lsquicMultiDispatch . $runtime . $streamRuntime,
     'quiche_h3_header'

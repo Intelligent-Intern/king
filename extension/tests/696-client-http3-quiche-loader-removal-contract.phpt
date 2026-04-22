@@ -38,7 +38,7 @@ if ($matches !== []) {
 
 require_not_contains('Client HTTP/3 source', $client, 'http3/quiche_loader.inc');
 require_contains('Client HTTP/3 source', $client, '#include "http3/lsquic_loader.inc"');
-require_contains('Client HTTP/3 source', $client, 'fail closed instead of loading a Quiche fallback');
+require_contains('Client HTTP/3 source', $client, 'fail closed instead of loading a legacy fallback');
 require_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_ensure_lsquic_ready()');
 require_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_throw_lsquic_unavailable(function_name)');
 require_contains('HTTP/3 dispatch backend selector', $dispatch, 'king_http3_throw_lsquic_build_required(function_name)');

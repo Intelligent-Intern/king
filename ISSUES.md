@@ -199,7 +199,7 @@ Checklist:
 - [x] Extend artifact hygiene gate for Quiche/Cargo artifacts.
 
 Done:
-- [ ] `rg -n "quiche|QUICHE"` finds no active product-path references.
+- [x] `rg -n "quiche|QUICHE"` finds no active product-path references.
 - [ ] Remaining matches are only historical migration notes or release history.
 
 ---

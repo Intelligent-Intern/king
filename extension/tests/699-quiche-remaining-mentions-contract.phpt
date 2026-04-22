@@ -28,6 +28,41 @@ function require_not_contains(string $label, string $source, string $needle): vo
     }
 }
 
+function require_active_product_path_quiche_free(string $path): void
+{
+    $source = source($path);
+    if (preg_match('/quiche/i', $source) === 1) {
+        throw new RuntimeException($path . ' contains an active product-path Quiche reference.');
+    }
+}
+
+$activeProductFiles = [
+    'stubs/king.php',
+    'extension/config.m4',
+];
+
+foreach (['extension/src', 'extension/include'] as $directory) {
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($root . '/' . $directory, FilesystemIterator::SKIP_DOTS)
+    );
+    foreach ($iterator as $file) {
+        if (!$file->isFile()) {
+            continue;
+        }
+
+        $extension = $file->getExtension();
+        if (!in_array($extension, ['c', 'h', 'inc'], true)) {
+            continue;
+        }
+
+        $activeProductFiles[] = str_replace($root . '/', '', $file->getPathname());
+    }
+}
+
+foreach ($activeProductFiles as $path) {
+    require_active_product_path_quiche_free($path);
+}
+
 $activeSurfaceFiles = [
     'stubs/king.php' => [
         'active `quiche` runtime',
@@ -106,6 +141,11 @@ require_contains(
     'Q-9 issue leaf',
     source('ISSUES.md'),
     '- [x] Mark remaining Quiche mentions as historical notes or remove them.'
+);
+require_contains(
+    'Q-9 active product path leaf',
+    source('ISSUES.md'),
+    '- [x] `rg -n "quiche|QUICHE"` finds no active product-path references.'
 );
 
 echo "OK\n";

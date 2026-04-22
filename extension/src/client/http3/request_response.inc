@@ -268,36 +268,3 @@ static zend_result king_http3_materialize_response(
 
     return SUCCESS;
 }
-
-#if !defined(KING_HTTP3_BACKEND_LSQUIC)
-static king_http3_multi_request_t *king_http3_multi_find_request_by_stream_id(
-    king_http3_multi_request_t *requests,
-    size_t request_count,
-    uint64_t stream_id)
-{
-    size_t i;
-
-    for (i = 0; i < request_count; ++i) {
-        if (requests[i].request_headers_sent && requests[i].request_stream_id == stream_id) {
-            return &requests[i];
-        }
-    }
-
-    return NULL;
-}
-
-static bool king_http3_multi_all_responses_complete(
-    const king_http3_multi_request_t *requests,
-    size_t request_count)
-{
-    size_t i;
-
-    for (i = 0; i < request_count; ++i) {
-        if (!requests[i].response.response_complete) {
-            return false;
-        }
-    }
-
-    return true;
-}
-#endif
