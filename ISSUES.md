@@ -28,7 +28,7 @@ Checklist:
 - [x] Remove Cargo/Rust bootstrap from the HTTP/3 build path.
 - [x] Make CI build reproducibly on Linux amd64 and arm64.
 - [x] Support macOS/dev only through documented env/pkg-config paths.
-- [ ] Update release package manifests for new artifacts and new provenance.
+- [x] Update release package manifests for new artifacts and new provenance.
 
 Done:
 - [ ] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
@@ -65,6 +65,12 @@ macOS/Dev Path Contract:
 - macOS/dev builds are documented through `PKG_CONFIG_PATH`, `KING_LSQUIC_*`, and `KING_BORINGSSL_*` overrides only.
 - Active build scripts, CI workflows, and user-facing build docs must not commit local Homebrew/Cellar dependency paths.
 - `infra/scripts/check-dev-path-configuration.rb` enforces the documented path contract from `static-checks.sh`.
+
+Release Manifest Contract:
+
+- `manifest.json` records the active HTTP/3 stack as `lsquic` + `boringssl` and identifies `modules/king.so` as the PHP extension artifact.
+- `manifest.json` carries LSQUIC, BoringSSL, ls-qpack, and ls-hpack archive hashes plus dependency provenance from `infra/scripts/lsquic-bootstrap.lock`.
+- `verify-release-package.sh` validates the modern manifest shape, and `verify-release-supply-chain.sh` compares it against the local pinned lock.
 
 ---
 

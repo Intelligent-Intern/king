@@ -240,6 +240,14 @@ verification metadata. The `--verify-reproducible` flag matters because it asks
 the packager to prove that the archive can be reproduced consistently rather
 than just emitted once.
 
+The generated `manifest.json` is also the release provenance boundary for the
+HTTP/3 stack. It records `modules/king.so` as the PHP extension artifact,
+declares the active stack as LSQUIC plus BoringSSL, and embeds the LSQUIC,
+BoringSSL, ls-qpack, and ls-hpack archive hashes from
+`infra/scripts/lsquic-bootstrap.lock`. `verify-release-package.sh` validates
+that shape, while `verify-release-supply-chain.sh` compares the manifest
+against the local pinned lock before a package can pass the release gate.
+
 The `dist/` directory then becomes the staging area for the next steps.
 
 ## Verify The Release Package

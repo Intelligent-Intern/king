@@ -280,6 +280,7 @@ if (!is_array($manifest['platform'] ?? null) || !is_string($manifest['platform']
     exit(1);
 }
 
+$expectedComponents = ['lsquic', 'boringssl', 'ls-qpack', 'ls-hpack'];
 $provenance = $manifest['provenance'] ?? null;
 if (!is_array($provenance)) {
     if ($allowMissingProvenance) {
@@ -291,12 +292,91 @@ if (!is_array($provenance)) {
 }
 
 if (is_array($provenance)) {
+    $artifacts = $manifest['artifacts'] ?? null;
+    if (!is_array($artifacts)) {
+        fwrite(STDERR, "Manifest artifacts metadata is missing.\n");
+        exit(1);
+    }
+
+    $kingModuleArtifact = $artifacts['modules/king.so'] ?? null;
+    if (
+        !is_array($kingModuleArtifact)
+        || ($kingModuleArtifact['kind'] ?? null) !== 'php_extension_module'
+        || ($kingModuleArtifact['http3_stack'] ?? null) !== 'lsquic-boringssl'
+    ) {
+        fwrite(STDERR, "Manifest king.so artifact metadata is invalid.\n");
+        exit(1);
+    }
+
+    $http3Stack = $manifest['http3_stack'] ?? null;
+    if (
+        !is_array($http3Stack)
+        || ($http3Stack['transport'] ?? null) !== 'lsquic'
+        || ($http3Stack['tls'] ?? null) !== 'boringssl'
+        || ($http3Stack['bootstrap_lock'] ?? null) !== 'infra/scripts/lsquic-bootstrap.lock'
+        || ($http3Stack['bootstrap_script'] ?? null) !== 'infra/scripts/bootstrap-lsquic.sh'
+        || !is_array($http3Stack['components'] ?? null)
+    ) {
+        fwrite(STDERR, "Manifest HTTP/3 stack metadata is invalid.\n");
+        exit(1);
+    }
+
+    if ($http3Stack['components'] !== $expectedComponents) {
+        fwrite(STDERR, "Manifest HTTP/3 component list is invalid.\n");
+        exit(1);
+    }
+
     foreach ([
         'lsquic_bootstrap_lock_sha256',
+        'lsquic_archive_sha256',
+        'boringssl_archive_sha256',
+        'ls_qpack_archive_sha256',
+        'ls_hpack_archive_sha256',
     ] as $provenanceKey) {
         $value = $provenance[$provenanceKey] ?? null;
         if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
             fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
+            exit(1);
+        }
+    }
+
+    $dependencyProvenance = $manifest['dependency_provenance'] ?? null;
+    if (!is_array($dependencyProvenance)) {
+        fwrite(STDERR, "Manifest dependency_provenance metadata is missing.\n");
+        exit(1);
+    }
+
+    foreach ($expectedComponents as $componentName) {
+        $component = $dependencyProvenance[$componentName] ?? null;
+        if (!is_array($component)) {
+            fwrite(STDERR, "Manifest dependency provenance is missing for {$componentName}.\n");
+            exit(1);
+        }
+
+        foreach (['name', 'repo_url', 'version', 'commit', 'archive_url', 'archive_sha256'] as $requiredKey) {
+            if (!is_string($component[$requiredKey] ?? null) || $component[$requiredKey] === '') {
+                fwrite(STDERR, "Manifest dependency provenance key {$componentName}.{$requiredKey} is invalid.\n");
+                exit(1);
+            }
+        }
+
+        if (preg_match('/^[a-f0-9]{40}$/', (string) $component['commit']) !== 1) {
+            fwrite(STDERR, "Manifest dependency provenance commit is invalid for {$componentName}.\n");
+            exit(1);
+        }
+
+        if (preg_match('/^[a-f0-9]{64}$/', (string) $component['archive_sha256']) !== 1) {
+            fwrite(STDERR, "Manifest dependency provenance archive hash is invalid for {$componentName}.\n");
+            exit(1);
+        }
+
+        if (!is_int($component['archive_bytes'] ?? null) || $component['archive_bytes'] <= 0) {
+            fwrite(STDERR, "Manifest dependency provenance archive size is invalid for {$componentName}.\n");
+            exit(1);
+        }
+
+        if (!is_array($component['license_files'] ?? null) || count($component['license_files']) < 1) {
+            fwrite(STDERR, "Manifest dependency provenance license files are invalid for {$componentName}.\n");
             exit(1);
         }
     }
