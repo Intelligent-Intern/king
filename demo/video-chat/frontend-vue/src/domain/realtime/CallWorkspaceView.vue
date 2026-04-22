@@ -672,7 +672,7 @@
               @input="handleChatInput"
               @paste="handleChatPaste"
             />
-            <button class="icon-mini-btn" type="submit" :disabled="!isSocketOnline || !hasChatPayload || chatSending">
+            <button class="icon-mini-btn" type="submit" :disabled="!canSubmitChatMessage">
               <img src="/assets/orgas/kingrt/icons/send.png" alt="Send" />
             </button>
           </form>
@@ -1857,6 +1857,7 @@ const activeMessages = computed(() => {
 });
 
 const hasChatPayload = computed(() => chatDraft.value.trim() !== '' || chatAttachmentDrafts.value.length > 0);
+const canSubmitChatMessage = computed(() => hasChatPayload.value && !chatSending.value);
 const showChatUnreadBadge = computed(() => chatUnreadByRoom[activeRoomId.value] === true);
 const showChatUnreadToast = computed(() => rightSidebarCollapsed.value && showChatUnreadBadge.value);
 
@@ -3084,6 +3085,11 @@ function sendSocketFrame(payload) {
   }
 }
 
+function hasOpenRealtimeSocket() {
+  const socket = socketRef.value;
+  return socket instanceof WebSocket && socket.readyState === WebSocket.OPEN;
+}
+
 function requestRoomSnapshot() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
     setNotice('Could not request room snapshot while websocket is offline.', 'error');
@@ -3427,7 +3433,15 @@ function handleChatInput() {
 async function sendChatMessage() {
   const text = chatDraft.value.trim();
   const hasAttachments = chatAttachmentDrafts.value.length > 0;
-  if ((text === '' && !hasAttachments) || !isSocketOnline.value || chatSending.value) return;
+  if ((text === '' && !hasAttachments) || chatSending.value) return;
+  if (!hasOpenRealtimeSocket()) {
+    if (connectionState.value === 'retrying') {
+      reconnectAttempt.value = 0;
+      void connectSocket();
+    }
+    setNotice('Realtime chat is reconnecting. The message is still in the composer.', 'error');
+    return;
+  }
   markParticipantActivity(currentUserId.value, 'chat');
 
   const clientMessageId = `client_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;

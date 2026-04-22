@@ -54,7 +54,7 @@ Goal:
 - In-call chat works during the call and archived chat/files are readable afterwards through standard responsive modal surfaces.
 
 Checklist:
-- [ ] Fix disabled send-button paths for text and emoji messages in the call chat.
+- [x] Fix disabled send-button paths for text and emoji messages in the call chat.
 - [ ] Show unread chat badge and first-message chat notification for other participants.
 - [ ] Keep emoji reactions/chat emoji delivery visible to all call participants.
 - [ ] Keep inline message limits and oversized-paste-to-attachment behavior intact.

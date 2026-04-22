@@ -630,7 +630,7 @@ export async function openMatrixWorkspace(page) {
 }
 
 export async function openChatTab(page) {
-  await page.locator('.tabs-right .tab').nth(2).click();
+  await page.getByRole('tab', { name: 'Chat' }).click();
 }
 
 export async function dropFilesOnChatComposer(page, filePayloads) {

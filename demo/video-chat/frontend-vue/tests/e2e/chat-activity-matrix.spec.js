@@ -50,6 +50,16 @@ async function waitForLastChatMessage(page, expectedAttachmentCount) {
   return page.evaluate(() => window.__matrixLastChatMessage);
 }
 
+async function waitForLastChatText(page, expectedText) {
+  const handle = await page.waitForFunction((text) => (
+    window.__matrixLastChatMessage
+    && window.__matrixLastChatMessage.message
+    && window.__matrixLastChatMessage.message.text === text
+  ), expectedText);
+  await handle.dispose();
+  return page.evaluate(() => window.__matrixLastChatMessage);
+}
+
 test('chat matrix fixture set covers allowed and blocked upload types', async ({ page }) => {
   for (const name of allowedFixtureNames) {
     expect(fixtureExists('allowed', name), `missing allowed fixture ${name}`).toBe(true);
@@ -70,6 +80,38 @@ test('chat matrix fixture set covers allowed and blocked upload types', async ({
   expect(result.allowed).toBe(true);
   expect(result.blockedCodes).toEqual(['attachment_type_not_allowed', 'attachment_type_not_allowed', 'attachment_type_not_allowed']);
   expect(result.disguisedPdfClientSide.ok).toBe(true);
+});
+
+test('text and emoji chat payloads enable the submit button and send through realtime', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openChatTab(admin.page);
+
+    const input = admin.page.getByPlaceholder('Write a message');
+    const sendButton = admin.page.locator('.workspace-chat-compose button[type="submit"]');
+    await expect(sendButton).toBeDisabled();
+
+    const textMessage = `matrix text ${Date.now()}`;
+    await input.fill(textMessage);
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+    const textPayload = await waitForLastChatText(admin.page, textMessage);
+    expect(textPayload.message.text).toBe(textMessage);
+
+    await admin.page.locator('.chat-emoji-toggle').click();
+    await admin.page.locator('.workspace-chat-emoji-btn', { hasText: '🚀' }).click();
+    await expect(input).toHaveValue('🚀');
+    await expect(sendButton).toBeEnabled();
+    await sendButton.click();
+    const emojiPayload = await waitForLastChatText(admin.page, '🚀');
+    expect(emojiPayload.message.text).toBe('🚀');
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
+  }
 });
 
 test('large paste becomes a chat file and the other participant gets unread badge plus attachment', async ({ browser }) => {
