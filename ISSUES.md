@@ -196,7 +196,7 @@ Checklist:
 - [x] Remove or replace Quiche-specific build scripts, locks, and docs.
 - [x] Update `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `DEPENDENCY_PROVENANCE.md`, and `documentation/quic-and-tls.md`.
 - [x] Mark remaining Quiche mentions as historical notes or remove them.
-- [ ] Extend artifact hygiene gate for Quiche/Cargo artifacts.
+- [x] Extend artifact hygiene gate for Quiche/Cargo artifacts.
 
 Done:
 - [ ] `rg -n "quiche|QUICHE"` finds no active product-path references.

@@ -62,6 +62,9 @@ for workflow in "${workflow_files[@]}"; do
     ruby "${YAML_VALIDATOR}" "${workflow}"
 done
 
+echo "Checking repository artifact hygiene..."
+infra/scripts/check-repo-artifact-hygiene.sh
+
 echo "Checking Linux reproducible CI build matrix..."
 ruby infra/scripts/check-ci-linux-reproducible-builds.rb
 
