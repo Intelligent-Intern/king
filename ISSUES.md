@@ -26,7 +26,7 @@ Checklist:
 - [x] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
 - [x] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
 - [x] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
-- [ ] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
+- [x] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
 
 Quiche-Fundstellen:
 
@@ -94,6 +94,23 @@ Rust-/Cargo-Abgrenzung:
 Abgrenzungsergebnis:
 - Getrackte Rust-Source-Dateien und Cargo-Manifeste sind aktuell HTTP/3-Testharness-bezogen.
 - Shared Toolchain-Dateien sind keine HTTP/3-Source, duerfen aber nach Quiche nicht mehr unnoetig Rust als Build-Voraussetzung erzwingen.
+
+Lokale/generierte Artefakte:
+
+| Klasse | Fundstellen | Sprint-Behandlung |
+|---|---|---|
+| Lokaler Cargo-Cache | `.cargo/**` | Nicht versionieren; darf nicht als Sprint-Output oder Build-Voraussetzung im Repo landen. |
+| Lokale Quiche-Checkouts und Buildtrees | `quiche/**`, `extension/quiche/**`, `extension/quiche/target/**` | Nicht versionieren; in #Q-12 als Cleanup-/Ignore-Guard behandeln. |
+| Profil-/Release-Runtime-Outputs | `extension/build/profiles/**`, `extension/build/profiles/release/libquiche.so`, `extension/build/profiles/release/quiche-server` | Nicht versionieren; in #Q-10 durch neue Release-Artefakte des Zielstacks ersetzen. |
+| Kompatibilitaetsartefakte | `compat-artifacts/**/runtime/libquiche.so`, `compat-artifacts/**/runtime/quiche-server` | Nicht versionieren; in #Q-10 aus Manifesten und Paketchecks entfernen oder migrieren. |
+| HTTP/3-Ticket-Server-Buildtree | `extension/tests/http3_ticket_server/target/**`, inklusive `king-http3-ticket-server`, `*.rlib`, `*.rmeta`, `*.d`, `.fingerprint/**` | Nicht versionieren; Quell-Harness bleibt nur `keep-temporary` bis #Q-8. |
+| Compiler-/Cargo-Nebenausgaben | `target/**`, `*.d`, `*.rlib`, `*.rmeta`, `.fingerprint/**` | Nicht versionieren; falls sie in Status oder Package auftauchen, ist das ein Cleanup-Fehler. |
+| Externe lokale Checkout-Spuren | `libcurl/**/quiche*`, `libcurl/CMake/FindQuiche.cmake`, `libcurl/lib/vquic/curl_quiche.*` | Nicht in diesen Sprint ziehen, solange nicht explizit als Dependency entschieden; aktuell nur als lokale/ignorierte Fremdbaum-Spur behandeln. |
+| Getrackte Lockfiles mit Ablauf | `infra/scripts/quiche-workspace.Cargo.lock`, `extension/tests/http3_ticket_server/Cargo.lock` | Nicht als generierte Artefakte loeschen: ersteres wird in #Q-3/#Q-9 entfernt, letzteres bleibt nur bis zur Harness-Migration in #Q-8. |
+
+Artefakt-Suchbasis:
+- `git status --short --ignored -uall | rg -i 'quiche|cargo|target|libquiche|quiche-server|compat-artifacts|\\.rlib|\\.d$'`
+- `git ls-files | rg -i '(libquiche\\.so|quiche-server|target/|compat-artifacts|extension/quiche|^quiche/|\\.rlib$|/\\.fingerprint/|Cargo\\.lock$|quiche-workspace\\.Cargo\\.lock)'`
 
 Done:
 - [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
