@@ -217,7 +217,7 @@ Checklist:
 - [x] Package manifests contain new dependency hashes and no Quiche manifests.
 
 Done:
-- [ ] A PR cannot silently bring back Quiche or local paths.
+- [x] A PR cannot silently bring back Quiche or local paths.
 - [ ] Release artifacts are reproducible and traceable for the new stack.
 
 ---
