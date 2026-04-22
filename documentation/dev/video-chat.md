@@ -446,8 +446,7 @@ The wizard asks for:
 
 - public domain, for example `video.example.com`
 - email address for Let's Encrypt/Certbot
-- Hetzner Cloud API token with read/write access
-- Hetzner DNS API token with read/write access if the helper should manage DNS
+- Hetzner Cloud API token with server and DNS-zone write access
 - server name, server type, location, and image, with defaults offered by the
   script
 - optional API, lobby websocket, SFU, TURN, and CDN hostnames; by default the helper
@@ -456,9 +455,9 @@ The wizard asks for:
 The helper loads `demo/video-chat/.env.local` before it checks required deploy
 variables. The wizard and manual deploy actions write the effective deploy
 settings back to that same file, so later runs can reuse them without retyping
-everything. This includes the Hetzner API token, derived `api/ws/sfu/turn/cdn`
-hostnames, the optional Hetzner DNS API token, the SSH key path, selected server
-settings, and the resolved server IP. The file is ignored by git.
+everything. This includes the Hetzner Cloud API token, derived
+`api/ws/sfu/turn/cdn` hostnames, the SSH key path, selected server settings, and
+the resolved server IP. The file is ignored by git.
 
 The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
 Manual deploy actions also auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is
@@ -485,8 +484,8 @@ What the wizard does:
 - uploads the SSH public key to Hetzner if it is not already present
 - creates a new Hetzner server or reuses an existing one with the same name
 - stores the new public IPv4 as the deploy target
-- tries to set the Hetzner DNS `A` record when the matching DNS zone is visible
-  to the API token
+- tries to set the Hetzner DNS `A` record through the Cloud API when the matching
+  DNS zone is visible to the API token
 - tries to set matching `A` records for `api`, `ws`, `sfu`, `turn`, and `cnd`
 - waits until the domain and those subdomains resolve to the new server IP
 - waits until SSH is reachable
@@ -511,8 +510,9 @@ public domain and subdomains to point at the server. Production actions run the
 same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`; when
 `VIDEOCHAT_DEPLOY_PUBLIC_IP` is set every name must resolve to that IP before
 Certbot is allowed to run.
-When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1` and a Hetzner token is present, normal
-`deploy` reruns also refresh those DNS records before the preflight.
+When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1` and `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is
+present, normal `deploy` reruns also refresh those DNS records before the
+preflight.
 
 Useful optional overrides:
 
