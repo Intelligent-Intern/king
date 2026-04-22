@@ -137,22 +137,38 @@ static zend_result king_http3_ensure_lsquic_ready(void)
 
     if (king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_global_init_fn, "lsquic_global_init") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_global_cleanup_fn, "lsquic_global_cleanup") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_init_settings_fn, "lsquic_engine_init_settings") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_check_settings_fn, "lsquic_engine_check_settings") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_new_fn, "lsquic_engine_new") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_destroy_fn, "lsquic_engine_destroy") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_connect_fn, "lsquic_engine_connect") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_packet_in_fn, "lsquic_engine_packet_in") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_process_conns_fn, "lsquic_engine_process_conns") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_has_unsent_packets_fn, "lsquic_engine_has_unsent_packets") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_send_unsent_packets_fn, "lsquic_engine_send_unsent_packets") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_earliest_adv_tick_fn, "lsquic_engine_earliest_adv_tick") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_get_conns_count_fn, "lsquic_engine_get_conns_count") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_engine_count_attq_fn, "lsquic_engine_count_attq") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_make_stream_fn, "lsquic_conn_make_stream") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_n_avail_streams_fn, "lsquic_conn_n_avail_streams") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_n_pending_streams_fn, "lsquic_conn_n_pending_streams") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_cancel_pending_streams_fn, "lsquic_conn_cancel_pending_streams") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_status_fn, "lsquic_conn_status") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_close_fn, "lsquic_conn_close") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_send_headers_fn, "lsquic_stream_send_headers") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_get_hset_fn, "lsquic_stream_get_hset") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_write_fn, "lsquic_stream_write") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_read_fn, "lsquic_stream_read") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_flush_fn, "lsquic_stream_flush") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_shutdown_fn, "lsquic_stream_shutdown") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_close_fn, "lsquic_stream_close") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_wantread_fn, "lsquic_stream_wantread") != SUCCESS
         || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_wantwrite_fn, "lsquic_stream_wantwrite") != SUCCESS
-        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_id_fn, "lsquic_stream_id") != SUCCESS) {
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_get_ctx_fn, "lsquic_stream_get_ctx") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_set_ctx_fn, "lsquic_stream_set_ctx") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_stream_id_fn, "lsquic_stream_id") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_get_ctx_fn, "lsquic_conn_get_ctx") != SUCCESS
+        || king_http3_lsquic_load_symbol((void **) &king_http3_lsquic.lsquic_conn_set_ctx_fn, "lsquic_conn_set_ctx") != SUCCESS) {
         king_http3_lsquic_close_runtime_handle();
         return FAILURE;
     }

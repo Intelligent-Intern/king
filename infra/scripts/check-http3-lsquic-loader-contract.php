@@ -130,6 +130,52 @@ king_http3_loader_require_contains(
     $errors
 );
 
+$requiredClientNeedles = [
+    'void (*lsquic_engine_init_settings_fn)(void *, unsigned);',
+    'int (*lsquic_engine_check_settings_fn)(const void *, unsigned, char *, size_t);',
+    'int (*lsquic_engine_packet_in_fn)(void *, const unsigned char *, size_t, const struct sockaddr *, const struct sockaddr *, void *, int);',
+    'int (*lsquic_engine_earliest_adv_tick_fn)(void *, int *);',
+    'unsigned (*lsquic_engine_get_conns_count_fn)(void *);',
+    'unsigned (*lsquic_engine_count_attq_fn)(void *, int);',
+    'void (*lsquic_conn_make_stream_fn)(void *);',
+    'unsigned (*lsquic_conn_n_avail_streams_fn)(const void *);',
+    'unsigned (*lsquic_conn_n_pending_streams_fn)(const void *);',
+    'unsigned (*lsquic_conn_cancel_pending_streams_fn)(void *, unsigned);',
+    'int (*lsquic_conn_status_fn)(void *, char *, size_t);',
+    'int (*lsquic_stream_send_headers_fn)(void *, const void *, int);',
+    'void *(*lsquic_stream_get_hset_fn)(void *);',
+    'ssize_t (*lsquic_stream_write_fn)(void *, const void *, size_t);',
+    'ssize_t (*lsquic_stream_read_fn)(void *, void *, size_t);',
+    'int (*lsquic_stream_flush_fn)(void *);',
+    'int (*lsquic_stream_shutdown_fn)(void *, int);',
+    'int (*lsquic_stream_close_fn)(void *);',
+    'int (*lsquic_stream_wantread_fn)(void *, int);',
+    'int (*lsquic_stream_wantwrite_fn)(void *, int);',
+    'void *(*lsquic_stream_get_ctx_fn)(const void *);',
+    'void (*lsquic_stream_set_ctx_fn)(void *, void *);',
+    'void *(*lsquic_conn_get_ctx_fn)(const void *);',
+    'void (*lsquic_conn_set_ctx_fn)(void *, void *);',
+];
+
+foreach ($requiredClientNeedles as $needle) {
+    king_http3_loader_require_contains('Client HTTP/3 LSQUIC API table', $client, $needle, $errors);
+}
+
+foreach ([
+    'int (*lsquic_engine_earliest_adv_tick_fn)(void *, long *, int *);',
+    'void *(*lsquic_conn_make_stream_fn)(void *);',
+    'void (*lsquic_stream_close_fn)(void *);',
+    'void (*lsquic_stream_wantread_fn)(void *, int);',
+    'void (*lsquic_stream_wantwrite_fn)(void *, int);',
+    'lsquic_config_new_fn',
+    'lsquic_h3_send_request_fn',
+    'LSQUIC_H3_ERR_DONE',
+] as $forbidden) {
+    if (str_contains($client, $forbidden)) {
+        $errors[] = 'Client HTTP/3 LSQUIC API table must not contain stale or non-LSQUIC marker: ' . $forbidden;
+    }
+}
+
 $requiredLoaderNeedles = [
     'KING_LSQUIC_LIBRARY',
     'dlopen(',
@@ -142,21 +188,37 @@ $requiredLoaderNeedles = [
     'return FAILURE',
     'lsquic_global_init',
     'lsquic_global_cleanup',
+    'lsquic_engine_init_settings',
+    'lsquic_engine_check_settings',
     'lsquic_engine_new',
     'lsquic_engine_connect',
+    'lsquic_engine_packet_in',
     'lsquic_engine_process_conns',
     'lsquic_engine_has_unsent_packets',
     'lsquic_engine_send_unsent_packets',
     'lsquic_engine_earliest_adv_tick',
+    'lsquic_engine_get_conns_count',
+    'lsquic_engine_count_attq',
     'lsquic_conn_make_stream',
+    'lsquic_conn_n_avail_streams',
+    'lsquic_conn_n_pending_streams',
+    'lsquic_conn_cancel_pending_streams',
+    'lsquic_conn_status',
     'lsquic_conn_close',
+    'lsquic_stream_send_headers',
+    'lsquic_stream_get_hset',
     'lsquic_stream_write',
     'lsquic_stream_read',
     'lsquic_stream_flush',
+    'lsquic_stream_shutdown',
     'lsquic_stream_close',
     'lsquic_stream_wantread',
     'lsquic_stream_wantwrite',
+    'lsquic_stream_get_ctx',
+    'lsquic_stream_set_ctx',
     'lsquic_stream_id',
+    'lsquic_conn_get_ctx',
+    'lsquic_conn_set_ctx',
     'KING_LSQUIC_GLOBAL_CLIENT',
     'init_result != 0',
     'king_http3_lsquic.global_initialized = true',
