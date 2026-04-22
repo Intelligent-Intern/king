@@ -209,6 +209,28 @@ static int king_server_http3_lsquic_packets_out(
     return (int) sent_count;
 }
 
+static void king_server_http3_lsquic_mark_stream_cancelled_if_registered(
+    king_server_http3_runtime_t *runtime)
+{
+    if (runtime == NULL
+        || runtime->lsquic_session == NULL
+        || runtime->lsquic_request_state == NULL
+        || runtime->lsquic_response_state == NULL
+        || !runtime->lsquic_request_state->request_stream_seen
+        || !runtime->lsquic_response_state->initialized
+        || runtime->lsquic_response_state->close_sent) {
+        return;
+    }
+
+    king_server_local_mark_stream_cancelled_if_registered(
+        runtime->lsquic_session,
+        (zend_long) runtime->lsquic_request_state->stream_id,
+        runtime->lsquic_function_name != NULL
+            ? runtime->lsquic_function_name
+            : "king_http3_server_listen_once"
+    );
+}
+
 static zend_result king_server_http3_lsquic_send_response_headers(
     king_server_http3_lsquic_stream_state_t *stream_state)
 {
@@ -503,6 +525,9 @@ static void king_server_http3_lsquic_on_close(
 
     if (stream_state != NULL) {
         stream_state->stream_closed = true;
+        if (stream_state->runtime != NULL) {
+            king_server_http3_lsquic_mark_stream_cancelled_if_registered(stream_state->runtime);
+        }
         if (stream_state->runtime != NULL && stream_state->runtime->lsquic_stream_state == stream_state) {
             stream_state->runtime->lsquic_stream_state = NULL;
         }

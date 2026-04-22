@@ -406,8 +406,13 @@ PHP_FUNCTION(king_http3_server_listen_once)
 
 cleanup:
     if (session != NULL) {
+        bool session_owns_runtime_socket = runtime.socket_fd >= 0
+            && session->transport_socket_fd == runtime.socket_fd;
+
         king_server_local_close_session(session);
-        runtime.socket_fd = -1;
+        if (session_owns_runtime_socket) {
+            runtime.socket_fd = -1;
+        }
     }
 
     if (request_state.headers_initialized) {

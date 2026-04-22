@@ -156,6 +156,7 @@ static void king_server_http3_runtime_destroy(king_server_http3_runtime_t *runti
         runtime->lsquic_engine = NULL;
         runtime->lsquic_conn = NULL;
         runtime->lsquic_ssl_ctx = NULL;
+        runtime->lsquic_session = NULL;
         runtime->lsquic_stream_state = NULL;
         runtime->lsquic_backend_active = false;
     }

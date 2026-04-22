@@ -134,6 +134,7 @@ typedef struct _king_server_http3_runtime {
     lsquic_engine_t *lsquic_engine;
     lsquic_conn_t *lsquic_conn;
     SSL_CTX *lsquic_ssl_ctx;
+    king_client_session_t *lsquic_session;
     king_server_http3_request_state_t *lsquic_request_state;
     king_server_http3_response_state_t *lsquic_response_state;
     zend_bool *lsquic_request_complete;

@@ -33,6 +33,7 @@ static zend_result king_server_http3_listen_once_lsquic(
     }
 
     runtime->lsquic_function_name = function_name;
+    runtime->lsquic_session = session;
     runtime->lsquic_request_state = request_state;
     runtime->lsquic_response_state = response_state;
     runtime->lsquic_request_complete = request_complete;
@@ -109,8 +110,19 @@ static zend_result king_server_http3_listen_once_lsquic(
         }
 
         if (runtime->lsquic_response_failed) {
+            king_server_http3_lsquic_mark_stream_cancelled_if_registered(runtime);
             king_server_local_set_errorf(
                 "%s() failed while writing the active LSQUIC HTTP/3 response.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        if (runtime->lsquic_connection_closed
+            && (!response_state->initialized || !response_state->close_sent)) {
+            king_server_http3_lsquic_mark_stream_cancelled_if_registered(runtime);
+            king_server_local_set_errorf(
+                "%s() saw the LSQUIC HTTP/3 connection close before a complete response was sent.",
                 function_name
             );
             return FAILURE;
