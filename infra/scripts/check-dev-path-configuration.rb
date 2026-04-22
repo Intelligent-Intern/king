@@ -16,7 +16,8 @@ end
 config_m4 = read_repo_file('extension/config.m4')
 docs = [
   read_repo_file('README.md'),
-  read_repo_file('documentation/operations-and-release.md')
+  read_repo_file('documentation/operations-and-release.md'),
+  read_repo_file('documentation/pie-install.md')
 ].join("\n")
 normalized_docs = docs.gsub(/\s+/, ' ')
 
@@ -75,7 +76,8 @@ active_files = [
   '.github/workflows/ci.yml',
   '.github/workflows/release-merge-publish.yml',
   'README.md',
-  'documentation/operations-and-release.md'
+  'documentation/operations-and-release.md',
+  'documentation/pie-install.md'
 ]
 
 forbidden = {

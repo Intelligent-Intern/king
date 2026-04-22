@@ -104,7 +104,8 @@ pie install intelligent-intern/king-ext
 
 or use explicit `KING_LSQUIC_CFLAGS`, `KING_LSQUIC_LIBS`,
 `KING_BORINGSSL_CFLAGS`, and `KING_BORINGSSL_LIBS` values. Do not bake local
-package-manager paths into the source package.
+package-manager paths into the source package. Homebrew/Cellar paths must stay
+local and must be passed only through environment variables or `pkg-config`.
 
 Depending on the target PHP installation and how PIE configures it, you may
 also need to enable the extension explicitly in `php.ini`:

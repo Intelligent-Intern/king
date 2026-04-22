@@ -32,7 +32,7 @@ Checklist:
 
 Done:
 - [x] Fresh HTTP/3 build needs no local Rust/Cargo configuration.
-- [ ] Fresh HTTP/3 build needs no local Homebrew paths.
+- [x] Fresh HTTP/3 build needs no local Homebrew paths.
 - [ ] CI blocks Quiche/Cargo bootstrap in the active HTTP/3 path.
 
 Detection Contract:
@@ -77,6 +77,11 @@ Fresh Build Contract:
 - PIE/user-facing install docs no longer require Rust, Cargo, `libquiche.so`, `quiche-server`, or `KING_QUICHE_TOOLCHAIN_CONFIRM`.
 - `infra/scripts/check-http3-product-build-path.rb` blocks Rust/Cargo/Quiche runtime bootstrap from active HTTP/3 build, release, CI, and install docs.
 - The remaining allowed Cargo/Quiche strings in source-packaging are artifact-exclusion hygiene lines only.
+
+Fresh Local Path Contract:
+
+- `documentation/pie-install.md` now follows the same Homebrew/Cellar rule as README and operations docs.
+- `infra/scripts/check-dev-path-configuration.rb` scans the fresh PIE/user install path for local Homebrew prefixes and Homebrew-specific env assumptions.
 
 ---
 

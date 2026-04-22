@@ -22,15 +22,19 @@ if ($status !== 0) {
 $readme = (string) file_get_contents($root . '/README.md');
 $operations = (string) file_get_contents($root . '/documentation/operations-and-release.md');
 $operationsNormalized = preg_replace('/\s+/', ' ', $operations);
+$pieInstall = (string) file_get_contents($root . '/documentation/pie-install.md');
+$pieInstallNormalized = preg_replace('/\s+/', ' ', $pieInstall);
 $config = (string) file_get_contents($root . '/extension/config.m4');
 
 var_dump($status === 0);
 var_dump(str_contains($readme, 'macOS / Dev Dependency Paths'));
 var_dump(str_contains($operationsNormalized, 'Homebrew/Cellar paths must stay local'));
+var_dump(str_contains($pieInstallNormalized, 'Homebrew/Cellar paths must stay local'));
 var_dump(str_contains($config, 'KING_LSQUIC_CFLAGS'));
 var_dump(str_contains($config, 'liblsquic'));
 ?>
 --EXPECT--
+bool(true)
 bool(true)
 bool(true)
 bool(true)
