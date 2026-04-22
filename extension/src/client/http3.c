@@ -131,10 +131,18 @@ typedef struct _king_http3_request_runtime {
     lsquic_engine_t *lsquic_engine;
     lsquic_conn_t *lsquic_conn;
     lsquic_stream_t *lsquic_stream;
+    const quiche_h3_header *lsquic_request_headers;
+    size_t lsquic_request_header_count;
+    zend_string *lsquic_body_string;
+    size_t lsquic_body_offset;
+    king_http3_response_t *lsquic_response;
     unsigned char lsquic_session_resume[KING_MAX_TICKET_SIZE];
     size_t lsquic_session_resume_len;
     bool lsquic_connection_closed;
     bool lsquic_stream_closed;
+    bool lsquic_headers_sent;
+    bool lsquic_request_failed;
+    bool lsquic_hset_claimed;
 #endif
 } king_http3_request_runtime_t;
 
@@ -334,6 +342,12 @@ static void king_http3_free_request_headers(
 static void king_http3_request_target_destroy(
     php_url *parsed_url,
     king_http3_request_target_t *target);
+static int king_http3_collect_response_header(
+    uint8_t *name,
+    size_t name_len,
+    uint8_t *value,
+    size_t value_len,
+    void *argp);
 
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 static void king_http3_lsquic_seed_ticket_from_ring(king_http3_request_runtime_t *runtime);
