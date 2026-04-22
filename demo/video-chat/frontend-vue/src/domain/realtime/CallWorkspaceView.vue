@@ -783,6 +783,11 @@ import {
   selectCallLayoutParticipants,
 } from './callLayoutStrategies';
 import {
+  gridVideoSlotId,
+  layoutModeOptionsFor,
+  layoutStrategyOptionsFor,
+} from './callLayoutUiOptions';
+import {
   apiRequest,
   extractErrorMessage,
   requestHeaders,
@@ -796,17 +801,6 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
 const ACTIVITY_MOTION_SAMPLE_MS = 500;
 const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
-const LAYOUT_MODE_OPTIONS = [
-  { mode: 'grid', label: 'Grid', icon: 'G' },
-  { mode: 'main_mini', label: 'Main + Mini', icon: 'M' },
-  { mode: 'main_only', label: 'Main only', icon: '1' },
-];
-const LAYOUT_STRATEGY_LABELS = {
-  manual_pinned: 'Manual / pinned',
-  most_active_window: 'Most active window',
-  active_speaker_main: 'Active speaker main',
-  round_robin_active: 'Round robin active',
-};
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -1649,7 +1643,7 @@ const showMiniParticipantStrip = computed(() => (
   currentLayoutMode.value === 'main_mini'
   && connectedParticipantUsers.value.length > 1
 ));
-const layoutModeOptions = computed(() => LAYOUT_MODE_OPTIONS.filter((option) => CALL_LAYOUT_MODES.includes(option.mode)));
+const layoutModeOptions = computed(() => layoutModeOptionsFor(CALL_LAYOUT_MODES));
 const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
 const showCompactMiniStripToggle = computed(() => (
   isCompactLayoutViewport.value
@@ -1664,16 +1658,6 @@ const compactMiniStripToggleLabel = computed(() => (
 function toggleCompactMiniStripPlacement() {
   compactMiniStripPlacement.value = isCompactMiniStripAbove.value ? 'below' : 'above';
   nextTick(() => renderCallVideoLayout());
-}
-
-function gridVideoSlotId(userId) {
-  const normalizedUserId = Number(userId);
-  return `workspace-grid-video-slot-${Number.isInteger(normalizedUserId) && normalizedUserId > 0 ? normalizedUserId : 'unknown'}`;
-}
-
-function layoutStrategyLabel(strategy) {
-  const normalized = String(strategy || '').trim().toLowerCase();
-  return LAYOUT_STRATEGY_LABELS[normalized] || normalized || 'Strategy';
 }
 
 function currentCallLayoutSidebarControls() {
@@ -1694,10 +1678,7 @@ function syncCallLayoutSidebarControls() {
     label: option.label,
     icon: option.icon,
   }));
-  controls.strategyOptions = layoutStrategyOptions.value.map((strategy) => ({
-    strategy,
-    label: layoutStrategyLabel(strategy),
-  }));
+  controls.strategyOptions = layoutStrategyOptionsFor(layoutStrategyOptions.value);
   controls.setMode = setCallLayoutMode;
   controls.setStrategy = setCallLayoutStrategy;
 }

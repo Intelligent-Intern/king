@@ -105,7 +105,7 @@ Goal:
 - Reduce recurring UI drift and file-size pressure without changing behavior.
 
 Checklist:
-- [ ] Split oversized frontend files toward the current target of maximum 750 LOC per source file.
+- [x] Split oversized frontend files toward the current target of maximum 750 LOC per source file.
 - [ ] Extract shared modal shell, header/title blocks, action bars, buttons, tables, pagination, empty states, and form controls where product behavior is already equivalent.
 - [ ] Split frontend state into focused stores for auth, calls, participants, chat, presence, and settings.
 - [ ] Keep existing visual standards instead of introducing one-off colors, borders, or modal variants.

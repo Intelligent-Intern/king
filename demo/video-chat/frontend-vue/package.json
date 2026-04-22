@@ -14,6 +14,7 @@
     "test:contract:call-compose-room-field": "node tests/contract/call-compose-room-field-contract.mjs",
     "test:contract:call-mini-strip-responsive": "node tests/contract/call-mini-strip-responsive-contract.mjs",
     "test:contract:call-layout-sidebar-controls": "node tests/contract/call-layout-sidebar-controls-contract.mjs",
+    "test:contract:call-layout-ui-options": "node tests/contract/call-layout-ui-options-contract.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:ui-parity": "playwright test tests/e2e/auth-navigation.spec.js tests/e2e/login-backend-contract.spec.js tests/e2e/ui-parity-journeys.spec.js tests/e2e/responsive-call-management.spec.js tests/e2e/lobby-admission.spec.js tests/e2e/chat-attachments.spec.js tests/e2e/chat-archive.spec.js tests/e2e/chat-activity-matrix.spec.js tests/e2e/call-layout-strategies.spec.js",
