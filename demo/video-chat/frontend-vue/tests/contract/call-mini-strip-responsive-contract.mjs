@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+function fail(message) {
+  throw new Error(`[call-mini-strip-responsive-contract] FAIL: ${message}`);
+}
+
+function cssBlock(source, selector) {
+  const start = source.indexOf(selector);
+  assert.notEqual(start, -1, `missing CSS selector ${selector}`);
+  const open = source.indexOf('{', start);
+  assert.notEqual(open, -1, `missing CSS block for ${selector}`);
+  const close = source.indexOf('}', open);
+  assert.notEqual(close, -1, `unterminated CSS block for ${selector}`);
+  return source.slice(open + 1, close);
+}
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const root = path.resolve(__dirname, '../..');
+const view = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
+const stageCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceStage.css'), 'utf8');
+const panelsCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspacePanels.css'), 'utf8');
+
+try {
+  assert.match(view, /'mini-strip-above': isCompactMiniStripAbove/, 'mini strip placement class must use compact viewport state');
+  assert.match(view, /v-if="showCompactMiniStripToggle"/, 'compact mini strip toggle must render in compact layouts');
+  assert.match(view, /@click="toggleCompactMiniStripPlacement"/, 'compact mini strip toggle must switch placement');
+  assert.match(
+    view,
+    /const isCompactMiniStripAbove = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& compactMiniStripPlacement\.value === 'above'\s*\)\);/,
+    'above placement must apply to tablet and mobile compact layouts'
+  );
+  assert.match(
+    view,
+    /const showCompactMiniStripToggle = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& showMiniParticipantStrip\.value\s*\)\);/,
+    'placement toggle must be available on tablet and mobile compact layouts'
+  );
+
+  const rootVars = cssBlock(stageCss, '.workspace-call-view');
+  const width = Number((rootVars.match(/--mini-story-width:\s*(\d+)px/) || [])[1] || 0);
+  const height = Number((rootVars.match(/--mini-story-height:\s*(\d+)px/) || [])[1] || 0);
+  assert.ok(width > 0 && height > 0 && width < height, 'mini story dimensions must stay portrait-oriented');
+  assert.match(stageCss, /\.workspace-mini-tile\s*\{[\s\S]*aspect-ratio:\s*9\s*\/\s*13;/, 'mini tiles must declare a portrait aspect ratio');
+
+  assert.match(panelsCss, /@media \(max-width: 1180px\) \{[\s\S]*\.workspace-stage\.compact\.has-mini-strip\.mini-strip-above/, 'tablet layout must support mini strip above main video');
+  assert.match(panelsCss, /@media \(max-width: 1180px\) \{[\s\S]*\.workspace-mini-placement-toggle\s*\{[\s\S]*display:\s*grid;/, 'tablet layout must show mini strip placement toggle');
+  assert.match(panelsCss, /@media \(max-width: 760px\) and \(orientation: landscape\) \{[\s\S]*--mini-story-width:\s*64px;[\s\S]*--mini-story-height:\s*92px;/, 'mobile landscape mini strip must remain portrait-oriented');
+
+  process.stdout.write('[call-mini-strip-responsive-contract] PASS\n');
+} catch (error) {
+  if (error instanceof Error) {
+    fail(error.message);
+  }
+  fail('unknown failure');
+}

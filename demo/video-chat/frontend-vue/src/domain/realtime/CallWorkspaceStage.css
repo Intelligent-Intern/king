@@ -446,6 +446,10 @@
   box-shadow: 0 10px 24px var(--color-rgba-0-0-0-0-28);
 }
 
+.workspace-mini-tile {
+  aspect-ratio: 9 / 13;
+}
+
 .workspace-mini-video-slot {
   position: absolute;
   inset: 0;

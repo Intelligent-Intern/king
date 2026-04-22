@@ -20,7 +20,7 @@
         :class="{
           compact: isCompactHeaderVisible,
           'has-mini-strip': showMiniParticipantStrip,
-          'mini-strip-above': isMobileMiniStripAbove,
+          'mini-strip-above': isCompactMiniStripAbove,
           'layout-grid': currentLayoutMode === 'grid',
           'layout-main-mini': currentLayoutMode === 'main_mini',
           'layout-main-only': currentLayoutMode === 'main_only',
@@ -139,16 +139,16 @@
 
         <section v-if="showMiniParticipantStrip" class="workspace-mini-strip">
           <button
-            v-if="showMobileMiniStripToggle"
+            v-if="showCompactMiniStripToggle"
             class="workspace-mini-placement-toggle"
             type="button"
-            :title="mobileMiniStripToggleLabel"
-            :aria-label="mobileMiniStripToggleLabel"
-            @click="toggleMobileMiniStripPlacement"
+            :title="compactMiniStripToggleLabel"
+            :aria-label="compactMiniStripToggleLabel"
+            @click="toggleCompactMiniStripPlacement"
           >
             <img
               class="workspace-mini-placement-icon"
-              :class="{ up: !isMobileMiniStripAbove, down: isMobileMiniStripAbove }"
+              :class="{ up: !isCompactMiniStripAbove, down: isCompactMiniStripAbove }"
               src="/assets/orgas/kingrt/icons/forward.png"
               alt=""
             />
@@ -918,7 +918,7 @@ const controlState = reactive({
 });
 const rightSidebarCollapsed = ref(false);
 const isCompactViewport = ref(false);
-const mobileMiniStripPlacement = ref('below');
+const compactMiniStripPlacement = ref('below');
 
 const workspaceError = ref('');
 const workspaceNotice = ref('');
@@ -1061,9 +1061,9 @@ const isCompactHeaderVisible = computed(() => (
   isCompactViewport.value
   && isCompactLayoutViewport.value
 ));
-const isMobileMiniStripAbove = computed(() => (
-  isShellMobileViewport.value
-  && mobileMiniStripPlacement.value === 'above'
+const isCompactMiniStripAbove = computed(() => (
+  isCompactLayoutViewport.value
+  && compactMiniStripPlacement.value === 'above'
 ));
 const showLeftSidebarRestoreButton = computed(() => {
   if (isCompactHeaderVisible.value || isShellMobileViewport.value) {
@@ -1651,18 +1651,18 @@ const showMiniParticipantStrip = computed(() => (
 ));
 const layoutModeOptions = computed(() => LAYOUT_MODE_OPTIONS.filter((option) => CALL_LAYOUT_MODES.includes(option.mode)));
 const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
-const showMobileMiniStripToggle = computed(() => (
-  isShellMobileViewport.value
+const showCompactMiniStripToggle = computed(() => (
+  isCompactLayoutViewport.value
   && showMiniParticipantStrip.value
 ));
-const mobileMiniStripToggleLabel = computed(() => (
-  isMobileMiniStripAbove.value
+const compactMiniStripToggleLabel = computed(() => (
+  isCompactMiniStripAbove.value
     ? 'Move mini videos below main video'
     : 'Move mini videos above main video'
 ));
 
-function toggleMobileMiniStripPlacement() {
-  mobileMiniStripPlacement.value = isMobileMiniStripAbove.value ? 'below' : 'above';
+function toggleCompactMiniStripPlacement() {
+  compactMiniStripPlacement.value = isCompactMiniStripAbove.value ? 'below' : 'above';
   nextTick(() => renderCallVideoLayout());
 }
 
