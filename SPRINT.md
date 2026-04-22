@@ -103,7 +103,7 @@ Checklist:
 - [x] Add Playwright journey: owner creates call, invited user logs in from link, waits in join modal, owner admits, both see media and roster.
 - [x] Add Playwright journey: chat text, emoji, unread badge, attachment, and post-call read-only archive.
 - [x] Add Playwright journey: mobile call creation/editing with internal participant add.
-- [ ] Add Playwright journey: websocket interruption, reconnect, room resync, and media/control recovery.
+- [x] Add Playwright journey: websocket interruption, reconnect, room resync, and media/control recovery.
 - [ ] Add release gate that fails when UI parity matrix or core video journeys are not covered.
 
 Done:

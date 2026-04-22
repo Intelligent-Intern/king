@@ -4414,6 +4414,7 @@ async function connectSocket() {
       }
 
       opened = true;
+      const isReconnectOpen = reconnectAttempt.value > 0;
       reconnectAttempt.value = 0;
       connectionState.value = 'online';
       connectionReason.value = 'ready';
@@ -4426,7 +4427,7 @@ async function connectSocket() {
       }
       void syncControlStateToPeers();
       void syncModerationStateToPeers();
-      void syncMediaSecurityWithParticipants();
+      void syncMediaSecurityWithParticipants(isReconnectOpen);
     });
 
     socket.addEventListener('message', handleSocketMessage);

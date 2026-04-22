@@ -41,6 +41,41 @@ async function submitChat(page) {
   });
 }
 
+async function openMatrixWorkspaceWithRealtimeSocket(page) {
+  await page.goto(`/workspace/call/${matrixCallRef}`);
+  await page.waitForSelector('.workspace-call-view');
+  await page.waitForFunction(() => {
+    const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
+    return setup?.connectionState === 'online';
+  });
+  await page.waitForFunction(() => (
+    (window.__matrixSocketFrames || []).some((frame) => frame?.type === 'room/snapshot/request')
+  ));
+}
+
+async function matrixRealtimeCounts(page) {
+  return page.evaluate(() => {
+    const frames = Array.isArray(window.__matrixSocketFrames) ? window.__matrixSocketFrames : [];
+    const roomSockets = (Array.isArray(window.__matrixSockets) ? window.__matrixSockets : [])
+      .filter((socket) => String(socket?.url || '').includes('/ws?'));
+    return {
+      roomSockets: roomSockets.length,
+      snapshotRequests: frames.filter((frame) => frame?.type === 'room/snapshot/request').length,
+      controlSyncs: frames.filter((frame) => (
+        frame?.type === 'call/ice'
+        && frame?.payload?.kind === 'workspace-control-state'
+      )).length,
+      currentControlSyncs: frames.filter((frame) => (
+        frame?.type === 'call/ice'
+        && frame?.payload?.kind === 'workspace-control-state'
+        && frame?.payload?.state?.handRaised === true
+        && frame?.payload?.state?.micEnabled === false
+      )).length,
+      mediaSecurityHellos: frames.filter((frame) => frame?.type === 'media-security/hello').length,
+    };
+  });
+}
+
 async function waitForLastChatMessage(page, expectedAttachmentCount) {
   const handle = await page.waitForFunction((count) => (
     window.__matrixLastChatMessage
@@ -345,6 +380,83 @@ test('chat journey covers text, emoji, unread badge, attachment, and read-only a
     await expect(user.page.getByRole('textbox', { name: /message/i })).toHaveCount(0);
   } finally {
     await Promise.allSettled([admin.context.close(), user.context.close()]);
+  }
+});
+
+test('websocket reconnect resyncs room snapshot, media security, and control state', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+
+  try {
+    await openMatrixWorkspaceWithRealtimeSocket(admin.page);
+    await expect(admin.page.locator('.user-row', { hasText: matrixUsers.user.displayName })).toBeVisible();
+    await expect(admin.page.locator('.workspace-mini-tile', { hasText: matrixUsers.user.displayName })).toBeVisible();
+    await admin.page.waitForFunction(() => (
+      (window.__matrixSocketFrames || []).some((frame) => frame?.type === 'media-security/hello')
+    ), null, { timeout: 10_000 });
+
+    await admin.page.getByTitle('Raise hand').click();
+    await admin.page.getByTitle('Toggle microphone').click();
+    await expect(admin.page.getByTitle('Raise hand')).toHaveClass(/active/);
+    await expect(admin.page.getByTitle('Toggle microphone')).not.toHaveClass(/active/);
+    await admin.page.waitForFunction(() => (
+      (window.__matrixSocketFrames || []).some((frame) => (
+        frame?.type === 'call/ice'
+        && frame?.payload?.kind === 'workspace-control-state'
+        && frame?.payload?.state?.handRaised === true
+        && frame?.payload?.state?.micEnabled === false
+      ))
+    ));
+
+    const beforeDrop = await matrixRealtimeCounts(admin.page);
+    expect(beforeDrop.snapshotRequests).toBeGreaterThan(0);
+    expect(beforeDrop.controlSyncs).toBeGreaterThan(0);
+    expect(beforeDrop.currentControlSyncs).toBeGreaterThan(0);
+    expect(beforeDrop.mediaSecurityHellos).toBeGreaterThan(0);
+
+    const dropped = await admin.page.evaluate(() => window.__matrixForceSocketClose(1006, 'network_drop'));
+    expect(dropped).toBe(true);
+    await admin.page.waitForFunction(() => {
+      const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
+      return setup?.connectionState === 'retrying';
+    });
+
+    await admin.page.waitForFunction((previous) => {
+      const setup = document.querySelector('.workspace-call-view')?.__vueParentComponent?.setupState;
+      const roomSockets = (window.__matrixSockets || []).filter((socket) => String(socket?.url || '').includes('/ws?'));
+      return setup?.connectionState === 'online' && roomSockets.length > previous.roomSockets;
+    }, beforeDrop, { timeout: 10_000 });
+
+    await admin.page.waitForFunction((previous) => {
+      const frames = window.__matrixSocketFrames || [];
+      const snapshotRequests = frames.filter((frame) => frame?.type === 'room/snapshot/request').length;
+      return snapshotRequests > previous.snapshotRequests;
+    }, beforeDrop, { timeout: 10_000 });
+
+    await admin.page.waitForFunction((previous) => {
+      const frames = window.__matrixSocketFrames || [];
+      const controlSyncs = frames.filter((frame) => (
+        frame?.type === 'call/ice'
+        && frame?.payload?.kind === 'workspace-control-state'
+        && frame?.payload?.state?.handRaised === true
+        && frame?.payload?.state?.micEnabled === false
+      )).length;
+      return controlSyncs > previous.currentControlSyncs;
+    }, beforeDrop, { timeout: 10_000 });
+
+    await admin.page.waitForFunction((previous) => {
+      const frames = window.__matrixSocketFrames || [];
+      const mediaSecurityHellos = frames.filter((frame) => frame?.type === 'media-security/hello').length;
+      return mediaSecurityHellos > previous.mediaSecurityHellos;
+    }, beforeDrop, { timeout: 10_000 });
+
+    await expect(admin.page.locator('.user-row', { hasText: matrixUsers.user.displayName })).toBeVisible();
+    await expect(admin.page.locator('.workspace-mini-tile', { hasText: matrixUsers.user.displayName })).toBeVisible();
+    await expect(admin.page.getByTitle('Raise hand')).toHaveClass(/active/);
+    await expect(admin.page.getByTitle('Toggle microphone')).not.toHaveClass(/active/);
+  } finally {
+    await Promise.allSettled([admin.context.close()]);
   }
 });
 
