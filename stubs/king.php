@@ -480,7 +480,7 @@ namespace {
     /**
      * Active one-shot on-wire HTTP/3 listener leaf.
      * Binds a real UDP socket, accepts exactly one QUIC connection, drives one
-     * HTTP/3 request stream over the active LSQUIC runtime, materializes one
+     * HTTP/3 request stream over the active `lsquic` runtime, materializes one
      * `King\Session` snapshot over the accepted socket, invokes the handler
      * once with a normalized HTTP/3-style request array, writes one HTTP/3
      * response, sends a clean `GOAWAY`, and then closes the listener/session.
@@ -1003,6 +1003,24 @@ namespace {
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_proto_encode(string $schema_name, mixed $data): string {}
+
+    /**
+     * Encodes a batch of records with one named IIBIN schema and returns a
+     * length-prefixed binary payload.
+     * @param array<int,array<string,mixed>|object> $records
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_proto_encode_batch(string $schema_name, array $records): string {}
+
+    /**
+     * Decodes a batched binary payload or legacy binary-record list using one
+     * named IIBIN schema.
+     * @param array<int,string>|string $binary_records
+     * @param bool|string|array<string,string> $decode_as_object
+     * @return array<int,array<string,mixed>|object>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_proto_decode_batch(string $schema_name, array|string $binary_records, bool|string|array $decode_as_object = false): array {}
 
     /**
      * Decodes an IIBIN payload using a named schema.
@@ -2066,11 +2084,21 @@ namespace King {
         /** @param array<string,mixed>|object $data */
         public static function encode(string $schema, mixed $data): string {}
 
+        /** @param array<int,array<string,mixed>|object> $records */
+        public static function encodeBatch(string $schema, array $records): string {}
+
         /**
          * @param bool|string|array<string,string> $decodeAsObject
          * @return array<string,mixed>|object
          */
         public static function decode(string $schema, string $data, bool|string|array $decodeAsObject = false): array|object {}
+
+        /**
+         * @param array<int,string>|string $data
+         * @param bool|string|array<string,string> $decodeAsObject
+         * @return array<int,array<string,mixed>|object>
+         */
+        public static function decodeBatch(string $schema, array|string $data, bool|string|array $decodeAsObject = false): array {}
 
         public static function isDefined(string $name): bool {}
 

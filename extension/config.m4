@@ -387,6 +387,7 @@ if test "$PHP_KING" != "no"; then
         src/iibin/iibin_schema_compiler.c \
         src/iibin/iibin_encoding.c \
         src/iibin/iibin_decoding.c \
+        src/gossip_mesh/gossip_mesh.c \
         src/semantic_dns/semantic_dns.c \
         src/semantic_dns/mother_node_discovery.c \
         src/semantic_dns/routing.c \
