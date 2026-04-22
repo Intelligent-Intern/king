@@ -308,7 +308,10 @@ test('admin layout controls react to activity and pinning overrides active-speak
 
   try {
     await openMatrixWorkspace(admin.page);
-    const layoutControls = admin.page.locator('.call-left-layout-controls');
+    const layoutControls = admin.page.locator('.call-left-owner-edit-block');
+    if (!(await layoutControls.isVisible())) {
+      await admin.page.getByRole('button', { name: 'Open left sidebar' }).click();
+    }
     await expect(layoutControls).toBeVisible();
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Active User');
 

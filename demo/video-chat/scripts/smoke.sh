@@ -355,6 +355,7 @@ compose_smoke() {
 
   local health_url="http://127.0.0.1:${compose_backend_port}/health"
   local runtime_url="http://127.0.0.1:${compose_backend_port}/api/runtime"
+  local admin_runtime_url="http://127.0.0.1:${compose_backend_port}/api/admin/runtime"
   local login_url="http://127.0.0.1:${compose_backend_port}/api/auth/login"
   local session_url="http://127.0.0.1:${compose_backend_port}/api/auth/session"
   local frontend_url="http://127.0.0.1:${compose_frontend_port}/"
@@ -409,24 +410,12 @@ compose_smoke() {
         fwrite(STDERR, "runtime status not ok\n");
         exit(1);
     }
-    $db = $data["database"] ?? null;
-    if (!is_array($db)) {
-        fwrite(STDERR, "runtime missing database snapshot\n");
-        exit(1);
-    }
 
-    $applied = -1;
-    if (is_array($db["migrations"] ?? null)) {
-        $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
-    } elseif (array_key_exists("migrations_applied", $db)) {
-        $applied = (int) ($db["migrations_applied"] ?? -1);
-    } elseif (array_key_exists("schema_version", $db)) {
-        $applied = (int) ($db["schema_version"] ?? -1);
-    }
-
-    if ($applied < 1) {
-        fwrite(STDERR, "runtime migration snapshot invalid\n");
-        exit(1);
+    foreach (["database", "auth", "calls", "demo_users", "schema_version", "migrations_applied", "table_names"] as $key) {
+        if (array_key_exists($key, $data)) {
+            fwrite(STDERR, "public runtime leaked ".$key."\n");
+            exit(1);
+        }
     }
   '
 
@@ -463,6 +452,51 @@ compose_smoke() {
     }
     echo trim($token);
   ')"
+
+  local admin_runtime_response
+  local admin_runtime_ready=0
+  for _ in {1..120}; do
+    if admin_runtime_response="$(curl -fsS \
+      -H "authorization: Bearer ${session_token}" \
+      "${admin_runtime_url}")"; then
+      admin_runtime_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${admin_runtime_ready}" != "1" ]]; then
+    log "ERROR: admin runtime endpoint did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
+
+  printf '%s' "${admin_runtime_response}" | php -r '
+    $raw = stream_get_contents(STDIN);
+    $data = json_decode($raw, true);
+    if (!is_array($data) || ($data["status"] ?? "") !== "ok") {
+        fwrite(STDERR, "admin runtime status not ok\n");
+        exit(1);
+    }
+    $db = $data["database"] ?? null;
+    if (!is_array($db)) {
+        fwrite(STDERR, "admin runtime missing database snapshot\n");
+        exit(1);
+    }
+
+    $applied = -1;
+    if (is_array($db["migrations"] ?? null)) {
+        $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
+    } elseif (array_key_exists("migrations_applied", $db)) {
+        $applied = (int) ($db["migrations_applied"] ?? -1);
+    } elseif (array_key_exists("schema_version", $db)) {
+        $applied = (int) ($db["schema_version"] ?? -1);
+    }
+
+    if ($applied < 1) {
+        fwrite(STDERR, "admin runtime migration snapshot invalid\n");
+        exit(1);
+    }
+  '
 
   local session_response
   local session_ready=0
