@@ -110,7 +110,7 @@ Checklist:
 - [x] Split frontend state into focused stores for auth, calls, participants, chat, presence, and settings.
 - [x] Keep existing visual standards instead of introducing one-off colors, borders, or modal variants.
 - [x] Add focused component/store tests or Playwright smoke coverage around extracted shared surfaces.
-- [ ] Keep refactor commits small enough that regressions can be bisected.
+- [x] Keep refactor commits small enough that regressions can be bisected.
 
 Done:
 - [ ] Shared UI primitives reduce duplicate modal/table/header/action code while existing flows still pass.

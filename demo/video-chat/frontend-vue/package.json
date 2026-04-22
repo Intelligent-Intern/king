@@ -18,6 +18,7 @@
     "test:contract:shared-ui-primitives": "node tests/contract/shared-ui-primitives-contract.mjs",
     "test:contract:frontend-state-stores": "node tests/contract/frontend-state-stores-contract.mjs",
     "test:contract:visual-standards": "node tests/contract/visual-standards-contract.mjs",
+    "test:contract:refactor-commit-boundaries": "node tests/contract/refactor-commit-boundaries-contract.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:ui-parity": "playwright test tests/e2e/auth-navigation.spec.js tests/e2e/login-backend-contract.spec.js tests/e2e/ui-parity-journeys.spec.js tests/e2e/responsive-call-management.spec.js tests/e2e/shared-ui-surfaces.spec.js tests/e2e/lobby-admission.spec.js tests/e2e/chat-attachments.spec.js tests/e2e/chat-archive.spec.js tests/e2e/chat-activity-matrix.spec.js tests/e2e/call-layout-strategies.spec.js",
