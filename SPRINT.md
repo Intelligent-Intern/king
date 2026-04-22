@@ -56,7 +56,7 @@ Goal:
 Checklist:
 - [x] Fix disabled send-button paths for text and emoji messages in the call chat.
 - [x] Show unread chat badge and first-message chat notification for other participants.
-- [ ] Keep emoji reactions/chat emoji delivery visible to all call participants.
+- [x] Keep emoji reactions/chat emoji delivery visible to all call participants.
 - [ ] Keep inline message limits and oversized-paste-to-attachment behavior intact.
 - [ ] Keep allowed attachment types and object-store ACL/download boundaries intact.
 - [ ] Rebuild the post-call chat/files modal with the shared modal style and responsive layout.

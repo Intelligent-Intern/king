@@ -60,6 +60,17 @@ async function waitForLastChatText(page, expectedText) {
   return page.evaluate(() => window.__matrixLastChatMessage);
 }
 
+async function waitForLastReactionEvent(page, expectedEmoji) {
+  const handle = await page.waitForFunction((emoji) => {
+    const payload = window.__matrixLastReactionEvent || {};
+    const reaction = payload.reaction || {};
+    const reactions = Array.isArray(payload.reactions) ? payload.reactions : [];
+    return reaction.emoji === emoji || reactions.some((row) => row && row.emoji === emoji);
+  }, expectedEmoji);
+  await handle.dispose();
+  return page.evaluate(() => window.__matrixLastReactionEvent);
+}
+
 test('chat matrix fixture set covers allowed and blocked upload types', async ({ page }) => {
   for (const name of allowedFixtureNames) {
     expect(fixtureExists('allowed', name), `missing allowed fixture ${name}`).toBe(true);
@@ -111,6 +122,38 @@ test('text and emoji chat payloads enable the submit button and send through rea
     expect(emojiPayload.message.text).toBe('🚀');
   } finally {
     await Promise.allSettled([admin.context.close()]);
+  }
+});
+
+test('reaction emoji and chat emoji are visible to every call participant', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+  const user = await createMatrixPage(browser, baseURL, matrixUsers.user);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openMatrixWorkspace(user.page);
+
+    await admin.page.getByTitle('Reactions').click();
+    await admin.page.locator('.workspace-reaction-btn', { hasText: '👏' }).click();
+    await expect(admin.page.locator('.workspace-reaction-particle', { hasText: '👏' }).first()).toBeVisible();
+
+    const reactionPayload = await waitForLastReactionEvent(admin.page, '👏');
+    await user.page.evaluate((event) => window.__matrixEmit(event), reactionPayload);
+    await expect(user.page.locator('.workspace-reaction-particle', { hasText: '👏' }).first()).toBeVisible();
+
+    await openChatTab(admin.page);
+    await admin.page.locator('.chat-emoji-toggle').click();
+    await admin.page.locator('.workspace-chat-emoji-btn', { hasText: '🚀' }).click();
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const chatPayload = await waitForLastChatText(admin.page, '🚀');
+
+    await user.page.evaluate((event) => window.__matrixEmit(event), chatPayload);
+    await openChatTab(user.page);
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText('🚀');
+  } finally {
+    await Promise.allSettled([admin.context.close(), user.context.close()]);
   }
 });
 

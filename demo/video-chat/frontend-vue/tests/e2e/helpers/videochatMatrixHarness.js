@@ -536,6 +536,60 @@ export async function installFakeMediaAndRealtime(context, user) {
           }, 0);
           return;
         }
+        if (payload.type === 'reaction/send') {
+          const emoji = String(payload.emoji || '').trim();
+          if (emoji === '') return;
+          const event = {
+            type: 'reaction/event',
+            room_id: roomId,
+            sender: { user_id: activeUser.id, display_name: activeUser.displayName, role: activeUser.role },
+            reaction: {
+              id: `reaction-${Date.now()}`,
+              emoji,
+              client_reaction_id: payload.client_reaction_id || null,
+              server_time: new Date().toISOString(),
+            },
+            time: new Date().toISOString(),
+          };
+          window.__matrixLastReactionEvent = event;
+          setTimeout(() => {
+            this.emit(event);
+            dispatchToWorkspace(event);
+          }, 0);
+          return;
+        }
+        if (payload.type === 'reaction/send_batch') {
+          const emojis = Array.isArray(payload.emojis)
+            ? payload.emojis.map((entry) => String(entry || '').trim()).filter(Boolean)
+            : [];
+          if (emojis.length === 0) return;
+          const now = Date.now();
+          const event = {
+            type: 'reaction/batch',
+            room_id: roomId,
+            sender: { user_id: activeUser.id, display_name: activeUser.displayName, role: activeUser.role },
+            batch: {
+              id: `reaction-batch-${now}`,
+              mode: 'client_batch',
+              size: emojis.length,
+              server_unix_ms: now,
+              server_time: new Date(now).toISOString(),
+            },
+            reactions: emojis.map((emoji, index) => ({
+              id: `reaction-${now}-${index + 1}`,
+              emoji,
+              client_reaction_id: payload.client_reaction_id ? `${payload.client_reaction_id}:${index + 1}` : null,
+              server_time: new Date(now + index).toISOString(),
+            })),
+            time: new Date(now).toISOString(),
+          };
+          window.__matrixLastReactionEvent = event;
+          setTimeout(() => {
+            this.emit(event);
+            dispatchToWorkspace(event);
+          }, 0);
+          return;
+        }
         if (payload.type === 'layout/mode') {
           window.__matrixLayout = { ...window.__matrixLayout, mode: payload.mode };
           setTimeout(() => {
