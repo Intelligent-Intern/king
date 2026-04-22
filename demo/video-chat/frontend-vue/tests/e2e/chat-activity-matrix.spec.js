@@ -114,6 +114,39 @@ test('text and emoji chat payloads enable the submit button and send through rea
   }
 });
 
+test('first incoming chat message shows unread badge and chat icon notification only for peers', async ({ browser }) => {
+  test.setTimeout(60_000);
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const admin = await createMatrixPage(browser, baseURL, matrixUsers.admin);
+  const user = await createMatrixPage(browser, baseURL, matrixUsers.user);
+
+  try {
+    await openMatrixWorkspace(admin.page);
+    await openMatrixWorkspace(user.page);
+    await openChatTab(admin.page);
+
+    const firstMessage = `first unread ${Date.now()}`;
+    await admin.page.getByPlaceholder('Write a message').fill(firstMessage);
+    await admin.page.locator('.workspace-chat-compose button[type="submit"]').click();
+    const payload = await waitForLastChatText(admin.page, firstMessage);
+
+    await expect(admin.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
+    await expect(admin.page.locator('.workspace-chat-toast')).toHaveCount(0);
+
+    await user.page.evaluate((event) => window.__matrixEmit(event), payload);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toBeVisible();
+    await expect(user.page.locator('.workspace-chat-toast')).toBeVisible();
+
+    await user.page.locator('.workspace-chat-toast').click();
+    await expect(user.page.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(user.page.locator('.workspace-chat-message').last()).toContainText(firstMessage);
+    await expect(user.page.locator('.tab-chat-unread-badge')).toHaveCount(0);
+    await expect(user.page.locator('.workspace-chat-toast')).toHaveCount(0);
+  } finally {
+    await Promise.allSettled([admin.context.close(), user.context.close()]);
+  }
+});
+
 test('large paste becomes a chat file and the other participant gets unread badge plus attachment', async ({ browser }) => {
   test.setTimeout(90_000);
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';

@@ -1859,7 +1859,7 @@ const activeMessages = computed(() => {
 const hasChatPayload = computed(() => chatDraft.value.trim() !== '' || chatAttachmentDrafts.value.length > 0);
 const canSubmitChatMessage = computed(() => hasChatPayload.value && !chatSending.value);
 const showChatUnreadBadge = computed(() => chatUnreadByRoom[activeRoomId.value] === true);
-const showChatUnreadToast = computed(() => rightSidebarCollapsed.value && showChatUnreadBadge.value);
+const showChatUnreadToast = computed(() => showChatUnreadBadge.value && (rightSidebarCollapsed.value || activeTab.value !== 'chat'));
 
 const typingUsers = computed(() => {
   const rows = typingByRoom[activeRoomId.value];
