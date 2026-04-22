@@ -10,9 +10,9 @@ if (trim((string) shell_exec('command -v cargo')) === '') {
     echo "skip cargo is required to build the delayed HTTP/3 body client helper";
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
 }
 ?>
 --INI--

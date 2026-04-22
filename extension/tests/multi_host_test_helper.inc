@@ -19,30 +19,15 @@ function king_multi_host_test_start_server_script(
 ): array
 {
     if ($port === null) {
-        $probe = stream_socket_server(
-            king_multi_host_test_format_tcp_endpoint($bindHost, 0),
-            $errno,
-            $errstr
-        );
-        if ($probe === false) {
-            throw new RuntimeException("failed to reserve multi-host test port: $errstr");
-        }
-
-        $serverName = stream_socket_get_name($probe, false);
-        fclose($probe);
-        if (preg_match('/^\[.*\]:(\d+)$/', $serverName, $matches) === 1) {
-            $port = (int) $matches[1];
-        } elseif (preg_match('/^.*:(\d+)$/', $serverName, $matches) === 1) {
-            $port = (int) $matches[1];
-        } else {
-            throw new RuntimeException('failed to parse multi-host test port from reserved socket name');
-        }
+        $port = random_int(40000, 49999);
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-multi-host-capture-');
+    $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = [
         PHP_BINARY,
         '-n',
+        '-d', 'extension=' . $extensionPath,
         $scriptPath,
         $capture,
         (string) ((int) $port),

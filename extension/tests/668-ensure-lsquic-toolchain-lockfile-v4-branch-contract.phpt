@@ -75,7 +75,7 @@ file_put_contents($manifest, "[package]\nname='stub'\nversion='0.1.0'\n");
 
 $environment = $_ENV;
 $environment['PATH'] = $tempRoot . '/bin:' . (getenv('PATH') ?: '');
-$environment['KING_QUICHE_TOOLCHAIN_CONFIRM'] = 'no';
+$environment['KING_LSQUIC_TOOLCHAIN_CONFIRM'] = 'no';
 
 $command = ['bash', $ensureCopy, $manifest];
 $process = proc_open(
@@ -103,7 +103,7 @@ $exitCode = proc_close($process);
 var_dump($exitCode === 1);
 var_dump(trim($stdout) === '');
 var_dump(str_contains($stderr, 'Cargo toolchain does not support lockfile-v4 cleanly.'));
-var_dump(str_contains($stderr, 'Aborted per confirmation (KING_QUICHE_TOOLCHAIN_CONFIRM=no).'));
+var_dump(str_contains($stderr, 'Aborted per confirmation (KING_LSQUIC_TOOLCHAIN_CONFIRM=no).'));
 var_dump(!str_contains($stderr, 'Toolchain check for quiche manifest failed before build.'));
 
 king_toolchain_668_cleanup($tempRoot);

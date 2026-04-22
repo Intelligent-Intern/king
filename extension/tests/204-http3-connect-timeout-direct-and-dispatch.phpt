@@ -2,9 +2,9 @@
 King HTTP/3 direct and dispatcher paths expose the active QUIC connect-timeout contract
 --SKIPIF--
 <?php
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
 }
 ?>
 --FILE--

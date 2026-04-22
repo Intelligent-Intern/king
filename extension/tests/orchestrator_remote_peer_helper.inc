@@ -18,31 +18,16 @@ function king_orchestrator_remote_peer_start(
     array $extraArgs = []
 ): array {
     if ($port === null) {
-        $probe = stream_socket_server(
-            king_orchestrator_test_format_tcp_endpoint($bindHost, 0),
-            $errno,
-            $errstr
-        );
-        if ($probe === false) {
-            throw new RuntimeException("failed to reserve orchestrator remote-peer port: $errstr");
-        }
-
-        $serverName = stream_socket_get_name($probe, false);
-        fclose($probe);
-        if (preg_match('/^\[.*\]:(\d+)$/', $serverName, $matches) === 1) {
-            $port = (int) $matches[1];
-        } elseif (preg_match('/^.*:(\d+)$/', $serverName, $matches) === 1) {
-            $port = (int) $matches[1];
-        } else {
-            throw new RuntimeException('failed to parse orchestrator remote-peer port');
-        }
+        $port = random_int(40000, 49999);
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-orchestrator-remote-peer-capture-');
     $serverScript ??= __DIR__ . '/orchestrator_remote_peer_server.inc';
+    $extensionPath = dirname(__DIR__) . '/modules/king.so';
     $command = [
         PHP_BINARY,
         '-n',
+        '-d', 'extension=' . $extensionPath,
         $serverScript,
         $capture,
         (string) $port,

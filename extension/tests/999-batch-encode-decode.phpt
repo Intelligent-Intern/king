@@ -1,8 +1,5 @@
 --TEST--
 Check batch encode/decode exists and works
---INI--
-extension=king.so
-extension_dir=extension/modules
 --FILE--
 <?php
 echo "Test batch functions:\n";

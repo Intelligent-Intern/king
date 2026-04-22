@@ -30,9 +30,9 @@ class GossipMesh
     private int $framesForwarded = 0;
     private int $duplicatesDropped = 0;
     
-    private ?callable $onFrameReceived = null;
-    private ?callable $onPeerConnected = null;
-    private ?callable $onPeerDisconnected = null;
+    private $onFrameReceived = null;
+    private $onPeerConnected = null;
+    private $onPeerDisconnected = null;
     
     public function __construct(
         ?callable $onFrameReceived = null,

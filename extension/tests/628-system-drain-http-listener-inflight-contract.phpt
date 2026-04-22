@@ -15,9 +15,9 @@ if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
 }
 ?>
 --INI--
