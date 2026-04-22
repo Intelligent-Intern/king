@@ -708,6 +708,7 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
+import { MEDIA_SECURITY_SIGNAL_TYPES, createMediaSecuritySession } from './mediaSecurity';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
   ALONE_IDLE_COUNTDOWN_MS,
@@ -940,6 +941,7 @@ const admissionGateState = reactive({
 const hasRealtimeRoomSync = ref(false);
 
 const sfuClientRef = ref(null);
+const mediaSecuritySessionRef = ref(null);
 const mediaRuntimeCapabilities = ref({
   checkedAt: '',
   wlvcWasm: {
@@ -964,6 +966,9 @@ let wlvcEncodeFailureCount = 0;
 let wlvcEncodeWarmupUntilMs = 0;
 let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
+let mediaSecuritySyncInFlight = false;
+const mediaSecurityHelloSignalsSent = new Set();
+const mediaSecuritySenderKeySignalsSent = new Set();
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const pendingSfuRemotePeerInitializers = new Map();
@@ -1075,6 +1080,115 @@ function isWlvcRuntimePath() {
 
 function isNativeWebRtcRuntimePath() {
   return mediaRuntimePath.value === 'webrtc_native';
+}
+
+function currentMediaSecurityRuntimePath() {
+  if (isNativeWebRtcRuntimePath()) return 'webrtc_native';
+  return 'wlvc_sfu';
+}
+
+function ensureMediaSecuritySession() {
+  const context = {
+    callId: activeSocketCallId.value || activeCallId.value,
+    roomId: activeRoomId.value,
+    userId: currentUserId.value,
+    policy: 'preferred',
+    logger: mediaDebugLog,
+  };
+  const existing = mediaSecuritySessionRef.value;
+  const contextChanged = existing
+    && (
+      existing.callId !== context.callId
+      || existing.roomId !== context.roomId
+      || existing.userId !== context.userId
+    );
+  if (!existing || contextChanged) {
+    mediaSecurityHelloSignalsSent.clear();
+    mediaSecuritySenderKeySignalsSent.clear();
+    mediaSecuritySessionRef.value = createMediaSecuritySession(context);
+  } else {
+    mediaSecuritySessionRef.value.updateContext(context);
+  }
+  return mediaSecuritySessionRef.value;
+}
+
+function mediaSecurityTargetIds() {
+  return connectedParticipantUsers.value
+    .map((row) => Number(row?.userId || 0))
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+}
+
+function mediaSecurityHelloSignalKey(targetUserId, session) {
+  return [
+    activeRoomId.value,
+    currentMediaSecurityRuntimePath(),
+    Number(targetUserId || 0),
+    Number(session?.epoch || 0),
+    'hello',
+  ].join(':');
+}
+
+function mediaSecuritySenderKeySignalKey(targetUserId, session) {
+  return [
+    activeRoomId.value,
+    currentMediaSecurityRuntimePath(),
+    Number(targetUserId || 0),
+    Number(session?.epoch || 0),
+    String(session?.senderKeyId || ''),
+    'sender-key',
+  ].join(':');
+}
+
+async function sendMediaSecurityHello(targetUserId, force = false) {
+  if (!isSocketOnline.value) return false;
+  const session = ensureMediaSecuritySession();
+  const key = mediaSecurityHelloSignalKey(targetUserId, session);
+  if (!force && mediaSecurityHelloSignalsSent.has(key)) return true;
+  const signal = await session.buildHelloSignal(targetUserId, currentMediaSecurityRuntimePath());
+  if (!signal) return false;
+  if (sendSocketFrame(signal)) {
+    mediaSecurityHelloSignalsSent.add(key);
+    return true;
+  }
+  return false;
+}
+
+async function sendMediaSecuritySenderKey(targetUserId, force = false) {
+  if (!isSocketOnline.value) return false;
+  const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  if (!ready) return false;
+  const key = mediaSecuritySenderKeySignalKey(targetUserId, session);
+  if (!force && mediaSecuritySenderKeySignalsSent.has(key)) return true;
+  const signal = await session.buildSenderKeySignal(targetUserId);
+  if (!signal) return false;
+  if (sendSocketFrame(signal)) {
+    mediaSecuritySenderKeySignalsSent.add(key);
+    return true;
+  }
+  return false;
+}
+
+async function syncMediaSecurityWithParticipants(forceRekey = false) {
+  if (mediaSecuritySyncInFlight || !isSocketOnline.value || currentUserId.value <= 0) return;
+  mediaSecuritySyncInFlight = true;
+  try {
+    const session = ensureMediaSecuritySession();
+    const marked = session.markParticipantSet(mediaSecurityTargetIds());
+    if (forceRekey || marked.changed) {
+      const ready = await session.ensureReady();
+      if (!ready) return;
+      await session.rotateSenderKey(forceRekey ? 'forced' : 'participant_change');
+    }
+    for (const targetUserId of marked.userIds) {
+      await sendMediaSecurityHello(targetUserId);
+      await sendMediaSecuritySenderKey(targetUserId);
+    }
+  } catch (error) {
+    mediaDebugLog('[MediaSecurity] sync failed', error);
+  } finally {
+    mediaSecuritySyncInFlight = false;
+  }
 }
 
 function setMediaRuntimePath(nextPath, reason) {
@@ -2039,11 +2153,14 @@ function isCallSignalType(type) {
   return normalized === 'call/offer'
     || normalized === 'call/answer'
     || normalized === 'call/ice'
-    || normalized === 'call/hangup';
+    || normalized === 'call/hangup'
+    || MEDIA_SECURITY_SIGNAL_TYPES.includes(normalized);
 }
 
 function shouldSuppressCallAckNotice(signalType) {
-  const normalized = normalizeSignalCommandType(signalType).replace('call/', '');
+  const normalizedType = normalizeSignalCommandType(signalType);
+  if (MEDIA_SECURITY_SIGNAL_TYPES.includes(normalizedType)) return true;
+  const normalized = normalizedType.replace('call/', '');
   return normalized === 'offer'
     || normalized === 'answer'
     || normalized === 'ice'
@@ -3819,16 +3936,47 @@ function applyRoomSnapshot(payload) {
   if (isSocketOnline.value) {
     void syncControlStateToPeers();
     void syncModerationStateToPeers();
+    if (participantsChanged) {
+      void syncMediaSecurityWithParticipants();
+    }
+  }
+}
+
+async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
+  const normalizedSenderUserId = Number(senderUserId || 0);
+  if (!Number.isInteger(normalizedSenderUserId) || normalizedSenderUserId <= 0) return;
+  const session = ensureMediaSecuritySession();
+
+  try {
+    if (type === 'media-security/hello') {
+      const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
+      if (accepted) {
+        await sendMediaSecurityHello(normalizedSenderUserId);
+        await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
+      }
+      return;
+    }
+
+    if (type === 'media-security/sender-key') {
+      await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
+    }
+  } catch (error) {
+    mediaDebugLog('[MediaSecurity] signaling failed', error);
   }
 }
 
 function handleSignalingEvent(payload) {
   const type = String(payload?.type || '').trim().toLowerCase();
-  if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup'].includes(type)) return;
+  if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...MEDIA_SECURITY_SIGNAL_TYPES].includes(type)) return;
 
   const sender = typeof payload.sender === 'object' ? payload.sender : {};
   const senderUserId = Number(sender.user_id || 0);
   const payloadBody = typeof payload.payload === 'object' ? payload.payload : null;
+  if (MEDIA_SECURITY_SIGNAL_TYPES.includes(type)) {
+    void handleMediaSecuritySignal(type, senderUserId, payloadBody || {});
+    return;
+  }
+
   const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
   const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
   const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
@@ -4266,6 +4414,7 @@ async function connectSocket() {
       }
 
       opened = true;
+      const isReconnectOpen = reconnectAttempt.value > 0;
       reconnectAttempt.value = 0;
       connectionState.value = 'online';
       connectionReason.value = 'ready';
@@ -4278,6 +4427,7 @@ async function connectSocket() {
       }
       void syncControlStateToPeers();
       void syncModerationStateToPeers();
+      void syncMediaSecurityWithParticipants(isReconnectOpen);
     });
 
     socket.addEventListener('message', handleSocketMessage);
@@ -5267,6 +5417,29 @@ function localTracksByKind(stream) {
   return out;
 }
 
+function attachMediaSecurityNativeSender(sender, track) {
+  if (!sender || !track || !isNativeWebRtcRuntimePath()) return;
+  const session = ensureMediaSecuritySession();
+  void session.ensureReady().then((ready) => {
+    if (!ready) return;
+    session.attachNativeSenderTransform(sender, {
+      trackKind: String(track.kind || 'video'),
+      trackId: String(track.id || ''),
+    });
+  }).catch((error) => mediaDebugLog('[MediaSecurity] native sender attach failed', error));
+}
+
+function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
+  if (!receiver || !isNativeWebRtcRuntimePath()) return;
+  const session = ensureMediaSecuritySession();
+  void session.ensureReady().then((ready) => {
+    if (!ready) return;
+    session.attachNativeReceiverTransform(receiver, senderUserId, {
+      trackId: String(track?.id || ''),
+    });
+  }).catch((error) => mediaDebugLog('[MediaSecurity] native receiver attach failed', error));
+}
+
 async function syncNativePeerLocalTracks(peer) {
   if (!peer?.pc || peer.pc.signalingState === 'closed') return;
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
@@ -5278,6 +5451,7 @@ async function syncNativePeerLocalTracks(peer) {
     if (senderKind !== 'audio' && senderKind !== 'video') continue;
     const nextTrack = byKind[senderKind] || null;
     if (nextTrack && sender.track?.id === nextTrack.id) {
+      attachMediaSecurityNativeSender(sender, nextTrack);
       delete byKind[senderKind];
       continue;
     }
@@ -5287,6 +5461,7 @@ async function syncNativePeerLocalTracks(peer) {
       // ignore replace failures for unstable peers
     }
     if (nextTrack) {
+      attachMediaSecurityNativeSender(sender, nextTrack);
       delete byKind[senderKind];
     }
   }
@@ -5296,7 +5471,8 @@ async function syncNativePeerLocalTracks(peer) {
     const track = byKind[kind] || null;
     if (!track) continue;
     try {
-      peer.pc.addTrack(track, stream);
+      const sender = peer.pc.addTrack(track, stream);
+      attachMediaSecurityNativeSender(sender, track);
     } catch {
       // ignore duplicate addTrack attempts
     }
@@ -5534,6 +5710,7 @@ function ensureNativePeerConnection(targetUserId) {
 
   pc.addEventListener('track', (event) => {
     markParticipantActivity(normalizedTargetUserId, 'media_track');
+    attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
     const incoming = event?.streams?.[0];
     if (incoming instanceof MediaStream) {
       for (const track of incoming.getTracks()) {
@@ -6526,14 +6703,25 @@ async function startEncodingPipeline(videoTrack) {
 
     try {
       const encoded = videoEncoderRef.value.encodeFrame(imageData, timestamp);
-      
+      const mediaSecurity = ensureMediaSecuritySession();
+      const protectedFrame = await mediaSecurity.protectFrame({
+        data: encoded.data,
+        runtimePath: 'wlvc_sfu',
+        trackKind: 'video',
+        frameKind: encoded.type,
+        trackId: videoTrack.id,
+        timestamp: encoded.timestamp,
+      });
+
       sfuClientRef.value.sendEncodedFrame({
         publisherId: String(sessionState.userId),
         publisherUserId: String(sessionState.userId),
         trackId: videoTrack.id,
         timestamp: encoded.timestamp,
-        data: encoded.data,
+        data: new ArrayBuffer(0),
         type: encoded.type,
+        protectedFrame: protectedFrame.protectedFrame,
+        protectionMode: 'protected',
       });
       wlvcEncodeFailureCount = 0;
       wlvcEncodeFirstFailureAtMs = 0;
@@ -6751,16 +6939,46 @@ function markRemoteFrameActivity(publisherUserId) {
   markParticipantActivity(normalizedUserId, 'media_frame', nowMs);
 }
 
-function decodeSfuFrameForPeer(publisherId, peer, frame) {
+async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   if (!peer || !peer.decoder) return;
   const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
     markRemoteFrameActivity(publisherUserId);
   }
 
+  let frameData = frame.data;
+  if (frame?.protectedFrame) {
+    try {
+      frameData = await ensureMediaSecuritySession().decryptProtectedFrameEnvelope({
+        protectedFrame: frame.protectedFrame,
+        publisherUserId,
+        runtimePath: 'wlvc_sfu',
+        trackId: frame.trackId,
+        timestamp: frame.timestamp,
+      });
+    } catch (error) {
+      mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      return;
+    }
+  } else if (frame?.protected && typeof frame.protected === 'object') {
+    try {
+      frameData = await ensureMediaSecuritySession().decryptFrame({
+        data: frame.data,
+        protected: frame.protected,
+        publisherUserId,
+        runtimePath: 'wlvc_sfu',
+        trackId: frame.trackId,
+        timestamp: frame.timestamp,
+      });
+    } catch (error) {
+      mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      return;
+    }
+  }
+
   try {
     const decoded = peer.decoder.decodeFrame({
-      data: frame.data,
+      data: frameData,
       timestamp: frame.timestamp,
       width: 640,
       height: 480,
@@ -6800,13 +7018,13 @@ function handleSFUEncodedFrame(frame) {
           createdPeer || remotePeersRef.value.get(publisherId),
           frame?.publisherUserId
         );
-        decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+        void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
       });
     }
     return;
   }
 
-  decodeSfuFrameForPeer(publisherId, peer, frame);
+  void decodeSfuFrameForPeer(publisherId, peer, frame);
 }
 
 onBeforeUnmount(() => {

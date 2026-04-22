@@ -7,6 +7,44 @@
     "tracker": "READYNESS_TRACKER.md",
     "notes": "Default validation proves the matrix and executable bindings. Strict release validation must fail while release_blocking gaps remain."
   },
+  "release_gate": {
+    "script": "test:e2e:release-gate",
+    "command": "npm run test:e2e:release-gate",
+    "required_ui_parity_specs": [
+      "frontend-vue/tests/e2e/auth-navigation.spec.js",
+      "frontend-vue/tests/e2e/login-backend-contract.spec.js",
+      "frontend-vue/tests/e2e/ui-parity-journeys.spec.js",
+      "frontend-vue/tests/e2e/responsive-call-management.spec.js",
+      "frontend-vue/tests/e2e/shared-ui-surfaces.spec.js",
+      "frontend-vue/tests/e2e/lobby-admission.spec.js",
+      "frontend-vue/tests/e2e/chat-attachments.spec.js",
+      "frontend-vue/tests/e2e/chat-archive.spec.js",
+      "frontend-vue/tests/e2e/chat-activity-matrix.spec.js",
+      "frontend-vue/tests/e2e/call-layout-strategies.spec.js"
+    ],
+    "required_core_video_journeys": [
+      {
+        "id": "owner_invite_lobby_admission_media_roster",
+        "path": "frontend-vue/tests/e2e/lobby-admission.spec.js",
+        "test_title": "admin creates/invites and admits user from lobby, both browsers share roster and media signals"
+      },
+      {
+        "id": "chat_text_emoji_badge_attachment_archive",
+        "path": "frontend-vue/tests/e2e/chat-activity-matrix.spec.js",
+        "test_title": "chat journey covers text, emoji, unread badge, attachment, and read-only archive"
+      },
+      {
+        "id": "mobile_call_create_edit_internal_participants",
+        "path": "frontend-vue/tests/e2e/responsive-call-management.spec.js",
+        "test_title": "mobile user can create and edit a call with internal participants"
+      },
+      {
+        "id": "websocket_reconnect_room_media_control_recovery",
+        "path": "frontend-vue/tests/e2e/chat-activity-matrix.spec.js",
+        "test_title": "websocket reconnect resyncs room snapshot, media security, and control state"
+      }
+    ]
+  },
   "commands": {
     "frontend:e2e:ui-parity": {
       "kind": "npm_script",
@@ -17,6 +55,8 @@
         "frontend-vue/tests/e2e/auth-navigation.spec.js",
         "frontend-vue/tests/e2e/login-backend-contract.spec.js",
         "frontend-vue/tests/e2e/ui-parity-journeys.spec.js",
+        "frontend-vue/tests/e2e/responsive-call-management.spec.js",
+        "frontend-vue/tests/e2e/shared-ui-surfaces.spec.js",
         "frontend-vue/tests/e2e/lobby-admission.spec.js",
         "frontend-vue/tests/e2e/chat-attachments.spec.js",
         "frontend-vue/tests/e2e/chat-archive.spec.js",

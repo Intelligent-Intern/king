@@ -177,7 +177,7 @@ try {
             static fn (array $server) => $case['attempt']($server),
             static fn (array $response) => $response['status'] === 200
                 && $response['protocol'] === 'http/3'
-                && $response['transport_backend'] === 'quiche_h3'
+                && $response['transport_backend'] === 'lsquic_h3'
                 && $response['response_complete'] === true
                 && $response['tls_enable_early_data'] === true
                 && $response['tls_ticket_source'] === 'ring'

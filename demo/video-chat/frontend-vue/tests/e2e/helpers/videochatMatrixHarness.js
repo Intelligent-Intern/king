@@ -619,13 +619,22 @@ export async function installFakeMediaAndRealtime(context, user) {
         }
       }
 
-      close() {
+      close(code = 1000, reason = 'test_close') {
+        if (this.readyState === FakeWebSocket.CLOSED) return;
         this.readyState = FakeWebSocket.CLOSED;
-        this.dispatch('close', { code: 1000, reason: 'test_close' });
+        this.dispatch('close', { code, reason });
       }
     }
 
     window.__matrixEmit = dispatchToOpenSockets;
+    window.__matrixForceSocketClose = (code = 1006, reason = 'network_drop') => {
+      const openSocket = [...window.__matrixSockets]
+        .reverse()
+        .find((socket) => socket.readyState === FakeWebSocket.OPEN && String(socket.url || '').includes('/ws?'));
+      if (!openSocket) return false;
+      openSocket.close(code, reason);
+      return true;
+    };
     window.__matrixCreateOpenSocket = () => {
       const socket = new FakeWebSocket(`ws://matrix.local/ws?room=${encodeURIComponent(roomId)}`);
       socket.readyState = FakeWebSocket.OPEN;

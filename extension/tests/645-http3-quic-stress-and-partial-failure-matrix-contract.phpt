@@ -60,8 +60,8 @@ function king_http3_645_run_stress_round(array $fixture, $config, int $round): v
             'stress round ' . $round . ' response ' . $index . ' did not return HTTP 200'
         );
         king_http3_645_assert(
-            (string) ($response['transport_backend'] ?? '') === 'quiche_h3',
-            'stress round ' . $round . ' response ' . $index . ' drifted from quiche_h3 backend'
+            (string) ($response['transport_backend'] ?? '') === 'lsquic_h3',
+            'stress round ' . $round . ' response ' . $index . ' drifted from lsquic_h3 backend'
         );
     }
 
@@ -160,7 +160,7 @@ function king_http3_645_run_partial_failure_round(array $fixture, $config, strin
     );
     king_http3_645_assert((int) ($response['status'] ?? 0) === 200, $label . ' round ' . $round . ' status drifted');
     king_http3_645_assert((string) ($response['body'] ?? '') === $expectedBody, $label . ' round ' . $round . ' body drifted');
-    king_http3_645_assert((string) ($response['transport_backend'] ?? '') === 'quiche_h3', $label . ' round ' . $round . ' backend drifted');
+    king_http3_645_assert((string) ($response['transport_backend'] ?? '') === 'lsquic_h3', $label . ' round ' . $round . ' backend drifted');
     king_http3_645_assert(($response['response_complete'] ?? false) === true, $label . ' round ' . $round . ' response completion drifted');
     king_http3_645_assert((int) ($response['quic_packets_lost'] ?? 0) > 0, $label . ' round ' . $round . ' packet loss counter was not populated');
     king_http3_645_assert((int) ($response['quic_packets_retransmitted'] ?? 0) > 0, $label . ' round ' . $round . ' retransmit counter was not populated');

@@ -27,7 +27,7 @@ $assertClean = static function (string $label, array $response, array $capture, 
     var_dump($label);
     var_dump($response['status'] === 200);
     var_dump($response['body'] === $expectedBody);
-    var_dump($response['transport_backend'] === 'quiche_h3');
+    var_dump($response['transport_backend'] === 'lsquic_h3');
     var_dump($response['response_complete'] === true);
     var_dump($response['body_bytes'] === strlen($expectedBody));
     var_dump(($response['header_bytes'] ?? 0) > 0);

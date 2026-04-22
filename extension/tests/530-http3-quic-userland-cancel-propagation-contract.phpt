@@ -2,21 +2,12 @@
 King HTTP/3 direct and dispatcher paths propagate userland CancelToken aborts into active QUIC transport state
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required for the HTTP/3 failure-peer helper";
-}
-
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+king_http3_skipif_require_c_helpers();
 if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
-    echo "skip pcntl and posix are required for the active cancel fixture";
+    king_http3_skipif_skip('pcntl and posix are required for the active cancel fixture');
 }
 ?>
 --INI--

@@ -657,6 +657,7 @@ run_step "backend contract: call schedule metadata" bash -lc "'${BACKEND_DIR}/te
 run_step "backend contract: invite preview/copy boundary" bash -lc "'${BACKEND_DIR}/tests/invite-code-copy-boundary-contract.sh'"
 run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
 run_step "backend contract: WLVC wire envelope" bash -lc "'${BACKEND_DIR}/tests/wlvc-wire-contract.sh'"
+run_step "backend contract: media security truth model" bash -lc "'${BACKEND_DIR}/tests/media-security-contract.sh'"
 run_step "backend contract: gateway JWT binding" bash -lc "'${BACKEND_DIR}/tests/gateway-jwt-binding-contract.sh'"
 run_step "backend contract: gateway/backend signaling mapping" bash -lc "'${BACKEND_DIR}/tests/gateway-backend-mapping-contract.sh'"
 run_step "backend contract: room join/presence" bash -lc "'${BACKEND_DIR}/tests/realtime-presence-contract.sh'"
@@ -671,6 +672,12 @@ run_step "frontend contract: WLVC wire envelope" bash -lc "
   set -euo pipefail
   cd '${FRONTEND_DIR}'
   npm run test:contract:wlvc
+"
+
+run_step "frontend contract: media security frame path" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:media-security
 "
 
 run_step "frontend scaffold boot check" bash -lc "

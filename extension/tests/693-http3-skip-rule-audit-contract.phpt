@@ -167,6 +167,39 @@ if ($helperGateCount < 12) {
     king_http3_skip_audit_fail('helper-backed behavior coverage unexpectedly collapsed');
 }
 
+$trackedPhptsOutput = shell_exec(
+    'git -C ' . escapeshellarg($root) . ' ls-files -z -- ' . escapeshellarg('extension/tests/*.phpt') . ' 2>/dev/null'
+);
+if (!is_string($trackedPhptsOutput) || $trackedPhptsOutput === '') {
+    king_http3_skip_audit_fail('could not enumerate tracked PHPT tests');
+}
+
+$legacySkippedTests = [];
+foreach (array_filter(explode("\0", $trackedPhptsOutput), static fn (string $path): bool => $path !== '') as $path) {
+    $fullPath = $root . '/' . $path;
+    if (!is_file($fullPath)) {
+        continue;
+    }
+
+    $source = file_get_contents($fullPath);
+    if (!is_string($source) || !preg_match("/--SKIPIF--\n(.*?)\n--FILE--/s", $source, $matches)) {
+        continue;
+    }
+
+    foreach ($legacySkipLiterals as $literal) {
+        if (str_contains($matches[1], $literal)) {
+            $legacySkippedTests[] = $path . ' uses ' . $literal;
+        }
+    }
+}
+
+if ($legacySkippedTests !== []) {
+    king_http3_skip_audit_fail(
+        "tracked PHPT tests still contain legacy Quiche/Cargo SKIPIF gates:\n"
+        . implode("\n", $legacySkippedTests)
+    );
+}
+
 $readiness = file_get_contents($root . '/READYNESS_TRACKER.md');
 if (!is_string($readiness) || $readiness === '') {
     king_http3_skip_audit_fail('could not read READYNESS_TRACKER.md');

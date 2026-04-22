@@ -80,12 +80,34 @@ function userDirectoryRows() {
       email: matrixUsers.user.email,
       role: matrixUsers.user.role,
     },
+    {
+      id: matrixUsers.outsider.id,
+      user_id: matrixUsers.outsider.id,
+      display_name: matrixUsers.outsider.displayName,
+      email: matrixUsers.outsider.email,
+      role: matrixUsers.outsider.role,
+    },
   ];
 }
 
-function buildCreatedCall(body) {
+function internalParticipantRowsFromIds(ids) {
+  const directory = new Map(userDirectoryRows().map((row) => [Number(row.id), row]));
+  return (Array.isArray(ids) ? ids : [])
+    .map((id) => directory.get(Number(id)))
+    .filter(Boolean)
+    .map((user) => ({
+      user_id: Number(user.id),
+      display_name: user.display_name,
+      email: user.email,
+      call_role: 'participant',
+      invite_state: 'invited',
+    }));
+}
+
+function buildCallFromBody(body, id = 'call-responsive-created') {
+  const internalRows = internalParticipantRowsFromIds(body?.internal_participant_user_ids);
   return {
-    id: 'call-responsive-created',
+    id,
     room_id: 'room-responsive-created',
     title: String(body?.title || 'Responsive created call'),
     status: 'scheduled',
@@ -98,16 +120,8 @@ function buildCreatedCall(body) {
       email: matrixUsers.user.email,
     },
     participants: {
-      total: 2,
-      internal: [
-        {
-          user_id: matrixUsers.admin.id,
-          display_name: matrixUsers.admin.displayName,
-          email: matrixUsers.admin.email,
-          call_role: 'participant',
-          invite_state: 'invited',
-        },
-      ],
+      total: internalRows.length + 1,
+      internal: internalRows,
       external: [],
     },
     my_participation: {
@@ -117,7 +131,7 @@ function buildCreatedCall(body) {
   };
 }
 
-async function installUserDashboardRoutes(context, createdBodies) {
+async function installUserDashboardRoutes(context, createdBodies, updatedBodies) {
   let createdCall = null;
 
   await context.route('**/api/**', async (route) => {
@@ -182,7 +196,32 @@ async function installUserDashboardRoutes(context, createdBodies) {
     if (url.pathname === '/api/calls' && request.method() === 'POST') {
       const body = request.postDataJSON();
       createdBodies.push(body);
-      createdCall = buildCreatedCall(body);
+      createdCall = buildCallFromBody(body);
+      await route.fulfill({
+        status: 200,
+        headers: jsonHeaders,
+        json: { status: 'ok', call: createdCall },
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/calls/call-responsive-created' && request.method() === 'GET' && createdCall) {
+      await route.fulfill({
+        status: 200,
+        headers: jsonHeaders,
+        json: { status: 'ok', call: createdCall },
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/calls/call-responsive-created' && request.method() === 'PATCH' && createdCall) {
+      const body = request.postDataJSON();
+      updatedBodies.push(body);
+      createdCall = {
+        ...buildCallFromBody(body, createdCall.id),
+        starts_at: String(body?.starts_at || createdCall.starts_at),
+        ends_at: String(body?.ends_at || createdCall.ends_at),
+      };
       await route.fulfill({
         status: 200,
         headers: jsonHeaders,
@@ -220,9 +259,10 @@ async function installUserDashboardRoutes(context, createdBodies) {
   });
 }
 
-test('mobile user can create a call and add an internal participant', async ({ browser }) => {
+test('mobile user can create and edit a call with internal participants', async ({ browser }) => {
   const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
   const createdBodies = [];
+  const updatedBodies = [];
   const context = await browser.newContext({
     baseURL,
     viewport: { width: 390, height: 844 },
@@ -232,7 +272,7 @@ test('mobile user can create a call and add an internal participant', async ({ b
   try {
     await bootstrapStoredSession(context, matrixUsers.user);
     await installQuietBrowserAPIs(context);
-    await installUserDashboardRoutes(context, createdBodies);
+    await installUserDashboardRoutes(context, createdBodies, updatedBodies);
 
     const page = await context.newPage();
     await page.goto('/user/dashboard');
@@ -255,6 +295,26 @@ test('mobile user can create a call and add an internal participant', async ({ b
     expect(createdBodies).toHaveLength(1);
     expect(createdBodies[0].title).toBe('Mobile participant coverage');
     expect(createdBodies[0].internal_participant_user_ids).toEqual([matrixUsers.admin.id]);
+
+    await page.getByRole('button', { name: 'Edit call Mobile participant coverage' }).click();
+    await expect(modal.getByRole('heading', { name: 'Edit video call' })).toBeVisible();
+    await modal.getByLabel('Title').fill('Mobile participant coverage edited');
+    await modal.getByText('Replace participant list during edit').click();
+
+    const newParticipantRow = modal.locator('.calls-participant-row', { hasText: matrixUsers.outsider.displayName });
+    await expect(newParticipantRow).toBeVisible();
+    await newParticipantRow.getByRole('checkbox').check();
+
+    await modal.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.locator('.calls-banner.ok')).toContainText('Call updated.');
+    await expect(page.locator('.call-title')).toContainText('Mobile participant coverage edited');
+
+    expect(updatedBodies).toHaveLength(1);
+    expect(updatedBodies[0].title).toBe('Mobile participant coverage edited');
+    expect(updatedBodies[0].internal_participant_user_ids).toEqual([
+      matrixUsers.admin.id,
+      matrixUsers.outsider.id,
+    ]);
   } finally {
     await context.close();
   }

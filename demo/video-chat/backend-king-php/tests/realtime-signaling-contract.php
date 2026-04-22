@@ -169,6 +169,27 @@ try {
     videochat_realtime_signaling_assert((bool) ($answerPublish['ok'] ?? false), 'answer publish should succeed');
     videochat_realtime_signaling_assert((int) ($answerPublish['sent_count'] ?? 0) === 1, 'answer should be delivered only to sender user');
 
+    $decodedMediaSecurityHello = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'media-security/hello',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'media_security_hello',
+            'public_key' => 'peer-public-key',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaSecurityHello['ok'] ?? false), 'media-security hello should decode');
+    $mediaSecurityPublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedMediaSecurityHello,
+        $sender,
+        1_780_300_124_500
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaSecurityPublish['ok'] ?? false), 'media-security hello publish should succeed');
+    $mediaSecurityTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($mediaSecurityTargetFrame['type'] ?? '') === 'media-security/hello', 'target should receive media-security hello');
+    videochat_realtime_signaling_assert((string) (($mediaSecurityTargetFrame['payload'] ?? [])['kind'] ?? '') === 'media_security_hello', 'media-security payload kind mismatch');
+
     $decodedInvalidSelfTarget = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/ice',
         'target_user_id' => 100,

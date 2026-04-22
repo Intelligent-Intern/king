@@ -345,7 +345,9 @@ function videochat_handle_sfu_routes(
                     $timestamp = $msg['timestamp'] ?? 0;
                     $frameData = $msg['data'] ?? [];
                     $frameType = $msg['frame_type'] ?? $msg['frameType'] ?? 'delta';
-                    if ($sfuDatabase instanceof PDO && is_array($frameData)) {
+                    $protectedFrame = is_string($msg['protected_frame'] ?? null) ? trim((string) $msg['protected_frame']) : '';
+                    $protectionMode = (string) ($msg['protection_mode'] ?? ($protectedFrame !== '' ? 'protected' : 'transport_only'));
+                    if ($sfuDatabase instanceof PDO && ($protectedFrame !== '' || is_array($frameData))) {
                         try {
                             videochat_sfu_insert_frame(
                                 $sfuDatabase,
@@ -355,7 +357,8 @@ function videochat_handle_sfu_routes(
                                 (string) $trackId,
                                 (int) $timestamp,
                                 (string) $frameType,
-                                $frameData
+                                is_array($frameData) ? $frameData : [],
+                                $protectedFrame
                             );
                         } catch (Throwable) {
                             // best-effort cross-worker frame relay
@@ -364,15 +367,21 @@ function videochat_handle_sfu_routes(
 
                     foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
                         if ((string) $subClientId !== (string) $clientId) {
-                            king_websocket_send($subClient['websocket'], json_encode([
+                            $outboundFrame = [
                                 'type' => 'sfu/frame',
                                 'publisher_id' => $clientId,
                                 'publisher_user_id' => $userIdString,
                                 'track_id' => $trackId,
                                 'timestamp' => $timestamp,
-                                'data' => $frameData,
                                 'frame_type' => $frameType,
-                            ]));
+                                'protection_mode' => $protectionMode,
+                            ];
+                            if ($protectedFrame !== '') {
+                                $outboundFrame['protected_frame'] = $protectedFrame;
+                            } else {
+                                $outboundFrame['data'] = $frameData;
+                            }
+                            king_websocket_send($subClient['websocket'], json_encode($outboundFrame));
                         }
                     }
                     break;
