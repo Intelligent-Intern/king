@@ -130,7 +130,7 @@ Current demo caveats:
 - TURN relay setup is available through the opt-in `turn` compose profile; default local demo remains STUN-only unless `VITE_VIDEOCHAT_ICE_SERVERS` is set
 - no production moderation/audit policy
 - background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
-- the MediaPipe selfie-segmentation runtime is vendored under `frontend-vue/public/cdn/vendor/mediapipe/selfie_segmentation` and served through King Edge; production builds set `VITE_VIDEOCHAT_CDN_ORIGIN=https://cnd.<domain>`
+- the MediaPipe and TFJS segmentation runtimes are vendored under `frontend-vue/public/cdn/vendor` and served through King Edge; production builds set `VITE_VIDEOCHAT_CDN_ORIGIN=https://cnd.<domain>`
 - frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
@@ -663,7 +663,7 @@ The smoke loads `demo/video-chat/.env.local`, then verifies the HTTP to HTTPS
 redirect, HTTPS frontend, public API health allow-list, protected admin runtime
 boundary, API version endpoint, lobby websocket routing, SFU websocket routing,
 the remote Certbot renewal hook, certificate SANs for the root domain plus
-`api/ws/sfu/turn/cdn`, the MediaPipe CDN asset endpoint, and authenticated admin operations payloads for
+`api/ws/sfu/turn/cdn`, the MediaPipe and TFJS CDN asset endpoints, and authenticated admin operations payloads for
 infrastructure and live video operations. The admin checks use
 `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD`, `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE`, or
 `demo/video-chat/secrets/admin-password` and assert that operations data is
