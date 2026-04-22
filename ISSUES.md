@@ -160,7 +160,7 @@ Checklist:
 - [x] `extension/tests/685-quic-lsquic-option-diagnostics-contract.phpt` proves LSQUIC client/server paths apply supported `quic.*` settings, reject unsupported non-default settings with explicit diagnostics, and validate before engine settings are accepted.
 - [x] `extension/tests/686-client-http3-lsquic-live-stats-contract.phpt` proves LSQUIC client response packet stats bind to `lsquic_conn_get_info()` counters instead of placeholder loss/retransmit zeros.
 - [x] `extension/tests/687-http3-lsquic-option-runtime-contract.phpt` proves LSQUIC client/server runtime mapping for congestion control, pacing, flow-control transport parameters, and idle timeout before settings validation.
-- [ ] Prevent stale bookkeeping fields or permanently zeroed counters.
+- [x] `extension/tests/688-client-http3-lsquic-byte-stats-contract.phpt` proves LSQUIC lost/retransmit byte response stats are derived from live connection byte and packet counters instead of stale bookkeeping or permanent zero placeholders.
 
 Done:
 - [ ] Existing stats and config tests stay green or have equally strong new proof.

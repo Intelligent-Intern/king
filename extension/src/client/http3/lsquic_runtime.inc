@@ -21,6 +21,34 @@ static void king_http3_lsquic_seed_ticket_from_ring(
     runtime->lsquic_session_resume_len = 0;
 }
 
+static zend_long king_http3_lsquic_uint64_to_zend_long(uint64_t value)
+{
+    return (zend_long) MIN(value, (uint64_t) ZEND_LONG_MAX);
+}
+
+static zend_long king_http3_lsquic_estimate_packet_bytes(
+    uint64_t total_bytes,
+    uint64_t event_packets,
+    uint64_t total_packets)
+{
+    uint64_t estimated;
+
+    if (total_bytes == 0 || event_packets == 0 || total_packets == 0) {
+        return 0;
+    }
+
+    if (event_packets >= total_packets) {
+        return king_http3_lsquic_uint64_to_zend_long(total_bytes);
+    }
+
+    estimated = (total_bytes / total_packets) * event_packets;
+    if (estimated == 0) {
+        estimated = 1;
+    }
+
+    return king_http3_lsquic_uint64_to_zend_long(estimated);
+}
+
 static void king_http3_lsquic_refresh_transport_stats(
     king_http3_request_runtime_t *runtime)
 {
@@ -38,12 +66,20 @@ static void king_http3_lsquic_refresh_transport_stats(
         return;
     }
 
-    runtime->quic_packets_sent = (zend_long) MIN(info.lci_pkts_sent, (uint64_t) ZEND_LONG_MAX);
-    runtime->quic_packets_received = (zend_long) MIN(info.lci_pkts_rcvd, (uint64_t) ZEND_LONG_MAX);
-    runtime->quic_packets_lost = (zend_long) MIN(info.lci_pkts_lost, (uint64_t) ZEND_LONG_MAX);
-    runtime->quic_packets_retransmitted = (zend_long) MIN(info.lci_pkts_retx, (uint64_t) ZEND_LONG_MAX);
-    runtime->quic_lost_bytes = 0;
-    runtime->quic_stream_retransmitted_bytes = 0;
+    runtime->quic_packets_sent = king_http3_lsquic_uint64_to_zend_long(info.lci_pkts_sent);
+    runtime->quic_packets_received = king_http3_lsquic_uint64_to_zend_long(info.lci_pkts_rcvd);
+    runtime->quic_packets_lost = king_http3_lsquic_uint64_to_zend_long(info.lci_pkts_lost);
+    runtime->quic_packets_retransmitted = king_http3_lsquic_uint64_to_zend_long(info.lci_pkts_retx);
+    runtime->quic_lost_bytes = king_http3_lsquic_estimate_packet_bytes(
+        info.lci_bytes_sent,
+        info.lci_pkts_lost,
+        info.lci_pkts_sent
+    );
+    runtime->quic_stream_retransmitted_bytes = king_http3_lsquic_estimate_packet_bytes(
+        info.lci_bytes_sent,
+        info.lci_pkts_retx,
+        info.lci_pkts_sent
+    );
 }
 
 static int king_http3_lsquic_runtime_packet_in(
