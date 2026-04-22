@@ -680,6 +680,12 @@ run_step "frontend contract: media security frame path" bash -lc "
   npm run test:contract:media-security
 "
 
+run_step "frontend contract: MediaPipe CDN assets" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:mediapipe-cdn
+"
+
 run_step "frontend scaffold boot check" bash -lc "
   set -euo pipefail
   tmp_log=\$(mktemp)

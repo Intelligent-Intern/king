@@ -113,6 +113,7 @@ persist_wizard_env() {
     VIDEOCHAT_DEPLOY_WS_DOMAIN
     VIDEOCHAT_DEPLOY_SFU_DOMAIN
     VIDEOCHAT_DEPLOY_TURN_DOMAIN
+    VIDEOCHAT_DEPLOY_CDN_DOMAIN
     VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
     VIDEOCHAT_DEPLOY_ADMIN_PASSWORD
     VIDEOCHAT_DEPLOY_USER_PASSWORD
@@ -320,7 +321,7 @@ resolved_ips_for_domain() {
 
 wait_for_dns_to_server() {
   local timeout="${VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS:-900}" deadline resolved target target_resolved all_ok
-  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}")
+  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}")
   if ! command -v getent >/dev/null 2>&1; then
     log "WARN: getent is missing locally; skipping DNS wait"
     return 0
@@ -404,7 +405,7 @@ hcloud_set_dns_a_record() {
 
 hcloud_set_videochat_subdomain_records() {
   local target
-  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}"; do
+  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}"; do
     [[ -n "${target}" ]] || continue
     hcloud_set_dns_a_record_for_domain "${target}" || true
   done
@@ -427,7 +428,7 @@ run_hcloud_dns_step() {
     hcloud_set_dns_a_record || true
     hcloud_set_videochat_subdomain_records
   else
-    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
+    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN}, ${DEPLOY_CDN_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
   fi
 
   wait_for_dns_to_server

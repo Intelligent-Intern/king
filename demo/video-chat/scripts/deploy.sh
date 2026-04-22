@@ -55,9 +55,10 @@ Optional environment:
   VIDEOCHAT_DEPLOY_WS_DOMAIN   Lobby websocket host, default: ws.<domain>.
   VIDEOCHAT_DEPLOY_SFU_DOMAIN  SFU websocket host, default: sfu.<domain>.
   VIDEOCHAT_DEPLOY_TURN_DOMAIN TURN host, default: turn.<domain>.
+  VIDEOCHAT_DEPLOY_CDN_DOMAIN  Static/CDN asset host, default: cnd.<domain>.
   VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
                               Comma-separated frontend dev-server hosts, default:
-                              deploy domain plus api/ws/sfu/turn hosts.
+                              deploy domain plus api/ws/sfu/turn/cdn hosts.
 
 Optional Hetzner wizard environment:
   VIDEOCHAT_DEPLOY_HCLOUD_TOKEN       Hetzner Cloud read/write API token.
@@ -171,23 +172,26 @@ refresh_deploy_config() {
   DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-}"
   DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-}"
   DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-}"
+  DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-}"
 
   if [[ -n "${DEPLOY_DOMAIN}" ]]; then
     DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
     DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
     DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
     DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
+    DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN:-cnd.${DEPLOY_DOMAIN}}"
   fi
 
   DEPLOY_VUE_ALLOWED_HOSTS="${VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS:-}"
   if [[ -z "${DEPLOY_VUE_ALLOWED_HOSTS}" && -n "${DEPLOY_DOMAIN}" ]]; then
-    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN}"
+    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN}"
   fi
 
   export VIDEOCHAT_DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN}"
   export VIDEOCHAT_DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN}"
   export VIDEOCHAT_DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN}"
   export VIDEOCHAT_DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN}"
   export VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS}"
   if [[ -n "${DEPLOY_REFRESH_KNOWN_HOSTS}" ]]; then
     export VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS="${DEPLOY_REFRESH_KNOWN_HOSTS}"
@@ -214,7 +218,7 @@ deploy_refresh_known_hosts_enabled() {
 
 deploy_dns_targets() {
   local target seen=""
-  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}"; do
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}"; do
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
       *" ${target} "*) continue ;;
@@ -293,6 +297,7 @@ persist_current_deploy_config() {
   local_env_upsert VIDEOCHAT_DEPLOY_WS_DOMAIN "${DEPLOY_WS_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_SFU_DOMAIN "${DEPLOY_SFU_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_TURN_DOMAIN "${DEPLOY_TURN_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_CDN_DOMAIN "${DEPLOY_CDN_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS "${DEPLOY_VUE_ALLOWED_HOSTS}"
   [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_SSH_KEY "${VIDEOCHAT_DEPLOY_SSH_KEY}"
   [[ -n "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE}"
@@ -318,6 +323,24 @@ check_dns_hint() {
       die "DNS preflight mismatch for ${target}: expected ${DEPLOY_PUBLIC_IP}, got ${resolved}"
     fi
   done < <(deploy_dns_targets)
+}
+
+ensure_hcloud_dns_records_if_configured() {
+  case "${VIDEOCHAT_DEPLOY_HCLOUD_DNS:-0}" in
+    1|true|TRUE|yes|YES) ;;
+    *) return 0 ;;
+  esac
+
+  [[ -n "${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}" && -n "${DEPLOY_PUBLIC_IP}" ]] || return 0
+  require_cmd curl
+  require_cmd jq
+
+  HCLOUD_TOKEN="${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN}"
+  HCLOUD_API_BASE="${VIDEOCHAT_DEPLOY_HCLOUD_API_BASE:-https://api.hetzner.cloud/v1}"
+  HCLOUD_API_BASE="${HCLOUD_API_BASE%/}"
+
+  hcloud_set_dns_a_record || true
+  hcloud_set_videochat_subdomain_records
 }
 
 bootstrap_remote() {
@@ -455,7 +478,7 @@ sync_checkout() {
 }
 
 certbot_standalone() {
-  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q
+  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   email_q="$(shell_quote "${DEPLOY_EMAIL}")"
@@ -463,6 +486,7 @@ certbot_standalone() {
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
+  cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
 
   log "Obtaining/renewing Let's Encrypt cert for ${DEPLOY_DOMAIN}"
   remote_bash <<REMOTE
@@ -475,6 +499,7 @@ API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
+CDN_DOMAIN=${cdn_domain_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 FRONTEND_WAS_RUNNING=0
 EDGE_WAS_RUNNING=0
@@ -548,7 +573,8 @@ fi
   -d "\${API_DOMAIN}" \\
   -d "\${WS_DOMAIN}" \\
   -d "\${SFU_DOMAIN}" \\
-  -d "\${TURN_DOMAIN}"
+  -d "\${TURN_DOMAIN}" \\
+  -d "\${CDN_DOMAIN}"
 
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/fullchain.pem"
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/privkey.pem"
@@ -559,7 +585,7 @@ REMOTE
 }
 
 write_remote_runtime_files() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -568,6 +594,7 @@ write_remote_runtime_files() {
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
+  cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   admin_q="$(shell_quote "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD:-}")"
   user_q="$(shell_quote "${VIDEOCHAT_DEPLOY_USER_PASSWORD:-}")"
@@ -594,6 +621,7 @@ API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
+CDN_DOMAIN=${cdn_domain_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 ADMIN_PASSWORD=${admin_q}
 USER_PASSWORD=${user_q}
@@ -655,6 +683,7 @@ VIDEOCHAT_DEPLOY_API_DOMAIN=\${API_DOMAIN}
 VIDEOCHAT_DEPLOY_WS_DOMAIN=\${WS_DOMAIN}
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=\${SFU_DOMAIN}
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=\${TURN_DOMAIN}
+VIDEOCHAT_DEPLOY_CDN_DOMAIN=\${CDN_DOMAIN}
 VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret
 VIDEOCHAT_TURN_URIS=turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp
 VIDEOCHAT_TURN_TTL_SECONDS=3600
@@ -665,6 +694,7 @@ VIDEOCHAT_V1_TURN_EXTERNAL_IP=\${TURN_EXTERNAL_IP}
 VIDEOCHAT_V1_BACKEND_ORIGIN=https://\${API_DOMAIN}
 VIDEOCHAT_V1_BACKEND_WS_ORIGIN=https://\${WS_DOMAIN}
 VIDEOCHAT_V1_BACKEND_SFU_ORIGIN=https://\${SFU_DOMAIN}
+VITE_VIDEOCHAT_CDN_ORIGIN=https://\${CDN_DOMAIN}
 VIDEOCHAT_V1_FRONTEND_BACKEND_PORT_FALLBACK=
 VIDEOCHAT_V1_FRONTEND_WS_PORT_FALLBACK=
 VIDEOCHAT_V1_FRONTEND_SFU_PORT_FALLBACK=
@@ -818,7 +848,7 @@ REMOTE
 }
 
 start_production_https() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -827,6 +857,7 @@ start_production_https() {
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
+  cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
@@ -849,6 +880,7 @@ API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
+CDN_DOMAIN=${cdn_domain_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 INFRA_PROVIDER=${infra_provider_q}
@@ -895,6 +927,7 @@ set_env_value VIDEOCHAT_DEPLOY_API_DOMAIN "\${API_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_TURN_URIS "turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp"
 set_env_value VIDEOCHAT_TURN_TTL_SECONDS 3600
@@ -907,6 +940,7 @@ set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
 set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\${API_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "https://\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "https://\${SFU_DOMAIN}"
+set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "https://\${CDN_DOMAIN}"
 set_env_value VIDEOCHAT_V1_FRONTEND_BACKEND_PORT_FALLBACK ""
 set_env_value VIDEOCHAT_V1_FRONTEND_WS_PORT_FALLBACK ""
 set_env_value VIDEOCHAT_V1_FRONTEND_SFU_PORT_FALLBACK ""
@@ -1117,13 +1151,14 @@ REMOTE
 }
 
 start_public_http() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q vue_allowed_hosts_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
   ws_domain_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
+  cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
 
@@ -1136,6 +1171,7 @@ API_DOMAIN=${api_domain_q}
 WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
+CDN_DOMAIN=${cdn_domain_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
@@ -1167,6 +1203,7 @@ set_env_value VIDEOCHAT_DEPLOY_API_DOMAIN "\${API_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_TURN_URIS "turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp"
 set_env_value VIDEOCHAT_TURN_TTL_SECONDS 3600
@@ -1179,6 +1216,7 @@ set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
 set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "http://\${API_DOMAIN}:18080"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "http://\${WS_DOMAIN}:18081"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "http://\${SFU_DOMAIN}:18082"
+set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "http://\${CDN_DOMAIN}:80"
 set_env_value VIDEOCHAT_VUE_ALLOWED_HOSTS "\${VUE_ALLOWED_HOSTS}"
 set_env_value VIDEOCHAT_FRONTEND_ORIGIN "http://\${DOMAIN}"
 
@@ -1287,6 +1325,7 @@ REMOTE
 prepare() {
   refresh_known_hosts_for_target
   require_cmd ssh
+  ensure_hcloud_dns_records_if_configured
   check_dns_hint
   bootstrap_remote
   sync_checkout

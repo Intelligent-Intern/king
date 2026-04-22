@@ -144,7 +144,7 @@ verify_remote_certbot_hook() {
   [[ -n "${DEPLOY_HOST}" ]] || fail "VIDEOCHAT_DEPLOY_HOST is required for certbot renewal-hook smoke"
   require_cmd ssh
 
-  local ssh_dest sudo_value domain_q api_q ws_q sfu_q turn_q
+  local ssh_dest sudo_value domain_q api_q ws_q sfu_q turn_q cdn_q
   ssh_dest="${DEPLOY_USER}@${DEPLOY_HOST}"
   sudo_value=""
   [[ "${DEPLOY_USER}" != "root" ]] && sudo_value="sudo"
@@ -153,13 +153,14 @@ verify_remote_certbot_hook() {
   ws_q="$(shell_quote "${DEPLOY_WS_DOMAIN}")"
   sfu_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
+  cdn_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
 
   local ssh_args=(-p "${DEPLOY_SSH_PORT}" -o BatchMode=yes -o StrictHostKeyChecking=accept-new)
   if [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]]; then
     ssh_args+=(-i "${VIDEOCHAT_DEPLOY_SSH_KEY}")
   fi
 
-  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} bash -s" <<'REMOTE'
+  ssh "${ssh_args[@]}" "${ssh_dest}" "SUDO=$(shell_quote "${sudo_value}") DOMAIN=${domain_q} API_DOMAIN=${api_q} WS_DOMAIN=${ws_q} SFU_DOMAIN=${sfu_q} TURN_DOMAIN=${turn_q} CDN_DOMAIN=${cdn_q} bash -s" <<'REMOTE'
 set -euo pipefail
 HOOK=/etc/letsencrypt/renewal-hooks/deploy/king-videochat-restart.sh
 ${SUDO} test -x "${HOOK}"
@@ -167,7 +168,7 @@ ${SUDO} grep -Fq 'docker compose' "${HOOK}"
 ${SUDO} grep -Fq 'restart || true' "${HOOK}"
 cert_output="$(${SUDO} certbot certificates -d "${DOMAIN}" 2>&1)"
 printf '%s\n' "${cert_output}" | grep -Fq "Certificate Name: ${DOMAIN}"
-for expected in "${DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}"; do
+for expected in "${DOMAIN}" "${API_DOMAIN}" "${WS_DOMAIN}" "${SFU_DOMAIN}" "${TURN_DOMAIN}" "${CDN_DOMAIN}"; do
   printf '%s\n' "${cert_output}" | grep -Fq "${expected}"
 done
 REMOTE
@@ -418,9 +419,11 @@ DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
 DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
 DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
 DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
+DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-cnd.${DEPLOY_DOMAIN}}"
 
 check_https_redirect
 expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
+expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 
 health_payload="$(curl -fsS --max-time "${TIMEOUT}" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload

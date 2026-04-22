@@ -20,6 +20,7 @@
     "test:contract:visual-standards": "node tests/contract/visual-standards-contract.mjs",
     "test:contract:refactor-commit-boundaries": "node tests/contract/refactor-commit-boundaries-contract.mjs",
     "test:contract:media-security": "node tests/contract/media-security-contract.mjs",
+    "test:contract:mediapipe-cdn": "node tests/contract/mediapipe-cdn-contract.mjs",
     "test:e2e:release-gate": "node tests/contract/e2e-release-gate-contract.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",

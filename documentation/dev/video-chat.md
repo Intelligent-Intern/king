@@ -130,6 +130,7 @@ Current demo caveats:
 - TURN relay setup is available through the opt-in `turn` compose profile; default local demo remains STUN-only unless `VITE_VIDEOCHAT_ICE_SERVERS` is set
 - no production moderation/audit policy
 - background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
+- the MediaPipe selfie-segmentation runtime is vendored under `frontend-vue/public/cdn/vendor/mediapipe/selfie_segmentation` and served through King Edge; production builds set `VITE_VIDEOCHAT_CDN_ORIGIN=https://cnd.<domain>`
 - frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
@@ -448,20 +449,20 @@ The wizard asks for:
 - Hetzner Cloud API token with read/write access
 - server name, server type, location, and image, with defaults offered by the
   script
-- optional API, lobby websocket, SFU, and TURN hostnames; by default the helper
-  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, and `turn.<domain>`
+- optional API, lobby websocket, SFU, TURN, and CDN hostnames; by default the helper
+  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, `turn.<domain>`, and `cnd.<domain>`
 
 The helper loads `demo/video-chat/.env.local` before it checks required deploy
 variables. The wizard and manual deploy actions write the effective deploy
 settings back to that same file, so later runs can reuse them without retyping
-everything. This includes the Hetzner API token, derived `api/ws/sfu/turn`
+everything. This includes the Hetzner API token, derived `api/ws/sfu/turn/cdn`
 hostnames, the SSH key path, selected server settings, and the resolved server
 IP. The file is ignored by git.
 
 The wizard also sets `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=1` in `.env.local`.
 Manual deploy actions also auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is
 known. Before the first SSH connection the helper removes stale entries for the
-deploy host, expected public IP, root domain, and `api/ws/sfu/turn` hostnames
+deploy host, expected public IP, root domain, and `api/ws/sfu/turn/cdn` hostnames
 from `~/.ssh/known_hosts`, including the `[host]:port` form. This keeps reruns
 idempotent when Hetzner reuses an IP address or a server was recreated. Set
 `VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS=0` if you want to keep SSH host key
@@ -485,7 +486,7 @@ What the wizard does:
 - stores the new public IPv4 as the deploy target
 - tries to set the Hetzner DNS `A` record when the matching DNS zone is visible
   to the API token
-- tries to set matching `A` records for `api`, `ws`, `sfu`, and `turn`
+- tries to set matching `A` records for `api`, `ws`, `sfu`, `turn`, and `cnd`
 - waits until the domain and those subdomains resolve to the new server IP
 - waits until SSH is reachable
 - runs the same `prepare` flow as the manual deployment path
@@ -502,12 +503,15 @@ intentionally allocate dedicated IPs:
 - `ws.video.example.com`
 - `sfu.video.example.com`
 - `turn.video.example.com`
+- `cnd.video.example.com`
 
 The helper waits before requesting the certificate because Certbot needs the
 public domain and subdomains to point at the server. Production actions run the
-same DNS preflight for the root domain and `api/ws/sfu/turn`; when
+same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`; when
 `VIDEOCHAT_DEPLOY_PUBLIC_IP` is set every name must resolve to that IP before
 Certbot is allowed to run.
+When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1` and a Hetzner token is present, normal
+`deploy` reruns also refresh those DNS records before the preflight.
 
 Useful optional overrides:
 
@@ -608,6 +612,7 @@ VIDEOCHAT_DEPLOY_API_DOMAIN=api.video.example.com \
 VIDEOCHAT_DEPLOY_WS_DOMAIN=ws.video.example.com \
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=sfu.video.example.com \
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=turn.video.example.com \
+VIDEOCHAT_DEPLOY_CDN_DOMAIN=cnd.video.example.com \
 demo/video-chat/scripts/deploy.sh deploy
 ```
 
@@ -657,7 +662,7 @@ The smoke loads `demo/video-chat/.env.local`, then verifies the HTTP to HTTPS
 redirect, HTTPS frontend, public API health allow-list, protected admin runtime
 boundary, API version endpoint, lobby websocket routing, SFU websocket routing,
 the remote Certbot renewal hook, certificate SANs for the root domain plus
-`api/ws/sfu/turn`, and authenticated admin operations payloads for
+`api/ws/sfu/turn/cdn`, the MediaPipe CDN asset endpoint, and authenticated admin operations payloads for
 infrastructure and live video operations. The admin checks use
 `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD`, `VIDEOCHAT_DEPLOY_ADMIN_PASSWORD_FILE`, or
 `demo/video-chat/secrets/admin-password` and assert that operations data is
