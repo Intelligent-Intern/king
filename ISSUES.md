@@ -211,7 +211,7 @@ Goal:
 
 Checklist:
 - [x] CI builds the new stack.
-- [ ] CI runs HTTP/3 client/server contract suites.
+- [x] CI runs HTTP/3 client/server contract suites.
 - [ ] CI blocks local absolute paths, Homebrew paths, Cargo HTTP/3 bootstrap, and Quiche locks.
 - [ ] Release supply-chain verification checks new provenance pins.
 - [ ] Package manifests contain new dependency hashes and no Quiche manifests.
