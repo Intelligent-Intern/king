@@ -46,9 +46,14 @@ if ($actualBehaviors !== $expectedBehaviors) {
 }
 
 $strategyCapabilities = array_fill_keys($strategy['required_capabilities'] ?? [], true);
+$activeHelpers = $strategy['active_helpers'] ?? null;
+if (!is_array($activeHelpers) || $activeHelpers === []) {
+    king_http3_behavior_fail('replacement strategy has no active helper inventory');
+}
+
 $replacementCapabilities = [];
-foreach (($strategy['replacements'] ?? []) as $replacement) {
-    foreach (($replacement['capabilities'] ?? []) as $capability) {
+foreach ($activeHelpers as $helper) {
+    foreach (($helper['capabilities'] ?? []) as $capability) {
         $replacementCapabilities[$capability] = true;
     }
 }
