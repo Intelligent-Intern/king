@@ -201,7 +201,11 @@ function videochat_realtime_room_snapshot_payload(
             'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? '')),
             'call_id' => (string) ($connection['active_call_id'] ?? ''),
             'call_role' => videochat_normalize_call_participant_role((string) ($connection['call_role'] ?? 'participant')),
+            'effective_call_role' => videochat_normalize_call_participant_role(
+                (string) ($connection['effective_call_role'] ?? ($connection['call_role'] ?? 'participant'))
+            ),
             'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
+            'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
         ],
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
         'time' => gmdate('c'),

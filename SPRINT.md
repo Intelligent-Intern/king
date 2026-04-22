@@ -26,7 +26,7 @@ Checklist:
 - [x] Fix SFU publish/subscribe fanout so remote audio and video tracks are delivered across browser sessions.
 - [x] Ensure remote participants render in mini-video slots unless pinned/promoted to the main stage.
 - [x] Ensure participant roster entries are derived from stable server-authoritative presence and do not jitter on polling/reconnect ticks.
-- [ ] Keep admin rights equivalent to call-owner rights inside the call.
+- [x] Keep admin rights equivalent to call-owner rights inside the call.
 - [ ] Add a two-browser Playwright journey that proves admin plus user see each other, hear/receive media signals, and share the same participant list.
 
 Done:

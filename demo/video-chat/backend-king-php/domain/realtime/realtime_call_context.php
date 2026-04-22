@@ -6,10 +6,12 @@ declare(strict_types=1);
  * @return array{
  *   call_id: string,
  *   call_role: string,
+ *   effective_call_role: string,
  *   invite_state: string,
  *   joined_at: string,
  *   left_at: string,
- *   can_moderate: bool
+ *   can_moderate: bool,
+ *   can_manage_owner: bool
  * }
  */
 function videochat_realtime_call_role_context_for_room_user(
@@ -61,14 +63,17 @@ SQL
             if ((int) ($preferredRow['owner_user_id'] ?? 0) === $userId) {
                 $callRole = 'owner';
             }
+            $effectiveCallRole = $isAdmin ? 'owner' : $callRole;
 
             return [
                 'call_id' => (string) ($preferredRow['id'] ?? ''),
                 'call_role' => $callRole,
+                'effective_call_role' => $effectiveCallRole,
                 'invite_state' => videochat_realtime_normalize_call_invite_state($preferredRow['invite_state'] ?? 'invited'),
                 'joined_at' => trim((string) ($preferredRow['joined_at'] ?? '')),
                 'left_at' => trim((string) ($preferredRow['left_at'] ?? '')),
                 'can_moderate' => $isAdmin || in_array($callRole, ['owner', 'moderator'], true),
+                'can_manage_owner' => $isAdmin || $callRole === 'owner',
             ];
         }
     }
@@ -402,10 +407,12 @@ function videochat_realtime_connection_with_call_context(array $connection, call
     $fallbackContext = [
         'call_id' => '',
         'call_role' => 'participant',
+        'effective_call_role' => 'participant',
         'invite_state' => 'invited',
         'joined_at' => '',
         'left_at' => '',
         'can_moderate' => false,
+        'can_manage_owner' => false,
     ];
 
     try {
@@ -427,11 +434,16 @@ function videochat_realtime_connection_with_call_context(array $connection, call
     $connection['requested_call_id'] = $requestedCallId;
     $connection['active_call_id'] = (string) ($resolved['call_id'] ?? '');
     $connection['call_role'] = videochat_normalize_call_participant_role((string) ($resolved['call_role'] ?? 'participant'));
+    $connection['effective_call_role'] = videochat_normalize_call_participant_role(
+        (string) ($resolved['effective_call_role'] ?? $connection['call_role'])
+    );
     $connection['invite_state'] = videochat_realtime_normalize_call_invite_state($resolved['invite_state'] ?? 'invited');
     $connection['joined_at'] = trim((string) ($resolved['joined_at'] ?? ''));
     $connection['left_at'] = trim((string) ($resolved['left_at'] ?? ''));
     $connection['can_moderate_call'] = videochat_normalize_role_slug((string) ($connection['role'] ?? '')) === 'admin'
         || (bool) ($resolved['can_moderate'] ?? false);
+    $connection['can_manage_call_owner'] = videochat_normalize_role_slug((string) ($connection['role'] ?? '')) === 'admin'
+        || (bool) ($resolved['can_manage_owner'] ?? false);
 
     return $connection;
 }

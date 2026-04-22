@@ -213,6 +213,37 @@ SQL
         ($adminContextConnection['can_moderate_call'] ?? false) === true,
         'admin resolved call context must grant owner-equivalent moderation'
     );
+    videochat_realtime_admission_bypass_assert(
+        ($adminContextConnection['call_role'] ?? '') === 'participant',
+        'admin resolved call context must not rewrite the stored participant role'
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminContextConnection['effective_call_role'] ?? '') === 'owner',
+        'admin resolved call context must expose owner-equivalent effective role'
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminContextConnection['can_manage_call_owner'] ?? false) === true,
+        'admin resolved call context must allow owner-equivalent role management'
+    );
+    $adminRoomSnapshot = videochat_realtime_room_snapshot_payload(
+        videochat_presence_state_init(),
+        $adminContextConnection,
+        $openDatabase,
+        'admin_owner_equivalence'
+    );
+    $adminViewer = is_array($adminRoomSnapshot['viewer'] ?? null) ? $adminRoomSnapshot['viewer'] : [];
+    videochat_realtime_admission_bypass_assert(
+        ($adminViewer['call_role'] ?? '') === 'participant',
+        'admin room snapshot viewer must keep the stored participant role separate'
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminViewer['effective_call_role'] ?? '') === 'owner',
+        'admin room snapshot viewer must expose owner-equivalent effective role'
+    );
+    videochat_realtime_admission_bypass_assert(
+        ($adminViewer['can_manage_owner'] ?? false) === true,
+        'admin room snapshot viewer must expose owner-equivalent owner-management permission'
+    );
 
     $ownerFastPathConnection = [
         'user_id' => 77,

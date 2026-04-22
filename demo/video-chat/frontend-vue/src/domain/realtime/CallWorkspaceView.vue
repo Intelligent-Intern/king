@@ -918,7 +918,9 @@ const mobileMiniStripPlacement = ref('below');
 const workspaceError = ref('');
 const workspaceNotice = ref('');
 const viewerCallRole = ref('participant');
+const viewerEffectiveCallRole = ref('participant');
 const viewerCanModerateCall = ref(false);
+const viewerCanManageOwnerRole = ref(false);
 const activeCallId = ref('');
 const loadedCallId = ref('');
 const callParticipantRoles = reactive({});
@@ -997,12 +999,13 @@ const showAdmissionGate = computed(() => {
 const canModerate = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
   || viewerCanModerateCall.value
-  || viewerCallRole.value === 'owner'
-  || viewerCallRole.value === 'moderator'
+  || viewerEffectiveCallRole.value === 'owner'
+  || viewerEffectiveCallRole.value === 'moderator'
 ));
 const canManageOwnerRole = computed(() => (
   normalizeRole(sessionState.role) === 'admin'
-  || viewerCallRole.value === 'owner'
+  || viewerCanManageOwnerRole.value
+  || viewerEffectiveCallRole.value === 'owner'
 ));
 const showLobbyTab = computed(() => canModerate.value);
 const usersSourceMode = computed(() => 'snapshot');
@@ -1279,7 +1282,7 @@ function currentUserParticipantRow() {
   if (!Number.isInteger(userId) || userId <= 0) return null;
 
   const displayName = String(sessionState.displayName || sessionState.email || '').trim() || 'You';
-  const callRole = normalizeCallRole(callParticipantRoles[userId] || viewerCallRole.value || 'participant');
+  const callRole = normalizeCallRole(viewerEffectiveCallRole.value || callParticipantRoles[userId] || viewerCallRole.value || 'participant');
   return {
     userId,
     displayName,
@@ -1878,9 +1881,9 @@ function userRowSnapshot(row) {
   const feedback = rowActionFeedback(row.userId);
   const isRoomMember = Boolean(participant);
   const mappedCallRole = normalizeCallRole(
-    callParticipantRoles[row.userId]
-      || participant?.callRole
-      || (row.userId === currentUserId.value ? viewerCallRole.value : row.callRole || 'participant')
+    row.userId === currentUserId.value
+      ? viewerEffectiveCallRole.value
+      : (callParticipantRoles[row.userId] || participant?.callRole || row.callRole || 'participant')
   );
   const peerState = peerControlStateByUserId[row.userId] || {};
   return {
@@ -3528,14 +3531,30 @@ function applyViewerContext(viewerPayload) {
     loadedCallId.value = '';
     resetCallParticipantRoles();
     viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
     viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
     if (nextCallId !== '') {
       void loadActiveCallDetails(true);
     }
   }
 
   viewerCallRole.value = normalizeCallRole(viewer.call_role || viewer.callRole || 'participant');
+  viewerEffectiveCallRole.value = normalizeCallRole(
+    viewer.effective_call_role
+    || viewer.effectiveCallRole
+    || viewer.call_role
+    || viewer.callRole
+    || 'participant'
+  );
   viewerCanModerateCall.value = Boolean(viewer.can_moderate ?? viewer.canModerate ?? false);
+  viewerCanManageOwnerRole.value = Boolean(
+    viewer.can_manage_owner
+    ?? viewer.canManageOwner
+    ?? viewer.can_manage_call_owner
+    ?? viewer.canManageCallOwner
+    ?? false
+  );
 }
 
 function applyCallDetails(callPayload) {
@@ -3554,19 +3573,31 @@ function applyCallDetails(callPayload) {
     callParticipantRoles[userId] = normalizeCallRole(participant?.call_role || participant?.callRole || 'participant');
   }
 
+  const isAdmin = normalizeRole(sessionState.role) === 'admin';
   if (callParticipantRoles[currentUserId.value]) {
     const currentCallRole = normalizeCallRole(callParticipantRoles[currentUserId.value]);
     viewerCallRole.value = currentCallRole;
-    viewerCanModerateCall.value = currentCallRole === 'owner' || currentCallRole === 'moderator';
+    viewerEffectiveCallRole.value = isAdmin ? 'owner' : currentCallRole;
+    viewerCanModerateCall.value = isAdmin || currentCallRole === 'owner' || currentCallRole === 'moderator';
+    viewerCanManageOwnerRole.value = isAdmin || currentCallRole === 'owner';
     return;
   }
   const ownerUserId = Number(call?.owner?.user_id || 0);
   if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === currentUserId.value) {
     viewerCallRole.value = 'owner';
+    viewerEffectiveCallRole.value = 'owner';
     viewerCanModerateCall.value = true;
+    viewerCanManageOwnerRole.value = true;
+  } else if (isAdmin) {
+    viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'owner';
+    viewerCanModerateCall.value = true;
+    viewerCanManageOwnerRole.value = true;
   } else {
     viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
     viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
   }
 }
 
@@ -3576,7 +3607,9 @@ async function loadActiveCallDetails(force = false) {
     loadedCallId.value = '';
     resetCallParticipantRoles();
     viewerCallRole.value = 'participant';
+    viewerEffectiveCallRole.value = 'participant';
     viewerCanModerateCall.value = false;
+    viewerCanManageOwnerRole.value = false;
     return;
   }
   if (!force && loadedCallId.value === callId) return;

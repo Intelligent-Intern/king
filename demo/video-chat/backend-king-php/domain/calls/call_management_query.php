@@ -515,10 +515,12 @@ SQL
  * @return array{
  *   call_id: string,
  *   call_role: string,
+ *   effective_call_role: string,
  *   invite_state: string,
  *   joined_at: string,
  *   left_at: string,
- *   can_moderate: bool
+ *   can_moderate: bool,
+ *   can_manage_owner: bool
  * }
  */
 function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int $userId): array
@@ -526,10 +528,12 @@ function videochat_call_role_context_for_room_user(PDO $pdo, string $roomId, int
     $fallback = [
         'call_id' => '',
         'call_role' => 'participant',
+        'effective_call_role' => 'participant',
         'invite_state' => 'invited',
         'joined_at' => '',
         'left_at' => '',
         'can_moderate' => false,
+        'can_manage_owner' => false,
     ];
     if ($userId <= 0) {
         return $fallback;
@@ -587,10 +591,12 @@ SQL
     return [
         'call_id' => (string) ($row['id'] ?? ''),
         'call_role' => $callRole,
+        'effective_call_role' => $callRole,
         'invite_state' => videochat_normalize_call_invite_state($row['invite_state'] ?? 'invited'),
         'joined_at' => trim((string) ($row['joined_at'] ?? '')),
         'left_at' => trim((string) ($row['left_at'] ?? '')),
         'can_moderate' => in_array($callRole, ['owner', 'moderator'], true),
+        'can_manage_owner' => $callRole === 'owner',
     ];
 }
 

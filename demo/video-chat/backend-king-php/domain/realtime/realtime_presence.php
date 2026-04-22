@@ -230,7 +230,12 @@ function videochat_presence_send_room_snapshot(
                     $normalized = strtolower(trim($role));
                     return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
                 })((string) ($connection['call_role'] ?? 'participant')),
+                'effective_call_role' => (static function (string $role): string {
+                    $normalized = strtolower(trim($role));
+                    return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
+                })((string) ($connection['effective_call_role'] ?? ($connection['call_role'] ?? 'participant'))),
                 'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
+                'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
             ],
             'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
             'time' => gmdate('c'),
