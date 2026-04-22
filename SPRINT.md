@@ -109,7 +109,7 @@ Checklist:
 - [x] Extract shared modal shell, header/title blocks, action bars, buttons, tables, pagination, empty states, and form controls where product behavior is already equivalent.
 - [x] Split frontend state into focused stores for auth, calls, participants, chat, presence, and settings.
 - [x] Keep existing visual standards instead of introducing one-off colors, borders, or modal variants.
-- [ ] Add focused component/store tests or Playwright smoke coverage around extracted shared surfaces.
+- [x] Add focused component/store tests or Playwright smoke coverage around extracted shared surfaces.
 - [ ] Keep refactor commits small enough that regressions can be bisected.
 
 Done:
