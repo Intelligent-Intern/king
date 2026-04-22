@@ -59,7 +59,7 @@ Checklist:
 - [x] Keep emoji reactions/chat emoji delivery visible to all call participants.
 - [x] Keep inline message limits and oversized-paste-to-attachment behavior intact.
 - [x] Keep allowed attachment types and object-store ACL/download boundaries intact.
-- [ ] Rebuild the post-call chat/files modal with the shared modal style and responsive layout.
+- [x] Rebuild the post-call chat/files modal with the shared modal style and responsive layout.
 - [ ] Add Playwright coverage for text send, emoji send, unread badge, attachment upload/download, and read-only archive modal.
 
 Done:

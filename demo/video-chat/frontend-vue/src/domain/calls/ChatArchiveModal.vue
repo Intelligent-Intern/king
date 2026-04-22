@@ -9,10 +9,12 @@
     body-class="calls-modal-body chat-archive-body"
     footer-class="calls-modal-footer chat-archive-footer"
     close-label="Close chat archive"
+    class="chat-archive-modal"
+    data-testid="chat-archive-modal"
     @close="closeArchive"
   >
     <template #body>
-      <section class="chat-archive-toolbar" aria-label="Chat archive filters">
+      <section class="chat-archive-toolbar" aria-label="Chat archive filters" data-testid="chat-archive-toolbar">
         <label class="chat-archive-field">
           <span>Search</span>
           <input
@@ -36,8 +38,8 @@
         </button>
       </section>
 
-      <div class="chat-archive-grid">
-        <section class="chat-archive-column chat-archive-messages" aria-label="Archived chat messages">
+      <div class="chat-archive-grid" data-testid="chat-archive-grid">
+        <section class="chat-archive-column chat-archive-messages" aria-label="Archived chat messages" data-testid="chat-archive-messages">
           <header class="chat-archive-column-header">
             <span>Messages</span>
             <small>{{ archive.messages.length }} loaded</small>
@@ -80,7 +82,7 @@
           </footer>
         </section>
 
-        <aside class="chat-archive-column chat-archive-files" aria-label="Archived chat files">
+        <aside class="chat-archive-column chat-archive-files" aria-label="Archived chat files" data-testid="chat-archive-files">
           <header class="chat-archive-column-header">
             <span>Files</span>
             <small>{{ fileCount }} files</small>
@@ -101,9 +103,14 @@
                   <span>{{ file.sender?.display_name || 'Unknown' }} · {{ formatArchiveBytes(file.size_bytes) }}</span>
                   <time>{{ formatArchiveTime(file.attached_at || file.created_at) }}</time>
                 </div>
-                <a class="icon-mini-btn" :href="file.download_url" target="_blank" rel="noopener noreferrer" aria-label="Download file">
-                  <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
-                  <span class="chat-archive-download-fallback">Download</span>
+                <a
+                  class="btn chat-archive-download"
+                  :href="file.download_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :aria-label="`Download ${file.name}`"
+                >
+                  Download
                 </a>
               </li>
             </ul>
@@ -326,8 +333,8 @@ watch(
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-surface-strong);
+  border-radius: 8px;
+  background: var(--bg-surface);
   overflow: hidden;
 }
 
@@ -339,7 +346,7 @@ watch(
   min-height: 42px;
   padding: 10px;
   border-bottom: 1px solid var(--border-subtle);
-  background: var(--brand-bg);
+  background: var(--bg-surface-strong);
   color: var(--text-primary);
   font-size: 13px;
   font-weight: 700;
@@ -363,8 +370,8 @@ watch(
 .chat-archive-message {
   padding: 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-surface);
+  border-radius: 8px;
+  background: var(--bg-surface-strong);
 }
 
 .chat-archive-message-head,
@@ -401,7 +408,7 @@ watch(
 
 .chat-archive-chip {
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--brand-cyan);
   padding: 6px 10px;
   text-decoration: none;
@@ -468,8 +475,8 @@ watch(
   gap: 12px;
   padding: 10px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--bg-surface);
+  border-radius: 8px;
+  background: var(--bg-surface-strong);
 }
 
 .chat-archive-file strong,
@@ -479,10 +486,11 @@ watch(
   overflow-wrap: anywhere;
 }
 
-.chat-archive-download-fallback {
-  display: none;
-  font-size: 0.68rem;
-  font-weight: 800;
+.chat-archive-download {
+  min-height: 34px;
+  align-items: center;
+  white-space: nowrap;
+  text-decoration: none;
 }
 
 :deep(.chat-archive-footer) {
@@ -601,13 +609,9 @@ watch(
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .chat-archive-file .icon-mini-btn {
+  .chat-archive-download {
     width: 100%;
     justify-content: center;
-  }
-
-  .chat-archive-download-fallback {
-    display: inline;
   }
 
   :deep(.chat-archive-footer) {

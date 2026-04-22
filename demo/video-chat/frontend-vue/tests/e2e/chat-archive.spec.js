@@ -170,8 +170,7 @@ async function installChatArchiveRoutes(page) {
   });
 }
 
-test('user opens the call list chat archive modal as a read-only two-column archive', async ({ page }) => {
-  await installChatArchiveRoutes(page);
+async function seedArchiveSession(page) {
   await page.addInitScript(
     ({ key }) => {
       localStorage.setItem(key, JSON.stringify({
@@ -182,10 +181,20 @@ test('user opens the call list chat archive modal as a read-only two-column arch
     },
     { key: sessionStorageKey },
   );
+}
 
+async function openArchiveModal(page) {
   await page.goto('/user/dashboard');
   await expect(page.getByText('Archive UI Call')).toBeVisible();
   await page.getByRole('button', { name: 'Open chat archive for Archive UI Call' }).click();
+  await expect(page.getByTestId('chat-archive-modal')).toBeVisible();
+}
+
+test('user opens the call list chat archive modal as a read-only two-column archive', async ({ page }) => {
+  await installChatArchiveRoutes(page);
+  await seedArchiveSession(page);
+
+  await openArchiveModal(page);
 
   await expect(page.getByRole('heading', { name: 'Chat archive' })).toBeVisible();
   await expect(page.getByLabel('Archived chat messages')).toContainText('hello archive from user');
@@ -196,10 +205,27 @@ test('user opens the call list chat archive modal as a read-only two-column arch
   await expect(page.getByLabel('Chat archive filters').getByRole('button', { name: /^Search$/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Send$/ })).toHaveCount(0);
   await expect(page.getByRole('textbox', { name: /message/i })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Download file' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Download screen.png' })).toHaveAttribute(
     'href',
     /\/api\/calls\/call-archive-ui\/chat\/attachments\/att-screen$/,
   );
+});
+
+test('chat archive modal stacks messages and files in the mobile modal layout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 740 });
+  await installChatArchiveRoutes(page);
+  await seedArchiveSession(page);
+
+  await openArchiveModal(page);
+
+  const toolbarBox = await page.getByTestId('chat-archive-toolbar').boundingBox();
+  const messageBox = await page.getByTestId('chat-archive-messages').boundingBox();
+  const filesBox = await page.getByTestId('chat-archive-files').boundingBox();
+  expect(toolbarBox?.width || 0).toBeLessThanOrEqual(382);
+  expect(messageBox?.width || 0).toBeLessThanOrEqual(382);
+  expect(filesBox?.width || 0).toBeLessThanOrEqual(382);
+  expect(filesBox?.y || 0).toBeGreaterThan((messageBox?.y || 0) + 40);
+  await expect(page.getByRole('link', { name: 'Download screen.png' })).toBeVisible();
 });
 
 test('chat archive payload is normalized as read-only modal data with message and file columns', async ({ page }) => {
