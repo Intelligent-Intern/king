@@ -1,5 +1,8 @@
 libcurl
 quiche
+boringssl
+curl
+extension/lsquic
 node_modules
 .cargo/
 

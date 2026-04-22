@@ -67,47 +67,6 @@ PHP_FUNCTION(king_proto_decode_batch)
     RETURN_ZVAL(&result, 0, 0);
 }
 
-/* Varint batch encode for A/B benchmark */
-PHP_FUNCTION(king_proto_encode_batch_varint)
-{
-    zend_string *schema_name;
-    zval *records;
-    zval result;
-
-    ZEND_PARSE_PARAMETERS_START(2, 2)
-        Z_PARAM_STR(schema_name)
-        Z_PARAM_ARRAY(records)
-    ZEND_PARSE_PARAMETERS_END();
-
-    if (king_iibin_encode_batch_varint(schema_name, records, &result) != SUCCESS) {
-        RETURN_THROWS();
-    }
-
-    RETURN_ZVAL(&result, 0, 0);
-}
-
-/* Varint batch decode for A/B benchmark */
-PHP_FUNCTION(king_proto_decode_batch_varint)
-{
-    zend_string *schema_name;
-    zval *binary_data;
-    zval *decode_as_object = NULL;
-    zval result;
-
-    ZEND_PARSE_PARAMETERS_START(2, 3)
-        Z_PARAM_STR(schema_name)
-        Z_PARAM_ZVAL(binary_data)
-        Z_PARAM_OPTIONAL
-        Z_PARAM_ZVAL(decode_as_object)
-    ZEND_PARSE_PARAMETERS_END();
-
-    if (king_iibin_decode_batch_varint(schema_name, binary_data, decode_as_object, &result) != SUCCESS) {
-        RETURN_THROWS();
-    }
-
-    RETURN_ZVAL(&result, 0, 0);
-}
-
 PHP_FUNCTION(king_proto_decode)
 {
     zend_string *schema_name;

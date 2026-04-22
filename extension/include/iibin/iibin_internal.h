@@ -116,18 +116,7 @@ zend_result king_iibin_encode_batch(
     zval *records,
     zval *encoded_out
 );
-zend_result king_iibin_encode_batch_varint(
-    zend_string *schema_name,
-    zval *records,
-    zval *encoded_out
-);
 zend_result king_iibin_decode_batch(
-    zend_string *schema_name,
-    zval *records,
-    zval *decode_mode_input,
-    zval *decoded_out
-);
-zend_result king_iibin_decode_batch_varint(
     zend_string *schema_name,
     zval *records,
     zval *decode_mode_input,
@@ -152,45 +141,6 @@ void king_proto_runtime_enum_zval_dtor(zval *zv);
 
 int king_iibin_minit(void);
 extern const zend_function_entry king_iibin_class_methods[];
-
-/* --- Elias Omega Coding --- */
-/* MSB-first varint: 7 data bits per byte, 0x80 = more bytes follow. */
-/* Same wire density as LEB128 varint but big-endian byte order. */
-
-static inline void king_proto_encode_omega(smart_str *buf, uint64_t n) {
-    unsigned char temp[10];
-    int len = 0;
-
-    /* Split into 7-bit groups, LSB first in temp */
-    do {
-        temp[len++] = (unsigned char)(n & 0x7F);
-        n >>= 7;
-    } while (n > 0);
-
-    /* Emit MSB first; set 0x80 continuation on every byte except the last */
-    for (int i = len - 1; i >= 0; i--) {
-        unsigned char b = temp[i];
-        if (i > 0) b |= 0x80;
-        smart_str_appendc(buf, b);
-    }
-}
-
-/* Elias omega decoder — MSB-first varint */
-static inline uint64_t king_proto_decode_omega(const unsigned char **buf_ptr, const unsigned char *buf_end) {
-    const unsigned char *p = *buf_ptr;
-    if (p >= buf_end) return 0;
-
-    uint64_t n = 0;
-    unsigned char b;
-
-    do {
-        b = *p++;
-        n = (n << 7) | (b & 0x7F);
-    } while ((b & 0x80) && p < buf_end);
-
-    *buf_ptr = p;
-    return n;
-}
 
 /* --- Wire Helpers: Varint encode --- */
 

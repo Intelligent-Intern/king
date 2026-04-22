@@ -65,8 +65,6 @@ zend_result king_iibin_encode_batch(
 |----------|-------------|
 | `king_proto_encode_batch(schema, records[])` | Encode multiple records |
 | `king_proto_decode_batch(schema, binary)` | Decode batch from binary |
-| `king_proto_encode_batch_varint(schema, varints[])` | Batch varint-only |
-| `king_proto_decode_batch_varint(schema, binary)` | Decode batch varints |
 
 ### Benchmark Results
 

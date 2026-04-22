@@ -13,8 +13,6 @@ PHP_FUNCTION(king_proto_encode);
 PHP_FUNCTION(king_proto_decode);
 PHP_FUNCTION(king_proto_encode_batch);
 PHP_FUNCTION(king_proto_decode_batch);
-PHP_FUNCTION(king_proto_encode_batch_varint);
-PHP_FUNCTION(king_proto_decode_batch_varint);
 PHP_FUNCTION(king_proto_is_defined);
 PHP_FUNCTION(king_proto_is_schema_defined);
 PHP_FUNCTION(king_proto_is_enum_defined);
@@ -67,8 +65,6 @@ const zend_function_entry king_iibin_class_methods[] = {
     ZEND_ME_MAPPING(decode, king_proto_decode, arginfo_class_King_IIBIN_decode, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(encodeBatch, king_proto_encode_batch, arginfo_class_King_IIBIN_encodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(decodeBatch, king_proto_decode_batch, arginfo_class_King_IIBIN_decodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(encodeBatchVarint, king_proto_encode_batch_varint, arginfo_class_King_IIBIN_encodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
-    ZEND_ME_MAPPING(decodeBatchVarint, king_proto_decode_batch_varint, arginfo_class_King_IIBIN_decodeBatch, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(isDefined, king_proto_is_defined, arginfo_class_King_IIBIN_name, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(isSchemaDefined, king_proto_is_schema_defined, arginfo_class_King_IIBIN_name, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
     ZEND_ME_MAPPING(isEnumDefined, king_proto_is_enum_defined, arginfo_class_King_IIBIN_name, ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)

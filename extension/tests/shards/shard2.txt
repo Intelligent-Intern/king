@@ -80,7 +80,7 @@ tests/234-mcp-upload-download-local-runtime.phpt
 tests/235-oo-mcp-upload-download-runtime.phpt
 tests/236-mcp-upload-download-validation.phpt
 tests/237-iibin-class-runtime.phpt
-tests/237-mcp-e2e-with-object-store.phpt
+tests/686-mcp-e2e-with-object-store.phpt
 tests/238-iibin-class-map-runtime.phpt
 tests/239-iibin-class-defaults-oneof-runtime.phpt
 tests/240-iibin-schema-compiler-snapshot-runtime.phpt
@@ -94,7 +94,7 @@ tests/247-proto-decode-object-class-validation.phpt
 tests/248-proto-decode-object-class-arginfo.phpt
 tests/249-proto-singular-wire-compatibility.phpt
 tests/250-orchestrator-registry-runtime.phpt
-tests/250-proto-packed-fixed-width-errors.phpt
+tests/687-proto-packed-fixed-width-errors.phpt
 tests/251-proto-map-wire-errors.phpt
 tests/252-proto-unknown-group-wire-errors.phpt
 tests/253-semantic-dns-core-server-runtime.phpt
@@ -112,7 +112,7 @@ tests/297-autoscaling-hetzner-readonly-missing-token.phpt
 tests/298-autoscaling-telemetry-monitoring-loop.phpt
 tests/299-autoscaling-hetzner-monitoring-step-guards.phpt
 tests/300-autoscaling-hetzner-budget-gating.phpt
-tests/300-semantic-dns-e2e-routing-policy.phpt
+tests/688-semantic-dns-e2e-routing-policy.phpt
 tests/301-autoscaling-hetzner-bootstrap-rollout.phpt
 tests/302-object-store-id-traversal.phpt
 tests/303-semantic-dns-state-hardening.phpt

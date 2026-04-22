@@ -39,7 +39,7 @@ tests/598-orchestrator-userland-controller-loss-restart-contract.phpt
 tests/599-autoscaling-real-operation-signal-contract.phpt
 tests/600-flow-php-object-store-source-contract.phpt
 tests/601-flow-php-http-source-contract.phpt
-tests/601-semantic-dns-routing-staleness-ttl-contract.phpt
+tests/698-semantic-dns-routing-staleness-ttl-contract.phpt
 tests/602-flow-php-mcp-source-contract.phpt
 tests/603-flow-php-object-store-sink-contract.phpt
 tests/604-flow-php-http-sink-contract.phpt

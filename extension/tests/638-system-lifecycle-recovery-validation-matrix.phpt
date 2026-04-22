@@ -5,6 +5,12 @@ King repo-local lifecycle matrix validates rolling restart, coordinated recovery
 if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
     echo "skip proc_open and stream_socket_server are required";
 }
+$probe = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+if ($probe === false) {
+    echo "skip loopback tcp listener unavailable: $errstr";
+    return;
+}
+fclose($probe);
 ?>
 --INI--
 king.security_allow_config_override=1

@@ -1,5 +1,17 @@
 --TEST--
 King WebSocket endpoint keeps fanout and upgrade continuity across rolling multi-node listener handoff under sustained load
+--SKIPIF--
+<?php
+if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
+    echo "skip proc_open and stream_socket_server are required";
+}
+$probe = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+if ($probe === false) {
+    echo "skip loopback tcp listener unavailable: $errstr";
+    return;
+}
+fclose($probe);
+?>
 --FILE--
 <?php
 require __DIR__ . '/server_websocket_wire_helper.inc';
@@ -11,21 +23,20 @@ function king_websocket_644_assert(bool $condition, string $message): void
     }
 }
 
-function king_websocket_644_pick_port(): int
+function king_websocket_644_run_node_phase(string $nodeId, ?int $port, int $peerCount): array
 {
-    return random_int(40000, 49999);
-}
-
-function king_websocket_644_run_node_phase(string $nodeId, int $port, int $peerCount): array
-{
-    $server = king_server_websocket_wire_start_server('oo-scheduling-load', $peerCount, $port);
+    $server = $port === null
+        ? king_server_websocket_wire_start_server('oo-scheduling-load', $peerCount)
+        : king_server_websocket_wire_start_server('oo-scheduling-load', $peerCount, $port);
+    $activePort = (int) ($server['port'] ?? 0);
+    king_websocket_644_assert($activePort > 0, $nodeId . ': websocket server did not publish a valid port');
     $clients = [];
     $capture = [];
     $rounds = 4;
 
     try {
         for ($i = 0; $i < $peerCount; $i++) {
-            $url = 'ws://127.0.0.1:' . $port . '/cluster?node=' . $nodeId . '&peer=' . $i;
+            $url = 'ws://127.0.0.1:' . $activePort . '/cluster?node=' . $nodeId . '&peer=' . $i;
             $clients[$i] = king_server_websocket_wire_connect_retry($url, 5000);
             king_websocket_644_assert(
                 king_client_websocket_send($clients[$i], $nodeId . '-ready-' . $i) === true,
@@ -116,7 +127,7 @@ function king_websocket_644_run_node_phase(string $nodeId, int $port, int $peerC
     );
 
     foreach (range(0, $peerCount - 1) as $i) {
-        $expectedUrl = 'ws://127.0.0.1:' . $port . '/cluster?node=' . $nodeId . '&peer=' . $i;
+        $expectedUrl = 'ws://127.0.0.1:' . $activePort . '/cluster?node=' . $nodeId . '&peer=' . $i;
         king_websocket_644_assert(
             ($accepted[$i]['id'] ?? '') === $expectedUrl,
             $nodeId . ': accepted URL drifted for peer ' . $i
@@ -124,17 +135,16 @@ function king_websocket_644_run_node_phase(string $nodeId, int $port, int $peerC
     }
 
     return [
+        'port' => $activePort,
         'capture' => $capture,
         'connection_ids' => $connectionIds,
     ];
 }
 
 $peerCount = 5;
-$sharedPort = king_websocket_644_pick_port();
-
-$nodeA = king_websocket_644_run_node_phase('node-a', $sharedPort, $peerCount);
+$nodeA = king_websocket_644_run_node_phase('node-a', null, $peerCount);
 usleep(200000);
-$nodeB = king_websocket_644_run_node_phase('node-b', $sharedPort, $peerCount);
+$nodeB = king_websocket_644_run_node_phase('node-b', (int) ($nodeA['port'] ?? 0), $peerCount);
 
 $intersection = array_values(array_intersect($nodeA['connection_ids'], $nodeB['connection_ids']));
 king_websocket_644_assert(
