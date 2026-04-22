@@ -64,13 +64,4 @@ return [
         'temporary' => true,
         'expiry_issue' => '#Q-9',
     ],
-    'infra/scripts/quiche-workspace.Cargo.lock' => [
-        'kind' => 'cargo_lock',
-        'context' => 'legacy_quiche_workspace_guard_fixture',
-        'purpose' => 'Quarantined legacy lock name used by product-path guards to prevent Quiche/Cargo bootstrap regression.',
-        'product_bootstrap' => false,
-        'active_product_path' => false,
-        'temporary' => true,
-        'expiry_issue' => '#Q-9',
-    ],
 ];

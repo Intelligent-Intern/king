@@ -84,12 +84,5 @@ return [
             'path' => 'pinned_lsquic_dependency_lock',
             'capabilities' => [],
         ],
-        'infra/scripts/quiche-workspace.Cargo.lock' => [
-            'target' => 'infra/scripts/lsquic-bootstrap.lock',
-            'helper' => 'king-http3-test-helper-provenance',
-            'path' => 'pinned_lsquic_dependency_lock',
-            'capabilities' => [],
-            'handoff_issue' => '#Q-9',
-        ],
     ],
 ];

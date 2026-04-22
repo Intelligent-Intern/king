@@ -9,9 +9,9 @@ Use it through the wrapper:
 ./benchmarks/run-canonical.sh
 ```
 
-The wrapper loads the built extension, configures the same quiche runtime
-environment as the canonical PHPT flow, and enables the local config override
-policy needed by the measured runtime slices.
+The wrapper loads the built extension and enables the local config override
+policy needed by the measured runtime slices. It does not require a Rust,
+Cargo, or Quiche runtime environment.
 
 ## Covered Cases
 

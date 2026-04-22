@@ -8,6 +8,10 @@ $deleted = [
     $root . '/infra/scripts/bootstrap-quiche.sh',
     $root . '/infra/scripts/check-quiche-bootstrap.sh',
     $root . '/infra/scripts/ensure-quiche-toolchain.sh',
+    $root . '/infra/scripts/cargo-build-compat.sh',
+    $root . '/infra/scripts/quiche-bootstrap.lock',
+    $root . '/infra/scripts/quiche-workspace.Cargo.lock',
+    $root . '/extension/config.m4.full',
 ];
 $output = [];
 $status = 1;
@@ -21,6 +25,10 @@ foreach ($deleted as $path) {
 }
 ?>
 --EXPECT--
+bool(true)
+bool(true)
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)

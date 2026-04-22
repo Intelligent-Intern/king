@@ -193,7 +193,7 @@ Goal:
 
 Checklist:
 - [x] Remove `extension/src/**/quiche_loader.inc` and fail closed without a Quiche loader fallback.
-- [ ] Remove or replace Quiche-specific build scripts, locks, and docs.
+- [x] Remove or replace Quiche-specific build scripts, locks, and docs.
 - [ ] Update `README.md`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `DEPENDENCY_PROVENANCE.md`, and `documentation/quic-and-tls.md`.
 - [ ] Mark remaining Quiche mentions as historical notes or remove them.
 - [ ] Extend artifact hygiene gate for Quiche/Cargo artifacts.

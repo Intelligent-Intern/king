@@ -25,7 +25,7 @@ if (!is_string($issues) || $issues === '') {
 foreach ([
     '### #Q-9 Remove Quiche From Source, Scripts, And Docs',
     '- Fully remove Quiche as an active dependency.',
-    '- [ ] Remove or replace Quiche-specific build scripts, locks, and docs.',
+    '- [x] Remove or replace Quiche-specific build scripts, locks, and docs.',
 ] as $needle) {
     if (!str_contains($issues, $needle)) {
         king_http3_expiry_fail('expiry issue #Q-9 is missing required context: ' . $needle);
@@ -70,7 +70,7 @@ foreach ($classification as $path => $entry) {
     }
 }
 
-if ($kindCounts !== ['rust_test_peer' => 5, 'cargo_manifest' => 1, 'cargo_lock' => 2]) {
+if ($kindCounts !== ['rust_test_peer' => 5, 'cargo_manifest' => 1, 'cargo_lock' => 1]) {
     king_http3_expiry_fail('temporary Rust/Cargo inventory count drifted: ' . json_encode($kindCounts));
 }
 

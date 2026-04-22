@@ -44,7 +44,6 @@ $inventory = array_merge(
 foreach ([
     $testsDir . '/http3_ticket_server/Cargo.toml',
     $testsDir . '/http3_ticket_server/Cargo.lock',
-    $root . '/infra/scripts/quiche-workspace.Cargo.lock',
 ] as $path) {
     if (is_file($path)) {
         $inventory[] = king_http3_relative_path($root, $path);
@@ -121,4 +120,4 @@ foreach ($classification as $relativePath => $entry) {
 echo 'Classified ' . count($classification) . " HTTP/3 Rust/Cargo fixtures.\n";
 ?>
 --EXPECT--
-Classified 8 HTTP/3 Rust/Cargo fixtures.
+Classified 7 HTTP/3 Rust/Cargo fixtures.

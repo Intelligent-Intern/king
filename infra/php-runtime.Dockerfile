@@ -85,8 +85,7 @@ RUN mkdir -p /opt/king /workspace
 
 COPY --from=package /opt/king/package /opt/king/package
 
-ENV KING_QUICHE_LIBRARY=/opt/king/package/runtime/libquiche.so \
-    KING_QUICHE_SERVER=/opt/king/package/runtime/quiche-server \
+ENV KING_LSQUIC_LIBRARY=/opt/king/package/runtime/liblsquic.so \
     LD_LIBRARY_PATH=/opt/king/package/runtime
 
 RUN printf '%s\n' \

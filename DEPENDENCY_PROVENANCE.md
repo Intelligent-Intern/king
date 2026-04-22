@@ -29,27 +29,12 @@ pinned and hashed as separate rows.
 | LSQUIC submodule `src/liblsquic/ls-qpack` | `https://github.com/litespeedtech/ls-qpack/archive/1a27f87ece031f9e2fbfb29d5b3ef0a72e0a6bbb.tar.gz` | LSQUIC gitlink | `1a27f87ece031f9e2fbfb29d5b3ef0a72e0a6bbb` | `9187f00cb85885a48eeeafc72e67a54bb850d52ec108be587c11f5f180303057` | `709885` |
 | LSQUIC submodule `src/lshpack` | `https://github.com/litespeedtech/ls-hpack/archive/8905c024b6d052f083a3d11d0a169b3c2735c8a1.tar.gz` | LSQUIC gitlink | `8905c024b6d052f083a3d11d0a169b3c2735c8a1` | `07d8bf901bb1b15543f38eabd23938519e1210eebadb52f3d651d6ef130ef973` | `952726` |
 
-## Legacy Quiche Bootstrap Provenance Pins
-
-These values are kept only while the old Quiche lock/check pipeline still
-exists. They are not the target provenance for the active HTTP/3 product path.
-
-| Component | Pinned value | Lock source |
-| --- | --- | --- |
-| Quiche repository | `https://github.com/cloudflare/quiche.git` | `infra/scripts/quiche-bootstrap.lock` |
-| Quiche commit | `b30f9e76c32332aa35377dcb00f556626d47a841` | `infra/scripts/quiche-bootstrap.lock` |
-| BoringSSL commit | `f1c75347daa2ea81a941e953f2263e0a4d970c8d` | `infra/scripts/quiche-bootstrap.lock` |
-| Wirefilter commit | `6621924baf36f8ba7f603433dbe6f857ad3d5589` | `infra/scripts/quiche-bootstrap.lock` |
-
 ## Enforcement Surface
 
 - `infra/scripts/toolchain-lock.sh` exposes and verifies canonical PHP/Rust pins.
 - `infra/scripts/check-lsquic-bootstrap.sh` validates LSQUIC/BoringSSL archive
   pins, checksums, byte sizes, HTTPS source URLs, and documentation drift
   without network access.
-- `infra/scripts/check-quiche-bootstrap.sh` verifies legacy
-  quiche/boringssl/wirefilter lock provenance while the old bootstrap path
-  still exists.
 - `infra/scripts/check-dependency-provenance-doc.sh` hard-fails when this
   document diverges from the lock sources or the active HTTP/3 replacement
   section names Quiche as the product-path stack.

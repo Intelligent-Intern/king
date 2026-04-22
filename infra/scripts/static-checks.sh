@@ -80,6 +80,9 @@ infra/scripts/check-include-layout.sh
 echo "Checking deterministic LSQUIC bootstrap..."
 infra/scripts/check-lsquic-bootstrap.sh
 
+echo "Checking dependency provenance documentation..."
+infra/scripts/check-dependency-provenance-doc.sh
+
 echo "Checking deterministic HTTP/3 test helper build plan..."
 infra/scripts/build-http3-test-helpers.sh --verify-plan
 
