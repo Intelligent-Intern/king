@@ -1735,7 +1735,6 @@ onBeforeUnmount(() => {
 const showLobbyRequestBadge = computed(() => (
   showLobbyTab.value
   && lobbyQueue.value.length > 0
-  && activeTab.value !== 'lobby'
 ));
 const lobbyRequestBadgeText = computed(() => (
   lobbyQueue.value.length > 99 ? '99+' : String(lobbyQueue.value.length)
@@ -2946,7 +2945,6 @@ function buildLobbyJoinToastMessage(entries) {
 
 function notifyLobbyJoinRequests(entries) {
   if (!canModerate.value) return;
-  if (!rightSidebarCollapsed.value) return;
   const list = Array.isArray(entries) ? entries : [];
   if (list.length <= 0) return;
   lobbyNotificationState.toastMessage = buildLobbyJoinToastMessage(list);

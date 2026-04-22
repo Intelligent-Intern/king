@@ -653,10 +653,13 @@ test('admin creates/invites and admits user from lobby, both browsers share rost
 
     const lobbyBadge = adminPage.locator('.tab-lobby .tab-notice-badge');
     await expect(lobbyBadge).toBeVisible({ timeout: 30_000 });
+    await expect(lobbyBadge).toHaveText('1');
 
     await adminPage.locator('button.tab-lobby').click();
     const lobbyPanel = adminPage.locator('.panel-lobby.active');
     await expect(lobbyPanel).toBeVisible({ timeout: 10_000 });
+    await expect(lobbyBadge).toBeVisible({ timeout: 10_000 });
+    await expect(lobbyPanel.locator('.user-row', { hasText: 'Call User' })).toBeVisible({ timeout: 20_000 });
 
     const allowUserButton = lobbyPanel.locator('button[title="Allow user"]').first();
     await expect(allowUserButton).toBeVisible({ timeout: 20_000 });
