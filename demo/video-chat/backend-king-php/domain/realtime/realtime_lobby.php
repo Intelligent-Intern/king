@@ -212,9 +212,11 @@ function videochat_lobby_user_present_in_room(
  *   error: string
  * }
  */
-function videochat_lobby_decode_client_frame(string $frame): array
+function videochat_lobby_decode_client_frame(mixed $frame): array
 {
-    $decoded = json_decode($frame, true);
+    $decoded = function_exists('videochat_realtime_decode_client_payload')
+        ? videochat_realtime_decode_client_payload($frame)
+        : (is_string($frame) ? json_decode($frame, true) : (is_array($frame) ? $frame : null));
     if (!is_array($decoded)) {
         return [
             'ok' => false,

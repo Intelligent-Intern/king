@@ -35,6 +35,16 @@ why it exists, how it works, and how it is used. The reference chapters list
 the public surface directly. The example guides show one complete operational
 story at a time so the reader can see how the parts fit together in practice.
 
+## Realtime Transport Note
+
+The demo realtime gateways (`/ws` and `/sfu`) support dual transport:
+
+- `json` (default and backward-compatible)
+- `iibin` (binary frame transport)
+
+Both endpoints accept `transport=iibin|json`; invalid values fall back to
+`json`, and IIBIN frames are also auto-detected by header.
+
 ## Table Of Contents
 
 ### Part I: Foundations
@@ -50,8 +60,8 @@ together.
 | [Glossary](./glossary.md) | Plain-language definitions for recurring technical terms. | Read when a term is unfamiliar, or once up front. |
 | [Platform Model](./platform-model.md) | How sessions, streams, responses, config, storage, orchestration, telemetry, and operations fit together. | Read when you want the whole system picture. |
 | [IIBIN](./iibin.md) | Binary schema system, encode/decode, compatibility. | Read when encoding binary data. |
-| [Protobuf](./protobuf.md) | Batch encoding, varint optimization, WebSocket speedups. | Read when tuning performance. |
-| [GossipMesh](./gossipmesh.md) | Decentralized SFU for 100+ participants. | Read when building video calls. |
+| [Protobuf](./protobuf.md) | Batch encoding, varint optimization, and dual-transport WebSocket framing (`json` + `iibin`). | Read when tuning performance. |
+| [GossipMesh](./gossipmesh.md) | Decentralized SFU for 100+ participants, including `/ws` + `/sfu` transport behavior. | Read when building video calls. |
 | [Configuration Handbook](./configuration-handbook.md) | How runtime config and deployment config work, how namespacing is used, and how changes are applied safely. | Read before tuning any subsystem. |
 | [Solution Blueprints](./solution-blueprints.md) | Three concrete starting paths, from one-node service to a full chat and video platform. | Read when you want to pick a deployment shape quickly. |
 

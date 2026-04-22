@@ -2144,6 +2144,24 @@ TEST $file
             return 'SKIPPED';
         }
 
+        // Auto-skip tests that require pcntl if pcntl extension is not available
+        if (!extension_loaded('pcntl')) {
+            $test_content = file_get_contents($tested_file);
+            if (
+                str_contains($test_content, "extension_loaded('pcntl')") ||
+                str_contains($test_content, 'extension_loaded("pcntl")') ||
+                str_contains($test_content, 'pcntl_signal') ||
+                str_contains($test_content, 'pcntl_fork') ||
+                str_contains($test_content, 'pcntl_waitpid') ||
+                str_contains($test_content, '!function_exists(\'pcntl') ||
+                str_contains($test_content, '!function_exists("pcntl')
+            ) {
+                show_result('SKIP', $tested, $tested_file, 'reason: pcntl extension required', $temp_filenames);
+                $junit->markTestAs('SKIP', $shortname, $tested, null, 'pcntl extension required');
+                return 'SKIPPED';
+            }
+        }
+
 
         if (!strncasecmp('info', $output, 4) && preg_match('/^info\s*(.+)/i', $output, $m)) {
             $info = " (info: $m[1])";
