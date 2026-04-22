@@ -732,4 +732,211 @@ fail_cleanup:
     RETURN_THROWS();
 }
 
+/*
+ * Decodes one unsigned varint from a bounded buffer.
+ * Returns 1 on success and advances `*cursor`, otherwise returns 0.
+ */
+static zend_bool king_websocket_server_decode_varint(
+    const unsigned char **cursor,
+    const unsigned char *end,
+    uint64_t *value_out
+)
+{
+    uint64_t value = 0;
+    int shift = 0;
+    const unsigned char *ptr = *cursor;
+    int i;
+
+    for (i = 0; i < 10; ++i) {
+        unsigned char byte;
+
+        if (ptr >= end) {
+            return 0;
+        }
+
+        byte = *ptr++;
+        value |= ((uint64_t) (byte & 0x7FU)) << shift;
+        if ((byte & 0x80U) == 0) {
+            *cursor = ptr;
+            *value_out = value;
+            return 1;
+        }
+
+        shift += 7;
+    }
+
+    return 0;
+}
+
+/*
+ * Builds one server→client WebSocket frame header (no masking).
+ * Returns header length (2, 4, or 10 bytes).
+ */
+static size_t king_ws_build_server_frame_header(
+    unsigned char *header,
+    unsigned char opcode,
+    size_t payload_len
+)
+{
+    size_t header_len = 0;
+
+    header[header_len++] = (unsigned char) (0x80U | (opcode & 0x0FU));
+
+    if (payload_len <= 125) {
+        header[header_len++] = (unsigned char) payload_len;
+        return header_len;
+    }
+
+    if (payload_len <= 0xFFFF) {
+        header[header_len++] = 126;
+        header[header_len++] = (unsigned char) ((payload_len >> 8) & 0xFFU);
+        header[header_len++] = (unsigned char) (payload_len & 0xFFU);
+        return header_len;
+    }
+
+    header[header_len++] = 127;
+    {
+        uint64_t ext = (uint64_t) payload_len;
+        size_t i;
+        for (i = 0; i < 8; ++i) {
+            header[header_len++] = (unsigned char) ((ext >> ((7 - i) * 8)) & 0xFFU);
+        }
+    }
+
+    return header_len;
+}
+
+/*
+ * Broadcasts a varint-length-prefixed batch by pre-framing all records once
+ * and scattering one contiguous buffer to each live peer.
+ */
+static zend_result king_websocket_server_broadcast_batch(
+    king_ws_server_object *intern,
+    zend_string *encoded_batch,
+    const char *function_name
+)
+{
+    const unsigned char *cursor;
+    const unsigned char *end;
+    smart_str framed = {0};
+    zval *entry;
+
+    if (intern->closed) {
+        king_websocket_server_set_errorf(
+            "%s() cannot run on a stopped WebSocket server.",
+            function_name
+        );
+        zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+        return FAILURE;
+    }
+
+    if (encoded_batch == NULL || ZSTR_LEN(encoded_batch) == 0) {
+        king_websocket_server_set_errorf(
+            "%s() requires a non-empty encoded batch.",
+            function_name
+        );
+        zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", king_get_error());
+        return FAILURE;
+    }
+
+    cursor = (const unsigned char *) ZSTR_VAL(encoded_batch);
+    end = cursor + ZSTR_LEN(encoded_batch);
+
+    /*
+     * Pre-frame all records once. The encoded batch already carries record
+     * boundaries, so we can preserve each payload and emit one binary frame.
+     */
+    smart_str_alloc(&framed, ZSTR_LEN(encoded_batch) + 256, 0);
+    while (cursor < end) {
+        uint64_t record_len = 0;
+        unsigned char header[10];
+        size_t header_len;
+
+        if (!king_websocket_server_decode_varint(&cursor, end, &record_len)) {
+            smart_str_free(&framed);
+            king_websocket_server_set_errorf(
+                "%s() received an invalid encoded batch prefix.",
+                function_name
+            );
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", king_get_error());
+            return FAILURE;
+        }
+
+        if (record_len == 0 || cursor + record_len > end) {
+            smart_str_free(&framed);
+            king_websocket_server_set_errorf(
+                "%s() received a truncated encoded batch payload.",
+                function_name
+            );
+            zend_throw_exception_ex(king_ce_validation_exception, 0, "%s", king_get_error());
+            return FAILURE;
+        }
+
+        header_len = king_ws_build_server_frame_header(header, 0x2U, (size_t) record_len);
+        smart_str_appendl(&framed, (const char *) header, header_len);
+        smart_str_appendl(&framed, (const char *) cursor, (size_t) record_len);
+        cursor += record_len;
+    }
+
+    if (framed.s == NULL || ZSTR_LEN(framed.s) == 0) {
+        smart_str_free(&framed);
+        king_set_error("");
+        return SUCCESS;
+    }
+
+    smart_str_0(&framed);
+    king_websocket_server_registry_prune_closed(intern);
+
+    ZEND_HASH_FOREACH_VAL(&intern->connections, entry)
+    {
+        king_ws_state *state = Z_TYPE_P(entry) == IS_PTR
+            ? (king_ws_state *) Z_PTR_P(entry)
+            : NULL;
+
+        if (state == NULL || state->closed || state->state == KING_WS_STATE_CLOSED || state->transport_stream == NULL) {
+            continue;
+        }
+
+        {
+            const char *buffer = ZSTR_VAL(framed.s);
+            size_t remaining = ZSTR_LEN(framed.s);
+            size_t written = 0;
+
+            while (written < remaining) {
+                ssize_t chunk = php_stream_write(
+                    state->transport_stream,
+                    buffer + written,
+                    remaining - written
+                );
+
+                if (chunk <= 0) {
+                    if (state->closed || state->state == KING_WS_STATE_CLOSED) {
+                        if (EG(exception) != NULL) {
+                            zend_clear_exception();
+                        }
+                        break;
+                    }
+
+                    smart_str_free(&framed);
+                    king_websocket_server_registry_prune_closed(intern);
+                    king_websocket_server_set_errorf(
+                        "%s() failed to write the encoded batch to an active peer.",
+                        function_name
+                    );
+                    zend_throw_exception_ex(king_ce_runtime_exception, 0, "%s", king_get_error());
+                    return FAILURE;
+                }
+
+                written += (size_t) chunk;
+            }
+        }
+    }
+    ZEND_HASH_FOREACH_END();
+
+    smart_str_free(&framed);
+    king_websocket_server_registry_prune_closed(intern);
+    king_set_error("");
+    return SUCCESS;
+}
+
 #include "websocket_server_object/dispatch.inc"

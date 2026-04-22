@@ -19,6 +19,10 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_broa
     ZEND_ARG_TYPE_INFO(0, payload, IS_STRING, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_broadcastBatch, 0, 1, IS_VOID, 0)
+    ZEND_ARG_TYPE_INFO(0, encodedBatch, IS_STRING, 0)
+ZEND_END_ARG_INFO()
+
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_King_WebSocket_Server_stop, 0, 0, IS_VOID, 0)
 ZEND_END_ARG_INFO()
 
@@ -147,6 +151,27 @@ PHP_METHOD(King_WebSocket_Server, broadcastBinary)
     }
 }
 
+PHP_METHOD(King_WebSocket_Server, broadcastBatch)
+{
+    zend_string *encoded_batch;
+    king_ws_server_object *intern;
+
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+        Z_PARAM_STR(encoded_batch)
+    ZEND_PARSE_PARAMETERS_END();
+
+    intern = php_king_ws_server_obj_from_zend(Z_OBJ_P(ZEND_THIS));
+    if (
+        king_websocket_server_broadcast_batch(
+            intern,
+            encoded_batch,
+            "WebSocket\\Server::broadcastBatch"
+        ) != SUCCESS
+    ) {
+        RETURN_THROWS();
+    }
+}
+
 PHP_METHOD(King_WebSocket_Server, stop)
 {
     king_ws_server_object *intern;
@@ -180,6 +205,7 @@ const zend_function_entry king_ws_server_class_methods[] = {
     PHP_ME(King_WebSocket_Server, sendBinary, arginfo_class_King_WebSocket_Server_sendBinary, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Server, broadcast, arginfo_class_King_WebSocket_Server_broadcast, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Server, broadcastBinary, arginfo_class_King_WebSocket_Server_broadcastBinary, ZEND_ACC_PUBLIC)
+    PHP_ME(King_WebSocket_Server, broadcastBatch, arginfo_class_King_WebSocket_Server_broadcastBatch, ZEND_ACC_PUBLIC)
     PHP_ME(King_WebSocket_Server, stop, arginfo_class_King_WebSocket_Server_stop, ZEND_ACC_PUBLIC)
     PHP_FE_END
 };
