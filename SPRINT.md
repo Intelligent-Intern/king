@@ -104,7 +104,7 @@ Checklist:
 - [x] Add Playwright journey: chat text, emoji, unread badge, attachment, and post-call read-only archive.
 - [x] Add Playwright journey: mobile call creation/editing with internal participant add.
 - [x] Add Playwright journey: websocket interruption, reconnect, room resync, and media/control recovery.
-- [ ] Add release gate that fails when UI parity matrix or core video journeys are not covered.
+- [x] Add release gate that fails when UI parity matrix or core video journeys are not covered.
 
 Done:
-- [ ] E2E journeys are deterministic enough to gate release readiness.
+- [x] E2E journeys are deterministic enough to gate release readiness.
