@@ -435,6 +435,17 @@
             </label>
           </section>
 
+          <section v-if="composeState.mode === 'edit'" class="calls-toggle-row">
+            <label class="calls-checkbox-row">
+              <input
+                v-model="composeState.replaceParticipants"
+                type="checkbox"
+                @change="handleReplaceParticipantsToggle"
+              />
+              <span>Replace participant list during edit</span>
+            </label>
+          </section>
+
           <section v-if="shouldSendParticipants" class="calls-participants-grid">
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
@@ -1759,6 +1770,8 @@ const composeState = reactive({
   roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
+  replaceParticipants: false,
+  participantsReady: false,
   submitting: false,
   error: '',
 });
@@ -1792,7 +1805,9 @@ const composeSubmitLabel = computed(() => {
   return 'Create call';
 });
 
-const shouldSendParticipants = computed(() => composeState.mode !== 'edit');
+const shouldSendParticipants = computed(
+  () => composeState.mode !== 'edit' || composeState.replaceParticipants,
+);
 
 function currentSessionUserId() {
   const id = Number(sessionState.userId || 0);
@@ -1844,6 +1859,8 @@ function resetComposeModal() {
   composeState.title = '';
   composeState.accessMode = 'invite_only';
   composeState.roomId = 'lobby';
+  composeState.replaceParticipants = false;
+  composeState.participantsReady = false;
   composeState.submitting = false;
   composeState.error = '';
   composeParticipants.loading = false;
@@ -1873,14 +1890,88 @@ function openCompose(mode, call = null) {
     composeState.roomId = String(call.room_id || 'lobby');
     composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
     composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
+    seedComposeParticipantsFromCall(call);
+    void loadEditableCallParticipants(composeState.callId);
   } else {
     seedComposeWindow(mode);
+    composeState.replaceParticipants = true;
     composeExternalRows.value = [nextExternalRow()];
   }
 
   if (shouldSendParticipants.value) {
     void loadComposeParticipants();
   }
+}
+
+function seedComposeParticipantsFromCall(call) {
+  const participants = call?.participants || {};
+  const hasDetailedParticipants = Array.isArray(participants.internal) || Array.isArray(participants.external);
+  if (!hasDetailedParticipants) {
+    return false;
+  }
+
+  const ownUserId = currentSessionUserId();
+  const internalRows = Array.isArray(participants.internal) ? participants.internal : [];
+  const externalRows = Array.isArray(participants.external) ? participants.external : [];
+  const selectedIds = [];
+  const seen = new Set();
+
+  for (const participant of internalRows) {
+    const id = Number(participant?.user_id ?? participant?.id ?? 0);
+    if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    selectedIds.push(id);
+  }
+
+  composeSelectedUserIds.value = selectedIds;
+  composeExternalRows.value = externalRows.map((participant) => ({
+    ...nextExternalRow(),
+    display_name: String(participant?.display_name || ''),
+    email: String(participant?.email || ''),
+  }));
+  composeState.participantsReady = true;
+  return true;
+}
+
+async function loadEditableCallParticipants(callId) {
+  const normalizedCallId = String(callId || '').trim();
+  if (normalizedCallId === '') return false;
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
+    if (
+      composeState.open
+      && composeState.mode === 'edit'
+      && composeState.callId === normalizedCallId
+      && payload?.call
+    ) {
+      return seedComposeParticipantsFromCall(payload.call);
+    }
+  } catch {
+    // Metadata edits still work; participant replacement is blocked until details load.
+  }
+  return false;
+}
+
+async function handleReplaceParticipantsToggle() {
+  if (!shouldSendParticipants.value) {
+    composeState.error = '';
+    return;
+  }
+
+  composeState.error = '';
+  if (composeState.mode === 'edit' && !composeState.participantsReady) {
+    const loaded = await loadEditableCallParticipants(composeState.callId);
+    if (!loaded) {
+      composeState.replaceParticipants = false;
+      composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+      return;
+    }
+  }
+
+  void loadComposeParticipants();
 }
 
 function closeCompose() {
@@ -2058,6 +2149,11 @@ async function submitCompose() {
   };
 
   if (shouldSendParticipants.value) {
+    if (composeState.mode === 'edit' && !composeState.participantsReady) {
+      composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+      return;
+    }
+
     const normalizedExternal = normalizeExternalRows();
     if (!normalizedExternal.ok) {
       composeState.error = normalizedExternal.error;

@@ -10,6 +10,7 @@
     "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
     "test:contract:participant-roster": "node tests/contract/participant-roster-stability-contract.mjs",
     "test:contract:admin-owner-rights": "node tests/contract/admin-owner-rights-contract.mjs",
+    "test:contract:user-dashboard-participants": "node tests/contract/user-dashboard-participants-contract.mjs",
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "test:e2e:ui-parity": "playwright test tests/e2e/auth-navigation.spec.js tests/e2e/login-backend-contract.spec.js tests/e2e/ui-parity-journeys.spec.js tests/e2e/lobby-admission.spec.js tests/e2e/chat-attachments.spec.js tests/e2e/chat-archive.spec.js tests/e2e/chat-activity-matrix.spec.js tests/e2e/call-layout-strategies.spec.js",

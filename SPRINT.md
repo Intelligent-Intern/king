@@ -88,7 +88,7 @@ Goal:
 - Desktop, tablet, and mobile call management use the same product flows and the same established visual system.
 
 Checklist:
-- [ ] Mobile user call creation/editing can add internal participants.
+- [x] Mobile user call creation/editing can add internal participants.
 - [ ] Remove the obsolete `Room name` field from create/edit call modal flows.
 - [ ] Keep mini-video layout portrait-oriented and available on tablet/mobile with above/below-main toggle controls.
 - [ ] Move activity strategy controls into the left sidebar call-settings area using the existing select/control styling.
