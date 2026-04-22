@@ -27,7 +27,7 @@ Checklist:
 - [x] Document checksums and sources in `DEPENDENCY_PROVENANCE.md`.
 - [x] Create a new bootstrap lockfile, for example `infra/scripts/lsquic-bootstrap.lock`.
 - [x] Register old `quiche-bootstrap.lock` and `quiche-workspace.Cargo.lock` as Quiche artifacts to remove.
-- [ ] Add offline/CI validation for pins and checksums.
+- [x] Add offline/CI validation for pins and checksums.
 
 Pin Decision:
 

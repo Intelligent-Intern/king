@@ -44,6 +44,9 @@ exists. They are not the target provenance for the active HTTP/3 product path.
 ## Enforcement Surface
 
 - `infra/scripts/toolchain-lock.sh` exposes and verifies canonical PHP/Rust pins.
+- `infra/scripts/check-lsquic-bootstrap.sh` validates LSQUIC/BoringSSL archive
+  pins, checksums, byte sizes, HTTPS source URLs, and documentation drift
+  without network access.
 - `infra/scripts/check-quiche-bootstrap.sh` verifies quiche/boringssl/wirefilter
   lock provenance before build work.
 - `infra/scripts/check-dependency-provenance-doc.sh` hard-fails when this

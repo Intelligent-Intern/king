@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock"
 QUICHE_LOCK="${SCRIPT_DIR}/quiche-bootstrap.lock"
+LSQUIC_CHECK="${SCRIPT_DIR}/check-lsquic-bootstrap.sh"
 DOC_FILE="${ROOT_DIR}/DEPENDENCY_PROVENANCE.md"
 
 if [[ ! -f "${TOOLCHAIN_LOCK}" ]]; then
@@ -15,6 +16,11 @@ fi
 
 if [[ ! -f "${QUICHE_LOCK}" ]]; then
     echo "Missing quiche bootstrap lock file: ${QUICHE_LOCK}" >&2
+    exit 1
+fi
+
+if [[ ! -x "${LSQUIC_CHECK}" ]]; then
+    echo "Missing executable LSQUIC bootstrap checker: ${LSQUIC_CHECK}" >&2
     exit 1
 fi
 
@@ -50,5 +56,7 @@ require_literal "${KING_QUICHE_REPO_URL:-}" "KING_QUICHE_REPO_URL"
 require_literal "${KING_QUICHE_COMMIT:-}" "KING_QUICHE_COMMIT"
 require_literal "${KING_QUICHE_BORINGSSL_COMMIT:-}" "KING_QUICHE_BORINGSSL_COMMIT"
 require_literal "${KING_QUICHE_WIREFILTER_COMMIT:-}" "KING_QUICHE_WIREFILTER_COMMIT"
+
+"${LSQUIC_CHECK}"
 
 echo "Dependency provenance doc is in sync with lock files."
