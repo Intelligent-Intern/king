@@ -4,11 +4,8 @@
  * PROJECT:    king
  *
  * PURPOSE:
- * Minimal live HTTP/3 client runtime for the active runtime. The
- * implementation keeps the extension free of a hard libquiche dependency by
- * loading the bundled/system libquiche at runtime, then driving the direct
- * one-shot and multi-request HTTPS-over-QUIC leaves with the existing King
- * config snapshot and normalized response contract.
+ * Active HTTP/3 client runtime backed by LSQUIC. Builds without the LSQUIC
+ * backend fail closed instead of loading a Quiche fallback at runtime.
  * =========================================================================
  */
 
@@ -375,9 +372,6 @@ static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runt
 
 
 #include "http3/errors_and_validation.inc"
-#if !defined(KING_HTTP3_BACKEND_LSQUIC)
-#include "http3/quiche_loader.inc"
-#endif
 #include "http3/lsquic_loader.inc"
 #include "http3/lsquic_stream_runtime.inc"
 #include "http3/lsquic_option_diagnostics.inc"

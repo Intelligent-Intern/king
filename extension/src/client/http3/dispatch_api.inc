@@ -511,25 +511,15 @@ zend_result king_http3_request_dispatch(
         return FAILURE;
     }
 
-    if (
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
-        king_http3_ensure_lsquic_ready()
-#else
-        king_http3_ensure_quiche_ready()
-#endif
-        != SUCCESS) {
-#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (king_http3_ensure_lsquic_ready() != SUCCESS) {
         king_http3_throw_lsquic_unavailable(function_name);
-#else
-        king_http3_throw(
-            king_ce_protocol_exception,
-            "%s() HTTP/3 runtime is unavailable: %s",
-            function_name,
-            king_http3_quiche.load_error
-        );
-#endif
         return FAILURE;
     }
+#else
+    king_http3_throw_lsquic_build_required(function_name);
+    return FAILURE;
+#endif
 
     if (body_zval != NULL && Z_TYPE_P(body_zval) != IS_NULL) {
         body_string = zval_get_string(body_zval);
@@ -570,25 +560,15 @@ static zend_result king_http3_multi_request_dispatch(
         return FAILURE;
     }
 
-    if (
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
-        king_http3_ensure_lsquic_ready()
-#else
-        king_http3_ensure_quiche_ready()
-#endif
-        != SUCCESS) {
-#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (king_http3_ensure_lsquic_ready() != SUCCESS) {
         king_http3_throw_lsquic_unavailable(function_name);
-#else
-        king_http3_throw(
-            king_ce_protocol_exception,
-            "%s() HTTP/3 runtime is unavailable: %s",
-            function_name,
-            king_http3_quiche.load_error
-        );
-#endif
         return FAILURE;
     }
+#else
+    king_http3_throw_lsquic_build_required(function_name);
+    return FAILURE;
+#endif
 
     return
 #if defined(KING_HTTP3_BACKEND_LSQUIC)

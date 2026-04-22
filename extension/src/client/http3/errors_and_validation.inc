@@ -60,6 +60,17 @@ static void king_http3_throw_lsquic_unavailable(const char *function_name)
 }
 
 #if !defined(KING_HTTP3_BACKEND_LSQUIC)
+static void king_http3_throw_lsquic_build_required(const char *function_name)
+{
+    king_http3_throw(
+        king_ce_protocol_exception,
+        "%s() requires an LSQUIC-enabled HTTP/3 client build.",
+        function_name
+    );
+}
+#endif
+
+#if !defined(KING_HTTP3_BACKEND_LSQUIC)
 static void king_http3_format_close_reason(
     const uint8_t *reason_bytes,
     size_t reason_len,

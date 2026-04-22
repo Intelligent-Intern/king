@@ -6,6 +6,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
+$clientQuicheLoaderPath = $root . '/extension/src/client/http3/quiche_loader.inc';
 $serverPath = $root . '/extension/src/server/http3.c';
 $serverLoaderPath = $root . '/extension/src/server/http3/lsquic_loader.inc';
 $serverTlsPath = $root . '/extension/src/server/http3/lsquic_tls.inc';
@@ -159,6 +160,10 @@ $oneShotWireTest = king_http3_loader_require_file($oneShotWireTestPath, $errors)
 $ooWireTest = king_http3_loader_require_file($ooWireTestPath, $errors);
 $serverWireTest = king_http3_loader_require_file($serverWireTestPath, $errors);
 
+if (file_exists($clientQuicheLoaderPath)) {
+    $errors[] = 'Client HTTP/3 Quiche loader fallback must not exist: ' . $clientQuicheLoaderPath;
+}
+
 if ($errors !== []) {
     king_http3_loader_fail(implode(PHP_EOL, $errors));
 }
@@ -241,20 +246,10 @@ king_http3_loader_require_contains(
     'king_http3_header_t **headers_out',
     $errors
 );
-king_http3_loader_require_guarded_include(
-    'Client HTTP/3 source',
-    $client,
-    '#if !defined(KING_HTTP3_BACKEND_LSQUIC)',
-    '#include <quiche.h>',
-    $errors
-);
-king_http3_loader_require_guarded_include(
-    'Client HTTP/3 source',
-    $client,
-    '#if !defined(KING_HTTP3_BACKEND_LSQUIC)',
-    '#include "http3/quiche_loader.inc"',
-    $errors
-);
+
+if (str_contains($client, 'http3/quiche_loader.inc')) {
+    $errors[] = 'Client HTTP/3 source must not include the removed Quiche loader fallback.';
+}
 
 foreach ([
     'Client HTTP/3 source' => $client,
@@ -619,10 +614,20 @@ foreach ([
 foreach ([
     'king_http3_ensure_lsquic_ready()',
     'king_http3_throw_lsquic_unavailable(function_name)',
+    'king_http3_throw_lsquic_build_required(function_name)',
     'king_http3_execute_request_lsquic(',
     'king_http3_execute_multi_requests_lsquic(',
 ] as $needle) {
     king_http3_loader_require_contains('HTTP/3 dispatch backend selection', $dispatch, $needle, $errors);
+}
+
+foreach ([
+    'king_http3_ensure_quiche_ready',
+    'king_http3_quiche.load_error',
+] as $forbidden) {
+    if (str_contains($dispatch, $forbidden)) {
+        $errors[] = 'HTTP/3 dispatch backend selection must not retain Quiche loader fallback marker: ' . $forbidden;
+    }
 }
 
 foreach ([
@@ -687,6 +692,8 @@ if ($ensureBody === null) {
 foreach ([
     'king_http3_lsquic_loader_exception_class',
     'king_http3_throw_lsquic_unavailable',
+    'king_http3_throw_lsquic_build_required',
+    'requires an LSQUIC-enabled HTTP/3 client build.',
     'KING_HTTP3_LSQUIC_LOAD_ERROR_LIBRARY',
     'KING_HTTP3_LSQUIC_LOAD_ERROR_SYMBOL',
     'KING_HTTP3_LSQUIC_LOAD_ERROR_GLOBAL_INIT',
