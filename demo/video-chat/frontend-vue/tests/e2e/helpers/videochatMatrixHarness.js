@@ -10,6 +10,9 @@ export const matrixCallRef = 'room-matrix-ui';
 
 const helperDir = path.dirname(fileURLToPath(import.meta.url));
 const fixturesRoot = path.resolve(helperDir, '../../fixtures/chat');
+const generatedFixtures = new Map([
+  ['allowed/notes.md', Buffer.from('# Chat notes\n\n- first item\n- second item\n', 'utf8')],
+]);
 
 export const matrixUsers = {
   admin: {
@@ -65,7 +68,20 @@ export function fixturePath(group, name) {
   return path.join(fixturesRoot, group, name);
 }
 
+function fixtureKey(group, name) {
+  return `${group}/${name}`;
+}
+
+function fixtureBuffer(group, name) {
+  const generated = generatedFixtures.get(fixtureKey(group, name));
+  if (generated) return generated;
+
+  return fs.readFileSync(fixturePath(group, name));
+}
+
 export function fixtureExists(group, name) {
+  if (generatedFixtures.has(fixtureKey(group, name))) return true;
+
   return fs.existsSync(fixturePath(group, name));
 }
 
@@ -78,12 +94,12 @@ export function fixtureFileSpec(group, name, overrideName = name) {
   return {
     name: overrideName,
     mimeType: fixtureMime(overrideName),
-    buffer: fs.readFileSync(fixturePath(group, name)),
+    buffer: fixtureBuffer(group, name),
   };
 }
 
 export function fixtureBrowserPayload(group, name, overrideName = name) {
-  const buffer = fs.readFileSync(fixturePath(group, name));
+  const buffer = fixtureBuffer(group, name);
   return {
     name: overrideName,
     type: fixtureMime(overrideName),

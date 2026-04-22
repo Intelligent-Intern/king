@@ -5,7 +5,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LOCK_FILE="${SCRIPT_DIR}/lsquic-bootstrap.lock"
-DOC_FILE="${ROOT_DIR}/DEPENDENCY_PROVENANCE.md"
+DOC_FILE="${ROOT_DIR}/documentation/dependency-provenance.md"
 MODE="${1:---check}"
 
 fail() {

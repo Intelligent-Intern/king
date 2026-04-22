@@ -119,7 +119,7 @@ Rollback:
 
 ### Future Multi-Node Production
 
-Dieser Pfad ist erst zulaessig, wenn `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md` implementiert ist.
+Dieser Pfad ist erst zulaessig, wenn `documentation/dev/video-chat/multi-node-runtime-architecture.md` implementiert ist.
 
 Rollout:
 

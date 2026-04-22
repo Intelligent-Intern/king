@@ -3,12 +3,12 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REPO_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
-DOC="${ROOT_DIR}/OPS_HARDENING.md"
+DOC="${REPO_ROOT}/documentation/dev/video-chat/ops-hardening.md"
 CATALOG="${ROOT_DIR}/ops/metrics-alerts.catalog.json"
 BACKUP_SCRIPT="${ROOT_DIR}/scripts/backup-sqlite.sh"
 RESTORE_SCRIPT="${ROOT_DIR}/scripts/restore-sqlite.sh"
-README="${ROOT_DIR}/README.md"
-ISSUES="${REPO_ROOT}/ISSUES.md"
+README="${REPO_ROOT}/documentation/dev/video-chat.md"
+BACKLOG="${REPO_ROOT}/BACKLOG.md"
 SMOKE="${ROOT_DIR}/scripts/smoke.sh"
 COMPOSE="${ROOT_DIR}/docker-compose.v1.yml"
 RUN_DEV="${ROOT_DIR}/backend-king-php/run-dev.sh"
@@ -34,7 +34,7 @@ require_file "${CATALOG}"
 require_file "${BACKUP_SCRIPT}"
 require_file "${RESTORE_SCRIPT}"
 require_file "${README}"
-require_file "${ISSUES}"
+require_file "${BACKLOG}"
 require_file "${SMOKE}"
 require_file "${COMPOSE}"
 require_file "${RUN_DEV}"
@@ -128,12 +128,11 @@ row_count="$(sqlite3 "${restore_db}" 'SELECT COUNT(*) FROM restore_drill;' | tr 
 restored_integrity="$(sqlite3 "${restore_db}" 'PRAGMA integrity_check;' | tr -d '\r')"
 [[ "${restored_integrity}" == "ok" ]] || fail "restore drill integrity failed: ${restored_integrity}"
 
-require_text "${README}" 'OPS_HARDENING.md'
+require_text "${README}" 'documentation/dev/video-chat/ops-hardening.md'
 require_text "${README}" 'check-ops-hardening.sh'
 require_text "${SMOKE}" 'check-ops-hardening.sh'
-require_text "${ISSUES}" '### #17 Ops Hardening'
-require_text "${ISSUES}" '- [x] Restore-Skript + Restore-Drill dokumentieren.'
-require_text "${ISSUES}" '- [x] Zentrale Metrics/Logs/Alerts Pipeline verdrahten'
-require_text "${ISSUES}" '- [x] Rollout/Rollback-Runbook pro Deployment-Variante ergänzen.'
+require_text "${BACKLOG}" '### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness'
+require_text "${BACKLOG}" 'Correct live call and participant counts'
+require_text "${BACKLOG}" 'fresh production deploy is repeatable'
 
 printf '[ops-hardening] PASS\n'

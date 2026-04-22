@@ -4,13 +4,9 @@ This directory is the active build-out of a first-class **inference-serving**
 role on top of the King native runtime. It maps to tracker sections **V**
 (AI/SLM Platform) and **Z** (Inference Serving) in `READYNESS_TRACKER.md`.
 
-> The demo lives on branch `feature/rag-pipeline` (R-batch), extending
-> `feature/model-inference` (M-batch). The sprint backlog is in the root
-> `ISSUES.md` under **"M-batch: Model Inference"** (`#M-1` → `#M-18`) and
-> **"R-batch: RAG Pipeline"** (`#R-1` → `#R-16`). Tracker boxes in
-> `READYNESS_TRACKER.md` and `PROJECT_ASSESSMENT.md` are **not** ticked from
-> this branch; a post-merge sweep ticks W/X bullets whose contract test is
-> green on `main`.
+The landed local inference and RAG proof is recorded in
+`READYNESS_TRACKER.md`. Remaining distributed inference, model placement, and
+fine-tuning work lives in `BACKLOG.md` Batch 4.
 
 ---
 
@@ -116,7 +112,7 @@ four M-batch tests require the llama.cpp runtime). You can:
 | #M-15 | done | two-node failover compose + `failover-smoke.sh` |
 | #M-16 | done | transcript persistence + `GET /api/transcripts/{id}` |
 | #M-17 | done | 9-phase compose end-to-end `smoke.sh` |
-| #M-18 | done | this README + scope fences + ISSUES update |
+| #M-18 | done | this dev doc + scope fences + readiness update |
 
 **R-batch: RAG Pipeline (branch `feature/rag-pipeline`)**
 
@@ -466,8 +462,9 @@ end. None of them tick any tracker V/Z box from this branch.
 ## Layout
 
 ```
+documentation/dev/model-inference.md             # this file
+
 demo/model-inference/
-  README.md                                     # this file
   docker-compose.v1.yml                         # two-node compose (#M-15)
   contracts/v1/
     api-ws-contract.catalog.json                # canonical API + WS catalog (#M-3, R-14)
@@ -558,8 +555,8 @@ demo/model-inference/
 - `EPIC.md` — stable charter + non-negotiables
   (no-capability-claim-without-proof, no-simulated-as-real,
   no-contract-shrink).
-- `ISSUES.md` — active execution queue including the M-batch.
-- `PROJECT_ASSESSMENT.md` — what is verified now (post-merge sweep, not
+- `BACKLOG.md` — open model-placement, distributed inference, and fine-tuning work.
+- `documentation/project-assessment.md` — what is verified now (post-merge sweep, not
   here).
 - `READYNESS_TRACKER.md` — long-form closure tracker including V / W / X /
   Y / Z / AA sections this demo starts unfencing.

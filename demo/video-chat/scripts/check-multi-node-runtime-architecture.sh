@@ -2,9 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOC="${ROOT_DIR}/MULTI_NODE_RUNTIME_ARCHITECTURE.md"
-README="${ROOT_DIR}/README.md"
-ISSUES="${ROOT_DIR}/../../ISSUES.md"
+REPO_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
+DOC="${REPO_ROOT}/documentation/dev/video-chat/multi-node-runtime-architecture.md"
+README="${REPO_ROOT}/documentation/dev/video-chat.md"
+BACKLOG="${REPO_ROOT}/BACKLOG.md"
 SMOKE="${ROOT_DIR}/scripts/smoke.sh"
 
 fail() {
@@ -25,7 +26,7 @@ require_text() {
 
 require_file "${DOC}"
 require_file "${README}"
-require_file "${ISSUES}"
+require_file "${BACKLOG}"
 require_file "${SMOKE}"
 
 for marker in \
@@ -54,13 +55,10 @@ do
   require_text "${DOC}" "${marker}"
 done
 
-require_text "${README}" 'MULTI_NODE_RUNTIME_ARCHITECTURE.md'
+require_text "${README}" 'documentation/dev/video-chat/multi-node-runtime-architecture.md'
 require_text "${README}" 'check-multi-node-runtime-architecture.sh'
 require_text "${SMOKE}" 'check-multi-node-runtime-architecture.sh'
-require_text "${ISSUES}" '### #16 Multi-Node Runtime Architektur'
-require_text "${ISSUES}" '- [x] Zustandsmodell splitten'
-require_text "${ISSUES}" '- [x] Persistenzstrategie definieren'
-require_text "${ISSUES}" '- [x] Inter-Node Signaling/Coordination'
-require_text "${ISSUES}" '- [x] Rolloutplan mit Zero-Downtime-Migration dokumentieren.'
+require_text "${BACKLOG}" '### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness'
+require_text "${BACKLOG}" 'Keep Hetzner-specific discovery behind provider abstractions'
 
 printf '[multi-node-architecture] PASS\n'

@@ -12,10 +12,9 @@ load gate, deterministic module-order dispatcher, per-surface contract tests.
 - `#M-2` HTTP/WS request dispatcher wires focused modules in fixed order; a
   contract test asserts the order list.
 
-Everything below the M-1/M-2 line is not yet landed on this branch. Leaves
-`#M-3` .. `#M-17` each add one module, one contract, and one `<name>-contract.sh`
-before ticking forward. See `demo/model-inference/README.md` for the schedule
-and `ISSUES.md` for the live queue.
+The full model-inference proof is summarized in
+[`documentation/dev/model-inference.md`](./model-inference.md). Remaining
+distributed placement and fine-tuning work lives in `BACKLOG.md` Batch 4.
 
 ## Running It Locally
 
@@ -84,8 +83,9 @@ beyond loopback.
 
 ## Target-Shape Fences
 
-The backend README inherits every fence listed in the parent
-`demo/model-inference/README.md`. The most important one locally is this:
+The backend inherits every fence listed in
+[`documentation/dev/model-inference.md`](./model-inference.md). The most
+important one locally is this:
 
 > **Inference endpoints will not silently fall back to a mock model.** When
 > a leaf is not yet landed, the route returns `501 not_implemented` with an
@@ -95,8 +95,9 @@ The backend README inherits every fence listed in the parent
 ## Layout
 
 ```
+documentation/dev/model-inference-backend.md # this file
+
 backend-king-php/
-  README.md                       # this file
   Dockerfile                      # containerized backend (M-1 / M-7)
   run-dev.sh                      # local runner
   server.php                      # accept loop + bootstrap (M-1)

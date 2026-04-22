@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DECISION="${ROOT_DIR}/EDGE_DEPLOYMENT_DECISION.md"
+REPO_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
+DECISION="${REPO_ROOT}/documentation/dev/video-chat/edge-deployment.md"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.v1.yml"
 EDGE_DIR="${ROOT_DIR}/edge"
 

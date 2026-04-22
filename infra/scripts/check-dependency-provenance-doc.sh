@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock"
 LSQUIC_CHECK="${SCRIPT_DIR}/check-lsquic-bootstrap.sh"
-DOC_FILE="${ROOT_DIR}/DEPENDENCY_PROVENANCE.md"
+DOC_FILE="${ROOT_DIR}/documentation/dependency-provenance.md"
 
 if [[ ! -f "${TOOLCHAIN_LOCK}" ]]; then
     echo "Missing toolchain lock file: ${TOOLCHAIN_LOCK}" >&2

@@ -21,6 +21,12 @@ keep it nearby while reading. The glossary exists so the handbook can use
 technical language without assuming every reader already lives inside that
 language every day.
 
+## Developer Docs
+
+Repo-local demo and package notes live under [`dev/`](./dev/). Keep Markdown
+out of code, demo, package, infra, benchmark, and test directories; add or move
+developer documentation here instead.
+
 ## How To Read The Handbook
 
 If you are new to King, begin with [Getting Started](./getting-started.md).

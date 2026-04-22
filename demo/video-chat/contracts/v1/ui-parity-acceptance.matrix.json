@@ -188,7 +188,7 @@
     {
       "id": "chat_files_archive_activity",
       "status": "covered",
-      "readiness_refs": ["Z4 chat", "Z5 chat tab", "ISSUES #18", "ISSUES #19", "ISSUES #21"],
+      "readiness_refs": ["Z4 chat", "Z5 chat tab", "BACKLOG #Q-18", "BACKLOG #Q-19", "BACKLOG #Q-21"],
       "acceptance": [
         "Oversized paste becomes a safe text attachment instead of an inline websocket payload.",
         "Allowed images/docs are uploadable and unsafe binaries are rejected.",
@@ -215,7 +215,7 @@
     {
       "id": "activity_layout_strategy",
       "status": "covered",
-      "readiness_refs": ["ISSUES #20", "Z5 call layout", "Z4 reaction/activity"],
+      "readiness_refs": ["BACKLOG #Q-20", "Z5 call layout", "Z4 reaction/activity"],
       "acceptance": [
         "Admin-selected layout modes and activity strategies normalize deterministically.",
         "Active speaker/movement strategy drives main/mini participant selection within visible limits."

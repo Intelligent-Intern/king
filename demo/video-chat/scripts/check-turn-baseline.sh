@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BASELINE="${ROOT_DIR}/TURN_BASELINE.md"
+REPO_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
+BASELINE="${REPO_ROOT}/documentation/dev/video-chat/turn-baseline.md"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.v1.yml"
 DEPLOY_SCRIPT="${ROOT_DIR}/scripts/deploy.sh"
 GENERATOR="${ROOT_DIR}/scripts/generate-turn-ice-servers.php"

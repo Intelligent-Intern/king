@@ -23,7 +23,7 @@ Documentation policy for this README:
 
 - this is a living spec for the active video-call stack
 - update it on every commit that changes behavior, contracts, runtime paths, or UX flow
-- keep it aligned with `ISSUES.md`, `READYNESS_TRACKER.md`, and the active contract tests
+- keep it aligned with `SPRINT.md`, `READYNESS_TRACKER.md`, and the active contract tests
 
 Latest commit-level progress:
 
@@ -207,9 +207,9 @@ What is already working:
 What is still missing for robust production operation:
 
 - production TURN infrastructure still needs environment-specific NAT evidence; the repo provides an opt-in coturn baseline profile plus credential rotation tooling
-- multi-node implementation is not active yet; the binding state split, persistence, fanout, SFU, rollout, and rollback contract is in `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`
+- multi-node implementation is not active yet; the binding state split, persistence, fanout, SFU, rollout, and rollback contract is in `documentation/dev/video-chat/multi-node-runtime-architecture.md`
 - external secret management can still be moved out of local files; hardened deployments already fail closed on demo defaults and use mounted secret files
-- operational hardening is baseline-wired for SQLite backup/restore, central OTLP metrics/logs/alerts catalog, and rollout/rollback runbooks in `demo/video-chat/OPS_HARDENING.md`
+- operational hardening is baseline-wired for SQLite backup/restore, central OTLP metrics/logs/alerts catalog, and rollout/rollback runbooks in `documentation/dev/video-chat/ops-hardening.md`
 
 Edge deployment decision:
 
@@ -230,19 +230,19 @@ Secret-management baseline:
 - Local demo defaults remain available only outside hardened deployments.
 - `VIDEOCHAT_KING_ENV=production|staging` or `VIDEOCHAT_REQUIRE_SECRET_SOURCES=1` makes backend start fail closed on default demo credentials or enabled demo seed calls.
 - `VIDEOCHAT_DEMO_ADMIN_PASSWORD_FILE` and `VIDEOCHAT_DEMO_USER_PASSWORD_FILE` are supported for mounted secret files.
-- The runbook and static guard are in `demo/video-chat/SECRET_MANAGEMENT.md` and `bash demo/video-chat/scripts/check-secret-management.sh`.
+- The runbook and static guard are in `documentation/dev/video-chat/secret-management.md` and `bash demo/video-chat/scripts/check-secret-management.sh`.
 
 Multi-node runtime architecture:
 
 - Current compose remains a single-node dev/staging path.
-- The binding architecture and migration contract is `demo/video-chat/MULTI_NODE_RUNTIME_ARCHITECTURE.md`.
+- The binding architecture and migration contract is `documentation/dev/video-chat/multi-node-runtime-architecture.md`.
 - It defines the required split for Session/Auth, Call State, Roster/Presence, Realtime Fanout, SFU topology, shared SQL replacement for SQLite, inter-node bus topics, zero-downtime rollout, and rollback gates.
 - The static guard is `bash demo/video-chat/scripts/check-multi-node-runtime-architecture.sh`.
 
 Ops hardening baseline:
 
 - SQLite backups use `bash demo/video-chat/scripts/backup-sqlite.sh`; restores use `bash demo/video-chat/scripts/restore-sqlite.sh`.
-- The restore drill and rollout/rollback runbook are in `demo/video-chat/OPS_HARDENING.md`.
+- The restore drill and rollout/rollback runbook are in `documentation/dev/video-chat/ops-hardening.md`.
 - The K-01..K-15 / A-01..A-15 pipeline catalog is `demo/video-chat/ops/metrics-alerts.catalog.json`.
 - Backend HTTP/WS/SFU compose services accept OTLP collector binding through `VIDEOCHAT_OTEL_EXPORTER_ENDPOINT`.
 - Admin operations expose a provider-neutral infrastructure inventory at `GET /api/admin/infrastructure`.

@@ -2,11 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd "${ROOT_DIR}/../.." && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend-king-php"
-DOC="${ROOT_DIR}/SECRET_MANAGEMENT.md"
+DOC="${REPO_ROOT}/documentation/dev/video-chat/secret-management.md"
 SUPPORT="${BACKEND_DIR}/support/config_hardening.php"
 SERVER="${BACKEND_DIR}/server.php"
 DATABASE="${BACKEND_DIR}/support/database.php"
+DATABASE_SEED="${BACKEND_DIR}/support/database_demo_seed.php"
 CONTRACT="${BACKEND_DIR}/tests/config-hardening-contract.sh"
 
 fail() {
@@ -29,6 +31,7 @@ require_file "${DOC}"
 require_file "${SUPPORT}"
 require_file "${SERVER}"
 require_file "${DATABASE}"
+require_file "${DATABASE_SEED}"
 require_file "${CONTRACT}"
 
 for marker in \
@@ -58,8 +61,9 @@ done
 require_text "${SERVER}" 'videochat_config_hardening_report'
 require_text "${SERVER}" 'secret/config hardening failed'
 require_text "${DATABASE}" "require_once __DIR__ . '/config_hardening.php';"
-require_text "${DATABASE}" "videochat_config_secret_value('VIDEOCHAT_DEMO_ADMIN_PASSWORD', 'admin123')"
-require_text "${DATABASE}" "videochat_config_secret_value('VIDEOCHAT_DEMO_USER_PASSWORD', 'user123')"
+require_text "${DATABASE}" "require_once __DIR__ . '/database_demo_seed.php';"
+require_text "${DATABASE_SEED}" "videochat_config_secret_value('VIDEOCHAT_DEMO_ADMIN_PASSWORD', 'admin123')"
+require_text "${DATABASE_SEED}" "videochat_config_secret_value('VIDEOCHAT_DEMO_USER_PASSWORD', 'user123')"
 
 php -l "${SUPPORT}" >/dev/null
 bash -n "${CONTRACT}"

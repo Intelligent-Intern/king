@@ -397,7 +397,13 @@ It is supposed to look like one native system with a PHP-facing control surface.
 
 ## Documentation
 
-The handbook lives under [`documentation/`](documentation/README.md)
+Core documents:
+
+- [`EPIC.md`](EPIC.md): stable v1 charter and release exit criteria.
+- [`BACKLOG.md`](BACKLOG.md): open work split into release batches.
+- [`SPRINT.md`](SPRINT.md): active branch scope only.
+- [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md): completion log only.
+- [`documentation/`](documentation/README.md): handbook and developer docs.
 
 ## Build
 

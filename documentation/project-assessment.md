@@ -4,7 +4,7 @@
 > Scope: verified repo-local v1 state inside this repository
 > This file records what is actually verified now.
 > `README.md` stays product-level.
-> `ISSUES.md` is the single moving roadmap and execution queue.
+> `SPRINT.md` is the single moving roadmap and execution queue.
 > `READYNESS_TRACKER.md` is the long-form closure tracker.
 
 ## Executive Summary
@@ -18,7 +18,7 @@ The remaining gaps are no longer about broad runtime parity or placeholder
 surfaces inside the local tree. They are now concentrated in the deeper
 control-plane, telemetry, and fleet-behavior proof still listed below.
 
-The explicitly requested `S` repo-local execution batch in `ISSUES.md` is now
+The explicitly requested `S` repo-local execution batch in `SPRINT.md` is now
 exhausted on `develop/v1.0.3-beta`, including the distributed runtime and
 hardening closure leaves (`#1`, `#3`-`#19`), and the branch is in closeout/wait
 state for the next explicitly selected batch.
@@ -211,11 +211,11 @@ The model is now:
 
 - `EPIC.md`
   stable charter, pillars, and exit criteria
-- `ISSUES.md`
+- `SPRINT.md`
   the active executable open items distilled from the larger completion tracker
 - `READYNESS_TRACKER.md`
   the broad long-form completion checklist with verified checks and still-open closure gates
-- `PROJECT_ASSESSMENT.md`
+- `documentation/project-assessment.md`
   verified state and caveats
 
 If a task is broad, vague, or derivative, it does not belong in the active
@@ -229,11 +229,11 @@ Use the root documents like this:
   stable product description
 - `EPIC.md`
   stable charter and release bar
-- `ISSUES.md`
+- `SPRINT.md`
   single moving roadmap and open execution queue
 - `READYNESS_TRACKER.md`
   long-form completion tracker and broad closure reference
-- `PROJECT_ASSESSMENT.md`
+- `documentation/project-assessment.md`
   verified current state and caveats
 - `CONTRIBUTE`
   workflow and verification discipline

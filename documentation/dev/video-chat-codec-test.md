@@ -5,7 +5,7 @@ Standalone test for comparing the wavelet video codec implementations with live 
 ## Usage
 
 ```bash
-cd /Users/sasha/king/demo/video-chat/frontend-vue
+cd demo/video-chat/frontend-vue
 npx serve . -p 3000
 ```
 
