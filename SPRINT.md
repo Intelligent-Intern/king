@@ -93,7 +93,7 @@ Checklist:
 - [x] Keep mini-video layout portrait-oriented and available on tablet/mobile with above/below-main toggle controls.
 - [x] Move activity strategy controls into the left sidebar call-settings area using the existing select/control styling.
 - [x] Remove ad-hoc overlay, border, background, and color treatments that diverge from the current design system.
-- [ ] Ensure call settings width aligns with neighboring sidebar controls.
+- [x] Ensure call settings width aligns with neighboring sidebar controls.
 - [ ] Add responsive Playwright coverage for mobile call creation with participants, mini-video toggle, and call-settings strategy selection.
 
 Done:
