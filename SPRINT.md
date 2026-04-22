@@ -23,18 +23,18 @@ Goal:
 - Define the real media-security contract for video-chat so transport security, media-E2EE state, capability policy, and failure behavior are explicit and testable.
 
 Checklist:
-- [ ] Publish `demo/video-chat/contracts/v1/e2ee-session.contract.json`.
-- [ ] Publish `demo/video-chat/contracts/v1/protected-media-frame.contract.json`.
-- [ ] Pin participant key state, epoch semantics, sender key id, receiver expectations, replay inputs, error codes, and rekey transitions.
-- [ ] Explicitly distinguish `transport_only`, `protected_not_ready`, `media_e2ee_active`, `blocked_capability`, `rekeying`, and `decrypt_error`.
-- [ ] Define one deterministic capability negotiation policy for `required | preferred | disabled`.
-- [ ] Define one shared security model across native WebRTC and WLVC/SFU paths.
-- [ ] Add negative tests for unsupported capability, mixed rooms, invalid control state, downgrade attempts, and malformed protected frames.
-- [ ] Make README, runtime notes, UI state, and telemetry wording match the contract exactly.
-- [ ] Remove any “E2EE” wording from paths that are only DTLS/TLS protected.
+- [x] Publish `demo/video-chat/contracts/v1/e2ee-session.contract.json`.
+- [x] Publish `demo/video-chat/contracts/v1/protected-media-frame.contract.json`.
+- [x] Pin participant key state, epoch semantics, sender key id, receiver expectations, replay inputs, error codes, and rekey transitions.
+- [x] Explicitly distinguish `transport_only`, `protected_not_ready`, `media_e2ee_active`, `blocked_capability`, `rekeying`, and `decrypt_error`.
+- [x] Define one deterministic capability negotiation policy for `required | preferred | disabled`.
+- [x] Define one shared security model across native WebRTC and WLVC/SFU paths.
+- [x] Add negative tests for unsupported capability, mixed rooms, invalid control state, downgrade attempts, and malformed protected frames.
+- [x] Make README, runtime notes, UI state, and telemetry wording match the contract exactly.
+- [x] Remove any “E2EE” wording from paths that are only DTLS/TLS protected.
 
 Done:
-- [ ] Media security claims are contract-first, runtime-honest, and testable.
+- [x] Media security claims are contract-first, runtime-honest, and testable.
 
 ### #Q-23 Video-Chat Native And SFU Media E2EE Implementation
 
@@ -108,4 +108,3 @@ Checklist:
 
 Done:
 - [ ] E2E journeys are deterministic enough to gate release readiness.
-

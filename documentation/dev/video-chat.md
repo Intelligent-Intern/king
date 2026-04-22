@@ -17,6 +17,8 @@ Target architecture:
 - backend: `demo/video-chat/backend-king-php`
 - protocol catalog: `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`
 - WLVC frame wire contract: `demo/video-chat/contracts/v1/wlvc-frame.contract.json`
+- media security session contract: `demo/video-chat/contracts/v1/e2ee-session.contract.json`
+- protected media frame contract: `demo/video-chat/contracts/v1/protected-media-frame.contract.json`
 - transport payload format: `@intelligentintern/iibin` from `node_modules`
 
 Documentation policy for this README:
@@ -122,6 +124,9 @@ Current demo caveats:
 
 - login/user directory is persisted in SQLite (`KING_DEMO_DB_PATH`)
 - no durable room/message persistence across backend restart
+- current media security state is `transport_only` unless a runtime path explicitly
+  reaches `media_e2ee_active` from the media security contract; TLS, WSS, and
+  DTLS/SRTP wording must not be presented as media end-to-end protection
 - TURN relay setup is available through the opt-in `turn` compose profile; default local demo remains STUN-only unless `VITE_VIDEOCHAT_ICE_SERVERS` is set
 - no production moderation/audit policy
 - background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`

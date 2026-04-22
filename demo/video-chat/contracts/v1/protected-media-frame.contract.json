@@ -1,0 +1,118 @@
+{
+  "contract_name": "king-video-chat-protected-media-frame",
+  "contract_version": "v1.0.0",
+  "scope": "application-media-protection-envelope",
+  "wire_encoding": "typed_binary_envelope_v1",
+  "endianness": "big-endian",
+  "magic_ascii": "KPMF",
+  "version": 1,
+  "header": {
+    "min_length_bytes": 80,
+    "public_fields": [
+      { "name": "magic", "type": "u32", "required": true, "value_ascii": "KPMF" },
+      { "name": "version", "type": "u8", "required": true, "value": 1 },
+      { "name": "runtime_path", "type": "enum", "required": true, "values": ["webrtc_native", "wlvc_sfu"] },
+      { "name": "track_kind", "type": "enum", "required": true, "values": ["audio", "video", "data"] },
+      { "name": "frame_kind", "type": "enum", "required": true, "values": ["keyframe", "delta", "audio", "control"] },
+      { "name": "kex_suite", "type": "enum", "required": true, "values": ["x25519_hkdf_sha256_v1", "hybrid_x25519_mlkem768_hkdf_sha256_v1"] },
+      { "name": "media_suite", "type": "enum", "required": true, "values": ["aes_256_gcm_v1", "xchacha20_poly1305_v1"] },
+      { "name": "epoch", "type": "u64", "required": true, "min": 1 },
+      { "name": "sender_key_id", "type": "base64url", "required": true, "min_bits": 128 },
+      { "name": "sequence", "type": "u64", "required": true, "monotonic_per_sender_epoch": true },
+      { "name": "nonce", "type": "bytes", "required": true, "length_bytes": 24 },
+      { "name": "aad_length", "type": "u32", "required": true, "max": 4096 },
+      { "name": "ciphertext_length", "type": "u32", "required": true, "max": 16777216 },
+      { "name": "tag_length", "type": "u8", "required": true, "allowed": [16] }
+    ]
+  },
+  "associated_data": {
+    "required_fields": [
+      "contract_name",
+      "contract_version",
+      "call_id",
+      "room_id",
+      "participant_id",
+      "sender_user_id",
+      "device_id",
+      "runtime_path",
+      "track_id",
+      "track_kind",
+      "frame_kind",
+      "epoch",
+      "sender_key_id",
+      "sequence",
+      "kex_suite",
+      "media_suite"
+    ],
+    "max_bytes": 4096,
+    "canonicalization": "utf8_json_canonical_sorted_keys"
+  },
+  "payload": {
+    "plaintext_never_crosses_sfu": true,
+    "ciphertext_max_bytes": 16777216,
+    "auth_tag_bytes": 16,
+    "replay_window": "strict_monotonic_sequence_per_sender_key_id_epoch",
+    "decryption_output": "codec_frame_or_audio_unit_after_integrity_success_only"
+  },
+  "relay_visibility": {
+    "visible_to_sfu": [
+      "contract_name",
+      "contract_version",
+      "runtime_path",
+      "track_kind",
+      "frame_kind",
+      "epoch",
+      "sender_key_id",
+      "sequence",
+      "ciphertext_length",
+      "tag_length"
+    ],
+    "forbidden_to_sfu": [
+      "raw_media_key",
+      "private_key",
+      "shared_secret",
+      "plaintext_frame",
+      "decoded_audio",
+      "decoded_video"
+    ]
+  },
+  "parse_failures": [
+    { "id": "magic_mismatch", "error_code": "malformed_protected_frame" },
+    { "id": "version_unsupported", "error_code": "unsupported_capability" },
+    { "id": "aad_too_large", "error_code": "malformed_protected_frame" },
+    { "id": "ciphertext_too_large", "error_code": "malformed_protected_frame" },
+    { "id": "tag_length_invalid", "error_code": "malformed_protected_frame" },
+    { "id": "wrong_epoch", "error_code": "wrong_epoch" },
+    { "id": "wrong_key_id", "error_code": "wrong_key_id" },
+    { "id": "replay_detected", "error_code": "replay_detected" },
+    { "id": "integrity_failed", "error_code": "decrypt_failed" }
+  ],
+  "compatibility": {
+    "required_mode_plaintext_fallback_allowed": false,
+    "preferred_mode_plaintext_fallback_state": "transport_only",
+    "disabled_mode_required_state": "transport_only",
+    "mixed_room_required_mode_behavior": "blocked_capability"
+  },
+  "negative_test_vectors": [
+    {
+      "name": "downgrade-required-to-plaintext",
+      "input": { "policy_mode": "required", "frame_format": "plaintext_wlvc" },
+      "expected_error_code": "downgrade_attempt"
+    },
+    {
+      "name": "malformed-magic",
+      "input": { "magic_ascii": "WLVC" },
+      "expected_error_code": "malformed_protected_frame"
+    },
+    {
+      "name": "wrong-epoch",
+      "input": { "epoch": 7, "receiver_epoch": 8 },
+      "expected_error_code": "wrong_epoch"
+    },
+    {
+      "name": "replayed-sequence",
+      "input": { "sequence": 41, "last_accepted_sequence": 42 },
+      "expected_error_code": "replay_detected"
+    }
+  ]
+}
