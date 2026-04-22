@@ -97,7 +97,7 @@ Checklist:
 - [x] Add responsive Playwright coverage for mobile call creation with participants, mini-video toggle, and call-settings strategy selection.
 
 Done:
-- [ ] Mobile and desktop call-management flows are feature-equivalent and visually consistent.
+- [x] Mobile and desktop call-management flows are feature-equivalent and visually consistent.
 
 ### #Q-21 Video-Chat Frontend Refactor And Shared UI Components
 
