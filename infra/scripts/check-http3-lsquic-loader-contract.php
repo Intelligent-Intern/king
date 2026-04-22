@@ -8,6 +8,10 @@ $clientPath = $root . '/extension/src/client/http3.c';
 $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
 $serverPath = $root . '/extension/src/server/http3.c';
 $serverLoaderPath = $root . '/extension/src/server/http3/lsquic_loader.inc';
+$serverTlsPath = $root . '/extension/src/server/http3/lsquic_tls.inc';
+$serverStreamRuntimePath = $root . '/extension/src/server/http3/lsquic_stream_runtime.inc';
+$serverRuntimePath = $root . '/extension/src/server/http3/lsquic_runtime.inc';
+$serverListenOncePath = $root . '/extension/src/server/http3/lsquic_listen_once.inc';
 $streamRuntimePath = $root . '/extension/src/client/http3/lsquic_stream_runtime.inc';
 $runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
 $lsquicDispatchPath = $root . '/extension/src/client/http3/lsquic_dispatch.inc';
@@ -138,6 +142,10 @@ $client = king_http3_loader_require_file($clientPath, $errors);
 $loader = king_http3_loader_require_file($loaderPath, $errors);
 $server = king_http3_loader_require_file($serverPath, $errors);
 $serverLoader = king_http3_loader_require_file($serverLoaderPath, $errors);
+$serverTls = king_http3_loader_require_file($serverTlsPath, $errors);
+$serverStreamRuntime = king_http3_loader_require_file($serverStreamRuntimePath, $errors);
+$serverRuntime = king_http3_loader_require_file($serverRuntimePath, $errors);
+$serverListenOnce = king_http3_loader_require_file($serverListenOncePath, $errors);
 $streamRuntime = king_http3_loader_require_file($streamRuntimePath, $errors);
 $runtime = king_http3_loader_require_file($runtimePath, $errors);
 $lsquicDispatch = king_http3_loader_require_file($lsquicDispatchPath, $errors);
@@ -372,17 +380,29 @@ foreach ([
     'king_server_http3_lsquic_load_error_kind_t',
     'king_server_http3_lsquic = {0}',
     '#include "http3/lsquic_loader.inc"',
+    '#include "http3/lsquic_tls.inc"',
+    '#include "http3/lsquic_stream_runtime.inc"',
+    '#include "http3/lsquic_runtime.inc"',
+    '#include "http3/lsquic_listen_once.inc"',
 ] as $needle) {
     king_http3_loader_require_contains('Server HTTP/3 source', $server, $needle, $errors);
 }
 
-king_http3_loader_require_guarded_include(
-    'Server HTTP/3 source',
-    $server,
-    '#if defined(KING_HTTP3_BACKEND_LSQUIC)',
+foreach ([
     '#include "http3/lsquic_loader.inc"',
-    $errors
-);
+    '#include "http3/lsquic_tls.inc"',
+    '#include "http3/lsquic_stream_runtime.inc"',
+    '#include "http3/lsquic_runtime.inc"',
+    '#include "http3/lsquic_listen_once.inc"',
+] as $include) {
+    king_http3_loader_require_guarded_include(
+        'Server HTTP/3 source',
+        $server,
+        '#if defined(KING_HTTP3_BACKEND_LSQUIC)',
+        $include,
+        $errors
+    );
+}
 
 foreach ([
     'KING_LSQUIC_GLOBAL_SERVER',
@@ -457,6 +477,59 @@ if ($serverEnsureBody === null) {
         ],
         $errors
     );
+}
+
+foreach ([
+    'king_server_http3_lsquic_create_ssl_ctx',
+    'SSL_CTX_use_certificate_chain_file',
+    'king_server_http3_lsquic_get_ssl_ctx',
+] as $needle) {
+    king_http3_loader_require_contains('Server LSQUIC TLS adapter', $serverTls, $needle, $errors);
+}
+
+foreach ([
+    'king_server_http3_lsquic_stream_if',
+    '.on_new_conn = king_server_http3_lsquic_on_new_conn',
+    '.on_new_stream = king_server_http3_lsquic_on_new_stream',
+    'king_server_http3_lsquic_hsi_process_header',
+    'king_server_http3_collect_request_header',
+    'king_server_http3_lsquic_packets_out',
+    'sendmsg(runtime->socket_fd',
+    'king_server_http3_lsquic_send_response_headers',
+    'lsxpack_header_set_offset2',
+    'lsquic_stream_send_headers_fn',
+    'lsquic_stream_write_fn',
+    'lsquic_stream_shutdown_fn',
+    'smart_str_appendl(&request->body',
+] as $needle) {
+    king_http3_loader_require_contains('Server LSQUIC stream runtime adapter', $serverStreamRuntime, $needle, $errors);
+}
+
+foreach ([
+    'king_server_http3_lsquic_runtime_init',
+    'LSENG_HTTP_SERVER',
+    'king_server_http3_lsquic_runtime_packet_in',
+    'lsquic_engine_packet_in_fn',
+    'king_server_http3_lsquic_runtime_process_egress',
+    'lsquic_engine_process_conns_fn',
+] as $needle) {
+    king_http3_loader_require_contains('Server LSQUIC runtime adapter', $serverRuntime, $needle, $errors);
+}
+
+foreach ([
+    'king_server_http3_listen_once_lsquic',
+    'king_server_http3_ensure_lsquic_ready()',
+    'king_server_http3_open_listener_socket(host, port, runtime, function_name)',
+    'king_server_http3_lsquic_runtime_init(runtime, options, function_name)',
+    'king_server_http3_lsquic_runtime_process_egress(runtime, function_name)',
+    'king_server_http3_build_wire_request',
+    'king_server_local_invoke_handler',
+    'king_server_http3_prepare_response_state',
+    'king_server_http3_apply_transport_snapshot_from_runtime',
+    'server_http3_lsquic_socket',
+    'king_server_http3_lsquic_runtime_packet_in',
+] as $needle) {
+    king_http3_loader_require_contains('Server LSQUIC listen_once path', $serverListenOnce, $needle, $errors);
 }
 
 $requiredStreamRuntimeNeedles = [

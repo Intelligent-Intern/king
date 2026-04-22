@@ -27,6 +27,7 @@
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 #include <lsquic.h>
 #include <lsxpack_header.h>
+#include <openssl/ssl.h>
 #endif
 
 #include <arpa/inet.h>
@@ -97,6 +98,10 @@ typedef struct _king_server_http3_request_header_context {
     const char *function_name;
 } king_server_http3_request_header_context_t;
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+typedef struct _king_server_http3_lsquic_stream_state king_server_http3_lsquic_stream_state_t;
+#endif
+
 typedef struct _king_server_http3_response_state {
     quiche_h3_header *headers;
     size_t headers_len;
@@ -122,6 +127,22 @@ typedef struct _king_server_http3_runtime {
     quiche_conn *conn;
     quiche_h3_config *h3_config;
     quiche_h3_conn *h3_conn;
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    bool lsquic_backend_active;
+    struct lsquic_engine_settings lsquic_settings;
+    struct lsquic_engine_api lsquic_api;
+    lsquic_engine_t *lsquic_engine;
+    lsquic_conn_t *lsquic_conn;
+    SSL_CTX *lsquic_ssl_ctx;
+    king_server_http3_request_state_t *lsquic_request_state;
+    king_server_http3_response_state_t *lsquic_response_state;
+    zend_bool *lsquic_request_complete;
+    king_server_http3_lsquic_stream_state_t *lsquic_stream_state;
+    const char *lsquic_function_name;
+    bool lsquic_connection_closed;
+    bool lsquic_request_failed;
+    bool lsquic_response_failed;
+#endif
 } king_server_http3_runtime_t;
 
 typedef struct _king_server_http3_quiche_api {
@@ -237,5 +258,11 @@ static king_server_http3_lsquic_api_t king_server_http3_lsquic = {0};
 #endif
 #include "http3/options_and_runtime.inc"
 #include "http3/request_response.inc"
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+#include "http3/lsquic_tls.inc"
+#include "http3/lsquic_stream_runtime.inc"
+#include "http3/lsquic_runtime.inc"
+#include "http3/lsquic_listen_once.inc"
+#endif
 #include "http3/event_loop.inc"
 #include "http3/listen_once_api.inc"

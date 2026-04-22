@@ -69,6 +69,25 @@ PHP_FUNCTION(king_http3_server_listen_once)
         goto cleanup;
     }
 
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    rc = king_server_http3_listen_once_lsquic(
+        host,
+        host_len,
+        port,
+        handler,
+        session,
+        &options,
+        &runtime,
+        &request_state,
+        &response_state,
+        &request,
+        &retval,
+        &request_complete,
+        &handler_invoked
+    ) == SUCCESS;
+    goto cleanup;
+#endif
+
     if (king_server_http3_ensure_quiche_ready() != SUCCESS) {
         king_server_local_set_errorf(
             "king_http3_server_listen_once() HTTP/3 runtime is unavailable: %s",

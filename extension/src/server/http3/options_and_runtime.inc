@@ -128,6 +128,39 @@ static zend_result king_server_http3_parse_options(
 
 static void king_server_http3_runtime_destroy(king_server_http3_runtime_t *runtime)
 {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+    if (runtime->lsquic_backend_active) {
+        if (runtime->lsquic_conn != NULL
+            && !runtime->lsquic_connection_closed
+            && king_server_http3_lsquic.lsquic_conn_close_fn != NULL) {
+            king_server_http3_lsquic.lsquic_conn_close_fn(runtime->lsquic_conn);
+            if (runtime->lsquic_engine != NULL
+                && king_server_http3_lsquic.lsquic_engine_process_conns_fn != NULL) {
+                king_server_http3_lsquic.lsquic_engine_process_conns_fn(runtime->lsquic_engine);
+            }
+        }
+
+        if (runtime->lsquic_engine != NULL
+            && king_server_http3_lsquic.lsquic_engine_destroy_fn != NULL) {
+            king_server_http3_lsquic.lsquic_engine_destroy_fn(runtime->lsquic_engine);
+        }
+
+        if (runtime->lsquic_ssl_ctx != NULL) {
+            SSL_CTX_free(runtime->lsquic_ssl_ctx);
+        }
+
+        if (runtime->lsquic_stream_state != NULL) {
+            efree(runtime->lsquic_stream_state);
+        }
+
+        runtime->lsquic_engine = NULL;
+        runtime->lsquic_conn = NULL;
+        runtime->lsquic_ssl_ctx = NULL;
+        runtime->lsquic_stream_state = NULL;
+        runtime->lsquic_backend_active = false;
+    }
+#endif
+
     if (runtime->h3_conn != NULL && king_server_http3_quiche.quiche_h3_conn_free_fn != NULL) {
         king_server_http3_quiche.quiche_h3_conn_free_fn(runtime->h3_conn);
     }
@@ -182,35 +215,20 @@ static zend_result king_server_http3_make_socket_nonblocking(int socket_fd)
         : FAILURE;
 }
 
-static zend_result king_server_http3_set_socket_endpoint(
+static zend_result king_server_http3_set_address_endpoint(
     zend_string **slot,
     zend_long *port_slot,
-    int socket_fd,
-    zend_bool peer,
+    const struct sockaddr *address,
+    socklen_t address_len,
     const char *function_name
 )
 {
-    struct sockaddr_storage address;
-    socklen_t address_len = sizeof(address);
     char host[NI_MAXHOST];
     char service[NI_MAXSERV];
-    int rc;
-
-    rc = peer
-        ? getpeername(socket_fd, (struct sockaddr *) &address, &address_len)
-        : getsockname(socket_fd, (struct sockaddr *) &address, &address_len);
-    if (rc != 0) {
-        king_server_local_set_errorf(
-            "%s() failed to capture the accepted HTTP/3 socket endpoints (errno %d).",
-            function_name,
-            errno
-        );
-        return FAILURE;
-    }
 
     if (
         getnameinfo(
-            (struct sockaddr *) &address,
+            address,
             address_len,
             host,
             sizeof(host),
@@ -229,6 +247,39 @@ static zend_result king_server_http3_set_socket_endpoint(
     king_server_local_set_string(slot, host);
     *port_slot = strtol(service, NULL, 10);
     return SUCCESS;
+}
+
+static zend_result king_server_http3_set_socket_endpoint(
+    zend_string **slot,
+    zend_long *port_slot,
+    int socket_fd,
+    zend_bool peer,
+    const char *function_name
+)
+{
+    struct sockaddr_storage address;
+    socklen_t address_len = sizeof(address);
+    int rc;
+
+    rc = peer
+        ? getpeername(socket_fd, (struct sockaddr *) &address, &address_len)
+        : getsockname(socket_fd, (struct sockaddr *) &address, &address_len);
+    if (rc != 0) {
+        king_server_local_set_errorf(
+            "%s() failed to capture the accepted HTTP/3 socket endpoints (errno %d).",
+            function_name,
+            errno
+        );
+        return FAILURE;
+    }
+
+    return king_server_http3_set_address_endpoint(
+        slot,
+        port_slot,
+        (struct sockaddr *) &address,
+        address_len,
+        function_name
+    );
 }
 
 static zend_result king_server_http3_apply_transport_snapshot_from_socket(
@@ -264,6 +315,49 @@ static zend_result king_server_http3_apply_transport_snapshot_from_socket(
             &session->transport_peer_port,
             socket_fd,
             1,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    return SUCCESS;
+}
+
+static zend_result king_server_http3_apply_transport_snapshot_from_runtime(
+    king_client_session_t *session,
+    const king_server_http3_runtime_t *runtime,
+    const char *backend_name,
+    const char *function_name
+)
+{
+    session->transport_socket_fd = runtime->socket_fd;
+    session->transport_has_socket = true;
+    session->transport_last_errno = 0;
+    session->transport_datagrams_enable = true;
+    king_server_local_set_string(&session->negotiated_alpn, "h3");
+    king_server_local_set_string(&session->transport_backend, backend_name);
+    king_server_local_set_string(&session->transport_socket_family, "udp");
+    king_server_local_set_string(&session->transport_error_scope, "none");
+
+    if (
+        king_server_http3_set_address_endpoint(
+            &session->transport_local_address,
+            &session->transport_local_port,
+            (const struct sockaddr *) &runtime->local_addr,
+            runtime->local_addr_len,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (
+        king_server_http3_set_address_endpoint(
+            &session->transport_peer_address,
+            &session->transport_peer_port,
+            (const struct sockaddr *) &runtime->peer_addr,
+            runtime->peer_addr_len,
             function_name
         ) != SUCCESS
     ) {
@@ -452,4 +546,3 @@ static zend_result king_server_http3_prepare_runtime_config(
 
     return SUCCESS;
 }
-
