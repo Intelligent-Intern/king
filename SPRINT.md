@@ -71,7 +71,7 @@ Goal:
 - Production deploy and operations views expose real, safe, backend-driven state instead of placeholders or oversharing.
 
 Checklist:
-- [ ] Replace static operations data such as sample running calls with backend/live data.
+- [x] Replace static operations data such as sample running calls with backend/live data.
 - [ ] Correct live call and participant counts from current call/session/SFU state.
 - [ ] Keep public health responses safe for production and hide schema/user/internal runtime detail unless authorized.
 - [ ] Keep deployment configuration in `.env.local` and make deploy wizard reruns idempotent for known-host, cert, DNS, and compose/service state.
