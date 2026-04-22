@@ -11,7 +11,7 @@ tests/521-telemetry-memory-bound-self-metrics-contract.phpt
 tests/522-autoscaling-real-load-patterns-contract.phpt
 tests/523-autoscaling-hetzner-partial-state-loss-bootstrap-propagation-contract.phpt
 tests/524-autoscaling-load-recovery-contract.phpt
-tests/524-tls-ticket-replacement-contract.phpt
+tests/697-tls-ticket-replacement-contract.phpt
 tests/525-admin-api-self-signed-client-rejection-contract.phpt
 tests/526-http3-quic-session-lifecycle-contract.phpt
 tests/527-http3-quic-idle-timeout-and-application-close-contract.phpt
@@ -89,7 +89,7 @@ tests/598-orchestrator-userland-controller-loss-restart-contract.phpt
 tests/599-autoscaling-real-operation-signal-contract.phpt
 tests/600-flow-php-object-store-source-contract.phpt
 tests/601-flow-php-http-source-contract.phpt
-tests/601-semantic-dns-routing-staleness-ttl-contract.phpt
+tests/698-semantic-dns-routing-staleness-ttl-contract.phpt
 tests/602-flow-php-mcp-source-contract.phpt
 tests/603-flow-php-object-store-sink-contract.phpt
 tests/604-flow-php-http-sink-contract.phpt
@@ -159,4 +159,4 @@ tests/672-flow-php-mcp-service-discovery-failover-contract.phpt
 tests/673-flow-php-oo-object-store-ingest-contract.phpt
 tests/674-flow-php-rag-orchestration-reference-contract.phpt
 tests/675-flow-php-mcp-host-stop-loopback-guard-contract.phpt
-tests/999-batch-encode-decode.phpt
+tests/676-batch-encode-decode.phpt

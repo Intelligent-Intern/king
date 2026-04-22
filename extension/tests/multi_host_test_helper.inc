@@ -19,7 +19,21 @@ function king_multi_host_test_start_server_script(
 ): array
 {
     if ($port === null) {
-        $port = random_int(40000, 49999);
+        $lastError = 'unknown startup error';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                return king_multi_host_test_start_server_script(
+                    $scriptPath,
+                    random_int(40000, 49999),
+                    $extraArgs,
+                    $bindHost
+                );
+            } catch (RuntimeException $e) {
+                $lastError = $e->getMessage();
+            }
+        }
+
+        throw new RuntimeException('failed to launch multi-host test server after retries: ' . $lastError);
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-multi-host-capture-');

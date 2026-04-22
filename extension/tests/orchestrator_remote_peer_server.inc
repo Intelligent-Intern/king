@@ -5,10 +5,6 @@
 $capturePath = $argv[1] ?? null;
 $port = isset($argv[2]) ? (int) $argv[2] : 0;
 $bindHost = $argv[3] ?? '127.0.0.1';
-// Force IPv4 binding to avoid macOS IPv6‑only socket issue
-if (!filter_var($bindHost, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
-    $bindHost = '0.0.0.0';
-}
 $handlerBootstrapPath = $argv[4] ?? null;
 
 if (!is_string($capturePath) || $capturePath === '' || $port <= 0) {
@@ -274,7 +270,7 @@ if ($isIpv6 && !preg_match('/^\[.*\]$/', $bindHost)) {
     $bindHost = '[' . $bindHost . ']';
 }
 
-$endpoint = 'tcp://' . $bindHost . ':' . $port; fwrite(STDERR, "Endpoint: $endpoint\n");
+$endpoint = 'tcp://' . $bindHost . ':' . $port;
 
 $server = @stream_socket_server($endpoint, $errno, $errstr);
 if ($server === false) {
@@ -319,9 +315,9 @@ echo "READY\n";
 flush();
 king_orchestrator_remote_peer_persist_capture($capture, $capturePath);
 
-var_dump($server); while (($client = @stream_socket_accept($server, -1)) !== false) {
+while (($client = @stream_socket_accept($server, -1)) !== false) {
     $peer = stream_socket_get_name($client, true);
-    $line = fgets($client); var_dump('RECV', $line);
+    $line = fgets($client);
 
     if ($line === false) {
         fclose($client);

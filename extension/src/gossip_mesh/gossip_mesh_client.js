@@ -49,12 +49,18 @@ class GossipMeshClient {
         
         // Debug
         this.debug = config.debug || false;
+
+        // Optional transport codec (IIBIN-style): keeps JSON compatibility
+        // while allowing binary payload transport for gossip peer messages.
+        this.transportCodec = this.createTransportCodec(
+            config.transportCodec || config.iibin || null
+        );
     }
     
     static DEFAULT_TTL = 4;
     static FORWARD_COUNT = 2;
     static SEEN_WINDOW_SIZE = 256;
-    
+
     /**
      * Get ICE servers - STUN + TURN configuration
      */
@@ -81,13 +87,111 @@ class GossipMeshClient {
     generatePeerId() {
         return Math.random().toString(36).substr(2, 9);
     }
-    
-    static DEFAULT_TTL = 4;
-    static FORWARD_COUNT = 2;
-    static SEEN_WINDOW_SIZE = 256;
-    
-    generatePeerId() {
-        return Math.random().toString(36).substr(2, 9);
+
+    createTransportCodec(codecConfig) {
+        if (!codecConfig) {
+            return null;
+        }
+
+        if (typeof codecConfig.encode === 'function' && typeof codecConfig.decode === 'function') {
+            return codecConfig;
+        }
+
+        const Encoder = codecConfig.Encoder || codecConfig.encoderClass || null;
+        const Decoder = codecConfig.Decoder || codecConfig.decoderClass || null;
+        const messageType = typeof codecConfig.messageType === 'number'
+            ? codecConfig.messageType
+            : (
+                codecConfig.MessageType &&
+                typeof codecConfig.MessageType.TEXT_MESSAGE === 'number'
+                    ? codecConfig.MessageType.TEXT_MESSAGE
+                    : null
+            );
+
+        if (!Encoder || !Decoder || typeof messageType !== 'number') {
+            return null;
+        }
+
+        const encoder = codecConfig.encoder || new Encoder();
+
+        return {
+            encode: (payload) => encoder.encode({
+                type: messageType,
+                data: payload,
+                timestamp: Date.now(),
+            }),
+            decode: (decoded) => {
+                if (!decoded || decoded.type !== messageType) {
+                    return null;
+                }
+                if (!decoded.data || typeof decoded.data !== 'object') {
+                    return null;
+                }
+                return decoded.data;
+            },
+            Decoder,
+        };
+    }
+
+    encodeTransportMessage(payload) {
+        if (!this.transportCodec) {
+            return JSON.stringify(payload);
+        }
+
+        try {
+            return this.transportCodec.encode(payload);
+        } catch (error) {
+            console.warn('[GossipMesh] Transport encode failed, falling back to JSON', error);
+            return JSON.stringify(payload);
+        }
+    }
+
+    async payloadToArrayBuffer(payload) {
+        if (payload instanceof ArrayBuffer) {
+            return payload;
+        }
+
+        if (ArrayBuffer.isView(payload)) {
+            return payload.buffer.slice(
+                payload.byteOffset,
+                payload.byteOffset + payload.byteLength
+            );
+        }
+
+        if (typeof Blob !== 'undefined' && payload instanceof Blob) {
+            return payload.arrayBuffer();
+        }
+
+        return null;
+    }
+
+    async decodeTransportMessage(payload) {
+        if (typeof payload === 'string') {
+            try {
+                return JSON.parse(payload);
+            } catch (error) {
+                if (!this.transportCodec) {
+                    return null;
+                }
+            }
+        }
+
+        if (!this.transportCodec) {
+            return null;
+        }
+
+        try {
+            const buffer = await this.payloadToArrayBuffer(payload);
+            if (!buffer) {
+                return null;
+            }
+
+            const decoded = new this.transportCodec.Decoder(buffer).decode();
+            return this.transportCodec.decode(decoded);
+        } catch (error) {
+            console.warn('[GossipMesh] Transport decode failed', error);
+            return null;
+        }
     }
     
     /**
@@ -96,6 +200,7 @@ class GossipMeshClient {
     async connect(sessionToken) {
         return new Promise((resolve, reject) => {
             this.peerConnection = new WebSocket(`${this.sfuUrl}?token=${sessionToken}`);
+            this.peerConnection.binaryType = 'arraybuffer';
             
             this.peerConnection.onopen = () => {
                 console.log('[GossipMesh] Connected to SFU');
@@ -111,7 +216,7 @@ class GossipMeshClient {
             };
             
             this.peerConnection.onmessage = (event) => {
-                this.handleSFUMessage(JSON.parse(event.data));
+                void this.handleSFUPayload(event.data);
             };
             
             this.peerConnection.onerror = (error) => {
@@ -130,6 +235,15 @@ class GossipMeshClient {
     /**
      * Handle messages from SFU signaling server
      */
+    async handleSFUPayload(payload) {
+        const message = await this.decodeTransportMessage(payload);
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        this.handleSFUMessage(message);
+    }
+
     handleSFUMessage(message) {
         switch (message.type) {
             case 'sfu/welcome':
@@ -197,7 +311,7 @@ class GossipMeshClient {
         };
         
         channel.onmessage = (event) => {
-            this.handlePeerMessage(peerId, JSON.parse(event.data));
+            void this.handlePeerPayload(peerId, event.data);
         };
         
         channel.onclose = () => {
@@ -265,7 +379,7 @@ class GossipMeshClient {
             pc.ondatachannel = (event) => {
                 const channel = event.channel;
                 channel.onmessage = (e) => {
-                    this.handlePeerMessage(peerId, JSON.parse(e.data));
+                    void this.handlePeerPayload(peerId, e.data);
                 };
                 channel.onopen = () => {
                     this.stats.neighborsConnected++;
@@ -383,6 +497,15 @@ class GossipMeshClient {
     /**
      * Handle message from peer via WebRTC data channel
      */
+    async handlePeerPayload(peerId, payload) {
+        const message = await this.decodeTransportMessage(payload);
+        if (!message || typeof message !== 'object') {
+            return;
+        }
+
+        this.handlePeerMessage(peerId, message);
+    }
+
     handlePeerMessage(peerId, message) {
         if (message.type === 'frame') {
             this.receiveFrame(
@@ -473,7 +596,7 @@ class GossipMeshClient {
                 this.stats.framesForwarded++;
             } else if (neighbor.channel && neighbor.channel.readyState === 'open') {
                 // Use P2P data channel
-                neighbor.channel.send(JSON.stringify({
+                neighbor.channel.send(this.encodeTransportMessage({
                     type: 'frame',
                     publisher_id: publisherId,
                     sequence: sequence,
@@ -496,7 +619,7 @@ class GossipMeshClient {
             
             for (const [peerId, neighbor] of this.neighbors) {
                 if (neighbor.channel && neighbor.channel.readyState === 'open') {
-                    neighbor.channel.send(JSON.stringify({
+                    neighbor.channel.send(this.encodeTransportMessage({
                         type: 'neighbors',
                         neighbors: neighborIds,
                     }));

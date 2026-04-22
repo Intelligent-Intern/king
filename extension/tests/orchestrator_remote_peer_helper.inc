@@ -11,6 +11,38 @@ function king_orchestrator_test_format_tcp_endpoint(string $host, int $port): st
     return 'tcp://' . $host . ':' . $port;
 }
 
+function king_orchestrator_remote_peer_wait_until_ready(string $host, int $port, int $timeoutMs = 3000): void
+{
+    $deadline = microtime(true) + ($timeoutMs / 1000.0);
+    $lastError = 'connection probe failed';
+    $lastErrno = 0;
+
+    while (microtime(true) < $deadline) {
+        $probe = @stream_socket_client(
+            king_orchestrator_test_format_tcp_endpoint($host, $port),
+            $lastErrno,
+            $lastError,
+            0.2
+        );
+        if (is_resource($probe)) {
+            fclose($probe);
+            return;
+        }
+
+        usleep(50000);
+    }
+
+    throw new RuntimeException(
+        sprintf(
+            'orchestrator remote peer listener did not become reachable at %s:%d (last error: %s [%d])',
+            $host,
+            $port,
+            $lastError,
+            $lastErrno
+        )
+    );
+}
+
 function king_orchestrator_remote_peer_start(
     ?int $port = null,
     string $bindHost = '127.0.0.1',
@@ -18,7 +50,21 @@ function king_orchestrator_remote_peer_start(
     array $extraArgs = []
 ): array {
     if ($port === null) {
-        $port = random_int(40000, 49999);
+        $lastError = 'unknown startup error';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            try {
+                return king_orchestrator_remote_peer_start(
+                    random_int(40000, 49999),
+                    $bindHost,
+                    $serverScript,
+                    $extraArgs
+                );
+            } catch (RuntimeException $e) {
+                $lastError = $e->getMessage();
+            }
+        }
+
+        throw new RuntimeException('failed to launch orchestrator remote peer server after retries: ' . $lastError);
     }
 
     $capture = tempnam(sys_get_temp_dir(), 'king-orchestrator-remote-peer-capture-');
@@ -57,6 +103,8 @@ function king_orchestrator_remote_peer_start(
         @unlink($capture);
         throw new RuntimeException('orchestrator remote peer server failed: ' . trim($stderr));
     }
+
+    king_orchestrator_remote_peer_wait_until_ready($bindHost, (int) $port);
 
     return [
         'process' => $process,

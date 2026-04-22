@@ -9,4 +9,4 @@ tests/672-flow-php-mcp-service-discovery-failover-contract.phpt
 tests/673-flow-php-oo-object-store-ingest-contract.phpt
 tests/674-flow-php-rag-orchestration-reference-contract.phpt
 tests/675-flow-php-mcp-host-stop-loopback-guard-contract.phpt
-tests/999-batch-encode-decode.phpt
+tests/676-batch-encode-decode.phpt

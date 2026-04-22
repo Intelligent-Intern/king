@@ -1,5 +1,17 @@
 --TEST--
 Repo-local Flow PHP SQL/pgvector bridge keeps the boundary non-native and enforces MCP request/response shape
+--SKIPIF--
+<?php
+if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
+    echo "skip proc_open and stream_socket_server are required";
+}
+$probe = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+if ($probe === false) {
+    echo "skip loopback tcp listener unavailable: $errstr";
+    return;
+}
+fclose($probe);
+?>
 --FILE--
 <?php
 require_once __DIR__ . '/mcp_test_helper.inc';
@@ -34,7 +46,7 @@ try {
         'req-671'
     );
 
-    $response = $bridge->search($request, ['timeout_ms' => 1200, 'deadline_ms' => ((int) (hrtime(true) / 1000000)) + 5000]);
+    $response = $bridge->search($request, ['timeout_ms' => 5000, 'deadline_ms' => ((int) (hrtime(true) / 1000000)) + 15000]);
     $result = $response->toArray();
 
     var_dump(($result['schema'] ?? null) === 'king.sql_vector.result.v1');

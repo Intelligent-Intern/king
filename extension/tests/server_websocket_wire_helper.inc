@@ -28,31 +28,27 @@ function king_server_websocket_wire_launch(string $mode, int $iterations, int $p
 {
     $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
     $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $commandParts = [
-        '/usr/local/bin/php',
+    $command = [
+        PHP_BINARY,
         '-n',
         '-d',
-        escapeshellarg('extension=' . $extensionPath),
+        'extension=' . $extensionPath,
         '-d',
-        escapeshellarg('king.security_allow_config_override=1'),
+        'king.security_allow_config_override=1',
     ];
 
     if ($mode === 'cors-allowlist') {
-        $commandParts[] = '-d';
-        $commandParts[] = escapeshellarg(
-            'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
-        );
+        $command[] = '-d';
+        $command[] = 'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test';
     }
 
-    $commandParts = array_merge($commandParts, [
-        escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
-        escapeshellarg($capture),
-        (string) (int) $port,
-        escapeshellarg($mode),
+    $command = array_merge($command, [
+        __DIR__ . '/server_websocket_wire_server.inc',
+        $capture,
+        (string) $port,
+        $mode,
         (string) max(1, $iterations),
     ]);
-
-    $command = implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
