@@ -24,7 +24,7 @@ Ziel:
 Checklist:
 - [x] `quiche`-Referenzen in Source, Headers, Tests, Docs, CI, Release-Scripts und Provenance erfassen.
 - [x] Rust-/Cargo-Pfade im HTTP/3-Kontext erfassen: `Cargo.toml`, `Cargo.lock`, `.rs`, Workspace-Locks, Bootstrap-Scripts.
-- [ ] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
+- [x] Jede Fundstelle klassifizieren: `remove`, `replace`, `rename`, `keep-temporary`, `keep-unrelated`.
 - [ ] Unrelated Rust im Repo vom Quiche-/HTTP3-Rust trennen.
 - [ ] Generierte oder lokale Artefakte markieren, die nicht versioniert bleiben duerfen.
 
@@ -61,6 +61,26 @@ Rust-/Cargo-Fundstellen im HTTP/3-Kontext:
 Suchbasis:
 - `git ls-files '*.rs' '**/Cargo.toml' '**/Cargo.lock' '*Cargo.lock'`
 - `git ls-files | rg '(^|/)(cargo-build-compat|ensure-quiche-toolchain|bootstrap-quiche|check-quiche-bootstrap|prebuild-http3-test-helpers|build-profile|package-release|package-pie-source|quiche-workspace\.Cargo\.lock)'`
+
+Klassifizierung:
+
+| Aktion | Fundstellen | Begruendung |
+|---|---|---|
+| `rename` | `extension/src/client/http3/quiche_loader.inc`, `extension/src/server/http3/quiche_loader.inc` | Loader bleiben als Konzept erhalten, aber Backendname und Symbolbindung wechseln auf den neuen Stack. |
+| `replace` | `extension/src/client/http3.c`, `extension/src/client/http3/*.inc`, `extension/src/server/http3.c`, `extension/src/server/http3/*.inc`, `extension/src/client/index.c` | HTTP/3 Client/Server bleiben Produktpfad; Quiche-Typen, Funktionszeiger und Error-Mapping werden durch neue Backend-Abstraktion ersetzt. |
+| `replace` | `extension/Makefile.frag`, `extension/config.m4`, `extension/config.m4.full`, `extension/config.h`, `extension/config.h.in`, `extension/include/config/config.h` | Build bleibt erhalten, aber Quiche-/Cargo-Detection wird durch portable neue Stack-Detection ersetzt. |
+| `replace` | `.github/workflows/ci.yml`, `.github/workflows/release-merge-publish.yml` | CI bleibt Pflicht, aber Rust/Cargo-/Quiche-Caches und Bootstrap-Gates werden auf neue Dependency-/Build-Gates umgestellt. |
+| `replace` | `DEPENDENCY_PROVENANCE.md`, `infra/scripts/check-dependency-provenance-doc.sh` | Provenance bleibt Pflicht, aber Quiche-Pins werden durch neue Stack-Pins ersetzt. |
+| `remove` | `infra/scripts/quiche-bootstrap.lock`, `infra/scripts/quiche-workspace.Cargo.lock` | Quiche- und Cargo-Locks duerfen nach der Migration nicht mehr aktiver Produktpfad sein. |
+| `remove` | `infra/scripts/bootstrap-quiche.sh`, `infra/scripts/check-quiche-bootstrap.sh`, `infra/scripts/ensure-quiche-toolchain.sh`, `infra/scripts/cargo-build-compat.sh` | Quiche-/Cargo-Bootstrap verschwindet aus dem HTTP/3-Produktpfad. |
+| `replace` | `infra/scripts/build-profile.sh`, `infra/scripts/package-release.sh`, `infra/scripts/package-pie-source.sh`, `infra/scripts/prebuild-http3-test-helpers.sh`, `infra/scripts/smoke-profile.sh`, `infra/scripts/soak-runtime.sh`, `infra/scripts/test-extension.sh`, `infra/scripts/check-stub-parity.sh`, `infra/scripts/verify-release-package.sh`, `infra/scripts/verify-release-supply-chain.sh` | Script-Zweck bleibt, aber Runtime-Artefakte, Manifeste, Checks und Env-Variablen wechseln vom Quiche-Pfad auf den neuen Stack. |
+| `replace` | `benchmarks/README.md`, `benchmarks/run-canonical.sh` | Benchmarks bleiben, aber `libquiche.so`/`quiche-server` werden durch neue Runtime-Artefakte ersetzt. |
+| `replace` | `extension/tests/*http3*.phpt`, `extension/tests/http3_test_helper/**` | HTTP/3-Vertrag bleibt; Test-Erwartungen, Env-Variablen und Helper-Binaries wechseln auf neuen Stack. |
+| `remove` | `extension/tests/366-quiche-bootstrap-contract.phpt`, `extension/tests/668-ensure-quiche-toolchain-lockfile-v4-branch-contract.phpt` | Diese Contracts pruefen ausschliesslich Quiche/Cargo-Bootstrap und werden durch neue Dependency-/Build-Gates ersetzt. |
+| `keep-temporary` | `extension/tests/http3_abort_client.rs`, `extension/tests/http3_delayed_body_client.rs`, `extension/tests/http3_failure_peer.rs`, `extension/tests/http3_multi_peer.rs`, `extension/tests/http3_ticket_server/**` | Bis #Q-8 ersetzt ist, bleiben sie nur als Test-Harness-Belege; nicht Produkt-Bootstrap. |
+| `replace` | `stubs/king.php`, `extension/src/php_king.c`, `extension/src/php_king/lifecycle.inc`, `extension/src/config/internal/snapshot.inc` | Oeffentliche Metadaten bleiben, aber Backendnamen/Diagnostics duerfen nicht mehr Quiche melden. |
+| `replace` | `README.md`, `CONTRIBUTE`, `PROJECT_ASSESSMENT.md`, `READYNESS_TRACKER.md`, `documentation/quic-and-tls.md`, `documentation/operations-and-release.md`, `documentation/pie-install.md` | Dokumentation bleibt, aber aktive Quiche-/Cargo-Aussagen werden auf den neuen Stack umgeschrieben oder als Historie markiert. |
+| `keep-unrelated` | Noch nicht final getrennt; Kandidaten sind allgemeine Rust-/Cargo-Toolchain-Dokumente ohne HTTP/3-Produktbezug. | Wird in der naechsten Checkbox separat gegen Quiche-/HTTP3-Rust abgegrenzt. |
 
 Done:
 - [ ] Eine Fundstellen-Tabelle mit Aktion pro Datei liegt vor.
