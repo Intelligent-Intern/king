@@ -1340,6 +1340,30 @@ const participantUsers = computed(() => {
     });
   }
 
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    const peerUserId = Number(peer?.userId || 0);
+    if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) continue;
+
+    const existing = aggregate.get(peerUserId);
+    const displayName = String(peer?.displayName || existing?.displayName || '').trim() || `User ${peerUserId}`;
+    const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing?.callRole || 'participant');
+    if (existing) {
+      existing.connections = Math.max(1, Number(existing.connections || 0));
+      existing.displayName = displayName;
+      existing.callRole = callRole;
+      continue;
+    }
+
+    aggregate.set(peerUserId, {
+      userId: peerUserId,
+      displayName,
+      role: 'user',
+      callRole,
+      connectedAt: '',
+      connections: 1,
+    });
+  }
+
   const currentUser = currentUserParticipantRow();
   if (currentUser) {
     const existing = aggregate.get(currentUser.userId);
@@ -5181,13 +5205,31 @@ function scheduleNativeOfferRetryForUserId(userId, reason = 'signaling') {
   scheduleNativeOfferRetry(peer, reason);
 }
 
+function setNativePeerConnection(targetUserId, peer) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0 || !peer) return;
+  const nextPeers = new Map(nativePeerConnectionsRef.value);
+  nextPeers.set(normalizedTargetUserId, peer);
+  nativePeerConnectionsRef.value = nextPeers;
+}
+
+function takeNativePeerConnection(targetUserId) {
+  const normalizedTargetUserId = Number(targetUserId);
+  if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return null;
+  const peer = nativePeerConnectionsRef.value.get(normalizedTargetUserId) || null;
+  if (!peer) return null;
+  const nextPeers = new Map(nativePeerConnectionsRef.value);
+  nextPeers.delete(normalizedTargetUserId);
+  nativePeerConnectionsRef.value = nextPeers;
+  return peer;
+}
+
 function closeNativePeerConnection(targetUserId) {
   const normalizedTargetUserId = Number(targetUserId);
   if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return;
-  const peer = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
+  const peer = takeNativePeerConnection(normalizedTargetUserId);
   if (!peer) return;
 
-  nativePeerConnectionsRef.value.delete(normalizedTargetUserId);
   clearNativeOfferRetry(peer);
   if (peer.pc) {
     try {
@@ -5204,10 +5246,12 @@ function closeNativePeerConnection(targetUserId) {
 }
 
 function teardownNativePeerConnections() {
-  for (const [targetUserId] of nativePeerConnectionsRef.value) {
+  for (const targetUserId of Array.from(nativePeerConnectionsRef.value.keys())) {
     closeNativePeerConnection(targetUserId);
   }
-  nativePeerConnectionsRef.value.clear();
+  if (nativePeerConnectionsRef.value.size > 0) {
+    nativePeerConnectionsRef.value = new Map();
+  }
   if (isNativeWebRtcRuntimePath()) {
     clearRemoteVideoContainer();
   }
@@ -5354,7 +5398,7 @@ function ensureNativePeerConnection(targetUserId) {
     void sendNativeOffer(peer);
   });
 
-  nativePeerConnectionsRef.value.set(normalizedTargetUserId, peer);
+  setNativePeerConnection(normalizedTargetUserId, peer);
   void syncNativePeerLocalTracks(peer);
   renderNativeRemoteVideos();
   if (peer.initiator) {
