@@ -5,41 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>King Model Inference — Chat</title>
 <style>
+  /* A-7e: palette + typography mirrors /ui/login so the two surfaces feel like one app. */
   :root {
     color-scheme: light dark;
-    --bg: #f7f7f8;
+    --bg: #f5f6f9;
     --bg-elev: #ffffff;
+    --bg-brand: #0b0c0f;
+    --bg-tint: #eef1f6;
     --fg: #0b0c0f;
     --fg-muted: #5b6472;
-    --border: #d9dce0;
+    --border: #e1e4ea;
+    --border-strong: #c9ced7;
+    --border-focus: #2e5aac;
     --accent: #2e5aac;
+    --accent-hover: #234785;
     --accent-fg: #ffffff;
-    --user-bg: #e7efff;
-    --user-fg: #0b1f3f;
-    --assistant-bg: #ffffff;
-    --assistant-fg: #0b0c0f;
-    --error-bg: #fdecec;
-    --error-fg: #892020;
-    --ok: #277a3a;
-    --warn: #a86b00;
+    --accent-soft: rgba(46, 90, 172, 0.12);
+    --accent-soft-strong: rgba(46, 90, 172, 0.22);
+    --ok: #1f7f4d;
+    --danger: #c12a2a;
+    --danger-bg: #fdecec;
+    --radius-lg: 16px;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow-card: 0 12px 28px -16px rgba(15, 23, 42, 0.25), 0 1px 3px rgba(15, 23, 42, 0.05);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #0e1014;
-      --bg-elev: #181a20;
+      --bg: #0b0d11;
+      --bg-elev: #15181f;
+      --bg-brand: #080a0e;
+      --bg-tint: #10131a;
       --fg: #e9eaee;
       --fg-muted: #97a0ad;
-      --border: #2a2f39;
-      --accent: #5f8fff;
-      --user-bg: #1f2a47;
-      --user-fg: #cbd8ff;
-      --assistant-bg: #181a20;
-      --assistant-fg: #e9eaee;
-      --error-bg: #3a1414;
-      --error-fg: #ff8888;
-      --ok: #58c671;
-      --warn: #f0b84a;
+      --border: #242832;
+      --border-strong: #363c47;
+      --border-focus: #7ba2ff;
+      --accent: #7ba2ff;
+      --accent-hover: #94b4ff;
+      --accent-fg: #0b0c0f;
+      --accent-soft: rgba(123, 162, 255, 0.14);
+      --accent-soft-strong: rgba(123, 162, 255, 0.26);
+      --ok: #4fd495;
+      --danger: #ff7373;
+      --danger-bg: #2a1518;
+      --shadow-card: 0 12px 28px -16px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
     }
   }
   * { box-sizing: border-box; }
@@ -48,213 +60,572 @@
     margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    font-size: 15px;
-    line-height: 1.45;
-    display: flex;
-    flex-direction: column;
+    font: 15px/1.55 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: grid;
+    grid-template-rows: auto 1fr;
     height: 100vh;
   }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
   header {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--border);
-    background: var(--bg-elev);
     display: flex;
     align-items: center;
     gap: 12px;
-    font-weight: 600;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elev);
   }
-  header .title { flex: 1; }
-  header .status {
+  header .brand {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  header .spacer { flex: 1; }
+  #new-chat {
+    all: unset;
+    padding: 5px 12px;
     font-size: 12px;
     font-family: var(--mono);
-    color: var(--fg-muted);
-    padding: 4px 8px;
-    border-radius: 10px;
-    border: 1px solid var(--border);
+    color: var(--fg);
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
   }
-  header .status.ok { color: var(--ok); border-color: var(--ok); }
-  header .status.err { color: var(--error-fg); border-color: var(--error-fg); }
-  main {
-    flex: 1;
+  #new-chat:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
+  header .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--fg-muted);
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+  }
+  header .status.ok { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, var(--border)); }
+  header .status.err { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 40%, var(--border)); }
+  /* A-7b: header auth chip — pill CTA / signed-in indicator. */
+  .auth-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--fg);
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms ease, border-color 120ms ease;
+  }
+  .auth-chip:hover { background: var(--accent-soft-strong); border-color: var(--accent); }
+  .auth-chip[data-state="authed"] {
+    background: color-mix(in oklab, var(--ok) 16%, transparent);
+    border-color: color-mix(in oklab, var(--ok) 38%, var(--border));
+  }
+  .auth-chip[data-state="authed"]::before {
+    content: "●"; color: var(--ok); font-size: 9px;
+  }
+  .auth-chip[data-state="anon"]::before {
+    content: "○"; color: var(--fg-muted); font-size: 9px;
+  }
+
+  /* ── Body shell (sidebar + main) ───────────────────────────────── */
+  #shell {
+    display: grid;
+    grid-template-columns: 1fr;   /* default = anon, sidebar hidden */
+    overflow: hidden;
+    min-height: 0;
+  }
+  body[data-authed="1"] #shell {
+    grid-template-columns: 260px 1fr;
+  }
+
+  /* ── Sidebar ───────────────────────────────────────────────────── */
+  #sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--bg-tint);
     overflow-y: auto;
-    padding: 20px;
+    display: none;
+  }
+  body[data-authed="1"] #sidebar { display: block; }
+  #sidebar .side-head {
+    padding: 14px 16px 10px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--fg-muted);
+    font-weight: 600;
+  }
+  #sidebar .side-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    max-width: 920px;
+    gap: 2px;
+    padding: 0 8px 16px;
+  }
+  #sidebar .side-empty {
+    padding: 8px 12px;
+    color: var(--fg-muted);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+  .side-item {
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .side-item:hover { background: var(--accent-soft); }
+  .side-item[data-active="1"] {
+    background: var(--accent-soft-strong);
+    border-color: color-mix(in oklab, var(--accent) 28%, var(--border));
+  }
+  .side-item .si-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .side-item .si-meta {
+    font-size: 11px;
+    color: var(--fg-muted);
+    font-family: var(--mono);
+  }
+  #sidebar-scrim { display: none; }
+  /* Narrow viewport: sidebar becomes off-canvas. */
+  @media (max-width: 760px) {
+    body[data-authed="1"] #shell { grid-template-columns: 1fr; }
+    #sidebar {
+      position: fixed; inset: 49px 0 0 0;
+      z-index: 20;
+      transform: translateX(-100%);
+      transition: transform 160ms ease;
+      width: min(85vw, 320px);
+    }
+    body[data-sidebar="open"] #sidebar { transform: translateX(0); }
+    body[data-sidebar="open"] #sidebar-scrim {
+      display: block;
+      position: fixed; inset: 49px 0 0 0; background: rgba(0,0,0,0.4); z-index: 19;
+    }
+  }
+  #sidebar-toggle {
+    display: none;
+    all: unset;
+    padding: 6px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    color: var(--fg-muted);
+    border-radius: var(--radius-sm);
+  }
+  #sidebar-toggle:hover { background: var(--accent-soft); color: var(--fg); }
+  @media (max-width: 760px) {
+    body[data-authed="1"] #sidebar-toggle { display: inline-flex; }
+  }
+
+  /* ── Main column (messages + composer) ─────────────────────────── */
+  #main {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    min-height: 0;
+    position: relative;
+  }
+  #messages {
+    overflow-y: auto;
+    padding: 32px 24px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    scroll-behavior: smooth;
+  }
+  #messages .inner {
+    max-width: 720px;
     width: 100%;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
   }
-  .msg {
-    padding: 10px 14px;
-    border-radius: 12px;
+
+  /* Empty / welcome state */
+  .welcome {
+    margin: 40px auto;
+    max-width: 560px;
+    text-align: center;
+  }
+  .welcome .w-title {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px 0;
+  }
+  .welcome .w-sub {
+    color: var(--fg-muted);
+    margin: 0 0 22px 0;
+  }
+  .welcome .w-prompts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  @media (min-width: 600px) {
+    .welcome .w-prompts { grid-template-columns: repeat(3, 1fr); }
+  }
+  .welcome .w-prompt {
+    all: unset;
+    cursor: pointer;
+    padding: 12px 14px;
     border: 1px solid var(--border);
-    max-width: 85%;
+    border-radius: var(--radius);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font-size: 13px;
+    text-align: left;
+    transition: border-color 140ms ease, background-color 140ms ease;
+  }
+  .welcome .w-prompt:hover { border-color: var(--border-focus); background: var(--accent-soft); }
+
+  /* Message bubbles */
+  .msg {
+    max-width: 86%;
+    padding: 12px 16px;
+    border-radius: var(--radius-lg);
+    line-height: 1.55;
     white-space: pre-wrap;
     word-wrap: break-word;
-    background: var(--assistant-bg);
-    color: var(--assistant-fg);
-  }
-  .msg.user {
-    align-self: flex-end;
-    background: var(--user-bg);
-    color: var(--user-fg);
-    border-color: transparent;
-  }
-  .msg.assistant { align-self: flex-start; }
-  .msg.error {
-    align-self: stretch;
-    background: var(--error-bg);
-    color: var(--error-fg);
-    border-color: transparent;
+    font-size: 15px;
+    border: 1px solid transparent;
   }
   .msg .role {
     font-size: 11px;
     font-weight: 600;
-    text-transform: uppercase;
     letter-spacing: 0.06em;
+    text-transform: uppercase;
     color: var(--fg-muted);
-    margin-bottom: 4px;
     font-family: var(--mono);
+    margin-bottom: 6px;
   }
-  .msg .body { font-family: inherit; }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--accent-soft-strong);
+    border-color: color-mix(in oklab, var(--accent) 28%, transparent);
+  }
+  .msg.user .role { color: var(--accent); }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--bg-elev);
+    border-color: var(--border);
+    box-shadow: var(--shadow-card);
+  }
+  .msg.error {
+    align-self: stretch;
+    background: var(--danger-bg);
+    color: var(--danger);
+    border-color: color-mix(in oklab, var(--danger) 30%, transparent);
+  }
+  .msg .body code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--fg) 6%, transparent);
+  }
   .msg .footer {
     font-size: 11px;
     font-family: var(--mono);
     color: var(--fg-muted);
-    margin-top: 6px;
+    margin-top: 8px;
+    opacity: 0.85;
   }
   .msg.assistant.streaming .body::after {
     content: "▍";
     color: var(--accent);
     animation: blink 1.1s infinite;
-    margin-left: 1px;
+    margin-left: 2px;
   }
   @keyframes blink { 50% { opacity: 0; } }
-  footer {
-    padding: 12px 20px;
+
+  /* ── Composer (input + send + settings toggle) ─────────────────── */
+  #composer-wrap {
     border-top: 1px solid var(--border);
     background: var(--bg-elev);
+    padding: 14px 24px 18px;
   }
-  footer form {
-    display: flex;
-    gap: 8px;
-    max-width: 920px;
+  #composer-wrap .inner {
+    max-width: 720px;
+    width: 100%;
     margin: 0 auto;
   }
-  footer .settings {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    max-width: 920px;
-    margin: 0 auto 8px;
-    font-size: 12px;
-    color: var(--fg-muted);
-    font-family: var(--mono);
-    align-items: center;
-  }
-  footer .settings label { display: inline-flex; align-items: center; gap: 4px; }
-  footer .settings input[type="number"] {
-    width: 70px;
-    padding: 2px 6px;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+  #form {
+    position: relative;
     background: var(--bg);
-    color: var(--fg);
-    font-family: var(--mono);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
   }
-  textarea {
-    flex: 1;
+  #form:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  #prompt {
+    width: 100%;
+    min-height: 52px;
+    max-height: 200px;
     resize: none;
-    min-height: 44px;
-    max-height: 160px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: inherit;
-    font-size: 15px;
-    line-height: 1.4;
-  }
-  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button {
-    padding: 0 16px;
+    padding: 14px 64px 14px 16px;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: var(--fg);
+    font: inherit;
+    font-size: 15px;
+    line-height: 1.45;
+    outline: none;
+  }
+  #prompt::placeholder { color: var(--fg-muted); }
+  #send {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    border: 0;
+    border-radius: 12px;
     background: var(--accent);
     color: var(--accent-fg);
     font-weight: 600;
-    font-size: 15px;
     cursor: pointer;
-    min-width: 88px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 140ms ease, transform 100ms ease;
   }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .meta {
-    max-width: 920px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 0 20px 12px;
-    font-size: 11px;
+  #send:hover:not(:disabled) { background: var(--accent-hover); }
+  #send:active:not(:disabled) { transform: translateY(1px); }
+  #send:disabled { opacity: 0.4; cursor: not-allowed; }
+  #send svg { width: 18px; height: 18px; }
+
+  #settings-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 6px;
+  }
+  #settings-toggle {
+    all: unset;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--fg-muted);
     font-family: var(--mono);
+    font-size: 12px;
+  }
+  #settings-toggle:hover { color: var(--fg); background: var(--accent-soft); }
+
+  /* Settings dialog */
+  #settings {
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-elev);
+    color: var(--fg);
+    box-shadow: var(--shadow-card);
+    width: min(560px, 92vw);
+    max-height: 86vh;
+  }
+  #settings::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(2px);
+  }
+  #settings .settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+  }
+  #settings .settings-header h2 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+  #settings-close {
+    all: unset;
+    width: 28px; height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--fg-muted);
+    font-size: 18px;
+    line-height: 1;
+  }
+  #settings-close:hover { background: var(--accent-soft); color: var(--fg); }
+  #settings .grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 18px;
+  }
+  @media (min-width: 640px) {
+    #settings .grid { grid-template-columns: 1fr 1fr; }
+  }
+  #settings label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
     color: var(--fg-muted);
   }
+  #settings input[type="text"],
+  #settings input[type="number"],
+  #settings select {
+    padding: 9px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font: inherit;
+    font-size: 13px;
+    font-family: var(--mono);
+  }
+  #settings input:focus, #settings select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+  #settings .diag {
+    grid-column: 1 / -1;
+    margin-top: 4px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-muted);
+  }
+
+  /* Legacy hooks — JS-rendered messages rely on these class names. */
+  .msg .body { font-family: inherit; }
+  #fwd-banner[hidden] { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <div class="title">king · model-inference · chat</div>
-  <div id="model-label" class="status" title="Active model selector">model=…</div>
+  <div class="brand">king · model-inference</div>
+  <button id="sidebar-toggle" aria-label="Toggle conversation list">☰</button>
+  <button id="new-chat" type="button" title="Start a new chat">+ New chat</button>
+  <div class="spacer"></div>
+  <div id="auth-chip" class="auth-chip" title="Sign in">
+    <span id="auth-chip-text">Sign in →</span>
+  </div>
   <div id="conn" class="status">loading…</div>
+  <!-- model-label preserved as a hidden diagnostic element the JS updates -->
+  <span id="model-label" hidden></span>
 </header>
 
-<div id="fwd-banner" hidden style="background:#fff3cd;color:#5a4a00;border-bottom:1px solid #e6d68a;padding:10px 20px;font-size:13px;line-height:1.5;">
-  <strong>Heads up:</strong> this page is loaded on <code id="fwd-host"></code>, which on VS Code dev containers routes through a port forwarder that silently drops streaming WebSocket frames mid-burst. Use the direct TCP proxy instead:
-  <a id="fwd-link" href="#" style="color:#5a4a00;text-decoration:underline;font-weight:600;">switch to the working URL</a>.
+<div id="fwd-banner" hidden></div>
+
+<div id="sidebar-scrim" aria-hidden="true"></div>
+<div id="shell">
+  <aside id="sidebar" aria-label="Your conversations">
+    <div class="side-head">Your conversations</div>
+    <div id="side-list" class="side-list"></div>
+  </aside>
+  <section id="main">
+    <div id="messages" role="log" aria-live="polite">
+      <div class="inner" id="messages-inner">
+        <div class="welcome" id="welcome">
+          <h1 class="w-title">Ready when you are</h1>
+          <p class="w-sub">Pick a prompt or ask your own.</p>
+          <div class="w-prompts">
+            <button type="button" class="w-prompt" data-prompt="What can you do?">What can you do?</button>
+            <button type="button" class="w-prompt" data-prompt="Remember: my favorite food is pizza.">Remember a fact</button>
+            <button type="button" class="w-prompt" data-prompt="Write a short haiku about rain.">Write a haiku</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="composer-wrap">
+      <div class="inner">
+        <div id="settings-row">
+          <button type="button" id="settings-toggle">Model settings</button>
+        </div>
+
+        <dialog id="settings" aria-labelledby="settings-title">
+          <header class="settings-header">
+            <h2 id="settings-title">Model settings</h2>
+            <button type="button" id="settings-close" aria-label="Close">×</button>
+          </header>
+          <div class="grid">
+            <label>model
+              <input type="text" id="model-name" value="SmolLM2-135M-Instruct">
+            </label>
+            <label>quant
+              <select id="quantization">
+                <option>Q4_K</option>
+                <option>Q4_0</option>
+                <option>Q5_K</option>
+                <option>Q6_K</option>
+                <option>Q8_0</option>
+                <option>F16</option>
+              </select>
+            </label>
+            <label>temperature
+              <input type="number" id="temperature" value="0.2" min="0" max="2" step="0.1">
+            </label>
+            <label>top_p
+              <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
+            </label>
+            <label>top_k
+              <input type="number" id="top_k" value="40" min="0" max="1024" step="1">
+            </label>
+            <label>max_tokens
+              <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
+            </label>
+            <label title="OpenAI-compat; breaks repetition loops. 0 = off.">frequency_penalty
+              <input type="number" id="frequency_penalty" value="0.8" min="-2" max="2" step="0.1">
+            </label>
+            <label title="OpenAI-compat; penalizes tokens already in the output. 0 = off.">presence_penalty
+              <input type="number" id="presence_penalty" value="0.6" min="-2" max="2" step="0.1">
+            </label>
+            <div class="diag" id="node-meta">node: connecting…</div>
+          </div>
+        </dialog>
+
+        <form id="form" autocomplete="off">
+          <textarea id="prompt" placeholder="Message SmolLM2… (Enter to send, Shift+Enter for newline)" required rows="1"></textarea>
+          <button id="send" type="submit" aria-label="Send message" title="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12l14 0"></path>
+              <path d="M13 6l6 6l-6 6"></path>
+            </svg>
+          </button>
+        </form>
+      </div>
+    </div>
+  </section>
 </div>
-
-<main id="messages" aria-live="polite">
-  <div class="msg assistant">
-    <div class="role">system</div>
-    <div class="body">This chat is streaming raw <code>TokenFrame</code> binary frames over <code>/ws</code>. Each message's footer shows live telemetry from the inference node.</div>
-  </div>
-</main>
-
-<footer>
-  <div class="settings">
-    <label>model
-      <input type="text" id="model-name" value="SmolLM2-135M-Instruct" size="24">
-    </label>
-    <label>quant
-      <select id="quantization">
-        <option>Q4_K</option>
-        <option>Q4_0</option>
-        <option>Q5_K</option>
-        <option>Q6_K</option>
-        <option>Q8_0</option>
-        <option>F16</option>
-      </select>
-    </label>
-    <label>temp
-      <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1">
-    </label>
-    <label>top_p
-      <input type="number" id="top_p" value="0.95" min="0" max="1" step="0.01">
-    </label>
-    <label>top_k
-      <input type="number" id="top_k" value="40" min="0" max="1024" step="1">
-    </label>
-    <label>max_tokens
-      <input type="number" id="max_tokens" value="192" min="1" max="8192" step="1">
-    </label>
-  </div>
-  <form id="form" autocomplete="off">
-    <textarea id="prompt" placeholder="Ask the model something. Enter to send, Shift+Enter for newline." required></textarea>
-    <button id="send" type="submit">Send</button>
-  </form>
-</footer>
-<div class="meta" id="node-meta">node: connecting…</div>
 
 <script>
 (() => {
@@ -265,6 +636,8 @@
 
   const els = {
     messages: document.getElementById('messages'),
+    messagesInner: document.getElementById('messages-inner'),
+    welcome: document.getElementById('welcome'),
     form: document.getElementById('form'),
     prompt: document.getElementById('prompt'),
     send: document.getElementById('send'),
@@ -277,45 +650,256 @@
     top_p: document.getElementById('top_p'),
     top_k: document.getElementById('top_k'),
     max_tokens: document.getElementById('max_tokens'),
+    frequency_penalty: document.getElementById('frequency_penalty'),
+    presence_penalty: document.getElementById('presence_penalty'),
+    authChip: document.getElementById('auth-chip'),
+    authChipText: document.getElementById('auth-chip-text'),
+    sidebar: document.getElementById('sidebar'),
+    sideList: document.getElementById('side-list'),
+    sidebarToggle: document.getElementById('sidebar-toggle'),
+    sidebarScrim: document.getElementById('sidebar-scrim'),
+    newChat: document.getElementById('new-chat'),
+    settingsToggle: document.getElementById('settings-toggle'),
+    settingsClose: document.getElementById('settings-close'),
+    settings: document.getElementById('settings'),
+    welcomePrompts: document.querySelectorAll('.w-prompt'),
   };
 
-  let sessionFallbackCounter = 0;
-  function generateSessionId() {
-    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
-      const bytes = new Uint8Array(8);
-      crypto.getRandomValues(bytes);
-      const token = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
-      return 'sess-ui-' + token;
-    }
+  const SESSION_KEY = 'king-model-inference-session-id';
+  const AUTH_STORAGE_KEY = 'king-model-inference-auth';
 
-    sessionFallbackCounter += 1;
-    return 'sess-ui-' + Date.now().toString(16) + '-' + sessionFallbackCounter.toString(16).padStart(4, '0');
+  function generateSessionId() {
+    return 'sess-ui-' + Math.random().toString(36).slice(2, 10);
+  }
+  function loadOrCreateSessionId() {
+    try {
+      let sid = localStorage.getItem(SESSION_KEY);
+      if (!sid || !/^[A-Za-z0-9_.:-]+$/.test(sid)) {
+        sid = generateSessionId();
+        localStorage.setItem(SESSION_KEY, sid);
+      }
+      return sid;
+    } catch {
+      return generateSessionId();
+    }
   }
 
   const state = {
-    ws: null,                // current in-flight WS (null when idle)
-    active: null,            // {bubble, body, footer, decoder}
-    sessionId: generateSessionId(),
+    ws: null,
+    active: null,
+    sessionId: loadOrCreateSessionId(),
     inFlight: false,
+    bootReady: false,
+    activePayload: null,
+    framesReceived: 0,
+    retriedForActive: false,
+    history: [],
+    pendingAssistantText: '',
+    authToken: null,
+    authUser: null,
+    systemPrompt: (
+      'You are a concise factual assistant. '
+      + 'Read the full conversation history. Answer ONLY the LATEST user question. '
+      + 'Do not repeat or quote your previous reply. Each answer must directly address the most recent question and use the specific fact it asks about (name, city, job, food, etc.). '
+      + 'If the user told you a fact earlier, recall THAT specific fact — do not substitute a different fact. '
+      + 'Keep replies short (one short sentence) unless asked for detail.'
+    ),
   };
 
-  // --------------------- WS lifecycle ---------------------
-  // We open a NEW WebSocket per prompt submit. The current king
-  // runtime runs the WS upgrade handler synchronously (#M-11 scope
-  // fence), so a persistent idle WS would block the HTTP listen loop
-  // on the server. Per-request WS keeps sessions short-lived and
-  // sidesteps that constraint until concurrent WS handling lands.
+  // ── Auth helpers ────────────────────────────────────────────────
+  function loadAuthFromStorage() {
+    try {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed.token !== 'string' || !/^[a-f0-9]{32}$/.test(parsed.token)) return;
+      if (parsed.expires_at && new Date(parsed.expires_at).getTime() < Date.now()) {
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        return;
+      }
+      state.authToken = parsed.token;
+      state.authUser = parsed.user || null;
+    } catch { /* ignore */ }
+  }
+  function clearAuth() {
+    state.authToken = null;
+    state.authUser = null;
+    try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch { /* ignore */ }
+  }
+  function authHeaders() {
+    return state.authToken ? { 'Authorization': 'Bearer ' + state.authToken } : {};
+  }
+  function updateAuthChip() {
+    if (state.authUser && state.authToken) {
+      els.authChip.dataset.state = 'authed';
+      els.authChipText.textContent = state.authUser.username + ' · ' + state.authUser.role;
+      els.authChip.title = 'Signed in — click to sign out';
+      document.body.dataset.authed = '1';
+    } else {
+      els.authChip.dataset.state = 'anon';
+      els.authChipText.textContent = 'Sign in →';
+      els.authChip.title = 'Go to the sign-in page';
+      document.body.dataset.authed = '0';
+    }
+  }
+  function goToLogin() { window.location.href = '/ui/login'; }
+  async function doLogout() {
+    const token = state.authToken;
+    clearAuth();
+    updateAuthChip();
+    renderSidebar([]);
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST', cache: 'no-store',
+          headers: { 'Authorization': 'Bearer ' + token },
+        });
+      } catch { /* fire and forget */ }
+    }
+  }
+
+  async function fetchJsonWithRetry(path, attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch(path, { cache: 'no-store', headers: { ...authHeaders() } });
+        if (res.ok) return await res.json();
+        if (res.status === 401) {
+          clearAuth();
+          updateAuthChip();
+          return null;
+        }
+      } catch { /* retry */ }
+      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
+    }
+    return null;
+  }
+
+  // ── Sidebar (authed conversations list) ────────────────────────
+  function relativeTime(iso) {
+    if (!iso) return '';
+    const t = Date.parse(iso);
+    if (Number.isNaN(t)) return '';
+    const delta = Math.max(0, Date.now() - t);
+    const mins = Math.floor(delta / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+  function renderSidebar(conversations) {
+    els.sideList.innerHTML = '';
+    if (!conversations || conversations.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'side-empty';
+      empty.textContent = 'No conversations yet. Send a message and it will appear here.';
+      els.sideList.appendChild(empty);
+      return;
+    }
+    for (const c of conversations) {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'side-item';
+      if (c.session_id === state.sessionId) row.dataset.active = '1';
+      row.dataset.sessionId = c.session_id;
+      const title = document.createElement('div');
+      title.className = 'si-title';
+      title.textContent = c.session_id;
+      const meta = document.createElement('div');
+      meta.className = 'si-meta';
+      const last = c.last_model_name || 'chat';
+      meta.textContent = relativeTime(c.updated_at) + ' · ' + c.turn_count + ' turn' + (c.turn_count === 1 ? '' : 's') + ' · ' + last;
+      row.appendChild(title);
+      row.appendChild(meta);
+      row.addEventListener('click', () => switchSession(c.session_id));
+      els.sideList.appendChild(row);
+    }
+  }
+  async function refreshSidebar() {
+    if (!state.authToken) { renderSidebar([]); return; }
+    const res = await fetchJsonWithRetry('/api/conversations/me');
+    if (!res || !Array.isArray(res.conversations)) { renderSidebar([]); return; }
+    renderSidebar(res.conversations);
+  }
+  async function switchSession(sid) {
+    if (!sid || sid === state.sessionId) {
+      closeSidebarOnMobile();
+      return;
+    }
+    try { localStorage.setItem(SESSION_KEY, sid); } catch { /* ignore */ }
+    state.sessionId = sid;
+    state.history = [];
+    state.pendingAssistantText = '';
+    clearMessageBubbles();
+    hideWelcome();
+    await rehydrateFromServer();
+    await refreshSidebar();
+    closeSidebarOnMobile();
+  }
+  function newSession() {
+    if (state.inFlight) {
+      closeWs(1000, 'new_session');
+      state.active = null;
+      state.activePayload = null;
+      state.inFlight = false;
+    }
+    const sid = generateSessionId();
+    try { localStorage.setItem(SESSION_KEY, sid); } catch { /* ignore */ }
+    state.sessionId = sid;
+    state.history = [];
+    state.pendingAssistantText = '';
+    clearMessageBubbles();
+    showWelcome();
+    refreshSidebar();
+    closeSidebarOnMobile();
+    setConn('ready');
+    els.send.disabled = !els.quantization.value;
+    els.prompt.disabled = false;
+    els.prompt.focus();
+  }
+  function openSidebarOnMobile() { document.body.dataset.sidebar = 'open'; }
+  function closeSidebarOnMobile() { delete document.body.dataset.sidebar; }
+
+  // ── Welcome / empty state ──────────────────────────────────────
+  function showWelcome() { if (els.welcome) els.welcome.style.display = ''; }
+  function hideWelcome() { if (els.welcome) els.welcome.style.display = 'none'; }
+  function clearMessageBubbles() {
+    // Remove rendered message bubbles but keep the welcome template in
+    // place so showWelcome() can re-attach to a live DOM node.
+    const bubbles = els.messagesInner.querySelectorAll('.msg');
+    bubbles.forEach(n => n.remove());
+  }
+
+  // ── Settings dialog ────────────────────────────────────────────
+  function openSettings() {
+    if (typeof els.settings.showModal === 'function') els.settings.showModal();
+    else els.settings.setAttribute('open', '');
+  }
+  function closeSettings() {
+    if (typeof els.settings.close === 'function') els.settings.close();
+    else els.settings.removeAttribute('open');
+  }
+
+  // ── WS URL ─────────────────────────────────────────────────────
   function wsUrl() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return proto + '//' + location.host + '/ws';
+    const base = proto + '//' + location.host + '/ws';
+    if (state.authToken) {
+      return base + '?auth_token=' + encodeURIComponent(state.authToken);
+    }
+    return base;
   }
 
   function setConn(text, kind) {
     els.conn.textContent = text;
     els.conn.className = 'status ' + (kind || '');
   }
+  function updateModelLabel(name, quant) {
+    els.modelLabel.textContent = 'model=' + (name || '?') + '/' + (quant || '?');
+  }
 
-  // --------------------- TokenFrame decode ---------------------
+  // ── TokenFrame decode ──────────────────────────────────────────
   function decodeFrame(buf) {
     if (!(buf instanceof ArrayBuffer) || buf.byteLength < HEADER_SIZE) {
       throw new Error('short_header (' + (buf && buf.byteLength) + ' bytes)');
@@ -351,6 +935,7 @@
       showErrorMessage('frame_decode_failed', String(e));
       return;
     }
+    state.framesReceived++;
     if (frame.frameType === FT_DELTA) {
       if (!state.active) return;
       const text = state.active.decoder.decode(frame.payload, { stream: true });
@@ -377,25 +962,25 @@
     try { return JSON.parse(new TextDecoder('utf-8').decode(u8)); } catch { return null; }
   }
 
-  // --------------------- message rendering ---------------------
+  // ── Message rendering ──────────────────────────────────────────
   function scrollToBottom() {
     els.messages.scrollTop = els.messages.scrollHeight;
   }
-
   function renderUser(text) {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg user';
     bubble.innerHTML = '<div class="role">you</div><div class="body"></div>';
     bubble.querySelector('.body').textContent = text;
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
   }
-
   function startAssistantBubble() {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg assistant streaming';
     bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">streaming…</div>';
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
     return {
       bubble,
@@ -404,21 +989,25 @@
       decoder: new TextDecoder('utf-8', { fatal: false }),
     };
   }
-
   function appendDelta(text) {
     if (!state.active) return;
     state.active.body.textContent += text;
+    state.pendingAssistantText += text;
     scrollToBottom();
   }
-
   function finalizeActive(errorText, hadError, summary) {
     if (!state.active) return;
-    // Flush any pending multi-byte UTF-8 bytes.
     try {
       const tail = state.active.decoder.decode();
       if (tail) appendDelta(tail);
     } catch { /* ignore */ }
     state.active.bubble.classList.remove('streaming');
+    if (!errorText && state.pendingAssistantText) {
+      pushHistory('assistant', state.pendingAssistantText);
+    } else if (errorText) {
+      popLastHistoryTurn('user');
+    }
+    state.pendingAssistantText = '';
     if (errorText) {
       state.active.bubble.classList.add('error');
       state.active.footer.textContent = errorText;
@@ -428,40 +1017,57 @@
       const ttft = summary.ttft_ms | 0;
       const dur = summary.duration_ms | 0;
       const tps = dur > 0 ? (tout / (dur / 1000)).toFixed(1) : '0.0';
-      state.active.footer.textContent = `tokens_in=${tin} tokens_out=${tout} ttft=${ttft}ms duration=${dur}ms tokens/s=${tps}`;
+      state.active.footer.textContent = `tokens_in=${tin}  tokens_out=${tout}  ttft=${ttft}ms  ${tps} tokens/s`;
     } else {
       state.active.footer.textContent = '(ended)';
     }
     state.active = null;
+    state.activePayload = null;
     state.inFlight = false;
-    // Per-request WS model: Send is enabled whenever no inference is in
-    // flight. A new request opens a fresh WS.
-    els.send.disabled = false;
+    els.send.disabled = !els.quantization.value;
     els.prompt.disabled = false;
     els.prompt.focus();
+    if (!hadError) refreshSidebar();
   }
 
   function showErrorMessage(code, message) {
+    hideWelcome();
     const bubble = document.createElement('div');
     bubble.className = 'msg error';
     bubble.innerHTML = '<div class="role">error</div><div class="body"></div>';
     bubble.querySelector('.body').textContent = '[' + code + '] ' + message;
-    els.messages.appendChild(bubble);
+    els.messagesInner.appendChild(bubble);
     scrollToBottom();
   }
 
-  // --------------------- send ---------------------
+  // ── Send pipeline ──────────────────────────────────────────────
   function currentSamplingFromUI() {
-    return {
-      temperature: Math.max(0, Math.min(2, Number(els.temperature.value) || 0)),
-      top_p: Math.max(0, Math.min(1, Number(els.top_p.value) || 0)),
-      top_k: Math.max(0, Math.min(1024, Number(els.top_k.value) | 0)),
-      max_tokens: Math.max(1, Math.min(8192, Number(els.max_tokens.value) | 0)),
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const s = {
+      temperature: clamp(Number(els.temperature.value) || 0, 0, 2),
+      top_p: clamp(Number(els.top_p.value) || 0, 0, 1),
+      top_k: clamp(Number(els.top_k.value) | 0, 0, 1024),
+      max_tokens: clamp(Number(els.max_tokens.value) | 0, 1, 8192),
     };
+    const freq = els.frequency_penalty ? Number(els.frequency_penalty.value) : 0;
+    const pres = els.presence_penalty ? Number(els.presence_penalty.value) : 0;
+    if (!Number.isNaN(freq) && freq !== 0) s.frequency_penalty = clamp(freq, -2, 2);
+    if (!Number.isNaN(pres) && pres !== 0) s.presence_penalty = clamp(pres, -2, 2);
+    return s;
   }
-
+  function pushHistory(role, content) {
+    if (!content) return;
+    state.history.push({ role, content });
+    while (state.history.length > 8) state.history.shift();
+    while (state.history.length > 0 && state.history[0].role === 'assistant') state.history.shift();
+  }
+  function popLastHistoryTurn(role) {
+    const last = state.history[state.history.length - 1];
+    if (last && last.role === role) state.history.pop();
+  }
   function sendPrompt(text) {
     if (state.inFlight) return;
+    pushHistory('user', text);
     const sampling = currentSamplingFromUI();
     const payload = {
       session_id: state.sessionId,
@@ -470,101 +1076,99 @@
         quantization: els.quantization.value,
         prefer_local: true,
       },
-      prompt: text,
+      messages: [{ role: 'system', content: state.systemPrompt }, ...state.history],
       sampling,
       stream: true,
     };
-    els.modelLabel.textContent = 'model=' + payload.model_selector.model_name + '/' + payload.model_selector.quantization;
+    updateModelLabel(payload.model_selector.model_name, payload.model_selector.quantization);
     state.active = startAssistantBubble();
     state.inFlight = true;
+    state.activePayload = payload;
+    state.framesReceived = 0;
+    state.retriedForActive = false;
     els.send.disabled = true;
     els.prompt.disabled = true;
+    openStreamingWs(payload);
+  }
+  function openStreamingWs(payload) {
     setConn('connecting…');
-
     const ws = new WebSocket(wsUrl());
     ws.binaryType = 'arraybuffer';
     state.ws = ws;
-
     ws.addEventListener('open', () => {
       setConn('streaming…', 'ok');
-      ws.send(JSON.stringify({ event: 'infer.start', payload }));
+      try { ws.send(JSON.stringify({ event: 'infer.start', payload })); }
+      catch (e) { console.error('ws send failed', e); }
     });
     ws.addEventListener('message', onMessage);
-    ws.addEventListener('error', () => {
-      setConn('ws error', 'err');
-      if (state.inFlight) finalizeActive('[ws_error] WebSocket transport error before the stream completed.', true);
-      state.ws = null;
-    });
+    ws.addEventListener('error', () => setConn('ws error', 'err'));
     ws.addEventListener('close', (ev) => {
-      if (state.inFlight) {
-        finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
-      }
-      setConn('ready');
       state.ws = null;
+      if (!state.inFlight) { setConn('ready'); return; }
+      if (state.framesReceived === 0 && !state.retriedForActive) {
+        state.retriedForActive = true;
+        setConn('retrying…');
+        setTimeout(() => { if (state.inFlight) openStreamingWs(state.activePayload); }, 150);
+        return;
+      }
+      finalizeActive('[ws_closed ' + ev.code + '] WebSocket closed before the end frame arrived.', true);
+      setConn('ready');
     });
   }
 
+  // ── Textarea auto-resize ───────────────────────────────────────
+  function autoResizePrompt() {
+    els.prompt.style.height = 'auto';
+    els.prompt.style.height = Math.min(200, els.prompt.scrollHeight) + 'px';
+  }
+
+  // ── Wire events ────────────────────────────────────────────────
   els.form.addEventListener('submit', (ev) => {
     ev.preventDefault();
     const text = els.prompt.value.trim();
     if (!text) return;
     renderUser(text);
     els.prompt.value = '';
+    autoResizePrompt();
     sendPrompt(text);
   });
-
+  els.prompt.addEventListener('input', autoResizePrompt);
   els.prompt.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter' && !ev.shiftKey) {
       ev.preventDefault();
       if (!state.inFlight) els.form.requestSubmit();
     }
   });
-
-  // --------------------- known-bad forwarder banner ---------------------
-  // VS Code dev-container port forwarding silently truncates our
-  // streaming WebSocket. If this page is loaded on port 18090 we show
-  // a visible banner pointing the user at the socat bridge on 18091.
-  (function maybeShowForwardBanner() {
-    if (location.port === '18090') {
-      const banner = document.getElementById('fwd-banner');
-      const host = document.getElementById('fwd-host');
-      const link = document.getElementById('fwd-link');
-      if (banner && host && link) {
-        host.textContent = location.host;
-        const proxyUrl = location.protocol + '//' + location.hostname + ':18091' + location.pathname + location.search;
-        link.href = proxyUrl;
-        link.textContent = proxyUrl;
-        banner.hidden = false;
-      }
-    }
-  })();
-
-  // --------------------- boot ---------------------
-  // The current king HTTP/1 one-shot listener serves ONE request at
-  // a time. A browser page typically fires multiple requests in
-  // parallel (/api/runtime, /api/models, /favicon.ico, …) and the
-  // ones that arrive while another is being handled get dropped.
-  // We work around this by:
-  //   (a) answering /favicon.ico on the server (module_runtime),
-  //   (b) serializing every boot fetch here, one at a time,
-  //   (c) falling back silently if a fetch fails — the UI works
-  //       without the metadata, with the defaults already in the form.
-  // Persistent WS is avoided entirely (see wsUrl header comment).
-  setConn('ready');
-  async function fetchJsonWithRetry(path, attempts = 3) {
-    for (let i = 0; i < attempts; i++) {
-      try {
-        const res = await fetch(path, { cache: 'no-store' });
-        if (res.ok) return await res.json();
-      } catch { /* retry */ }
-      if (i < attempts - 1) await new Promise(r => setTimeout(r, 200));
-    }
-    return null;
+  els.welcomePrompts.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const text = btn.dataset.prompt || btn.textContent.trim();
+      els.prompt.value = text;
+      autoResizePrompt();
+      els.prompt.focus();
+    });
+  });
+  els.authChip.addEventListener('click', async () => {
+    if (state.authToken) { await doLogout(); }
+    else { goToLogin(); }
+  });
+  els.newChat.addEventListener('click', newSession);
+  els.settingsToggle.addEventListener('click', openSettings);
+  els.settingsClose.addEventListener('click', closeSettings);
+  els.settings.addEventListener('click', (ev) => {
+    // click on the backdrop (outside the dialog content) closes it
+    if (ev.target === els.settings) closeSettings();
+  });
+  if (els.sidebarToggle) {
+    els.sidebarToggle.addEventListener('click', () => {
+      if (document.body.dataset.sidebar === 'open') closeSidebarOnMobile();
+      else openSidebarOnMobile();
+    });
   }
-  // The registry (models response) is the source of truth for the
-  // quant dropdown. The old dropdown listed every enum value, which
-  // caused `model_not_found` when the user picked a quant that hadn't
-  // been registered.
+  if (els.sidebarScrim) {
+    els.sidebarScrim.addEventListener('click', closeSidebarOnMobile);
+  }
+
+  // ── Model quant dropdown (hydrated from /api/models) ───────────
   let registeredModels = [];
   function refreshQuantOptionsForModelName(modelName) {
     const matches = registeredModels.filter(m => m.model_name === modelName);
@@ -579,10 +1183,8 @@
       return;
     }
     els.quantization.disabled = false;
-    // Quality order: F16 > Q8_0 > Q6_K > Q5_K > Q4_K > Q4_0 > Q3_K > Q2_K.
     const rank = { 'F16': 100, 'Q8_0': 80, 'Q6_K': 60, 'Q5_K': 50, 'Q4_K': 40, 'Q4_0': 35, 'Q3_K': 30, 'Q2_K': 20 };
-    const seenQuants = [...new Set(matches.map(m => m.quantization))]
-      .sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
+    const seenQuants = [...new Set(matches.map(m => m.quantization))].sort((a, b) => (rank[b] || 0) - (rank[a] || 0));
     for (const q of seenQuants) {
       const opt = document.createElement('option');
       opt.value = q;
@@ -591,16 +1193,67 @@
     }
     els.quantization.value = seenQuants.includes(current) ? current : seenQuants[0];
   }
-  els.modelName.addEventListener('change', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
-  els.modelName.addEventListener('input', () => refreshQuantOptionsForModelName(els.modelName.value.trim()));
+  function syncSendEnabled() {
+    if (!state.bootReady || state.inFlight) return;
+    els.send.disabled = !els.quantization.value;
+  }
+  els.modelName.addEventListener('change', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
+  els.modelName.addEventListener('input', () => { refreshQuantOptionsForModelName(els.modelName.value.trim()); syncSendEnabled(); });
+  els.quantization.addEventListener('change', () => {
+    updateModelLabel(els.modelName.value.trim(), els.quantization.value);
+    syncSendEnabled();
+  });
+
+  // ── Rehydrate current session history from server ──────────────
+  async function rehydrateFromServer() {
+    try {
+      const convoUrl = '/api/conversations/' + encodeURIComponent(state.sessionId) + '/messages';
+      const convo = await fetchJsonWithRetry(convoUrl);
+      if (convo && convo.found && Array.isArray(convo.messages) && convo.messages.length > 0) {
+        hideWelcome();
+        for (const m of convo.messages) {
+          if (!m || typeof m.role !== 'string' || typeof m.content !== 'string') continue;
+          state.history.push({ role: m.role, content: m.content });
+          if (m.role === 'user') {
+            renderUser(m.content);
+          } else if (m.role === 'assistant') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">assistant</div><div class="body"></div><div class="footer">restored</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messagesInner.appendChild(bubble);
+          } else if (m.role === 'system') {
+            const bubble = document.createElement('div');
+            bubble.className = 'msg assistant';
+            bubble.innerHTML = '<div class="role">system</div><div class="body"></div><div class="footer">restored</div>';
+            bubble.querySelector('.body').textContent = m.content;
+            els.messagesInner.appendChild(bubble);
+          }
+        }
+        scrollToBottom();
+      }
+    } catch { /* ignore rehydrate failures */ }
+  }
+
+  // ── Boot ───────────────────────────────────────────────────────
+  setConn('booting…');
+  els.send.disabled = true;
+  els.prompt.disabled = true;
+  loadAuthFromStorage();
+  updateAuthChip();
 
   (async function fetchMeta() {
+    if (state.authToken) {
+      const who = await fetchJsonWithRetry('/api/auth/whoami');
+      if (!who || who.status !== 'ok') { clearAuth(); updateAuthChip(); }
+      else if (who.user) { state.authUser = who.user; updateAuthChip(); }
+    }
     const runtime = await fetchJsonWithRetry('/api/runtime');
     const models = await fetchJsonWithRetry('/api/models');
     if (runtime && runtime.node) {
       const n = runtime.node.node_id || '?';
       const ver = (runtime.runtime && runtime.runtime.king_version) || '?';
-      els.nodeMeta.textContent = `node=${n} king=${ver} models=${models && models.count != null ? models.count : '?'}`;
+      els.nodeMeta.textContent = `node=${n}  king=${ver}  models=${models && models.count != null ? models.count : '?'}`;
     }
     if (models && Array.isArray(models.items) && models.items.length > 0) {
       registeredModels = models.items.map(m => ({ model_name: m.model_name, quantization: m.quantization }));
@@ -608,7 +1261,7 @@
       els.modelName.value = first.model_name;
       refreshQuantOptionsForModelName(first.model_name);
       if (els.quantization.value) {
-        els.modelLabel.textContent = 'model=' + first.model_name + '/' + els.quantization.value;
+        updateModelLabel(first.model_name, els.quantization.value);
       }
     } else if (models && Array.isArray(models.items)) {
       registeredModels = [];
@@ -616,6 +1269,15 @@
       els.modelLabel.textContent = 'model=(none registered)';
       showErrorMessage('no_model_registered', 'No models in the registry. Run scripts/seed-model.php or boot the server with MODEL_INFERENCE_AUTOSEED=1.');
     }
+
+    await rehydrateFromServer();
+    await refreshSidebar();
+
+    state.bootReady = true;
+    els.prompt.disabled = false;
+    els.send.disabled = !els.quantization.value;
+    setConn('ready');
+    els.prompt.focus();
   })();
 })();
 </script>

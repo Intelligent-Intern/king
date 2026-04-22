@@ -217,6 +217,642 @@ Visible Participants Window (definiert):
   - eigener Self-View bleibt verfügbar (als eigener Kanal, nicht zwingend im Top-5-Mainset).
   - Teilnehmer außerhalb Top-5 bleiben vollständig im Roster sichtbar und moderierbar.
 
+All 18 leaves (`#M-1` through `#M-18`) are closed. 17 contract tests
+green. The `feature/model-inference` branch is merge-ready. Post-merge
+sweep ticks V/Z tracker bullets against `main`.
+
+## R-batch: RAG Pipeline (branch `feature/rag-pipeline`)
+
+> Parallel track, extends `demo/model-inference/` with embedding + retrieval
+> surfaces. Maps to tracker sections **W** (Embeddings / Vectorization /
+> Semantic Discovery, partial: W.1–W.4, W.6) and **X** (Knowledge / Retrieval,
+> partial: X.1–X.3, X.7). Branched off `feature/model-inference` tip `e4aeeb7`.
+> Tracker boxes NOT ticked from this branch; post-merge sweep only.
+
+Non-negotiable direction for this batch:
+
+- embedding engine is **llama.cpp server in `--embedding` mode** (same pinned
+  binary, different GGUF, different flags). King owns the embedding contract;
+  llama.cpp is the execution engine behind it.
+- vector storage is **object-store brute-force cosine similarity**. Honest — no
+  HNSW/IVF/ANN claim. Demo corpus sizes only.
+- document format is **plain text only**. PDF/HTML/Markdown parsing fenced.
+- the RAG pipeline composes embedding + retrieval + inference in-process (same
+  server, no cross-service HTTP). Multi-service composition fenced.
+- out of scope: hybrid retrieval (X.4), retrieval-backed MCP selection
+  (X.5–X.6), graph traversal (W.8–W.9), similarity-based service resolution
+  (W.5, W.7), external vector databases, large-scale indexing (>10K vectors),
+  WS streaming of RAG results, multimodal embedding, concurrent RAG execution.
+
+### Done in current branch
+
+- [x] `#R-1` Embedding model registry — extend SQLite schema with `model_type`
+  column (`chat`/`embedding`); `scripts/install-embedding-model.sh` pins a GGUF
+  embedding model with committed SHA-256; autoseed on boot. Maps to `W.1`,
+  `W.2`.
+  - Added `model_type` column via idempotent ALTER in `registry_schema_migrate()`
+  - Extended validation, create, list, and envelope functions
+  - Added `model_inference_registry_list_by_type()` and `model_inference_registry_find_embedding_model()`
+  - Created `scripts/install-embedding-model.sh` pinning nomic-embed-text-v1.5 Q8_0
+  - Extended server autoseed for embedding model fixtures
+  - Contract test: `tests/embedding-model-registry-contract.{sh,php}`
+
+- [x] `#R-2` Embedding worker lifecycle — spawn second `LlamaCppWorker` with
+  `extra_argv: ['--embedding']`; health probe on `/health`; `EmbeddingSession`
+  cache (one active embedding worker, separate from inference worker). Maps to
+  `W.2`.
+  - Created `domain/embedding/embedding_session.php` — mirrors InferenceSession
+  - Spawns worker with `extra_argv: ['--embedding']`; calls `/v1/embeddings`
+  - L2 normalization on returned vectors; one-active-worker policy
+  - Bootstrapped in `server.php` with shutdown drain handler
+  - Contract test: `tests/embedding-worker-contract.{sh,php}`
+
+- [x] `#R-3` `contracts/v1/embedding-request.contract.json` — typed envelope
+  `{texts[], model_selector, options:{normalize, truncate}}`; validation with
+  rejection codes. Maps to `W.2`, `W.4`.
+  - Created `contracts/v1/embedding-request.contract.json` with full shape
+  - Created `domain/embedding/embedding_request.php` — `EmbeddingRequestValidationError` + `model_inference_validate_embedding_request()`
+  - 33-rule contract test: `tests/embedding-request-envelope-contract.{sh,php}`
+
+- [x] `#R-4` `POST /api/embed` — real embedding generation via llama.cpp
+  `/v1/embeddings`; returns `{embeddings[], dimensions, model, tokens_used,
+  duration_ms}`. Maps to `W.1`, `W.2`.
+  - Created `http/module_embed.php` — POST /api/embed endpoint
+  - Router module order grew to include `embed` between registry and inference
+  - Wired `$getEmbeddingSession` through router + server handler (optional param, backward-compatible)
+  - Updated catalog: added `embed` surface to live API
+  - Updated parity test: embed probe, shipped list, exception catch
+  - Contract test: `tests/embedding-generation-contract.{sh,php}`
+
+- [x] `#R-5` Document ingest — `POST /api/documents` accepts plain text body,
+  stores in object store under flat key `doc-{16hex}`, returns `{document_id,
+  byte_length, sha256_hex}`. Maps to `X.1`.
+  - Created `domain/retrieval/document_store.php` — ingest, get, list, schema migration
+  - Created `http/module_ingest.php` — POST /api/documents, GET /api/documents, GET /api/documents/{id}
+  - Router module order grew to include `ingest` between embed and inference
+  - Catalog: added `documents_list`, `documents_create`, `document_get` + error codes
+  - Contract test: `tests/document-ingest-contract.{sh,php}`
+
+- [x] `#R-6` Text chunking engine — `domain/retrieval/text_chunker.php` with
+  configurable strategy (fixed-size with overlap);
+  `contracts/v1/chunk-envelope.contract.json`. Maps to `X.2`.
+  - Created `domain/retrieval/text_chunker.php` — `model_inference_chunk_text()` with configurable chunk_size + overlap
+  - Chunk ID format: `chk-{doc_prefix_8hex}-{sequence_4digit}` (deterministic)
+  - SQLite persistence: chunks table with schema migration, persist, list_by_document
+  - Created `contracts/v1/chunk-envelope.contract.json`
+  - 60-rule contract test: `tests/text-chunker-contract.{sh,php}`
+
+- [x] `#R-7` Chunk persistence — embed + store chunks to object store keyed
+  `chk-{doc_prefix}-{seq}`; chunk metadata in SQLite;
+  `GET /api/documents/{document_id}/chunks`. Maps to `X.2`, `W.3`.
+  - Auto-chunks on document ingest: `POST /api/documents` now chunks + persists
+  - Chunk text stored to object store via `model_inference_chunk_store_texts()`
+  - Added `GET /api/documents/{document_id}/chunks` endpoint
+  - Catalog: added `document_chunks` surface
+  - Contract test: `tests/chunk-persistence-contract.{sh,php}`
+
+- [x] `#R-8` Vector store — persist embedding vectors to object store keyed
+  `vec-{16hex}`; vector metadata in SQLite linking chunk_id → vector_id →
+  embedding model. Maps to `W.3`.
+  - Created `domain/retrieval/vector_store.php` — schema migration, store, load, list
+  - Vectors stored as JSON float arrays in object store under `vec-{16hex}` keys
+  - SQLite metadata: vectors table linking chunk_id → vector_id → embedding_model_id
+  - `model_inference_vector_load_all()` and `_load_all_for_document()` for retrieval
+  - Contract test: `tests/vector-store-contract.{sh,php}`
+
+- [x] `#R-9` Brute-force cosine similarity — pure function
+  `cosine_similarity(array $a, array $b): float`; vector search over stored
+  vectors returning top-K ranked results. Maps to `W.4`.
+  - Created `domain/retrieval/cosine_similarity.php` — `model_inference_cosine_similarity()` + `model_inference_vector_search()`
+  - Pure functions: no database, no object store, no I/O
+  - top-K ranking with min_score filtering, sorted descending by score
+  - 16-rule contract test: `tests/cosine-similarity-contract.{sh,php}`
+
+- [x] `#R-10` `POST /api/retrieve` — retrieval endpoint: embed query → scan
+  vectors → return ranked chunks with scores;
+  `contracts/v1/retrieval-request.contract.json`. Maps to `X.1`, `X.3`.
+  - Created `domain/retrieval/retrieval_pipeline.php` — `model_inference_retrieval_search()`
+  - Created `http/module_retrieve.php` — POST /api/retrieve endpoint
+  - Created `contracts/v1/retrieval-request.contract.json`
+  - Request validation: query, model_selector, optional document_ids/top_k/min_score
+  - Router module order grew to include `retrieve` between ingest and inference
+  - Catalog + parity test updated
+  - Contract test: `tests/retrieval-pipeline-contract.{sh,php}`
+
+- [x] `#R-11` `POST /api/rag` — end-to-end RAG pipeline: accept query +
+  document_id → retrieve top-K context → augment prompt with context → forward
+  to inference engine → return grounded completion. Maps to `X.1`.
+  - Created `domain/retrieval/rag_orchestrator.php` — `model_inference_rag_execute()`, `_rag_build_prompt()`, `_validate_rag_request()`
+  - Dual model_selector: separate chat + embedding model selectors
+  - Prompt augmentation: context block with numbered chunks + system instruction
+  - Wired as `POST /api/rag` in module_retrieve.php
+  - Contract test: `tests/rag-orchestrator-contract.{sh,php}`
+
+- [x] `#R-12` RAG telemetry — extend `InferenceMetricsRing` pattern for
+  embedding + retrieval metrics (embedding_latency_ms, retrieval_latency_ms,
+  chunks_scanned, vectors_scanned, context_tokens). Maps to `X.7`.
+  - Created `domain/telemetry/rag_metrics.php` — `RagMetricsRing` (same bounded-FIFO pattern)
+  - Tracks: embedding_ms, retrieval_ms, inference_ms, total_ms, chunks_used, vectors_scanned, tokens_in/out
+  - `GET /api/telemetry/rag/recent` endpoint added to module_telemetry
+  - 24-rule contract test: `tests/rag-telemetry-contract.{sh,php}`
+
+- [x] `#R-13` Semantic-DNS: register embedding + retrieval capabilities as
+  attributes on existing `king.inference.v1` service; update routing
+  diagnostic. Maps to `W.6`.
+  - Extended `model_inference_semantic_dns_register()` with `supports_embedding`, `supports_retrieval`, `supports_rag`, `embedding_dimensions` attributes
+  - Same service type `king.inference.v1` (not a separate type)
+  - Boot profile in server.php sets embedding capabilities
+  - Contract test: `tests/semantic-dns-embedding-contract.{sh,php}`
+
+- [x] `#R-14` Catalog parity update — grow `api-ws-contract.catalog.json` with
+  all R-batch surfaces; update parity gate; promote relevant target-shape
+  entries. Maps to `W`, `X`.
+  - Catalog maintained incrementally through R-1–R-13 (no drift)
+  - All R-batch surfaces in live catalog: embed, documents_list, documents_create, document_get, document_chunks, retrieve, rag, telemetry_rag_recent
+  - Parity test covers all 18 live API surfaces + probes
+  - Error codes: document_not_found, document_too_large added
+  - Shipped list prevents R-batch surfaces from leaking into target-shape
+
+- [x] `#R-15` `scripts/rag-smoke.sh` — end-to-end: ingest doc → verify chunks
+  → embed → retrieve → RAG completion; runs in compose. Maps to `X.7`.
+  - Created `scripts/rag-smoke.sh` — 10-phase end-to-end RAG smoke test
+  - Phases: syntax → contract tests (R-batch + M-batch) → compose boot →
+    embedding model probe → document ingest → chunk verification → embedding →
+    retrieval → RAG completion → RAG telemetry
+  - Graceful skip for phases 6-8 when embedding model fixture not installed
+  - Runs all 23 R-batch + M-batch offline contract tests as regression gate
+
+- [x] `#R-16` README update + target-shape fences + ISSUES section review.
+  Tracker boxes remain unticked.
+  - README: added R-batch "What works today" section, R-batch leaf table,
+    embedding model install step, RAG smoke section, R-batch scope fences
+  - Layout tree updated with all R-batch files (30 test pairs total)
+  - Scope fences: 8 explicit R-batch fences (hybrid retrieval, external vector
+    DBs, HNSW/IVF, PDF/HTML parsing, multimodal, large-scale, WS streaming,
+    concurrent RAG)
+
+### Next step (R-batch)
+
+- R-batch sprint complete. All 16 leaves (#R-1 → #R-16) are closed. 30
+  contract tests green. Branch `feature/rag-pipeline` is merge-ready.
+  Tracker boxes remain unticked pending post-merge sweep on `main`.
+
+## S-batch: Semantic Discovery (branch `feature/rag-pipeline`)
+
+> Stacks directly on top of R-batch. Reuses `model_inference_embed()` +
+> `model_inference_cosine_similarity()` + `model_inference_vector_search()`
+> to replace keyword-only service/tool selection with vector-ranked
+> discovery. Maps to tracker bullets **W.5, W.7, X.4, X.5, X.6**.
+> Tracker boxes NOT ticked from this branch; post-merge sweep only.
+
+Non-negotiable direction for this batch:
+
+- Brute-force cosine over `service_embeddings` / `tool_embeddings`. No ANN /
+  HNSW / IVF. Demo scale only (<1k services).
+- BM25 parameters pinned (`k1=1.2`, `b=0.75`). No learned ranker.
+- Descriptor text (name + description + capabilities + tags) is the sole
+  semantic signal. No graph traversal.
+- C-level Semantic-DNS surface is UNCHANGED. The semantic-query path is an
+  additive PHP overlay so the existing keyword API keeps its behavior.
+- `POST /api/tools/pick` fails closed with `no_semantic_match` when no tool
+  scores above `min_score`. No silent default target.
+- Out of scope: graph-aware metadata (W.8/W.9), retrieval-driven *document*
+  hybrid (stays semantic-only in `/api/retrieve`), fleet-wide model
+  placement (V.3-V.5), fine-tuning (Y), advanced extensions (AA).
+
+### Done in current branch
+
+- [x] `#S-1` `service-descriptor.contract.json` + validator
+  (`domain/discovery/service_descriptor.php`): typed envelope
+  `{service_id, service_type, name, description, capabilities[], tags[]}` +
+  `model_inference_service_descriptor_embedding_text()` helper. Maps to `W.5`.
+  - 40-rule test: `tests/service-descriptor-contract.{sh,php}`
+
+- [x] `#S-2` `service_embeddings` SQLite table + `svec-{hex}` object-store
+  layer (`domain/discovery/service_embedding_store.php`): schema migration,
+  upsert-aware store, load_row, load_all (metadata + dense vector),
+  list-by-type, delete. Maps to `W.5`, `W.7`.
+  - 39-rule test: `tests/service-embedding-store-contract.{sh,php}`
+
+- [x] `#S-3` Embedding composition layer
+  (`domain/discovery/service_embedding_upsert.php`):
+  `model_inference_service_embedding_upsert()` validates descriptor, assembles
+  text, calls injected embedder, persists. Adapter factory converts an
+  `EmbeddingSession` + worker into the callable shape. Maps to `W.5`.
+  - 15-rule test: `tests/service-embedding-upsert-contract.{sh,php}`
+
+- [x] `#S-4` `POST /api/discover` + envelope parser
+  (`http/module_discover.php`). Modes: `keyword | semantic | hybrid`. Wired
+  into dispatcher; `discover` added to deterministic module order. Maps to `X.5`.
+  - 43-rule envelope test: `tests/discover-envelope-contract.{sh,php}`
+
+- [x] `#S-5` Semantic scorer (`domain/discovery/semantic_discover.php`):
+  brute-force cosine over `service_embeddings` with deterministic `service_id`
+  tie-break. Maps to `W.7`, `X.5`.
+  - 11-rule test: `tests/semantic-discover-contract.{sh,php}`
+
+- [x] `#S-6` Hybrid scorer (`domain/discovery/hybrid_discover.php`):
+  normalized BM25 (k1=1.2, b=0.75) + cosine fusion with `alpha`, min-max
+  normalization before fusion, deterministic tie-break on zero scores. Maps
+  to `X.4`.
+  - 30-rule test: `tests/hybrid-discover-contract.{sh,php}`
+
+- [x] `#S-7` `tool-descriptor.contract.json` + `tool_embeddings` store +
+  `model_inference_validate_tool_descriptor()` with full mcp_target shape.
+  Maps to `W.7`.
+  - 43-rule test: `tests/tool-descriptor-contract.{sh,php}`
+
+- [x] `#S-8` Tool embedding upsert
+  (`model_inference_tool_embedding_upsert()`): same pattern as S-3 for tools,
+  persists to `tvec-{hex}`. Maps to `W.7`. (Tested in `tool-descriptor-contract`.)
+
+- [x] `#S-9` `POST /api/tools/discover` + semantic/hybrid tool scorers
+  (`domain/discovery/tool_discover.php`): same shape as `/api/discover`,
+  returns ranked tools with `mcp_target`. Maps to `X.6`.
+  - 11-rule test: `tests/tool-discover-contract.{sh,php}`
+
+- [x] `#S-10` `POST /api/tools/pick` + `model_inference_mcp_pick()`
+  wrapper (`domain/discovery/mcp_pick.php`): fails closed with
+  `McpPickNoMatchException` / `no_semantic_match` when no tool scores above
+  `min_score`. Maps to `W.7`, `X.6`.
+  - 5-rule test: `tests/mcp-pick-contract.{sh,php}`
+
+- [x] `#S-11` `DiscoveryMetricsRing` + `GET /api/telemetry/discovery/recent`
+  (`domain/telemetry/discovery_metrics.php`): bounded-FIFO ring with
+  `embedding_ms`, `search_ms`, `total_ms`, `candidates_scanned`, `mode`,
+  `alpha`, `query_length`, `service_type`, `top_k`, `min_score`. Maps to `X.5`.
+  - 32-rule test: `tests/discovery-telemetry-contract.{sh,php}`
+
+- [x] `#S-12` `dns_semantic_query.php` overlay: intersects
+  `king_semantic_dns_discover_service` candidates with
+  `semantic_discover` results. Fails closed (empty intersection) when a
+  service is only in embeddings but not registered in DNS. Maps to `W.5`, `W.7`.
+  - 10-rule test: `tests/dns-semantic-query-contract.{sh,php}`
+
+- [x] `#S-13` Catalog parity grown by 4 live surfaces (`discover`,
+  `tools_discover`, `tools_pick`, `telemetry_discovery_recent`) + 4 new
+  error codes (`invalid_service_descriptor`, `invalid_tool_descriptor`,
+  `embedding_worker_unavailable_discovery`, `no_semantic_match`).
+  `contract-catalog-parity-contract` stays green; `router-module-order`
+  updated.
+
+- [x] `#S-14` `scripts/discovery-smoke.sh` — 10-phase end-to-end
+  (syntax → contract suite → compose → embedding probe → keyword
+  discovery → semantic → hybrid → tools discover → tools pick
+  fail-closed → telemetry). README updated with S-batch table + scope
+  fences + layout entries. ISSUES updated (this section).
+
+### Next step (S-batch)
+
+- S-batch sprint complete. All 14 leaves (#S-1 → #S-14) are closed. 11 new
+  contract tests green; no regressions in existing 30+ tests. Branch
+  `feature/rag-pipeline` carries both R-batch and S-batch and is
+  merge-ready. Tracker boxes **W.5, W.7, X.4, X.5, X.6** remain unticked
+  pending post-merge sweep on `main`.
+
+## T-batch: Chat Memory & Small-Model Reliability (branch `feature/rag-pipeline`)
+
+> Follow-on to R/S batches on the same branch. Turns the model-inference
+> demo from a single-turn primitive into a working multi-turn chat against
+> SmolLM2-135M, including the surface-level tuning needed to make a tiny
+> model actually usable for context recall. Does NOT tick any readiness
+> tracker boxes — this is demo-UX hardening, not a new capability axis.
+
+Non-negotiable direction for this batch:
+
+- No model swap. Everything must work on the existing 135M fixture.
+- Server envelope stays backward-compatible. Pre-T-batch callers that send
+  only `prompt` (no `messages[]`, no penalties) must see identical behaviour.
+- Shared resolver for HTTP and WS transports so behaviour can't drift.
+- Honest documentation of the failure modes and the specific knobs that fix
+  them — so readers know both *what to do* and *why*.
+
+### Done in current branch
+
+- [x] `#T-1` Multi-turn chat memory: optional `messages[]` field on the
+  inference-request envelope, plumbed through HTTP + WS paths to llama.cpp
+  `/v1/chat/completions`, with transcripts persisted including messages.
+  Browser UI (`public/chat.html`) now keeps an in-memory `state.history`
+  of `{role, content}` turns, re-sent on every submit. Pre-T-1 clients
+  that send only `prompt` are unchanged.
+  - Shared resolver: `domain/inference/chat_messages.php`
+  - Validator + schema: `domain/inference/inference_request.php` (adds
+    `messages` as optional top-level key; roles `system|user|assistant`;
+    1–64 items; content 1–32768 chars)
+  - Transcript round-trip: `domain/inference/transcript_store.php`
+  - Contract test: `tests/chat-memory-contract.{sh,php}` (37 rules)
+
+- [x] `#T-2` Anti-collapse surface fix: add a default system prompt,
+  lower default temperature to 0.2, and cap history at 8 turns (down
+  from 32). Stops SmolLM2-135M from mode-collapsing into training-data
+  snippets (the observed "Croatia/beaches/colors" loop). Single-fact
+  recall (`"What is my name?"`) becomes reliable.
+  - Edits: `public/chat.html` (`state.systemPrompt`, `pushHistory` cap,
+    temperature default 0.7 → 0.2)
+  - Live proof: name-recall across a fresh Playwright session.
+  - Limitation surfaced: multi-fact follow-up questions still fail
+    because the model echo-copies its previous short reply. Resolved
+    in #T-3.
+
+- [x] `#T-3` Repetition penalties + stronger system prompt: extend the
+  sampling envelope with optional `frequency_penalty` and
+  `presence_penalty` (OpenAI-compatible, range -2.0..2.0, default 0.0).
+  Plumb both through HTTP + WS paths to `/v1/chat/completions` only when
+  non-zero (keeps pre-T-3 payloads identical). UI ships defaults
+  `frequency_penalty=0.8, presence_penalty=0.6`. Stronger system prompt
+  explicitly forbids repeating/quoting the previous reply and anchors
+  the model to the LATEST question.
+  - Envelope + validator: `domain/inference/inference_request.php`
+    (sampling: new optional fields with float range check)
+  - Plumbing: `domain/inference/inference_session.php` (HTTP) and
+    `domain/inference/inference_stream.php` (WS); both include the
+    penalty fields only when `!== 0.0`
+  - UI: `public/chat.html` adds two new numeric inputs and the
+    refined system prompt under `state.systemPrompt`
+  - Contract JSON: `contracts/v1/inference-request.contract.json`
+    documents the new sampling fields
+  - Live proof: 4-fact Playwright stress test (name, city, job, food)
+    recalled 4/4 correctly on SmolLM2-135M-Instruct/Q4_K. Same test on
+    T-2 baseline scored 1/3 (first probe correct, subsequent probes all
+    returned `"My name is Julius."`).
+
+- [x] `#T-4` Demo README learnings section: `demo/model-inference/README.md`
+  gets a new "Prompting a tiny model for reliable chat memory" section
+  documenting the two failure modes (training-data echo, previous-reply
+  echo), the three-lever recipe that fixes them (system prompt + penalties
+  + short history), the capacity limits that remain (multi-fact extraction
+  in one turn, chain reasoning), and pointers to every file where the
+  levers live. Positioned next to the existing scope-fences section since
+  it's the same *what works / what doesn't* register.
+
+### Next step (T-batch)
+
+- T-batch complete. No new contract tests beyond T-1's `chat-memory-contract`
+  (T-2 and T-3 edits are UI defaults + backward-compatible envelope
+  extensions that don't need their own test — the existing envelope test
+  already covers the optional-field rules). Offline suite: 36 pass / 4 skip
+  / 1 pre-existing fail (unrelated to T-batch). No readiness tracker boxes
+  move; this is honest demo-UX work on top of the shipped M/R/S capabilities.
+
+## C-batch: Conversation Persistence (branch `feature/rag-pipeline`)
+
+> Closes readiness tracker bullet **V.8** (prompt / cache / checkpoint
+> persistence). Every chat turn is now persisted server-side keyed by
+> `session_id`; the browser UI writes its `session_id` into `localStorage`
+> and rehydrates `state.history` on reload.
+
+Non-negotiable direction:
+
+- Backward-compatible: pre-C-batch callers (no UI rehydration) see
+  identical behaviour. The persistence hook is best-effort and never
+  fails the inference response.
+- SQLite-only at this leaf. Object-store-backed durable replay stays
+  fenced — V.8's "checkpoint" axis is a separate hardening axis and is
+  honestly listed in the tracker as a tick on the *persistence* half, not
+  a claim of full KV-cache durability.
+- session_id is client-supplied and NOT authenticated; matches the
+  existing inference-request contract's honesty rule.
+
+### Done in current branch
+
+- [x] `#C-1` `conversations` + `conversation_messages` SQLite schema with
+  per-session monotonic `seq` and a unique index on (session_id, seq).
+  Transactional append path that skips already-persisted client turns
+  when the UI re-sends the full messages[] thread.
+  - Domain: `domain/conversation/conversation_store.php`
+  - Contract: `tests/conversation-store-contract.{sh,php}` (60 rules)
+
+- [x] `#C-2` `GET /api/conversations/{session_id}/messages`,
+  `GET /api/conversations/{session_id}` (meta only), and
+  `DELETE /api/conversations/{session_id}`. All scoped to the regex
+  `^[A-Za-z0-9_.:\-]+$` matching the inference session_id validator.
+  - Module: `http/module_conversations.php`
+  - Contract: `contracts/v1/conversation-message.contract.json` +
+    `tests/conversations-endpoint-contract.{sh,php}` (42 rules)
+
+- [x] `#C-3` HTTP + WS inference paths auto-append each completed turn
+  via `model_inference_conversation_append_turn()`. Wrapped in try/catch
+  so a persistence failure never corrupts the JSON response or WS stream.
+  - Edits: `http/module_inference.php`, `http/module_realtime.php`
+
+- [x] `#C-4` Chat UI persists `session_id` in `localStorage` and
+  rehydrates prior turns as `(restored)` bubbles on load, preserving
+  the state.history invariant so the next submit re-sends the full
+  thread to the model.
+  - Edit: `public/chat.html`
+
+- [x] Catalog grew with `conversation_messages_list`, `conversation_meta_get`,
+  `conversation_delete`; `contract-catalog-parity-contract` updated.
+  Router-module-order contract updated for the new `conversations`
+  module; `router-module-order-contract` green.
+
+### Next step (C-batch)
+
+- C-batch complete. 2 new contract tests (60 + 42 = 102 rules). Closes
+  tracker bullet **V.8**.
+
+## G-batch: Graph-aware Discovery (branch `feature/rag-pipeline`)
+
+> Closes readiness tracker bullets **W.8** (optional graph-aware
+> metadata + relationship traversal) and **W.9** (public contract
+> boundary between core semantic discovery and optional graph
+> integrations).
+
+Non-negotiable direction:
+
+- Core S-batch ranking stays authoritative and unchanged. The graph
+  layer is strictly additive: an /api/discover call without
+  `graph_expand` produces bit-identical output to pre-G-batch behaviour.
+- Traversal is plain BFS bounded by `max_hops` (1..2 in the HTTP
+  surface, 1..3 at the store layer) and a fixed 512-visit budget.
+- Edges are NEVER a ranking signal. Graph only widens the candidate
+  set. Weighted / shortest-path / MoE-style routing stays fenced under
+  tracker V.5.
+
+### Done in current branch
+
+- [x] `#G-1` `service_edges` SQLite schema + unique (from, to, type)
+  index + three secondary indexes for fast traversal. CRUD + BFS
+  traversal with visit-budget cap.
+  - Domain: `domain/discovery/graph_store.php`
+  - Contract: `tests/graph-store-contract.{sh,php}` (46 rules)
+
+- [x] `#G-2` `graph_expand` composition takes a core ranked result
+  set, walks outgoing edges from the top service_ids, and appends
+  unique neighbors under `expanded` tagged `source: "graph_expand"`,
+  `semantic_score: null`. Descriptors rehydrated from
+  `service_embeddings` when available.
+  - Domain: `domain/discovery/graph_expand.php`
+  - Contract: `tests/graph-expand-contract.{sh,php}` (28 rules) —
+    including the W.9 boundary assertion that core `results` is
+    bit-identical with or without `graph_expand`.
+
+- [x] `#G-3` `POST /api/discover` parser accepts an optional
+  `graph_expand: {edge_types?: array<string>(0..16, regex
+  [a-z][a-z0-9_.-]*), max_hops?: int 1..2}` block. Wired into both the
+  keyword and semantic/hybrid branches so all three modes can expand.
+  - Edit: `http/module_discover.php`
+
+- [x] `#G-4` `contracts/v1/service-graph.contract.json` pins the
+  core-vs-extension boundary explicitly. Tracker W.9 is ticked against
+  this file plus the `graph-expand-contract` assertion.
+
+### Next step (G-batch)
+
+- G-batch complete. 2 new contract tests (46 + 28 = 74 rules). Closes
+  tracker bullets **W.8** and **W.9**.
+
+## Tracker post-merge sweep (2026-04-20)
+
+Flipped in `READYNESS_TRACKER.md` with proof citations against contract
+tests shipped in this branch: **W.5**, **W.7**, **W.8**, **W.9**,
+**X.4**, **X.5**, **X.6**, **V.8** — 8 bullets closed in this session.
+
+Still honestly fenced for model-inference scope: V.3 (fleet placement),
+V.4 (sharded execution), V.5 (MoE / expert routing), all of Y-batch
+(fine-tuning), all of AA-batch (advanced extensions, out-of-core).
+
+## A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`)
+
+> Demo-grade auth layer that binds model-inference conversations to a
+> logged-in user for cross-device continuation. Borrows patterns from
+> the video-chat auth layer (bcrypt + opaque bearer + middleware-at-
+> dispatcher + idempotent demo-user autoseed) but drops the production
+> complexity (session refresh, per-frame WS revalidation, full RBAC
+> matrix, email-based login) to stay demo-sized.
+>
+> Scope map: closes readiness tracker section **AB** (4 bullets). Does
+> NOT move V / W / X / Y / AA.
+
+Non-negotiable direction:
+
+- **Auth is OPTIONAL.** Every pre-A-batch caller that doesn't send an
+  `Authorization: Bearer` header continues to work exactly as before —
+  `/api/infer`, `/api/rag`, `/api/discover`, `/api/tools/*`,
+  `/api/documents/*`, `/api/conversations/*` all stay open to anonymous
+  use. Auth only engages when a Bearer token is present.
+- **No king.so changes.** Everything is PHP-level composition on top of
+  the existing HTTP primitives.
+- **Reuse video-chat patterns; do not import video-chat code.** The
+  video-chat auth at `demo/video-chat/backend-king-php/` is the
+  reference; we mirror the shape (opaque session ids, bcrypt, middleware
+  at dispatcher) but write a new, minimal store + endpoints scoped to
+  the model-inference demo's conventions.
+- **Honest fences**: per-frame WS revalidation, session refresh, RBAC
+  path-rule matrix, SSO/OAuth, password-reset, rate-limit/brute-force
+  lockout — all intentionally out of scope for the demo.
+
+### Done in current branch
+
+- [x] `#A-1` Auth store + users/sessions SQLite schema. Domain API:
+  `model_inference_auth_create_user`, `verify_credentials`,
+  `issue_session`, `validate_session`, `revoke_session`. Passwords
+  bcrypt-hashed via `password_hash(PASSWORD_DEFAULT)`. Session ids are
+  opaque 32-byte hex strings. Maps to AB.1, AB.2.
+  - New file: `backend-king-php/domain/auth/auth_store.php`
+  - Contract: `tests/auth-store-contract.{sh,php}`
+
+- [x] `#A-2` `POST /api/auth/login` + `POST /api/auth/logout` +
+  `GET /api/auth/whoami`. Login accepts `{username, password}` JSON,
+  issues a session with TTL (env `MODEL_INFERENCE_SESSION_TTL_SECONDS`,
+  default 12h, clamped 60s–30d), returns
+  `{session: {id, expires_at, ttl_seconds}, user: {id, username, display_name, role}}`.
+  Logout revokes. Whoami echoes `$request['user']`. Maps to AB.1, AB.2.
+  - New file: `backend-king-php/http/module_auth.php`
+  - New contract JSONs: `contracts/v1/auth-request.contract.json`,
+    `contracts/v1/user-session.contract.json`
+  - Contract test: `tests/auth-endpoint-contract.{sh,php}`
+
+- [x] `#A-3` Non-blocking auth middleware. Extracts
+  `Authorization: Bearer <token>`, validates against the sessions table
+  (JOIN users + role). On hit: hydrates `$request['user']` and
+  `$request['session']`. On miss (no header, invalid, expired, revoked):
+  request proceeds **anonymously** (no 401). Called once from the
+  dispatcher before module fan-out. Maps to AB.1.
+  - New file: `backend-king-php/domain/auth/auth_middleware.php`
+  - Edit: `backend-king-php/http/router.php` (hook insertion)
+  - Contract: `tests/auth-middleware-contract.{sh,php}`
+
+- [x] `#A-4` Conversation ownership binding. Add nullable `user_ref`
+  INTEGER column to `conversations` (idempotent `ALTER TABLE`). When
+  authenticated, `model_inference_conversation_append_turn()` populates
+  `user_ref = user.id`. `GET /api/conversations/{session_id}/messages`
+  and `DELETE /api/conversations/{session_id}` enforce ownership: if
+  `user_ref` is set, requester must be the owner (403
+  `ownership_denied` otherwise). Anonymous conversations
+  (user_ref=NULL) remain readable by anyone with the session_id —
+  pre-A-batch behavior preserved. Maps to AB.3.
+  - Edits: `backend-king-php/domain/conversation/conversation_store.php`,
+    `backend-king-php/http/module_inference.php`,
+    `backend-king-php/http/module_realtime.php`,
+    `backend-king-php/http/module_conversations.php`
+  - Contract: `tests/conversation-ownership-contract.{sh,php}`
+
+- [x] `#A-5` WebSocket handshake-time auth. In the WS upgrade path
+  (`module_realtime.php`), invoke the middleware on the upgrade
+  request. On valid Bearer token: bind user into the run-session
+  context. On missing/invalid: stream runs anonymously. No per-frame
+  revalidation (fenced). Explicit rule in the contract test: a token
+  revoked mid-stream does NOT need to kill the active stream. Maps to
+  AB.4.
+  - Edit: `backend-king-php/http/module_realtime.php`
+  - Contract: `tests/realtime-auth-contract.{sh,php}`
+
+- [x] `#A-6` Demo user autoseed. `server.php` calls
+  `model_inference_auth_seed_demo_users($pdo)` at boot. Seeds three
+  fixture users idempotently from
+  `backend-king-php/fixtures/demo-users.json` (admin / alice / bob).
+  Passwords bcrypt-hashed at seed time. Credentials overridable via
+  env vars `MODEL_INFERENCE_DEMO_{ADMIN,ALICE,BOB}_{USERNAME,PASSWORD}`.
+  Also ship `scripts/seed-users.sh` for manual / CI invocation. Maps to
+  AB.1.
+  - Edit: `backend-king-php/server.php`
+  - New files: `backend-king-php/scripts/seed-users.sh`,
+    `backend-king-php/fixtures/demo-users.json`
+  - Contract: `tests/auth-seed-contract.{sh,php}`
+
+- [x] `#A-7` Chat UI login surface. Minimal additions to
+  `public/chat.html`: on boot `GET /api/auth/whoami`; if 401, show an
+  inline login form; on login success store
+  `{token, expires_at, user}` in `localStorage` under
+  `king-model-inference-auth` and attach `Authorization: Bearer` to
+  all REST + WS calls. Click-on-username to logout. Anonymous mode
+  unchanged when the user doesn't log in.
+
+- [x] `#A-8` Catalog parity + router order + README + tracker tick +
+  smoke. Catalog grows with `auth_login`, `auth_logout`, `auth_whoami`
+  + 4 new error codes (`invalid_credentials`, `session_expired`,
+  `session_revoked`, `ownership_denied`).
+  `contract-catalog-parity-contract` + `router-module-order-contract`
+  updated. README gains "Auth (optional, demo-grade)" section near
+  the C-batch block. `scripts/auth-smoke.sh` mirrors
+  `discovery-smoke.sh`. On merge to main, AB.1–AB.4 flip to `[x]` with
+  contract-test citations.
+
+### Demo user data (seeded at boot from `fixtures/demo-users.json`)
+
+| Username | Password | Role | Display name |
+|---|---|---|---|
+| `admin` | `admin123` | admin | Admin |
+| `alice` | `alice123` | user | Alice |
+| `bob` | `bob123` | user | Bob |
+
+Passwords bcrypt-hashed with `password_hash(PASSWORD_DEFAULT)` at seed
+time. These are **demo-only** credentials — identical treatment to the
+video-chat demo's `admin@intelligent-intern.com / admin123` fixtures.
+Env overrides exist for CI and production-hardening runs that need to
+rotate them.
+
+### Out of scope (honestly fenced for the demo)
+
+- Per-frame WebSocket session revalidation (handshake-time only)
+- Session refresh / rotation (logout + re-login covers it)
+- RBAC path-rule matrix (flat `user | admin`, no path guards)
+- Multi-tenant / organization / team scoping
+- SSO / OAuth / OIDC
+- Password reset / account recovery / email verification
+- Rate limiting / brute-force lockout
+- User profile management surface beyond the demo seeds
 Roster-Modell (definiert):
 - Server ist Source of Truth für Teilnehmerliste (keine vollständige Client-Schattenliste als Primärquelle).
 - Abfrageform: `page`, `page_size`, `search`, `sort`, optionale `status`-Filter.

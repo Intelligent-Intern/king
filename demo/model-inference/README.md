@@ -139,6 +139,80 @@ four M-batch tests require the llama.cpp runtime). You can:
 | #R-15 | done | `scripts/rag-smoke.sh` 10-phase end-to-end |
 | #R-16 | done | this README update + scope fences |
 
+**A-batch: Simple Auth / Identity (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker section **AB** (4 bullets: AB.1–AB.4). Demo-grade auth layer mirroring the video-chat auth approach but intentionally minimal: opaque 32-hex bearer sessions, bcrypt password hashing, handshake-time WS validation only (per-frame fenced), flat `user | admin` role, demo users autoseed from `fixtures/demo-users.json`. **Auth is OPTIONAL** — every pre-A-batch caller that omits `Authorization` continues to work anonymously.
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #A-1 | done | `users` + `sessions` SQLite schema + bcrypt store (72-rule `auth-store-contract`) |
+| #A-2 | done | `POST /api/auth/login` + `POST /api/auth/logout` + `GET /api/auth/whoami` (45-rule `auth-endpoint-contract`) |
+| #A-3 | done | Non-blocking auth middleware (dispatcher-wide hook, 25-rule `auth-middleware-contract`) |
+| #A-4 | done | `conversations.user_ref` + ownership gate + `GET /api/conversations/me` (28-rule `conversation-ownership-contract`) |
+| #A-5 | done | WS handshake-time auth via Bearer header OR `?auth_token=<32-hex>` query fallback (13-rule `realtime-auth-contract`) |
+| #A-6 | done | Demo user autoseed (`admin/alice/bob`) from `fixtures/demo-users.json`, env-overridable, idempotent re-seed (44-rule `auth-seed-contract`) |
+| #A-7 | done | Inline login banner in `/ui`, Bearer attached to REST + WS, `(username @ role)` chip, click-to-logout |
+| #A-8 | done | Catalog parity + router order + this README + tracker AB section + `scripts/auth-smoke.sh` |
+
+**Demo credentials** (seeded at boot from `fixtures/demo-users.json`, env-overridable):
+
+| Username | Password | Role |
+|---|---|---|
+| `admin` | `admin123` | admin |
+| `alice` | `alice123` | user |
+| `bob` | `bob123` | user |
+
+**Honest scope fences (A-batch):** per-frame WS revalidation is NOT implemented (handshake-time only); session refresh/rotation is NOT implemented (logout + re-login covers the demo); no RBAC path-rule matrix; no SSO/OAuth/OIDC; no password reset; no rate-limit or brute-force lockout. Credentials travel the wire in plaintext over the /api/auth/login POST body — TLS termination is the deployer's responsibility.
+
+**C-batch: Conversation Persistence (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker bullet **V.8** (prompt/cache/checkpoint persistence). Every chat turn is now persisted server-side keyed by `session_id`; the browser UI survives page reloads because it writes its `session_id` into `localStorage` and rehydrates `state.history` from the server on next boot.
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #C-1 | done | `conversations` + `conversation_messages` SQLite schema (60-rule `conversation-store-contract`) |
+| #C-2 | done | `GET /api/conversations/{session_id}/messages`, `GET /api/conversations/{session_id}`, `DELETE /api/conversations/{session_id}` (42-rule `conversations-endpoint-contract`) |
+| #C-3 | done | HTTP + WS inference paths auto-append each turn (best-effort, never corrupts response) |
+| #C-4 | done | Chat UI persists `session_id` in `localStorage` and rehydrates prior turns as `(restored)` bubbles on load |
+
+**Scope fences (C-batch):** session_id is client-supplied and NOT authenticated — any caller with the string can read/delete the conversation. SQLite-only persistence at this leaf; durable object-store replay is out-of-scope (V.8's "checkpoint" side is the harder axis and stays fenced). No pagination on the message list yet (1000-message cap per request).
+
+**G-batch: Graph-aware Discovery (branch `feature/rag-pipeline`)**
+
+Closes readiness tracker bullets **W.8** (graph-aware metadata + relationship traversal) and **W.9** (public contract boundary between core semantic discovery and optional graph integrations).
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #G-1 | done | `service_edges` SQLite schema + `graph_store.php` with upsert / delete / list_outgoing / traverse_outgoing (1..3-hop cap, 512-visit budget) (46-rule `graph-store-contract`) |
+| #G-2 | done | `graph_expand.php` enriches a ranked /api/discover result with 1- or 2-hop neighbors tagged `source: "graph_expand"`, `semantic_score: null` (28-rule `graph-expand-contract`) |
+| #G-3 | done | `POST /api/discover` accepts optional `graph_expand: {edge_types?, max_hops?: 1..2}`; core `results` is bit-identical with or without the field (W.9 contract boundary assertion) |
+| #G-4 | done | `contracts/v1/service-graph.contract.json` pins the core-vs-extension boundary |
+
+**Scope fences (G-batch):** directional edges only (undirected must be written twice). No weighted scoring — traversal is plain BFS. Edges are never a ranking signal; they only widen the candidate set. No HTTP write endpoint for edges yet (direct SQLite or a future admin route). MoE / expert routing (tracker V.5) stays fenced — that is a different problem.
+
+**S-batch: Semantic Discovery (branch `feature/rag-pipeline`)**
+
+Reuses the R-batch embedding infrastructure to replace keyword-only service/tool selection with vector + BM25 ranked discovery. Closes W.5, W.7, X.4, X.5, X.6 in the readiness tracker.
+
+| Leaf | Status | Proof |
+|------|--------|-------|
+| #S-1 | done | `service-descriptor.contract.json` + 40-rule validator |
+| #S-2 | done | `service_embeddings` SQLite + `svec-{hex}` object-store (39 rules) |
+| #S-3 | done | `service_embedding_upsert()` composition + session-adapter (15 rules) |
+| #S-4 | done | `POST /api/discover` module + envelope parser (43 rules) |
+| #S-5 | done | `semantic_discover()` brute-force cosine over service embeddings (11 rules) |
+| #S-6 | done | `hybrid_discover()` BM25 (k1=1.2, b=0.75) + cosine fusion with alpha (30 rules) |
+| #S-7 | done | `tool-descriptor.contract.json` + `tool_embeddings` table (43 rules) |
+| #S-8 | done | `tool_embedding_upsert()` (covered by S-7 test) |
+| #S-9 | done | `POST /api/tools/discover` semantic + hybrid (11 rules) |
+| #S-10 | done | `POST /api/tools/pick` + fail-closed `no_semantic_match` (5 rules) |
+| #S-11 | done | `DiscoveryMetricsRing` + `GET /api/telemetry/discovery/recent` (32 rules) |
+| #S-12 | done | `dns_semantic_query()` overlay intersecting DNS candidates with embedding ranking (10 rules) |
+| #S-13 | done | catalog parity grown to 4 new surfaces + 4 new error codes; `contract-catalog-parity-contract` green |
+| #S-14 | done | this README update + `discovery-smoke.sh` E2E |
+
+**Scope fences (S-batch):** brute-force cosine only; no ANN / HNSW / IVF. BM25 parameters pinned; no learned ranker. Service+tool descriptors are the sole semantic signal; graph-aware metadata (W.8/W.9) stays fenced. C-level Semantic-DNS surface is UNCHANGED; the semantic-query path is a PHP overlay added by #S-12, preserving the existing keyword API.
+
 ---
 
 ## Quickstart
@@ -245,6 +319,102 @@ MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1 \
 demo/model-inference/scripts/rag-smoke.sh
 ```
 
+### Semantic discovery smoke (S-batch)
+
+```bash
+MODEL_INFERENCE_SMOKE_REQUIRE_COMPOSE=1 \
+demo/model-inference/scripts/discovery-smoke.sh
+```
+
+Exercises the keyword path against an empty registry first (never requires an
+embedding worker), then — when an embedding model fixture is available —
+probes `/api/discover` (semantic + hybrid), `/api/tools/discover`,
+`/api/tools/pick` (including the `no_semantic_match` fail-closed path), and
+`/api/telemetry/discovery/recent`. Without docker compose it runs the
+offline contract suite and exits 0.
+
+---
+
+## Prompting a tiny model for reliable chat memory
+
+SmolLM2-135M is the chat fixture this demo ships with. Naïvely wired — single
+`prompt` field per request, default sampling, no system turn — it is
+effectively useless for multi-turn conversation: every reply collapses into
+one of two failure modes, and neither is a bug in King or llama.cpp.
+
+**Failure mode A — training-data echo.** With no system prompt and temperature
+0.7, the model snaps to a generic "friendly assistant" snippet baked into its
+training data regardless of the user's question. One observed case: five
+different food/memory questions all returned the same Croatia/beaches/colors
+paragraph. The model isn't stuck; it's picking the highest-probability
+"neutral" output and that output is very stable across unrelated prompts.
+
+**Failure mode B — previous-reply echo.** Even with a system prompt, once the
+assistant produces a short confident answer like `"My name is Julius."`, the
+next turn's most likely continuation — to the model — is the exact same
+string, regardless of the new question. *Name recall* succeeds; every
+follow-up ("Where do I live?", "What is my job?") returns `"My name is
+Julius."` verbatim. This is small-model mode collapse: the model uses the
+immediately-preceding assistant turn as a template and copies it.
+
+**Three cheap levers fix both.** Verified end-to-end against this backend
+with a 4-fact Playwright stress test (name, city, job, food — 4/4 recalled):
+
+1. **A strong system prompt, anchored to the *latest* question.**
+   The demo ships with:
+   > *"You are a concise factual assistant. Read the full conversation
+   > history. Answer ONLY the LATEST user question. Do not repeat or quote
+   > your previous reply. Each answer must directly address the most recent
+   > question and use the specific fact it asks about…"*
+
+   The phrase "do not repeat or quote your previous reply" is what breaks
+   failure-mode B in combination with the penalties below. Dropping it
+   brings the echo behaviour back.
+
+2. **Repetition penalties.** Plumbed in sampling (#T-3):
+   `frequency_penalty = 0.8`, `presence_penalty = 0.6`. OpenAI-compatible
+   values that llama.cpp's sampler pushes the model away from tokens it
+   just emitted, and away from any token already present in the output. 0.8
+   is aggressive enough to be felt; lower values (0.3) don't reliably stop
+   the Julius-echo on a 135M model.
+
+3. **Temperature 0.2, history cap 8 turns.** Low temperature keeps answers
+   focused when the prompt is well-specified; the tight history cap keeps
+   the WS payload small and fits the SmolLM2 2048-token context window.
+   Both are surface defaults the user can override in the `/ui` control
+   bar.
+
+**What stays broken — model capacity.** Even with all three levers, some
+things do not work on 135M:
+
+- *Multi-fact extraction from a single sentence.* "Remember my name is
+  Julius, I live in Berlin, I work as an engineer" followed by "Where do I
+  live?" often still picks the wrong fact. Splitting the facts across
+  separate turns restores reliability.
+- *Chain reasoning over recalled facts.* "You know my city — is there a
+  river there?" needs world-knowledge integration 135M params cannot
+  support.
+- *Consistent refusal of off-topic continuations.* The model sometimes
+  hallucinates a follow-up sentence after a correct answer (e.g. "My name
+  is Julius, which means 'I am' in German"). The fact is right; the
+  embellishment is fabricated. Tightening `max_tokens` to ~8 for recall
+  probes is the practical mitigation.
+
+These are **model-size limits, not demo limits.** Swapping SmolLM2-135M for
+a 1B+ GGUF via `POST /api/models` (Qwen2.5-1.5B-Instruct, Llama-3.2-1B,
+Phi-3-mini-3.8B) removes them without any further tuning.
+
+**Where the levers live in code:**
+
+- System prompt + defaults: `public/chat.html` (`state.systemPrompt`, the
+  temperature / freq_pen / pres_pen input defaults).
+- Sampling validator: `domain/inference/inference_request.php`
+  (`frequency_penalty`, `presence_penalty` as optional sampling fields).
+- Plumb-through to llama.cpp: `domain/inference/inference_session.php`
+  (HTTP path) and `domain/inference/inference_stream.php` (WS path) — both
+  include the penalties in the `/v1/chat/completions` body only when
+  non-zero so pre-T-3 fixtures see the same payload as before.
+
 ---
 
 ## Honest scope fences (target-shape, not verified here)
@@ -259,8 +429,10 @@ end. None of them tick any tracker V/Z box from this branch.
   does **not** prove sharded execution across nodes. Tracker V.4's
   "distributed execution" bullet stays fenced.
 - **Fine-tuning pipelines** (entire tracker section Y).
-- **Hybrid retrieval** (BM25/TF-IDF + vector fusion). R-batch proves semantic
-  retrieval only; keyword search is fenced.
+- **Hybrid retrieval** (BM25/TF-IDF + vector fusion) is proved for *discovery*
+  in S-batch (`/api/discover?mode=hybrid`, pinned BM25 k1=1.2, b=0.75). For
+  *document* retrieval (`/api/retrieve`, `/api/rag`) it remains fenced —
+  retrieval stays semantic-only until a dedicated R-follow-up leaf lands.
 - **External vector databases** (pgvector, Pinecone, Weaviate). Brute-force
   over King object store only.
 - **HNSW / IVF / ANN indexes.** Honest brute-force; approximate methods fenced.
@@ -306,9 +478,12 @@ demo/model-inference/
     token-frame.contract.json                   # IIBIN binary frame + sample vectors (#M-9)
     node-profile.contract.json                  # GET /api/node/profile envelope (#M-4)
     model-registry-entry.contract.json          # registry row + http_surface (#M-5)
+    service-descriptor.contract.json            # service descriptor + embedding input (#S-1)
+    tool-descriptor.contract.json               # tool descriptor + mcp_target (#S-7)
   scripts/
     smoke.sh                                    # 9-phase compose end-to-end (#M-17)
     rag-smoke.sh                                # 10-phase RAG pipeline smoke (#R-15)
+    discovery-smoke.sh                          # S-batch discovery smoke (#S-14)
     failover-smoke.sh                           # two-node failover proof (#M-15)
   backend-king-php/
     Dockerfile                                  # PHP 8.4 + king.so + llama.cpp + pdo_sqlite
@@ -324,9 +499,10 @@ demo/model-inference/
       module_embed.php                          # POST /api/embed (#R-4)
       module_ingest.php                         # /api/documents + /api/documents/:id/chunks (#R-5, R-7)
       module_retrieve.php                       # POST /api/retrieve + POST /api/rag (#R-10, R-11)
+      module_discover.php                       # /api/discover + /api/tools/{discover,pick} (#S-4, S-9, S-10)
       module_inference.php                      # POST /api/infer + GET /api/transcripts/:id
       module_realtime.php                       # GET /ws + WS streaming
-      module_telemetry.php                      # /api/telemetry/{inference,rag}/recent
+      module_telemetry.php                      # /api/telemetry/{inference,rag,discovery}/recent
       module_routing.php                        # GET /api/route
       module_ui.php                             # GET /ui
     domain/
@@ -345,9 +521,20 @@ demo/model-inference/
       retrieval/cosine_similarity.php           # brute-force scorer (#R-9)
       retrieval/retrieval_pipeline.php          # embed query → scan → rank (#R-10)
       retrieval/rag_orchestrator.php            # retrieve → augment → infer (#R-11)
+      discovery/service_descriptor.php          # service descriptor validator (#S-1)
+      discovery/service_embedding_store.php     # svec-{hex} store + service_embeddings (#S-2)
+      discovery/service_embedding_upsert.php    # validate → embed → persist (#S-3)
+      discovery/semantic_discover.php           # brute-force cosine over services (#S-5)
+      discovery/hybrid_discover.php             # BM25 + cosine fusion with alpha (#S-6)
+      discovery/tool_descriptor.php             # tool descriptor validator + tokenizer (#S-7)
+      discovery/tool_descriptor_store.php       # tvec-{hex} + tool_embeddings + upsert (#S-7, S-8)
+      discovery/tool_discover.php               # semantic + hybrid tool ranking (#S-9)
+      discovery/mcp_pick.php                    # top mcp_target + no_semantic_match fail-closed (#S-10)
+      discovery/dns_semantic_query.php          # DNS ∩ embedding ranking overlay (#S-12)
       routing/inference_routing.php             # Semantic-DNS routing helper (#M-14)
       telemetry/inference_metrics.php           # inference metrics ring (#M-12)
       telemetry/rag_metrics.php                 # RAG metrics ring (#R-12)
+      telemetry/discovery_metrics.php           # discovery metrics ring (#S-11)
     support/
       database.php                              # SQLite schema bootstrap
       object_store.php                          # king_object_store_init wrapper

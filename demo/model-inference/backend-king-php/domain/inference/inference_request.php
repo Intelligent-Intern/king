@@ -72,7 +72,13 @@ function model_inference_request_allowed_quantizations(): array
 /** @return array<int, string> */
 function model_inference_request_allowed_top_level_keys(): array
 {
-    return ['session_id', 'model_selector', 'prompt', 'system', 'sampling', 'stream'];
+    return ['session_id', 'model_selector', 'prompt', 'system', 'messages', 'sampling', 'stream'];
+}
+
+/** @return array<int, string> */
+function model_inference_request_allowed_message_roles(): array
+{
+    return ['system', 'user', 'assistant'];
 }
 
 /**
@@ -163,7 +169,28 @@ function model_inference_validate_infer_request($payload, array $options = []): 
         }
     }
 
-    $prompt = model_inference_request_require_string($payload, 'prompt', 1, 131072);
+    $messages = null;
+    if (array_key_exists('messages', $payload)) {
+        $messages = model_inference_request_require_messages_array($payload['messages']);
+    }
+
+    $promptRequired = ($messages === null);
+    $prompt = null;
+    if ($promptRequired) {
+        $prompt = model_inference_request_require_string($payload, 'prompt', 1, 131072);
+    } elseif (array_key_exists('prompt', $payload)) {
+        if (!is_string($payload['prompt'])) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', 'prompt', 'must be a string when present', gettype($payload['prompt'])
+            );
+        }
+        if (strlen($payload['prompt']) < 1 || strlen($payload['prompt']) > 131072) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', 'prompt', 'must be 1..131072 chars', strlen($payload['prompt'])
+            );
+        }
+        $prompt = $payload['prompt'];
+    }
 
     $system = null;
     if (array_key_exists('system', $payload)) {
@@ -208,8 +235,27 @@ function model_inference_validate_infer_request($payload, array $options = []): 
             $seed = $seedValue;
         }
     }
+
+    // T-3: repetition penalties (OpenAI-compatible). llama.cpp's
+    // /v1/chat/completions accepts these and applies them in the sampler
+    // stack to push the model away from copying recent tokens — the fix
+    // for small-model mode collapse like "assistant always echoes the
+    // previous reply".
+    $frequencyPenalty = 0.0;
+    if (array_key_exists('frequency_penalty', $sampling)) {
+        $frequencyPenalty = model_inference_request_require_float(
+            $sampling, 'frequency_penalty', -2.0, 2.0, 'sampling.'
+        );
+    }
+    $presencePenalty = 0.0;
+    if (array_key_exists('presence_penalty', $sampling)) {
+        $presencePenalty = model_inference_request_require_float(
+            $sampling, 'presence_penalty', -2.0, 2.0, 'sampling.'
+        );
+    }
+
     foreach (array_keys($sampling) as $key) {
-        if (!in_array($key, ['temperature', 'top_p', 'top_k', 'max_tokens', 'seed'], true)) {
+        if (!in_array($key, ['temperature', 'top_p', 'top_k', 'max_tokens', 'seed', 'frequency_penalty', 'presence_penalty'], true)) {
             throw new InferenceRequestValidationError(
                 'invalid_request_envelope',
                 "sampling.{$key}",
@@ -263,15 +309,84 @@ function model_inference_validate_infer_request($payload, array $options = []): 
         ],
         'prompt' => $prompt,
         'system' => $system,
+        'messages' => $messages,
         'sampling' => [
             'temperature' => $temperature,
             'top_p' => $topP,
             'top_k' => $topK,
             'max_tokens' => $maxTokens,
             'seed' => $seed,
+            'frequency_penalty' => $frequencyPenalty,
+            'presence_penalty' => $presencePenalty,
         ],
         'stream' => $stream,
     ];
+}
+
+/**
+ * Validate the optional messages[] field: 1..64 items of {role, content}
+ * where role ∈ {system, user, assistant} and content is 1..32768 chars.
+ * The final message's role MUST be user (the turn the model is responding
+ * to) unless prompt is also present (in which case the server will append
+ * the prompt as the final user turn).
+ *
+ * @param mixed $raw
+ * @return array<int, array{role: string, content: string}>
+ */
+function model_inference_request_require_messages_array($raw): array
+{
+    if (!is_array($raw) || $raw !== array_values($raw)) {
+        throw new InferenceRequestValidationError(
+            'invalid_request_envelope', 'messages', 'must be a JSON array', gettype($raw)
+        );
+    }
+    $count = count($raw);
+    if ($count < 1) {
+        throw new InferenceRequestValidationError(
+            'invalid_request_envelope', 'messages', 'must contain at least 1 item', $count
+        );
+    }
+    if ($count > 64) {
+        throw new InferenceRequestValidationError(
+            'invalid_request_envelope', 'messages', 'must contain at most 64 items', $count
+        );
+    }
+    $allowedRoles = model_inference_request_allowed_message_roles();
+    $result = [];
+    foreach ($raw as $i => $item) {
+        if (!is_array($item)) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', "messages[{$i}]", 'must be an object', gettype($item)
+            );
+        }
+        foreach (array_keys($item) as $k) {
+            if (!in_array($k, ['role', 'content'], true)) {
+                throw new InferenceRequestValidationError(
+                    'invalid_request_envelope', "messages[{$i}].{$k}", 'unknown key inside message', $k
+                );
+            }
+        }
+        if (!isset($item['role']) || !is_string($item['role']) || !in_array($item['role'], $allowedRoles, true)) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', "messages[{$i}].role",
+                'must be one of ' . implode(',', $allowedRoles),
+                $item['role'] ?? null
+            );
+        }
+        if (!isset($item['content']) || !is_string($item['content'])) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', "messages[{$i}].content", 'required string', $item['content'] ?? null
+            );
+        }
+        $len = strlen($item['content']);
+        if ($len < 1 || $len > 32768) {
+            throw new InferenceRequestValidationError(
+                'invalid_request_envelope', "messages[{$i}].content", 'must be 1..32768 chars', $len
+            );
+        }
+        $result[] = ['role' => $item['role'], 'content' => $item['content']];
+    }
+    return $result;
 }
 
 /**
