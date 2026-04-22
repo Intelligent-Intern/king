@@ -63,6 +63,38 @@ static king_http3_lsquic_request_state_t *king_http3_lsquic_request_from_stream(
     return (king_http3_lsquic_request_state_t *) king_http3_lsquic.lsquic_stream_get_ctx_fn(stream);
 }
 
+static king_http3_lsquic_request_state_t *king_http3_lsquic_runtime_peek_pending_request(
+    king_http3_request_runtime_t *runtime)
+{
+    if (runtime == NULL
+        || runtime->lsquic_pending_requests == NULL
+        || runtime->lsquic_pending_request_offset >= runtime->lsquic_pending_request_count) {
+        return NULL;
+    }
+
+    return &runtime->lsquic_pending_requests[runtime->lsquic_pending_request_offset];
+}
+
+static king_http3_lsquic_request_state_t *king_http3_lsquic_runtime_take_pending_request(
+    king_http3_request_runtime_t *runtime)
+{
+    king_http3_lsquic_request_state_t *request =
+        king_http3_lsquic_runtime_peek_pending_request(runtime);
+
+    if (request == NULL) {
+        return NULL;
+    }
+
+    runtime->lsquic_pending_request_offset++;
+    if (runtime->lsquic_pending_request_offset >= runtime->lsquic_pending_request_count) {
+        runtime->lsquic_pending_requests = NULL;
+        runtime->lsquic_pending_request_count = 0;
+        runtime->lsquic_pending_request_offset = 0;
+    }
+
+    return request;
+}
+
 static void king_http3_lsquic_header_set_destroy(
     king_http3_lsquic_header_set_t *set)
 {
@@ -88,7 +120,7 @@ static void *king_http3_lsquic_hsi_create_header_set(
     (void) is_push_promise;
 
     if (request == NULL && runtime != NULL) {
-        request = runtime->lsquic_pending_request;
+        request = king_http3_lsquic_runtime_peek_pending_request(runtime);
     }
 
     set = ecalloc(1, sizeof(*set));
@@ -388,8 +420,7 @@ static lsquic_stream_ctx_t *king_http3_lsquic_on_new_stream(
     king_http3_lsquic_request_state_t *request = NULL;
 
     if (runtime != NULL) {
-        request = runtime->lsquic_pending_request;
-        runtime->lsquic_pending_request = NULL;
+        request = king_http3_lsquic_runtime_take_pending_request(runtime);
     }
 
     if (request != NULL) {

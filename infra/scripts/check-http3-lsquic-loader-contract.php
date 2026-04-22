@@ -9,6 +9,7 @@ $loaderPath = $root . '/extension/src/client/http3/lsquic_loader.inc';
 $streamRuntimePath = $root . '/extension/src/client/http3/lsquic_stream_runtime.inc';
 $runtimePath = $root . '/extension/src/client/http3/lsquic_runtime.inc';
 $lsquicDispatchPath = $root . '/extension/src/client/http3/lsquic_dispatch.inc';
+$lsquicMultiDispatchPath = $root . '/extension/src/client/http3/lsquic_multi_dispatch.inc';
 $runtimeInitPath = $root . '/extension/src/client/http3/runtime_init.inc';
 $requestResponsePath = $root . '/extension/src/client/http3/request_response.inc';
 $dispatchPath = $root . '/extension/src/client/http3/dispatch_api.inc';
@@ -108,6 +109,7 @@ $loader = king_http3_loader_require_file($loaderPath, $errors);
 $streamRuntime = king_http3_loader_require_file($streamRuntimePath, $errors);
 $runtime = king_http3_loader_require_file($runtimePath, $errors);
 $lsquicDispatch = king_http3_loader_require_file($lsquicDispatchPath, $errors);
+$lsquicMultiDispatch = king_http3_loader_require_file($lsquicMultiDispatchPath, $errors);
 $runtimeInit = king_http3_loader_require_file($runtimeInitPath, $errors);
 $requestResponse = king_http3_loader_require_file($requestResponsePath, $errors);
 $dispatch = king_http3_loader_require_file($dispatchPath, $errors);
@@ -139,6 +141,12 @@ king_http3_loader_require_contains(
     'Client HTTP/3 source',
     $client,
     '#include "http3/lsquic_dispatch.inc"',
+    $errors
+);
+king_http3_loader_require_contains(
+    'Client HTTP/3 source',
+    $client,
+    '#include "http3/lsquic_multi_dispatch.inc"',
     $errors
 );
 king_http3_loader_require_contains(
@@ -269,6 +277,8 @@ $requiredStreamRuntimeNeedles = [
     'struct _king_http3_lsquic_request_state',
     'king_http3_lsquic_request_from_stream_ctx',
     'king_http3_lsquic_request_from_stream',
+    'king_http3_lsquic_runtime_peek_pending_request',
+    'king_http3_lsquic_runtime_take_pending_request',
     'king_http3_lsquic_send_headers',
     'king_http3_lsquic_write_body',
     'king_http3_lsquic_read_response',
@@ -310,6 +320,8 @@ $requiredRuntimeNeedles = [
     'king_http3_lsquic_runtime_init',
     'king_http3_lsquic_runtime_destroy',
     'king_http3_lsquic_runtime_prepare_request',
+    'king_http3_lsquic_runtime_prepare_requests',
+    'king_http3_lsquic_request_state_init',
     'king_http3_lsquic_runtime_packet_in',
     'lsquic_engine_packet_in_fn',
     'lsquic_engine_init_settings_fn',
@@ -321,7 +333,8 @@ $requiredRuntimeNeedles = [
     'king_http3_lsquic_stream_if',
     'king_http3_lsquic_packets_out',
     'king_http3_lsquic.lsquic_conn_make_stream_fn(runtime->lsquic_conn)',
-    'runtime->lsquic_pending_request = request',
+    'runtime->lsquic_pending_requests = requests',
+    'runtime->lsquic_pending_request_count = request_count',
     'king_ticket_ring_get(runtime->lsquic_session_resume',
     'runtime->tls_ticket_source = "ring"',
     'runtime->quic_packets_received++',
@@ -346,21 +359,36 @@ foreach ([
     'king_http3_ensure_lsquic_ready()',
     'king_http3_throw_lsquic_unavailable(function_name)',
     'king_http3_execute_request_lsquic(',
+    'king_http3_execute_multi_requests_lsquic(',
 ] as $needle) {
     king_http3_loader_require_contains('HTTP/3 dispatch backend selection', $dispatch, $needle, $errors);
 }
 
 foreach ([
     'king_http3_execute_request_lsquic',
+    'king_http3_lsquic_drive_requests',
+    'king_http3_lsquic_requests_have_started',
     'king_http3_runtime_open_udp_socket(&runtime, &target, function_name)',
     'king_http3_lsquic_runtime_init(&runtime, &target, options, function_name)',
     'king_http3_lsquic_runtime_prepare_request(',
-    'king_http3_lsquic_runtime_process_egress(&runtime, function_name)',
+    'king_http3_lsquic_runtime_process_egress(runtime, function_name)',
     'king_http3_lsquic_runtime_packet_in(',
-    'king_http3_lsquic_poll_timeout_ms(&runtime',
+    'king_http3_lsquic_poll_timeout_ms(runtime',
     'king_http3_materialize_response(return_value, &response, &runtime, url_str)',
 ] as $needle) {
     king_http3_loader_require_contains('LSQUIC one-shot dispatch', $lsquicDispatch, $needle, $errors);
+}
+
+foreach ([
+    'king_http3_execute_multi_requests_lsquic',
+    'king_http3_runtime_open_udp_socket(&runtime, &requests[0].target, function_name)',
+    'king_http3_lsquic_runtime_init(&runtime, &requests[0].target, options, function_name)',
+    'king_http3_lsquic_request_state_init(',
+    'king_http3_lsquic_runtime_prepare_requests(',
+    'king_http3_lsquic_drive_requests(',
+    'king_http3_materialize_response(',
+] as $needle) {
+    king_http3_loader_require_contains('LSQUIC multi dispatch', $lsquicMultiDispatch, $needle, $errors);
 }
 
 king_http3_loader_require_contains(

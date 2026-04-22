@@ -99,6 +99,67 @@ static zend_result king_http3_lsquic_runtime_process_egress(
     return SUCCESS;
 }
 
+static void king_http3_lsquic_request_state_init(
+    king_http3_lsquic_request_state_t *request,
+    king_http3_request_runtime_t *runtime,
+    const quiche_h3_header *headers,
+    size_t header_count,
+    zend_string *body_string,
+    king_http3_response_t *response)
+{
+    memset(request, 0, sizeof(*request));
+    request->runtime = runtime;
+    request->headers = headers;
+    request->header_count = header_count;
+    request->body_string = body_string;
+    request->body_offset = 0;
+    request->response = response;
+}
+
+static zend_result king_http3_lsquic_runtime_prepare_requests(
+    king_http3_request_runtime_t *runtime,
+    king_http3_lsquic_request_state_t *requests,
+    size_t request_count,
+    const char *function_name)
+{
+    if (runtime == NULL
+        || requests == NULL
+        || request_count == 0
+        || runtime->lsquic_conn == NULL
+        || king_http3_lsquic.lsquic_conn_make_stream_fn == NULL) {
+        king_http3_throw(
+            king_ce_protocol_exception,
+            "%s() cannot prepare LSQUIC request streams without request state and connection context.",
+            function_name
+        );
+        return FAILURE;
+    }
+
+    for (size_t i = 0; i < request_count; ++i) {
+        if (requests[i].headers == NULL
+            || requests[i].header_count == 0
+            || requests[i].response == NULL) {
+            king_http3_throw(
+                king_ce_protocol_exception,
+                "%s() cannot prepare LSQUIC request stream #%zu without headers and response state.",
+                function_name,
+                i + 1
+            );
+            return FAILURE;
+        }
+    }
+
+    runtime->lsquic_pending_requests = requests;
+    runtime->lsquic_pending_request_count = request_count;
+    runtime->lsquic_pending_request_offset = 0;
+
+    for (size_t i = 0; i < request_count; ++i) {
+        king_http3_lsquic.lsquic_conn_make_stream_fn(runtime->lsquic_conn);
+    }
+
+    return king_http3_lsquic_runtime_process_egress(runtime, function_name);
+}
+
 static zend_result king_http3_lsquic_runtime_prepare_request(
     king_http3_request_runtime_t *runtime,
     king_http3_lsquic_request_state_t *request,
@@ -110,7 +171,6 @@ static zend_result king_http3_lsquic_runtime_prepare_request(
 {
     if (runtime == NULL
         || request == NULL
-        || runtime->lsquic_conn == NULL
         || headers == NULL
         || header_count == 0
         || response == NULL) {
@@ -122,17 +182,21 @@ static zend_result king_http3_lsquic_runtime_prepare_request(
         return FAILURE;
     }
 
-    memset(request, 0, sizeof(*request));
-    request->runtime = runtime;
-    request->headers = headers;
-    request->header_count = header_count;
-    request->body_string = body_string;
-    request->body_offset = 0;
-    request->response = response;
-    runtime->lsquic_pending_request = request;
+    king_http3_lsquic_request_state_init(
+        request,
+        runtime,
+        headers,
+        header_count,
+        body_string,
+        response
+    );
 
-    king_http3_lsquic.lsquic_conn_make_stream_fn(runtime->lsquic_conn);
-    return king_http3_lsquic_runtime_process_egress(runtime, function_name);
+    return king_http3_lsquic_runtime_prepare_requests(
+        runtime,
+        request,
+        1,
+        function_name
+    );
 }
 
 static zend_long king_http3_lsquic_poll_timeout_ms(
@@ -277,7 +341,9 @@ static void king_http3_lsquic_runtime_destroy(
     king_secure_zero(runtime->lsquic_session_resume, sizeof(runtime->lsquic_session_resume));
     runtime->lsquic_session_resume_len = 0;
     runtime->lsquic_conn = NULL;
-    runtime->lsquic_pending_request = NULL;
+    runtime->lsquic_pending_requests = NULL;
+    runtime->lsquic_pending_request_count = 0;
+    runtime->lsquic_pending_request_offset = 0;
     runtime->lsquic_backend_active = false;
 }
 

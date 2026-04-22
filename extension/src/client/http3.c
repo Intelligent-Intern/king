@@ -134,7 +134,9 @@ typedef struct _king_http3_request_runtime {
     struct lsquic_engine_api lsquic_api;
     lsquic_engine_t *lsquic_engine;
     lsquic_conn_t *lsquic_conn;
-    king_http3_lsquic_request_state_t *lsquic_pending_request;
+    king_http3_lsquic_request_state_t *lsquic_pending_requests;
+    size_t lsquic_pending_request_count;
+    size_t lsquic_pending_request_offset;
     unsigned char lsquic_session_resume[KING_MAX_TICKET_SIZE];
     size_t lsquic_session_resume_len;
     bool lsquic_connection_closed;
@@ -360,5 +362,6 @@ static void king_http3_lsquic_runtime_destroy(king_http3_request_runtime_t *runt
 #include "http3/runtime_init.inc"
 #include "http3/request_response.inc"
 #include "http3/lsquic_dispatch.inc"
+#include "http3/lsquic_multi_dispatch.inc"
 #include "http3/multi_request.inc"
 #include "http3/dispatch_api.inc"

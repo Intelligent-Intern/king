@@ -568,17 +568,32 @@ static zend_result king_http3_multi_request_dispatch(
         return FAILURE;
     }
 
-    if (king_http3_ensure_quiche_ready() != SUCCESS) {
+    if (
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_ensure_lsquic_ready()
+#else
+        king_http3_ensure_quiche_ready()
+#endif
+        != SUCCESS) {
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_throw_lsquic_unavailable(function_name);
+#else
         king_http3_throw(
             king_ce_protocol_exception,
             "%s() HTTP/3 runtime is unavailable: %s",
             function_name,
             king_http3_quiche.load_error
         );
+#endif
         return FAILURE;
     }
 
-    return king_http3_execute_multi_requests(
+    return
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        king_http3_execute_multi_requests_lsquic(
+#else
+        king_http3_execute_multi_requests(
+#endif
         return_value,
         requests_array,
         &options,
