@@ -3,7 +3,7 @@
 Purpose:
 - This is the source of truth for open work.
 - GitHub Project: https://github.com/orgs/Intelligent-Intern/projects/1
-- Work is split into five release batches so multiple people can work in parallel with clear ownership boundaries.
+- Work is split into release batches so multiple people can work in parallel with clear ownership boundaries.
 - `READYNESS_TRACKER.md` is the completion log only.
 - `SPRINT.md` is only the active sprint extraction from this backlog, not the long-term backlog.
 
@@ -24,6 +24,7 @@ Rules:
 | 3 | `#148` | `1.0.7-beta` | Core runtime + experiment intake | LSQUIC regression, migration cleanup, IIBIN/proto batch, GossipMesh, WLVC/WASM/Kalman audit | Owns `extension/**`, `infra/**`, `documentation/**`, `benchmarks/**`; avoid video UI churn unless a codec/SFU integration contract requires it. |
 | 4 | `#149` | `1.0.7-beta` | AI / SLM / fine-tuning | Model placement, distributed inference, prompt/cache checkpoints, fine-tuning, model extensions | Owns model-inference and AI platform surfaces; should not touch video-call demo or MarketView except shared runtime contracts. |
 | 5 | `#150` | `v1.0.12-beta+` | Future work | MarketView trading demo and later product explorations | Keep at the bottom; do not start until Batches 1-4 are stable or explicitly reprioritized. |
+| 6 | `TBD` | `1.0.7-beta` | Realtime topology observability | Admin dashboard VueFlow graph for calls, participants, WebRTC/SFU edges, media counters, and server routing state | Owns safe topology/metrics endpoints and admin visualization; coordinate with Batch 1 on media runtime fields and Batch 2 on security-label wording. |
 
 ## Batch 1: Video-Call Demo Live Readiness (`1.0.7-beta`)
 
@@ -149,6 +150,27 @@ Checklist:
 
 Done:
 - [ ] The imported GitHub Gherkin scope is covered by feature files and executable frontend tests, with stable selectors and responsive/orientation coverage.
+
+## Batch 6: Video-Call Realtime Topology Observability (`1.0.7-beta`)
+
+### #Q-31 Video-Call Realtime Topology Graph
+
+Goal:
+- Admins can see which participants are connected to which call, whether media flows peer-to-peer or through SFU, and which bounded transport counters are moving, without exposing secrets or media payload.
+
+Checklist:
+- [ ] Add a safe admin topology endpoint for live calls, participants, rooms, websocket sessions, SFU publishers/subscribers, and edge health.
+- [ ] Expose bounded counters only: connection state, edge type, direction, last activity, frame/message counts, approximate byte counts, track kind, and server instance id.
+- [ ] Never expose session tokens, ICE credentials, SDP bodies, raw candidates, raw media frames, encryption keys, or attachment/chat content through topology endpoints.
+- [ ] Add a VueFlow-based admin dashboard graph with call nodes, participant nodes, SFU/server nodes, and typed edges for `websocket`, `webrtc`, and `sfu`.
+- [ ] Let admins filter by call, server/provider node, connection type, participant, and unhealthy/stale edges.
+- [ ] Visualize P2P WebRTC edges differently from SFU-routed media edges and show audio/video track direction separately.
+- [ ] Add backend contracts for topology payload shape, authorization, redaction, and stale-connection pruning.
+- [ ] Add frontend tests for graph rendering, filters, empty state, stale edge state, and redaction invariants.
+- [ ] Document the operational meaning of each graph state so support/debugging does not confuse signaling, SFU relay, and E2EE media protection.
+
+Done:
+- [ ] The admin dashboard can explain current call topology and transport health without leaking sensitive runtime data.
 
 ## Batch 2: E2E, Encryption, And Security Claims (`1.0.7-beta`)
 
