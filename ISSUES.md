@@ -164,7 +164,7 @@ Checklist:
 
 Done:
 - [x] `extension/tests/147-oo-config-parity.phpt`, `148-oo-config-policy-and-read-slice.phpt`, and `684`-`688` pass together as the config/stats proof set for the LSQUIC HTTP/3 stack.
-- [ ] Documentation names the new stack, not Quiche counters.
+- [x] `PROJECT_ASSESSMENT.md` and `READYNESS_TRACKER.md` name LSQUIC/BoringSSL and `lsquic_conn_get_info()` as the active QUIC stats/bootstrap surface instead of legacy counter or poll-loop wording.
 
 ---
 
