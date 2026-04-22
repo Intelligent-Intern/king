@@ -98,21 +98,7 @@ jobs:
         run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Verify toolchain
         run: |
@@ -243,21 +229,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Build profile
         working-directory: extension
@@ -345,21 +317,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Build canonical release profile
         working-directory: extension
@@ -431,21 +389,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -512,21 +456,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -593,21 +523,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -673,21 +589,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Run release config-state compatibility matrix
         working-directory: extension
@@ -750,21 +652,7 @@ jobs:
           extensions: curl, mbstring, openssl, sockets
 
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Build sanitizer profile
         working-directory: extension
