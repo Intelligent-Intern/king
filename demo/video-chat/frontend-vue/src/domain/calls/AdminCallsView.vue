@@ -609,6 +609,12 @@ import AppPagination from '../../components/AppPagination.vue';
 import AppSelect from '../../components/AppSelect.vue';
 import ChatArchiveModal from './ChatArchiveModal.vue';
 import CallsListTable from './CallsListTable.vue';
+import {
+  createCallListStore,
+  createChatArchiveStore,
+  createNoticeStore,
+  createParticipantDirectoryStore,
+} from './callViewState';
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
@@ -775,11 +781,21 @@ function isInvitable(call) {
   return status !== 'cancelled' && status !== 'ended';
 }
 
-const viewMode = ref('calls');
-const queryDraft = ref('');
-const queryApplied = ref('');
-const statusFilter = ref('all');
-const scopeFilter = ref('all');
+const callListStore = createCallListStore({ defaultScope: 'all' });
+const {
+  viewMode,
+  queryDraft,
+  queryApplied,
+  statusFilter,
+  scopeFilter,
+  calls,
+  loadingCalls,
+  callsError,
+  pagination,
+  calendarCalls,
+  loadingCalendar,
+  calendarError,
+} = callListStore;
 const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
   ? 'Schedule video call'
   : 'New video call'));
@@ -788,57 +804,16 @@ function openPrimaryCompose() {
   openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
 }
 
-const calls = ref([]);
-const loadingCalls = ref(false);
-const callsError = ref('');
-
-const pagination = reactive({
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-});
-
-const calendarCalls = ref([]);
-const loadingCalendar = ref(false);
-const calendarError = ref('');
-
-const noticeKind = ref('');
-const noticeMessage = ref('');
-const chatArchiveState = reactive({
-  open: false,
-  callId: '',
-  callTitle: '',
-});
-
-const noticeKindClass = computed(() => ({
-  ok: noticeKind.value === 'ok',
-  error: noticeKind.value === 'error',
-}));
-
-function setNotice(kind, message) {
-  noticeKind.value = kind;
-  noticeMessage.value = String(message || '').trim();
-}
-
-function clearNotice() {
-  noticeKind.value = '';
-  noticeMessage.value = '';
-}
-
-function openChatArchive(call) {
-  chatArchiveState.callId = String(call?.id || '').trim();
-  chatArchiveState.callTitle = String(call?.title || call?.id || '').trim();
-  chatArchiveState.open = chatArchiveState.callId !== '';
-}
-
-function closeChatArchive() {
-  chatArchiveState.open = false;
-  chatArchiveState.callId = '';
-  chatArchiveState.callTitle = '';
-}
+const {
+  noticeKind,
+  noticeMessage,
+  noticeKindClass,
+  setNotice,
+  clearNotice,
+} = createNoticeStore();
+const chatArchiveStore = createChatArchiveStore();
+const chatArchiveState = chatArchiveStore.state;
+const { openChatArchive, closeChatArchive } = chatArchiveStore;
 
 let adminSyncReloadTimer = 0;
 let adminSyncClient = null;
@@ -920,20 +895,11 @@ async function loadCalls() {
     });
 
     calls.value = Array.isArray(payload.calls) ? payload.calls : [];
-    const paging = payload.pagination || {};
-    pagination.page = Number.isInteger(paging.page) ? paging.page : pagination.page;
-    pagination.pageSize = Number.isInteger(paging.page_size) ? paging.page_size : pagination.pageSize;
-    pagination.total = Number.isInteger(paging.total) ? paging.total : calls.value.length;
-    pagination.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0 ? paging.page_count : 1;
-    pagination.hasPrev = Boolean(paging.has_prev);
-    pagination.hasNext = Boolean(paging.has_next);
+    callListStore.applyPagination(payload.pagination || {}, calls.value.length);
   } catch (error) {
     calls.value = [];
     callsError.value = error instanceof Error ? error.message : 'Could not load calls.';
-    pagination.total = 0;
-    pagination.pageCount = 1;
-    pagination.hasPrev = false;
-    pagination.hasNext = false;
+    callListStore.resetPagination();
   } finally {
     loadingCalls.value = false;
   }
@@ -1750,18 +1716,8 @@ const composeState = reactive({
   error: '',
 });
 
-const composeParticipants = reactive({
-  loading: false,
-  error: '',
-  query: '',
-  page: 1,
-  pageSize: 10,
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
-  rows: [],
-});
+const composeParticipantStore = createParticipantDirectoryStore();
+const composeParticipants = composeParticipantStore.state;
 
 const composeSelectedUserIds = ref([]);
 const composeExternalRows = ref([]);
@@ -1831,14 +1787,7 @@ function resetComposeModal() {
   composeState.replaceParticipants = false;
   composeState.submitting = false;
   composeState.error = '';
-  composeParticipants.query = '';
-  composeParticipants.page = 1;
-  composeParticipants.error = '';
-  composeParticipants.rows = [];
-  composeParticipants.total = 0;
-  composeParticipants.pageCount = 1;
-  composeParticipants.hasPrev = false;
-  composeParticipants.hasNext = false;
+  composeParticipantStore.reset();
   composeSelectedUserIds.value = [];
   composeExternalRows.value = [];
 }
@@ -1894,27 +1843,16 @@ async function loadComposeParticipants() {
 
     const ownUserId = currentSessionUserId();
     const allRows = Array.isArray(payload.users) ? payload.users : [];
-    composeParticipants.rows = allRows.filter((row) => {
+    const rows = allRows.filter((row) => {
       const candidateId = Number(row?.id ?? row?.user_id ?? 0);
       return !Number.isInteger(candidateId) || candidateId !== ownUserId;
     });
-    const paging = payload.pagination || {};
-    composeParticipants.total = Number.isInteger(paging.total) ? paging.total : composeParticipants.rows.length;
-    composeParticipants.pageCount = Number.isInteger(paging.page_count) && paging.page_count > 0
-      ? paging.page_count
-      : 1;
-    composeParticipants.hasPrev = Boolean(paging.has_prev);
-    composeParticipants.hasNext = Boolean(paging.has_next);
+    composeParticipantStore.applyRows(rows, payload.pagination || {});
     if (ownUserId > 0) {
       composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
     }
   } catch (error) {
-    composeParticipants.rows = [];
-    composeParticipants.total = 0;
-    composeParticipants.pageCount = 1;
-    composeParticipants.hasPrev = false;
-    composeParticipants.hasNext = false;
-    composeParticipants.error = error instanceof Error ? error.message : 'Could not load users.';
+    composeParticipantStore.fail(error instanceof Error ? error.message : 'Could not load users.');
   } finally {
     composeParticipants.loading = false;
   }
