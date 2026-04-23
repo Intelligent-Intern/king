@@ -62,7 +62,7 @@ Goal:
 - Bring the useful IIBIN/proto performance and batch API work into the current tree without importing experiment artifacts or weakening existing contracts.
 
 Checklist:
-- [ ] Preserve contributor credit for the experiment work.
+- [x] Preserve contributor credit for the experiment work.
 - [ ] Port branchless varint encode and architecture-safe decode improvements into `extension/include/iibin/iibin_internal.h`.
 - [ ] Review whether ARM64-specific unrolling belongs in production or should stay behind a guarded helper.
 - [ ] Consolidate float/double bit helpers without duplicating logic across encode/decode/prelude paths.
