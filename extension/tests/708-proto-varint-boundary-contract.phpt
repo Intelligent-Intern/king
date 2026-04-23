@@ -30,11 +30,15 @@ $max = PHP_INT_MAX;
 echo 'PHP_INT_MAX:', bin2hex(king_proto_encode('VarintU64Q13', ['value' => $max])), "\n";
 var_dump(king_proto_decode('VarintU64Q13', hex2bin('08ffffffffffffffff7f')));
 
-foreach (['0880808080808080808002', '08808080808080808080'] as $payload) {
+$invalidPayloads = [
+    'overflow' => '0880808080808080808002',
+    'truncated' => '08808080808080808080',
+];
+foreach ($invalidPayloads as $case => $payload) {
     try {
         king_proto_decode('VarintU64Q13', hex2bin($payload));
     } catch (King\Exception $e) {
-        var_dump($e->getMessage());
+        echo $case, ':', $e->getMessage(), "\n";
     }
 }
 ?>
@@ -57,4 +61,5 @@ array(1) {
   ["value"]=>
   int(9223372036854775807)
 }
-string(82) "Decoding error: malformed varint value for field 'value' in schema 'VarintU64Q13'."
+overflow:Decoding error: malformed varint value for field 'value' in schema 'VarintU64Q13'.
+truncated:Decoding error: malformed varint value for field 'value' in schema 'VarintU64Q13'.
