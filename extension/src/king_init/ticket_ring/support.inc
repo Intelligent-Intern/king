@@ -9,15 +9,13 @@ static void king_best_effort_random_fill(void *buffer, size_t len)
     unsigned char *cursor = (unsigned char *) buffer;
     size_t offset = 0;
 
-    if (buffer == NULL || len == 0) {
-        return;
-    }
-
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-    arc4random_buf(buffer, len);
+    arc4random_buf(cursor, len);
     return;
-#elif defined(__linux__)
+#endif
+
     while (offset < len) {
+#if defined(__linux__)
         ssize_t written = getrandom(cursor + offset, len - offset, 0);
 
         if (written < 0) {
@@ -28,32 +26,9 @@ static void king_best_effort_random_fill(void *buffer, size_t len)
         }
 
         offset += (size_t) written;
-    }
-
-    if (offset == len) {
-        return;
-    }
+#else
+        break;
 #endif
-
-    while (offset < len) {
-        ssize_t written;
-        int fd = open("/dev/urandom", O_RDONLY);
-
-        if (fd < 0) {
-            return;
-        }
-
-        do {
-            written = read(fd, cursor + offset, len - offset);
-        } while (written < 0 && errno == EINTR);
-
-        (void) close(fd);
-
-        if (written <= 0) {
-            return;
-        }
-
-        offset += (size_t) written;
     }
 }
 

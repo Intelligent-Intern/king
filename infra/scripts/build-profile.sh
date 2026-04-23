@@ -42,7 +42,7 @@ EXT_DIR="${ROOT_DIR}/extension"
 LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
-JOBS="${JOBS:-$(nproc)}"
+JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1)}"
 
 BASE_CFLAGS="${CFLAGS:-}"
 BASE_CPPFLAGS="${CPPFLAGS:-}"
@@ -334,8 +334,56 @@ apply_pkg_config_curl_cppflags() {
     fi
 }
 
+configure_default_tls_overrides() {
+    local openssl_cflags=""
+    local openssl_libs=""
+    local openssl_bin=""
+    local openssl_prefix=""
+    local openssl_include_dir=""
+    local openssl_lib_dir=""
+
+    if [[ -n "${KING_BORINGSSL_CFLAGS:-}${KING_BORINGSSL_LIBS:-}${KING_BORINGSSL_ROOT:-}${KING_BORINGSSL_INCLUDE_DIR:-}${KING_BORINGSSL_SSL_LIBRARY_DIR:-}${KING_BORINGSSL_CRYPTO_LIBRARY_DIR:-}" ]]; then
+        return
+    fi
+
+    if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists openssl; then
+        openssl_cflags="$(pkg-config --cflags openssl || true)"
+        openssl_libs="$(pkg-config --libs openssl || true)"
+        if [[ -n "${openssl_cflags}" && -n "${openssl_libs}" ]]; then
+            export KING_BORINGSSL_CFLAGS="${openssl_cflags}"
+            export KING_BORINGSSL_LIBS="${openssl_libs}"
+            return
+        fi
+    fi
+
+    if ! command -v openssl >/dev/null 2>&1; then
+        return
+    fi
+
+    openssl_bin="$(command -v openssl)"
+    openssl_prefix="$(cd "$(dirname "${openssl_bin}")/.." && pwd)"
+    openssl_include_dir="${openssl_prefix}/include"
+    openssl_lib_dir="${openssl_prefix}/lib"
+
+    if [[ ! -f "${openssl_include_dir}/openssl/ssl.h" ]]; then
+        return
+    fi
+
+    if [[ ! -f "${openssl_lib_dir}/libssl.a" && ! -f "${openssl_lib_dir}/libssl.so" && ! -f "${openssl_lib_dir}/libssl.dylib" ]]; then
+        return
+    fi
+
+    if [[ ! -f "${openssl_lib_dir}/libcrypto.a" && ! -f "${openssl_lib_dir}/libcrypto.so" && ! -f "${openssl_lib_dir}/libcrypto.dylib" ]]; then
+        return
+    fi
+
+    export KING_BORINGSSL_CFLAGS="-I${openssl_include_dir}"
+    export KING_BORINGSSL_LIBS="-L${openssl_lib_dir} -Wl,-rpath,${openssl_lib_dir} -lssl -lcrypto"
+}
+
 validate_curl_headers
 apply_pkg_config_curl_cppflags
+configure_default_tls_overrides
 
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
     "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock

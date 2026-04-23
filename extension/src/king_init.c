@@ -34,9 +34,7 @@
 #include <string.h>
 #include <sys/file.h>
 #include <sys/mman.h>
-#ifdef __linux__
 #include <sys/random.h>
-#endif
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>

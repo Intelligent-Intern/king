@@ -44,6 +44,9 @@ int king_init_modules(int type, int module_number)
     king_orchestrator_registry_init();
 
     if (king_ticket_ring_init() != SUCCESS) {
+        if (king_get_error()[0] == '\0') {
+            king_set_error("King ticket ring initialization failed.");
+        }
         return FAILURE;
     }
 
