@@ -10,6 +10,14 @@ log() {
   printf '[video-chat-smoke] %s\n' "$*"
 }
 
+curl_smoke() {
+  if [[ "${VIDEOCHAT_SMOKE_VERBOSE_CURL:-0}" == "1" ]]; then
+    curl -fsS "$@"
+    return
+  fi
+  curl -fsS "$@" 2>/dev/null
+}
+
 run_step() {
   local step="$1"
   log "START: ${step}"
@@ -362,7 +370,7 @@ compose_smoke() {
   local health_ready=0
 
   for _ in {1..180}; do
-    if curl -fsS "${health_url}" >/dev/null; then
+    if curl_smoke "${health_url}" >/dev/null; then
       health_ready=1
       break
     fi
@@ -377,7 +385,7 @@ compose_smoke() {
 
   local frontend_ready=0
   for _ in {1..120}; do
-    if curl -fsS "${frontend_url}" >/dev/null; then
+    if curl_smoke "${frontend_url}" >/dev/null; then
       frontend_ready=1
       break
     fi
@@ -392,7 +400,7 @@ compose_smoke() {
   local runtime_response
   local runtime_ready=0
   for _ in {1..120}; do
-    if runtime_response="$(curl -fsS "${runtime_url}")"; then
+    if runtime_response="$(curl_smoke "${runtime_url}")"; then
       runtime_ready=1
       break
     fi
@@ -422,7 +430,7 @@ compose_smoke() {
   local login_response
   local login_ready=0
   for _ in {1..120}; do
-    if login_response="$(curl -fsS -X POST \
+    if login_response="$(curl_smoke -X POST \
       -H 'content-type: application/json' \
       --data '{"email":"admin@intelligent-intern.com","password":"admin123"}' \
       "${login_url}")"; then
@@ -456,7 +464,7 @@ compose_smoke() {
   local admin_runtime_response
   local admin_runtime_ready=0
   for _ in {1..120}; do
-    if admin_runtime_response="$(curl -fsS \
+    if admin_runtime_response="$(curl_smoke \
       -H "authorization: Bearer ${session_token}" \
       "${admin_runtime_url}")"; then
       admin_runtime_ready=1
@@ -501,7 +509,7 @@ compose_smoke() {
   local session_response
   local session_ready=0
   for _ in {1..120}; do
-    if session_response="$(curl -fsS \
+    if session_response="$(curl_smoke \
       -H "authorization: Bearer ${session_token}" \
       "${session_url}")"; then
       session_ready=1
