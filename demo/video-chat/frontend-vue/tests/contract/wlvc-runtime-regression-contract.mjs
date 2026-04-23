@@ -161,14 +161,28 @@ try {
   requireMatch(switchRuntime, /else\s*\{[\s\S]*stopLocalEncodingPipeline\(\);[\s\S]*teardownNativePeerConnections\(\);[\s\S]*teardownSfuRemotePeers\(\);[\s\S]*\}/, 'unsupported switch fail-closed teardown');
 
   const fallbackRuntime = extractFunction(workspace, 'maybeFallbackToNativeRuntime');
+  requireContains(fallbackRuntime, 'if (SFU_RUNTIME_ENABLED) return false;', 'SFU runtime blocks native fallback');
   requireContains(fallbackRuntime, "return switchMediaRuntimePath('webrtc_native', reason)", 'native fallback runtime switch');
   requireContains(workspace, "await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a')", 'capability probe WLVC switch');
   requireContains(workspace, "await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b')", 'capability probe native switch');
   requireContains(workspace, "setMediaRuntimePath('unsupported', 'capability_probe_unsupported')", 'capability probe unsupported switch');
 
+  const nativeSignalBlock = extractFunction(workspace, 'shouldBlockNativeRuntimeSignaling');
+  requireContains(nativeSignalBlock, 'SFU_RUNTIME_ENABLED', 'native signaling block honors SFU runtime flag');
+  requireContains(nativeSignalBlock, "mediaRuntimePath.value === 'pending'", 'native signaling block protects SFU startup');
+  requireContains(nativeSignalBlock, 'isWlvcRuntimePath()', 'native signaling block protects active WLVC runtime');
+  const handleSignal = extractFunction(workspace, 'handleSignalingEvent');
+  requireContains(handleSignal, 'if (shouldBlockNativeRuntimeSignaling())', 'native signaling event block before fallback switch');
+  requireContains(handleSignal, "mediaDebugLog('[WebRTC] ignoring native signal while SFU runtime is active', type);", 'native signaling event block diagnostic');
+  requireContains(handleSignal, 'void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});', 'native signaling fallback still available');
+  const ensureNative = extractFunction(workspace, 'ensureNativeRuntimeForSignaling');
+  requireContains(ensureNative, 'if (shouldBlockNativeRuntimeSignaling()) return false;', 'native runtime switch cannot preempt SFU');
+
   const createPeer = extractFunction(workspace, 'createOrUpdateSfuRemotePeer');
+  requireContains(workspace, 'markRaw', 'Vue raw marker for native codec objects');
   requireContains(createPeer, 'Number.isInteger(publisherUserId)', 'SFU self-publisher integer guard');
   requireContains(createPeer, 'publisherUserId === currentUserId.value', 'SFU does not render local publisher as remote');
+  requireContains(createPeer, 'decoder = markRaw(decoder);', 'remote WASM decoder is not Vue-proxied');
   requireContains(createPeer, "canvas.className = 'remote-video'", 'remote decoded canvas class');
   requireContains(createPeer, 'canvas.dataset.publisherId = publisherId', 'remote canvas publisher id');
   requireContains(createPeer, 'canvas.dataset.userId = String(publisherUserId)', 'remote canvas user id');
@@ -187,6 +201,19 @@ try {
   requireContains(decodePeer, 'const decoded = peer.decoder.decodeFrame({', 'remote decode invocation');
   requireContains(decodePeer, 'ctx.putImageData(imageData, 0, 0);', 'remote decoded canvas paint');
   requireContains(decodePeer, 'renderCallVideoLayout();', 'remote decode render recovery');
+
+  const transportOnlyFallback = extractFunction(workspace, 'shouldSendTransportOnlySfuFrame');
+  requireContains(transportOnlyFallback, "message.includes('unsupported_capability')", 'transport-only fallback handles missing media security capability');
+  requireContains(transportOnlyFallback, "message.includes('blocked_capability')", 'transport-only fallback handles blocked media security capability');
+  const publishLocal = extractFunction(workspace, 'publishLocalTracks');
+  requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
+  const encodePipeline = extractFunction(workspace, 'startEncodingPipeline');
+  requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
+  requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
+  requireContains(encodePipeline, 'outgoingFrame.protectedFrame = protectedFrame.protectedFrame;', 'SFU encoder upgrades to protected frame when available');
+  requireContains(encodePipeline, "outgoingFrame.protectionMode = 'protected';", 'SFU encoder marks protected frames');
+  requireContains(encodePipeline, 'if (!shouldSendTransportOnlySfuFrame(securityError))', 'SFU encoder only falls back for media security capability failures');
+  requireContains(encodePipeline, 'sfuClientRef.value.sendEncodedFrame(outgoingFrame);', 'SFU encoder sends transport-only or protected frame');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');
   requireContains(handleFrame, 'const init = ensureSfuRemotePeerForFrame(frame);', 'remote frame can create peer before tracks');

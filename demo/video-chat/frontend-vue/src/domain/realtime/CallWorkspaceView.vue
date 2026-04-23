@@ -683,7 +683,7 @@
 </template>
 
 <script setup>
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, inject, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { isGuestSession, sessionState } from '../auth/session';
 import {
@@ -1083,6 +1083,11 @@ function isNativeWebRtcRuntimePath() {
   return mediaRuntimePath.value === 'webrtc_native';
 }
 
+function shouldBlockNativeRuntimeSignaling() {
+  return SFU_RUNTIME_ENABLED
+    && (mediaRuntimePath.value === 'pending' || isWlvcRuntimePath());
+}
+
 function currentMediaSecurityRuntimePath() {
   if (isNativeWebRtcRuntimePath()) return 'webrtc_native';
   return 'wlvc_sfu';
@@ -1198,6 +1203,12 @@ function shouldRecoverMediaSecurityFromFrameError(error) {
   return message.includes('wrong_key_id')
     || message.includes('wrong_epoch')
     || message.includes('downgrade_attempt');
+}
+
+function shouldSendTransportOnlySfuFrame(error) {
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return message.includes('unsupported_capability')
+    || message.includes('blocked_capability');
 }
 
 function recoverMediaSecurityForPublisher(publisherUserId) {
@@ -4006,6 +4017,10 @@ function handleSignalingEvent(payload) {
   }
 
   if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
+    if (shouldBlockNativeRuntimeSignaling()) {
+      mediaDebugLog('[WebRTC] ignoring native signal while SFU runtime is active', type);
+      return;
+    }
     void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});
     return;
   }
@@ -5030,6 +5045,9 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
     try {
       decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
+      if (decoder) {
+        decoder = markRaw(decoder);
+      }
     } catch (error) {
       mediaDebugLog('[SFU] WASM decoder init failed for publisher', publisherId, error);
     }
@@ -5892,6 +5910,7 @@ async function waitForNativeCapabilityForSignaling() {
 
 async function ensureNativeRuntimeForSignaling() {
   if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+  if (shouldBlockNativeRuntimeSignaling()) return false;
   if (!(await waitForNativeCapabilityForSignaling())) return false;
 
   if (!runtimeSwitchInFlight) {
@@ -5985,6 +6004,7 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
 }
 
 async function maybeFallbackToNativeRuntime(reason) {
+  if (SFU_RUNTIME_ENABLED) return false;
   if (!mediaRuntimeCapabilities.value.stageB) return false;
   return switchMediaRuntimePath('webrtc_native', reason);
 }
@@ -6593,6 +6613,12 @@ function teardownLocalPublisher() {
 async function publishLocalTracks() {
   if (localStreamRef.value instanceof MediaStream) {
     publishLocalTracksToSfuIfReady();
+    if (isWlvcRuntimePath() && !encodeIntervalRef.value) {
+      const videoTrack = localStreamRef.value.getVideoTracks?.()[0] || null;
+      if (videoTrack) {
+        await startEncodingPipeline(videoTrack);
+      }
+    }
     return true;
   }
   if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
@@ -6672,12 +6698,13 @@ async function startEncodingPipeline(videoTrack) {
   }
 
   try {
-    videoEncoderRef.value = await createWasmEncoder({
+    const nextEncoder = await createWasmEncoder({
       width: 640, 
       height: 480, 
       quality: 75,
       keyFrameInterval: 30,
     });
+    videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
     if (!videoEncoderRef.value) {
       mediaDebugLog('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
       void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
@@ -6714,26 +6741,38 @@ async function startEncodingPipeline(videoTrack) {
 
     try {
       const encoded = videoEncoderRef.value.encodeFrame(imageData, timestamp);
-      const mediaSecurity = ensureMediaSecuritySession();
-      const protectedFrame = await mediaSecurity.protectFrame({
-        data: encoded.data,
-        runtimePath: 'wlvc_sfu',
-        trackKind: 'video',
-        frameKind: encoded.type,
-        trackId: videoTrack.id,
-        timestamp: encoded.timestamp,
-      });
-
-      sfuClientRef.value.sendEncodedFrame({
+      const outgoingFrame = {
         publisherId: String(sessionState.userId),
         publisherUserId: String(sessionState.userId),
         trackId: videoTrack.id,
         timestamp: encoded.timestamp,
-        data: new ArrayBuffer(0),
+        data: encoded.data,
         type: encoded.type,
-        protectedFrame: protectedFrame.protectedFrame,
-        protectionMode: 'protected',
-      });
+        protectionMode: 'transport_only',
+      };
+
+      try {
+        const mediaSecurity = ensureMediaSecuritySession();
+        const protectedFrame = await mediaSecurity.protectFrame({
+          data: encoded.data,
+          runtimePath: 'wlvc_sfu',
+          trackKind: 'video',
+          frameKind: encoded.type,
+          trackId: videoTrack.id,
+          timestamp: encoded.timestamp,
+        });
+        outgoingFrame.data = new ArrayBuffer(0);
+        outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
+        outgoingFrame.protectionMode = 'protected';
+      } catch (securityError) {
+        if (!shouldSendTransportOnlySfuFrame(securityError)) {
+          throw securityError;
+        }
+        mediaDebugLog('[MediaSecurity] protected SFU frame unavailable; sending transport-only frame', securityError);
+        void syncMediaSecurityWithParticipants();
+      }
+
+      sfuClientRef.value.sendEncodedFrame(outgoingFrame);
       wlvcEncodeFailureCount = 0;
       wlvcEncodeFirstFailureAtMs = 0;
     } catch (e) {

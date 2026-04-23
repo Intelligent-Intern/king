@@ -449,6 +449,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     $madeProgress = true;
                     continue;
                 }
+                if ($isWebSocket) {
+                    // TLS/nonblocking WebSocket streams can report readability
+                    // without yielding bytes. Keep the tunnel alive and let the
+                    // websocket idle timeout decide, otherwise live SFU streams
+                    // are cut while the browser is still connected.
+                    $needsBackoff = true;
+                    continue;
+                }
                 if ($stream === $client) {
                     if ((microtime(true) - $lastClientReadProgress) >= $readStallTimeout) {
                         $clientOpen = false;

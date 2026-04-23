@@ -24,6 +24,8 @@ function read(relativePath) {
 
 const sfuClient = read('../../src/lib/sfu/sfuClient.ts');
 const backendOrigin = read('../../src/support/backendOrigin.js');
+const stackEnv = read('../../../.env');
+const deployScript = read('../../../scripts/deploy.sh');
 
 try {
   requireContains(sfuClient, 'resolveBackendSfuOriginCandidates', 'SFU client origin imports');
@@ -65,6 +67,10 @@ try {
   requireContains(backendOrigin, 'const websocketOrigin = resolveBackendWebSocketOrigin();', 'websocket fallback origin');
   requireContains(backendOrigin, 'const backendOrigin = resolveBackendOrigin();', 'backend fallback origin');
   requireMatch(backendOrigin, /pushUniqueCandidate\(candidates,\s*primarySfuOrigin\)[\s\S]*appendLoopbackHostVariant\(candidates,\s*primarySfuOrigin\)/, 'SFU loopback origin fallback');
+
+  requireMatch(stackEnv, /^VITE_VIDEOCHAT_ENABLE_SFU=true$/m, 'default SFU runtime flag');
+  requireContains(deployScript, 'VITE_VIDEOCHAT_ENABLE_SFU=true', 'deployment SFU runtime flag template');
+  requireContains(deployScript, 'set_env_value VITE_VIDEOCHAT_ENABLE_SFU true', 'deployment SFU runtime env persistence');
 
   process.stdout.write('[sfu-origin-room-binding-contract] PASS\n');
 } catch (error) {
