@@ -11,6 +11,7 @@
 
 #include <php.h>
 #include <stdint.h>
+#include <string.h>
 #include <zend_hash.h>
 #include <zend_smart_str.h>
 
@@ -232,6 +233,30 @@ static inline zend_bool king_proto_decode_fixed64(const unsigned char **buf_ptr,
                  ((uint64_t)ptr[7] << 56);
     *buf_ptr += 8;
     return 1;
+}
+
+static inline uint32_t king_proto_float_to_bits(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline float king_proto_bits_to_float(uint32_t bits) {
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+static inline uint64_t king_proto_double_to_bits(double value) {
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline double king_proto_bits_to_double(uint64_t bits) {
+    double value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
 }
 
 static inline uint32_t king_proto_zigzag_encode32(int32_t n) {
