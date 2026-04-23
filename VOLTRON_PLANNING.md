@@ -16,7 +16,7 @@ No alternative transport/control stack is allowed.
 6. **Semantic DNS** is discovery/routing policy (`king_semantic_dns_*`).
 7. **Object Store** is artifact/staging for large payloads.
 
-## Current Branch Reality (`experiments/1.0.7-delphi`)
+## Current Branch Reality (`experiments/1.0.7-voltron`)
 
 1. Present and usable:
    - IIBIN runtime and docs
@@ -46,13 +46,13 @@ No alternative transport/control stack is allowed.
 ## Immediate M0 Follow-Through
 
 1. Bind concrete handlers for the scaffolded step IDs:
-   - `delphi.prepare_inputs`
-   - `delphi.route_tokens_topk`
-   - `delphi.dispatch_expert_batch`
-   - `delphi.collect_expert_results`
-   - `delphi.merge_weighted_outputs`
-   - `delphi.next_layer_or_decode`
-   - `delphi.emit_final`
+   - `voltron.prepare_inputs`
+   - `voltron.route_tokens_topk`
+   - `voltron.dispatch_expert_batch`
+   - `voltron.collect_expert_results`
+   - `voltron.merge_weighted_outputs`
+   - `voltron.next_layer_or_decode`
+   - `voltron.emit_final`
 2. Land a contract test for one recurrent loop with at least 2 expert fanout branches
    proving deterministic merge and idempotent duplicate-drop behavior.
 3. Wire route/expert payloads to real object-store artifact refs (no large inline payloads).

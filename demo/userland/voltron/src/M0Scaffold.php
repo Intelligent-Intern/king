@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace King\Delphi;
+namespace King\Voltron;
 
 use InvalidArgumentException;
 use RuntimeException;
@@ -9,15 +9,15 @@ use RuntimeException;
 final class M0Scaffold
 {
     /**
-     * Registers the Delphi M0 IIBIN schema set used by the recurrent expert-fanout scaffold.
+     * Registers the Voltron M0 IIBIN schema set used by the recurrent expert-fanout scaffold.
      */
     public static function registerIibinSchemas(): void
     {
         self::assertExtensionFunction('king_proto_define_enum');
         self::assertExtensionFunction('king_proto_define_schema');
 
-        if (!self::isEnumDefined('DelphiArtifactKind')) {
-            king_proto_define_enum('DelphiArtifactKind', [
+        if (!self::isEnumDefined('VoltronArtifactKind')) {
+            king_proto_define_enum('VoltronArtifactKind', [
                 'tensor' => 0,
                 'expert_batch' => 1,
                 'expert_result' => 2,
@@ -25,7 +25,7 @@ final class M0Scaffold
             ]);
         }
 
-        self::defineSchemaIfMissing('DelphiTensorMeta', [
+        self::defineSchemaIfMissing('VoltronTensorMeta', [
             'shape' => ['tag' => 1, 'type' => 'repeated_int32'],
             'dtype' => ['tag' => 2, 'type' => 'string', 'required' => true],
             'quantization' => ['tag' => 3, 'type' => 'string'],
@@ -34,48 +34,48 @@ final class M0Scaffold
             'window_id' => ['tag' => 6, 'type' => 'string'],
         ]);
 
-        self::defineSchemaIfMissing('DelphiArtifactRef', [
+        self::defineSchemaIfMissing('VoltronArtifactRef', [
             'artifact_uri' => ['tag' => 1, 'type' => 'string', 'required' => true],
             'object_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
-            'kind' => ['tag' => 3, 'type' => 'DelphiArtifactKind', 'required' => true],
+            'kind' => ['tag' => 3, 'type' => 'VoltronArtifactKind', 'required' => true],
             'size_bytes' => ['tag' => 4, 'type' => 'int64'],
             'version' => ['tag' => 5, 'type' => 'int64'],
-            'tensor_meta' => ['tag' => 6, 'type' => 'DelphiTensorMeta'],
+            'tensor_meta' => ['tag' => 6, 'type' => 'VoltronTensorMeta'],
             'created_at_ms' => ['tag' => 7, 'type' => 'int64'],
         ]);
 
-        self::defineSchemaIfMissing('DelphiRoutePlan', [
+        self::defineSchemaIfMissing('VoltronRoutePlan', [
             'run_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
             'swarm_id' => ['tag' => 2, 'type' => 'string'],
             'loop_index' => ['tag' => 3, 'type' => 'int32'],
             'top_k' => ['tag' => 4, 'type' => 'int32'],
             'expert_ids' => ['tag' => 5, 'type' => 'repeated_string'],
-            'input_artifact' => ['tag' => 6, 'type' => 'DelphiArtifactRef'],
+            'input_artifact' => ['tag' => 6, 'type' => 'VoltronArtifactRef'],
         ]);
 
-        self::defineSchemaIfMissing('DelphiExpertBatch', [
+        self::defineSchemaIfMissing('VoltronExpertBatch', [
             'run_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
             'step_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
             'expert_id' => ['tag' => 3, 'type' => 'string', 'required' => true],
             'owner_node_id' => ['tag' => 4, 'type' => 'string', 'required' => true],
-            'activation_artifact' => ['tag' => 5, 'type' => 'DelphiArtifactRef', 'required' => true],
+            'activation_artifact' => ['tag' => 5, 'type' => 'VoltronArtifactRef', 'required' => true],
             'idempotency_key' => ['tag' => 6, 'type' => 'string'],
         ]);
 
-        self::defineSchemaIfMissing('DelphiExpertResult', [
+        self::defineSchemaIfMissing('VoltronExpertResult', [
             'run_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
             'step_id' => ['tag' => 2, 'type' => 'string', 'required' => true],
             'expert_id' => ['tag' => 3, 'type' => 'string', 'required' => true],
             'status' => ['tag' => 4, 'type' => 'string', 'required' => true],
-            'output_artifact' => ['tag' => 5, 'type' => 'DelphiArtifactRef'],
+            'output_artifact' => ['tag' => 5, 'type' => 'VoltronArtifactRef'],
             'runtime_ms' => ['tag' => 6, 'type' => 'int64'],
             'error_detail' => ['tag' => 7, 'type' => 'string'],
         ]);
 
-        self::defineSchemaIfMissing('DelphiLayerMerge', [
+        self::defineSchemaIfMissing('VoltronLayerMerge', [
             'run_id' => ['tag' => 1, 'type' => 'string', 'required' => true],
             'loop_index' => ['tag' => 2, 'type' => 'int32', 'required' => true],
-            'merged_output_artifact' => ['tag' => 3, 'type' => 'DelphiArtifactRef'],
+            'merged_output_artifact' => ['tag' => 3, 'type' => 'VoltronArtifactRef'],
             'next_action' => ['tag' => 4, 'type' => 'string'],
         ]);
     }
@@ -117,7 +117,7 @@ final class M0Scaffold
         $steps = [
             [
                 'id' => $prepareId,
-                'tool' => 'delphi.prepare_inputs',
+                'tool' => 'voltron.prepare_inputs',
                 'params' => [
                     'run_id' => $runId,
                     'loop_index' => $loopIndex,
@@ -126,7 +126,7 @@ final class M0Scaffold
             ],
             [
                 'id' => $routeId,
-                'tool' => 'delphi.route_tokens_topk',
+                'tool' => 'voltron.route_tokens_topk',
                 'deps' => [$prepareId],
                 'params' => [
                     'run_id' => $runId,
@@ -148,7 +148,7 @@ final class M0Scaffold
             $dispatchIds[] = $dispatchId;
             $steps[] = [
                 'id' => $dispatchId,
-                'tool' => 'delphi.dispatch_expert_batch',
+                'tool' => 'voltron.dispatch_expert_batch',
                 'deps' => [$routeId],
                 'params' => [
                     'run_id' => $runId,
@@ -163,7 +163,7 @@ final class M0Scaffold
 
         $steps[] = [
             'id' => $collectId,
-            'tool' => 'delphi.collect_expert_results',
+            'tool' => 'voltron.collect_expert_results',
             'deps' => $dispatchIds,
             'params' => [
                 'run_id' => $runId,
@@ -173,7 +173,7 @@ final class M0Scaffold
         ];
         $steps[] = [
             'id' => $mergeId,
-            'tool' => 'delphi.merge_weighted_outputs',
+            'tool' => 'voltron.merge_weighted_outputs',
             'deps' => [$collectId],
             'params' => [
                 'run_id' => $runId,
@@ -182,7 +182,7 @@ final class M0Scaffold
         ];
         $steps[] = [
             'id' => $nextId,
-            'tool' => 'delphi.next_layer_or_decode',
+            'tool' => 'voltron.next_layer_or_decode',
             'deps' => [$mergeId],
             'params' => [
                 'run_id' => $runId,
@@ -191,7 +191,7 @@ final class M0Scaffold
         ];
         $steps[] = [
             'id' => $emitId,
-            'tool' => 'delphi.emit_final',
+            'tool' => 'voltron.emit_final',
             'deps' => [$nextId],
             'params' => [
                 'run_id' => $runId,
@@ -265,9 +265,9 @@ final class M0Scaffold
         self::assertArtifactRef($artifactRef);
         self::assertExtensionFunction('king_proto_encode');
 
-        $encoded = king_proto_encode('DelphiArtifactRef', $artifactRef);
+        $encoded = king_proto_encode('VoltronArtifactRef', $artifactRef);
         if (!is_string($encoded) || $encoded === '') {
-            throw new RuntimeException('Failed to encode DelphiArtifactRef payload.');
+            throw new RuntimeException('Failed to encode VoltronArtifactRef payload.');
         }
 
         return $encoded;
