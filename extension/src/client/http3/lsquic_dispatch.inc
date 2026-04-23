@@ -73,6 +73,15 @@ static zend_result king_http3_lsquic_throw_closed_connection(
 {
     char status[128];
 
+    if (runtime != NULL && runtime->lsquic_tls_verify_failed) {
+        king_http3_throw(
+            king_ce_tls_exception,
+            "%s() failed during the QUIC/TLS handshake (-10).",
+            function_name
+        );
+        return FAILURE;
+    }
+
     memset(status, 0, sizeof(status));
     if (runtime != NULL
         && runtime->lsquic_conn != NULL
@@ -159,6 +168,15 @@ static zend_result king_http3_lsquic_drive_requests(
             return FAILURE;
         }
         king_http3_refresh_tls_state(runtime);
+
+        if (runtime->lsquic_tls_verify_failed) {
+            king_http3_throw(
+                king_ce_tls_exception,
+                "%s() failed during the QUIC/TLS handshake (-10).",
+                function_name
+            );
+            return FAILURE;
+        }
 
         failed_request = king_http3_lsquic_failed_request(requests, request_count);
         if (failed_request != NULL) {

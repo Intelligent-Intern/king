@@ -55,23 +55,23 @@ var_dump($warmup['transport_backend']);
 
 var_dump($first instanceof King\Response);
 var_dump($first->getStatusCode());
-var_dump($first->getHeaders()['content-length']);
+var_dump($first->getHeaders()['content-type']);
 var_dump($first->getBody());
 
 var_dump($second instanceof King\Response);
 var_dump($second->getStatusCode());
-var_dump($second->getHeaders()['content-length']);
+var_dump($second->getHeaders()['content-type']);
 var_dump($second->getBody());
 ?>
 --EXPECT--
 string(9) "lsquic_h3"
 bool(true)
 int(200)
-string(2) "12"
+string(10) "text/plain"
 string(12) "first-http3
 "
 bool(true)
 int(200)
-string(2) "13"
+string(10) "text/plain"
 string(13) "second-http3
 "

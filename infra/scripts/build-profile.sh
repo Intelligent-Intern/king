@@ -421,6 +421,8 @@ if [[ -n "${lsquic_runtime_prefix}" ]]; then
     CONFIGURE_ENV+=(
         KING_LSQUIC_INCLUDE_DIR="${lsquic_runtime_prefix}/include/lsquic"
         KING_LSQUIC_LIBRARY_DIR="${lsquic_runtime_prefix}/lib"
+        KING_BORINGSSL_CFLAGS="-DKING_BORINGSSL_STATIC_LINK=1"
+        KING_BORINGSSL_LIBS="-Wl,--exclude-libs,ALL ${lsquic_runtime_prefix}/boringssl/lib/libssl.a ${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a -lstdc++"
     )
 fi
 

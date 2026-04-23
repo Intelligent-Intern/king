@@ -149,6 +149,8 @@ require_literal(build_profile, "Pinned LSQUIC source cache is missing in CI; boo
 require_literal(build_profile, "\"${LSQUIC_BOOTSTRAP_SCRIPT}\"", "build-profile LSQUIC source bootstrap invocation")
 require_literal(build_profile, "KING_LSQUIC_INCLUDE_DIR=\"${lsquic_runtime_prefix}/include/lsquic\"", "build-profile LSQUIC runtime include path")
 require_literal(build_profile, "KING_LSQUIC_LIBRARY_DIR=\"${lsquic_runtime_prefix}/lib\"", "build-profile LSQUIC runtime library path")
+require_literal(build_profile, "KING_BORINGSSL_CFLAGS=\"-DKING_BORINGSSL_STATIC_LINK=1\"", "build-profile BoringSSL static-link marker")
+require_literal(build_profile, "KING_BORINGSSL_LIBS=\"-Wl,--exclude-libs,ALL ${lsquic_runtime_prefix}/boringssl/lib/libssl.a ${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a -lstdc++\"", "build-profile pinned BoringSSL static libraries")
 require_literal(build_profile, "stage_lsquic_runtime", "build-profile staged runtime copy")
 require_literal(build_profile, "./configure --enable-king", "build-profile configure entrypoint")
 
@@ -156,6 +158,9 @@ require_literal(build_lsquic_runtime, "KING_LSQUIC_RUNTIME_PREFIX", "runtime bui
 require_literal(build_lsquic_runtime, "KING_LSQUIC_RUNTIME_LOCK_SHA256", "runtime builder lock metadata")
 require_literal(build_lsquic_runtime, "-DLSQUIC_SHARED_LIB=OFF", "runtime builder static LSQUIC archive path")
 require_literal(build_lsquic_runtime, "-Wl,--whole-archive", "runtime builder BoringSSL static link")
+require_literal(build_lsquic_runtime, "include/boringssl", "runtime builder BoringSSL header staging")
+require_literal(build_lsquic_runtime, "boringssl/lib/libssl.a", "runtime builder BoringSSL ssl archive staging")
+require_literal(build_lsquic_runtime, "boringssl/lib/libcrypto.a", "runtime builder BoringSSL crypto archive staging")
 require_literal(build_lsquic_runtime, "liblsquic.so", "runtime builder shared artifact")
 require_literal(build_lsquic_runtime, "unresolved BoringSSL symbols", "runtime builder fail-closed symbol audit")
 

@@ -49,6 +49,121 @@ static zend_long king_http3_lsquic_estimate_packet_bytes(
     return king_http3_lsquic_uint64_to_zend_long(estimated);
 }
 
+static bool king_http3_lsquic_has_path_option(const char *path)
+{
+    return path != NULL && path[0] != '\0';
+}
+
+static int king_http3_lsquic_load_verify_store(
+    X509_STORE *store,
+    const char *ca_file)
+{
+    struct stat st;
+
+    if (store == NULL) {
+        return -1;
+    }
+
+    if (!king_http3_lsquic_has_path_option(ca_file)) {
+        return X509_STORE_set_default_paths(store) == 1 ? 0 : -1;
+    }
+
+    if (stat(ca_file, &st) != 0) {
+        return -1;
+    }
+
+    if (S_ISDIR(st.st_mode)) {
+        return X509_STORE_load_locations(store, NULL, ca_file) == 1 ? 0 : -1;
+    }
+
+    return X509_STORE_load_locations(store, ca_file, NULL) == 1 ? 0 : -1;
+}
+
+static bool king_http3_lsquic_verify_host(
+    X509 *cert,
+    const char *host)
+{
+    unsigned char ip_buffer[16];
+
+    if (cert == NULL || host == NULL || host[0] == '\0') {
+        return false;
+    }
+
+    if (inet_pton(AF_INET, host, ip_buffer) == 1
+        || inet_pton(AF_INET6, host, ip_buffer) == 1) {
+        return X509_check_ip_asc(cert, host, 0) == 1;
+    }
+
+    return X509_check_host(cert, host, strlen(host), 0, NULL) == 1;
+}
+
+static int king_http3_lsquic_verify_server_cert(
+    void *verify_ctx,
+    STACK_OF(X509) *chain)
+{
+    king_http3_request_runtime_t *runtime = (king_http3_request_runtime_t *) verify_ctx;
+    X509_STORE *store = NULL;
+    X509_STORE_CTX *store_ctx = NULL;
+    STACK_OF(X509) *untrusted_chain = NULL;
+    X509 *cert = NULL;
+    int verified = 0;
+
+    if (runtime == NULL || !runtime->lsquic_tls_verify_peer) {
+        return 0;
+    }
+
+    if (chain == NULL || sk_X509_num(chain) <= 0) {
+        runtime->lsquic_tls_verify_failed = true;
+        return -1;
+    }
+
+    store = X509_STORE_new();
+    store_ctx = X509_STORE_CTX_new();
+    untrusted_chain = sk_X509_dup(chain);
+    cert = sk_X509_value(chain, 0);
+
+    if (store == NULL
+        || store_ctx == NULL
+        || untrusted_chain == NULL
+        || cert == NULL
+        || king_http3_lsquic_load_verify_store(store, runtime->lsquic_tls_ca_file) != 0) {
+        goto done;
+    }
+
+    (void) sk_X509_shift(untrusted_chain);
+    if (X509_STORE_CTX_init(store_ctx, store, cert, untrusted_chain) != 1) {
+        goto done;
+    }
+
+    if (X509_verify_cert(store_ctx) != 1) {
+        goto done;
+    }
+
+    if (!king_http3_lsquic_verify_host(cert, runtime->lsquic_tls_verify_host)) {
+        goto done;
+    }
+
+    verified = 1;
+
+done:
+    if (untrusted_chain != NULL) {
+        sk_X509_free(untrusted_chain);
+    }
+    if (store_ctx != NULL) {
+        X509_STORE_CTX_free(store_ctx);
+    }
+    if (store != NULL) {
+        X509_STORE_free(store);
+    }
+
+    if (verified != 1) {
+        runtime->lsquic_tls_verify_failed = true;
+        return -1;
+    }
+
+    return 0;
+}
+
 static void king_http3_lsquic_refresh_transport_stats(
     king_http3_request_runtime_t *runtime)
 {
@@ -300,6 +415,10 @@ static zend_result king_http3_lsquic_runtime_init(
     runtime->quic_packets_retransmitted = 0;
     runtime->quic_lost_bytes = 0;
     runtime->quic_stream_retransmitted_bytes = 0;
+    runtime->lsquic_tls_verify_peer = options->tls_verify_peer;
+    runtime->lsquic_tls_verify_failed = false;
+    runtime->lsquic_tls_ca_file = options->tls_default_ca_file;
+    runtime->lsquic_tls_verify_host = ZSTR_VAL(target->host);
 
     king_http3_lsquic.lsquic_engine_init_settings_fn(&runtime->lsquic_settings, engine_flags);
     if (king_http3_lsquic_apply_quic_options(runtime, options, function_name) != SUCCESS) {
@@ -339,6 +458,10 @@ static zend_result king_http3_lsquic_runtime_init(
     runtime->lsquic_api.ea_packets_out_ctx = runtime;
     runtime->lsquic_api.ea_hsi_if = &king_http3_lsquic_hset_if;
     runtime->lsquic_api.ea_hsi_ctx = runtime;
+    if (options->tls_verify_peer) {
+        runtime->lsquic_api.ea_verify_cert = king_http3_lsquic_verify_server_cert;
+        runtime->lsquic_api.ea_verify_ctx = runtime;
+    }
 
     runtime->lsquic_engine = (lsquic_engine_t *) king_http3_lsquic.lsquic_engine_new_fn(
         engine_flags,

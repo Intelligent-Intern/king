@@ -101,8 +101,6 @@ static struct lsxpack_header *king_server_http3_lsquic_hsi_prepare_decode(
     king_server_http3_lsquic_header_set_t *set =
         (king_server_http3_lsquic_header_set_t *) hdr_set;
 
-    (void) hdr;
-
     if (set == NULL) {
         return NULL;
     }
@@ -116,6 +114,12 @@ static struct lsxpack_header *king_server_http3_lsquic_hsi_prepare_decode(
             ? emalloc(space)
             : erealloc(set->buffer, space);
         set->buffer_size = space;
+    }
+
+    if (hdr != NULL) {
+        hdr->buf = set->buffer;
+        hdr->val_len = (lsxpack_strlen_t) space;
+        return hdr;
     }
 
     lsxpack_header_prepare_decode(&set->header, set->buffer, 0, space);
@@ -132,7 +136,11 @@ static int king_server_http3_lsquic_hsi_process_header(
     const char *name;
     const char *value;
 
-    if (hdr == NULL || set == NULL || set->request == NULL) {
+    if (hdr == NULL) {
+        return 0;
+    }
+
+    if (set == NULL || set->request == NULL) {
         return -1;
     }
 
@@ -315,6 +323,16 @@ static zend_result king_server_http3_lsquic_write_response_body(
         return SUCCESS;
     }
 
+    if (response->body == NULL || ZSTR_LEN(response->body) == 0) {
+        (void) king_server_http3_lsquic.lsquic_stream_shutdown_fn(stream_state->stream, 1);
+        king_server_http3_lsquic.lsquic_stream_wantread_fn(stream_state->stream, 1);
+        response->goaway_sent = true;
+        response->close_sent = true;
+        response->close_grace_deadline_ms = king_server_http3_now_ms() + KING_SERVER_HTTP3_CLOSE_GRACE_MS;
+
+        return SUCCESS;
+    }
+
     while (response->body != NULL && response->body_offset < ZSTR_LEN(response->body)) {
         ssize_t written = king_server_http3_lsquic.lsquic_stream_write_fn(
             stream_state->stream,
@@ -342,14 +360,12 @@ static zend_result king_server_http3_lsquic_write_response_body(
         return FAILURE;
     }
 
-    king_server_http3_lsquic.lsquic_stream_wantwrite_fn(stream_state->stream, 0);
+    king_server_http3_lsquic.lsquic_stream_wantread_fn(stream_state->stream, 1);
     response->goaway_sent = true;
     response->close_sent = true;
     response->close_grace_deadline_ms = king_server_http3_now_ms() + KING_SERVER_HTTP3_CLOSE_GRACE_MS;
 
-    return king_server_http3_lsquic.lsquic_stream_flush_fn(stream_state->stream) == 0
-        ? SUCCESS
-        : FAILURE;
+    return SUCCESS;
 }
 
 static zend_result king_server_http3_lsquic_claim_request_headers(
@@ -510,8 +526,15 @@ static void king_server_http3_lsquic_on_write(
         return;
     }
 
-    if (king_server_http3_lsquic_send_response_headers(stream_state) != SUCCESS
-        || king_server_http3_lsquic_write_response_body(stream_state) != SUCCESS) {
+    if (stream_state->runtime->lsquic_response_state != NULL
+        && !stream_state->runtime->lsquic_response_state->headers_sent) {
+        if (king_server_http3_lsquic_send_response_headers(stream_state) != SUCCESS) {
+            stream_state->runtime->lsquic_response_failed = true;
+        }
+        return;
+    }
+
+    if (king_server_http3_lsquic_write_response_body(stream_state) != SUCCESS) {
         stream_state->runtime->lsquic_response_failed = true;
     }
 }

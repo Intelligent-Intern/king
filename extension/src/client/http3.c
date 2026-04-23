@@ -24,6 +24,8 @@
 #if defined(KING_HTTP3_BACKEND_LSQUIC)
 #include <lsquic.h>
 #include <lsxpack_header.h>
+#include <openssl/x509.h>
+#include <openssl/x509v3.h>
 #endif
 
 #include <arpa/inet.h>
@@ -39,6 +41,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <time.h>
@@ -146,6 +149,10 @@ typedef struct _king_http3_request_runtime {
     unsigned char lsquic_session_resume[KING_MAX_TICKET_SIZE];
     size_t lsquic_session_resume_len;
     bool lsquic_connection_closed;
+    bool lsquic_tls_verify_peer;
+    bool lsquic_tls_verify_failed;
+    const char *lsquic_tls_ca_file;
+    const char *lsquic_tls_verify_host;
 #endif
 } king_http3_request_runtime_t;
 

@@ -135,8 +135,6 @@ static struct lsxpack_header *king_http3_lsquic_hsi_prepare_decode(
 {
     king_http3_lsquic_header_set_t *set = (king_http3_lsquic_header_set_t *) hdr_set;
 
-    (void) hdr;
-
     if (set == NULL) {
         return NULL;
     }
@@ -150,6 +148,12 @@ static struct lsxpack_header *king_http3_lsquic_hsi_prepare_decode(
             ? emalloc(space)
             : erealloc(set->buffer, space);
         set->buffer_size = space;
+    }
+
+    if (hdr != NULL) {
+        hdr->buf = set->buffer;
+        hdr->val_len = (lsxpack_strlen_t) space;
+        return hdr;
     }
 
     lsxpack_header_prepare_decode(&set->header, set->buffer, 0, space);
@@ -285,7 +289,7 @@ static zend_result king_http3_lsquic_send_headers(
     result = king_http3_lsquic.lsquic_stream_send_headers_fn(
         stream,
         &header_list,
-        request->body_string == NULL || ZSTR_LEN(request->body_string) == 0
+        0
     );
 
     for (size_t i = 0; i < request->header_count; ++i) {
@@ -311,28 +315,32 @@ static zend_result king_http3_lsquic_write_body(
         return FAILURE;
     }
 
-    if (request->body_string != NULL) {
-        while (request->body_offset < ZSTR_LEN(request->body_string)) {
-            ssize_t written = king_http3_lsquic.lsquic_stream_write_fn(
-                stream,
-                ZSTR_VAL(request->body_string) + request->body_offset,
-                ZSTR_LEN(request->body_string) - request->body_offset
-            );
+    if (request->body_string == NULL || ZSTR_LEN(request->body_string) == 0) {
+        (void) king_http3_lsquic.lsquic_stream_shutdown_fn(stream, 1);
+        king_http3_lsquic.lsquic_stream_wantread_fn(stream, 1);
+        return SUCCESS;
+    }
 
-            if (written < 0) {
-                request->request_failed = true;
-                return FAILURE;
-            }
-            if (written == 0) {
-                break;
-            }
+    while (request->body_offset < ZSTR_LEN(request->body_string)) {
+        ssize_t written = king_http3_lsquic.lsquic_stream_write_fn(
+            stream,
+            ZSTR_VAL(request->body_string) + request->body_offset,
+            ZSTR_LEN(request->body_string) - request->body_offset
+        );
 
-            request->body_offset += (size_t) written;
+        if (written < 0) {
+            request->request_failed = true;
+            return FAILURE;
+        }
+        if (written == 0) {
+            break;
         }
 
-        if (request->body_offset < ZSTR_LEN(request->body_string)) {
-            return SUCCESS;
-        }
+        request->body_offset += (size_t) written;
+    }
+
+    if (request->body_offset < ZSTR_LEN(request->body_string)) {
+        return SUCCESS;
     }
 
     if (king_http3_lsquic.lsquic_stream_shutdown_fn(stream, 1) != 0) {
@@ -340,9 +348,8 @@ static zend_result king_http3_lsquic_write_body(
         return FAILURE;
     }
 
-    king_http3_lsquic.lsquic_stream_wantwrite_fn(stream, 0);
     king_http3_lsquic.lsquic_stream_wantread_fn(stream, 1);
-    return king_http3_lsquic.lsquic_stream_flush_fn(stream) == 0 ? SUCCESS : FAILURE;
+    return SUCCESS;
 }
 
 static zend_result king_http3_lsquic_read_response(
@@ -459,9 +466,10 @@ static void king_http3_lsquic_on_write(
         return;
     }
 
-    if (!request->headers_sent
-        && king_http3_lsquic_send_headers(request, stream) != SUCCESS) {
-        request->request_failed = true;
+    if (!request->headers_sent) {
+        if (king_http3_lsquic_send_headers(request, stream) != SUCCESS) {
+            request->request_failed = true;
+        }
         return;
     }
 

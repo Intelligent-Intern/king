@@ -275,7 +275,7 @@ try {
             'http3 ' . $label . ' server capability was not an int token'
         );
         king_server_listener_646_assert(
-            ($capture['request']['transport_backend_before'] ?? null) === 'server_http3_socket',
+            ($capture['request']['transport_backend_before'] ?? null) === 'server_http3_lsquic_socket',
             'http3 ' . $label . ' session transport backend drifted'
         );
         king_server_listener_646_assert(
@@ -291,7 +291,7 @@ try {
             'http3 ' . $label . ' post session state was not closed'
         );
         king_server_listener_646_assert(
-            ($capture['post_stats']['transport_backend'] ?? null) === 'server_http3_socket',
+            ($capture['post_stats']['transport_backend'] ?? null) === 'server_http3_lsquic_socket',
             'http3 ' . $label . ' post session transport backend drifted'
         );
     }

@@ -23,174 +23,186 @@ $configOptions = [
 ];
 
 $config = king_new_config($configOptions);
+$maxRequests = $mode === 'static-root'
+    ? max(1, (int) ($modeArgs[1] ?? 32))
+    : 1;
+$servedRequests = 0;
 
 fwrite(STDOUT, "READY\n");
 fflush(STDOUT);
 
-$result = king_http3_server_listen_once(
-    $host,
-    $port,
-    $config,
-    static function (array $request) use (&$capture, &$session, $mode, $modeArgs): array {
-        $session = $request['session'];
-        $stats = king_get_stats($session);
+do {
+    $result = king_http3_server_listen_once(
+        $host,
+        $port,
+        $config,
+        static function (array $request) use (&$capture, &$session, $mode, $modeArgs): array {
+            $session = $request['session'];
+            $stats = king_get_stats($session);
 
-        $capture['request'] = [
-            'protocol' => $request['protocol'],
-            'scheme' => $request['scheme'],
-            'method' => $request['method'],
-            'uri' => $request['uri'],
-            'path' => $request['path'] ?? null,
-            'host' => $request['host'],
-            'body' => $request['body'],
-            'stream_id' => $request['stream_id'],
-            'authority' => $request['headers'][':authority'] ?? null,
-            'mode' => $request['headers']['x-mode'] ?? null,
-            'session_is_resource' => is_resource($request['session']),
-            'capability_is_int' => is_int($request['server_session_capability']),
-            'transport_backend_before' => $stats['transport_backend'],
-            'alpn_before' => $stats['alpn'],
-            'transport_socket_family_before' => $stats['transport_socket_family'],
-            'transport_has_socket_before' => $stats['transport_has_socket'],
-        ];
-
-        if ($mode === 'response-normalization') {
-            return [
-                'status' => 202,
-                'headers' => [
-                    'Content-Length' => '999',
-                    'Connection' => 'keep-alive',
-                    'Content-Type' => 'text/plain',
-                    'X-Reply-Mode' => 'normalized',
-                    'X-Multi' => [
-                        'alpha',
-                        'beta',
-                    ],
-                ],
-                'body' => 'normalized-body',
+            $capture['request'] = [
+                'protocol' => $request['protocol'],
+                'scheme' => $request['scheme'],
+                'method' => $request['method'],
+                'uri' => $request['uri'],
+                'path' => $request['path'] ?? null,
+                'host' => $request['host'],
+                'body' => $request['body'],
+                'stream_id' => $request['stream_id'],
+                'authority' => $request['headers'][':authority'] ?? null,
+                'mode' => $request['headers']['x-mode'] ?? null,
+                'session_is_resource' => is_resource($request['session']),
+                'capability_is_int' => is_int($request['server_session_capability']),
+                'transport_backend_before' => $stats['transport_backend'],
+                'alpn_before' => $stats['alpn'],
+                'transport_socket_family_before' => $stats['transport_socket_family'],
+                'transport_has_socket_before' => $stats['transport_has_socket'],
             ];
-        }
 
-        if ($mode === 'cancel-callback') {
-            $capture['cancel_handler_ok'] = king_server_on_cancel(
-                $session,
-                $request['stream_id'],
-                static function (int $cancelledStreamId) use (&$capture): void {
-                    $capture['cancelled_stream'] = $cancelledStreamId;
+            if ($mode === 'response-normalization') {
+                return [
+                    'status' => 202,
+                    'headers' => [
+                        'Content-Length' => '999',
+                        'Connection' => 'keep-alive',
+                        'Content-Type' => 'text/plain',
+                        'X-Reply-Mode' => 'normalized',
+                        'X-Multi' => [
+                            'alpha',
+                            'beta',
+                        ],
+                    ],
+                    'body' => 'normalized-body',
+                ];
+            }
+
+            if ($mode === 'cancel-callback') {
+                $capture['cancel_handler_ok'] = king_server_on_cancel(
+                    $session,
+                    $request['stream_id'],
+                    static function (int $cancelledStreamId) use (&$capture): void {
+                        $capture['cancelled_stream'] = $cancelledStreamId;
+                    }
+                );
+                $capture['cancel_handler_error'] = king_get_last_error();
+                usleep(300000);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                    ],
+                    'body' => str_repeat('late-http3-', 65536),
+                ];
+            }
+
+            if ($mode === 'tls-reload') {
+                $reloadCertFile = (string) ($modeArgs[0] ?? '');
+                $reloadKeyFile = (string) ($modeArgs[1] ?? '');
+
+                $capture['tls_reload_ok'] = king_server_reload_tls_config(
+                    $session,
+                    $reloadCertFile,
+                    $reloadKeyFile
+                );
+                $capture['tls_reload_error'] = king_get_last_error();
+                $capture['tls_reload_stats'] = king_get_stats($session);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                        'x-reply-mode' => 'tls-reload',
+                    ],
+                    'body' => 'tls-reload-live',
+                ];
+            }
+
+            if ($mode === 'cors-allowlist') {
+                $capture['request']['headers'] = $request['headers'];
+                $capture['request']['cors'] = $request['cors'];
+                $capture['cors_stats_before_return'] = king_get_stats($session);
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                        'x-cors-mode' => 'allowlist',
+                    ],
+                    'body' => 'cors-http3-body',
+                ];
+            }
+
+            if ($mode === 'capture-headers') {
+                $capture['request']['headers'] = $request['headers'];
+
+                return [
+                    'status' => 200,
+                    'headers' => [
+                        'content-type' => 'text/plain',
+                    ],
+                    'body' => 'captured',
+                ];
+            }
+
+            if ($mode === 'static-root') {
+                $rootDir = (string) ($modeArgs[0] ?? '');
+                $path = parse_url((string) $request['uri'], PHP_URL_PATH);
+                if (!is_string($path) || $path === '' || str_contains($path, '..')) {
+                    return [
+                        'status' => 400,
+                        'headers' => [
+                            'content-type' => 'text/plain',
+                        ],
+                        'body' => 'invalid path',
+                    ];
                 }
-            );
-            $capture['cancel_handler_error'] = king_get_last_error();
-            usleep(300000);
 
-            return [
-                'status' => 200,
-                'headers' => [
-                    'content-type' => 'text/plain',
-                ],
-                'body' => str_repeat('late-http3-', 65536),
-            ];
-        }
+                $file = rtrim($rootDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($path, '/');
+                if (!is_file($file)) {
+                    return [
+                        'status' => 404,
+                        'headers' => [
+                            'content-type' => 'text/plain',
+                        ],
+                        'body' => 'not found',
+                    ];
+                }
 
-        if ($mode === 'tls-reload') {
-            $reloadCertFile = (string) ($modeArgs[0] ?? '');
-            $reloadKeyFile = (string) ($modeArgs[1] ?? '');
-
-            $capture['tls_reload_ok'] = king_server_reload_tls_config(
-                $session,
-                $reloadCertFile,
-                $reloadKeyFile
-            );
-            $capture['tls_reload_error'] = king_get_last_error();
-            $capture['tls_reload_stats'] = king_get_stats($session);
-
-            return [
-                'status' => 200,
-                'headers' => [
-                    'content-type' => 'text/plain',
-                    'x-reply-mode' => 'tls-reload',
-                ],
-                'body' => 'tls-reload-live',
-            ];
-        }
-
-        if ($mode === 'cors-allowlist') {
-            $capture['request']['headers'] = $request['headers'];
-            $capture['request']['cors'] = $request['cors'];
-            $capture['cors_stats_before_return'] = king_get_stats($session);
-
-            return [
-                'status' => 200,
-                'headers' => [
-                    'content-type' => 'text/plain',
-                    'x-cors-mode' => 'allowlist',
-                ],
-                'body' => 'cors-http3-body',
-            ];
-        }
-
-        if ($mode === 'capture-headers') {
-            $capture['request']['headers'] = $request['headers'];
-
-            return [
-                'status' => 200,
-                'headers' => [
-                    'content-type' => 'text/plain',
-                ],
-                'body' => 'captured',
-            ];
-        }
-
-        if ($mode === 'static-root') {
-            $rootDir = (string) ($modeArgs[0] ?? '');
-            $path = parse_url((string) $request['uri'], PHP_URL_PATH);
-            if (!is_string($path) || $path === '' || str_contains($path, '..')) {
+                $body = (string) file_get_contents($file);
                 return [
-                    'status' => 400,
+                    'status' => 200,
                     'headers' => [
                         'content-type' => 'text/plain',
+                        'content-length' => (string) strlen($body),
                     ],
-                    'body' => 'invalid path',
+                    'body' => $body,
                 ];
             }
 
-            $file = rtrim($rootDir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . ltrim($path, '/');
-            if (!is_file($file)) {
-                return [
-                    'status' => 404,
-                    'headers' => [
-                        'content-type' => 'text/plain',
-                    ],
-                    'body' => 'not found',
-                ];
-            }
-
-            $body = (string) file_get_contents($file);
             return [
-                'status' => 200,
+                'status' => 201,
                 'headers' => [
                     'content-type' => 'text/plain',
-                    'content-length' => (string) strlen($body),
+                    'x-reply-mode' => 'wire-h3',
                 ],
-                'body' => $body,
+                'body' => 'reply:' . $request['body'],
             ];
         }
+    );
 
-        return [
-            'status' => 201,
-            'headers' => [
-                'content-type' => 'text/plain',
-                'x-reply-mode' => 'wire-h3',
-            ],
-            'body' => 'reply:' . $request['body'],
-        ];
+    $servedRequests++;
+    $capture['listen_result'] = $result;
+    $capture['listen_error'] = king_get_last_error();
+    $capture['served_requests'] = $servedRequests;
+    $capture['post_stats'] = $session !== null ? king_get_stats($session) : null;
+
+    file_put_contents(
+        $capturePath,
+        json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
+    );
+
+    if ($mode !== 'static-root' && $result !== true) {
+        break;
     }
-);
-
-$capture['listen_result'] = $result;
-$capture['listen_error'] = king_get_last_error();
-$capture['post_stats'] = $session !== null ? king_get_stats($session) : null;
-
-file_put_contents(
-    $capturePath,
-    json_encode($capture, JSON_PRETTY_PRINT | JSON_INVALID_UTF8_SUBSTITUTE)
-);
+} while ($servedRequests < $maxRequests);

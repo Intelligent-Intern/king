@@ -118,6 +118,9 @@ verify_runtime() {
     local header="${PREFIX_DIR}/include/lsquic/lsquic.h"
     local types_header="${PREFIX_DIR}/include/lsquic/lsquic_types.h"
     local xpack_header="${PREFIX_DIR}/include/lsquic/lsxpack_header.h"
+    local boringssl_header="${PREFIX_DIR}/include/boringssl/openssl/ssl.h"
+    local boringssl_ssl="${PREFIX_DIR}/boringssl/lib/libssl.a"
+    local boringssl_crypto="${PREFIX_DIR}/boringssl/lib/libcrypto.a"
     local symbols_file=""
     local lock_sha=""
     local arch=""
@@ -127,6 +130,9 @@ verify_runtime() {
     [[ -f "${header}" ]] || return 1
     [[ -f "${types_header}" ]] || return 1
     [[ -f "${xpack_header}" ]] || return 1
+    [[ -f "${boringssl_header}" ]] || return 1
+    [[ -f "${boringssl_ssl}" ]] || return 1
+    [[ -f "${boringssl_crypto}" ]] || return 1
     [[ -f "${METADATA_FILE}" ]] || return 1
 
     lock_sha="$(metadata_value KING_LSQUIC_RUNTIME_LOCK_SHA256)"
@@ -161,6 +167,9 @@ KING_LSQUIC_RUNTIME_PREFIX=${PREFIX_DIR}
 KING_LSQUIC_INCLUDE_DIR=${PREFIX_DIR}/include/lsquic
 KING_LSQUIC_LIBRARY_DIR=${PREFIX_DIR}/lib
 KING_LSQUIC_LIBRARY=${PREFIX_DIR}/lib/liblsquic.so
+KING_BORINGSSL_INCLUDE_DIR=${PREFIX_DIR}/include/boringssl
+KING_BORINGSSL_SSL_LIBRARY=${PREFIX_DIR}/boringssl/lib/libssl.a
+KING_BORINGSSL_CRYPTO_LIBRARY=${PREFIX_DIR}/boringssl/lib/libcrypto.a
 EOF
 }
 
@@ -170,6 +179,7 @@ clean_runtime() {
 
 build_runtime() {
     local boringssl_build="${BUILD_DIR}/boringssl"
+    local boringssl_prefix="${PREFIX_DIR}/boringssl"
     local lsquic_build="${BUILD_DIR}/lsquic"
     local library="${PREFIX_DIR}/lib/liblsquic.so"
     local lsquic_archive=""
@@ -184,7 +194,11 @@ build_runtime() {
     fi
 
     rm -rf "${BUILD_DIR}" "${PREFIX_DIR}"
-    mkdir -p "${PREFIX_DIR}/lib" "${PREFIX_DIR}/include/lsquic"
+    mkdir -p \
+        "${PREFIX_DIR}/lib" \
+        "${PREFIX_DIR}/include/lsquic" \
+        "${PREFIX_DIR}/include/boringssl" \
+        "${boringssl_prefix}/lib"
 
     cmake \
         -S "${SOURCE_DIR}/boringssl" \
@@ -235,6 +249,9 @@ build_runtime() {
     install -m 0644 "${SOURCE_DIR}/lsquic/include/lsquic.h" "${PREFIX_DIR}/include/lsquic/lsquic.h"
     install -m 0644 "${SOURCE_DIR}/lsquic/include/lsquic_types.h" "${PREFIX_DIR}/include/lsquic/lsquic_types.h"
     install -m 0644 "${SOURCE_DIR}/lsquic/include/lsxpack_header.h" "${PREFIX_DIR}/include/lsquic/lsxpack_header.h"
+    cp -R "${SOURCE_DIR}/boringssl/include/openssl" "${PREFIX_DIR}/include/boringssl/"
+    install -m 0644 "${boringssl_build}/libssl.a" "${boringssl_prefix}/lib/libssl.a"
+    install -m 0644 "${boringssl_build}/libcrypto.a" "${boringssl_prefix}/lib/libcrypto.a"
     write_metadata "${library}"
     verify_runtime
 }

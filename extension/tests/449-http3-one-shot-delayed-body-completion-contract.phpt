@@ -60,6 +60,6 @@ string(18) "/wire?room=delayed"
 localhost:%d
 string(7) "payload"
 string(12) "delayed-body"
-string(19) "server_http3_socket"
+string(26) "server_http3_lsquic_socket"
 string(2) "h3"
 string(6) "closed"

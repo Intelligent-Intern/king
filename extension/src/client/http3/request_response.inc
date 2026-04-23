@@ -35,16 +35,16 @@ static zend_result king_http3_prepare_request_headers(
     headers[index].value_len = sizeof("https") - 1;
     index++;
 
-    headers[index].name = (const uint8_t *) ":authority";
-    headers[index].name_len = sizeof(":authority") - 1;
-    headers[index].value = (const uint8_t *) ZSTR_VAL(target->authority);
-    headers[index].value_len = ZSTR_LEN(target->authority);
-    index++;
-
     headers[index].name = (const uint8_t *) ":path";
     headers[index].name_len = sizeof(":path") - 1;
     headers[index].value = (const uint8_t *) ZSTR_VAL(target->path);
     headers[index].value_len = ZSTR_LEN(target->path);
+    index++;
+
+    headers[index].name = (const uint8_t *) ":authority";
+    headers[index].name_len = sizeof(":authority") - 1;
+    headers[index].value = (const uint8_t *) ZSTR_VAL(target->authority);
+    headers[index].value_len = ZSTR_LEN(target->authority);
     index++;
 
     if (headers_array != NULL && Z_TYPE_P(headers_array) == IS_ARRAY) {
