@@ -42,8 +42,8 @@ Goal:
 - Close the sprint cleanly: no leftover artifacts, no half-renamed paths, no old build assumptions.
 
 Checklist:
-- [ ] Complete `rg` sweep for Quiche, Cargo, Rust-HTTP3, local paths, and stub loaders.
-- [ ] `git status` contains no generated build or test artifacts.
+- [x] Complete `rg` sweep for Quiche, Cargo, Rust-HTTP3, local paths, and stub loaders.
+- [x] `git status` contains no generated build or test artifacts.
 - [ ] Docs, tests, CI, and release manifests reference the same new stack.
 - [ ] Add closure note to `documentation/project-assessment.md` and `READYNESS_TRACKER.md` with test evidence.
 - [ ] Split migration work into logical commits: inventory, build, client, server, tests, docs/cleanup.
