@@ -101,7 +101,7 @@ Checklist:
 - [x] Reject any experiment behavior that weakens current room/admission/security guarantees.
 
 Done:
-- [ ] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
+- [x] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
 - [ ] Video-chat SFU remains compatible with current room/admission/security contracts.
 
 ### #Q-15 Audit Remaining WLVC/WASM/Kalman Experiment Diffs

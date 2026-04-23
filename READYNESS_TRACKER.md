@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 GossipMesh runtime disposition: closed the GossipMesh intake as a tested King runtime capability on the current `wlvc_sfu` path. Accepted behavior is bounded topology planning, admitted-member filtering, protected-envelope routing, duplicate suppression, TTL/fanout limiting, relay candidate ranking, and relay fallback planning. Raw experiment API/client/signaling/P2P/process-local/plaintext/debug behavior remains rejected. Added `729-gossipmesh-runtime-disposition-contract.phpt`.
+
 - 2026-04-23 Q-14 weakened experiment behavior rejection: pinned rejected GossipMesh/SFU experiment semantics as forbidden in active `/sfu` and GossipMesh paths. Client-created call/room/peer/admission/topology authority, direct P2P forwarding, process-local admission authority, JSON/plaintext downgrade, raw network endpoints, public STUN/TURN defaults, and debug control behavior now require a separate backend-authoritative runtime contract before they can enter production. Added runtime negative cases and `728-gossipmesh-weakened-behavior-rejection-contract.phpt`.
 
 - 2026-04-23 Q-14 SFU constraint preservation: pinned the stronger current `/sfu` contract for GossipMesh integration. The gateway must bind `room_id`/`call_id`, authorize via session/RBAC, require current room membership or DB-backed participant admission, treat process-local SFU arrays as live socket indexes only, and decode client frames against the bound room. Added `727-gossipmesh-sfu-constraints-contract.phpt`.

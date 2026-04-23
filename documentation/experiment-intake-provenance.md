@@ -148,3 +148,10 @@ Weakening behavior rejection:
 - It must not accept direct P2P media forwarding, process-local admission authority, JSON/plaintext downgrade for protected frames, unbounded public STUN/TURN defaults, raw sockets/network endpoints, or debug-generated control behavior.
 - Reusable topology ideas may enter only as server-issued hints after session auth, RBAC, room/call binding, participant/admission checks, and protected-envelope validation.
 - Any future native WebRTC or P2P mode must be a separate backend-authoritative runtime contract with revocation, participant churn, rekey, relay authorization, downgrade, and cross-room-isolation tests.
+
+Q-14 disposition:
+- GossipMesh is accepted only as the tested `wlvc_sfu` runtime helper in `demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php`.
+- The accepted capability is bounded topology planning, admitted-member filtering, protected-envelope routing, duplicate suppression, TTL/fanout limiting, relay candidate ranking, and relay fallback planning.
+- The active proof is `demo/video-chat/backend-king-php/tests/realtime-gossipmesh-runtime-contract.php` plus PHPT guards `723` through `729`.
+- Raw experiment API, C structs, standalone browser client, `sfu_signaling.php`, direct P2P transport, process-local authority, plaintext downgrade, generated artifacts, and debug scaffolding are rejected for the current runtime.
+- Future WebRTC-native or P2P work must be opened as a separate backend-authoritative runtime contract instead of weakening this disposition.

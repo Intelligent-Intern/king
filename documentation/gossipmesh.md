@@ -24,8 +24,21 @@ The active implementation is deliberately small:
   `725-gossipmesh-runtime-coverage-contract.phpt`, and
   `726-gossipmesh-production-doc-contract.phpt`,
   `727-gossipmesh-sfu-constraints-contract.phpt`, and
-  `728-gossipmesh-weakened-behavior-rejection-contract.phpt` pin the intake
-  decisions and documentation boundary.
+  `728-gossipmesh-weakened-behavior-rejection-contract.phpt`, and
+  `729-gossipmesh-runtime-disposition-contract.phpt` pin the intake decisions
+  and documentation boundary.
+
+## Runtime Status
+
+Q-14 is closed as a tested runtime capability, not as a raw experiment import.
+Accepted: the current `wlvc_sfu` helper for backend-authoritative topology
+planning, admitted-member filtering, protected-envelope routing, duplicate
+suppression, TTL/fanout limiting, relay candidate ranking, and relay fallback
+planning.
+
+Rejected: raw experiment API, C structs, standalone browser client,
+`sfu_signaling.php`, direct P2P transport, process-local authority, plaintext
+downgrade, generated artifacts, and debug scaffolding.
 
 ## Runtime Model
 
