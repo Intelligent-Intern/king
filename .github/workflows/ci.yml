@@ -89,7 +89,7 @@ jobs:
         run: bash ./infra/scripts/build-lsquic-runtime.sh
 
       - name: Upload pinned LSQUIC runtime
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-lsquic-runtime-${{ matrix.arch-label }}
           if-no-files-found: error
@@ -138,7 +138,7 @@ jobs:
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Download pinned LSQUIC runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-lsquic-runtime-linux-amd64
           path: .cache/king/lsquic/runtime/prefix
@@ -211,7 +211,7 @@ jobs:
 
       - name: Upload canonical release package artifact
         if: matrix.shard-index == 1
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-package-php8.5-linux-amd64
           if-no-files-found: error
@@ -241,7 +241,7 @@ jobs:
 
       - name: Upload failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-canonical-baseline-failures-shard-${{ matrix.shard-index }}
           if-no-files-found: ignore
@@ -302,7 +302,7 @@ jobs:
 
       - name: Upload profile failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-${{ matrix.profile }}-profile-failures
           if-no-files-found: ignore
@@ -373,7 +373,7 @@ jobs:
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Download pinned LSQUIC runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-lsquic-runtime-${{ matrix.arch-label }}
           path: .cache/king/lsquic/runtime/prefix
@@ -406,7 +406,7 @@ jobs:
         run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
 
       - name: Upload release package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
           if-no-files-found: error
@@ -416,7 +416,7 @@ jobs:
 
       - name: Upload package install failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
           if-no-files-found: ignore
@@ -484,7 +484,7 @@ jobs:
 
       - name: Upload release upgrade failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-upgrade-failures
           if-no-files-found: ignore
@@ -551,7 +551,7 @@ jobs:
 
       - name: Upload release downgrade failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-downgrade-failures
           if-no-files-found: ignore
@@ -618,7 +618,7 @@ jobs:
 
       - name: Upload release persistence migration failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-persistence-migration-failures
           if-no-files-found: ignore
@@ -668,7 +668,7 @@ jobs:
 
       - name: Upload release config-state failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-config-state-failures
           if-no-files-found: ignore
@@ -735,7 +735,7 @@ jobs:
 
       - name: Upload sanitizer soak failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-${{ matrix.mode }}-soak-diagnostics
           if-no-files-found: ignore

@@ -77,13 +77,13 @@ require_job_step_literal(
 require_job_step_literal(
   jobs,
   "lsquic-runtime",
-  "actions/upload-artifact@v4",
+  "actions/upload-artifact@v6",
   "runtime upload artifact"
 )
 require_job_step_literal(
   jobs,
   "canonical-baseline",
-  "actions/download-artifact@v4",
+  "actions/download-artifact@v7",
   "runtime download artifact"
 )
 require_job_step_literal(
@@ -107,7 +107,7 @@ require_job_step_literal(
 require_job_step_literal(
   jobs,
   "install-package-matrix",
-  "actions/download-artifact@v4",
+  "actions/download-artifact@v7",
   "runtime download artifact"
 )
 require_job_step_literal(
