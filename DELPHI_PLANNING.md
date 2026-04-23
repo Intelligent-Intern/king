@@ -29,6 +29,37 @@ No alternative transport/control stack is allowed.
    - Compute mesh work must start by porting the gossip-mesh primitives from
      `experiments/1.0.7-gossip-mesh` into Delphi.
 
+## Execution Notes (2026-04-22)
+
+1. Orchestrator input now supports graph-shaped submission (`steps` + `id` + `deps`)
+   and normalizes it into deterministic topological order before run persistence.
+2. This is currently a control-plane scheduling improvement, not fine-grained
+   in-process parallel frontier execution. Step-boundary execution semantics remain.
+3. M0 scaffolding for recurrent loop + expert fanout is added in userland:
+   - IIBIN schema registration helpers
+   - one-loop expert fanout DAG template
+   - object-store artifact reference contract and encoder helpers
+4. Build and targeted contract tests are green for the DAG path and existing
+   orchestrator terminal-state visibility path.
+5. Build/test snapshot is tracked in `DELPHI_BUILD_STATE.md`.
+
+## Immediate M0 Follow-Through
+
+1. Bind concrete handlers for the scaffolded step IDs:
+   - `delphi.prepare_inputs`
+   - `delphi.route_tokens_topk`
+   - `delphi.dispatch_expert_batch`
+   - `delphi.collect_expert_results`
+   - `delphi.merge_weighted_outputs`
+   - `delphi.next_layer_or_decode`
+   - `delphi.emit_final`
+2. Land a contract test for one recurrent loop with at least 2 expert fanout branches
+   proving deterministic merge and idempotent duplicate-drop behavior.
+3. Wire route/expert payloads to real object-store artifact refs (no large inline payloads).
+4. Keep branch operations fork-only unless explicitly instructed otherwise:
+   - push to `origin` (`sashakolpakov`) only
+   - do not push to `upstream`.
+
 ## Architecture (King-Native)
 
 ### 1) Control Plane: WebSocket + IIBIN
