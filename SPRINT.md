@@ -91,7 +91,7 @@ Checklist:
 - [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
 - [x] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.
 - [x] Separate reusable topology/signaling ideas from experiment-only behavior.
-- [ ] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.
+- [x] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.
 - [ ] Explicitly decide whether transport-level DataChannel protection is sufficient for any intended payloads or whether app-level protected envelopes are required.
 - [ ] Port only compatible GossipMesh runtime pieces; do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks.
 - [ ] Decide whether `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` should be ported, replaced, or folded into the current SFU client.
