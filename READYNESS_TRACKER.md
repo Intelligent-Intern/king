@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 weakened experiment behavior rejection: pinned rejected GossipMesh/SFU experiment semantics as forbidden in active `/sfu` and GossipMesh paths. Client-created call/room/peer/admission/topology authority, direct P2P forwarding, process-local admission authority, JSON/plaintext downgrade, raw network endpoints, public STUN/TURN defaults, and debug control behavior now require a separate backend-authoritative runtime contract before they can enter production. Added runtime negative cases and `728-gossipmesh-weakened-behavior-rejection-contract.phpt`.
+
 - 2026-04-23 Q-14 SFU constraint preservation: pinned the stronger current `/sfu` contract for GossipMesh integration. The gateway must bind `room_id`/`call_id`, authorize via session/RBAC, require current room membership or DB-backed participant admission, treat process-local SFU arrays as live socket indexes only, and decode client frames against the bound room. Added `727-gossipmesh-sfu-constraints-contract.phpt`.
 
 - 2026-04-23 Q-14 GossipMesh production docs: added `documentation/gossipmesh.md` only after the backend-authoritative runtime contract and tests existed. The doc covers the current `wlvc_sfu` runtime helper, protected-envelope routing, duplicate/TTL/relay failure behavior, frontend fold-in boundary, inactive experiment behaviors, and provenance rules. Added `726-gossipmesh-production-doc-contract.phpt`.

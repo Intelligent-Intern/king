@@ -22,8 +22,10 @@ The active implementation is deliberately small:
 - `extension/tests/723-gossipmesh-compatible-runtime-port-contract.phpt`,
   `724-gossipmesh-frontend-client-decision-contract.phpt`,
   `725-gossipmesh-runtime-coverage-contract.phpt`, and
-  `726-gossipmesh-production-doc-contract.phpt` pin the intake decisions and
-  documentation boundary.
+  `726-gossipmesh-production-doc-contract.phpt`,
+  `727-gossipmesh-sfu-constraints-contract.phpt`, and
+  `728-gossipmesh-weakened-behavior-rejection-contract.phpt` pin the intake
+  decisions and documentation boundary.
 
 ## Runtime Model
 
@@ -54,6 +56,16 @@ Process-local `$sfuClients` and `$sfuRooms` are live socket indexes only. They
 are not room identity, call identity, participant state, or admission state.
 Client frames are decoded against the already-bound room, so browser code
 cannot switch rooms or invent call state after the gateway admits a socket.
+
+## Rejected Weakening Behavior
+
+The following experiment behaviors remain forbidden in the active runtime:
+- Client-created call, room, peer, participant, admission, relay, or topology authority.
+- Direct P2P media forwarding without a separate backend-authoritative runtime contract.
+- Process-local admission or room identity as source of truth.
+- JSON/plaintext fallback for protected frames or protected-media claims.
+- Unbounded public STUN/TURN defaults or raw network endpoints in topology payloads.
+- Debug console behavior as control-plane behavior.
 
 ## Payload Protection
 

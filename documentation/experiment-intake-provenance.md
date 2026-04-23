@@ -141,3 +141,10 @@ SFU constraint preservation:
 - Process-local `$sfuClients` and `$sfuRooms` are live socket indexes only after admission. They are not durable room identity, call identity, participant state, or admission state.
 - Client SFU frames are decoded against the already-bound room through `videochat_sfu_decode_client_frame($msgJson, $roomId)`.
 - The experiment may add topology hints after admission, but it must not create room identity, call identity, participant state, or admission state from client input.
+
+Weakening behavior rejection:
+- Rejected experiment behavior is forbidden in active `/sfu` and GossipMesh paths unless it is re-specified under the current backend-authoritative contract and covered by tests.
+- The active path must not accept client-created room, call, peer, participant, admission, relay, or topology authority.
+- It must not accept direct P2P media forwarding, process-local admission authority, JSON/plaintext downgrade for protected frames, unbounded public STUN/TURN defaults, raw sockets/network endpoints, or debug-generated control behavior.
+- Reusable topology ideas may enter only as server-issued hints after session auth, RBAC, room/call binding, participant/admission checks, and protected-envelope validation.
+- Any future native WebRTC or P2P mode must be a separate backend-authoritative runtime contract with revocation, participant churn, rekey, relay authorization, downgrade, and cross-room-isolation tests.

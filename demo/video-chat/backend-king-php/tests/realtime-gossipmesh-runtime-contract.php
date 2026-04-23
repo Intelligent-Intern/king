@@ -76,6 +76,34 @@ videochat_gossipmesh_test_assert(count($plan['members']) === 3, 'only admitted m
 videochat_gossipmesh_test_assert($plan['rejected_members'] === 2, 'pending and secret-bearing members must be rejected');
 videochat_gossipmesh_test_assert($plan['ttl'] === 3, 'small room TTL estimate mismatch');
 
+$weakeningProbePlan = videochat_gossipmesh_plan_topology('call-alpha', 'room-alpha', [
+    [
+        'participant_id' => 'safe-1',
+        'user_id' => '10',
+        'invite_state' => 'allowed',
+    ],
+    [
+        'participant_id' => 'sdp-2',
+        'user_id' => '20',
+        'invite_state' => 'allowed',
+        'sdp' => 'offer',
+    ],
+    [
+        'participant_id' => 'ice-3',
+        'user_id' => '30',
+        'invite_state' => 'allowed',
+        'ice_candidate' => 'candidate',
+    ],
+    [
+        'participant_id' => 'socket-4',
+        'user_id' => '40',
+        'invite_state' => 'allowed',
+        'socket' => 'raw-socket',
+    ],
+], ['seed' => 'weakening']);
+videochat_gossipmesh_test_assert(count($weakeningProbePlan['members']) === 1, 'weakened member plan must keep only clean admitted members');
+videochat_gossipmesh_test_assert($weakeningProbePlan['rejected_members'] === 3, 'weakened member plan must reject SDP, ICE, and socket fields');
+
 $knownIds = array_map(static fn(array $member): string => $member['id'], $plan['members']);
 sort($knownIds);
 videochat_gossipmesh_test_assert($knownIds === ['mod-5', 'owner-1', 'user-2'], 'eligible member ids mismatch');
@@ -134,6 +162,16 @@ $badEnvelope = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 52,
 ], []);
 videochat_gossipmesh_test_assert($badEnvelope['ok'] === false, 'legacy plaintext data must fail');
 videochat_gossipmesh_test_assert($badEnvelope['error'] === 'legacy_plaintext_data_forbidden', 'legacy plaintext data error mismatch');
+
+foreach (['plaintext_frame', 'sdp', 'ice_candidate', 'socket', 'ip'] as $forbiddenField) {
+    $weakEnvelope = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 520 + strlen($forbiddenField), 3, [
+        'envelope_contract' => VIDEOCHAT_GOSSIPMESH_ENVELOPE_CONTRACT,
+        'protected_frame' => 'KPMF',
+        $forbiddenField => 'experiment-weakened-field',
+    ], []);
+    videochat_gossipmesh_test_assert($weakEnvelope['ok'] === false, 'weakened envelope field must fail: ' . $forbiddenField);
+    videochat_gossipmesh_test_assert($weakEnvelope['error'] === 'forbidden_plaintext_or_secret_field', 'weakened envelope error mismatch: ' . $forbiddenField);
+}
 
 $missingEnvelope = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 53, 3, [
     'protected_frame' => 'KPMF',

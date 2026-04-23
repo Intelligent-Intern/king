@@ -98,7 +98,7 @@ Checklist:
 - [x] Add contract tests for GossipMesh message routing, membership, IIBIN envelope use, duplicate suppression, TTL handling, relay fallback, and failure behavior.
 - [x] Add `documentation/gossipmesh.md` only after the production contract matches the implementation.
 - [x] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
-- [ ] Reject any experiment behavior that weakens current room/admission/security guarantees.
+- [x] Reject any experiment behavior that weakens current room/admission/security guarantees.
 
 Done:
 - [ ] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
