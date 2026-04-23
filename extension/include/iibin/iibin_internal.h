@@ -145,6 +145,7 @@ extern const zend_function_entry king_iibin_class_methods[];
 
 /* --- Wire Helpers --- */
 
+#define KING_IIBIN_BATCH_MAX_RECORDS 65536
 #define KING_PROTO_VARINT_MAX_BYTES 10
 
 static inline void king_proto_encode_varint(smart_str *buf, uint64_t value) {

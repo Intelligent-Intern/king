@@ -70,7 +70,7 @@ Checklist:
 - [x] Add internal `king_iibin_encode_batch()` and `king_iibin_decode_batch()` with bounded memory behavior and per-record error handling.
 - [x] Add or port batch encode/decode PHPT coverage under the current test numbering scheme.
 - [x] Add benchmarks for batch encode/decode and omega-vs-varint only as clean source files, not generated results.
-- [ ] Add explicit failure coverage for malformed batch boundaries, truncated records, schema mismatch, oversized batches, and bounded allocation behavior.
+- [x] Add explicit failure coverage for malformed batch boundaries, truncated records, schema mismatch, oversized batches, and bounded allocation behavior.
 - [ ] Update documentation for IIBIN/proto batch behavior and performance expectations.
 
 Done:

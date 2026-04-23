@@ -565,7 +565,20 @@ zend_result king_iibin_decode_batch(
     king_proto_decode_mode decode_mode;
     king_proto_runtime_schema *runtime_schema;
     zval *binary_data;
+    size_t record_count;
     size_t record_index = 0;
+
+    record_count = zend_hash_num_elements(Z_ARRVAL_P(binary_records));
+    if (record_count > KING_IIBIN_BATCH_MAX_RECORDS) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Batch decoding failed: record count %zu exceeds the maximum of %u.",
+            record_count,
+            KING_IIBIN_BATCH_MAX_RECORDS
+        );
+        return FAILURE;
+    }
 
     if (!king_proto_registry_has_schema(schema_name)) {
         king_throw_proto_schema_not_defined(schema_name, "batch decoding");
@@ -582,7 +595,7 @@ zend_result king_iibin_decode_batch(
         return FAILURE;
     }
 
-    array_init_size(decoded_records, zend_hash_num_elements(Z_ARRVAL_P(binary_records)));
+    array_init_size(decoded_records, record_count);
 
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data) {
         zval decoded_array;

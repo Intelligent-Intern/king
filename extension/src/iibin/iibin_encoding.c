@@ -96,7 +96,20 @@ zend_result king_iibin_encode_batch(
 {
     king_proto_runtime_schema *runtime_schema;
     zval *record;
+    size_t record_count;
     size_t record_index = 0;
+
+    record_count = zend_hash_num_elements(Z_ARRVAL_P(records));
+    if (record_count > KING_IIBIN_BATCH_MAX_RECORDS) {
+        zend_throw_exception_ex(
+            king_ce_validation_exception,
+            0,
+            "Batch encoding failed: record count %zu exceeds the maximum of %u.",
+            record_count,
+            KING_IIBIN_BATCH_MAX_RECORDS
+        );
+        return FAILURE;
+    }
 
     if (!king_proto_registry_has_schema(schema_name)) {
         king_throw_proto_schema_not_defined(schema_name, "batch encoding");
@@ -109,7 +122,7 @@ zend_result king_iibin_encode_batch(
         return FAILURE;
     }
 
-    array_init_size(encoded_records, zend_hash_num_elements(Z_ARRVAL_P(records)));
+    array_init_size(encoded_records, record_count);
 
     ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record) {
         smart_str encoded = {0};

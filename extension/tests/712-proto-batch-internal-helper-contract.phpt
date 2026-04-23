@@ -30,12 +30,16 @@ function require_not_contains(string $path, string $needle): void
 
 $expectations = [
     'extension/include/iibin/iibin_internal.h' => [
+        '#define KING_IIBIN_BATCH_MAX_RECORDS 65536',
         'zend_result king_iibin_encode_batch(',
         'zend_result king_iibin_decode_batch(',
     ],
     'extension/src/iibin/iibin_encoding.c' => [
         'zend_result king_iibin_encode_batch(',
-        'array_init_size(encoded_records, zend_hash_num_elements(Z_ARRVAL_P(records)))',
+        'record_count = zend_hash_num_elements(Z_ARRVAL_P(records))',
+        'record_count > KING_IIBIN_BATCH_MAX_RECORDS',
+        'Batch encoding failed: record count %zu exceeds the maximum of %u.',
+        'array_init_size(encoded_records, record_count)',
         'ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record)',
         'king_proto_runtime_encode_schema_payload(',
         'zval_ptr_dtor(encoded_records)',
@@ -46,8 +50,11 @@ $expectations = [
     ],
     'extension/src/iibin/iibin_decoding.c' => [
         'zend_result king_iibin_decode_batch(',
+        'record_count = zend_hash_num_elements(Z_ARRVAL_P(binary_records))',
+        'record_count > KING_IIBIN_BATCH_MAX_RECORDS',
+        'Batch decoding failed: record count %zu exceeds the maximum of %u.',
         'king_iibin_decode_mode_init(schema_name, decode_mode_input, &decode_mode)',
-        'array_init_size(decoded_records, zend_hash_num_elements(Z_ARRVAL_P(binary_records)))',
+        'array_init_size(decoded_records, record_count)',
         'ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data)',
         'king_proto_runtime_decode_schema_payload(',
         'king_iibin_hydrate_schema_result(',
