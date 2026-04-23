@@ -36,3 +36,34 @@ Port status:
 - `e16af6f7e02f1826c11554dd68c49964bc7a7cd2` was ported for float/double bit conversion consolidation: encode/decode now use the shared `iibin_internal.h` helpers instead of local duplicate helpers.
 - `c9f6cf63986d770b72405ca1a494aaccc6f9a67e` and `2914b0316e6138ec8a442d27b85b7d25e701ac22` were reviewed for the public batch API. The stable public surface is ported as `king_proto_encode_batch()` and `king_proto_decode_batch()` plus `King\IIBIN::encodeBatch()` and `King\IIBIN::decodeBatch()`; it delegates to internal `king_iibin_encode_batch()` / `king_iibin_decode_batch()` helpers, pre-sizes output arrays, fails the whole batch on the first invalid record, and adds batch-index context while preserving the original lower-level exception as `previous`.
 - `b6507fcc83a89d4b4770cce021efd0efbb8c81f9` and `8e0a539b837cd0e397b58528329c95f44c98e5cc` were reviewed for benchmark coverage. The standalone experiment script was not copied verbatim because the current tree has a canonical benchmark runner, budgets, docs, and result-hygiene rules. The useful intent is ported as clean source-only benchmark cases for batch encode/decode and varint-vs-Elias-omega comparison, with no generated result snapshots committed.
+
+## Q-14 GossipMesh/SFU Research Sources
+
+Source range:
+- `origin/experiments/v1.0.6-beta` through `4e58bef`, represented locally during this sprint by the fetched experiment ancestry and the `sash-temp/develop-v1.0.6-beta` remote-tracking ref.
+
+Recorded source commits:
+- `d92dfddd09710f80c2599bab4dbb5f59c3f34f1c` - Alice-and-Bob `<sasha@MacBook-Pro-2.local>` - `save state commit`
+- `dca5e9815eaf90900d8bda2de7b9850f969f48e2` - Alice-and-Bob `<sasha@MacBook-Pro-2.local>` - `main changes described in /documentation/README.md, protobuf.md, gossipmesh.md`
+- `b338a87e505a0ed40eb32bacc47d099581d5e029` - Alice-and-Bob `<sasha@MacBook-Pro-2.local>` - `main changes described in /documentation/README.md, protobuf.md, gossipmesh.md`
+- `9f7f544ba3dbc8159ca57335ae819d978b904406` - Alice-and-Bob `<sasha@MacBook-Pro-2.local>` - `bring IIBIN to gossip_mesh`
+
+Relevant experiment paths:
+- `extension/src/gossip_mesh/gossip_mesh.c`
+- `extension/src/gossip_mesh/gossip_mesh.h`
+- `extension/src/gossip_mesh/gossip_mesh.php`
+- `extension/src/gossip_mesh/gossip_mesh_client.js`
+- `extension/src/gossip_mesh/sfu_signaling.php`
+- `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js`
+- `documentation/gossipmesh.md`
+- `extension/tests/999-gossipmesh-test.phpt`
+
+Porting notes:
+- Do not blindly import the experiment directory. The production path must keep current King runtime contracts, especially explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
+- Prefer `git cherry-pick -x` only when a source commit can be applied without artifacts or weaker behavior. Otherwise, make a manual port and include the relevant source commit hash in the commit body.
+- Keep the recorded author identity visible. If the contributor's real public identity is clarified, add a valid `Co-authored-by` trailer to material port commits instead of rewriting this provenance history.
+- Do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks from these commits.
+- Treat direct P2P/DataChannel behavior as research until it is re-specified under current backend-authoritative SFU, room, admission, and payload-protection contracts.
+
+Port status:
+- Contributor credit and source paths are recorded. No GossipMesh/SFU production code has been ported yet under Q-14.

@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 contributor-credit baseline: recorded the GossipMesh/SFU experiment source commits, author identity, relevant paths, artifact exclusions, and current SFU/admission constraints in `documentation/experiment-intake-provenance.md`. Added a static provenance contract before any production GossipMesh port.
+
 - 2026-04-23 Q-13 documentation closure: documented IIBIN/proto batch public surfaces, input-order behavior, fail-closed no-partial-result semantics, 65536-record safety bound, batch-index exception context, object-hydration decode modes, and benchmark expectations for `proto_batch`, `proto_varint`, and `proto_omega`. Added `716-proto-batch-documentation-contract.phpt` and closed Q-13 in `SPRINT.md`.
 
 - 2026-04-23 Q-13 batch failure coverage: added the internal `KING_IIBIN_BATCH_MAX_RECORDS` bound before batch output allocation and covered malformed decode entries, truncated records, schema mismatch, oversized encode/decode batches, batch-index error context, and whole-batch fail-closed behavior with `715-proto-batch-failure-boundaries.phpt`.
