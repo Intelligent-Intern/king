@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --config ./vite.config.js",
     "build": "vite build",
-    "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs",
+    "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs && node tests/contract/wlvc-binding-recovery-contract.mjs",
     "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
     "test:contract:participant-roster": "node tests/contract/participant-roster-stability-contract.mjs",
     "test:contract:admin-owner-rights": "node tests/contract/admin-owner-rights-contract.mjs",

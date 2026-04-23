@@ -190,4 +190,11 @@ Debug-log abstraction decision:
 - Direct `console.*` calls are forbidden in active `src/lib/wasm`, `src/lib/wavelet`, and `src/lib/kalman` JavaScript/TypeScript hotpath files, except generated Emscripten glue `wlvc.js`.
 - `codec-test.html` remains a standalone manual diagnostic page and may keep browser-console diagnostics; it is not the production media hotpath.
 
+WASM binding-mismatch recovery decision:
+- Keep the current production-safe Emscripten binding-mismatch recovery in `demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts`.
+- The wrapper recognizes stale class-handle errors by checking `Expected null or instance of` plus the target class name.
+- On encoder mismatch, the wrapper deletes the stale encoder if possible, recreates it from the cached module reference with current width, height, quality, and key-frame interval, then retries the encode exactly through the recreated encoder.
+- On decoder mismatch, the wrapper deletes the stale decoder if possible, recreates it from the cached module reference with current width, height, and quality, then retries the decode exactly through the recreated decoder.
+- Non-binding errors still fail closed by rethrowing the original error; this recovery is not a broad catch-all fallback.
+
 Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
