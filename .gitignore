@@ -6,6 +6,7 @@ node_modules
 # Local vendored source trees / dependency sandboxes (do not commit)
 boringssl/
 curl/
+lsquic/
 php-8.2.3/
 extension/lsquic/
 extension/src/util/
