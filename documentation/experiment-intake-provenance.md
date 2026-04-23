@@ -115,3 +115,11 @@ Compatible runtime port:
 - It deliberately does not port the experiment global `GossipMesh` class, C `gossip_mesh_t` surface, browser `GossipMeshClient`, `sfu_signaling.php`, direct P2P transport, process-local rooms, raw sockets, ICE/STUN/TURN defaults, JSON/plaintext fallback, or debug console behavior.
 - The port accepts only server-provided admitted members and returns bounded arrays with `call_id`, `room_id`, `runtime_path`, `envelope_contract`, topology, relay candidates, and rejected-member counts.
 - Artifact exclusions remain mandatory: `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, and submodule gitlinks must not be imported.
+
+Frontend client integration decision:
+- `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` is not ported as a standalone browser runtime.
+- The experiment browser client is replaced by the current `demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts` integration point. Any compatible future GossipMesh client behavior must be folded into that existing SFU client after the backend publishes server-authoritative topology and routing contracts.
+- Browser code may consume server-issued topology snapshots, relay hints, and forward instructions only after the current `/sfu` admission gate has bound `session`, `call_id`, `room_id`, participant state, and protected-media policy.
+- Browser code must not generate peer identity, create room state, select topology, open direct DataChannels, pick relay authority, add public STUN/TURN defaults, or downgrade protected frames to JSON/plaintext.
+- A future folded SFU-client extension must preserve existing backend-origin failover, `room_id` and `call_id` query binding, `protected_frame` carriage, `protection_mode` honesty, and current `sfu/frame` parsing semantics.
+- Direct P2P/WebRTC-native behavior remains research until it is specified as a separate backend-authoritative `webrtc_native` contract with admission, revocation, rekey, relay, and downgrade tests.

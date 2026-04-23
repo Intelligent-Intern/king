@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 frontend GossipMesh client decision: rejected standalone port of `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js`; compatible future client behavior must be folded into the current `SFUClient` only after backend-authoritative topology/routing contracts exist. The decision preserves current SFU origin failover, `call_id`/`room_id` binding, protected-frame carriage, and keeps direct browser P2P/DataChannel behavior research-only. Added `724-gossipmesh-frontend-client-decision-contract.phpt`.
+
 - 2026-04-23 Q-14 compatible GossipMesh runtime port: ported only server-authoritative runtime pieces into `demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php`: bounded topology planning, TTL estimation, duplicate suppression, deterministic forward target selection, relay candidate ranking, and admitted-member normalization. The guard rejects raw experiment artifacts including `.DS_Store`, `tmp_*`, debug/generated PHPT output, `extension/src/gossip_mesh/*`, `documentation/gossipmesh.md`, and submodule gitlinks. Added `realtime-gossipmesh-runtime-contract.php` and `723-gossipmesh-compatible-runtime-port-contract.phpt`.
 
 - 2026-04-23 Q-14 transport protection decision: decided DataChannel/DTLS/SRTP/WSS/TLS protection is not sufficient for intended media/control payloads; app-level protected envelopes are required for required policy, SFU/relay/gossip forwarding, stored/forwarded payloads, or any protected-media/E2EE claim. Added `722-gossipmesh-transport-protection-decision-contract.phpt`.
