@@ -30,33 +30,19 @@ PHP_FUNCTION(king_proto_encode_batch)
 {
     zend_string *schema_name;
     zval *records;
-    zval *record;
+    zval encoded_records;
 
     ZEND_PARSE_PARAMETERS_START(2, 2)
         Z_PARAM_STR(schema_name)
         Z_PARAM_ARRAY(records)
     ZEND_PARSE_PARAMETERS_END();
 
-    array_init(return_value);
+    ZVAL_UNDEF(&encoded_records);
+    if (king_iibin_encode_batch(schema_name, records, &encoded_records) != SUCCESS) {
+        RETURN_THROWS();
+    }
 
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record) {
-        smart_str encoded = {0};
-        zval encoded_value;
-
-        if (king_iibin_encode(schema_name, record, &encoded) != SUCCESS) {
-            zval_ptr_dtor(return_value);
-            RETURN_THROWS();
-        }
-
-        if (encoded.s == NULL) {
-            ZVAL_EMPTY_STRING(&encoded_value);
-        } else {
-            smart_str_0(&encoded);
-            ZVAL_STR(&encoded_value, encoded.s);
-        }
-
-        add_next_index_zval(return_value, &encoded_value);
-    } ZEND_HASH_FOREACH_END();
+    RETURN_ZVAL(&encoded_records, 0, 1);
 }
 
 PHP_FUNCTION(king_proto_decode)
@@ -91,7 +77,7 @@ PHP_FUNCTION(king_proto_decode_batch)
     zend_string *schema_name;
     zval *binary_records;
     zval *decode_as_object = NULL;
-    zval *binary_data;
+    zval decoded_records;
 
     ZEND_PARSE_PARAMETERS_START(2, 3)
         Z_PARAM_STR(schema_name)
@@ -100,28 +86,15 @@ PHP_FUNCTION(king_proto_decode_batch)
         Z_PARAM_ZVAL(decode_as_object)
     ZEND_PARSE_PARAMETERS_END();
 
-    array_init(return_value);
+    ZVAL_UNDEF(&decoded_records);
+    if (king_iibin_decode_batch(
+            schema_name,
+            binary_records,
+            decode_as_object,
+            &decoded_records
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
 
-    ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data) {
-        zval decoded_result;
-
-        if (Z_TYPE_P(binary_data) != IS_STRING) {
-            zval_ptr_dtor(return_value);
-            zend_argument_value_error(2, "must contain only strings");
-            RETURN_THROWS();
-        }
-
-        ZVAL_UNDEF(&decoded_result);
-        if (king_iibin_decode(
-                schema_name,
-                Z_STR_P(binary_data),
-                decode_as_object,
-                &decoded_result
-            ) != SUCCESS) {
-            zval_ptr_dtor(return_value);
-            RETURN_THROWS();
-        }
-
-        add_next_index_zval(return_value, &decoded_result);
-    } ZEND_HASH_FOREACH_END();
+    RETURN_ZVAL(&decoded_records, 0, 1);
 }

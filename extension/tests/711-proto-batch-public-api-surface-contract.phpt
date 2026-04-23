@@ -54,9 +54,10 @@ $expectations = [
     'extension/src/core/introspection/proto_api/codec.inc' => [
         'PHP_FUNCTION(king_proto_encode_batch)',
         'PHP_FUNCTION(king_proto_decode_batch)',
-        'ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(records), record)',
-        'ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(binary_records), binary_data)',
-        'zend_argument_value_error(2, "must contain only strings")',
+        'king_iibin_encode_batch(schema_name, records, &encoded_records)',
+        'king_iibin_decode_batch(',
+        'RETURN_ZVAL(&encoded_records, 0, 1)',
+        'RETURN_ZVAL(&decoded_records, 0, 1)',
     ],
 ];
 

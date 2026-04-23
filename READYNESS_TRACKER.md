@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 internal proto batch helpers: moved public batch encode/decode dispatch onto `king_iibin_encode_batch()` and `king_iibin_decode_batch()`, with pre-sized output arrays, whole-batch cleanup on first failure, and batch-index exception context that preserves the original lower-level error as `previous`. Added `712-proto-batch-internal-helper-contract.phpt`.
+
 - 2026-04-23 Q-13 public proto batch API: added procedural and `King\IIBIN` batch encode/decode surfaces across stubs, arginfo, externals, function table, public header, and codec dispatch; `711-proto-batch-public-api-surface-contract.phpt` pins the complete surface and whole-batch failure contract.
 
 - 2026-04-23 Q-13 float/double helper consolidation: ported the shared helper intent from `e16af6f` into `extension/include/iibin/iibin_internal.h`, removed duplicate helpers from encode/decode C files, and added `710-proto-float-bit-helper-consolidation-contract.phpt`.

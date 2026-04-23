@@ -112,11 +112,22 @@ zend_result king_iibin_encode(
     zval *data,
     smart_str *encoded_out
 );
+zend_result king_iibin_encode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_records
+);
 zend_result king_iibin_decode(
     zend_string *schema_name,
     zend_string *binary_data,
     zval *decode_mode,
     zval *decoded_result
+);
+zend_result king_iibin_decode_batch(
+    zend_string *schema_name,
+    zval *binary_records,
+    zval *decode_mode,
+    zval *decoded_records
 );
 bool king_iibin_is_defined(zend_string *name);
 bool king_iibin_is_schema_defined(zend_string *schema_name);

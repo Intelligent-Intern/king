@@ -67,7 +67,7 @@ Checklist:
 - [x] Review whether ARM64-specific unrolling belongs in production or should stay behind a guarded helper.
 - [x] Consolidate float/double bit helpers without duplicating logic across encode/decode/prelude paths.
 - [x] Add `king_proto_encode_batch(schema, records[])` and `king_proto_decode_batch(schema, binary_records[], options)` as stable public API only if the contract is fully validated.
-- [ ] Add internal `king_iibin_encode_batch()` and `king_iibin_decode_batch()` with bounded memory behavior and per-record error handling.
+- [x] Add internal `king_iibin_encode_batch()` and `king_iibin_decode_batch()` with bounded memory behavior and per-record error handling.
 - [ ] Add or port batch encode/decode PHPT coverage under the current test numbering scheme.
 - [ ] Add benchmarks for batch encode/decode and omega-vs-varint only as clean source files, not generated results.
 - [ ] Add explicit failure coverage for malformed batch boundaries, truncated records, schema mismatch, oversized batches, and bounded allocation behavior.
