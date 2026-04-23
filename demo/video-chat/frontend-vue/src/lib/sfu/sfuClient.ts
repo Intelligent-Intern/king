@@ -12,6 +12,12 @@ import {
   resolveBackendSfuOriginCandidates,
   setBackendSfuOrigin,
 } from '../../support/backendOrigin'
+import {
+  appendAssetVersionQuery,
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from '../../support/assetVersion'
+import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 
 export interface SFUTrack {
   id: string
@@ -91,6 +97,19 @@ export class SFUClient {
   ): void {
     if (generation !== this.connectGeneration) return
     if (index >= candidates.length) {
+      reportClientDiagnostic({
+        category: 'media',
+        level: 'error',
+        eventType: 'sfu_socket_connect_failed',
+        code: 'sfu_socket_connect_failed',
+        message: 'SFU websocket could not connect to any configured origin.',
+        roomId,
+        payload: {
+          room_id: roomId,
+          candidate_count: candidates.length,
+        },
+        immediate: true,
+      })
       this.notifyDisconnectOnce()
       return
     }
@@ -134,11 +153,13 @@ export class SFUClient {
     ws.onmessage = (ev) => {
       let msg: any
       try { msg = JSON.parse(ev.data) } catch { return }
+      if (handleAssetVersionSocketPayload(msg)) return
       this.handleMessage(msg)
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       if (generation !== this.connectGeneration) return
+      if (handleAssetVersionSocketClose(event)) return
       if (!opened) {
         failToNextCandidate()
         return
@@ -146,6 +167,20 @@ export class SFUClient {
       if (this.ws === ws) {
         this.ws = null
       }
+      reportClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_socket_closed',
+        code: normalizeIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
+        message: String(event?.reason || 'SFU websocket closed unexpectedly.').trim() || 'SFU websocket closed unexpectedly.',
+        roomId,
+        payload: {
+          room_id: roomId,
+          close_code: Number(event?.code || 0),
+          was_clean: Boolean(event?.wasClean),
+          candidate_origin: String(candidates[index] || ''),
+        },
+      })
       this.notifyDisconnectOnce()
     }
 
@@ -171,13 +206,13 @@ export class SFUClient {
       this.ws = null
     }
 
-    const query    = new URLSearchParams({
+    const query    = appendAssetVersionQuery(new URLSearchParams({
       room: roomId,
       room_id: roomId,
       userId: session.userId,
       token:  session.token,
       name:   session.name,
-    })
+    }))
     const normalizedCallId = String(callId || '').trim()
     if (/^[A-Za-z0-9._-]{1,200}$/.test(normalizedCallId)) {
       query.set('call_id', normalizedCallId)
@@ -294,6 +329,33 @@ export class SFUClient {
           })
         }
         break
+
+      case 'sfu/error':
+        reportClientDiagnostic({
+          category: 'media',
+          level: 'error',
+          eventType: 'sfu_command_error',
+          code: normalizeIdentifier(stringField(msg.error), 'sfu_command_error'),
+          message: 'SFU command failed.',
+          roomId: stringField(msg.roomId, msg.room_id),
+          payload: {
+            room_id: stringField(msg.roomId, msg.room_id),
+            command_type: stringField(msg.commandType, msg.command_type),
+            error: stringField(msg.error),
+          },
+          immediate: true,
+        })
+        break
     }
   }
+}
+
+function normalizeIdentifier(value: string, fallback = ''): string {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._:-]+/g, '_')
+    .replace(/^[_:.-]+|[_:.-]+$/g, '')
+
+  return normalized || fallback
 }

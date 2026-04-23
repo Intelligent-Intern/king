@@ -108,8 +108,8 @@ $runtimeEnvelope = static function (): array {
         ],
         'database' => [
             'path' => '/data/video-chat.sqlite',
-            'schema_version' => 17,
-            'migrations_applied' => 17,
+            'schema_version' => 18,
+            'migrations_applied' => 18,
             'table_names' => ['users', 'sessions', 'calls'],
             'demo_users' => [
                 ['email' => 'admin@example.test', 'display_name' => 'Admin', 'role' => 'admin'],

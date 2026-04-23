@@ -7,6 +7,7 @@ require_once __DIR__ . '/../domain/users/user_directory.php';
 require_once __DIR__ . '/../domain/users/user_settings.php';
 require_once __DIR__ . '/../domain/users/avatar_upload.php';
 require_once __DIR__ . '/../domain/users/user_emails.php';
+require_once __DIR__ . '/../domain/realtime/client_diagnostics.php';
 require_once __DIR__ . '/../domain/realtime/turn_ice.php';
 require_once __DIR__ . '/module_users_admin_accounts.php';
 
@@ -177,6 +178,66 @@ function videochat_handle_user_routes(
                 'returned' => count($rows),
                 'has_prev' => $page > 1,
                 'has_next' => $pageCount > 0 && $page < $pageCount,
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if ($path === '/api/user/client-diagnostics') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/user/client-diagnostics.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'client_diagnostics_invalid_request_body', 'Client diagnostics payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $normalized = videochat_client_diagnostics_normalize_batch(
+            $payload,
+            $authenticatedUserId,
+            trim((string) ($apiAuthContext['session']['id'] ?? ''))
+        );
+        if (!(bool) ($normalized['ok'] ?? false)) {
+            return $errorResponse(422, 'client_diagnostics_validation_failed', 'Client diagnostics payload failed validation.', [
+                'fields' => is_array($normalized['errors'] ?? null) ? $normalized['errors'] : [],
+            ]);
+        }
+
+        $entries = is_array($normalized['entries'] ?? null) ? $normalized['entries'] : [];
+        videochat_log_client_diagnostics_entries($entries);
+
+        $storeMode = 'log_only';
+        $storedCount = 0;
+        try {
+            $pdo = $openDatabase();
+            $storeResult = videochat_store_client_diagnostics($pdo, $entries);
+            $storeMode = 'database';
+            $storedCount = (int) ($storeResult['stored_count'] ?? 0);
+        } catch (Throwable) {
+            $storeMode = 'log_only';
+            $storedCount = 0;
+        }
+
+        return $jsonResponse(202, [
+            'status' => 'ok',
+            'result' => [
+                'accepted_count' => count($entries),
+                'stored_count' => $storedCount,
+                'store_mode' => $storeMode,
+                'invalid_count' => (int) ($normalized['invalid_count'] ?? 0),
+                'dropped_count' => (int) ($normalized['dropped_count'] ?? 0),
             ],
             'time' => gmdate('c'),
         ]);

@@ -705,6 +705,10 @@ import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
+import {
+  configureClientDiagnostics,
+  reportClientDiagnostic,
+} from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './backgroundFilterController';
 import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
 import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
@@ -806,6 +810,8 @@ const workspaceSidebarState = inject('workspaceSidebarState', null);
 const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
 const ACTIVITY_MOTION_SAMPLE_MS = 500;
 const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
+const REMOTE_VIDEO_STALL_THRESHOLD_MS = 8000;
+const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 3000;
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -996,6 +1002,112 @@ let activityLastMotionSampleMs = 0;
 let activityLastMotionScore = 0;
 let dynamicIceServersPromise = null;
 let dynamicIceServersExpiresAtMs = 0;
+let remoteVideoStallTimer = null;
+
+function extractDiagnosticMessage(value, fallback = 'Client diagnostics event captured.') {
+  if (value instanceof Error) {
+    return String(value.message || fallback).trim() || fallback;
+  }
+  if (typeof value === 'string') {
+    return value.trim() || fallback;
+  }
+  if (value && typeof value === 'object' && typeof value.message === 'string') {
+    return String(value.message || fallback).trim() || fallback;
+  }
+  return fallback;
+}
+
+function captureClientDiagnostic({
+  category = 'media',
+  level = 'error',
+  eventType = '',
+  code = '',
+  message = '',
+  payload = {},
+  immediate = false,
+} = {}) {
+  if (String(eventType || '').trim() === '') return;
+  reportClientDiagnostic({
+    category,
+    level,
+    eventType,
+    code,
+    message,
+    callId: activeSocketCallId.value || activeCallId.value,
+    roomId: activeRoomId.value,
+    payload,
+    immediate,
+  });
+}
+
+function captureClientDiagnosticError(eventType, error, payload = {}, options = {}) {
+  captureClientDiagnostic({
+    category: options.category || 'media',
+    level: options.level || 'error',
+    eventType,
+    code: options.code || '',
+    message: extractDiagnosticMessage(error, options.fallbackMessage || 'Client diagnostics error captured.'),
+    payload: {
+      ...payload,
+      error,
+    },
+    immediate: Boolean(options.immediate),
+  });
+}
+
+function checkRemoteVideoStalls() {
+  if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
+
+  const nowMs = Date.now();
+  for (const [publisherId, peer] of remotePeersRef.value.entries()) {
+    if (!peer || typeof peer !== 'object' || !peer.decoder) continue;
+    const trackCount = Array.isArray(peer.tracks) ? peer.tracks.length : 0;
+    if (trackCount <= 0) continue;
+
+    const createdAtMs = Number(peer.createdAtMs || 0);
+    const frameCount = Number(peer.frameCount || 0);
+    const stalledLoggedAtMs = Number(peer.stalledLoggedAtMs || 0);
+    if (createdAtMs <= 0 || frameCount > 0) continue;
+    if ((nowMs - createdAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
+    if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
+
+    peer.stalledLoggedAtMs = nowMs;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'error',
+      eventType: 'sfu_remote_video_stalled',
+      code: 'sfu_remote_video_stalled',
+      message: 'Remote publisher advertised tracks but no decoded video frames arrived.',
+      payload: {
+        publisher_id: publisherId,
+        publisher_user_id: Number(peer.userId || 0),
+        publisher_name: String(peer.displayName || '').trim(),
+        track_count: trackCount,
+        frame_count: frameCount,
+        age_ms: Math.max(0, nowMs - createdAtMs),
+        remote_peer_count: remotePeersRef.value.size,
+        connected_participant_count: connectedParticipantUsers.value.length,
+        sfu_connected: sfuConnected.value,
+        connection_state: connectionState.value,
+        media_runtime_path: mediaRuntimePath.value,
+      },
+      immediate: true,
+    });
+  }
+}
+
+function startRemoteVideoStallTimer() {
+  if (remoteVideoStallTimer !== null) {
+    clearInterval(remoteVideoStallTimer);
+  }
+  remoteVideoStallTimer = setInterval(checkRemoteVideoStalls, REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS);
+}
+
+function clearRemoteVideoStallTimer() {
+  if (remoteVideoStallTimer === null) return;
+  clearInterval(remoteVideoStallTimer);
+  remoteVideoStallTimer = null;
+}
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
@@ -1605,6 +1717,21 @@ const participantUsers = computed(() => {
 const connectedParticipantUsers = computed(() => (
   participantUsers.value.filter((row) => Number(row?.connections || 0) > 0)
 ));
+configureClientDiagnostics(() => ({
+  call_id: activeSocketCallId.value || activeCallId.value,
+  room_id: activeRoomId.value,
+  current_user_id: currentUserId.value,
+  connection_state: connectionState.value,
+  connection_reason: connectionReason.value,
+  sfu_connected: sfuConnected.value,
+  media_runtime_path: mediaRuntimePath.value,
+  media_runtime_reason: mediaRuntimeReason.value,
+  media_stage_a: Boolean(mediaRuntimeCapabilities.value.stageA),
+  media_stage_b: Boolean(mediaRuntimeCapabilities.value.stageB),
+  media_preferred_path: mediaRuntimeCapabilities.value.preferredPath,
+  connected_participant_count: connectedParticipantUsers.value.length,
+  remote_peer_count: remotePeersRef.value.size,
+}));
 const isAloneInCall = computed(() => {
   const participants = connectedParticipantUsers.value;
   if (participants.length !== 1) return false;
@@ -4143,6 +4270,21 @@ function handleSocketMessage(event) {
     const closeReason = String(payload?.details?.close?.close_reason || payload?.details?.reason || '').trim().toLowerCase();
     const failedCommandType = String(payload?.details?.type || '').trim().toLowerCase();
     const failedTargetUserId = Number(payload?.details?.target_user_id || 0);
+    if (code === 'signaling_publish_failed') {
+      captureClientDiagnostic({
+        category: 'realtime',
+        level: 'error',
+        eventType: 'realtime_signaling_publish_failed',
+        code,
+        message,
+        payload: {
+          failed_command_type: failedCommandType,
+          failed_target_user_id: failedTargetUserId,
+          details: payload?.details || {},
+        },
+        immediate: true,
+      });
+    }
     if (code === 'lobby_command_failed' && Number.isInteger(failedTargetUserId) && failedTargetUserId > 0) {
       if (failedCommandType === 'lobby/allow') {
         clearLobbyActionText(failedTargetUserId, 'allow');
@@ -4818,6 +4960,7 @@ watch(routeCallRef, (nextValue, previousValue) => {
 });
 
 onMounted(async () => {
+  startRemoteVideoStallTimer();
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     compactMediaQuery = window.matchMedia(`(max-width: ${COMPACT_BREAKPOINT}px)`);
     isCompactViewport.value = compactMediaQuery.matches;
@@ -4953,10 +5096,35 @@ function initSFU() {
           setTimeout(() => initSFU(), SFU_CONNECT_RETRY_DELAY_MS);
           return;
         }
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'error',
+          eventType: 'sfu_connect_exhausted',
+          code: 'sfu_connect_exhausted',
+          message: 'SFU connection retries were exhausted before the call could become active.',
+          payload: {
+            retry_count: sfuConnectRetryCount,
+            media_runtime_path: mediaRuntimePath.value,
+            connection_state: connectionState.value,
+          },
+          immediate: true,
+        });
         sfuConnectRetryCount = 0;
         void maybeFallbackToNativeRuntime('sfu_connect_failed');
         return;
       }
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_disconnected_after_connect',
+        code: 'sfu_disconnected_after_connect',
+        message: 'SFU disconnected after the call was already connected.',
+        payload: {
+          media_runtime_path: mediaRuntimePath.value,
+          connection_state: connectionState.value,
+          remote_peer_count: remotePeersRef.value.size,
+        },
+      });
       sfuConnectRetryCount = 0;
       setTimeout(() => initSFU(), 2000);
     },
@@ -5043,6 +5211,10 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
         : Number(existingPeer.userId || 0),
       displayName: String(options.publisherName || existingPeer.displayName || '').trim(),
       tracks,
+      createdAtMs: Number(existingPeer.createdAtMs || Date.now()),
+      frameCount: Number(existingPeer.frameCount || 0),
+      lastFrameAtMs: Number(existingPeer.lastFrameAtMs || 0),
+      stalledLoggedAtMs: Number(existingPeer.stalledLoggedAtMs || 0),
     };
     setSfuRemotePeer(publisherId, updatedPeer);
     await nextTick();
@@ -5060,6 +5232,14 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
       }
     } catch (error) {
       mediaDebugLog('[SFU] Remote decoder init failed for publisher', publisherId, error);
+      captureClientDiagnosticError('sfu_remote_decoder_init_failed', error, {
+        publisher_id: publisherId,
+        publisher_user_id: publisherUserId,
+        track_count: tracks.length,
+      }, {
+        code: 'sfu_remote_decoder_init_failed',
+        immediate: true,
+      });
     }
   }
 
@@ -5090,6 +5270,10 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     stream: null,
     decoder,
     decodedCanvas: canvas,
+    createdAtMs: Date.now(),
+    frameCount: 0,
+    lastFrameAtMs: 0,
+    stalledLoggedAtMs: 0,
   };
   setSfuRemotePeer(publisherId, peer);
 
@@ -5116,6 +5300,14 @@ function ensureSfuRemotePeerForFrame(frame) {
   })
     .catch((error) => {
       mediaDebugLog('[SFU] Could not create peer from frame', publisherId, error);
+      captureClientDiagnosticError('sfu_remote_peer_create_failed', error, {
+        publisher_id: publisherId,
+        publisher_user_id: frame?.publisherUserId,
+        track_id: trackId,
+      }, {
+        code: 'sfu_remote_peer_create_failed',
+        immediate: true,
+      });
       return null;
     })
     .finally(() => {
@@ -5153,8 +5345,16 @@ function handleSFUTracks(e) {
     publisherName: e?.publisherName,
     tracks: e?.tracks,
   }).catch((error) => {
-    mediaDebugLog('[SFU] Could not subscribe to publisher', publisherId, error);
-    return null;
+      mediaDebugLog('[SFU] Could not subscribe to publisher', publisherId, error);
+      captureClientDiagnosticError('sfu_subscribe_failed', error, {
+        publisher_id: publisherId,
+        publisher_user_id: e?.publisherUserId,
+        track_count: Array.isArray(e?.tracks) ? e.tracks.length : 0,
+      }, {
+        code: 'sfu_subscribe_failed',
+        immediate: true,
+      });
+      return null;
   });
   pendingSfuRemotePeerInitializers.set(
     publisherId,
@@ -6673,6 +6873,13 @@ async function publishLocalTracks() {
     return true;
   } catch (e) {
     mediaDebugLog('[SFU] Failed to get user media:', e);
+    captureClientDiagnosticError('local_user_media_failed', e, {
+      media_runtime_path: mediaRuntimePath.value,
+      sfu_runtime_enabled: SFU_RUNTIME_ENABLED,
+    }, {
+      code: 'local_user_media_failed',
+      immediate: true,
+    });
     return false;
   }
 }
@@ -6725,6 +6932,14 @@ async function startEncodingPipeline(videoTrack) {
     wlvcEncodeLastErrorLogAtMs = 0;
   } catch (error) {
     mediaDebugLog('[SFU] WLVC encoder init error; falling back to native WebRTC path:', error);
+    captureClientDiagnosticError('wlvc_encoder_init_failed', error, {
+      media_runtime_path: mediaRuntimePath.value,
+      stage_a: mediaRuntimeCapabilities.value.stageA,
+      stage_b: mediaRuntimeCapabilities.value.stageB,
+    }, {
+      code: 'wlvc_encoder_init_failed',
+      immediate: true,
+    });
     void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
     return;
   }
@@ -6786,6 +7001,13 @@ async function startEncodingPipeline(videoTrack) {
       if (nowMs - wlvcEncodeLastErrorLogAtMs >= WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS) {
         wlvcEncodeLastErrorLogAtMs = nowMs;
         mediaDebugLog('[SFU] WASM encode frame failed', e);
+        captureClientDiagnosticError('wlvc_encode_frame_failed', e, {
+          failure_count: wlvcEncodeFailureCount,
+          media_runtime_path: mediaRuntimePath.value,
+          track_id: videoTrack.id,
+        }, {
+          code: 'wlvc_encode_frame_failed',
+        });
       }
 
       if (nowMs < wlvcEncodeWarmupUntilMs) {
@@ -7048,6 +7270,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     });
 
     if (decoded && decoded.data) {
+      peer.frameCount = Number(peer.frameCount || 0) + 1;
+      peer.lastFrameAtMs = Date.now();
+      peer.stalledLoggedAtMs = 0;
       const canvas = peer.decodedCanvas;
       const ctx = canvas.getContext('2d');
       const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
@@ -7058,6 +7283,16 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     }
   } catch (e) {
     mediaDebugLog('[SFU] Decode error:', e);
+    captureClientDiagnosticError('sfu_decode_frame_failed', e, {
+      publisher_id: publisherId,
+      publisher_user_id: publisherUserId,
+      track_id: frame?.trackId,
+      frame_type: frame?.type,
+      frame_timestamp: frame?.timestamp,
+      frame_count: Number(peer.frameCount || 0),
+    }, {
+      code: 'sfu_decode_frame_failed',
+    });
   }
 }
 
@@ -7090,6 +7325,7 @@ function handleSFUEncodedFrame(frame) {
 }
 
 onBeforeUnmount(() => {
+  clearRemoteVideoStallTimer();
   clearReactionQueueTimer();
   clearModerationSyncTimer();
   consumeQueuedModerationSyncEntries();

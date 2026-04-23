@@ -538,6 +538,33 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_calls_schedule_date ON calls(schedule_date, starts_at)",
             ],
         ],
+        18 => [
+            'name' => '0018_client_diagnostics',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS client_diagnostics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL DEFAULT '',
+    call_id TEXT NOT NULL DEFAULT '',
+    room_id TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL,
+    level TEXT NOT NULL CHECK (level IN ('debug', 'info', 'warning', 'error')),
+    event_type TEXT NOT NULL,
+    code TEXT NOT NULL DEFAULT '',
+    message TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    repeat_count INTEGER NOT NULL DEFAULT 1,
+    client_time TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_client_diagnostics_user_time ON client_diagnostics(user_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_client_diagnostics_call_time ON client_diagnostics(call_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_client_diagnostics_room_time ON client_diagnostics(room_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_client_diagnostics_event_time ON client_diagnostics(event_type, created_at DESC)",
+            ],
+        ],
     ];
 }
 

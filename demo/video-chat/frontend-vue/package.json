@@ -19,6 +19,7 @@
     "test:contract:shared-ui-primitives": "node tests/contract/shared-ui-primitives-contract.mjs",
     "test:contract:frontend-state-stores": "node tests/contract/frontend-state-stores-contract.mjs",
     "test:contract:asset-cache-busting": "node tests/contract/asset-cache-busting-contract.mjs",
+    "test:contract:client-diagnostics": "node tests/contract/client-diagnostics-contract.mjs",
     "test:contract:visual-standards": "node tests/contract/visual-standards-contract.mjs",
     "test:contract:refactor-commit-boundaries": "node tests/contract/refactor-commit-boundaries-contract.mjs",
     "test:contract:media-security": "node tests/contract/media-security-contract.mjs",
