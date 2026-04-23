@@ -523,6 +523,11 @@ import {
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
+import {
+  appendAssetVersionQuery,
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from '../../support/assetVersion';
 import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   formatDateDisplay,
@@ -979,7 +984,7 @@ function normalizeCallId(value) {
 }
 
 function enterAdmissionSocketUrlForOrigin(origin) {
-  const query = new URLSearchParams();
+  const query = appendAssetVersionQuery(new URLSearchParams());
   query.set('room', normalizeRoomId(enterCallState.roomId || 'lobby'));
 
   const callId = normalizeCallId(enterCallState.callId);
@@ -1056,10 +1061,17 @@ function scheduleEnterAdmissionReconnect() {
 }
 
 async function enterAdmittedCall() {
+  const callRef = normalizeCallId(enterCallState.callId);
+  if (callRef === '') {
+    enterCallState.loading = false;
+    enterCallState.waitingForAdmission = false;
+    enterCallState.admissionMessage = '';
+    enterCallState.error = 'Could not open the call because the call ID is missing.';
+    return;
+  }
+
   enterAdmissionAccepted = true;
   closeEnterAdmissionSocket({ cancel: false });
-
-  const callRef = normalizeCallId(enterCallState.callId) || normalizeRoomId(enterCallState.roomId || 'lobby');
   enterCallState.open = false;
   enterCallState.loading = false;
   enterCallState.waitingForAdmission = false;
@@ -1067,11 +1079,16 @@ async function enterAdmittedCall() {
   stopEnterCallPreview();
   resetEnterCallState();
 
-  await router.push({
+  const target = router.resolve({
     name: 'call-workspace',
     params: { callRef },
     query: { entry: 'invite' },
   });
+  if (typeof window !== 'undefined') {
+    window.location.replace(target.href);
+    return;
+  }
+  await router.replace(target.fullPath);
 }
 
 function handleEnterAdmissionLobbySnapshot(payload) {
@@ -1117,6 +1134,7 @@ function handleEnterAdmissionSocketMessage(event) {
   }
 
   if (!payload || typeof payload !== 'object') return;
+  if (handleAssetVersionSocketPayload(payload)) return;
   const type = String(payload.type || '').trim().toLowerCase();
   if (type === 'system/welcome') {
     handleEnterAdmissionWelcome(payload);
@@ -1209,12 +1227,13 @@ function connectEnterAdmissionSocketWithOriginAt(candidates, originIndex, genera
     enterCallState.admissionMessage = 'Reconnecting lobby connection...';
   });
 
-  socket.addEventListener('close', () => {
+  socket.addEventListener('close', (event) => {
     if (generation !== enterAdmissionSocketGeneration) return;
     if (enterAdmissionSocket === socket) {
       enterAdmissionSocket = null;
     }
     if (enterAdmissionManuallyClosed || enterAdmissionAccepted) return;
+    if (handleAssetVersionSocketClose(event)) return;
 
     if (!opened) {
       failOverToNextOrigin();

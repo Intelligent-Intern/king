@@ -136,6 +136,11 @@ import {
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
 import {
+  appendAssetVersionQuery,
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from '../../support/assetVersion';
+import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
@@ -197,7 +202,7 @@ function normalizeCallId(value) {
 }
 
 function admissionSocketUrlForOrigin(origin) {
-  const query = new URLSearchParams();
+  const query = appendAssetVersionQuery(new URLSearchParams());
   query.set('room', normalizeRoomId(state.roomId || 'lobby'));
 
   const callId = normalizeCallId(state.callId);
@@ -312,6 +317,15 @@ function scheduleAdmissionReconnect(accessId) {
 }
 
 async function enterAdmittedCall(accessId) {
+  const callRef = normalizeCallId(state.callId) || normalizeAccessId(accessId);
+  if (callRef === '') {
+    state.waitingForAdmission = false;
+    state.joining = false;
+    state.admissionMessage = '';
+    state.joinError = 'Could not open the call because the call reference is missing.';
+    return;
+  }
+
   admissionAccepted = true;
   closeAdmissionSocket({ cancel: false });
   stopPreview();
@@ -319,12 +333,16 @@ async function enterAdmittedCall(accessId) {
   state.joining = false;
   state.admissionMessage = '';
 
-  const callRef = normalizeCallId(state.callId) || normalizeAccessId(accessId);
-  await router.replace({
+  const target = router.resolve({
     name: 'call-workspace',
     params: { callRef },
     query: { entry: 'invite' },
   });
+  if (typeof window !== 'undefined') {
+    window.location.replace(target.href);
+    return;
+  }
+  await router.replace(target.fullPath);
 }
 
 function handleAdmissionLobbySnapshot(payload, accessId) {
@@ -373,6 +391,7 @@ function handleAdmissionSocketMessage(event, accessId) {
   }
 
   if (!payload || typeof payload !== 'object') return;
+  if (handleAssetVersionSocketPayload(payload)) return;
   const type = String(payload.type || '').trim().toLowerCase();
   if (type === 'system/welcome') {
     handleAdmissionWelcome(payload, accessId);
@@ -464,12 +483,13 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
     state.admissionMessage = 'Reconnecting lobby connection...';
   });
 
-  socket.addEventListener('close', () => {
+  socket.addEventListener('close', (event) => {
     if (generation !== admissionSocketGeneration) return;
     if (admissionSocket === socket) {
       admissionSocket = null;
     }
     if (admissionManuallyClosed || admissionAccepted) return;
+    if (handleAssetVersionSocketClose(event)) return;
 
     if (!opened) {
       failOverToNextOrigin();
