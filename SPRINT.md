@@ -44,13 +44,13 @@ Goal:
 Checklist:
 - [x] Complete `rg` sweep for Quiche, Cargo, Rust-HTTP3, local paths, and stub loaders.
 - [x] `git status` contains no generated build or test artifacts.
-- [ ] Docs, tests, CI, and release manifests reference the same new stack.
-- [ ] Add closure note to `documentation/project-assessment.md` and `READYNESS_TRACKER.md` with test evidence.
-- [ ] Split migration work into logical commits: inventory, build, client, server, tests, docs/cleanup.
+- [x] Docs, tests, CI, and release manifests reference the same new stack.
+- [x] Add closure note to `documentation/project-assessment.md` and `READYNESS_TRACKER.md` with test evidence.
+- [x] Split migration work into logical commits: inventory, build, client, server, tests, docs/cleanup.
 
 Done:
-- [ ] Quiche is removed from the active product path.
-- [ ] HTTP/3/QUIC is fully proven on the new stack.
+- [x] Quiche is removed from the active product path.
+- [x] HTTP/3/QUIC is fully proven on the new stack.
 
 ### #Q-13 Port Experiment IIBIN/Proto Batch And Varint Work
 
