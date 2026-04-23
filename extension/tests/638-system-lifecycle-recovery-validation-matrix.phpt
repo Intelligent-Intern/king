@@ -2,9 +2,17 @@
 King repo-local lifecycle matrix validates rolling restart, coordinated recovery surfaces, and public named-peer failover claims
 --SKIPIF--
 <?php
-if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
-    echo "skip proc_open and stream_socket_server are required";
-}
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'proc_open',
+    'stream_socket_server',
+    'king_system_init',
+    'king_system_get_status',
+    'king_system_get_component_info',
+    'king_pipeline_orchestrator_register_tool',
+]);
+king_skipif_require_loopback_bind('tcp');
 ?>
 --INI--
 king.security_allow_config_override=1

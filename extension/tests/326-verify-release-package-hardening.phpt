@@ -1,5 +1,13 @@
 --TEST--
 King release-package verifier rejects unsafe archive entries before extraction
+--SKIPIF--
+<?php
+require __DIR__ . '/skipif_capability.inc';
+
+if (trim((string) shell_exec('command -v tar 2>/dev/null')) === '') {
+    king_skipif('tar is required');
+}
+?>
 --FILE--
 <?php
 $root = sys_get_temp_dir() . '/king_verify_release_package_' . getmypid();
@@ -32,13 +40,24 @@ function king_verify_release_cleanup(string $path): void
 file_put_contents($root . '/payload', "unsafe\n");
 $buildOutput = [];
 $cmd = sprintf(
-    'cd %s && tar -czf %s --transform=%s %s',
+    'cd %s && tar -czf %s --transform=%s %s 2>/dev/null',
     escapeshellarg($root),
     escapeshellarg($traversalArchive),
     escapeshellarg('s#payload#king-bad/../escape#'),
     escapeshellarg('payload')
 );
 exec($cmd, $buildOutput, $buildStatus);
+if ($buildStatus !== 0) {
+    $buildOutput = [];
+    $cmd = sprintf(
+        'cd %s && tar -czf %s -s %s %s 2>/dev/null',
+        escapeshellarg($root),
+        escapeshellarg($traversalArchive),
+        escapeshellarg('#payload#king-bad/../escape#'),
+        escapeshellarg('payload')
+    );
+    exec($cmd, $buildOutput, $buildStatus);
+}
 var_dump($buildStatus === 0);
 file_put_contents(
     $traversalArchive . '.sha256',
@@ -59,7 +78,7 @@ mkdir($root . '/king-link/bin', 0700, true);
 symlink('/bin/sh', $root . '/king-link/bin/smoke.sh');
 $buildOutput = [];
 $cmd = sprintf(
-    'cd %s && tar -czf %s %s',
+    'cd %s && tar -czf %s %s 2>/dev/null',
     escapeshellarg($root),
     escapeshellarg($symlinkArchive),
     escapeshellarg('king-link')

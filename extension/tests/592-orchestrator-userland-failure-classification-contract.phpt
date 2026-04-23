@@ -2,9 +2,18 @@
 King userland-backed orchestrator runs classify validation, runtime, timeout, cancelled, backend, and missing-handler failures explicitly
 --SKIPIF--
 <?php
-if (!function_exists('proc_open') || !function_exists('stream_socket_server')) {
-    echo "skip proc_open and stream_socket_server are required";
-}
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'proc_open',
+    'stream_socket_server',
+    'king_pipeline_orchestrator_register_tool',
+    'king_pipeline_orchestrator_run',
+    'king_pipeline_orchestrator_dispatch',
+    'king_pipeline_orchestrator_worker_run_next',
+    'king_system_get_component_info',
+]);
+king_skipif_require_loopback_bind('tcp');
 ?>
 --INI--
 king.security_allow_config_override=1

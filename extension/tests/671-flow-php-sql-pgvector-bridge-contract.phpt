@@ -1,5 +1,18 @@
 --TEST--
 Repo-local Flow PHP SQL/pgvector bridge keeps the boundary non-native and enforces MCP request/response shape
+--SKIPIF--
+<?php
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'proc_open',
+    'stream_socket_server',
+    'king_mcp_connect',
+    'king_mcp_request',
+    'king_mcp_close',
+]);
+king_skipif_require_loopback_bind('tcp');
+?>
 --FILE--
 <?php
 require_once __DIR__ . '/mcp_test_helper.inc';

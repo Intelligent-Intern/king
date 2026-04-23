@@ -58,7 +58,7 @@ king_object_store_put('orders.ndjson', implode("\n", [
 ]);
 
 $ndjsonReader = new SerializedRecordReader(
-    new ObjectStoreDataset('orders.ndjson', 5)->source(),
+    (new ObjectStoreDataset('orders.ndjson', 5))->source(),
     new NdjsonCodec()
 );
 

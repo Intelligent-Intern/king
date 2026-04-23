@@ -1,5 +1,17 @@
 --TEST--
 King Smart-DNS preserves coherent discovery and routing state across concurrent service and status writers
+--SKIPIF--
+<?php
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'proc_open',
+    'stream_socket_server',
+    'king_semantic_dns_init',
+    'king_semantic_dns_start_server',
+]);
+king_skipif_require_loopback_bind('udp');
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

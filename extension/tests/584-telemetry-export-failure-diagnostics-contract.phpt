@@ -1,5 +1,20 @@
 --TEST--
 King telemetry exposes complete export failure diagnostics across transport TLS HTTP and collector failures
+--SKIPIF--
+<?php
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'proc_open',
+    'stream_socket_server',
+    'king_system_get_component_info',
+]);
+king_skipif_require_loopback_bind('tcp');
+
+if (trim((string) shell_exec('command -v openssl 2>/dev/null')) === '') {
+    king_skipif('openssl is required');
+}
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

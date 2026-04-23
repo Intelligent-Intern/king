@@ -1,5 +1,17 @@
 --TEST--
 King client transport runtime opens a real UDP socket and tracks send receive stats
+--SKIPIF--
+<?php
+require __DIR__ . '/skipif_capability.inc';
+
+king_skipif_require_functions([
+    'stream_socket_server',
+    'king_connect',
+    'king_get_stats',
+    'king_poll',
+]);
+king_skipif_require_loopback_bind('udp');
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--
