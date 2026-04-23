@@ -216,4 +216,6 @@ Explicit WLVC regression checks:
 - The same guard pins runtime-path switching: capability probing prefers `wlvc_wasm`, falls back to `webrtc_native`, records transition telemetry, tears down the inactive transport, and fails closed to `unsupported` when neither path is available.
 - The remote-render guard pins SFU frame continuity: frames can create a remote peer before track metadata arrives, decoded canvases are rendered into primary/mini/grid slots through user-id mapping, activity is marked from remote frames, and render-version changes happen once per peer-map mutation.
 
-Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
+Q-15 WLVC outcome:
+- Remaining codec/WASM/Kalman experiment diffs are either ported with targeted tests or explicitly classified as superseded by the current stronger implementation.
+- The closed outcome is recorded in `READYNESS_TRACKER.md` and pinned by `extension/tests/738-wlvc-q15-outcome-contract.phpt`.

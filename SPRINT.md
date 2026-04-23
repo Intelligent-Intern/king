@@ -120,7 +120,7 @@ Checklist:
 - [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
 - [x] Port only verified codec correctness or performance improvements with targeted frontend tests.
 - [x] Add explicit regression checks for encode/decode parity, crash-free decode failure, runtime-path switching, and remote render continuity.
-- [ ] Document the outcome in `READYNESS_TRACKER.md`.
+- [x] Document the outcome in `READYNESS_TRACKER.md`.
 
 Done:
-- [ ] Remaining codec experiment diffs are either ported with tests or explicitly classified as superseded by current implementation.
+- [x] Remaining codec experiment diffs are either ported with tests or explicitly classified as superseded by current implementation.
