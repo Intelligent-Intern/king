@@ -207,11 +207,12 @@ $provenance = $manifest['provenance'] ?? null;
 $dependencyProvenance = $manifest['dependency_provenance'] ?? null;
 $http3Stack = $manifest['http3_stack'] ?? null;
 
-if (!is_string($gitCommit) || preg_match('/^[0-9a-f]{40}$/', $gitCommit) !== 1) {
+if (!is_string($gitCommit) || preg_match('/^[0-9a-fA-F]{40}$/', $gitCommit) !== 1) {
     $fail("Manifest git_commit is invalid for {$archivePath}.\n");
 }
+$gitCommit = strtolower($gitCommit);
 
-if (!is_string($gitShort) || $gitShort !== substr($gitCommit, 0, 12)) {
+if (!is_string($gitShort) || strtolower($gitShort) !== substr($gitCommit, 0, 12)) {
     $fail("Manifest git_short does not match git_commit for {$archivePath}.\n");
 }
 
