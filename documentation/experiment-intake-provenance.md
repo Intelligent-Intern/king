@@ -29,3 +29,6 @@ Porting notes:
 - Port code only after validating it against the current IIBIN/proto contracts.
 - Do not carry generated benchmark results into the repo.
 - Do not add public API surfaces until arginfo, stubs, function tables, docs, and PHPT coverage match.
+
+Port status:
+- `3267785485ad61706170f9122f7af5997cc42202` and `a669b0964382e23eb316125132f59ff86cd42c71` were reviewed for the varint port. The encode patch from `3267785` is not cherry-picked because its small multi-byte cases write non-canonical continuation bytes. The current port keeps the source context, ports the bounded/unrolled encode intent manually, and adds overflow-safe decode behavior without architecture-specific unaligned reads.

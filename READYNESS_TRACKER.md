@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 varint port: manually ported the experiment varint intent from `3267785` and `a669b09` into `extension/include/iibin/iibin_internal.h` with canonical unrolled encode boundaries and uint64 overflow-safe decode. Added `708-proto-varint-boundary-contract.phpt`; local PHPT passed. A full local `make -C extension` is blocked by the existing generated Makefile still requiring `../quiche`, not by the Varint header change.
+
 - 2026-04-23 Q-13 experiment intake provenance: recorded the source commits and author identity for the IIBIN/proto batch and varint work in `documentation/experiment-intake-provenance.md`; subsequent ports must preserve source commit context with `git cherry-pick -x` or explicit source trailers.
 
 - 2026-04-23 HTTP/3 Q-12 migration closure: docs, tests, CI guardrails, release supply-chain checks, and release package manifests now agree on the LSQUIC/BoringSSL stack; Quiche is removed from the active product path and remaining Quiche/Cargo mentions are classified. Proof: `cd extension && php run-tests.php -q tests/698-quiche-main-docs-update-contract.phpt tests/699-quiche-remaining-mentions-contract.phpt tests/700-quiche-cargo-artifact-hygiene-contract.phpt tests/701-ci-builds-http3-stack-contract.phpt tests/702-ci-http3-contract-suite-coverage-contract.phpt tests/703-ci-migration-guardrails-contract.phpt tests/704-release-supply-chain-provenance-pins-contract.phpt tests/705-release-package-manifest-dependency-hashes-contract.phpt tests/706-http3-release-regression-matrix-contract.phpt tests/707-http3-migration-closure-contract.phpt`, plus `./infra/scripts/static-checks.sh`.
