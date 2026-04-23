@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 public proto batch API: added procedural and `King\IIBIN` batch encode/decode surfaces across stubs, arginfo, externals, function table, public header, and codec dispatch; `711-proto-batch-public-api-surface-contract.phpt` pins the complete surface and whole-batch failure contract.
+
 - 2026-04-23 Q-13 float/double helper consolidation: ported the shared helper intent from `e16af6f` into `extension/include/iibin/iibin_internal.h`, removed duplicate helpers from encode/decode C files, and added `710-proto-float-bit-helper-consolidation-contract.phpt`.
 
 - 2026-04-23 Q-13 ARM64 varint policy: reviewed the experiment ARM64 decode unrolling from `a669b09` and kept it out of the active product path until a guarded architecture profile has benchmark, sanitizer, and parity coverage. Added `709-proto-varint-architecture-policy-contract.phpt` to pin the decision.

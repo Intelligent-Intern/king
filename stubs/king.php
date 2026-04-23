@@ -1005,6 +1005,17 @@ namespace {
     function king_proto_encode(string $schema_name, mixed $data): string {}
 
     /**
+     * Encodes multiple records with one named IIBIN schema.
+     * The result is a list of binary payloads in input iteration order. The
+     * whole batch fails on the first invalid record and does not return a
+     * partial result.
+     * @param list<array<string,mixed>|object> $records
+     * @return list<string>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_proto_encode_batch(string $schema_name, array $records): array {}
+
+    /**
      * Decodes an IIBIN payload using a named schema.
      * Unknown schemas throw immediately. The current runtime supports
      * registered zero-field schemas plus a minimal primitive and numeric enum
@@ -1033,6 +1044,17 @@ namespace {
      * @throws \King\ValidationException|\King\RuntimeException
      */
     function king_proto_decode(string $schema_name, string $binary_data, bool|string|array $decode_as_object = false): array|object {}
+
+    /**
+     * Decodes multiple binary IIBIN records with one named schema.
+     * The result is a list in input iteration order. The whole batch fails on
+     * the first invalid binary record and does not return a partial result.
+     * @param list<string> $binary_records
+     * @param bool|string|array<string,string> $decode_as_object
+     * @return list<array<string,mixed>|object>
+     * @throws \King\ValidationException|\King\RuntimeException
+     */
+    function king_proto_decode_batch(string $schema_name, array $binary_records, bool|string|array $decode_as_object = false): array {}
 
     /**
      * Checks whether any schema or enum entry is currently registered.
@@ -2067,10 +2089,23 @@ namespace King {
         public static function encode(string $schema, mixed $data): string {}
 
         /**
+         * @param list<array<string,mixed>|object> $records
+         * @return list<string>
+         */
+        public static function encodeBatch(string $schema, array $records): array {}
+
+        /**
          * @param bool|string|array<string,string> $decodeAsObject
          * @return array<string,mixed>|object
          */
         public static function decode(string $schema, string $data, bool|string|array $decodeAsObject = false): array|object {}
+
+        /**
+         * @param list<string> $records
+         * @param bool|string|array<string,string> $decodeAsObject
+         * @return list<array<string,mixed>|object>
+         */
+        public static function decodeBatch(string $schema, array $records, bool|string|array $decodeAsObject = false): array {}
 
         public static function isDefined(string $name): bool {}
 
