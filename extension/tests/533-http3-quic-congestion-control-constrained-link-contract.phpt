@@ -6,11 +6,6 @@ if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
 if (trim((string) shell_exec('command -v cargo')) === '') {
     echo "skip cargo is required for the HTTP/3 ticket test server";
 }

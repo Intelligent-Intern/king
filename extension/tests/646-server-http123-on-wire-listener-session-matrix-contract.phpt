@@ -5,11 +5,6 @@ King HTTP/1, HTTP/2, and HTTP/3 one-shot listeners preserve on-wire request-resp
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
 }
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
 ?>
 --INI--
 king.security_allow_config_override=1

@@ -6,11 +6,6 @@ if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
 
-$server = getenv('KING_QUICHE_SERVER');
-if (!is_string($server) || $server === '' || !is_executable($server)) {
-    echo "skip KING_QUICHE_SERVER must point at a prebuilt quiche-server binary";
-}
-
 $library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
     echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";

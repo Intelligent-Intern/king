@@ -5,11 +5,6 @@ King server TLS reload keeps a live HTTP/3 request path honest under real traffi
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the live TLS reload fixture";
 }
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
 ?>
 --INI--
 king.security_allow_config_override=1

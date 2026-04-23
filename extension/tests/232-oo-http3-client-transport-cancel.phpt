@@ -2,10 +2,6 @@
 King OO Http3Client can cancel an active HTTP/3 transport via CancelToken
 --SKIPIF--
 <?php
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
 if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
     echo "skip pcntl and posix are required for the active cancel fixture";
 }
