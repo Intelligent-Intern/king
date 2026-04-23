@@ -264,6 +264,8 @@ try {
   assert.match(workspaceSource, /MEDIA_SECURITY_SIGNAL_TYPES/, 'workspace must handle media-security signaling');
   assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*sendEncodedFrame\(\{[\s\S]*protectedFrame: protectedFrame\.protectedFrame/, 'workspace must protect WLVC frames before SFU send');
   assert.match(workspaceSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'/, 'workspace must decrypt WLVC transport envelopes before decode');
+  assert.match(workspaceSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(publisherUserId\);/, 'workspace must recover the media-security handshake when protected SFU frames arrive before keys');
+  assert.match(workspaceSource, /await sendMediaSecurityHello\(normalizedUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedUserId, true\);/, 'workspace recovery must retry hello and sender-key signals for the remote publisher');
   assert.match(workspaceSource, /attachNativeSenderTransform/, 'workspace must attach native sender transform hooks');
   assert.match(workspaceSource, /attachNativeReceiverTransform/, 'workspace must attach native receiver transform hooks');
 

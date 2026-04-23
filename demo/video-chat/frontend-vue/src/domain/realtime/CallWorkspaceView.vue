@@ -969,6 +969,7 @@ let wlvcEncodeLastErrorLogAtMs = 0;
 let mediaSecuritySyncInFlight = false;
 const mediaSecurityHelloSignalsSent = new Set();
 const mediaSecuritySenderKeySignalsSent = new Set();
+const mediaSecurityRecoveryLastByUserId = new Map();
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const pendingSfuRemotePeerInitializers = new Map();
@@ -1105,6 +1106,7 @@ function ensureMediaSecuritySession() {
   if (!existing || contextChanged) {
     mediaSecurityHelloSignalsSent.clear();
     mediaSecuritySenderKeySignalsSent.clear();
+    mediaSecurityRecoveryLastByUserId.clear();
     mediaSecuritySessionRef.value = createMediaSecuritySession(context);
   } else {
     mediaSecuritySessionRef.value.updateContext(context);
@@ -1189,6 +1191,29 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
   } finally {
     mediaSecuritySyncInFlight = false;
   }
+}
+
+function shouldRecoverMediaSecurityFromFrameError(error) {
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return message.includes('wrong_key_id')
+    || message.includes('wrong_epoch')
+    || message.includes('downgrade_attempt');
+}
+
+function recoverMediaSecurityForPublisher(publisherUserId) {
+  const normalizedUserId = Number(publisherUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  const nowMs = Date.now();
+  const lastRecoveryMs = Number(mediaSecurityRecoveryLastByUserId.get(normalizedUserId) || 0);
+  if ((nowMs - lastRecoveryMs) < 3000) return;
+  mediaSecurityRecoveryLastByUserId.set(normalizedUserId, nowMs);
+
+  requestRoomSnapshot();
+  void (async () => {
+    await sendMediaSecurityHello(normalizedUserId, true);
+    await sendMediaSecuritySenderKey(normalizedUserId, true);
+    await syncMediaSecurityWithParticipants();
+  })();
 }
 
 function setMediaRuntimePath(nextPath, reason) {
@@ -1469,8 +1494,33 @@ function currentUserParticipantRow() {
   };
 }
 
-function shouldUseLocalPeerRosterFallback() {
-  return hasRealtimeRoomSync.value !== true;
+function mergeLiveMediaPeerIntoRoster(aggregate, peer, source = 'media') {
+  if (!(aggregate instanceof Map) || !peer || typeof peer !== 'object') return;
+  const peerUserId = Number(peer?.userId || 0);
+  if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) return;
+
+  const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
+  const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || peer?.callRole || 'participant');
+  const existing = aggregate.get(peerUserId);
+  if (existing) {
+    existing.connections = Math.max(1, Number(existing.connections || 0));
+    if (String(existing.displayName || '').trim() === '') {
+      existing.displayName = displayName;
+    }
+    existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || callRole);
+    existing.mediaPeerSource = String(source || 'media');
+    return;
+  }
+
+  aggregate.set(peerUserId, {
+    userId: peerUserId,
+    displayName,
+    role: 'user',
+    callRole,
+    connectedAt: '',
+    connections: 1,
+    mediaPeerSource: String(source || 'media'),
+  });
 }
 
 const participantUsers = computed(() => {
@@ -1508,50 +1558,11 @@ const participantUsers = computed(() => {
   }
 
   for (const peer of remotePeersRef.value.values()) {
-    const peerUserId = Number(peer?.userId || 0);
-    if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) continue;
-
-    const existing = aggregate.get(peerUserId);
-    const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
-    if (existing) {
-      continue;
-    }
-    if (!shouldUseLocalPeerRosterFallback()) {
-      continue;
-    }
-
-    aggregate.set(peerUserId, {
-      userId: peerUserId,
-      displayName,
-      role: 'user',
-      callRole: normalizeCallRole(callParticipantRoles[peerUserId] || 'participant'),
-      connectedAt: '',
-      connections: 1,
-    });
+    mergeLiveMediaPeerIntoRoster(aggregate, peer, 'sfu');
   }
 
   for (const peer of nativePeerConnectionsRef.value.values()) {
-    const peerUserId = Number(peer?.userId || 0);
-    if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) continue;
-
-    const existing = aggregate.get(peerUserId);
-    const displayName = String(peer?.displayName || existing?.displayName || '').trim() || `User ${peerUserId}`;
-    const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing?.callRole || 'participant');
-    if (existing) {
-      continue;
-    }
-    if (!shouldUseLocalPeerRosterFallback()) {
-      continue;
-    }
-
-    aggregate.set(peerUserId, {
-      userId: peerUserId,
-      displayName,
-      role: 'user',
-      callRole,
-      connectedAt: '',
-      connections: 1,
-    });
+    mergeLiveMediaPeerIntoRoster(aggregate, peer, 'native');
   }
 
   const currentUser = currentUserParticipantRow();
@@ -6958,6 +6969,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       });
     } catch (error) {
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      if (shouldRecoverMediaSecurityFromFrameError(error)) {
+        recoverMediaSecurityForPublisher(publisherUserId);
+      }
       return;
     }
   } else if (frame?.protected && typeof frame.protected === 'object') {
@@ -6972,6 +6986,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       });
     } catch (error) {
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      if (shouldRecoverMediaSecurityFromFrameError(error)) {
+        recoverMediaSecurityForPublisher(publisherUserId);
+      }
       return;
     }
   }

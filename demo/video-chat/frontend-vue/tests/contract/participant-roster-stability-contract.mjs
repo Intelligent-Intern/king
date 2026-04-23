@@ -70,22 +70,36 @@ try {
     'room snapshots must not refresh the roster presentation unconditionally'
   );
 
-  const existingPeerGuardMatches = source.match(/if \(existing\) \{\s*continue;\s*\}/g) || [];
-  assert.ok(
-    existingPeerGuardMatches.length >= 2,
-    'local SFU/native peer maps must not overwrite server-authoritative roster rows'
-  );
-  const fallbackGuardMatches = source.match(/if \(!shouldUseLocalPeerRosterFallback\(\)\) \{\s*continue;\s*\}/g) || [];
-  assert.ok(
-    fallbackGuardMatches.length >= 2,
-    'local SFU/native peer maps must not create roster rows after the authoritative snapshot is active'
-  );
-
-  const fallbackBody = functionBody(source, 'shouldUseLocalPeerRosterFallback');
+  const liveMediaPeerMergeBody = functionBody(source, 'mergeLiveMediaPeerIntoRoster');
   assert.match(
-    fallbackBody,
-    /hasRealtimeRoomSync\.value !== true/,
-    'local peer fallback must stop after the first server-authoritative room snapshot'
+    liveMediaPeerMergeBody,
+    /peerUserId === currentUserId\.value/,
+    'live media peer roster merge must never add the local user as a remote peer'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
+    /existing\.connections = Math\.max\(1, Number\(existing\.connections \|\| 0\)\);/,
+    'live media peer roster merge may mark an existing server row connected but must not replace it'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
+    /if \(String\(existing\.displayName \|\| ''\)\.trim\(\) === ''\)/,
+    'live media peer roster merge must preserve server display names when present'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
+    /aggregate\.set\(peerUserId, \{[\s\S]*connections: 1,[\s\S]*mediaPeerSource:/,
+    'backend-confirmed live media peers may supplement a missing snapshot row'
+  );
+  assert.match(
+    source,
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, 'sfu'\);/,
+    'SFU remote peers must supplement the call roster so decoded canvases get a layout slot'
+  );
+  assert.match(
+    source,
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, 'native'\);/,
+    'native WebRTC peers must supplement the call roster so remote videos get a layout slot'
   );
 
   process.stdout.write('[participant-roster-stability-contract] PASS\n');
