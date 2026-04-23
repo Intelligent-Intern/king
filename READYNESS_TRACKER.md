@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 transport protection decision: decided DataChannel/DTLS/SRTP/WSS/TLS protection is not sufficient for intended media/control payloads; app-level protected envelopes are required for required policy, SFU/relay/gossip forwarding, stored/forwarded payloads, or any protected-media/E2EE claim. Added `722-gossipmesh-transport-protection-decision-contract.phpt`.
+
 - 2026-04-23 Q-14 direct P2P research policy: pinned experiment P2P/DataChannel transport as research-only until re-specified under backend-authoritative `webrtc_native` semantics with server-issued peer/topology state, `call_id`/`room_id` admission binding, participant churn/revocation handling, and protected-media envelope proof. Added `721-gossipmesh-p2p-research-policy-contract.phpt`.
 
 - 2026-04-23 Q-14 reusable/experiment-only split: classified reusable GossipMesh topology, signaling, and envelope ideas separately from rejected experiment-only P2P/browser/process-local/plaintext behaviors. The port rule now requires a contract proving rejected behavior stays absent whenever a reusable idea is implemented. Added `720-gossipmesh-reusable-split-contract.phpt`.
