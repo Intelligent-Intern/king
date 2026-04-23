@@ -197,4 +197,11 @@ WASM binding-mismatch recovery decision:
 - On decoder mismatch, the wrapper deletes the stale decoder if possible, recreates it from the cached module reference with current width, height, and quality, then retries the decode exactly through the recreated decoder.
 - Non-binding errors still fail closed by rethrowing the original error; this recovery is not a broad catch-all fallback.
 
+SFU compatibility decision:
+- Keep the current `demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts` and backend `/sfu` compatibility behavior for this sprint leaf.
+- The client resolves SFU websocket candidates through `resolveBackendSfuOriginCandidates()`, connects through `buildWebSocketUrl(origin, '/sfu', query)`, and records the working origin with `setBackendSfuOrigin(...)`.
+- The client binds `room`, `room_id`, and validated `call_id` query parameters before opening `/sfu`, sends outbound SFU commands with snake_case fields, and remains compatible with camelCase or snake_case server events.
+- The backend `/sfu` gateway validates handshake, websocket auth, RBAC, room binding, `call_id`/`callId`, and room admission before `king_server_upgrade_to_websocket(...)`.
+- Client SFU command frames are decoded against the already-bound room, accepting legacy `room`/`roomId` only when they match and failing closed with `sfu_room_mismatch` on cross-room commands.
+
 Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.

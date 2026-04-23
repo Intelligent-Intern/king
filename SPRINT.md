@@ -117,7 +117,7 @@ Checklist:
 - [x] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
 - [x] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.
 - [x] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.
-- [ ] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
+- [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
 - [ ] Port only verified codec correctness or performance improvements with targeted frontend tests.
 - [ ] Add explicit regression checks for encode/decode parity, crash-free decode failure, runtime-path switching, and remote render continuity.
 - [ ] Document the outcome in `READYNESS_TRACKER.md`.
