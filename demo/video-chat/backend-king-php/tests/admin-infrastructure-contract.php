@@ -29,7 +29,7 @@ try {
     putenv('VIDEOCHAT_DEPLOY_WS_DOMAIN=ws.video.example.test');
     putenv('VIDEOCHAT_DEPLOY_SFU_DOMAIN=sfu.video.example.test');
     putenv('VIDEOCHAT_DEPLOY_TURN_DOMAIN=turn.video.example.test');
-    putenv('VIDEOCHAT_DEPLOY_CDN_DOMAIN=cnd.video.example.test');
+putenv('VIDEOCHAT_DEPLOY_CDN_DOMAIN=cdn.video.example.test');
     putenv('VIDEOCHAT_INFRA_NODE_ROLES=edge,http,ws,sfu');
     putenv('VIDEOCHAT_OTEL_ENABLE=1');
     putenv('VIDEOCHAT_OTEL_EXPORTER_ENDPOINT=http://otel-collector:4317');
@@ -92,7 +92,7 @@ try {
     videochat_admin_infra_assert((string) ($payload['status'] ?? '') === 'ok', 'payload status mismatch');
     videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['name'] ?? '') === 'contract-cluster', 'deployment name mismatch');
     videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['sfu_domain'] ?? '') === 'sfu.video.example.test', 'SFU domain mismatch');
-    videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['cdn_domain'] ?? '') === 'cnd.video.example.test', 'CDN domain mismatch');
+    videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['cdn_domain'] ?? '') === 'cdn.video.example.test', 'CDN domain mismatch');
     videochat_admin_infra_assert(count((array) ($payload['nodes'] ?? [])) === 1, 'static inventory should expose one node');
     videochat_admin_infra_assert(count((array) ($payload['services'] ?? [])) >= 4, 'static inventory should expose core services');
     videochat_admin_infra_assert((bool) (($payload['telemetry']['open_telemetry'] ?? [])['enabled'] ?? false), 'OTel should be enabled');

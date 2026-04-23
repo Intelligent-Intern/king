@@ -7,7 +7,8 @@ Video-Chat-Demo-Verzeichnis. Er terminiert TLS mit Certbot-Material, leitet
 HTTP auf HTTPS um, liefert das gebaute Vue-Frontend statisch aus und routet API,
 Lobby-WebSocket (`/ws`) und SFU-WebSocket (`/sfu`) auf interne King-PHP
 Backend-Services. Statische CDN-Assets werden ueber denselben King/PHP Edge auf
-`VIDEOCHAT_DEPLOY_CDN_DOMAIN` ausgeliefert; Default ist `cnd.<domain>`.
+`VIDEOCHAT_DEPLOY_CDN_DOMAIN` ausgeliefert; Default ist `cdn.<domain>`. Der Edge
+akzeptiert `cnd.<domain>` als Legacy-Alias fuer alte Demo-Deploys.
 
 ## Aktiver Scope
 

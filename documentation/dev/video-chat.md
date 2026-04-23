@@ -130,7 +130,7 @@ Current demo caveats:
 - TURN relay setup is available through the opt-in `turn` compose profile; default local demo remains STUN-only unless `VITE_VIDEOCHAT_ICE_SERVERS` is set
 - no production moderation/audit policy
 - background blur uses browser `FaceDetector` / center-mask fallback by default; optional MediaPipe/TFJS segmentation backends are opt-in via `VITE_VIDEOCHAT_ENABLE_MEDIAPIPE=true` / `VITE_VIDEOCHAT_ENABLE_TFJS=true`
-- the MediaPipe and TFJS segmentation runtimes are vendored under `frontend-vue/public/cdn/vendor` and served through King Edge; production builds set `VITE_VIDEOCHAT_CDN_ORIGIN=https://cnd.<domain>`
+- the MediaPipe and TFJS segmentation runtimes are vendored under `frontend-vue/public/cdn/vendor` and served through King Edge; production builds set `VITE_VIDEOCHAT_CDN_ORIGIN=https://cdn.<domain>` and keep `cnd.<domain>` as a legacy alias
 - frontend debug console output is quiet by default; enable verbose runtime logs with `VITE_VIDEOCHAT_DEBUG_LOGS=true`
 - frontend runtime proxy may emit Node deprecation warnings from transitive proxy dependencies; behavior remains functional
 
@@ -450,7 +450,7 @@ The wizard asks for:
 - server name, server type, location, and image, with defaults offered by the
   script
 - optional API, lobby websocket, SFU, TURN, and CDN hostnames; by default the helper
-  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, `turn.<domain>`, and `cnd.<domain>`
+  uses `api.<domain>`, `ws.<domain>`, `sfu.<domain>`, `turn.<domain>`, and `cdn.<domain>`
 
 The helper loads `demo/video-chat/.env.local` before it checks required deploy
 variables. The wizard and manual deploy actions write the effective deploy
@@ -486,7 +486,8 @@ What the wizard does:
 - stores the new public IPv4 as the deploy target
 - tries to set the Hetzner DNS `A` record through the Cloud API when the matching
   DNS zone is visible to the API token
-- tries to set matching `A` records for `api`, `ws`, `sfu`, `turn`, and `cnd`
+- tries to set matching `A` records for `api`, `ws`, `sfu`, `turn`, `cdn`, and
+  the legacy `cnd` alias
 - waits until the domain and those subdomains resolve to the new server IP
 - waits until SSH is reachable
 - runs the same `prepare` flow as the manual deployment path
@@ -503,7 +504,8 @@ intentionally allocate dedicated IPs:
 - `ws.video.example.com`
 - `sfu.video.example.com`
 - `turn.video.example.com`
-- `cnd.video.example.com`
+- `cdn.video.example.com`
+- `cnd.video.example.com` for legacy cached bundles
 
 The helper waits before requesting the certificate because Certbot needs the
 public domain and subdomains to point at the server. Production actions run the
@@ -613,7 +615,7 @@ VIDEOCHAT_DEPLOY_API_DOMAIN=api.video.example.com \
 VIDEOCHAT_DEPLOY_WS_DOMAIN=ws.video.example.com \
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=sfu.video.example.com \
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=turn.video.example.com \
-VIDEOCHAT_DEPLOY_CDN_DOMAIN=cnd.video.example.com \
+VIDEOCHAT_DEPLOY_CDN_DOMAIN=cdn.video.example.com \
 demo/video-chat/scripts/deploy.sh deploy
 ```
 

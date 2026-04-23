@@ -401,9 +401,14 @@ hcloud_set_dns_a_record() {
 }
 
 hcloud_set_videochat_subdomain_records() {
-  local target
-  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}"; do
+  local target seen="" legacy_cdn_domain=""
+  [[ -n "${DEPLOY_DOMAIN:-}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
+  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}"; do
     [[ -n "${target}" ]] || continue
+    case " ${seen} " in
+      *" ${target} "*) continue ;;
+    esac
+    seen="${seen} ${target}"
     hcloud_set_dns_a_record_for_domain "${target}" || true
   done
 }

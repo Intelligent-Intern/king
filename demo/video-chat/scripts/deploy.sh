@@ -55,7 +55,7 @@ Optional environment:
   VIDEOCHAT_DEPLOY_WS_DOMAIN   Lobby websocket host, default: ws.<domain>.
   VIDEOCHAT_DEPLOY_SFU_DOMAIN  SFU websocket host, default: sfu.<domain>.
   VIDEOCHAT_DEPLOY_TURN_DOMAIN TURN host, default: turn.<domain>.
-  VIDEOCHAT_DEPLOY_CDN_DOMAIN  Static/CDN asset host, default: cnd.<domain>.
+  VIDEOCHAT_DEPLOY_CDN_DOMAIN  Static/CDN asset host, default: cdn.<domain>.
   VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
                               Comma-separated frontend dev-server hosts, default:
                               deploy domain plus api/ws/sfu/turn/cdn hosts.
@@ -179,7 +179,7 @@ refresh_deploy_config() {
     DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}"
     DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
     DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
-    DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN:-cnd.${DEPLOY_DOMAIN}}"
+    DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}"
   fi
 
   DEPLOY_VUE_ALLOWED_HOSTS="${VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS:-}"
@@ -218,7 +218,9 @@ deploy_refresh_known_hosts_enabled() {
 
 deploy_dns_targets() {
   local target seen=""
-  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}"; do
+  local legacy_cdn_domain=""
+  [[ -n "${DEPLOY_DOMAIN}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}"; do
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
       *" ${target} "*) continue ;;
@@ -481,7 +483,7 @@ sync_checkout() {
 }
 
 certbot_standalone() {
-  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q
+  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q legacy_cdn_domain_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   email_q="$(shell_quote "${DEPLOY_EMAIL}")"
@@ -490,6 +492,7 @@ certbot_standalone() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  legacy_cdn_domain_q="$(shell_quote "cnd.${DEPLOY_DOMAIN}")"
 
   log "Obtaining/renewing Let's Encrypt cert for ${DEPLOY_DOMAIN}"
   remote_bash <<REMOTE
@@ -503,6 +506,7 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+LEGACY_CDN_DOMAIN=${legacy_cdn_domain_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 FRONTEND_WAS_RUNNING=0
 EDGE_WAS_RUNNING=0
@@ -564,7 +568,19 @@ if [ -f "\${VIDEOCHAT_DIR}/docker-compose.v1.yml" ] && [ -f "\${VIDEOCHAT_DIR}/.
   fi
 fi
 
-\${SUDO}certbot certonly \\
+CERTBOT_DOMAINS=(
+  -d "\${DOMAIN}"
+  -d "\${API_DOMAIN}"
+  -d "\${WS_DOMAIN}"
+  -d "\${SFU_DOMAIN}"
+  -d "\${TURN_DOMAIN}"
+  -d "\${CDN_DOMAIN}"
+)
+if [ -n "\${LEGACY_CDN_DOMAIN}" ] && [ "\${LEGACY_CDN_DOMAIN}" != "\${CDN_DOMAIN}" ]; then
+  CERTBOT_DOMAINS+=(-d "\${LEGACY_CDN_DOMAIN}")
+fi
+
+\${SUDO} certbot certonly \\
   --standalone \\
   --non-interactive \\
   --agree-tos \\
@@ -572,12 +588,7 @@ fi
   --cert-name "\${DOMAIN}" \\
   --expand \\
   --keep-until-expiring \\
-  -d "\${DOMAIN}" \\
-  -d "\${API_DOMAIN}" \\
-  -d "\${WS_DOMAIN}" \\
-  -d "\${SFU_DOMAIN}" \\
-  -d "\${TURN_DOMAIN}" \\
-  -d "\${CDN_DOMAIN}"
+  "\${CERTBOT_DOMAINS[@]}"
 
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/fullchain.pem"
 \${SUDO}test -r "/etc/letsencrypt/live/\${DOMAIN}/privkey.pem"

@@ -10,7 +10,16 @@ $apiDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_API_DOMAIN') ?: 'a
 $wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.' . $domain)));
 $sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $domain)));
 $turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $domain)));
-$cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cnd.' . $domain)));
+$cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $domain)));
+$cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: 'cnd.' . $domain));
+$cdnDomains = [$cdnDomain];
+foreach (preg_split('/\s*,\s*/', $cdnAliasInput) ?: [] as $alias) {
+    $alias = strtolower(trim((string) $alias));
+    if ($alias !== '') {
+        $cdnDomains[] = $alias;
+    }
+}
+$cdnDomains = array_values(array_unique($cdnDomains));
 $certFile = getenv('VIDEOCHAT_EDGE_CERT_FILE') ?: '/run/certs/live/fullchain.pem';
 $keyFile = getenv('VIDEOCHAT_EDGE_KEY_FILE') ?: '/run/certs/live/privkey.pem';
 $staticRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_STATIC_ROOT') ?: '/app/frontend-dist'), '/');
@@ -265,9 +274,9 @@ $contentType = static function (string $path): string {
     };
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomain): void {
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains): void {
     $path = rawurldecode((string) $request['path']);
-    $isCdnAsset = $request['host'] === $cdnDomain || str_starts_with($path, '/cdn/');
+    $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
     $corsHeaders = $isCdnAsset
         ? [
             'Access-Control-Allow-Origin' => '*',
@@ -527,10 +536,10 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomain, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
-    if ($host === $cdnDomain) {
+    if (in_array($host, $cdnDomains, true)) {
         return 'static';
     }
     if ($path === '/ws' || $host === $wsDomain) {
