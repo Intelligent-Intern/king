@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 GossipMesh API surface decision: reviewed the experiment `extension/src/gossip_mesh/*` surfaces and rejected raw global PHP classes, raw C structs, browser-controlled topology, and process-local room ownership as production API. The accepted production direction is a server-authoritative topology/routing planner with bounded PHP facade/procedural mirrors, internal C helpers only after tests, IIBIN envelopes, and transport effects owned by WS/SFU workers. Added `718-gossipmesh-api-surface-decision-contract.phpt`.
+
 - 2026-04-23 Q-14 contributor-credit baseline: recorded the GossipMesh/SFU experiment source commits, author identity, relevant paths, artifact exclusions, and current SFU/admission constraints in `documentation/experiment-intake-provenance.md`. Added a static provenance contract before any production GossipMesh port.
 
 - 2026-04-23 Q-13 documentation closure: documented IIBIN/proto batch public surfaces, input-order behavior, fail-closed no-partial-result semantics, 65536-record safety bound, batch-index exception context, object-hydration decode modes, and benchmark expectations for `proto_batch`, `proto_varint`, and `proto_omega`. Added `716-proto-batch-documentation-contract.phpt` and closed Q-13 in `SPRINT.md`.

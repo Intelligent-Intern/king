@@ -88,7 +88,7 @@ Goal:
 
 Checklist:
 - [x] Preserve contributor credit for the experiment work.
-- [ ] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
+- [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
 - [ ] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.
 - [ ] Separate reusable topology/signaling ideas from experiment-only behavior.
 - [ ] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.

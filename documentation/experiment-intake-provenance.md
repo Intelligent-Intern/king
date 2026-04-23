@@ -67,3 +67,12 @@ Porting notes:
 
 Port status:
 - Contributor credit and source paths are recorded. No GossipMesh/SFU production code has been ported yet under Q-14.
+
+Production API surface decision:
+- The raw experiment surface is not the production King API. Do not expose the global PHP `GossipMesh` class, raw C `gossip_mesh_t` pointers, browser `GossipMeshClient` topology control, direct peer IP/port neighbor mutation, or process-local room ownership as stable API.
+- The production surface is a server-authoritative topology and routing planner. Clients may receive assigned topology and media/signaling instructions, but they must not create call state, admission state, room identity, or trust decisions.
+- The C layer may provide internal helpers for topology planning, duplicate-window tracking, TTL/fanout selection, relay candidate selection, and stats collection after those helpers have contract tests. The C layer must not expose raw mutable structs to PHP.
+- The public PHP extension surface, if Q-14 proceeds to implementation, is a namespaced/static `King\GossipMesh` facade plus procedural `king_gossip_mesh_*` mirrors. Candidate stable operations are topology planning, membership delta application, envelope routing, duplicate suppression, relay fallback selection, and stats export.
+- Public PHP calls must accept and return bounded arrays or typed King objects, not sockets, WebRTC objects, raw peers, or callbacks. WebSocket/SFU workers own transport side effects.
+- Wire payloads must use a versioned IIBIN envelope once implemented. A JSON/debug envelope may exist only as test scaffolding until the production envelope is contract-tested.
+- The video-chat demo may consume the production surface only through the existing backend-authoritative room/call/admission gateway. `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` remains research until it is folded into the current SFU client without weakening room binding, admission, logging, or security behavior.
