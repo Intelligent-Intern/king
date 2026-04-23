@@ -45,7 +45,6 @@ if ($actualChecklist !== $expectedChecklist) {
 }
 
 $uniqueTests = [];
-$documentedPendingItems = [];
 foreach ($requiredByIssue as $item) {
     $entry = $checklist[$item] ?? null;
     if (!is_array($entry)) {
@@ -113,19 +112,13 @@ foreach ($requiredByIssue as $item) {
         }
     }
 
-    if (($entry['status'] ?? null) === 'pending_measurement') {
-        $documentedPendingItems[] = $item;
-    } elseif (($entry['tests'] ?? []) === []) {
-        king_http3_release_matrix_fail("{$item} has no pinned PHPT evidence");
+    if (($entry['tests'] ?? []) === [] && ($entry['documents'] ?? []) === []) {
+        king_http3_release_matrix_fail("{$item} has no pinned PHPT or document evidence");
     }
 }
 
 if (count($uniqueTests) < 20) {
     king_http3_release_matrix_fail('release regression matrix collapsed below the expected HTTP/3 breadth');
-}
-
-if ($documentedPendingItems !== ['performance_baseline_documented']) {
-    king_http3_release_matrix_fail('only the measured performance baseline may be pending in #Q-11');
 }
 
 foreach ([

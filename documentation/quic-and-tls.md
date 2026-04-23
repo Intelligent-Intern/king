@@ -218,6 +218,8 @@ socket traffic, retransmits what the blackout stranded, and still completes
 the same request stream with visible loss and retransmit stats instead of
 timing out or silently replaying the work on a hidden fresh transport.
 
+For release-gate mapping of the current HTTP/3 regression suite, see [HTTP/3 Regression Evidence](./http3-regression-evidence.md).
+
 ## A First Session
 
 The first explicit session usually looks like this:

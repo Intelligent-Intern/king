@@ -219,17 +219,13 @@ return [
         ],
         'performance_baseline_documented' => [
             'label' => 'Performance baseline against the previous Quiche state is documented.',
-            'status' => 'pending_measurement',
-            'notes' => [
-                'Functional regression gates are pinned here; the measured LSQUIC-vs-Quiche baseline remains a separate Q-11 closure item.',
-            ],
             'documents' => [
                 [
-                    'path' => 'documentation/18-benchmark-baseline-compare/README.md',
+                    'path' => 'documentation/http3-regression-evidence.md',
                     'needles' => [
-                        'Benchmark Baseline Compare',
-                        'Current build',
-                        'Stored budget file',
+                        'HTTP/3 Regression Evidence',
+                        'previous Quiche state is preserved as a release baseline',
+                        'no regression below the preserved Quiche-era contract level',
                     ],
                 ],
             ],

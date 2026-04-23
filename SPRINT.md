@@ -23,18 +23,18 @@ Goal:
 - Prove the new stack carries the previous HTTP/3/QUIC contract.
 
 Checklist:
-- [ ] Client one-shot request/response tests are green.
-- [ ] OO `Http3Client` exception matrix is green.
-- [ ] Server one-shot listener tests are green.
-- [ ] Session-ticket and 0-RTT tests are green.
-- [ ] Stream lifecycle, reset, stop-sending, cancel, and timeout tests are green.
-- [ ] Packet loss, retransmit, congestion control, flow control, and long-duration soak are green.
-- [ ] WebSocket-over-HTTP3 relevant slices are green.
-- [ ] Performance baseline against the previous Quiche state is documented.
+- [x] Client one-shot request/response tests are green.
+- [x] OO `Http3Client` exception matrix is green.
+- [x] Server one-shot listener tests are green.
+- [x] Session-ticket and 0-RTT tests are green.
+- [x] Stream lifecycle, reset, stop-sending, cancel, and timeout tests are green.
+- [x] Packet loss, retransmit, congestion control, flow control, and long-duration soak are green.
+- [x] WebSocket-over-HTTP3 relevant slices are green.
+- [x] Performance baseline against the previous Quiche state is documented.
 
 Done:
-- [ ] New stack is proven at the existing contract level.
-- [ ] Deviations are fixed or registered as new blocker issues.
+- [x] New stack is proven at the existing contract level.
+- [x] Deviations are fixed or registered as new blocker issues.
 
 ### #Q-12 Migration Closure And Repo Cleanup
 

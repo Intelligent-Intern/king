@@ -61,6 +61,7 @@ function remaining_quiche_match_category(string $path, array $removedFixtureClas
         'READYNESS_TRACKER.md',
         'documentation/dependency-provenance.md',
         'documentation/dev/benchmarks.md',
+        'documentation/http3-regression-evidence.md',
     ], true)) {
         return 'historical_migration_note';
     }
@@ -191,6 +192,7 @@ $historicalDocs = [
     'READYNESS_TRACKER.md' => 'legacy Quiche bootstrap inputs',
     'documentation/dependency-provenance.md' => 'Legacy Quiche bootstrap locks are no longer provenance inputs.',
     'documentation/dev/benchmarks.md' => 'Cargo, or Quiche runtime environment.',
+    'documentation/http3-regression-evidence.md' => 'previous Quiche state is preserved as a release baseline',
 ];
 foreach ($historicalDocs as $path => $expectedHistoricalNote) {
     require_contains($path, source($path), $expectedHistoricalNote);
