@@ -39,6 +39,8 @@ php_lint() {
 echo "Linting PHP entry surfaces..."
 php_lint stubs/king.php
 php_lint benchmarks/run.php
+php_lint benchmarks/cases/proto_batch.php
+php_lint benchmarks/cases/proto_integer_encodings.php
 php_lint infra/scripts/check-stub-parity.php
 php_lint infra/scripts/check-http3-lsquic-loader-contract.php
 php_lint infra/scripts/runtime-config-compatibility.php

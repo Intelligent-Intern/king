@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 benchmark source coverage: added canonical benchmark source cases for `proto_batch`, `proto_varint`, and `proto_omega`, wired them into the benchmark runner, docs, static linting, and CI budget schema without committing generated benchmark result snapshots.
+
 - 2026-04-23 Q-13 batch runtime PHPT coverage: added `713-proto-batch-runtime-roundtrip.phpt` to exercise procedural and `King\IIBIN` facade batch encode/decode roundtrips, per-record parity against single-record encode, and class materialization decode mode.
 
 - 2026-04-23 Q-13 internal proto batch helpers: moved public batch encode/decode dispatch onto `king_iibin_encode_batch()` and `king_iibin_decode_batch()`, with pre-sized output arrays, whole-batch cleanup on first failure, and batch-index exception context that preserves the original lower-level error as `previous`. Added `712-proto-batch-internal-helper-contract.phpt`.

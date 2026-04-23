@@ -11,6 +11,15 @@
     "proto": {
       "max_ns_per_iteration": 3000
     },
+    "proto_batch": {
+      "max_ns_per_iteration": 250000
+    },
+    "proto_varint": {
+      "max_ns_per_iteration": 25000
+    },
+    "proto_omega": {
+      "max_ns_per_iteration": 75000
+    },
     "object_store": {
       "max_ns_per_iteration": 900000
     },

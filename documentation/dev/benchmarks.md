@@ -19,6 +19,16 @@ Cargo, or Quiche runtime environment.
   `king_connect()`, `king_get_stats()`, `king_poll()`, `king_cancel_stream()`, `king_close()`
 - `proto`
   `king_proto_define_schema()` once, then repeated `king_proto_encode()` / `king_proto_decode()`
+- `proto_batch`
+  `king_proto_define_schema()` once, then repeated `king_proto_encode_batch()` /
+  `king_proto_decode_batch()` over a fixed 32-record set
+- `proto_varint`
+  schema-defined `uint64` encode/decode over boundary values that exercise the
+  active King varint wire helper
+- `proto_omega`
+  a source-only PHP Elias omega encode/decode control workload over the same
+  boundary values as `proto_varint`, so varint-vs-omega performance can be
+  compared without adding generated benchmark results to the repo
 - `object_store`
   `king_object_store_init()` once, then repeated put/get/cache/delete cycles
   on a benchmark temp root that prefers tmpfs when available
@@ -68,6 +78,8 @@ and keeps the median sample for the actual budget/baseline comparison.
 ## Useful Flags
 
 - `--case=session,proto`
+- `--case=proto_batch`
+- `--case=proto_varint,proto_omega`
 - `--iterations=500`
 - `--warmup=25`
 - `--baseline=<path>`
