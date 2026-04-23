@@ -36,6 +36,8 @@ RUN npm run build
 
 FROM php:8.4-cli-trixie
 
+ARG VIDEOCHAT_ASSET_VERSION=""
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && docker-php-ext-install pcntl \
@@ -49,6 +51,7 @@ ENV VIDEOCHAT_EDGE_HOST=0.0.0.0
 ENV VIDEOCHAT_EDGE_HTTP_PORT=8080
 ENV VIDEOCHAT_EDGE_HTTPS_PORT=8443
 ENV VIDEOCHAT_EDGE_STATIC_ROOT=/app/frontend-dist
+ENV VIDEOCHAT_ASSET_VERSION="${VIDEOCHAT_ASSET_VERSION}"
 
 EXPOSE 8080
 EXPOSE 8443

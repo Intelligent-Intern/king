@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import { onMounted, watchEffect } from 'vue';
+import { onBeforeUnmount, onMounted, watchEffect } from 'vue';
 import { RouterView } from 'vue-router';
 import { probeBackendRuntime } from './support/runtime';
 import { sessionState } from './domain/auth/session';
@@ -69,6 +69,15 @@ const THEME_PRESETS = {
   },
 };
 
+const BUILD_VERSION = String(import.meta.env.VIDEOCHAT_ASSET_VERSION || '').trim();
+const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';
+const BUILD_VERSION_CHECK_INTERVAL_MS = 30000;
+
+let buildVersionGuardTimerId = 0;
+let buildVersionGuardListenerBound = false;
+let buildVersionCheckPromise = null;
+let buildVersionReloadPending = false;
+
 function applyTheme(themeValue) {
   if (typeof document === 'undefined') return;
 
@@ -90,12 +99,87 @@ function applyTimeFormat(timeFormatValue) {
   document.documentElement.dataset.timeFormat = timeFormat;
 }
 
+function stopBuildVersionGuard() {
+  if (typeof window !== 'undefined' && buildVersionGuardListenerBound) {
+    window.removeEventListener('focus', handleBuildVersionGuardTrigger);
+    document.removeEventListener('visibilitychange', handleBuildVersionGuardTrigger);
+    buildVersionGuardListenerBound = false;
+  }
+  if (buildVersionGuardTimerId !== 0) {
+    window.clearInterval(buildVersionGuardTimerId);
+    buildVersionGuardTimerId = 0;
+  }
+}
+
+async function fetchLiveBuildVersion() {
+  const response = await fetch(`/?build_check=${Date.now()}`, {
+    method: 'HEAD',
+    cache: 'no-store',
+    credentials: 'same-origin',
+  });
+  if (!response.ok) {
+    return '';
+  }
+  return String(response.headers.get(BUILD_VERSION_HEADER) || '').trim();
+}
+
+async function checkForBuildVersionMismatch() {
+  if (import.meta.env.DEV || buildVersionReloadPending) return;
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (BUILD_VERSION === '' || document.visibilityState === 'hidden') return;
+  if (buildVersionCheckPromise) {
+    await buildVersionCheckPromise;
+    return;
+  }
+
+  buildVersionCheckPromise = (async () => {
+    try {
+      const liveBuildVersion = await fetchLiveBuildVersion();
+      if (liveBuildVersion !== '' && liveBuildVersion !== BUILD_VERSION) {
+        buildVersionReloadPending = true;
+        window.location.reload();
+      }
+    } catch {
+      // Ignore transient network failures while the app is already running.
+    }
+  })();
+
+  try {
+    await buildVersionCheckPromise;
+  } finally {
+    buildVersionCheckPromise = null;
+  }
+}
+
+function handleBuildVersionGuardTrigger() {
+  void checkForBuildVersionMismatch();
+}
+
+function startBuildVersionGuard() {
+  if (import.meta.env.DEV || typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (BUILD_VERSION === '') return;
+  if (!buildVersionGuardListenerBound) {
+    window.addEventListener('focus', handleBuildVersionGuardTrigger);
+    document.addEventListener('visibilitychange', handleBuildVersionGuardTrigger);
+    buildVersionGuardListenerBound = true;
+  }
+  if (buildVersionGuardTimerId === 0) {
+    buildVersionGuardTimerId = window.setInterval(handleBuildVersionGuardTrigger, BUILD_VERSION_CHECK_INTERVAL_MS);
+  }
+  window.setTimeout(handleBuildVersionGuardTrigger, 2000);
+}
+
 watchEffect(() => {
   applyTheme(sessionState.theme);
   applyTimeFormat(sessionState.timeFormat);
 });
 
 onMounted(() => {
+  startBuildVersionGuard();
   void probeBackendRuntime();
+});
+
+onBeforeUnmount(() => {
+  stopBuildVersionGuard();
 });
 </script>

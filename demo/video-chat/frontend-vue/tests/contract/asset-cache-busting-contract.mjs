@@ -27,12 +27,21 @@ try {
   assert.ok(edgeDockerfile.includes('ARG VIDEOCHAT_ASSET_VERSION=""'), 'edge image must accept build-time asset version');
   assert.ok(edgeDockerfile.includes('ENV VIDEOCHAT_ASSET_VERSION="${VIDEOCHAT_ASSET_VERSION}"'), 'edge image must expose build-time asset version to the frontend build');
 
+  const app = readUtf8(path.join(frontendRoot, 'src/App.vue'));
+  assert.ok(app.includes("const BUILD_VERSION = String(import.meta.env.VIDEOCHAT_ASSET_VERSION || '').trim();"), 'app must read the current build version');
+  assert.ok(app.includes("const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';"), 'app must compare against the edge build-version header');
+  assert.ok(app.includes('window.location.reload();'), 'app must hard-reload stale tabs after a deploy');
+
   const compose = readUtf8(path.join(repoVideoChatRoot, 'docker-compose.v1.yml'));
   assert.ok(compose.includes('VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"'), 'compose builds must forward the asset version');
 
   const deploy = readUtf8(path.join(repoVideoChatRoot, 'scripts/deploy.sh'));
   assert.ok(deploy.includes('VIDEOCHAT_ASSET_VERSION=\\${ASSET_VERSION}'), 'remote bootstrap must persist an initial asset version');
   assert.ok(deploy.includes('set_env_value VIDEOCHAT_ASSET_VERSION "\\$(date -u +%Y%m%d%H%M%S)"'), 'deploy must rotate the asset version on each release');
+
+  const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));
+  assert.ok(edge.includes("'X-KingRT-Asset-Version'"), 'edge must expose the asset version header on static responses');
+  assert.ok(edge.includes('use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion)'), 'edge static handler must capture the asset version for response headers');
 
   console.log('[asset-cache-busting-contract] PASS');
 } catch (error) {

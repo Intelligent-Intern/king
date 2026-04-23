@@ -34,6 +34,7 @@ $writeStallTimeout = max(1.0, (float) (getenv('VIDEOCHAT_EDGE_WRITE_STALL_TIMEOU
 $zeroWriteSleepMicros = max(1000, (int) (getenv('VIDEOCHAT_EDGE_ZERO_WRITE_SLEEP_MICROS') ?: '10000'));
 $readStallTimeout = max(1.0, (float) (getenv('VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS') ?: (string) $writeStallTimeout));
 $maxChildren = (int) (getenv('VIDEOCHAT_EDGE_MAX_CHILDREN') ?: '512');
+$assetVersion = trim((string) (getenv('VIDEOCHAT_ASSET_VERSION') ?: ''));
 
 if ($httpPort < 1 || $httpPort > 65535 || $httpsPort < 1 || $httpsPort > 65535) {
     fwrite(STDERR, "[videochat-edge] invalid listener port configuration\n");
@@ -274,7 +275,7 @@ $contentType = static function (string $path): string {
     };
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains): void {
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion): void {
     $path = rawurldecode((string) $request['path']);
     $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
     $corsHeaders = $isCdnAsset
@@ -320,6 +321,9 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
         'Strict-Transport-Security' => 'max-age=31536000; includeSubDomains',
         'X-Content-Type-Options' => 'nosniff',
     ] + $corsHeaders;
+    if ($assetVersion !== '') {
+        $headers['X-KingRT-Asset-Version'] = $assetVersion;
+    }
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
 };
 
