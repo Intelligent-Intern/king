@@ -113,6 +113,7 @@ persist_wizard_env() {
     VIDEOCHAT_DEPLOY_WS_DOMAIN
     VIDEOCHAT_DEPLOY_SFU_DOMAIN
     VIDEOCHAT_DEPLOY_TURN_DOMAIN
+    VIDEOCHAT_DEPLOY_CDN_DOMAIN
     VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
     VIDEOCHAT_DEPLOY_ADMIN_PASSWORD
     VIDEOCHAT_DEPLOY_USER_PASSWORD
@@ -133,10 +134,6 @@ persist_wizard_env() {
     [[ -n "${value}" ]] || continue
     local_env_upsert "${key}" "${value}"
   done
-}
-
-urlencode_path_segment() {
-  jq -rn --arg value "$1" '$value | @uri'
 }
 
 hcloud_api() {
@@ -320,7 +317,7 @@ resolved_ips_for_domain() {
 
 wait_for_dns_to_server() {
   local timeout="${VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS:-900}" deadline resolved target target_resolved all_ok
-  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}")
+  local targets=("${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}")
   if ! command -v getent >/dev/null 2>&1; then
     log "WARN: getent is missing locally; skipping DNS wait"
     return 0
@@ -354,7 +351,7 @@ hcloud_find_zone_for_domain() {
   local zones
   zones="$(hcloud_api GET '/zones?per_page=100')" || return 1
   jq -r --arg domain "${target_domain}" '
-    [.zones[]? | select($domain == .name or ($domain | endswith("." + .name)))]
+    [.zones[]? | .name as $zone | select($domain == $zone or ($domain | endswith("." + $zone)))]
     | sort_by(.name | length)
     | reverse
     | .[0]
@@ -366,7 +363,7 @@ hcloud_find_zone_for_domain() {
 
 hcloud_set_dns_a_record_for_domain() {
   local target_domain="$1"
-  local zone_line zone_id zone_name zone_mode rr_name zone_path rr_path rrsets exists action body
+  local zone_line zone_id zone_name zone_mode rr_name rrsets exists action body
   zone_line="$(hcloud_find_zone_for_domain "${target_domain}" || true)"
   if [[ -z "${zone_line}" ]]; then
     log "No matching Hetzner DNS zone found for ${target_domain}; manual A record is required."
@@ -374,7 +371,7 @@ hcloud_set_dns_a_record_for_domain() {
   fi
 
   IFS=$'\t' read -r zone_id zone_name zone_mode <<<"${zone_line}"
-  if [[ "${zone_mode}" != "primary" ]]; then
+  if [[ -n "${zone_mode}" && "${zone_mode}" != "primary" ]]; then
     log "Hetzner DNS zone ${zone_name} is ${zone_mode}; manual A record is required."
     return 1
   fi
@@ -385,16 +382,17 @@ hcloud_set_dns_a_record_for_domain() {
     rr_name="${target_domain%.${zone_name}}"
   fi
 
-  zone_path="$(urlencode_path_segment "${zone_id}")"
-  rr_path="$(urlencode_path_segment "${rr_name}")"
-  rrsets="$(hcloud_api GET "/zones/${zone_path}/rrsets?per_page=500")"
-  exists="$(jq -r --arg name "${rr_name}" '[.rrsets[]? | select(.name == $name and .type == "A")][0].name // empty' <<<"${rrsets}")"
+  rrsets="$(hcloud_api GET "/zones/${zone_id}/rrsets?per_page=500")"
+  exists="$(jq -r --arg name "${rr_name}" '
+    [.rrsets[]? | select(.name == $name and .type == "A")][0].name // empty
+  ' <<<"${rrsets}")"
+
   action="add_records"
   [[ -n "${exists}" ]] && action="set_records"
+  body="$(jq -n --arg value "${DEPLOY_PUBLIC_IP}" \
+    '{records: [{value: $value, comment: "King video chat"}]}')"
 
-  body="$(jq -n --arg ip "${DEPLOY_PUBLIC_IP}" \
-    '{records: [{value: $ip, comment: "King video chat"}]}')"
-  hcloud_api POST "/zones/${zone_path}/rrsets/${rr_path}/A/actions/${action}" "${body}" >/dev/null
+  hcloud_api POST "/zones/${zone_id}/rrsets/${rr_name}/A/actions/${action}" "${body}" >/dev/null
   log "Hetzner DNS A record set: ${target_domain} -> ${DEPLOY_PUBLIC_IP}"
 }
 
@@ -403,9 +401,14 @@ hcloud_set_dns_a_record() {
 }
 
 hcloud_set_videochat_subdomain_records() {
-  local target
-  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}"; do
+  local target seen="" legacy_cdn_domain=""
+  [[ -n "${DEPLOY_DOMAIN:-}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
+  for target in "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}"; do
     [[ -n "${target}" ]] || continue
+    case " ${seen} " in
+      *" ${target} "*) continue ;;
+    esac
+    seen="${seen} ${target}"
     hcloud_set_dns_a_record_for_domain "${target}" || true
   done
 }
@@ -421,13 +424,14 @@ run_hcloud_dns_step() {
   fi
   VIDEOCHAT_DEPLOY_HCLOUD_DNS="${choice}"
   export VIDEOCHAT_DEPLOY_HCLOUD_DNS
+
   persist_wizard_env
 
   if [[ "${choice}" == "1" || "${choice}" == "yes" || "${choice}" == "true" ]]; then
     hcloud_set_dns_a_record || true
     hcloud_set_videochat_subdomain_records
   else
-    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
+    log "Manual DNS required: set A ${DEPLOY_DOMAIN}, ${DEPLOY_API_DOMAIN}, ${DEPLOY_WS_DOMAIN}, ${DEPLOY_SFU_DOMAIN}, ${DEPLOY_TURN_DOMAIN}, ${DEPLOY_CDN_DOMAIN} -> ${DEPLOY_PUBLIC_IP}"
   fi
 
   wait_for_dns_to_server

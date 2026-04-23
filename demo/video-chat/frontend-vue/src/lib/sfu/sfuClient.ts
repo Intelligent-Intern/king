@@ -32,8 +32,11 @@ export interface SFUEncodedFrame {
   publisherUserId?: string
   trackId: string
   timestamp: number
-  data: ArrayBuffer
+  data?: ArrayBuffer
   type: 'keyframe' | 'delta'
+  protected?: Record<string, unknown> | null
+  protectedFrame?: string | null
+  protectionMode?: 'transport_only' | 'protected' | 'required'
 }
 
 export interface SFUClientCallbacks {
@@ -199,14 +202,20 @@ export class SFUClient {
   }
 
   sendEncodedFrame(frame: SFUEncodedFrame): void {
-    const payload = {
+    const payload: Record<string, unknown> = {
       type: 'sfu/frame',
       publisher_id: frame.publisherId,
       publisher_user_id: frame.publisherUserId || '',
       track_id: frame.trackId,
       timestamp: frame.timestamp,
-      data: Array.from(new Uint8Array(frame.data)),
       frame_type: frame.type,
+    }
+    if (frame.protectedFrame) {
+      payload.protected_frame = frame.protectedFrame
+      payload.protection_mode = frame.protectionMode || 'protected'
+    } else {
+      payload.data = Array.from(new Uint8Array(frame.data || new ArrayBuffer(0)))
+      payload.protection_mode = frame.protectionMode || 'transport_only'
     }
     this.send(payload)
   }
@@ -269,13 +278,19 @@ export class SFUClient {
 
       case 'sfu/frame':
         if (this.cb.onEncodedFrame) {
+          const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
           this.cb.onEncodedFrame({
             publisherId: stringField(msg.publisherId, msg.publisher_id),
             publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
             trackId: stringField(msg.trackId, msg.track_id),
             timestamp: msg.timestamp,
-            data: new Uint8Array(msg.data).buffer,
+            data: Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0),
             type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
+            protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
+            protectedFrame: protectedFrame || null,
+            protectionMode: stringField(msg.protectionMode, msg.protection_mode) === 'required'
+              ? 'required'
+              : (protectedFrame !== '' ? 'protected' : 'transport_only'),
           })
         }
         break

@@ -271,6 +271,8 @@ function videochat_handle_realtime_websocket_route(
                         'answer' => 'call/answer',
                         'ice' => 'call/ice',
                         'hangup' => 'call/hangup',
+                        'media_security_hello' => 'media-security/hello',
+                        'media_security_sender_key' => 'media-security/sender-key',
                         'ack' => 'call/ack',
                     ],
                     'admin_sync' => [

@@ -56,6 +56,7 @@ function videochat_infra_deployment_snapshot(): array
         'ws_domain' => videochat_infra_env('VIDEOCHAT_DEPLOY_WS_DOMAIN', 'ws.' . $domain),
         'sfu_domain' => videochat_infra_env('VIDEOCHAT_DEPLOY_SFU_DOMAIN', 'sfu.' . $domain),
         'turn_domain' => videochat_infra_env('VIDEOCHAT_DEPLOY_TURN_DOMAIN', 'turn.' . $domain),
+        'cdn_domain' => videochat_infra_env('VIDEOCHAT_DEPLOY_CDN_DOMAIN', 'cdn.' . $domain),
         'inventory_mode' => videochat_infra_env('VIDEOCHAT_INFRA_PROVIDER', 'auto'),
     ];
 }

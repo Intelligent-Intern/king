@@ -42,7 +42,8 @@ for marker in \
   'demo/video-chat/docker-compose.v1.yml' \
   'videochat-edge-v1' \
   '/ws' \
-  '/sfu'
+  '/sfu' \
+  'VIDEOCHAT_DEPLOY_CDN_DOMAIN'
 do
   require_text "${DECISION}" "${marker}"
 done
@@ -72,8 +73,11 @@ require_text "${COMPOSE_FILE}" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
 require_text "${COMPOSE_FILE}" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" "'wasm' => 'application/wasm'"
 require_text "${EDGE_DIR}/edge.php" "str_starts_with(\$path, '/assets/')"
+require_text "${EDGE_DIR}/edge.php" "str_starts_with(\$path, '/cdn/')"
 require_text "${EDGE_DIR}/edge.php" "\$path === '/ws' || \$host === \$wsDomain"
 require_text "${EDGE_DIR}/edge.php" "\$path === '/sfu' || \$host === \$sfuDomain"
+require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_CDN_DOMAIN'
+require_text "${EDGE_DIR}/edge.php" 'Access-Control-Allow-Origin'
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" '$written === 0'

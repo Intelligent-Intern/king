@@ -1,0 +1,165 @@
+{
+  "contract_name": "king-video-chat-e2ee-session",
+  "contract_version": "v1.0.0",
+  "scope": "media-security-session-state",
+  "security_model_id": "king-video-chat-media-security-v1",
+  "kex_contract": "king-video-chat-media-kex",
+  "runtime_paths": [
+    {
+      "id": "webrtc_native",
+      "transport": "browser_webrtc_dtls_srtp",
+      "media_protection_contract": "king-video-chat-protected-media-frame",
+      "raw_media_key_visibility": "client_only"
+    },
+    {
+      "id": "wlvc_sfu",
+      "transport": "king_sfu_websocket_relay",
+      "media_protection_contract": "king-video-chat-protected-media-frame",
+      "raw_media_key_visibility": "client_only",
+      "relay_visibility": "ciphertext_and_bounded_public_metadata_only"
+    }
+  ],
+  "security_states": [
+    {
+      "id": "transport_only",
+      "claim": "Transport is protected by TLS, WSS, DTLS/SRTP, or equivalent channel security, but media payloads are not protected by the application media-E2EE layer.",
+      "may_render_e2ee_claim": false,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    },
+    {
+      "id": "protected_not_ready",
+      "claim": "The selected room policy requires or prefers protected media, but key state or capability negotiation is not ready yet.",
+      "may_render_e2ee_claim": false,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    },
+    {
+      "id": "media_e2ee_active",
+      "claim": "Media payloads are protected by the application media-E2EE layer for the pinned epoch, suite, participants, and runtime path.",
+      "may_render_e2ee_claim": true,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    },
+    {
+      "id": "blocked_capability",
+      "claim": "The room policy cannot be satisfied by the local runtime capabilities and must fail closed.",
+      "may_render_e2ee_claim": false,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    },
+    {
+      "id": "rekeying",
+      "claim": "Participant or policy churn requires new media epoch material; old material must not be reused for new protected frames.",
+      "may_render_e2ee_claim": false,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    },
+    {
+      "id": "decrypt_error",
+      "claim": "A received protected frame failed validation, replay, epoch, key id, or integrity checks.",
+      "may_render_e2ee_claim": false,
+      "allowed_runtime_paths": ["webrtc_native", "wlvc_sfu"]
+    }
+  ],
+  "capability_negotiation": {
+    "policy_modes": ["required", "preferred", "disabled"],
+    "kex_policy_modes": ["classical_required", "hybrid_preferred", "hybrid_required"],
+    "default_kex_suite": "x25519_hkdf_sha256_v1",
+    "hybrid_kex_suite": "hybrid_x25519_mlkem768_hkdf_sha256_v1",
+    "hybrid_requires_explicit_policy": true,
+    "deterministic_policy": [
+      {
+        "mode": "required",
+        "when_all_participants_support_protected_media": "media_e2ee_active",
+        "when_any_participant_lacks_support": "blocked_capability",
+        "plaintext_fallback_allowed": false
+      },
+      {
+        "mode": "preferred",
+        "when_all_participants_support_protected_media": "media_e2ee_active",
+        "when_any_participant_lacks_support": "transport_only",
+        "plaintext_fallback_allowed": true,
+        "required_user_visible_state": "transport_only"
+      },
+      {
+        "mode": "disabled",
+        "when_all_participants_support_protected_media": "transport_only",
+        "when_any_participant_lacks_support": "transport_only",
+        "plaintext_fallback_allowed": true,
+        "required_user_visible_state": "transport_only"
+      }
+    ],
+    "capability_fields": [
+      "runtime_path",
+      "supports_protected_media_frame_v1",
+      "supports_insertable_streams",
+      "supports_wlvc_protected_frame",
+      "supported_kex_suites",
+      "supported_media_suites"
+    ]
+  },
+  "key_establishment": {
+    "contract": "king-video-chat-media-kex",
+    "selected_suite_pinned_in": ["hello_transcript", "sender_key", "protected_media_frame_header"],
+    "transcript_hash": "sha256_base64url",
+    "downgrade_behavior": "downgrade_attempt",
+    "sender_key_aad_bound_to": ["call_id", "room_id", "participant_set_hash", "kex_transcript_hash", "kex_suite", "media_suite", "epoch", "sender_key_id"],
+    "post_quantum_scope": "hybrid key-establishment posture only after explicit hybrid suite negotiation"
+  },
+  "participant_key_state": {
+    "states": ["unknown", "capability_ready", "keying", "active", "rekeying", "removed", "failed"],
+    "identity_binding": ["call_id", "room_id", "participant_id", "user_id", "device_id", "runtime_path"],
+    "epoch_semantics": {
+      "epoch_min": 1,
+      "epoch_increment": "strictly_monotonic_per_call_room",
+      "epoch_material_bound_to": ["call_id", "room_id", "participant_set_hash", "kex_suite", "media_suite", "runtime_path"],
+      "accepted_receive_epochs": "current_epoch_only_after_graceful_rekey_cutover",
+      "stale_epoch_behavior": "reject_with_wrong_epoch"
+    },
+    "sender_key_id": {
+      "format": "base64url_128_bit_minimum",
+      "rotation": "new_key_id_for_each_epoch_or_forced_rekey",
+      "receiver_expectation": "sender_key_id_must_match_current_participant_epoch_state"
+    },
+    "rekey_triggers": [
+      "participant_joined",
+      "participant_left",
+      "participant_removed",
+      "participant_reconnected_after_key_loss",
+      "policy_changed",
+      "forced_rekey",
+      "decrypt_error_threshold"
+    ]
+  },
+  "state_transitions": [
+    { "from": "transport_only", "to": "protected_not_ready", "reason": "protected_policy_selected" },
+    { "from": "protected_not_ready", "to": "media_e2ee_active", "reason": "capabilities_and_epoch_ready" },
+    { "from": "protected_not_ready", "to": "blocked_capability", "reason": "required_capability_missing" },
+    { "from": "media_e2ee_active", "to": "rekeying", "reason": "participant_or_policy_churn" },
+    { "from": "rekeying", "to": "media_e2ee_active", "reason": "new_epoch_ready" },
+    { "from": "media_e2ee_active", "to": "decrypt_error", "reason": "frame_validation_failed" },
+    { "from": "decrypt_error", "to": "rekeying", "reason": "recoverable_rekey" },
+    { "from": "decrypt_error", "to": "blocked_capability", "reason": "fail_closed_after_threshold" }
+  ],
+  "negative_tests": [
+    "unsupported_capability",
+    "mixed_room_policy",
+    "invalid_control_state",
+    "downgrade_attempt",
+    "malformed_protected_frame"
+  ],
+  "error_codes": [
+    "unsupported_capability",
+    "mixed_room_policy",
+    "invalid_control_state",
+    "downgrade_attempt",
+    "malformed_protected_frame",
+    "wrong_epoch",
+    "wrong_key_id",
+    "replay_detected",
+    "decrypt_failed",
+    "stale_post_removal_key"
+  ],
+  "runtime_honesty": {
+    "forbidden_claims_without_media_e2ee_active": ["E2EE", "end-to-end encrypted media", "post-quantum protected media"],
+    "allowed_transport_wording": ["TLS protected", "WSS protected", "DTLS/SRTP protected", "transport_only"],
+    "telemetry_public_fields": ["security_state", "runtime_path", "policy_mode", "kex_suite", "media_suite", "epoch", "rekey_reason", "error_code"],
+    "telemetry_forbidden_fields": ["raw_media_key", "private_key", "shared_secret", "plaintext_frame", "sdp_body", "ice_credentials"]
+  }
+}

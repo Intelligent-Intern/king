@@ -1,0 +1,91 @@
+{
+  "contract_name": "king-video-chat-media-kex",
+  "contract_version": "v1.0.0",
+  "scope": "algorithm-agile-media-key-establishment",
+  "purpose": "Pins media key-establishment suites independently from protected media frame serialization.",
+  "suite_selection": {
+    "default_suite": "x25519_hkdf_sha256_v1",
+    "policy_modes": ["classical_required", "hybrid_preferred", "hybrid_required"],
+    "selection_order": ["hybrid_x25519_mlkem768_hkdf_sha256_v1", "x25519_hkdf_sha256_v1"],
+    "hybrid_requires_explicit_policy": true,
+    "required_policy_missing_suite_behavior": "blocked_capability",
+    "downgrade_behavior": "downgrade_attempt"
+  },
+  "suites": [
+    {
+      "id": "x25519_hkdf_sha256_v1",
+      "family": "classical",
+      "status": "production",
+      "components": ["x25519", "hkdf_sha256"],
+      "requires_external_provider": false,
+      "shared_secret_combiner": "hkdf_sha256_extract_expand"
+    },
+    {
+      "id": "hybrid_x25519_mlkem768_hkdf_sha256_v1",
+      "family": "hybrid_classical_pq",
+      "status": "policy_gated_provider_required",
+      "components": ["x25519", "ml_kem_768", "hkdf_sha256"],
+      "requires_external_provider": true,
+      "shared_secret_combiner": "hkdf_sha256_extract_expand_over_classical_and_mlkem_components",
+      "enabled_by_default": false
+    }
+  ],
+  "capability_negotiation": {
+    "hello_fields": [
+      "supported_kex_suites",
+      "preferred_kex_suites",
+      "kex_policy",
+      "public_key",
+      "hybrid_public_key"
+    ],
+    "sender_key_fields": [
+      "kex_suite",
+      "kex_transcript_hash",
+      "participant_set_hash",
+      "rekey_reason"
+    ],
+    "selected_suite_pinned_in": ["hello_transcript", "sender_key", "protected_media_frame_header"],
+    "mixed_suite_behavior": "downgrade_attempt"
+  },
+  "transcript_binding": {
+    "hash": "sha256_base64url",
+    "bound_fields": [
+      "contract_name",
+      "contract_version",
+      "call_id",
+      "room_id",
+      "participant_set_hash",
+      "participant_user_ids",
+      "device_ids",
+      "x25519_public_keys",
+      "hybrid_public_keys",
+      "selected_kex_suite",
+      "media_suite",
+      "kex_policy",
+      "epoch",
+      "sender_key_id"
+    ],
+    "sender_key_aad_must_include_transcript_hash": true,
+    "sender_key_aad_must_include_participant_set_hash": true
+  },
+  "participant_churn": {
+    "rekey_reasons": ["participant_joined", "participant_left", "participant_removed", "participant_reconnected_after_key_loss", "policy_changed", "forced_rekey", "decrypt_error_threshold"],
+    "required_behavior": "new_epoch_and_new_sender_key_id_before_new_protected_frames"
+  },
+  "telemetry": {
+    "public_fields": ["security_state", "runtime_path", "policy_mode", "kex_policy", "kex_suite", "kex_family", "media_suite", "epoch", "rekey_reason", "error_code"],
+    "forbidden_fields": ["raw_media_key", "private_key", "shared_secret", "plaintext_frame", "sdp_body", "ice_credentials", "mlkem_private_key"]
+  },
+  "post_quantum_scope": {
+    "meaning": "Hybrid mode covers key-establishment posture only when an audited ML-KEM-768 provider is explicitly configured and negotiated.",
+    "not_claimed": ["metadata secrecy", "topology secrecy", "signaling secrecy", "traffic analysis resistance", "post-quantum protection without negotiated hybrid suite"],
+    "readme_claim_allowed_before_green_downgrade_tests": false
+  },
+  "negative_tests": [
+    "hybrid_required_without_provider_blocks",
+    "sender_key_suite_downgrade_rejected",
+    "protected_frame_suite_downgrade_rejected",
+    "transcript_hash_mismatch_rejected",
+    "participant_churn_forces_new_epoch"
+  ]
+}

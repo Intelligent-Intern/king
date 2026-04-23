@@ -6,135 +6,105 @@ Purpose:
 - Completion notes go to `READYNESS_TRACKER.md`.
 
 Active GitHub issue:
-- #146 Batch 1: Video-Call Demo Live Readiness (`1.0.7-beta`)
+- #147 Batch 2: E2E, Encryption, And Security Claims (`1.0.7-beta`)
 
 Rules:
 - Keep active work small enough for clean commits and bisectable reviews.
 - Do not mix ownership lanes unless the backlog item explicitly requires coordination.
 - Do not weaken King v1 contracts to close a task faster.
 - Preserve contributor credit when porting experiment-branch work.
+- No path may be labeled secure, encrypted, E2EE, or post-quantum unless implementation, contracts, negative tests, and runtime/UI state prove the claim.
 
-## Batch 1: Video-Call Demo Live Readiness (`1.0.7-beta`)
+## Batch 2: E2E, Encryption, And Security Claims (`1.0.7-beta`)
 
-### #Q-16 Video-Chat Media Fanout And Participant Rendering
-
-Goal:
-- Every participant in one call room sees and hears the other admitted participants, with stable roster and layout state.
-
-Checklist:
-- [x] Verify the joined user is admitted into the owner's existing call room instead of creating or resolving a separate room/session.
-- [x] Fix SFU publish/subscribe fanout so remote audio and video tracks are delivered across browser sessions.
-- [x] Ensure remote participants render in mini-video slots unless pinned/promoted to the main stage.
-- [x] Ensure participant roster entries are derived from stable server-authoritative presence and do not jitter on polling/reconnect ticks.
-- [x] Keep admin rights equivalent to call-owner rights inside the call.
-- [x] Add a two-browser Playwright journey that proves admin plus user see each other, hear/receive media signals, and share the same participant list.
-
-Done:
-- [x] Admin and user in the same call both see local and remote media plus the same roster without flicker.
-
-### #Q-17 Video-Chat Lobby, Admission, And Role Boundary
+### #Q-22 Video-Chat E2EE Threat Model, Contracts, And Runtime Honesty
 
 Goal:
-- Invited users pass through the join modal gate, owners/admins/moderators see pending users, and plain users never see moderator-only lobby UI.
+- Define the real media-security contract for video-chat so transport security, media-E2EE state, capability policy, and failure behavior are explicit and testable.
 
 Checklist:
-- [x] Keep invited users on the existing join modal until `Join call` moves their participant state to `pending`.
-- [x] Reset `pending` back to `invited` when the modal closes or the websocket/session disappears before approval.
-- [x] Show the host notification and lobby badge/list for pending users to call owner, admins, and moderators.
-- [x] Admit users only after an authorized owner/admin/moderator grants access, then redirect the waiting browser into the same call.
-- [x] Hide the lobby tab from plain invited users unless they are explicitly promoted to moderator or are the call owner/admin.
-- [x] Add role-boundary tests for owner, admin, moderator, invited user, and removed participant.
+- [x] Publish `demo/video-chat/contracts/v1/e2ee-session.contract.json`.
+- [x] Publish `demo/video-chat/contracts/v1/protected-media-frame.contract.json`.
+- [x] Pin participant key state, epoch semantics, sender key id, receiver expectations, replay inputs, error codes, and rekey transitions.
+- [x] Explicitly distinguish `transport_only`, `protected_not_ready`, `media_e2ee_active`, `blocked_capability`, `rekeying`, and `decrypt_error`.
+- [x] Define one deterministic capability negotiation policy for `required | preferred | disabled`.
+- [x] Define one shared security model across native WebRTC and WLVC/SFU paths.
+- [x] Add negative tests for unsupported capability, mixed rooms, invalid control state, downgrade attempts, and malformed protected frames.
+- [x] Make README, runtime notes, UI state, and telemetry wording match the contract exactly.
+- [x] Remove any “E2EE” wording from paths that are only DTLS/TLS protected.
 
 Done:
-- [x] The admission flow is gate-first, room-stable, and role-correct.
+- [x] Media security claims are contract-first, runtime-honest, and testable.
 
-### #Q-18 Video-Chat Chat, Archive, Emoji, And Attachment Release Readiness
+### #Q-23 Video-Chat Native And SFU Media E2EE Implementation
 
 Goal:
-- In-call chat works during the call and archived chat/files are readable afterwards through standard responsive modal surfaces.
+- Implement real media E2EE for both the native WebRTC path and the WLVC/SFU path so the server cannot decrypt protected media payloads.
 
 Checklist:
-- [x] Fix disabled send-button paths for text and emoji messages in the call chat.
-- [x] Show unread chat badge and first-message chat notification for other participants.
-- [x] Keep emoji reactions/chat emoji delivery visible to all call participants.
-- [x] Keep inline message limits and oversized-paste-to-attachment behavior intact.
-- [x] Keep allowed attachment types and object-store ACL/download boundaries intact.
-- [x] Rebuild the post-call chat/files modal with the shared modal style and responsive layout.
-- [x] Add Playwright coverage for text send, emoji send, unread badge, attachment upload/download, and read-only archive modal.
+- [x] Implement client-side session key establishment and media epoch state.
+- [x] Keep raw media keys client-side only in normal operation.
+- [x] Implement sender-side media encryption for the native WebRTC path before remote delivery.
+- [x] Implement receiver-side decryption and integrity validation for the native WebRTC path.
+- [x] Implement sender-side media encryption for the WLVC/SFU path before `sfu/frame` transit.
+- [x] Implement receiver-side decryption and integrity validation for the WLVC/SFU path.
+- [x] Add participant join/leave/admission/removal/reconnect rekey behavior.
+- [x] Reject wrong epoch, wrong key id, replayed units, tampered payloads, and stale post-removal material.
+- [x] Add wire/packet-path verification proving the SFU forwards ciphertext and bounded public metadata only.
+- [x] Add CI coverage for native sender->receiver success, tamper rejection, and WLVC/SFU ciphertext-only transit.
 
 Done:
-- [x] Chat is usable live, notifies other participants, and the archive modal matches product modal standards on desktop and mobile.
+- [x] The E2EE path protects media end-to-end and the server cannot decode call content.
 
-### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
+### #Q-24 Video-Chat Protected Media Transport Cleanup
 
 Goal:
-- Production deploy and operations views expose real, safe, backend-driven state instead of placeholders or oversharing.
+- Clean up the media transport layer so protected media is carried in a pinned typed/binary envelope rather than ad-hoc plaintext-oriented payload conventions.
 
 Checklist:
-- [x] Replace static operations data such as sample running calls with backend/live data.
-- [x] Correct live call and participant counts from current call/session/SFU state.
-- [x] Keep public health responses safe for production and hide schema/user/internal runtime detail unless authorized.
-- [x] Keep deployment configuration in `.env.local` and make deploy wizard reruns idempotent for known-host, cert, DNS, and compose/service state.
-- [x] Verify HTTPS redirect, certificate renewal hooks, API, websocket, and SFU endpoints with scripted `curl`/websocket smoke checks.
-- [x] Investigate and eliminate runaway `/app/edge.php` CPU spin under production routing.
-- [x] Keep Hetzner-specific discovery behind provider abstractions so Kubernetes or other providers can be added later.
+- [x] Separate codec-frame, transport-envelope, and protected-media contracts.
+- [x] Replace any ad-hoc JSON byte-array carriage for protected media with a pinned typed or binary envelope.
+- [x] Add bounded parse rules, malformed-frame rejection, and size ceilings for protected media transit.
+- [x] Ensure `/sfu` never needs raw media keys and never accepts unauthenticated plaintext in E2EE mode.
+- [x] Add contract tests for envelope parse/serialize parity and malformed-frame rejection.
+- [x] Add relay-visible-field tests so only intentionally public metadata crosses the SFU.
+- [x] Keep compatibility behavior explicit: no implicit fallback from protected envelope to plaintext media in `required` mode.
 
 Done:
-- [x] A fresh production deploy is repeatable and the admin operations page reports real safe state.
+- [x] Protected media transit is pinned, bounded, and ready for stable E2EE rollout.
 
-### #Q-20 Video-Chat Responsive Call Management And Workspace UI Parity
+### #Q-25 Video-Chat Algorithm-Agile And Hybrid Post-Quantum Key Agreement
 
 Goal:
-- Desktop, tablet, and mobile call management use the same product flows and the same established visual system.
+- Make the media-E2EE design algorithm-agile and able to support hybrid classical + post-quantum key establishment without redesigning the media-protection layer.
 
 Checklist:
-- [x] Mobile user call creation/editing can add internal participants.
-- [x] Remove the obsolete `Room name` field from create/edit call modal flows.
-- [x] Keep mini-video layout portrait-oriented and available on tablet/mobile with above/below-main toggle controls.
-- [x] Move activity strategy controls into the left sidebar call-settings area using the existing select/control styling.
-- [x] Remove ad-hoc overlay, border, background, and color treatments that diverge from the current design system.
-- [x] Ensure call settings width aligns with neighboring sidebar controls.
-- [x] Add responsive Playwright coverage for mobile call creation with participants, mini-video toggle, and call-settings strategy selection.
+- [x] Add a KEX abstraction independent from the protected-media frame format.
+- [x] Pin the negotiated KEX suite in capability negotiation and session state.
+- [x] Ship one production classical KEX path first on the shared abstraction.
+- [x] Add hybrid classical + PQ suite negotiation behind explicit policy.
+- [x] Bind transcript, room, participants, and selected suite into derived media epoch material.
+- [x] Add downgrade rejection across KEX suites.
+- [x] Add rejoin, reconnect, participant churn, and forced-rekey coverage under hybrid mode.
+- [x] Add telemetry that distinguishes classical vs hybrid sessions without leaking secrets.
+- [x] Document exactly what “post-quantum” means in this stack: key-establishment posture, not blanket secrecy of metadata, topology, or signaling.
+- [x] Keep post-quantum wording out of README/security claims until suite agreement, transcript binding, and downgrade tests are green.
 
 Done:
-- [x] Mobile and desktop call-management flows are feature-equivalent and visually consistent.
+- [x] Media-key derivation is algorithm-agile and hybrid PQ works under the same pinned session-state contract as the classical path.
+- [x] Downgrade across KEX suites fails closed and is CI-covered.
 
-### #Q-21 Video-Chat Frontend Refactor And Shared UI Components
+### #E2E-1 Video-Chat End-To-End Acceptance Matrix
 
 Goal:
-- Reduce recurring UI drift and file-size pressure without changing behavior.
+- Prove the demo as a user journey, not only as isolated endpoint contracts.
 
 Checklist:
-- [x] Split oversized frontend files toward the current target of maximum 750 LOC per source file.
-- [x] Extract shared modal shell, header/title blocks, action bars, buttons, tables, pagination, empty states, and form controls where product behavior is already equivalent.
-- [x] Split frontend state into focused stores for auth, calls, participants, chat, presence, and settings.
-- [x] Keep existing visual standards instead of introducing one-off colors, borders, or modal variants.
-- [x] Add focused component/store tests or Playwright smoke coverage around extracted shared surfaces.
-- [x] Keep refactor commits small enough that regressions can be bisected.
+- [x] Add Playwright journey: owner creates call, invited user logs in from link, waits in join modal, owner admits, both see media and roster.
+- [x] Add Playwright journey: chat text, emoji, unread badge, attachment, and post-call read-only archive.
+- [x] Add Playwright journey: mobile call creation/editing with internal participant add.
+- [x] Add Playwright journey: websocket interruption, reconnect, room resync, and media/control recovery.
+- [x] Add release gate that fails when UI parity matrix or core video journeys are not covered.
 
 Done:
-- [x] Shared UI primitives reduce duplicate modal/table/header/action code while existing flows still pass.
-
-### #VC-TEST-1 Frontend Gherkin Feature Coverage Intake
-
-Source:
-- Imported from GitHub issues `#131` through `#139` before replacing one-issue-per-view tracking with one issue per release batch.
-
-Goal:
-- Convert the old view-by-view Gherkin issue set into real Playwright/Cucumber-compatible frontend coverage without scattering planning across GitHub issues.
-
-Checklist:
-- [ ] Core UI primitives expose stable `data-testid` selectors and accessible state for buttons, form controls, modals, sidebars, tabs, tables, pagination, empty/loading states, media preview, and call controls.
-- [ ] Login feature covers valid login, validation errors, backend rejection, authenticated redirects, and tablet/mobile orientation changes.
-- [ ] Guest call-join feature covers access-link resolution, display-name requirements, invited-guest identity, media-preview failure, invalid/expired/forbidden links, and orientation changes.
-- [ ] Guest exit feature covers guest-only exit confirmation, no authenticated workspace controls, no media preview, no websocket reconnect UI, and orientation changes.
-- [ ] Admin overview feature covers dashboard/calendar switching, calendar call compose, non-admin redirect, and orientation state preservation.
-- [ ] User management feature covers admin-only user table, search/pagination, create/edit user modal, email/avatar/status flows, non-admin redirect, and orientation state preservation.
-- [ ] Admin video-calls feature covers list/calendar switching, create/edit with registered and external participants, enter-call media preview, preview failures, cancel/delete confirmation, non-admin redirect, and orientation state preservation.
-- [ ] User dashboard feature covers user call list/calendar, invite redemption, invite errors, enter-call media preview, owner create/edit flow, role redirects, and orientation state preservation.
-- [ ] Video room feature covers local/remote media surfaces, call controls, chat send/receive, lobby admission, non-moderator role boundaries, owner settings edit, media toggles, reconnect/expired auth states, orientation continuity, and hangup routing.
-- [ ] Feature files use English Gherkin, role/breakpoint tags, and `data-testid` selectors only; no CSS class or visible-text selectors.
-- [ ] View-level features do not retest shared Core UI primitive internals.
-
-Done:
-- [ ] The imported GitHub Gherkin scope is covered by feature files and executable frontend tests, with stable selectors and responsive/orientation coverage.
+- [x] E2E journeys are deterministic enough to gate release readiness.

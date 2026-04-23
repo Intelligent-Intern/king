@@ -1,7 +1,7 @@
-const MEDIAPIPE_SELFIE_SEGMENTATION_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js';
-const MEDIAPIPE_SELFIE_SEGMENTATION_BASE_URL =
-  'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/';
+const VIDEOCHAT_CDN_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CDN_ORIGIN || '').replace(/\/+$/, '');
+const MEDIAPIPE_SELFIE_SEGMENTATION_BASE_PATH = '/cdn/vendor/mediapipe/selfie_segmentation/';
+const MEDIAPIPE_SELFIE_SEGMENTATION_BASE_URL = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_SELFIE_SEGMENTATION_BASE_PATH}`;
+const MEDIAPIPE_SELFIE_SEGMENTATION_URL = `${MEDIAPIPE_SELFIE_SEGMENTATION_BASE_URL}selfie_segmentation.js`;
 
 let runtimeLoadPromise = null;
 

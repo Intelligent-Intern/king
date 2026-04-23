@@ -31,6 +31,9 @@ for marker in \
   'VIDEOCHAT_DEPLOY_PERSIST_LOCAL' \
   'deploy_refresh_known_hosts_enabled' \
   'deploy_dns_targets' \
+  'VIDEOCHAT_DEPLOY_CDN_DOMAIN' \
+  'VIDEOCHAT_DEPLOY_HCLOUD_DNS' \
+  'ensure_hcloud_dns_records_if_configured' \
   'resolved_ips_for_domain "${target}"' \
   'restore_certbot_stopped_services' \
   'trap restore_certbot_stopped_services EXIT' \
@@ -44,6 +47,9 @@ for marker in \
   'persist_wizard_env' \
   'VIDEOCHAT_DEPLOY_HCLOUD_TOKEN' \
   'hcloud_set_videochat_subdomain_records' \
+  '/rrsets?per_page=500' \
+  'action="set_records"' \
+  'action="add_records"' \
   'wait_for_dns_to_server' \
   'refresh_known_hosts_for_target'
 do
@@ -52,9 +58,10 @@ done
 
 for marker in \
   'manual deploy actions write the effective deploy' \
-  'derived `api/ws/sfu/turn`' \
+  'Hetzner Cloud API token, derived' \
+  '`api/ws/sfu/turn/cdn` hostnames' \
   'auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is' \
-  'same DNS preflight for the root domain and `api/ws/sfu/turn`' \
+  'same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`' \
   'safe to rerun'
 do
   require_text "${DOC}" "${marker}"

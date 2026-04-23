@@ -691,12 +691,13 @@ const scalingModesSummary = computed(() => {
 const routingPolicyRows = computed(() => [
   {
     topic: 'Deployment routing',
-    policy: 'Domain + API/WS/SFU subdomains',
+    policy: 'Domain + API/WS/SFU/CDN subdomains',
     runtime: [
       infrastructureState.deployment?.public_domain,
       infrastructureState.deployment?.api_domain,
       infrastructureState.deployment?.ws_domain,
       infrastructureState.deployment?.sfu_domain,
+      infrastructureState.deployment?.cdn_domain,
     ].filter(Boolean).join(' / ') || 'n/a',
     code: false,
   },

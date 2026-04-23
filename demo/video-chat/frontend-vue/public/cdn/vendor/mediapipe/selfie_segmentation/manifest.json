@@ -1,0 +1,16 @@
+{
+  "package": "@mediapipe/selfie_segmentation",
+  "version": "0.1.1675465747",
+  "source": "https://registry.npmjs.org/@mediapipe/selfie_segmentation/-/selfie_segmentation-0.1.1675465747.tgz",
+  "files": [
+    {"path": "selfie_segmentation.js", "sha256": "a4720d2d2374ec9df3510461ff186a4af427fb5bd402375e135875a991467da3", "bytes": 44542},
+    {"path": "selfie_segmentation.binarypb", "sha256": "0007be42c754f111063c0121bba7104880b7c56277d3a9681cdcb17709236aee", "bytes": 362},
+    {"path": "selfie_segmentation.tflite", "sha256": "8d13b7fae74af625c641226813616a2117bd6bca19eb3b75574621fc08557f27", "bytes": 249024},
+    {"path": "selfie_segmentation_landscape.tflite", "sha256": "4aafe6223bb8dac6fac8ca8ed56852870a33051ef3f6238822d282a109962894", "bytes": 249792},
+    {"path": "selfie_segmentation_solution_simd_wasm_bin.data", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "bytes": 0},
+    {"path": "selfie_segmentation_solution_simd_wasm_bin.js", "sha256": "9406e7e30843bdca189689d4bea413f3e468f71e381560e583ef12792d26d46a", "bytes": 276493},
+    {"path": "selfie_segmentation_solution_simd_wasm_bin.wasm", "sha256": "d93e73677ef1fe791ff5407083c0f9ced6d6050a705bd6c20823fc05919d8dc4", "bytes": 5694839},
+    {"path": "selfie_segmentation_solution_wasm_bin.js", "sha256": "ed59858c14c9db26d34abbf0afa9017e5c6583a6ad63dae63d2fe42e19abfea5", "bytes": 276488},
+    {"path": "selfie_segmentation_solution_wasm_bin.wasm", "sha256": "37665276fd8e38589a28b07ddec805266efb1b7a1a52fd36667ef11dff43a847", "bytes": 5587523}
+  ]
+}
