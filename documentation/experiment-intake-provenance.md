@@ -184,4 +184,10 @@ WASM MIME/cache-buster decision:
 - `demo/video-chat/edge/edge.php` serves `.wasm` as `application/wasm`; the cache-buster only invalidates stale cached responses after MIME fixes and is not a MIME workaround by itself.
 - The audited experiment boundary has no better production-safe replacement for this handling. A future replacement must provide an immutable asset fingerprint plus correct `application/wasm` serving and equivalent contract coverage.
 
+Debug-log abstraction decision:
+- Keep the current production-safe debug abstraction in active codec hotpaths.
+- Active TypeScript codec, WASM wrapper, wavelet transform, wavelet processor, and Kalman processor files must use `debugLog`/`debugWarn` from `demo/video-chat/frontend-vue/src/support/debugLogs.js`.
+- Direct `console.*` calls are forbidden in active `src/lib/wasm`, `src/lib/wavelet`, and `src/lib/kalman` JavaScript/TypeScript hotpath files, except generated Emscripten glue `wlvc.js`.
+- `codec-test.html` remains a standalone manual diagnostic page and may keep browser-console diagnostics; it is not the production media hotpath.
+
 Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
