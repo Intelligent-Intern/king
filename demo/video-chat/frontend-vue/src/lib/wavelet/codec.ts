@@ -368,6 +368,10 @@ export class WaveletVideoEncoder {
     this.frameCount = 0
     this.previousY  = null
   }
+
+  destroy(): void {
+    this.reset()
+  }
 }
 
 // ─── Decoder ─────────────────────────────────────────────────────────────────
@@ -457,6 +461,10 @@ export class WaveletVideoDecoder {
 
   reset(): void {
     this.previousY = null
+  }
+
+  destroy(): void {
+    this.reset()
   }
 }
 

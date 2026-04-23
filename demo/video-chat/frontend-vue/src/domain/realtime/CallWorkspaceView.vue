@@ -701,13 +701,17 @@ import {
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
 } from './callMediaPreferences';
+import {
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from '../../support/assetVersion';
 import { BackgroundFilterController } from './backgroundFilterController';
 import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
 import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
 import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
-import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
+import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 import { MEDIA_SECURITY_SIGNAL_TYPES, createMediaSecuritySession } from './mediaSecurity';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
@@ -4042,6 +4046,7 @@ function handleSocketMessage(event) {
   }
 
   if (!payload || typeof payload !== 'object') return;
+  if (handleAssetVersionSocketPayload(payload)) return;
   const type = String(payload.type || '').trim().toLowerCase();
   if (type === '') return;
 
@@ -4478,6 +4483,10 @@ async function connectSocket() {
       hasRealtimeRoomSync.value = false;
 
       if (manualSocketClose) {
+        return;
+      }
+
+      if (handleAssetVersionSocketClose(event)) {
         return;
       }
 
@@ -5042,14 +5051,15 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   }
 
   let decoder = null;
-  if (isWlvcRuntimePath() && mediaRuntimeCapabilities.value.stageA) {
+  if (isWlvcRuntimePath()) {
     try {
-      decoder = await createWasmDecoder({ width: 640, height: 480, quality: 75 });
+      decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
       if (decoder) {
         decoder = markRaw(decoder);
+        mediaDebugLog('[SFU] Remote decoder initialized for publisher', publisherId, decoder?.constructor?.name || 'unknown_decoder');
       }
     } catch (error) {
-      mediaDebugLog('[SFU] WASM decoder init failed for publisher', publisherId, error);
+      mediaDebugLog('[SFU] Remote decoder init failed for publisher', publisherId, error);
     }
   }
 
@@ -6521,7 +6531,11 @@ function stopLocalEncodingPipeline() {
     encodeIntervalRef.value = null;
   }
   if (videoEncoderRef.value) {
-    videoEncoderRef.value.destroy();
+    if (typeof videoEncoderRef.value.destroy === 'function') {
+      videoEncoderRef.value.destroy();
+    } else if (typeof videoEncoderRef.value.reset === 'function') {
+      videoEncoderRef.value.reset();
+    }
     videoEncoderRef.value = null;
   }
   wlvcEncodeFailureCount = 0;
@@ -6691,14 +6705,8 @@ async function startEncodingPipeline(videoTrack) {
     return;
   }
 
-  if (!mediaRuntimeCapabilities.value.stageA) {
-    mediaDebugLog('[SFU] WLVC WASM unavailable; falling back to native WebRTC path');
-    void maybeFallbackToNativeRuntime('wlvc_runtime_unavailable');
-    return;
-  }
-
   try {
-    const nextEncoder = await createWasmEncoder({
+    const nextEncoder = await createHybridEncoder({
       width: 640, 
       height: 480, 
       quality: 75,
@@ -6706,17 +6714,17 @@ async function startEncodingPipeline(videoTrack) {
     });
     videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
     if (!videoEncoderRef.value) {
-      mediaDebugLog('[SFU] WASM encoder unavailable; falling back to native WebRTC path');
+      mediaDebugLog('[SFU] WLVC encoder unavailable; falling back to native WebRTC path');
       void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
       return;
     }
-    mediaDebugLog('[SFU] WASM encoder initialized');
+    mediaDebugLog('[SFU] Local encoder initialized', videoEncoderRef.value?.constructor?.name || 'unknown_encoder');
     wlvcEncodeFailureCount = 0;
     wlvcEncodeWarmupUntilMs = Date.now() + WLVC_ENCODE_WARMUP_MS;
     wlvcEncodeFirstFailureAtMs = 0;
     wlvcEncodeLastErrorLogAtMs = 0;
   } catch (error) {
-    mediaDebugLog('[SFU] WASM encoder init error; falling back to native WebRTC path:', error);
+    mediaDebugLog('[SFU] WLVC encoder init error; falling back to native WebRTC path:', error);
     void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
     return;
   }
