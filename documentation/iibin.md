@@ -77,15 +77,16 @@ in a wiki page that drifted out of date. It is part of the actual runtime.
 King exposes the IIBIN surface in both procedural and object-oriented form.
 
 The procedural functions are `king_proto_define_enum()`,
-`king_proto_define_schema()`, `king_proto_encode()`, `king_proto_decode()`,
-`king_proto_is_defined()`, `king_proto_is_schema_defined()`,
-`king_proto_is_enum_defined()`, `king_proto_get_defined_schemas()`, and
-`king_proto_get_defined_enums()`.
+`king_proto_define_schema()`, `king_proto_encode()`,
+`king_proto_encode_batch()`, `king_proto_decode()`,
+`king_proto_decode_batch()`, `king_proto_is_defined()`,
+`king_proto_is_schema_defined()`, `king_proto_is_enum_defined()`,
+`king_proto_get_defined_schemas()`, and `king_proto_get_defined_enums()`.
 
 The object-oriented mirror is `King\IIBIN`. Its static methods are
-`defineEnum()`, `defineSchema()`, `encode()`, `decode()`, `isDefined()`,
-`isSchemaDefined()`, `isEnumDefined()`, `getDefinedSchemas()`, and
-`getDefinedEnums()`.
+`defineEnum()`, `defineSchema()`, `encode()`, `encodeBatch()`, `decode()`,
+`decodeBatch()`, `isDefined()`, `isSchemaDefined()`, `isEnumDefined()`,
+`getDefinedSchemas()`, and `getDefinedEnums()`.
 
 The important idea is that the two styles are mirrors. They are not two
 different binary systems.
@@ -227,6 +228,43 @@ probably fine" into "this payload matches the declared contract".
 That makes `king_proto_encode()` and `King\IIBIN::encode()` important for data
 quality, not only for compactness.
 
+## Batch Encode And Decode
+
+Use `king_proto_encode_batch()` and `king_proto_decode_batch()` when many
+records share the same schema and should cross the PHP/native boundary as one
+bounded operation. The OO mirror is `King\IIBIN::encodeBatch()` and
+`King\IIBIN::decodeBatch()`.
+
+```php
+<?php
+
+$encoded = king_proto_encode_batch('User', [
+    ['id' => 1, 'name' => 'Ada'],
+    ['id' => 2, 'name' => 'Grace'],
+]);
+
+$decoded = king_proto_decode_batch('User', $encoded);
+
+$objects = King\IIBIN::decodeBatch('User', $encoded, App\DTO\User::class);
+```
+
+Batch output keeps input iteration order. Batch decode supports the same
+`decode_as_object` modes as single-record decode: `false`, `true`, a
+class-string for top-level hydration, or a schema-to-class map for recursive
+message hydration.
+
+The batch contract is fail-closed. If any record is invalid, the whole batch
+fails and no partial result is returned. Encode and decode errors include the
+batch record index, and failures that originate in a lower-level encode or
+decode operation preserve that original exception as `previous`. Decode also
+rejects non-string batch entries before trying to parse them.
+
+The current hard safety bound is `65536` records per batch. This limit is
+checked before the runtime allocates the output list, so oversized inputs fail
+before materializing a large result. Batch APIs are not streaming APIs; callers
+that handle unbounded or externally supplied data should chunk the data into
+bounded batches and keep backpressure in their own pipeline.
+
 ## Decode Can Return Arrays Or Objects
 
 `king_proto_decode()` and `King\IIBIN::decode()` can decode into a plain array
@@ -307,6 +345,27 @@ job hand-wiring `king_proto_encode()`, `king_proto_decode()`,
 
 This is why the IIBIN chapter belongs near the center of the manual. It is one
 of the pieces that lets the rest of the platform share one data language.
+
+## Performance Expectations
+
+IIBIN performance work is measured through source-controlled benchmark cases,
+not through claims embedded in prose. Use
+`./benchmarks/run-canonical.sh --case=proto_batch` to compare batch
+encode/decode against the current runtime and
+`./benchmarks/run-canonical.sh --case=proto_varint,proto_omega` when checking
+integer encoding changes.
+
+The practical expectation for batch APIs is lower per-record overhead when many
+same-schema records are encoded or decoded together, because the caller crosses
+the PHP/native boundary once for the batch instead of once per record. The
+runtime still validates and materializes every record, so benchmark with the
+real record shape before assuming a fixed speedup.
+
+The current varint path is architecture-neutral and avoids enabling an
+ARM64-specific unrolled decode path without dedicated architecture guard,
+sanitizer proof, and benchmark evidence. Any future architecture-specific
+change has to preserve wire compatibility and prove that it does not introduce
+undefined behavior on supported builds.
 
 ## A Strong Realtime Pattern: WebSocket Plus IIBIN
 

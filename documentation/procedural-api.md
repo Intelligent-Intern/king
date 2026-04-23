@@ -258,7 +258,9 @@ for every job.
 | `king_proto_define_schema()` | Registers one schema definition. | [IIBIN](./iibin.md) |
 | `king_proto_get_defined_enums()` | Lists the currently defined enums. | [IIBIN](./iibin.md) |
 | `king_proto_encode()` | Encodes a payload using a named schema. | [IIBIN](./iibin.md) |
+| `king_proto_encode_batch()` | Encodes a bounded list of same-schema records and fails the whole batch on the first invalid record. | [IIBIN](./iibin.md) |
 | `king_proto_decode()` | Decodes a payload using a named schema. | [IIBIN](./iibin.md) |
+| `king_proto_decode_batch()` | Decodes a bounded list of same-schema binary records with the same object-hydration modes as single-record decode. | [IIBIN](./iibin.md) |
 | `king_proto_is_defined()` | Checks whether a schema or enum name exists. | [IIBIN](./iibin.md) |
 | `king_proto_is_schema_defined()` | Checks whether a schema exists. | [IIBIN](./iibin.md) |
 | `king_proto_is_enum_defined()` | Checks whether an enum exists. | [IIBIN](./iibin.md) |

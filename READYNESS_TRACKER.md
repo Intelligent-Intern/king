@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 documentation closure: documented IIBIN/proto batch public surfaces, input-order behavior, fail-closed no-partial-result semantics, 65536-record safety bound, batch-index exception context, object-hydration decode modes, and benchmark expectations for `proto_batch`, `proto_varint`, and `proto_omega`. Added `716-proto-batch-documentation-contract.phpt` and closed Q-13 in `SPRINT.md`.
+
 - 2026-04-23 Q-13 batch failure coverage: added the internal `KING_IIBIN_BATCH_MAX_RECORDS` bound before batch output allocation and covered malformed decode entries, truncated records, schema mismatch, oversized encode/decode batches, batch-index error context, and whole-batch fail-closed behavior with `715-proto-batch-failure-boundaries.phpt`.
 
 - 2026-04-23 Q-13 benchmark source coverage: added canonical benchmark source cases for `proto_batch`, `proto_varint`, and `proto_omega`, wired them into the benchmark runner, docs, static linting, and CI budget schema without committing generated benchmark result snapshots.

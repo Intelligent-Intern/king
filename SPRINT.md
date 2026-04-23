@@ -71,11 +71,11 @@ Checklist:
 - [x] Add or port batch encode/decode PHPT coverage under the current test numbering scheme.
 - [x] Add benchmarks for batch encode/decode and omega-vs-varint only as clean source files, not generated results.
 - [x] Add explicit failure coverage for malformed batch boundaries, truncated records, schema mismatch, oversized batches, and bounded allocation behavior.
-- [ ] Update documentation for IIBIN/proto batch behavior and performance expectations.
+- [x] Update documentation for IIBIN/proto batch behavior and performance expectations.
 
 Done:
-- [ ] IIBIN batch APIs are public, documented, tested, and wired through arginfo/function-table surfaces.
-- [ ] Varint performance changes are proven on supported architectures without undefined behavior.
+- [x] IIBIN batch APIs are public, documented, tested, and wired through arginfo/function-table surfaces.
+- [x] Varint performance changes are proven on supported architectures without undefined behavior.
 
 ### #Q-14 Port Experiment GossipMesh/SFU Research As King Runtime Contract
 
