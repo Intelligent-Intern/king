@@ -3,19 +3,16 @@ King drain stops new HTTP listener work while preserving already admitted on-wir
 --SKIPIF--
 <?php
 require __DIR__ . '/http3_new_stack_skip.inc';
-king_http3_skipif_require_lsquic_runtime();
 if (
     !function_exists('proc_open')
     || !function_exists('proc_get_status')
     || !function_exists('proc_terminate')
     || !function_exists('stream_socket_server')
 ) {
-    echo "skip proc_open, proc_get_status, proc_terminate, and stream_socket_server are required";
+    king_http3_skipif_skip('proc_open, proc_get_status, proc_terminate, and stream_socket_server are required');
 }
-
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the on-wire HTTP/3 fixture";
-}
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
 ?>
 --INI--
 king.security_allow_config_override=1

@@ -2,14 +2,9 @@
 King HTTP/3 LSQUIC runtime can perform real local HTTPS roundtrips directly and over the dispatcher
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$library = getenv('KING_LSQUIC_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
 ?>
 --INI--
 king.security_allow_config_override=1

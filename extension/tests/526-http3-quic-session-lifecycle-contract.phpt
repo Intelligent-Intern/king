@@ -3,14 +3,9 @@ King QUIC session lifecycle proves handshake, open, response drain, and close ag
 --SKIPIF--
 <?php
 require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
 king_http3_skipif_require_lsquic_runtime();
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required to build the HTTP/3 ticket test server";
-}
+king_http3_skipif_require_c_helpers();
 ?>
 --INI--
 king.security_allow_config_override=1

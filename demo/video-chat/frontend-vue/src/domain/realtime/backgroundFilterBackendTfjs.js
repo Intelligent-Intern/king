@@ -1,8 +1,10 @@
-const TFJS_CORE_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core/dist/tf-core.min.js';
-const TFJS_CONVERTER_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter/dist/tf-converter.min.js';
-const TFJS_BACKEND_WEBGL_URL = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl/dist/tf-backend-webgl.min.js';
-const TFJS_BODY_SEGMENTATION_URL =
-  'https://cdn.jsdelivr.net/npm/@tensorflow-models/body-segmentation/dist/body-segmentation.min.js';
+const VIDEOCHAT_CDN_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CDN_ORIGIN || '').replace(/\/+$/, '');
+const TENSORFLOW_VENDOR_BASE_PATH = '/cdn/vendor/tensorflow/';
+const TENSORFLOW_VENDOR_BASE_URL = `${VIDEOCHAT_CDN_ORIGIN}${TENSORFLOW_VENDOR_BASE_PATH}`;
+const TFJS_CORE_URL = `${TENSORFLOW_VENDOR_BASE_URL}tfjs-core/tf-core.min.js`;
+const TFJS_CONVERTER_URL = `${TENSORFLOW_VENDOR_BASE_URL}tfjs-converter/tf-converter.min.js`;
+const TFJS_BACKEND_WEBGL_URL = `${TENSORFLOW_VENDOR_BASE_URL}tfjs-backend-webgl/tf-backend-webgl.min.js`;
+const TFJS_BODY_SEGMENTATION_URL = `${TENSORFLOW_VENDOR_BASE_URL}body-segmentation/body-segmentation.min.js`;
 
 let runtimeLoadPromise = null;
 

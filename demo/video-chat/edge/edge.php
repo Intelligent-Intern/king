@@ -10,6 +10,16 @@ $apiDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_API_DOMAIN') ?: 'a
 $wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.' . $domain)));
 $sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $domain)));
 $turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $domain)));
+$cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $domain)));
+$cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: 'cnd.' . $domain));
+$cdnDomains = [$cdnDomain];
+foreach (preg_split('/\s*,\s*/', $cdnAliasInput) ?: [] as $alias) {
+    $alias = strtolower(trim((string) $alias));
+    if ($alias !== '') {
+        $cdnDomains[] = $alias;
+    }
+}
+$cdnDomains = array_values(array_unique($cdnDomains));
 $certFile = getenv('VIDEOCHAT_EDGE_CERT_FILE') ?: '/run/certs/live/fullchain.pem';
 $keyFile = getenv('VIDEOCHAT_EDGE_KEY_FILE') ?: '/run/certs/live/privkey.pem';
 $staticRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_STATIC_ROOT') ?: '/app/frontend-dist'), '/');
@@ -249,6 +259,7 @@ $contentType = static function (string $path): string {
         'css' => 'text/css; charset=utf-8',
         'json', 'map' => 'application/json; charset=utf-8',
         'wasm' => 'application/wasm',
+        'data', 'tflite', 'binarypb' => 'application/octet-stream',
         'png' => 'image/png',
         'jpg', 'jpeg' => 'image/jpeg',
         'gif' => 'image/gif',
@@ -263,13 +274,29 @@ $contentType = static function (string $path): string {
     };
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType): void {
-    if (!in_array($request['method'], ['GET', 'HEAD'], true)) {
-        $writeResponse($client, 405, 'Method Not Allowed', ['Content-Type' => 'text/plain; charset=utf-8'], "Method Not Allowed\n");
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains): void {
+    $path = rawurldecode((string) $request['path']);
+    $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
+    $corsHeaders = $isCdnAsset
+        ? [
+            'Access-Control-Allow-Origin' => '*',
+            'Access-Control-Allow-Methods' => 'GET, HEAD, OPTIONS',
+            'Access-Control-Allow-Headers' => 'Origin, Accept, Content-Type, Range',
+            'Access-Control-Max-Age' => '86400',
+            'Cross-Origin-Resource-Policy' => 'cross-origin',
+        ]
+        : [];
+
+    if ($request['method'] === 'OPTIONS') {
+        $writeResponse($client, 204, 'No Content', $corsHeaders + ['Content-Type' => 'text/plain; charset=utf-8'], '', true);
         return;
     }
 
-    $path = rawurldecode((string) $request['path']);
+    if (!in_array($request['method'], ['GET', 'HEAD'], true)) {
+        $writeResponse($client, 405, 'Method Not Allowed', $corsHeaders + ['Content-Type' => 'text/plain; charset=utf-8'], "Method Not Allowed\n");
+        return;
+    }
+
     if ($path === '/' || $path === '') {
         $path = '/index.html';
     }
@@ -278,7 +305,7 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
     $rootReal = realpath($staticRoot);
     if ($candidate === false || $rootReal === false || !str_starts_with($candidate, $rootReal . DIRECTORY_SEPARATOR) || !is_file($candidate)) {
         if (str_starts_with($path, '/assets/') || preg_match('/\.[A-Za-z0-9]{1,12}$/', $path) === 1) {
-            $writeResponse($client, 404, 'Not Found', ['Content-Type' => 'text/plain; charset=utf-8'], "Not Found\n", $request['method'] === 'HEAD');
+            $writeResponse($client, 404, 'Not Found', $corsHeaders + ['Content-Type' => 'text/plain; charset=utf-8'], "Not Found\n", $request['method'] === 'HEAD');
             return;
         }
         $candidate = $staticRoot . '/index.html';
@@ -292,7 +319,7 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
             : 'public, max-age=31536000, immutable',
         'Strict-Transport-Security' => 'max-age=31536000; includeSubDomains',
         'X-Content-Type-Options' => 'nosniff',
-    ];
+    ] + $corsHeaders;
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
 };
 
@@ -509,9 +536,12 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
+    if (in_array($host, $cdnDomains, true)) {
+        return 'static';
+    }
     if ($path === '/ws' || $host === $wsDomain) {
         return $wsUpstream;
     }

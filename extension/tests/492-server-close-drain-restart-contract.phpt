@@ -3,10 +3,8 @@ King one-shot server listeners can close, drain, and restart on the same port un
 --SKIPIF--
 <?php
 require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
 king_http3_skipif_require_lsquic_runtime();
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the on-wire HTTP/3 fixture";
-}
 ?>
 --INI--
 king.security_allow_config_override=1

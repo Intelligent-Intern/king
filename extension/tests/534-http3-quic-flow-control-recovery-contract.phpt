@@ -85,7 +85,7 @@ try {
         var_dump($case['label']);
         var_dump($response['status']);
         var_dump($response['body'] === $expectedBody);
-        var_dump($response['transport_backend'] === 'quiche_h3');
+        var_dump($response['transport_backend'] === 'lsquic_h3');
         var_dump($elapsedMs >= 250);
         var_dump($elapsedMs < 4000);
         var_dump($capture['mode'] === 'flow_control_recovery');

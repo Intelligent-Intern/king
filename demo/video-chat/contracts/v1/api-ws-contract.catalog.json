@@ -382,7 +382,7 @@
     "signaling_event": {
       "type": "object",
       "required": {
-        "type": { "type": "string", "enum": ["call/offer", "call/answer", "call/ice", "call/hangup"] },
+        "type": { "type": "string", "enum": ["call/offer", "call/answer", "call/ice", "call/hangup", "media-security/hello", "media-security/sender-key"] },
         "room_id": { "type": "string", "min_length": 1 },
         "target_user_id": { "type": "int", "min": 1 },
         "sender": {

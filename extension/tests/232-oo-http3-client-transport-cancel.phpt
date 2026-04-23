@@ -5,7 +5,7 @@ King OO Http3Client can cancel an active HTTP/3 transport via CancelToken
 require __DIR__ . '/http3_new_stack_skip.inc';
 king_http3_skipif_require_lsquic_runtime();
 if (!extension_loaded('pcntl') || !extension_loaded('posix')) {
-    echo "skip pcntl and posix are required for the active cancel fixture";
+    king_http3_skipif_skip('pcntl and posix are required for the active cancel fixture');
 }
 ?>
 --FILE--

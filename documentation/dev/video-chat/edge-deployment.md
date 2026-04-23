@@ -6,7 +6,9 @@ Der Live-Deploy-Pfad nutzt einen King/PHP Edge-Container im
 Video-Chat-Demo-Verzeichnis. Er terminiert TLS mit Certbot-Material, leitet
 HTTP auf HTTPS um, liefert das gebaute Vue-Frontend statisch aus und routet API,
 Lobby-WebSocket (`/ws`) und SFU-WebSocket (`/sfu`) auf interne King-PHP
-Backend-Services.
+Backend-Services. Statische CDN-Assets werden ueber denselben King/PHP Edge auf
+`VIDEOCHAT_DEPLOY_CDN_DOMAIN` ausgeliefert; Default ist `cdn.<domain>`. Der Edge
+akzeptiert `cnd.<domain>` als Legacy-Alias fuer alte Demo-Deploys.
 
 ## Aktiver Scope
 
@@ -49,6 +51,7 @@ Der Production-Deploy-Pfad muss diese Punkte abdecken:
 - explizite Backend-Origin- und Port-Matrix,
 - Healthchecks fuer HTTP, WS und SFU,
 - Rollback-/Rollback-Test fuer den Edge-Pfad,
+- statische CDN-Asset-Auslieferung inklusive korrektem WASM-MIME und CORS,
 - Secret-Handling ohne Demo-Defaults.
 
 Der aktuelle Deploy-Helper setzt diesen Pfad fuer einen einzelnen Hetzner-Host
