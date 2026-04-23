@@ -19,6 +19,10 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `${label} missing: ${needle}`);
 }
 
+function requireNotContains(source, needle, label) {
+  assert.ok(!source.includes(needle), `${label} must not contain: ${needle}`);
+}
+
 function requireMatch(source, pattern, label) {
   assert.ok(pattern.test(source), `${label} missing pattern: ${pattern}`);
 }
@@ -209,6 +213,7 @@ try {
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
   const encodePipeline = extractFunction(workspace, 'startEncodingPipeline');
   requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
+  requireNotContains(encodePipeline, 'document.hidden', 'SFU frame publishing must continue from background tabs');
   requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
   requireContains(encodePipeline, 'outgoingFrame.protectedFrame = protectedFrame.protectedFrame;', 'SFU encoder upgrades to protected frame when available');
   requireContains(encodePipeline, "outgoingFrame.protectionMode = 'protected';", 'SFU encoder marks protected frames');

@@ -6731,8 +6731,6 @@ async function startEncodingPipeline(videoTrack) {
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
       return;
     }
-    if (typeof document !== 'undefined' && document.hidden) return;
-
     if (video.readyState < 2) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
