@@ -83,10 +83,38 @@ jobs:
       - name: Install system dependencies
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
+      - name: Restore pinned LSQUIC runtime cache
+        id: restore-lsquic-runtime-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/king/lsquic/runtime/prefix
+          key: king-lsquic-runtime-${{ matrix.arch-label }}-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/build-lsquic-runtime.sh') }}
+
+      - name: Verify pinned LSQUIC runtime cache
+        id: verify-lsquic-runtime-cache
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: |
+          if [[ "${{ steps.restore-lsquic-runtime-cache.outputs.cache-hit }}" == "true" ]] \
+            && bash ./infra/scripts/build-lsquic-runtime.sh --verify-current; then
+            echo "cache-current=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "cache-current=false" >> "${GITHUB_OUTPUT}"
+
       - name: Build pinned LSQUIC runtime
+        if: steps.verify-lsquic-runtime-cache.outputs.cache-current != 'true'
         env:
           KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: bash ./infra/scripts/build-lsquic-runtime.sh
+
+      - name: Save pinned LSQUIC runtime cache
+        if: steps.verify-lsquic-runtime-cache.outputs.cache-current != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/king/lsquic/runtime/prefix
+          key: ${{ steps.restore-lsquic-runtime-cache.outputs.cache-primary-key }}
 
       - name: Upload pinned LSQUIC runtime
         uses: actions/upload-artifact@v6

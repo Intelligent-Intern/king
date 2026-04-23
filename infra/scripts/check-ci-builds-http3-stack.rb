@@ -71,6 +71,30 @@ server_http3 = read_repo(SERVER_HTTP3)
 require_job_step_literal(
   jobs,
   "lsquic-runtime",
+  "actions/cache/restore@v5",
+  "runtime cache restore"
+)
+require_job_step_literal(
+  jobs,
+  "lsquic-runtime",
+  "actions/cache/save@v5",
+  "runtime cache save"
+)
+require_job_step_literal(
+  jobs,
+  "lsquic-runtime",
+  "hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/build-lsquic-runtime.sh')",
+  "runtime cache lock key"
+)
+require_job_step_literal(
+  jobs,
+  "lsquic-runtime",
+  "./infra/scripts/build-lsquic-runtime.sh --verify-current",
+  "runtime cache verification"
+)
+require_job_step_literal(
+  jobs,
+  "lsquic-runtime",
   "./infra/scripts/build-lsquic-runtime.sh",
   "pinned runtime build"
 )
