@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 PHP_BIN="${PHP_BIN:-php}"
 EXT_SO="${EXT_DIR}/modules/king.so"
+PROFILE_RUNTIME_DIR="${EXT_DIR}/build/profiles/release/runtime"
 SHARD_TOTAL="${SHARD_TOTAL:-1}"
 SHARD_INDEX="${SHARD_INDEX:-1}"
 KING_PREBUILD_HTTP3_TEST_HELPERS="${KING_PREBUILD_HTTP3_TEST_HELPERS:-0}"
@@ -18,6 +19,15 @@ if [[ ! -f "${EXT_SO}" ]]; then
 fi
 
 cd "${EXT_DIR}"
+
+if [[ -z "${KING_LSQUIC_LIBRARY:-}" && -f "${PROFILE_RUNTIME_DIR}/liblsquic.so" ]]; then
+    export KING_LSQUIC_LIBRARY="${PROFILE_RUNTIME_DIR}/liblsquic.so"
+fi
+
+if [[ -n "${KING_LSQUIC_LIBRARY:-}" && -f "${KING_LSQUIC_LIBRARY}" ]]; then
+    KING_LSQUIC_LIBRARY_DIR="$(cd "$(dirname "${KING_LSQUIC_LIBRARY}")" && pwd)"
+    export LD_LIBRARY_PATH="${KING_LSQUIC_LIBRARY_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
 
 if [[ "${KING_PREBUILD_HTTP3_TEST_HELPERS}" == "1" ]]; then
     "${SCRIPT_DIR}/prebuild-http3-test-helpers.sh"

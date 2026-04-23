@@ -257,14 +257,25 @@ PACKAGE_BASENAME="king-${VERSION}-${BUILD_REF}-${OS_NAME}-${ARCH_NAME}-phpapi-${
 
 ensure_release_git_lock_state
 
+build_release_profile() {
+    local -a build_env=()
+
+    if [[ -z "${KING_LSQUIC_RUNTIME_PREFIX:-}" && ! -f "${PROFILE_DIR}/runtime/liblsquic.so" ]]; then
+        build_env+=(KING_LSQUIC_RUNTIME_BUILD="${KING_LSQUIC_RUNTIME_BUILD:-1}")
+    fi
+
+    env "${build_env[@]}" "${SCRIPT_DIR}/build-profile.sh" release
+}
+
 require_release_profile() {
     local missing=0
     local required_files=(
         "${PROFILE_DIR}/king.so"
+        "${PROFILE_DIR}/runtime/liblsquic.so"
     )
 
     if [[ "${REBUILD}" == "1" ]]; then
-        "${SCRIPT_DIR}/build-profile.sh" release
+        build_release_profile
         return 0
     fi
 
@@ -276,7 +287,7 @@ require_release_profile() {
     done
 
     if [[ "${missing}" == "1" ]]; then
-        "${SCRIPT_DIR}/build-profile.sh" release
+        build_release_profile
     fi
 }
 
@@ -295,6 +306,7 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Contents
 
 - \`modules/king.so\`
+- \`runtime/liblsquic.so\`
 - \`bin/smoke.sh\`
 - \`bin/smoke.php\`
 - \`manifest.json\`
@@ -303,7 +315,8 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Install
 
 1. Copy \`modules/king.so\` into your PHP extension directory or reference it by absolute path.
-2. Enable the extension in PHP:
+2. Keep \`runtime/liblsquic.so\` readable and set \`KING_LSQUIC_LIBRARY\` to its absolute path when using HTTP/3.
+3. Enable the extension in PHP:
 
 \`\`\`ini
 extension=/absolute/path/to/modules/king.so
@@ -333,6 +346,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
+export KING_LSQUIC_LIBRARY="${KING_LSQUIC_LIBRARY:-${PACKAGE_DIR}/runtime/liblsquic.so}"
+export LD_LIBRARY_PATH="${PACKAGE_DIR}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 exec "${PHP_BIN}" \
     -d "extension=${PACKAGE_DIR}/modules/king.so" \
@@ -443,6 +458,7 @@ foreach ([
     'bin/smoke.sh',
     'docs/INSTALL.md',
     'modules/king.so',
+    'runtime/liblsquic.so',
 ] as $relative) {
     $full = $root . DIRECTORY_SEPARATOR . $relative;
     $files[$relative] = [
@@ -471,6 +487,11 @@ $manifest = [
             'kind' => 'php_extension_module',
             'provides' => ['king'],
             'http3_stack' => 'lsquic-boringssl',
+        ],
+        'runtime/liblsquic.so' => [
+            'kind' => 'http3_transport_runtime',
+            'provides' => ['lsquic'],
+            'tls' => 'boringssl',
         ],
     ],
     'http3_stack' => [
@@ -505,6 +526,7 @@ write_inner_checksums() {
             bin/smoke.sh \
             docs/INSTALL.md \
             modules/king.so \
+            runtime/liblsquic.so \
         > SHA256SUMS
     )
 }
@@ -522,9 +544,11 @@ package_once() {
     mkdir -p \
         "${package_root}/bin" \
         "${package_root}/docs" \
-        "${package_root}/modules"
+        "${package_root}/modules" \
+        "${package_root}/runtime"
 
     install -m 0644 "${PROFILE_DIR}/king.so" "${package_root}/modules/king.so"
+    install -m 0644 "${PROFILE_DIR}/runtime/liblsquic.so" "${package_root}/runtime/liblsquic.so"
 
     generate_smoke_script "${package_root}/bin/smoke.sh"
     install_runtime_smoke_script "${package_root}/bin/smoke.php"

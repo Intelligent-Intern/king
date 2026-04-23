@@ -206,22 +206,30 @@ fi
 
 PACKAGE_DIR="${package_entries[0]}"
 
-for required_dir in \
-    "bin" \
-    "docs" \
+required_dirs=(
+    "bin"
+    "docs"
     "modules"
-do
+)
+required_paths=(
+    "SHA256SUMS"
+    "bin/smoke.php"
+    "bin/smoke.sh"
+    "docs/INSTALL.md"
+    "manifest.json"
+    "modules/king.so"
+)
+
+if [[ "${ALLOW_MISSING_PROVENANCE}" != "1" ]]; then
+    required_dirs+=("runtime")
+    required_paths+=("runtime/liblsquic.so")
+fi
+
+for required_dir in "${required_dirs[@]}"; do
     assert_package_directory "${required_dir}"
 done
 
-for required_path in \
-    "SHA256SUMS" \
-    "bin/smoke.php" \
-    "bin/smoke.sh" \
-    "docs/INSTALL.md" \
-    "manifest.json" \
-    "modules/king.so"
-do
+for required_path in "${required_paths[@]}"; do
     assert_package_regular_file "${required_path}"
 done
 
@@ -351,6 +359,23 @@ if (is_array($provenance)) {
     ) {
         fwrite(STDERR, "Manifest king.so artifact metadata is invalid.\n");
         exit(1);
+    }
+
+    $lsquicRuntimeArtifact = $artifacts['runtime/liblsquic.so'] ?? null;
+    if (!is_array($lsquicRuntimeArtifact)) {
+        if (!$allowMissingProvenance) {
+            fwrite(STDERR, "Manifest LSQUIC runtime artifact metadata is missing.\n");
+            exit(1);
+        }
+    } else {
+        if (
+            ($lsquicRuntimeArtifact['kind'] ?? null) !== 'http3_transport_runtime'
+            || ($lsquicRuntimeArtifact['tls'] ?? null) !== 'boringssl'
+            || !in_array('lsquic', $lsquicRuntimeArtifact['provides'] ?? [], true)
+        ) {
+            fwrite(STDERR, "Manifest LSQUIC runtime artifact metadata is invalid.\n");
+            exit(1);
+        }
     }
 
     $http3Stack = $manifest['http3_stack'] ?? null;

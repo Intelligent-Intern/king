@@ -61,9 +61,46 @@ jobs:
             core.setOutput('reason', reason);
             core.notice(reason);
 
+  lsquic-runtime:
+    name: Pinned LSQUIC Runtime ${{ matrix.arch-label }}
+    needs: branch-push-dedupe
+    if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
+
+      - name: Build pinned LSQUIC runtime
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: bash ./infra/scripts/build-lsquic-runtime.sh
+
+      - name: Upload pinned LSQUIC runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: king-lsquic-runtime-${{ matrix.arch-label }}
+          if-no-files-found: error
+          path: |
+            .cache/king/lsquic/runtime/prefix/**
+
   canonical-baseline:
     name: Audit, Build, Test shard ${{ matrix.shard-index }}/3, Go-Live
-    needs: branch-push-dedupe
+    needs:
+      - branch-push-dedupe
+      - lsquic-runtime
     if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -100,6 +137,12 @@ jobs:
       - name: Install system dependencies
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
+      - name: Download pinned LSQUIC runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: king-lsquic-runtime-linux-amd64
+          path: .cache/king/lsquic/runtime/prefix
+
       - name: Verify toolchain
         run: |
           php -v
@@ -120,6 +163,8 @@ jobs:
 
       - name: Build canonical release profile
         working-directory: extension
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: ../infra/scripts/build-profile.sh release
 
       - name: Verify public contract truthfulness gates
@@ -150,6 +195,7 @@ jobs:
         env:
           SHARD_TOTAL: "3"
           SHARD_INDEX: "${{ matrix.shard-index }}"
+          KING_LSQUIC_LIBRARY: ${{ github.workspace }}/extension/build/profiles/release/runtime/liblsquic.so
         run: |
           mkdir -p ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}
           set +e
@@ -266,7 +312,9 @@ jobs:
 
   install-package-matrix:
     name: Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}
-    needs: canonical-baseline
+    needs:
+      - canonical-baseline
+      - lsquic-runtime
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -324,8 +372,16 @@ jobs:
       - name: Install system dependencies
         run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
+      - name: Download pinned LSQUIC runtime
+        uses: actions/download-artifact@v4
+        with:
+          name: king-lsquic-runtime-${{ matrix.arch-label }}
+          path: .cache/king/lsquic/runtime/prefix
+
       - name: Build canonical release profile
         working-directory: extension
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: ../infra/scripts/build-profile.sh release
 
       - name: Package canonical release archive
@@ -690,6 +746,7 @@ jobs:
   release-full-gate:
     name: Full pipeline completed
     needs:
+      - lsquic-runtime
       - canonical-baseline
       - profile-smoke
       - install-package-matrix

@@ -16,6 +16,10 @@ Environment variables:
   CFLAGS         Extra C compiler flags appended to the profile defaults
   CPPFLAGS       Extra preprocessor flags appended to the profile defaults
   LDFLAGS        Extra linker flags appended to the profile defaults
+  KING_LSQUIC_RUNTIME_PREFIX
+                 Existing LSQUIC runtime prefix to use for HTTP/3 builds.
+  KING_LSQUIC_RUNTIME_BUILD=1
+                 Build the pinned LSQUIC runtime before configuring King.
 EOF
 }
 
@@ -40,6 +44,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
+LSQUIC_RUNTIME_SCRIPT="${SCRIPT_DIR}/build-lsquic-runtime.sh"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
@@ -56,7 +61,9 @@ profile_cflags=""
 profile_cppflags="${BASE_CPPFLAGS}"
 profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_kind=""
+lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-}"
 declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
+declare -a CONFIGURE_ENV=()
 PHPIZE_SNAPSHOT_DIR=""
 
 trim_ascii_whitespace() {
@@ -334,20 +341,55 @@ apply_pkg_config_curl_cppflags() {
     fi
 }
 
+resolve_lsquic_runtime_prefix() {
+    if [[ "${KING_LSQUIC_RUNTIME_BUILD:-0}" == "1" ]]; then
+        "${LSQUIC_RUNTIME_SCRIPT}"
+        lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-${ROOT_DIR}/.cache/king/lsquic/runtime/prefix}"
+    fi
+
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        return 0
+    fi
+
+    KING_LSQUIC_RUNTIME_PREFIX="${lsquic_runtime_prefix}" "${LSQUIC_RUNTIME_SCRIPT}" --verify-current
+}
+
+stage_lsquic_runtime() {
+    local runtime_library=""
+    local runtime_metadata=""
+
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        return 0
+    fi
+
+    runtime_library="${lsquic_runtime_prefix}/lib/liblsquic.so"
+    runtime_metadata="${lsquic_runtime_prefix}/king-lsquic-runtime.env"
+
+    mkdir -p "${PROFILE_DIR}/runtime"
+    install -m 0644 "${runtime_library}" "${PROFILE_DIR}/runtime/liblsquic.so"
+    if [[ -f "${runtime_metadata}" ]]; then
+        install -m 0644 "${runtime_metadata}" "${PROFILE_DIR}/runtime/king-lsquic-runtime.env"
+    fi
+}
+
 validate_curl_headers
 apply_pkg_config_curl_cppflags
+resolve_lsquic_runtime_prefix
 
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
     "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
     # CI checkouts may not contain the generated source cache. Rebuild it from
-    # the deterministic lock whenever the local cache is missing or stale.
-    if ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
+    # the deterministic lock whenever the local cache is missing or stale. A
+    # downloaded LSQUIC runtime artifact already carries matching lock metadata.
+    if [[ -z "${lsquic_runtime_prefix}" ]] && ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
         echo "Pinned LSQUIC source cache is missing in CI; bootstrapping pinned source cache." >&2
         "${LSQUIC_BOOTSTRAP_SCRIPT}"
     fi
 else
-    "${LSQUIC_BOOTSTRAP_SCRIPT}"
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        "${LSQUIC_BOOTSTRAP_SCRIPT}"
+    fi
 fi
 
 echo "Building King profile: ${PROFILE}"
@@ -367,18 +409,28 @@ fi
 phpize --clean >/dev/null 2>&1 || true
 phpize
 
-env \
-    CC="${profile_cc}" \
-    CXX="${profile_cxx}" \
-    CFLAGS="${profile_cflags}" \
-    CPPFLAGS="${profile_cppflags}" \
-    LDFLAGS="${profile_ldflags}" \
-    ./configure --enable-king
+CONFIGURE_ENV=(
+    CC="${profile_cc}"
+    CXX="${profile_cxx}"
+    CFLAGS="${profile_cflags}"
+    CPPFLAGS="${profile_cppflags}"
+    LDFLAGS="${profile_ldflags}"
+)
+
+if [[ -n "${lsquic_runtime_prefix}" ]]; then
+    CONFIGURE_ENV+=(
+        KING_LSQUIC_INCLUDE_DIR="${lsquic_runtime_prefix}/include/lsquic"
+        KING_LSQUIC_LIBRARY_DIR="${lsquic_runtime_prefix}/lib"
+    )
+fi
+
+env "${CONFIGURE_ENV[@]}" ./configure --enable-king
 
 make -j"${JOBS}"
 
 mkdir -p "${PROFILE_DIR}"
 cp "${EXT_DIR}/modules/king.so" "${PROFILE_DIR}/king.so"
+stage_lsquic_runtime
 
 if [[ -n "${sanitizer_kind}" ]]; then
     compiler_bin="${profile_cc%% *}"

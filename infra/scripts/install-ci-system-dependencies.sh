@@ -21,6 +21,7 @@ packages=(
   ninja-build
   pkg-config
   re2c
+  zlib1g-dev
 )
 
 run_with_retry() {
