@@ -113,7 +113,7 @@ Goal:
 - Verify whether any remaining codec/WASM/Kalman experiment diffs should be ported, while keeping the stronger current implementation where it already improved the experiment.
 
 Checklist:
-- [ ] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.
+- [x] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.
 - [ ] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
 - [ ] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.
 - [ ] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.

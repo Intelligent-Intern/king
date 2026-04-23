@@ -161,3 +161,21 @@ Video-chat SFU compatibility disposition:
 - Compatibility is proven by the existing `/sfu` gateway order: handshake validation, websocket session auth, RBAC, room/call binding, current room membership or DB-backed admission, then WebSocket upgrade.
 - SFU message handling keeps bound-room decoding, protected-frame downgrade rejection, cross-room isolation, and room-scoped broker persistence.
 - GossipMesh may only provide post-admission topology/routing hints and does not replace the video-chat SFU gateway.
+
+## Q-15 WLVC/WASM/Kalman Experiment Diff Audit
+
+Audited boundary: `4e58bef77420c03df379f2fe159a694c4d40493a`.
+
+Compared paths: `codec-test.html`, `codec-test.md`, `src/lib/wasm/**`, `src/lib/wavelet/**`, `src/lib/kalman/**`, and `mediaRuntime*`.
+
+Comparison outcome:
+- The C++/WASM codec sources and generated `wlvc.*` assets are unchanged from the audited experiment boundary for this checkbox.
+- The current TypeScript WASM wrapper is stronger than the experiment boundary because it keeps the WASM MIME cache-buster, uses `debugWarn`, and recreates stale encoder/decoder bindings after Emscripten class-mismatch errors.
+- The current wavelet decoder is stronger because it bounds the V-channel payload slice by the declared byte count and rejects payload-length mismatch.
+- The current Kalman filter is stronger because it multiplies the Kalman gain by `SInv`, computes process-noise `dt4` locally, and removes stale module-level `dt2`/`dt3`/`dt4` constants.
+- The current codec test page keeps the experiment live-camera test intent but fixes the V-channel slice and removes unused Kalman result storage.
+- `codec-test.md` and `src/lib/wavelet/README.md` were removed from the active frontend tree and replaced by canonical docs under `documentation/dev/`.
+- `mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain in the current frontend.
+- The duplicate legacy `demo/video-chat/frontend/src/lib/**` experiment tree is not reintroduced; the active tree is `demo/video-chat/frontend-vue/**`.
+
+This checkbox performs comparison only. Later Q-15 leaves decide which current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.

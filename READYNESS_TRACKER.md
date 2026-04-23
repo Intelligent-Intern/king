@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-15 WLVC/WASM/Kalman diff audit: compared `codec-test.html`, `codec-test.md`, `src/lib/wasm/**`, `src/lib/wavelet/**`, `src/lib/kalman/**`, and `mediaRuntime*` against audited experiment boundary `4e58bef77420c03df379f2fe159a694c4d40493a`. The audit found unchanged C++/WASM generated assets, stronger current WASM wrapper behavior, stronger V-channel decode bounds, stronger Kalman gain/process-noise handling, canonical docs replacing active-source markdown, retained media runtime modules, and no reintroduced duplicate legacy `demo/video-chat/frontend/src/lib/**` tree. Added `731-wlvc-experiment-diff-audit-contract.phpt`.
+
 - 2026-04-23 Q-14 video-chat SFU compatibility closure: closed the final Q-14 SFU compatibility line. The active `/sfu` gateway still validates handshake, authenticates websocket sessions, checks RBAC, binds `room_id`/`call_id`, requires current room membership or DB-backed admission before upgrade, decodes client frames against the bound room, rejects protected-frame downgrades, and keeps broker persistence room-scoped. Added `730-gossipmesh-videochat-sfu-compatibility-contract.phpt`.
 
 - 2026-04-23 Q-14 GossipMesh runtime disposition: closed the GossipMesh intake as a tested King runtime capability on the current `wlvc_sfu` path. Accepted behavior is bounded topology planning, admitted-member filtering, protected-envelope routing, duplicate suppression, TTL/fanout limiting, relay candidate ranking, and relay fallback planning. Raw experiment API/client/signaling/P2P/process-local/plaintext/debug behavior remains rejected. Added `729-gossipmesh-runtime-disposition-contract.phpt`.
