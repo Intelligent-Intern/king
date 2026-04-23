@@ -2,6 +2,8 @@
 King HTTP/3 proves a coherent QUIC and TLS lifecycle across fresh handshakes, resumed sessions, and repeated same-port listener churn
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
@@ -121,7 +123,7 @@ try {
             static function (array $response) use ($phase) {
                 return $response['status'] === 200
                     && $response['protocol'] === 'http/3'
-                    && $response['transport_backend'] === 'quiche_h3'
+                    && $response['transport_backend'] === 'lsquic_h3'
                     && $response['response_complete'] === true
                     && $response['tls_enable_early_data'] === true
                     && $response['tls_has_session_ticket'] === true
@@ -158,7 +160,7 @@ foreach ($results as $result) {
 --EXPECT--
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 bool(true)
 bool(true)
@@ -168,7 +170,7 @@ string(4) "none"
 bool(false)
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 bool(true)
 bool(true)
@@ -178,7 +180,7 @@ string(4) "ring"
 bool(true)
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 bool(true)
 bool(true)
@@ -188,7 +190,7 @@ string(4) "ring"
 bool(true)
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 bool(true)
 bool(true)

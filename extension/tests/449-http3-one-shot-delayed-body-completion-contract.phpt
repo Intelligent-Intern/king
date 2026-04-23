@@ -2,6 +2,8 @@
 King HTTP/3 one-shot listener waits for DATA and FIN before invoking the handler
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
 }

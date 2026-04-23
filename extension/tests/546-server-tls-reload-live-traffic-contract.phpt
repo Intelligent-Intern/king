@@ -2,6 +2,8 @@
 King server TLS reload keeps a live HTTP/3 request path honest under real traffic
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the live TLS reload fixture";
 }
@@ -47,7 +49,7 @@ try {
         ),
         static fn (array $response) => $response['status'] === 200
             && $response['protocol'] === 'http/3'
-            && $response['transport_backend'] === 'quiche_h3'
+            && $response['transport_backend'] === 'lsquic_h3'
             && ($response['headers']['x-reply-mode'] ?? null) === 'tls-reload'
             && $response['body'] === 'tls-reload-live'
     );
@@ -82,7 +84,7 @@ try {
         ),
         static fn (array $response) => $response['status'] === 200
             && $response['protocol'] === 'http/3'
-            && $response['transport_backend'] === 'quiche_h3'
+            && $response['transport_backend'] === 'lsquic_h3'
             && ($response['headers']['x-reply-mode'] ?? null) === 'tls-reload'
             && $response['body'] === 'tls-reload-live'
     );
@@ -147,12 +149,12 @@ var_dump($dispatcherCapture['post_stats']['server_tls_reload_count']);
 --EXPECT--
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 string(10) "tls-reload"
 string(15) "tls-reload-live"
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 string(10) "tls-reload"
 string(15) "tls-reload-live"
 bool(true)

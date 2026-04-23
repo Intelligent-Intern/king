@@ -2,6 +2,8 @@
 King HTTP/1, HTTP/2, and HTTP/3 one-shot listeners preserve on-wire request-response and session lifecycle contracts in one matrix
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
 }
@@ -224,7 +226,7 @@ try {
             'http3 ' . $label . ' protocol drifted'
         );
         king_server_listener_646_assert(
-            ($response['transport_backend'] ?? null) === 'quiche_h3',
+            ($response['transport_backend'] ?? null) === 'lsquic_h3',
             'http3 ' . $label . ' transport backend drifted'
         );
         king_server_listener_646_assert(

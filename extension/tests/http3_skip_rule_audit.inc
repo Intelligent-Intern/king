@@ -51,7 +51,7 @@ return [
     'scope' => 'http3_behavior_preservation_matrix',
     'missing_new_stack_counts_as_success' => false,
     'done_checkbox' => 'HTTP/3 tests prove the new stack without Quiche or Cargo bootstrap.',
-    'legacy_skip_literals' => [],
+    'legacy_skip_literals' => ['KING_QUICHE_LIBRARY', 'KING_QUICHE_SERVER', 'command -v cargo'],
     'acceptable_environment_skip_literals' => [
         'command -v openssl',
         "extension_loaded('pcntl')",

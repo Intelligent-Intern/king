@@ -2,6 +2,8 @@
 King QUIC stream lifecycle proves open body finish and read-drain behavior against real peers
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
@@ -70,7 +72,7 @@ try {
             $attempt,
             static fn (array $response) => $response['status'] === 200
                 && $response['protocol'] === 'http/3'
-                && $response['transport_backend'] === 'quiche_h3'
+                && $response['transport_backend'] === 'lsquic_h3'
                 && $response['stream_kind'] === 'request'
                 && $response['response_complete'] === true
                 && ($response['body'] ?? null) === $expectedBody
@@ -147,7 +149,7 @@ foreach (['direct', 'dispatch'] as $label) {
 --EXPECT--
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 string(7) "request"
 bool(true)
 string(45) "stream-ack:stream-body-alpha
@@ -169,7 +171,7 @@ bool(true)
 bool(true)
 int(200)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 string(7) "request"
 bool(true)
 string(45) "stream-ack:stream-body-alpha

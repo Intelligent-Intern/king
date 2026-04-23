@@ -2,6 +2,8 @@
 King HTTP/3 runtime survives repeated mixed-load bursts and keeps later healthy sessions clean
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
@@ -153,8 +155,8 @@ bool(true)
 int(200)
 string(20) "stable-direct-http3
 "
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 int(200)
 string(22) "stable-dispatch-http3
 "
-string(9) "quiche_h3"
+string(9) "lsquic_h3"

@@ -2,6 +2,8 @@
 King server CORS metadata and response headers stay honest against real HTTP/1 HTTP/2 and HTTP/3 clients
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
 }

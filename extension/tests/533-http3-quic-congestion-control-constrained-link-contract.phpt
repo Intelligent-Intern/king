@@ -2,6 +2,8 @@
 King HTTP/3 keeps supported QUIC congestion-control algorithms live under sustained constrained links
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the local HTTP/3 fixture";
 }
@@ -128,7 +130,7 @@ try {
         var_dump($case['label']);
         var_dump($response['status']);
         var_dump($response['body'] === $expectedBody);
-        var_dump($response['transport_backend'] === 'quiche_h3');
+        var_dump($response['transport_backend'] === 'lsquic_h3');
         var_dump($response['quic_packets_lost'] > 0);
         var_dump($response['quic_packets_retransmitted'] > 0);
         var_dump($response['quic_lost_bytes'] > 0);

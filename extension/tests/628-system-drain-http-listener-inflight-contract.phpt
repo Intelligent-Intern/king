@@ -2,6 +2,8 @@
 King drain stops new HTTP listener work while preserving already admitted on-wire HTTP/1, HTTP/2, and HTTP/3 requests
 --SKIPIF--
 <?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_lsquic_runtime();
 if (
     !function_exists('proc_open')
     || !function_exists('proc_get_status')
