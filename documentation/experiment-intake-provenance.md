@@ -178,4 +178,10 @@ Comparison outcome:
 - `mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain in the current frontend.
 - The duplicate legacy `demo/video-chat/frontend/src/lib/**` experiment tree is not reintroduced; the active tree is `demo/video-chat/frontend-vue/**`.
 
-This checkbox performs comparison only. Later Q-15 leaves decide which current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
+WASM MIME/cache-buster decision:
+- Keep the current production-safe handling for this sprint leaf.
+- `demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts` imports the bundled `wlvc.js`, resolves `wlvc.wasm` through Emscripten `locateFile`, and appends `?v=application-wasm-20260421` through `WASM_MIME_CACHE_BUSTER`.
+- `demo/video-chat/edge/edge.php` serves `.wasm` as `application/wasm`; the cache-buster only invalidates stale cached responses after MIME fixes and is not a MIME workaround by itself.
+- The audited experiment boundary has no better production-safe replacement for this handling. A future replacement must provide an immutable asset fingerprint plus correct `application/wasm` serving and equivalent contract coverage.
+
+Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.

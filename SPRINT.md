@@ -114,7 +114,7 @@ Goal:
 
 Checklist:
 - [x] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.
-- [ ] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
+- [x] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
 - [ ] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.
 - [ ] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.
 - [ ] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
