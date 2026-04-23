@@ -102,7 +102,7 @@ Checklist:
 
 Done:
 - [x] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
-- [ ] Video-chat SFU remains compatible with current room/admission/security contracts.
+- [x] Video-chat SFU remains compatible with current room/admission/security contracts.
 
 ### #Q-15 Audit Remaining WLVC/WASM/Kalman Experiment Diffs
 

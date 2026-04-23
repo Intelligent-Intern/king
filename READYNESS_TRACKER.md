@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 video-chat SFU compatibility closure: closed the final Q-14 SFU compatibility line. The active `/sfu` gateway still validates handshake, authenticates websocket sessions, checks RBAC, binds `room_id`/`call_id`, requires current room membership or DB-backed admission before upgrade, decodes client frames against the bound room, rejects protected-frame downgrades, and keeps broker persistence room-scoped. Added `730-gossipmesh-videochat-sfu-compatibility-contract.phpt`.
+
 - 2026-04-23 Q-14 GossipMesh runtime disposition: closed the GossipMesh intake as a tested King runtime capability on the current `wlvc_sfu` path. Accepted behavior is bounded topology planning, admitted-member filtering, protected-envelope routing, duplicate suppression, TTL/fanout limiting, relay candidate ranking, and relay fallback planning. Raw experiment API/client/signaling/P2P/process-local/plaintext/debug behavior remains rejected. Added `729-gossipmesh-runtime-disposition-contract.phpt`.
 
 - 2026-04-23 Q-14 weakened experiment behavior rejection: pinned rejected GossipMesh/SFU experiment semantics as forbidden in active `/sfu` and GossipMesh paths. Client-created call/room/peer/admission/topology authority, direct P2P forwarding, process-local admission authority, JSON/plaintext downgrade, raw network endpoints, public STUN/TURN defaults, and debug control behavior now require a separate backend-authoritative runtime contract before they can enter production. Added runtime negative cases and `728-gossipmesh-weakened-behavior-rejection-contract.phpt`.

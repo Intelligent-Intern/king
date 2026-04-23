@@ -25,8 +25,9 @@ The active implementation is deliberately small:
   `726-gossipmesh-production-doc-contract.phpt`,
   `727-gossipmesh-sfu-constraints-contract.phpt`, and
   `728-gossipmesh-weakened-behavior-rejection-contract.phpt`, and
-  `729-gossipmesh-runtime-disposition-contract.phpt` pin the intake decisions
-  and documentation boundary.
+  `729-gossipmesh-runtime-disposition-contract.phpt`, and
+  `730-gossipmesh-videochat-sfu-compatibility-contract.phpt` pin the intake
+  decisions and documentation boundary.
 
 ## Runtime Status
 
@@ -69,6 +70,18 @@ Process-local `$sfuClients` and `$sfuRooms` are live socket indexes only. They
 are not room identity, call identity, participant state, or admission state.
 Client frames are decoded against the already-bound room, so browser code
 cannot switch rooms or invent call state after the gateway admits a socket.
+
+## Video-Chat SFU Compatibility
+
+The video-chat SFU gateway remains compatible with the existing room,
+admission, and security model. The compatibility guard is
+`730-gossipmesh-videochat-sfu-compatibility-contract.phpt`.
+
+The gateway still validates the WebSocket handshake, authenticates the session,
+checks RBAC, binds `room_id` and optional `call_id`, requires current room
+membership or DB-backed admission, and only then upgrades the socket. Client
+messages are decoded against the bound room, protected-frame downgrade paths
+fail closed, and broker persistence stays room-scoped.
 
 ## Rejected Weakening Behavior
 

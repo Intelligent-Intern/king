@@ -155,3 +155,9 @@ Q-14 disposition:
 - The active proof is `demo/video-chat/backend-king-php/tests/realtime-gossipmesh-runtime-contract.php` plus PHPT guards `723` through `729`.
 - Raw experiment API, C structs, standalone browser client, `sfu_signaling.php`, direct P2P transport, process-local authority, plaintext downgrade, generated artifacts, and debug scaffolding are rejected for the current runtime.
 - Future WebRTC-native or P2P work must be opened as a separate backend-authoritative runtime contract instead of weakening this disposition.
+
+Video-chat SFU compatibility disposition:
+- The active video-chat SFU remains compatible with current room, admission, and security contracts after Q-14.
+- Compatibility is proven by the existing `/sfu` gateway order: handshake validation, websocket session auth, RBAC, room/call binding, current room membership or DB-backed admission, then WebSocket upgrade.
+- SFU message handling keeps bound-room decoding, protected-frame downgrade rejection, cross-room isolation, and room-scoped broker persistence.
+- GossipMesh may only provide post-admission topology/routing hints and does not replace the video-chat SFU gateway.
