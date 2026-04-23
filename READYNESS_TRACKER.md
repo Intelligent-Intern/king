@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-15 WLVC verified codec port decision: kept only verified active codec correctness/performance deltas and did not port additional experiment code without tests. The frontend guard pins bounded V-channel decode, payload-length mismatch rejection, codec-test V-channel parity, Kalman `SInv` gain use, local process-noise `dt4`, unchanged generated C++/WASM sources, canonical docs, and absence of duplicate legacy frontend paths. Added frontend contract `wlvc-codec-port-contract.mjs` and PHPT `736-wlvc-verified-codec-port-contract.phpt`.
+
 - 2026-04-23 Q-15 WLVC SFU compatibility decision: kept the current SFU client/gateway compatibility contract. The frontend uses SFU origin candidates, `buildWebSocketUrl(..., '/sfu', ...)`, working-origin persistence, `room` plus `room_id`, validated `call_id`, snake_case outbound commands, and camel/snake inbound event parsing. The backend validates handshake, websocket auth, RBAC, bound room, `call_id`/`callId`, admission, and bound-room command decoding before or after upgrade as appropriate. Added frontend contract `sfu-origin-room-binding-contract.mjs` and PHPT `735-wlvc-sfu-compatibility-contract.phpt`.
 
 - 2026-04-23 Q-15 WLVC binding-mismatch recovery decision: kept the current Emscripten stale-binding recovery in `wasm-codec.ts`. Encoder and decoder operations detect `Expected null or instance of` errors for their target class, delete stale handles if possible, recreate from the cached module reference, retry once through the recreated binding, and rethrow non-binding errors. Added frontend contract `wlvc-binding-recovery-contract.mjs` and PHPT `734-wlvc-binding-recovery-contract.phpt`.

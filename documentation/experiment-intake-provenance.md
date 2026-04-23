@@ -204,4 +204,11 @@ SFU compatibility decision:
 - The backend `/sfu` gateway validates handshake, websocket auth, RBAC, room binding, `call_id`/`callId`, and room admission before `king_server_upgrade_to_websocket(...)`.
 - Client SFU command frames are decoded against the already-bound room, accepting legacy `room`/`roomId` only when they match and failing closed with `sfu_room_mismatch` on cross-room commands.
 
+Verified codec port decision:
+- No additional experiment code is ported by this leaf without a targeted frontend contract.
+- The verified active correctness deltas are kept: V-channel decode uses the declared `vBytes` slice, decode rejects payload-length mismatch, `codec-test.html` uses the same bounded V-channel slice, Kalman gain multiplication includes `SInv`, and process-noise `dt4` is computed from `dt2` locally.
+- The verified active performance boundary is unchanged: C++/WASM generated sources remain at the audited experiment boundary, while WASM production delivery and stale-binding recovery are pinned by earlier Q-15 leaves.
+- Removed experiment markdown and the duplicate legacy frontend tree are not reintroduced; canonical developer docs stay under `documentation/dev/`.
+- `demo/video-chat/frontend-vue/tests/contract/wlvc-codec-port-contract.mjs` is the targeted frontend guard for this decision.
+
 Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
