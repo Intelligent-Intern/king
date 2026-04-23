@@ -127,3 +127,8 @@ Frontend client integration decision:
 Runtime contract-test coverage:
 - `realtime-gossipmesh-runtime-contract.php` covers admitted-member filtering, rejected-member accounting, deterministic topology, bounded neighbor fanout, relay candidate ranking, duplicate suppression, TTL expiry, protected-envelope validation, route planning, relay fallback, and failure cases for plaintext data, missing envelope contract, duplicate frames, unknown publishers, and unavailable relays.
 - `725-gossipmesh-runtime-coverage-contract.phpt` pins that the runtime exposes only backend-owned helpers for protected-envelope routing and that the coverage remains wired into `SPRINT.md` and `READYNESS_TRACKER.md`.
+
+Production documentation:
+- `documentation/gossipmesh.md` is now allowed because the production runtime contract exists and is covered by tests.
+- The doc describes only the current backend-authoritative `wlvc_sfu` topology/routing helper, protected-envelope requirement, failure behavior, inactive experiment behaviors, frontend integration boundary, and provenance rules.
+- It must not reintroduce the experiment documentation as product semantics.

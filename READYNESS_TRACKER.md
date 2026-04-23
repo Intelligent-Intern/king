@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 GossipMesh production docs: added `documentation/gossipmesh.md` only after the backend-authoritative runtime contract and tests existed. The doc covers the current `wlvc_sfu` runtime helper, protected-envelope routing, duplicate/TTL/relay failure behavior, frontend fold-in boundary, inactive experiment behaviors, and provenance rules. Added `726-gossipmesh-production-doc-contract.phpt`.
+
 - 2026-04-23 Q-14 GossipMesh runtime contract coverage: expanded `realtime-gossipmesh-runtime-contract.php` and `realtime_gossipmesh.php` to prove message routing, admitted-member filtering, protected transport-envelope/IIBIN-style contract use, duplicate suppression, TTL no-forward behavior, relay fallback, and failure paths for plaintext payloads, missing envelope contracts, duplicate frames, unknown publishers, and unavailable relays. Added `725-gossipmesh-runtime-coverage-contract.phpt`.
 
 - 2026-04-23 Q-14 frontend GossipMesh client decision: rejected standalone port of `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js`; compatible future client behavior must be folded into the current `SFUClient` only after backend-authoritative topology/routing contracts exist. The decision preserves current SFU origin failover, `call_id`/`room_id` binding, protected-frame carriage, and keeps direct browser P2P/DataChannel behavior research-only. Added `724-gossipmesh-frontend-client-decision-contract.phpt`.
