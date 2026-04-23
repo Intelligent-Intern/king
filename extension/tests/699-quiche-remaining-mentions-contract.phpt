@@ -65,6 +65,10 @@ function remaining_quiche_match_category(string $path, array $removedFixtureClas
         return 'historical_migration_note';
     }
 
+    if ($path === 'SPRINT.md') {
+        return 'active_sprint_literal';
+    }
+
     if (in_array($path, [
         '.dockerignore',
         '.gitignore',
@@ -92,6 +96,7 @@ function remaining_quiche_match_category(string $path, array $removedFixtureClas
 
     if (preg_match('#^extension/tests/[0-9]+-[^/]+\.phpt$#', $path) === 1
         || in_array($path, [
+            'extension/tests/http3_release_regression_matrix.inc',
             'extension/tests/http3_skip_rule_audit.inc',
         ], true)) {
         return 'contract_test_literal';
