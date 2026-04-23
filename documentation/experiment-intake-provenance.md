@@ -66,7 +66,8 @@ Porting notes:
 - Treat direct P2P/DataChannel behavior as research until it is re-specified under current backend-authoritative SFU, room, admission, and payload-protection contracts.
 
 Port status:
-- Contributor credit and source paths are recorded. No GossipMesh/SFU production code has been ported yet under Q-14.
+- Contributor credit and source paths are recorded.
+- A compatible server-authoritative runtime slice has been ported as `demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php`. Raw experiment transport, browser authority, process-local room state, generated artifacts, and debug scaffolding remain excluded.
 
 Production API surface decision:
 - The raw experiment surface is not the production King API. Do not expose the global PHP `GossipMesh` class, raw C `gossip_mesh_t` pointers, browser `GossipMeshClient` topology control, direct peer IP/port neighbor mutation, or process-local room ownership as stable API.
@@ -107,3 +108,10 @@ Transport protection decision:
 - Required envelope claims must remain bound to `call_id`, `room_id`, `participant_set_hash`, `runtime_path`, `kex_suite`, `media_suite`, `epoch`, `sender_key_id`, `sequence`, AAD length, and ciphertext length as pinned by `king-video-chat-protected-media-frame`.
 - Plaintext or JSON fallback is allowed only in `transport_only` under `preferred` or `disabled` policy where UI and telemetry expose `transport_only`; it is forbidden in `required` mode and forbidden when a `protected_frame` field is present.
 - Any GossipMesh or P2P port must use `king-video-chat-protected-media-transport-envelope` or an equivalent versioned IIBIN envelope. The SFU or gossip layer may inspect bounded public metadata only and must never see raw media keys, shared secrets, or plaintext media.
+
+Compatible runtime port:
+- The compatible runtime port is `demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php`.
+- It ports the experiment ideas for bounded topology planning, TTL estimation, duplicate suppression, deterministic forward target selection, relay candidate ranking, and stats-safe member normalization.
+- It deliberately does not port the experiment global `GossipMesh` class, C `gossip_mesh_t` surface, browser `GossipMeshClient`, `sfu_signaling.php`, direct P2P transport, process-local rooms, raw sockets, ICE/STUN/TURN defaults, JSON/plaintext fallback, or debug console behavior.
+- The port accepts only server-provided admitted members and returns bounded arrays with `call_id`, `room_id`, `runtime_path`, `envelope_contract`, topology, relay candidates, and rejected-member counts.
+- Artifact exclusions remain mandatory: `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, and submodule gitlinks must not be imported.
