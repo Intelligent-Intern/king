@@ -125,6 +125,97 @@ Compatibility rule: never reuse field numbers; add-only evolution.
 2. Lease expiry triggers re-offer.
 3. `idempotency_key` prevents duplicate commit side effects.
 
+## MoE and OP-Tree Distribution (Speed-Critical)
+
+### Short Answer
+
+1. Yes, nodes can own experts, and this should be the default for Delphi.
+2. Yes, compute graph partitioning is possible, but do not split at single-op granularity.
+3. Fastest practical design is a hybrid:
+   - expert-parallel for MoE layers
+   - coarse graph partition for dense blocks only when locality is favorable.
+
+### Recommended Execution Model
+
+1. **Primary mode (expert ownership):**
+   - each node advertises resident expert IDs and capacity via Semantic DNS + heartbeat
+   - router/gating stage computes top-k experts per token group
+   - coordinator packs activations per destination expert owner and dispatches remote chunks
+   - expert owners execute locally and return partial outputs
+   - coordinator performs weighted merge and continues next layer.
+2. **Secondary mode (coarse OP-tree partition):**
+   - partition only at fused block boundaries (for example: attention block, MLP block, or full layer slice)
+   - never dispatch single matmul/add/relu ops across nodes
+   - use this mode when a block does not fit target node memory or when expert layout is unavailable.
+3. **Fallback mode (local-only):**
+   - if network or lease pressure crosses threshold, execute the layer/chunk locally to protect tail latency.
+
+### Why This Is Fastest on King
+
+1. MoE naturally sparsifies compute; only selected experts run.
+2. Sending routed activations to expert owners reduces wasted FLOPs versus dense split-by-op.
+3. OP-tree micro-splitting causes network serialization overhead that dominates on commodity nodes.
+4. Coarse blocks keep data movement bounded and make orchestrator retries tractable.
+
+### King Infra Mapping (Non-Negotiable)
+
+1. **IIBIN**
+   - encode `RoutePlan`, `ExpertBatch`, `ExpertResult`, and `LayerMerge` payloads.
+   - include tensor metadata (shape, dtype, quantization, checksum, sequence/window id).
+2. **WebSocket**
+   - control channel for lease, ack, cancel, backpressure, and heartbeat.
+   - binary IIBIN envelopes for control-path determinism.
+3. **SFU**
+   - fast fanout for observers/replicas and live partial stream visibility.
+   - not the source of truth for completion; orchestrator state remains authoritative.
+4. **Gossip Mesh**
+   - quick propagation of capability/health deltas and hot-node pressure signals.
+   - bounded TTL and duplicate suppression to avoid storms.
+5. **Pipeline Orchestrator**
+   - single request = one run; each routed expert batch = step.
+   - merge/reduce = explicit terminal steps with idempotency keys.
+
+### Orchestrator DAG Shape
+
+1. `prepare_inputs`
+2. `route_tokens_topk`
+3. `dispatch_expert_batch::<node/expert>` (parallel fanout)
+4. `collect_expert_results`
+5. `merge_weighted_outputs`
+6. `next_layer_or_decode`
+7. `emit_final`
+
+Rules:
+1. retries only at step boundaries.
+2. lease timeout triggers reassignment or hedged execution.
+3. duplicate completions are dropped by `idempotency_key`.
+
+### Placement and Scheduling Rules
+
+1. Keep expert ownership sticky per time window to improve cache locality.
+2. Co-locate experts with high co-activation probability when possible.
+3. Use adaptive micro-batching:
+   - larger batch for stable low-RTT peers
+   - smaller batch for weak/high-jitter peers.
+4. Use hedged dispatch for stragglers on critical path layers.
+5. Enforce per-node in-flight byte and step caps to prevent queue collapse.
+
+### Latency Budget Guardrails
+
+For each dispatch candidate:
+1. estimate `remote_total = net_out + queue + compute + net_back + merge`.
+2. estimate `local_total = local_queue + local_compute`.
+3. dispatch remote only if `remote_total + safety_margin < local_total`.
+
+Safety margin should be dynamic from recent p95 jitter and timeout rate.
+
+### Practical Constraints
+
+1. Expert-per-node works best when expert weights are resident and warm.
+2. If experts are too large for many peers, shard by expert group instead of single expert.
+3. For very weak nodes, assign CPU-safe preprocessing/postprocessing chunks, not hot MoE path.
+4. Keep payloads quantized/compressed where acceptable, with deterministic decode checksums.
+
 ## State and Consistency Model
 
 1. **Authoritative state**:

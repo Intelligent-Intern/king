@@ -1,7 +1,7 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define to 1 if the PHP extension 'king' is built as a dynamic module. */
+/* Whether to build king as dynamic module */
 #define COMPILE_DL_KING 1
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
@@ -9,6 +9,12 @@
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 /* #undef HAVE_INTTYPES_H */
+
+/* Whether optional BoringSSL build paths were configured */
+/* #undef HAVE_KING_BORINGSSL */
+
+/* Whether optional LSQUIC build paths were configured */
+/* #undef HAVE_KING_LSQUIC */
 
 /* Define to 1 if you have the <stdint.h> header file. */
 /* #undef HAVE_STDINT_H */
@@ -34,8 +40,8 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 /* #undef HAVE_UNISTD_H */
 
-/* Define to the sub-directory where libtool stores uninstalled libraries. */
-#define LT_OBJDIR ".libs/"
+/* Whether the HTTP/3 build is configured for LSQUIC */
+/* #undef KING_HTTP3_BACKEND_LSQUIC */
 
 /* Define to the address where bug reports for this package should be sent. */
 /* #undef PACKAGE_BUGREPORT */
@@ -55,7 +61,7 @@
 /* Define to the version of this package. */
 /* #undef PACKAGE_VERSION */
 
-/* Define to 1 if all of the C90 standard headers exist (not just the ones
+/* Define to 1 if all of the C89 standard headers exist (not just the ones
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
 /* #undef STDC_HEADERS */
