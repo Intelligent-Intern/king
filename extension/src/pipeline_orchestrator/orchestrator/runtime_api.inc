@@ -1678,6 +1678,368 @@ static int king_orchestrator_execute_existing_run(
     return SUCCESS;
 }
 
+static zend_result king_orchestrator_prepare_execution_pipeline(
+    zval *pipeline_input,
+    zval *normalized_pipeline_out,
+    const char *function_name,
+    zend_bool throw_on_error
+)
+{
+    const char *fn = function_name != NULL ? function_name : "king_pipeline_orchestrator_run";
+    zval *steps_value;
+    HashTable *steps_ht;
+    zval *step;
+    size_t step_count;
+    zend_bool explicit_graph = 0;
+    zend_bool has_graph_markers = 0;
+    zval *step_defs = NULL;
+    zend_string **step_ids = NULL;
+    zval *dependents = NULL;
+    zend_long *indegree = NULL;
+    zend_long *queue = NULL;
+    HashTable id_to_index;
+    zend_bool id_to_index_initialized = 0;
+    size_t index = 0;
+    zend_long queue_head = 0;
+    zend_long queue_tail = 0;
+    zend_long processed_count = 0;
+    char message[KING_ERR_LEN];
+    zend_result rc = FAILURE;
+
+    ZVAL_UNDEF(normalized_pipeline_out);
+
+    if (pipeline_input == NULL || Z_TYPE_P(pipeline_input) != IS_ARRAY) {
+        return king_orchestrator_raise_error(
+            "king_pipeline_orchestrator_run() requires an array pipeline definition.",
+            king_ce_validation_exception,
+            throw_on_error
+        );
+    }
+
+    steps_value = zend_hash_str_find(
+        Z_ARRVAL_P(pipeline_input),
+        "steps",
+        sizeof("steps") - 1
+    );
+    if (steps_value != NULL) {
+        explicit_graph = 1;
+        if (Z_TYPE_P(steps_value) != IS_ARRAY) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() graph pipeline key 'steps' must be an array.",
+                fn
+            );
+            return king_orchestrator_raise_error(
+                message,
+                king_ce_validation_exception,
+                throw_on_error
+            );
+        }
+        steps_ht = Z_ARRVAL_P(steps_value);
+    } else {
+        steps_ht = Z_ARRVAL_P(pipeline_input);
+    }
+
+    if (zend_hash_num_elements(steps_ht) == 0) {
+        array_init(normalized_pipeline_out);
+        return SUCCESS;
+    }
+
+    ZEND_HASH_FOREACH_VAL(steps_ht, step) {
+        if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+            break;
+        }
+        if (
+            zend_hash_str_find(Z_ARRVAL_P(step), "id", sizeof("id") - 1) != NULL
+            || zend_hash_str_find(Z_ARRVAL_P(step), "deps", sizeof("deps") - 1) != NULL
+        ) {
+            has_graph_markers = 1;
+            break;
+        }
+    } ZEND_HASH_FOREACH_END();
+
+    if (!explicit_graph && !has_graph_markers) {
+        if (steps_value != NULL) {
+            ZVAL_COPY(normalized_pipeline_out, steps_value);
+        } else {
+            ZVAL_COPY(normalized_pipeline_out, pipeline_input);
+        }
+        return SUCCESS;
+    }
+
+    step_count = zend_hash_num_elements(steps_ht);
+    step_defs = safe_emalloc(step_count, sizeof(zval), 0);
+    step_ids = safe_emalloc(step_count, sizeof(zend_string *), 0);
+    dependents = safe_emalloc(step_count, sizeof(zval), 0);
+    indegree = safe_emalloc(step_count, sizeof(zend_long), 0);
+    queue = safe_emalloc(step_count, sizeof(zend_long), 0);
+
+    for (index = 0; index < step_count; index++) {
+        ZVAL_UNDEF(&step_defs[index]);
+        step_ids[index] = NULL;
+        ZVAL_UNDEF(&dependents[index]);
+        indegree[index] = 0;
+        queue[index] = 0;
+    }
+
+    zend_hash_init(&id_to_index, (uint32_t) step_count, NULL, ZVAL_PTR_DTOR, 0);
+    id_to_index_initialized = 1;
+
+    index = 0;
+    ZEND_HASH_FOREACH_VAL(steps_ht, step) {
+        zval *id_value;
+        zval idx;
+
+        if (step == NULL || Z_TYPE_P(step) != IS_ARRAY) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() graph step %zu must be an array.",
+                fn,
+                index
+            );
+            goto cleanup;
+        }
+
+        ZVAL_COPY(&step_defs[index], step);
+        SEPARATE_ARRAY(&step_defs[index]);
+        array_init(&dependents[index]);
+
+        id_value = zend_hash_str_find(
+            Z_ARRVAL(step_defs[index]),
+            "id",
+            sizeof("id") - 1
+        );
+        if (id_value != NULL && Z_TYPE_P(id_value) != IS_NULL) {
+            if (Z_TYPE_P(id_value) != IS_STRING || Z_STRLEN_P(id_value) == 0) {
+                snprintf(
+                    message,
+                    sizeof(message),
+                    "%s() graph step %zu requires a non-empty string 'id' when provided.",
+                    fn,
+                    index
+                );
+                goto cleanup;
+            }
+            step_ids[index] = zend_string_copy(Z_STR_P(id_value));
+        } else {
+            step_ids[index] = strpprintf(0, "step-%zu", index);
+            add_assoc_stringl(
+                &step_defs[index],
+                "id",
+                ZSTR_VAL(step_ids[index]),
+                ZSTR_LEN(step_ids[index])
+            );
+        }
+
+        if (zend_hash_exists(&id_to_index, step_ids[index])) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() graph pipeline contains a duplicate step id '%s'.",
+                fn,
+                ZSTR_VAL(step_ids[index])
+            );
+            goto cleanup;
+        }
+
+        ZVAL_LONG(&idx, (zend_long) index);
+        zend_hash_update(&id_to_index, step_ids[index], &idx);
+        index++;
+    } ZEND_HASH_FOREACH_END();
+
+    for (index = 0; index < step_count; index++) {
+        zval *deps_value = zend_hash_str_find(
+            Z_ARRVAL(step_defs[index]),
+            "deps",
+            sizeof("deps") - 1
+        );
+
+        if (deps_value == NULL || Z_TYPE_P(deps_value) == IS_NULL) {
+            continue;
+        }
+
+        if (Z_TYPE_P(deps_value) != IS_ARRAY) {
+            snprintf(
+                message,
+                sizeof(message),
+                "%s() graph step '%s' key 'deps' must be an array when provided.",
+                fn,
+                step_ids[index] != NULL ? ZSTR_VAL(step_ids[index]) : "unknown"
+            );
+            goto cleanup;
+        }
+
+        {
+            HashTable seen_dependencies;
+            zval *dep_entry;
+
+            zend_hash_init(&seen_dependencies, 0, NULL, NULL, 0);
+            ZEND_HASH_FOREACH_VAL(Z_ARRVAL_P(deps_value), dep_entry) {
+                zval *dep_index_zv;
+                zend_long dep_index;
+
+                if (
+                    dep_entry == NULL
+                    || Z_TYPE_P(dep_entry) != IS_STRING
+                    || Z_STRLEN_P(dep_entry) == 0
+                ) {
+                    zend_hash_destroy(&seen_dependencies);
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "%s() graph step '%s' contains a non-string dependency id.",
+                        fn,
+                        step_ids[index] != NULL ? ZSTR_VAL(step_ids[index]) : "unknown"
+                    );
+                    goto cleanup;
+                }
+
+                dep_index_zv = zend_hash_find(&id_to_index, Z_STR_P(dep_entry));
+                if (dep_index_zv == NULL || Z_TYPE_P(dep_index_zv) != IS_LONG) {
+                    zend_hash_destroy(&seen_dependencies);
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "%s() graph step '%s' references unknown dependency '%s'.",
+                        fn,
+                        step_ids[index] != NULL ? ZSTR_VAL(step_ids[index]) : "unknown",
+                        Z_STRVAL_P(dep_entry)
+                    );
+                    goto cleanup;
+                }
+
+                dep_index = Z_LVAL_P(dep_index_zv);
+                if (dep_index == (zend_long) index) {
+                    zend_hash_destroy(&seen_dependencies);
+                    snprintf(
+                        message,
+                        sizeof(message),
+                        "%s() graph step '%s' cannot depend on itself.",
+                        fn,
+                        step_ids[index] != NULL ? ZSTR_VAL(step_ids[index]) : "unknown"
+                    );
+                    goto cleanup;
+                }
+
+                if (zend_hash_index_exists(&seen_dependencies, (zend_ulong) dep_index)) {
+                    continue;
+                }
+
+                zend_hash_index_add_empty_element(&seen_dependencies, (zend_ulong) dep_index);
+                indegree[index]++;
+                add_next_index_long(&dependents[dep_index], (zend_long) index);
+            } ZEND_HASH_FOREACH_END();
+            zend_hash_destroy(&seen_dependencies);
+        }
+    }
+
+    for (index = 0; index < step_count; index++) {
+        if (indegree[index] == 0) {
+            queue[queue_tail++] = (zend_long) index;
+        }
+    }
+
+    array_init(normalized_pipeline_out);
+    while (queue_head < queue_tail) {
+        zend_long current_index = queue[queue_head++];
+        zval *dependent_index_value;
+
+        add_next_index_zval(normalized_pipeline_out, &step_defs[current_index]);
+        ZVAL_UNDEF(&step_defs[current_index]);
+        processed_count++;
+
+        ZEND_HASH_FOREACH_VAL(Z_ARRVAL(dependents[current_index]), dependent_index_value) {
+            zend_long dependent_index;
+
+            if (
+                dependent_index_value == NULL
+                || Z_TYPE_P(dependent_index_value) != IS_LONG
+            ) {
+                continue;
+            }
+
+            dependent_index = Z_LVAL_P(dependent_index_value);
+            if (dependent_index < 0 || dependent_index >= (zend_long) step_count) {
+                continue;
+            }
+
+            indegree[dependent_index]--;
+            if (indegree[dependent_index] == 0) {
+                queue[queue_tail++] = dependent_index;
+            }
+        } ZEND_HASH_FOREACH_END();
+    }
+
+    if (processed_count != (zend_long) step_count) {
+        snprintf(
+            message,
+            sizeof(message),
+            "%s() graph pipeline contains a cycle or unresolved dependency chain.",
+            fn
+        );
+        goto cleanup;
+    }
+
+    rc = SUCCESS;
+
+cleanup:
+    if (rc != SUCCESS && !Z_ISUNDEF_P(normalized_pipeline_out)) {
+        zval_ptr_dtor(normalized_pipeline_out);
+        ZVAL_UNDEF(normalized_pipeline_out);
+    }
+
+    if (id_to_index_initialized) {
+        zend_hash_destroy(&id_to_index);
+    }
+
+    if (step_defs != NULL) {
+        for (index = 0; index < step_count; index++) {
+            if (!Z_ISUNDEF(step_defs[index])) {
+                zval_ptr_dtor(&step_defs[index]);
+            }
+        }
+        efree(step_defs);
+    }
+
+    if (step_ids != NULL) {
+        for (index = 0; index < step_count; index++) {
+            if (step_ids[index] != NULL) {
+                zend_string_release(step_ids[index]);
+            }
+        }
+        efree(step_ids);
+    }
+
+    if (dependents != NULL) {
+        for (index = 0; index < step_count; index++) {
+            if (!Z_ISUNDEF(dependents[index])) {
+                zval_ptr_dtor(&dependents[index]);
+            }
+        }
+        efree(dependents);
+    }
+
+    if (indegree != NULL) {
+        efree(indegree);
+    }
+
+    if (queue != NULL) {
+        efree(queue);
+    }
+
+    if (rc == SUCCESS) {
+        return SUCCESS;
+    }
+
+    return king_orchestrator_raise_error(
+        message,
+        king_ce_validation_exception,
+        throw_on_error
+    );
+}
+
 int king_orchestrator_resume_run(
     zend_string *run_id,
     zval *return_value,
@@ -1796,6 +2158,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
 {
     zend_string *run_id;
     zval sanitized_options;
+    zval normalized_pipeline;
     zval telemetry_parent_context;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
@@ -1803,6 +2166,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     int rc = FAILURE;
 
     ZVAL_UNDEF(&sanitized_options);
+    ZVAL_UNDEF(&normalized_pipeline);
     ZVAL_NULL(&telemetry_parent_context);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
@@ -1869,10 +2233,21 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         goto cleanup;
     }
 
+    if (
+        king_orchestrator_prepare_execution_pipeline(
+            pipeline_array,
+            &normalized_pipeline,
+            "king_pipeline_orchestrator_run",
+            1
+        ) != SUCCESS
+    ) {
+        goto cleanup;
+    }
+
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(
         initial_data,
-        pipeline_array,
+        &normalized_pipeline,
         persisted_options,
         &telemetry_parent_context,
         "running"
@@ -1898,7 +2273,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         rc = king_orchestrator_execute_remote_run(
             run_id,
             initial_data,
-            pipeline_array,
+            &normalized_pipeline,
             persisted_options,
             return_value,
             &control,
@@ -1909,7 +2284,7 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
         rc = king_orchestrator_execute_existing_run(
             run_id,
             initial_data,
-            pipeline_array,
+            &normalized_pipeline,
             return_value,
             &control,
             "king_pipeline_orchestrator_run",
@@ -1921,6 +2296,9 @@ int king_orchestrator_run(zval *initial_data, zval *pipeline_array, zval *option
     }
     zend_string_release(run_id);
 cleanup:
+    if (!Z_ISUNDEF(normalized_pipeline)) {
+        zval_ptr_dtor(&normalized_pipeline);
+    }
     if (!Z_ISUNDEF(sanitized_options)) {
         zval_ptr_dtor(&sanitized_options);
     }
@@ -1933,12 +2311,14 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
 {
     zend_string *run_id;
     zval sanitized_options;
+    zval normalized_pipeline;
     zval telemetry_parent_context;
     zval *persisted_options;
     king_orchestrator_exec_control_t control;
     int rc = FAILURE;
 
     ZVAL_UNDEF(&sanitized_options);
+    ZVAL_UNDEF(&normalized_pipeline);
     ZVAL_NULL(&telemetry_parent_context);
     ZVAL_UNDEF(&control.cancel_token);
     control.run_id = NULL;
@@ -1988,11 +2368,22 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
         goto cleanup;
     }
 
+    if (
+        king_orchestrator_prepare_execution_pipeline(
+            pipeline_array,
+            &normalized_pipeline,
+            "king_pipeline_orchestrator_dispatch",
+            1
+        ) != SUCCESS
+    ) {
+        goto cleanup;
+    }
+
     king_orchestrator_capture_distributed_parent_context(&telemetry_parent_context);
     persisted_options = king_orchestrator_prepare_persisted_options(options, &sanitized_options);
     run_id = king_orchestrator_pipeline_run_begin(
         initial_data,
-        pipeline_array,
+        &normalized_pipeline,
         persisted_options,
         &telemetry_parent_context,
         "queued"
@@ -2028,6 +2419,9 @@ int king_orchestrator_dispatch(zval *initial_data, zval *pipeline_array, zval *o
     zend_string_release(run_id);
     rc = SUCCESS;
 cleanup:
+    if (!Z_ISUNDEF(normalized_pipeline)) {
+        zval_ptr_dtor(&normalized_pipeline);
+    }
     if (!Z_ISUNDEF(sanitized_options)) {
         zval_ptr_dtor(&sanitized_options);
     }

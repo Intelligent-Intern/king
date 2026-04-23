@@ -403,6 +403,15 @@ the tool that should be used for that step. Steps may also carry scheduling
 options such as `delay_ms`, which lets the controller or worker delay the start
 of that step while still honoring timeout, deadline, and cancellation checks.
 
+The runtime now also accepts a graph-shaped submission form:
+
+- top-level key `steps` containing step definitions
+- each step may include `id` and `deps` (array of prerequisite step IDs)
+
+When `id` and `deps` are present, King validates the dependency graph, rejects
+unknown dependencies or cycles, and normalizes the run into a deterministic
+topological step order before persistence and execution.
+
 The important idea is that the pipeline is data, not hidden control flow.
 Because the pipeline is data, King can validate it, persist it, queue it,
 rehydrate it, send it to a remote peer, and inspect it after the fact.
@@ -411,6 +420,11 @@ That is one of the biggest practical differences between an orchestrated
 workflow and in-process callback chaining. In King, workflow data crosses
 durable boundaries while executable handlers are re-registered on the process
 that owns execution (the app-worker boundary).
+
+The graph submission form is a control-plane contract, not a promise of
+fine-grained in-process parallel execution. The current execution slice still
+advances one validated step at a time at explicit step boundaries, which keeps
+retry and persisted run-history semantics stable.
 
 ## Run Lifecycle
 
