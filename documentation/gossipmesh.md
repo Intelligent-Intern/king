@@ -43,6 +43,18 @@ given `call_id`, `room_id`, seed, and member set.
 
 `videochat_gossipmesh_plan_message_route()` validates a protected transport envelope, applies duplicate suppression, honors TTL, selects bounded forward targets, and uses relay fallback when a direct target is marked failed and a safe relay candidate exists.
 
+## SFU Constraints
+
+The current `/sfu` gateway remains the production media-signaling entry point.
+It admits a socket only after handshake validation, session auth, RBAC,
+explicit `room_id` binding, optional normalized `call_id` binding, and either
+current room membership or DB-backed participant admission.
+
+Process-local `$sfuClients` and `$sfuRooms` are live socket indexes only. They
+are not room identity, call identity, participant state, or admission state.
+Client frames are decoded against the already-bound room, so browser code
+cannot switch rooms or invent call state after the gateway admits a socket.
+
 ## Payload Protection
 
 Transport security alone is not enough for this contract. WebSocket, TLS,

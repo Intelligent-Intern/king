@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 SFU constraint preservation: pinned the stronger current `/sfu` contract for GossipMesh integration. The gateway must bind `room_id`/`call_id`, authorize via session/RBAC, require current room membership or DB-backed participant admission, treat process-local SFU arrays as live socket indexes only, and decode client frames against the bound room. Added `727-gossipmesh-sfu-constraints-contract.phpt`.
+
 - 2026-04-23 Q-14 GossipMesh production docs: added `documentation/gossipmesh.md` only after the backend-authoritative runtime contract and tests existed. The doc covers the current `wlvc_sfu` runtime helper, protected-envelope routing, duplicate/TTL/relay failure behavior, frontend fold-in boundary, inactive experiment behaviors, and provenance rules. Added `726-gossipmesh-production-doc-contract.phpt`.
 
 - 2026-04-23 Q-14 GossipMesh runtime contract coverage: expanded `realtime-gossipmesh-runtime-contract.php` and `realtime_gossipmesh.php` to prove message routing, admitted-member filtering, protected transport-envelope/IIBIN-style contract use, duplicate suppression, TTL no-forward behavior, relay fallback, and failure paths for plaintext payloads, missing envelope contracts, duplicate frames, unknown publishers, and unavailable relays. Added `725-gossipmesh-runtime-coverage-contract.phpt`.

@@ -97,7 +97,7 @@ Checklist:
 - [x] Decide whether `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` should be ported, replaced, or folded into the current SFU client.
 - [x] Add contract tests for GossipMesh message routing, membership, IIBIN envelope use, duplicate suppression, TTL handling, relay fallback, and failure behavior.
 - [x] Add `documentation/gossipmesh.md` only after the production contract matches the implementation.
-- [ ] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
+- [x] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
 - [ ] Reject any experiment behavior that weakens current room/admission/security guarantees.
 
 Done:

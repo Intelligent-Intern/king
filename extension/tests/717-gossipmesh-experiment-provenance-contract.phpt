@@ -1,5 +1,5 @@
 --TEST--
-King GossipMesh experiment intake preserves contributor credit before porting
+King GossipMesh experiment intake preserves contributor credit through porting
 --FILE--
 <?php
 $root = dirname(__DIR__, 2);
@@ -39,7 +39,8 @@ $provenanceNeedles = [
     'Do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks',
     'explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state',
     'Treat direct P2P/DataChannel behavior as research',
-    'No GossipMesh/SFU production code has been ported yet under Q-14.',
+    'A compatible server-authoritative runtime slice has been ported as `demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php`.',
+    'Raw experiment transport, browser authority, process-local room state, generated artifacts, and debug scaffolding remain excluded.',
 ];
 
 foreach ($provenanceNeedles as $needle) {

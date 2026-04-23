@@ -132,3 +132,12 @@ Production documentation:
 - `documentation/gossipmesh.md` is now allowed because the production runtime contract exists and is covered by tests.
 - The doc describes only the current backend-authoritative `wlvc_sfu` topology/routing helper, protected-envelope requirement, failure behavior, inactive experiment behaviors, frontend integration boundary, and provenance rules.
 - It must not reintroduce the experiment documentation as product semantics.
+
+SFU constraint preservation:
+- The active `/sfu` gateway remains the only production entry point for SFU media signaling. The experiment `sfu_signaling.php` stays rejected as a replacement.
+- It binds every SFU socket to a validated `room_id` and optional normalized `call_id` before WebSocket upgrade.
+- Admission is current room membership or DB-backed admission through `videochat_realtime_user_has_sfu_room_admission()`.
+- Durable SFU admission comes from current room presence plus the database-backed `calls`, `rooms`, and `call_participants` state, including participant role and invite state.
+- Process-local `$sfuClients` and `$sfuRooms` are live socket indexes only after admission. They are not durable room identity, call identity, participant state, or admission state.
+- Client SFU frames are decoded against the already-bound room through `videochat_sfu_decode_client_frame($msgJson, $roomId)`.
+- The experiment may add topology hints after admission, but it must not create room identity, call identity, participant state, or admission state from client input.
