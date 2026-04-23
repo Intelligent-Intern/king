@@ -123,3 +123,7 @@ Frontend client integration decision:
 - Browser code must not generate peer identity, create room state, select topology, open direct DataChannels, pick relay authority, add public STUN/TURN defaults, or downgrade protected frames to JSON/plaintext.
 - A future folded SFU-client extension must preserve existing backend-origin failover, `room_id` and `call_id` query binding, `protected_frame` carriage, `protection_mode` honesty, and current `sfu/frame` parsing semantics.
 - Direct P2P/WebRTC-native behavior remains research until it is specified as a separate backend-authoritative `webrtc_native` contract with admission, revocation, rekey, relay, and downgrade tests.
+
+Runtime contract-test coverage:
+- `realtime-gossipmesh-runtime-contract.php` covers admitted-member filtering, rejected-member accounting, deterministic topology, bounded neighbor fanout, relay candidate ranking, duplicate suppression, TTL expiry, protected-envelope validation, route planning, relay fallback, and failure cases for plaintext data, missing envelope contract, duplicate frames, unknown publishers, and unavailable relays.
+- `725-gossipmesh-runtime-coverage-contract.phpt` pins that the runtime exposes only backend-owned helpers for protected-envelope routing and that the coverage remains wired into `SPRINT.md` and `READYNESS_TRACKER.md`.

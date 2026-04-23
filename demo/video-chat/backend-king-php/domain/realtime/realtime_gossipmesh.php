@@ -10,6 +10,7 @@ const VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS = 4;
 const VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT = 2;
 const VIDEOCHAT_GOSSIPMESH_SEEN_WINDOW_SIZE = 256;
 const VIDEOCHAT_GOSSIPMESH_MAX_RELAY_CANDIDATES = 10;
+const VIDEOCHAT_GOSSIPMESH_MAX_PROTECTED_FRAME_BYTES = 16_781_320;
 
 /**
  * @return array<int, string>
@@ -284,4 +285,167 @@ function videochat_gossipmesh_select_forward_targets(array $neighbors, string $p
     });
 
     return array_slice($safeNeighbors, 0, min($forwardCount, count($safeNeighbors)));
+}
+
+/**
+ * @return array{ok: bool, protected_frame: string, error: string}
+ */
+function videochat_gossipmesh_validate_transport_envelope(array $envelope): array
+{
+    foreach (videochat_gossipmesh_forbidden_payload_fields() as $field) {
+        if (array_key_exists($field, $envelope)) {
+            return ['ok' => false, 'protected_frame' => '', 'error' => 'forbidden_plaintext_or_secret_field'];
+        }
+    }
+
+    if (array_key_exists('data', $envelope)) {
+        return ['ok' => false, 'protected_frame' => '', 'error' => 'legacy_plaintext_data_forbidden'];
+    }
+
+    $contract = (string) ($envelope['envelope_contract'] ?? $envelope['contract'] ?? '');
+    if ($contract !== VIDEOCHAT_GOSSIPMESH_ENVELOPE_CONTRACT) {
+        return ['ok' => false, 'protected_frame' => '', 'error' => 'missing_protected_envelope_contract'];
+    }
+
+    $protectedFrame = trim((string) ($envelope['protected_frame'] ?? ''));
+    if ($protectedFrame === '') {
+        return ['ok' => false, 'protected_frame' => '', 'error' => 'missing_protected_frame'];
+    }
+    if (strlen($protectedFrame) > VIDEOCHAT_GOSSIPMESH_MAX_PROTECTED_FRAME_BYTES) {
+        return ['ok' => false, 'protected_frame' => '', 'error' => 'protected_frame_too_large'];
+    }
+    if (preg_match('/^[A-Za-z0-9_-]+$/', $protectedFrame) !== 1) {
+        return ['ok' => false, 'protected_frame' => '', 'error' => 'malformed_protected_frame'];
+    }
+
+    return ['ok' => true, 'protected_frame' => $protectedFrame, 'error' => ''];
+}
+
+/**
+ * @param array{
+ *   topology: array<string, array<int, string>>,
+ *   relay_candidates: array<int, string>,
+ *   forward_count: int
+ * } $topologyPlan
+ * @param array<string, bool> $failedPeers
+ * @return array{
+ *   ok: bool,
+ *   error: string,
+ *   duplicate: bool,
+ *   ttl: int,
+ *   next_ttl: int,
+ *   direct_targets: array<int, string>,
+ *   relay_targets: array<int, array{target_id: string, relay_id: string}>,
+ *   seen_window: array<int, string>
+ * }
+ */
+function videochat_gossipmesh_plan_message_route(
+    array $topologyPlan,
+    array $seenWindow,
+    string $publisherId,
+    int $sequence,
+    int $ttl,
+    array $transportEnvelope,
+    array $failedPeers = []
+): array {
+    $baseFailure = [
+        'ok' => false,
+        'error' => '',
+        'duplicate' => false,
+        'ttl' => $ttl,
+        'next_ttl' => max(0, $ttl - 1),
+        'direct_targets' => [],
+        'relay_targets' => [],
+        'seen_window' => array_values($seenWindow),
+    ];
+
+    $publisherId = videochat_gossipmesh_safe_id($publisherId);
+    if ($publisherId === '') {
+        return [...$baseFailure, 'error' => 'invalid_publisher'];
+    }
+    if ($sequence < 0) {
+        return [...$baseFailure, 'error' => 'invalid_sequence'];
+    }
+
+    $envelope = videochat_gossipmesh_validate_transport_envelope($transportEnvelope);
+    if (!$envelope['ok']) {
+        return [...$baseFailure, 'error' => $envelope['error']];
+    }
+
+    $accepted = videochat_gossipmesh_accept_frame_once($seenWindow, $publisherId, $sequence);
+    if (!$accepted['accepted']) {
+        return [
+            ...$baseFailure,
+            'ok' => false,
+            'error' => $accepted['duplicate'] ? 'duplicate_frame' : 'frame_rejected',
+            'duplicate' => $accepted['duplicate'],
+            'seen_window' => $accepted['seen_window'],
+        ];
+    }
+
+    if ($ttl <= 0) {
+        return [
+            ...$baseFailure,
+            'ok' => true,
+            'error' => '',
+            'seen_window' => $accepted['seen_window'],
+        ];
+    }
+
+    $neighbors = $topologyPlan['topology'][$publisherId] ?? null;
+    if (!is_array($neighbors)) {
+        return [
+            ...$baseFailure,
+            'error' => 'publisher_not_in_topology',
+            'seen_window' => $accepted['seen_window'],
+        ];
+    }
+
+    $forwardCount = videochat_gossipmesh_clamp_int(
+        $topologyPlan['forward_count'] ?? VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
+        VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
+        1,
+        VIDEOCHAT_GOSSIPMESH_MAX_NEIGHBORS
+    );
+    $targets = videochat_gossipmesh_select_forward_targets($neighbors, $publisherId, $sequence, $ttl, $forwardCount);
+    $relayCandidates = array_values(array_filter(
+        $topologyPlan['relay_candidates'] ?? [],
+        static fn(mixed $value): bool => is_string($value) && videochat_gossipmesh_safe_id($value) !== ''
+    ));
+    $directTargets = [];
+    $relayTargets = [];
+
+    foreach ($targets as $targetId) {
+        if (($failedPeers[$targetId] ?? false) !== true) {
+            $directTargets[] = $targetId;
+            continue;
+        }
+
+        $relayId = '';
+        foreach ($relayCandidates as $candidateId) {
+            if ($candidateId !== $targetId && $candidateId !== $publisherId && ($failedPeers[$candidateId] ?? false) !== true) {
+                $relayId = $candidateId;
+                break;
+            }
+        }
+        if ($relayId === '') {
+            return [
+                ...$baseFailure,
+                'error' => 'relay_unavailable',
+                'seen_window' => $accepted['seen_window'],
+            ];
+        }
+        $relayTargets[] = ['target_id' => $targetId, 'relay_id' => $relayId];
+    }
+
+    return [
+        'ok' => true,
+        'error' => '',
+        'duplicate' => false,
+        'ttl' => $ttl,
+        'next_ttl' => $ttl - 1,
+        'direct_targets' => $directTargets,
+        'relay_targets' => $relayTargets,
+        'seen_window' => $accepted['seen_window'],
+    ];
 }

@@ -108,6 +108,65 @@ videochat_gossipmesh_test_assert(
     'expired TTL must not forward'
 );
 
+$envelope = [
+    'envelope_contract' => VIDEOCHAT_GOSSIPMESH_ENVELOPE_CONTRACT,
+    'protected_frame' => rtrim(strtr(base64_encode('KPMF contract frame'), '+/', '-_'), '='),
+];
+$route = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 50, 3, $envelope, []);
+videochat_gossipmesh_test_assert($route['ok'] === true, 'valid protected envelope should route');
+videochat_gossipmesh_test_assert($route['next_ttl'] === 2, 'route should decrement TTL');
+videochat_gossipmesh_test_assert(count($route['direct_targets']) + count($route['relay_targets']) <= $plan['forward_count'], 'route fanout must be bounded');
+videochat_gossipmesh_test_assert($route['seen_window'] === ['owner-1:50'], 'route should update duplicate window');
+
+$duplicateRoute = videochat_gossipmesh_plan_message_route($plan, $route['seen_window'], 'owner-1', 50, 3, $envelope, []);
+videochat_gossipmesh_test_assert($duplicateRoute['ok'] === false, 'duplicate route should fail');
+videochat_gossipmesh_test_assert($duplicateRoute['duplicate'] === true, 'duplicate route should be classified');
+videochat_gossipmesh_test_assert($duplicateRoute['error'] === 'duplicate_frame', 'duplicate error code mismatch');
+
+$expiredRoute = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 51, 0, $envelope, []);
+videochat_gossipmesh_test_assert($expiredRoute['ok'] === true, 'expired TTL route should be accepted for local delivery');
+videochat_gossipmesh_test_assert($expiredRoute['direct_targets'] === [] && $expiredRoute['relay_targets'] === [], 'expired TTL route must not forward');
+
+$badEnvelope = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 52, 3, [
+    'envelope_contract' => VIDEOCHAT_GOSSIPMESH_ENVELOPE_CONTRACT,
+    'protected_frame' => 'KPMF',
+    'data' => [1, 2, 3],
+], []);
+videochat_gossipmesh_test_assert($badEnvelope['ok'] === false, 'legacy plaintext data must fail');
+videochat_gossipmesh_test_assert($badEnvelope['error'] === 'legacy_plaintext_data_forbidden', 'legacy plaintext data error mismatch');
+
+$missingEnvelope = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 53, 3, [
+    'protected_frame' => 'KPMF',
+], []);
+videochat_gossipmesh_test_assert($missingEnvelope['ok'] === false, 'missing envelope contract must fail');
+videochat_gossipmesh_test_assert($missingEnvelope['error'] === 'missing_protected_envelope_contract', 'missing envelope error mismatch');
+
+$routeTargetProbe = videochat_gossipmesh_select_forward_targets($plan['topology']['owner-1'], 'owner-1', 54, 3, $plan['forward_count']);
+videochat_gossipmesh_test_assert(count($routeTargetProbe) > 0, 'route probe needs at least one target for relay test');
+$failedTarget = $routeTargetProbe[0];
+$relayRoute = videochat_gossipmesh_plan_message_route($plan, [], 'owner-1', 54, 3, $envelope, [$failedTarget => true]);
+videochat_gossipmesh_test_assert($relayRoute['ok'] === true, 'failed direct target should use relay fallback when available');
+videochat_gossipmesh_test_assert(count($relayRoute['relay_targets']) === 1, 'relay fallback target count mismatch');
+videochat_gossipmesh_test_assert($relayRoute['relay_targets'][0]['target_id'] === $failedTarget, 'relay fallback target id mismatch');
+videochat_gossipmesh_test_assert($relayRoute['relay_targets'][0]['relay_id'] !== $failedTarget, 'relay must not be failed target');
+videochat_gossipmesh_test_assert($relayRoute['relay_targets'][0]['relay_id'] !== 'owner-1', 'relay must not be publisher');
+
+$relayUnavailable = videochat_gossipmesh_plan_message_route(
+    [...$plan, 'relay_candidates' => [$failedTarget, 'owner-1']],
+    [],
+    'owner-1',
+    55,
+    3,
+    $envelope,
+    [$failedTarget => true]
+);
+videochat_gossipmesh_test_assert($relayUnavailable['ok'] === false, 'missing relay candidate should fail');
+videochat_gossipmesh_test_assert($relayUnavailable['error'] === 'relay_unavailable', 'relay unavailable error mismatch');
+
+$unknownPublisher = videochat_gossipmesh_plan_message_route($plan, [], 'ghost', 56, 3, $envelope, []);
+videochat_gossipmesh_test_assert($unknownPublisher['ok'] === false, 'unknown publisher should fail');
+videochat_gossipmesh_test_assert($unknownPublisher['error'] === 'publisher_not_in_topology', 'unknown publisher error mismatch');
+
 try {
     videochat_gossipmesh_plan_topology('', 'room-alpha', $members);
     videochat_gossipmesh_test_assert(false, 'missing call_id must throw');
