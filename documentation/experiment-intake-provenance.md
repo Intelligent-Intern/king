@@ -211,4 +211,9 @@ Verified codec port decision:
 - Removed experiment markdown and the duplicate legacy frontend tree are not reintroduced; canonical developer docs stay under `documentation/dev/`.
 - `demo/video-chat/frontend-vue/tests/contract/wlvc-codec-port-contract.mjs` is the targeted frontend guard for this decision.
 
+Explicit WLVC regression checks:
+- `demo/video-chat/frontend-vue/tests/contract/wlvc-runtime-regression-contract.mjs` verifies encode/decode parity with a re-encode byte match and crash-free decode failure results for malformed inputs.
+- The same guard pins runtime-path switching: capability probing prefers `wlvc_wasm`, falls back to `webrtc_native`, records transition telemetry, tears down the inactive transport, and fails closed to `unsupported` when neither path is available.
+- The remote-render guard pins SFU frame continuity: frames can create a remote peer before track metadata arrives, decoded canvases are rendered into primary/mini/grid slots through user-id mapping, activity is marked from remote frames, and render-version changes happen once per peer-map mutation.
+
 Remaining Q-15 leaves decide which other current stronger behavior must stay pinned and whether any remaining experiment diff should be ported.
