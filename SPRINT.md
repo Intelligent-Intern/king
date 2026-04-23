@@ -64,7 +64,7 @@ Goal:
 Checklist:
 - [x] Preserve contributor credit for the experiment work.
 - [x] Port branchless varint encode and architecture-safe decode improvements into `extension/include/iibin/iibin_internal.h`.
-- [ ] Review whether ARM64-specific unrolling belongs in production or should stay behind a guarded helper.
+- [x] Review whether ARM64-specific unrolling belongs in production or should stay behind a guarded helper.
 - [ ] Consolidate float/double bit helpers without duplicating logic across encode/decode/prelude paths.
 - [ ] Add `king_proto_encode_batch(schema, records[])` and `king_proto_decode_batch(schema, binary_records[], options)` as stable public API only if the contract is fully validated.
 - [ ] Add internal `king_iibin_encode_batch()` and `king_iibin_decode_batch()` with bounded memory behavior and per-record error handling.

@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-13 ARM64 varint policy: reviewed the experiment ARM64 decode unrolling from `a669b09` and kept it out of the active product path until a guarded architecture profile has benchmark, sanitizer, and parity coverage. Added `709-proto-varint-architecture-policy-contract.phpt` to pin the decision.
+
 - 2026-04-23 Q-13 varint port: manually ported the experiment varint intent from `3267785` and `a669b09` into `extension/include/iibin/iibin_internal.h` with canonical unrolled encode boundaries and uint64 overflow-safe decode. Added `708-proto-varint-boundary-contract.phpt`; local PHPT passed. A full local `make -C extension` is blocked by the existing generated Makefile still requiring `../quiche`, not by the Varint header change.
 
 - 2026-04-23 Q-13 experiment intake provenance: recorded the source commits and author identity for the IIBIN/proto batch and varint work in `documentation/experiment-intake-provenance.md`; subsequent ports must preserve source commit context with `git cherry-pick -x` or explicit source trailers.
