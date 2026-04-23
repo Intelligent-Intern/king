@@ -6,8 +6,9 @@ $root = dirname(__DIR__, 2);
 $header = file_get_contents($root . '/extension/include/iibin/iibin_internal.h');
 $encoding = file_get_contents($root . '/extension/src/iibin/iibin_encoding.c');
 $decoding = file_get_contents($root . '/extension/src/iibin/iibin_decoding.c');
+$prelude = file_get_contents($root . '/extension/src/core/introspection/prelude/types.inc');
 
-if (!is_string($header) || !is_string($encoding) || !is_string($decoding)) {
+if (!is_string($header) || !is_string($encoding) || !is_string($decoding) || !is_string($prelude)) {
     throw new RuntimeException('Could not read IIBIN helper sources.');
 }
 
@@ -25,6 +26,7 @@ foreach ([
 foreach ([
     'iibin_encoding.c' => $encoding,
     'iibin_decoding.c' => $decoding,
+    'prelude/types.inc' => $prelude,
 ] as $path => $source) {
     foreach (['king_proto_float_to_bits(', 'king_proto_bits_to_float(', 'king_proto_double_to_bits(', 'king_proto_bits_to_double('] as $needle) {
         if (substr_count($source, $needle) > 0) {
