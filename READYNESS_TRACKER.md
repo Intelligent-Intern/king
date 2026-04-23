@@ -17,6 +17,8 @@ Purpose:
 
 ## Completion Log
 
+- 2026-04-23 Q-14 reusable/experiment-only split: classified reusable GossipMesh topology, signaling, and envelope ideas separately from rejected experiment-only P2P/browser/process-local/plaintext behaviors. The port rule now requires a contract proving rejected behavior stays absent whenever a reusable idea is implemented. Added `720-gossipmesh-reusable-split-contract.phpt`.
+
 - 2026-04-23 Q-14 SFU signaling admission review: compared the experiment `sfu_signaling.php` against the active video-chat `/sfu` gateway and rejected it as a replacement because it is process-local, client-input-driven, and lacks session/RBAC, `call_id`/`room_id`, call-access, participant-state, and protected-frame gates. Reusable bootstrap/neighbor/relay/churn ideas are limited to post-admission topology hints through the existing server-authoritative SFU store. Added `719-gossipmesh-sfu-admission-review-contract.phpt`.
 
 - 2026-04-23 Q-14 GossipMesh API surface decision: reviewed the experiment `extension/src/gossip_mesh/*` surfaces and rejected raw global PHP classes, raw C structs, browser-controlled topology, and process-local room ownership as production API. The accepted production direction is a server-authoritative topology/routing planner with bounded PHP facade/procedural mirrors, internal C helpers only after tests, IIBIN envelopes, and transport effects owned by WS/SFU workers. Added `718-gossipmesh-api-surface-decision-contract.phpt`.
