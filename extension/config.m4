@@ -138,6 +138,7 @@ if test "$PHP_KING" != "no"; then
     KING_BORINGSSL_INCLUDE_DIR="${KING_BORINGSSL_INCLUDE_DIR:-}"
     KING_BORINGSSL_SSL_LIBRARY_DIR="${KING_BORINGSSL_SSL_LIBRARY_DIR:-}"
     KING_BORINGSSL_CRYPTO_LIBRARY_DIR="${KING_BORINGSSL_CRYPTO_LIBRARY_DIR:-}"
+    KING_TLS_LIBS_CONFIGURED="no"
 
     if test "$PHP_KING_BORINGSSL" != "no" || test -n "$KING_BORINGSSL_ROOT$KING_BORINGSSL_INCLUDE_DIR$KING_BORINGSSL_SSL_LIBRARY_DIR$KING_BORINGSSL_CRYPTO_LIBRARY_DIR$KING_BORINGSSL_CFLAGS$KING_BORINGSSL_LIBS"; then
         AC_MSG_CHECKING([for optional BoringSSL build paths])
@@ -148,6 +149,7 @@ if test "$PHP_KING" != "no"; then
             fi
             CFLAGS="$CFLAGS $KING_BORINGSSL_CFLAGS"
             KING_SHARED_LIBADD="$KING_SHARED_LIBADD $KING_BORINGSSL_LIBS"
+            KING_TLS_LIBS_CONFIGURED="yes"
         else
             if test "$PHP_KING_BORINGSSL" != "yes" && test "$PHP_KING_BORINGSSL" != "no"; then
                 KING_BORINGSSL_ROOT="$PHP_KING_BORINGSSL"
@@ -193,6 +195,7 @@ if test "$PHP_KING" != "no"; then
                 fi
                 PHP_ADD_LIBRARY_WITH_PATH([ssl], [$KING_BORINGSSL_SSL_LIBRARY_DIR], [KING_SHARED_LIBADD])
                 PHP_ADD_LIBRARY_WITH_PATH([crypto], [$KING_BORINGSSL_CRYPTO_LIBRARY_DIR], [KING_SHARED_LIBADD])
+                KING_TLS_LIBS_CONFIGURED="yes"
             else
                 AC_CHECK_HEADER([openssl/ssl.h], [], [
                     AC_MSG_ERROR([--with-king-boringssl=yes was provided, but openssl/ssl.h was not found.])
@@ -200,6 +203,7 @@ if test "$PHP_KING" != "no"; then
                 AC_CHECK_LIB([ssl], [SSL_CTX_new], [
                     PHP_ADD_LIBRARY([ssl], [1], [KING_SHARED_LIBADD])
                     PHP_ADD_LIBRARY([crypto], [1], [KING_SHARED_LIBADD])
+                    KING_TLS_LIBS_CONFIGURED="yes"
                 ], [
                     AC_MSG_ERROR([--with-king-boringssl=yes was provided, but libssl/libcrypto were not found in default library paths.])
                 ], [-lcrypto])
@@ -208,6 +212,19 @@ if test "$PHP_KING" != "no"; then
 
         AC_DEFINE([HAVE_KING_BORINGSSL], [1], [Whether optional BoringSSL build paths were configured])
         AC_MSG_RESULT([enabled])
+    fi
+
+    if test "$KING_TLS_LIBS_CONFIGURED" = "no"; then
+        AC_CHECK_HEADER([openssl/ssl.h], [], [
+            AC_MSG_ERROR([King runtime requires OpenSSL/BoringSSL headers (openssl/ssl.h). Install OpenSSL dev headers or configure KING_BORINGSSL_* overrides.])
+        ])
+        AC_CHECK_LIB([ssl], [SSL_CTX_new], [
+            PHP_ADD_LIBRARY([ssl], [1], [KING_SHARED_LIBADD])
+            PHP_ADD_LIBRARY([crypto], [1], [KING_SHARED_LIBADD])
+            KING_TLS_LIBS_CONFIGURED="yes"
+        ], [
+            AC_MSG_ERROR([King runtime requires libssl/libcrypto. Install OpenSSL dev libraries or configure KING_BORINGSSL_* overrides.])
+        ], [-lcrypto])
     fi
 
     dnl ---------------------------------------------------------------------------
@@ -387,6 +404,7 @@ if test "$PHP_KING" != "no"; then
         src/iibin/iibin_schema_compiler.c \
         src/iibin/iibin_encoding.c \
         src/iibin/iibin_decoding.c \
+        src/gossip_mesh/gossip_mesh.c \
         src/semantic_dns/semantic_dns.c \
         src/semantic_dns/mother_node_discovery.c \
         src/semantic_dns/routing.c \

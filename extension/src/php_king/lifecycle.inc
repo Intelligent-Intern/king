@@ -7,6 +7,10 @@
 PHP_MINIT_FUNCTION(king)
 {
     if (king_init_modules(type, module_number) != SUCCESS) {
+        const char *startup_error = king_get_error();
+        if (startup_error != NULL && startup_error[0] != '\0') {
+            php_error_docref(NULL, E_WARNING, "%s", startup_error);
+        }
         return FAILURE;
     }
 

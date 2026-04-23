@@ -9,7 +9,13 @@ static void king_best_effort_random_fill(void *buffer, size_t len)
     unsigned char *cursor = (unsigned char *) buffer;
     size_t offset = 0;
 
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    arc4random_buf(cursor, len);
+    return;
+#endif
+
     while (offset < len) {
+#if defined(__linux__)
         ssize_t written = getrandom(cursor + offset, len - offset, 0);
 
         if (written < 0) {
@@ -20,6 +26,9 @@ static void king_best_effort_random_fill(void *buffer, size_t len)
         }
 
         offset += (size_t) written;
+#else
+        break;
+#endif
     }
 }
 
