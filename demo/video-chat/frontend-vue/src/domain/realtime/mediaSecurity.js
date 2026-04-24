@@ -729,7 +729,7 @@ export class MediaSecuritySession {
     for (const userId of previous) {
       if (!next.has(userId)) this.markPeerRemoved(userId);
     }
-    const changed = this.participantSignature !== '' && this.participantSignature !== nextSignature;
+    const changed = this.participantSignature !== nextSignature;
     this.participantSignature = nextSignature;
     return { changed, userIds: normalized };
   }

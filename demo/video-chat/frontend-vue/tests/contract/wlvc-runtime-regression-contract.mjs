@@ -303,6 +303,7 @@ try {
   requireContains(syncNativeMedia, 'const audioNeedsRebind = peer.audio.srcObject !== nextAudioStream;', 'native audio bridge only rebinds the audio element when the stream object changed');
   requireContains(syncNativeMedia, "void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');", 'native audio bridge retries playback without forcing a fresh load on every sync');
   requireContains(workspace, 'function ensureNativePeerAudioTransceiver', 'native audio bridge ensures an explicit audio transceiver for negotiation');
+  requireContains(workspace, 'function clearMediaSecuritySignalCaches', 'workspace exposes media security signal cache reset helper');
   requireContains(workspace, "() => callMediaPrefs.outgoingVideoQualityProfile", 'workspace watches outgoing video quality profile changes');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
@@ -337,6 +338,8 @@ try {
   requireContains(workspace, 'if (isSocketOnline.value) {', 'connected participant watcher resyncs security only on an open socket');
   requireContains(workspace, 'void syncMediaSecurityWithParticipants();', 'connected participant and bridge watchers resync media security');
   requireContains(workspace, "shouldUseNativeAudioBridge() ? '1' : '0'", 'media security watcher reacts when hybrid audio bridge availability flips');
+  const syncMediaSecurity = extractFunction(workspace, 'syncMediaSecurityWithParticipants');
+  requireContains(syncMediaSecurity, 'clearMediaSecuritySignalCaches();', 'participant churn clears deduplicated media security hello and sender-key caches');
 
   const mediaNode = extractFunction(workspace, 'mediaNodeForUserId');
   requireContains(mediaNode, 'for (const peer of remotePeersRef.value.values())', 'remote media node user lookup');

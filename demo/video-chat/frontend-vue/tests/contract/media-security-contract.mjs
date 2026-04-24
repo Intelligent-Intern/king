@@ -255,6 +255,12 @@ try {
   assert.deepEqual(Array.from(new Uint8Array(hybridDecrypted)), Array.from(plaintext), 'hybrid KEX provider path must protect and decrypt media under the same frame contract');
   assert.equal(hybridAlice.telemetrySnapshot('wlvc_sfu').kex_family, 'hybrid');
 
+  const reconnectSession = createMediaSecuritySession({ callId: 'call-r', roomId: 'room-r', userId: 404 });
+  const firstJoin = reconnectSession.markParticipantSet([505]);
+  assert.equal(firstJoin.changed, true, 'first non-empty participant set must count as a handshake change');
+  const stableJoin = reconnectSession.markParticipantSet([505]);
+  assert.equal(stableJoin.changed, false, 'unchanged participant set must not trigger redundant rekeys');
+
   bob.markPeerRemoved(101);
   await assert.rejects(
     () => bob.decryptFrame({

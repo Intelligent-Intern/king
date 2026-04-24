@@ -1451,6 +1451,11 @@ function mediaSecuritySenderKeySignalKey(targetUserId, session) {
   ].join(':');
 }
 
+function clearMediaSecuritySignalCaches() {
+  mediaSecurityHelloSignalsSent.clear();
+  mediaSecuritySenderKeySignalsSent.clear();
+}
+
 async function sendMediaSecurityHello(targetUserId, force = false) {
   if (!isSocketOnline.value) return false;
   const session = ensureMediaSecuritySession();
@@ -1575,6 +1580,7 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
     const marked = session.markParticipantSet(mediaSecurityTargetIds());
     mediaSecurityStateVersion.value += 1;
     if (forceRekey || marked.changed) {
+      clearMediaSecuritySignalCaches();
       const ready = await session.ensureReady();
       if (!ready) {
         mediaSecurityStateVersion.value += 1;
