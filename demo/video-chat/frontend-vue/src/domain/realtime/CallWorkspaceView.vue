@@ -3,6 +3,9 @@
     <section v-if="workspaceError" class="workspace-call-banner error">
       {{ workspaceError }}
     </section>
+    <section v-if="nativeAudioSecurityBannerMessage" class="workspace-call-banner warning">
+      {{ nativeAudioSecurityBannerMessage }}
+    </section>
     <section v-if="workspaceNotice" class="workspace-call-banner ok">
       {{ workspaceNotice }}
     </section>
@@ -717,7 +720,7 @@ import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 import { createDecoder as createTsDecoder } from '../../lib/wavelet/codec.js';
-import { MEDIA_SECURITY_SIGNAL_TYPES, createMediaSecuritySession } from './mediaSecurity';
+import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './mediaSecurity';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
   ALONE_IDLE_COUNTDOWN_MS,
@@ -976,6 +979,7 @@ const mediaRuntimePath = ref('pending');
 const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
 const mediaRenderVersion = ref(0);
+const mediaSecurityStateVersion = ref(0);
 const dynamicIceServers = ref([]);
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
@@ -1208,9 +1212,27 @@ function isNativeWebRtcRuntimePath() {
   return mediaRuntimePath.value === 'webrtc_native';
 }
 
+function shouldUseNativeAudioBridge() {
+  return SFU_RUNTIME_ENABLED
+    && isWlvcRuntimePath()
+    && Boolean(mediaRuntimeCapabilities.value.stageB)
+    && MediaSecuritySession.supportsNativeTransforms();
+}
+
+function shouldMaintainNativePeerConnections() {
+  return isNativeWebRtcRuntimePath() || shouldUseNativeAudioBridge();
+}
+
+function shouldSendNativeTrackKind(kind) {
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  if (normalizedKind === 'audio') return shouldMaintainNativePeerConnections();
+  if (normalizedKind === 'video') return isNativeWebRtcRuntimePath();
+  return false;
+}
+
 function shouldBlockNativeRuntimeSignaling() {
   return SFU_RUNTIME_ENABLED
-    && (mediaRuntimePath.value === 'pending' || isWlvcRuntimePath());
+    && mediaRuntimePath.value === 'pending';
 }
 
 function currentMediaSecurityRuntimePath() {
@@ -1238,11 +1260,42 @@ function ensureMediaSecuritySession() {
     mediaSecuritySenderKeySignalsSent.clear();
     mediaSecurityRecoveryLastByUserId.clear();
     mediaSecuritySessionRef.value = createMediaSecuritySession(context);
+    mediaSecurityStateVersion.value += 1;
   } else {
     mediaSecuritySessionRef.value.updateContext(context);
   }
   return mediaSecuritySessionRef.value;
 }
+
+const nativeAudioSecurityBannerMessage = computed(() => {
+  mediaSecurityStateVersion.value;
+  if (
+    SFU_RUNTIME_ENABLED
+    && isWlvcRuntimePath()
+    && Boolean(mediaRuntimeCapabilities.value.stageB)
+    && !MediaSecuritySession.supportsNativeTransforms()
+  ) {
+    return 'Audio is unavailable because this browser cannot run native end-to-end protected audio bridging.';
+  }
+  if (!shouldUseNativeAudioBridge()) return '';
+  const targetUserIds = mediaSecurityTargetIds();
+  if (targetUserIds.length <= 0) return '';
+  const session = mediaSecuritySessionRef.value;
+  if (!session) {
+    return 'Audio is waiting for end-to-end encryption to become ready.';
+  }
+  if (!session?.canProtectForTargets(targetUserIds)) {
+    const blocked = targetUserIds.some((userId) => {
+      const peer = session?.peers instanceof Map ? session.peers.get(userId) : null;
+      return String(peer?.state || '').trim().toLowerCase() === 'blocked_capability';
+    });
+    if (blocked) {
+      return 'Audio is muted because end-to-end encryption is unavailable for at least one participant.';
+    }
+    return 'Audio is waiting for end-to-end encryption to become ready.';
+  }
+  return '';
+});
 
 function mediaSecurityTargetIds() {
   return connectedParticipantUsers.value
@@ -4251,6 +4304,7 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
   try {
     if (type === 'media-security/hello') {
       const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
+      mediaSecurityStateVersion.value += 1;
       if (accepted) {
         await sendMediaSecurityHello(normalizedSenderUserId);
         await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
@@ -4260,6 +4314,7 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
 
     if (type === 'media-security/sender-key') {
       await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
+      mediaSecurityStateVersion.value += 1;
     }
   } catch (error) {
     mediaDebugLog('[MediaSecurity] signaling failed', error);
@@ -4306,7 +4361,7 @@ function handleSignalingEvent(payload) {
 
   if (isNativeSignal && Number.isInteger(senderUserId) && senderUserId > 0) {
     if (shouldBlockNativeRuntimeSignaling()) {
-      mediaDebugLog('[WebRTC] ignoring native signal while SFU runtime is active', type);
+      mediaDebugLog('[WebRTC] ignoring native signal while runtime is still pending', type);
       return;
     }
     void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});
@@ -4965,7 +5020,7 @@ watch(
     .join(','),
   () => {
     nextTick(() => renderCallVideoLayout());
-    if (!isNativeWebRtcRuntimePath()) return;
+    if (!shouldMaintainNativePeerConnections()) return;
     syncNativePeerConnectionsWithRoster();
   }
 );
@@ -5790,6 +5845,21 @@ function createNativePeerVideoElement(userId) {
   return video;
 }
 
+function createNativePeerAudioElement(userId) {
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  audio.playsInline = true;
+  audio.hidden = true;
+  audio.dataset.userId = String(userId);
+  audio.dataset.role = 'native-audio-bridge';
+  audio.setAttribute('aria-hidden', 'true');
+  const root = document.querySelector('.workspace-call-view');
+  if (root instanceof HTMLElement) {
+    root.appendChild(audio);
+  }
+  return audio;
+}
+
 function remotePeerMediaNode(peer) {
   if (!peer || typeof peer !== 'object') return null;
   if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
@@ -5813,6 +5883,15 @@ function streamHasTracks(stream) {
   return stream.getTracks().some((track) => track?.readyState !== 'ended');
 }
 
+function streamHasLiveTrackKind(stream, kind) {
+  if (typeof MediaStream === 'undefined' || !(stream instanceof MediaStream)) return false;
+  const normalizedKind = String(kind || '').trim().toLowerCase();
+  return stream.getTracks().some((track) => (
+    String(track?.kind || '').trim().toLowerCase() === normalizedKind
+    && track?.readyState !== 'ended'
+  ));
+}
+
 function remotePeerHasRenderableMedia(peer) {
   if (!peer || typeof peer !== 'object') return false;
   if (
@@ -5822,9 +5901,9 @@ function remotePeerHasRenderableMedia(peer) {
   ) {
     return true;
   }
-  if (streamHasTracks(peer.remoteStream) || streamHasTracks(peer.stream)) return true;
+  if (streamHasLiveTrackKind(peer.remoteStream, 'video') || streamHasLiveTrackKind(peer.stream, 'video')) return true;
   if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) {
-    return streamHasTracks(peer.video.srcObject) || Number(peer.video.readyState || 0) > 0;
+    return streamHasLiveTrackKind(peer.video.srcObject, 'video') || Number(peer.video.readyState || 0) > 0;
   }
   return false;
 }
@@ -5963,7 +6042,7 @@ function renderCallVideoLayout() {
 
 function renderNativeRemoteVideos() {
   if (typeof document === 'undefined') return;
-  if (!isNativeWebRtcRuntimePath()) return;
+  if (!shouldMaintainNativePeerConnections()) return;
   renderCallVideoLayout();
 }
 
@@ -6044,26 +6123,61 @@ function localTracksByKind(stream) {
 }
 
 function attachMediaSecurityNativeSender(sender, track) {
-  if (!sender || !track || !isNativeWebRtcRuntimePath()) return;
+  if (!sender || !track || !shouldMaintainNativePeerConnections()) return;
   const session = ensureMediaSecuritySession();
-  void session.ensureReady().then((ready) => {
-    if (!ready) return;
-    session.attachNativeSenderTransform(sender, {
-      trackKind: String(track.kind || 'video'),
-      trackId: String(track.id || ''),
-    });
-  }).catch((error) => mediaDebugLog('[MediaSecurity] native sender attach failed', error));
+  if (session.attachNativeSenderTransform(sender, {
+    trackKind: String(track.kind || 'video'),
+    trackId: String(track.id || ''),
+  })) {
+    mediaSecurityStateVersion.value += 1;
+  }
 }
 
 function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
-  if (!receiver || !isNativeWebRtcRuntimePath()) return;
+  if (!receiver || !shouldMaintainNativePeerConnections()) return;
   const session = ensureMediaSecuritySession();
-  void session.ensureReady().then((ready) => {
-    if (!ready) return;
-    session.attachNativeReceiverTransform(receiver, senderUserId, {
-      trackId: String(track?.id || ''),
-    });
-  }).catch((error) => mediaDebugLog('[MediaSecurity] native receiver attach failed', error));
+  if (session.attachNativeReceiverTransform(receiver, senderUserId, {
+    trackId: String(track?.id || ''),
+  })) {
+    mediaSecurityStateVersion.value += 1;
+  }
+}
+
+function synchronizeNativePeerMediaElements(peer) {
+  if (!peer || typeof peer !== 'object') return;
+
+  if (shouldUseNativeAudioBridge()) {
+    if (peer.video instanceof HTMLVideoElement) {
+      peer.video.srcObject = null;
+      peer.video.remove();
+      peer.video = null;
+    }
+    if (!(peer.audio instanceof HTMLAudioElement)) {
+      peer.audio = createNativePeerAudioElement(peer.userId);
+    }
+    if (peer.audio instanceof HTMLAudioElement) {
+      peer.audio.srcObject = peer.remoteStream instanceof MediaStream ? peer.remoteStream : null;
+      peer.audio.play().catch(() => {});
+    }
+    if (peer.remoteStream instanceof MediaStream) {
+      for (const track of peer.remoteStream.getVideoTracks()) {
+        peer.remoteStream.removeTrack(track);
+      }
+    }
+    return;
+  }
+
+  if (peer.audio instanceof HTMLAudioElement) {
+    peer.audio.srcObject = null;
+    peer.audio.remove();
+    peer.audio = null;
+  }
+  if (!(peer.video instanceof HTMLVideoElement)) {
+    peer.video = createNativePeerVideoElement(peer.userId);
+  }
+  if (peer.video instanceof HTMLVideoElement) {
+    peer.video.srcObject = peer.remoteStream instanceof MediaStream ? peer.remoteStream : null;
+  }
 }
 
 async function syncNativePeerLocalTracks(peer) {
@@ -6073,9 +6187,11 @@ async function syncNativePeerLocalTracks(peer) {
   const senders = peer.pc.getSenders();
 
   for (const sender of senders) {
-    const senderKind = String(sender?.track?.kind || '').toLowerCase();
+    const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').toLowerCase();
     if (senderKind !== 'audio' && senderKind !== 'video') continue;
-    const nextTrack = byKind[senderKind] || null;
+    const nextTrack = shouldSendNativeTrackKind(senderKind)
+      ? (byKind[senderKind] || null)
+      : null;
     if (nextTrack && sender.track?.id === nextTrack.id) {
       attachMediaSecurityNativeSender(sender, nextTrack);
       delete byKind[senderKind];
@@ -6094,10 +6210,12 @@ async function syncNativePeerLocalTracks(peer) {
 
   if (!(stream instanceof MediaStream)) return;
   for (const kind of ['audio', 'video']) {
+    if (!shouldSendNativeTrackKind(kind)) continue;
     const track = byKind[kind] || null;
     if (!track) continue;
     try {
       const sender = peer.pc.addTrack(track, stream);
+      peer?.senderKinds?.set?.(sender, kind);
       attachMediaSecurityNativeSender(sender, track);
     } catch {
       // ignore duplicate addTrack attempts
@@ -6106,7 +6224,7 @@ async function syncNativePeerLocalTracks(peer) {
 }
 
 async function ensureLocalMediaForNativeNegotiation() {
-  if (!isNativeWebRtcRuntimePath()) return false;
+  if (!shouldMaintainNativePeerConnections()) return false;
   if (localStreamRef.value instanceof MediaStream) return true;
   return publishLocalTracks();
 }
@@ -6150,7 +6268,7 @@ function nativePeerConnectionIsFinal(peer) {
 
 function shouldRetryNativeOffer(peer) {
   if (!peer?.initiator || !peer?.pc) return false;
-  if (!isNativeWebRtcRuntimePath()) return false;
+  if (!shouldMaintainNativePeerConnections()) return false;
   if (nativePeerHasRemoteAnswer(peer)) return false;
   if (nativePeerConnectionIsFinal(peer)) return false;
   const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
@@ -6221,6 +6339,10 @@ function closeNativePeerConnection(targetUserId) {
     peer.video.srcObject = null;
     peer.video.remove();
   }
+  if (peer.audio instanceof HTMLAudioElement) {
+    peer.audio.srcObject = null;
+    peer.audio.remove();
+  }
   renderNativeRemoteVideos();
 }
 
@@ -6238,7 +6360,7 @@ function teardownNativePeerConnections() {
 
 async function sendNativeOffer(peer) {
   if (!peer?.pc) return;
-  if (!isNativeWebRtcRuntimePath()) return;
+  if (!shouldMaintainNativePeerConnections()) return;
   if (peer.negotiating) {
     peer.needsRenegotiate = true;
     return;
@@ -6296,14 +6418,25 @@ function ensureNativePeerConnection(targetUserId) {
 
   const existing = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
   if (existing) {
+    synchronizeNativePeerMediaElements(existing);
     scheduleNativeOfferRetry(existing, 'peer_roster_sync');
     return existing;
   }
 
   const pc = new RTCPeerConnection(nativeWebRtcConfig());
   const remoteStream = new MediaStream();
-  const video = createNativePeerVideoElement(normalizedTargetUserId);
-  video.srcObject = remoteStream;
+  const video = isNativeWebRtcRuntimePath()
+    ? createNativePeerVideoElement(normalizedTargetUserId)
+    : null;
+  const audio = shouldUseNativeAudioBridge()
+    ? createNativePeerAudioElement(normalizedTargetUserId)
+    : null;
+  if (video instanceof HTMLVideoElement) {
+    video.srcObject = remoteStream;
+  }
+  if (audio instanceof HTMLAudioElement) {
+    audio.srcObject = remoteStream;
+  }
 
   const peer = {
     userId: normalizedTargetUserId,
@@ -6316,11 +6449,13 @@ function ensureNativePeerConnection(targetUserId) {
     pendingIce: [],
     pc,
     video,
+    audio,
     remoteStream,
+    senderKinds: markRaw(new Map()),
   };
 
   pc.addEventListener('icecandidate', (event) => {
-    if (!isNativeWebRtcRuntimePath()) return;
+    if (!shouldMaintainNativePeerConnections()) return;
     if (!event?.candidate) return;
     sendSocketFrame({
       type: 'call/ice',
@@ -6336,25 +6471,43 @@ function ensureNativePeerConnection(targetUserId) {
 
   pc.addEventListener('track', (event) => {
     markParticipantActivity(normalizedTargetUserId, 'media_track');
-    attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
+    const trackKind = String(event?.track?.kind || '').trim().toLowerCase();
+    if (trackKind === 'audio' || isNativeWebRtcRuntimePath()) {
+      attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
+    }
+    if (shouldUseNativeAudioBridge() && trackKind === 'video') {
+      return;
+    }
     const incoming = event?.streams?.[0];
     if (incoming instanceof MediaStream) {
       for (const track of incoming.getTracks()) {
+        if (shouldUseNativeAudioBridge() && String(track?.kind || '').trim().toLowerCase() === 'video') continue;
         if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
           remoteStream.addTrack(track);
-          track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+          if (String(track?.kind || '').trim().toLowerCase() === 'video') {
+            track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+          }
         }
       }
     } else if (event?.track) {
+      if (shouldUseNativeAudioBridge() && trackKind === 'video') return;
       if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
         remoteStream.addTrack(event.track);
-        event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+        if (trackKind === 'video') {
+          event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+        }
       }
     }
-    bumpMediaRenderVersion();
-    renderNativeRemoteVideos();
-    if (video instanceof HTMLVideoElement) {
-      video.play().catch(() => {});
+    synchronizeNativePeerMediaElements(peer);
+    if (!shouldUseNativeAudioBridge()) {
+      bumpMediaRenderVersion();
+      renderNativeRemoteVideos();
+    }
+    if (peer.video instanceof HTMLVideoElement) {
+      peer.video.play().catch(() => {});
+    }
+    if (peer.audio instanceof HTMLAudioElement) {
+      peer.audio.play().catch(() => {});
     }
   });
 
@@ -6371,7 +6524,7 @@ function ensureNativePeerConnection(targetUserId) {
     if (state === 'failed') {
       closeNativePeerConnection(normalizedTargetUserId);
       setTimeout(() => {
-        if (!isNativeWebRtcRuntimePath()) return;
+        if (!shouldMaintainNativePeerConnections()) return;
         syncNativePeerConnectionsWithRoster();
       }, 250);
     }
@@ -6383,6 +6536,7 @@ function ensureNativePeerConnection(targetUserId) {
   });
 
   setNativePeerConnection(normalizedTargetUserId, peer);
+  synchronizeNativePeerMediaElements(peer);
   void syncNativePeerLocalTracks(peer);
   renderNativeRemoteVideos();
   if (peer.initiator) {
@@ -6392,7 +6546,7 @@ function ensureNativePeerConnection(targetUserId) {
 }
 
 function syncNativePeerConnectionsWithRoster() {
-  if (!isNativeWebRtcRuntimePath()) return;
+  if (!shouldMaintainNativePeerConnections()) return;
 
   const activePeerIds = new Set();
   for (const row of connectedParticipantUsers.value) {
@@ -6506,7 +6660,7 @@ async function waitForNativeCapabilityForSignaling() {
 }
 
 async function ensureNativeRuntimeForSignaling() {
-  if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+  if (shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight) return true;
   if (shouldBlockNativeRuntimeSignaling()) return false;
   if (!(await waitForNativeCapabilityForSignaling())) return false;
 
@@ -6515,11 +6669,11 @@ async function ensureNativeRuntimeForSignaling() {
   }
 
   for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight) return true;
+    if (shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight) return true;
     await waitForNativeRuntimeTick();
   }
 
-  return isNativeWebRtcRuntimePath() && !runtimeSwitchInFlight;
+  return shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight;
 }
 
 async function handleNativeSignalingEvent(type, senderUserId, payloadBody) {
@@ -6577,7 +6731,15 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
       wlvcEncodeFirstFailureAtMs = 0;
       wlvcEncodeLastErrorLogAtMs = 0;
     } else if (normalizedNextPath === 'wlvc_wasm') {
-      teardownNativePeerConnections();
+      if (shouldUseNativeAudioBridge()) {
+        syncNativePeerConnectionsWithRoster();
+        for (const peer of nativePeerConnectionsRef.value.values()) {
+          synchronizeNativePeerMediaElements(peer);
+          void syncNativePeerLocalTracks(peer);
+        }
+      } else {
+        teardownNativePeerConnections();
+      }
       wlvcEncodeFailureCount = 0;
       wlvcEncodeWarmupUntilMs = 0;
       wlvcEncodeFirstFailureAtMs = 0;
@@ -7250,7 +7412,7 @@ async function publishLocalTracks() {
     publishLocalTracksToSfuIfReady();
     applyCallInputPreferences();
     applyCallOutputPreferences();
-    if (isNativeWebRtcRuntimePath()) {
+    if (shouldMaintainNativePeerConnections()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
         void syncNativePeerLocalTracks(peer).then(() => {
@@ -7486,7 +7648,7 @@ async function reconfigureLocalBackgroundFilterOnly() {
       unpublishSfuTracks(previousTracks);
       publishLocalTracksToSfuIfReady();
 
-      if (isNativeWebRtcRuntimePath()) {
+      if (shouldMaintainNativePeerConnections()) {
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
           await syncNativePeerLocalTracks(peer);
@@ -7572,7 +7734,7 @@ async function reconfigureLocalTracksFromSelectedDevices() {
     applyCallInputPreferences();
     applyCallOutputPreferences();
 
-    if (isNativeWebRtcRuntimePath()) {
+    if (shouldMaintainNativePeerConnections()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
         await syncNativePeerLocalTracks(peer);

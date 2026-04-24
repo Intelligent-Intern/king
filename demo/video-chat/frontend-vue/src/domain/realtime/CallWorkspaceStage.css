@@ -47,6 +47,11 @@
   color: var(--color-bdf6cf);
 }
 
+.workspace-call-banner.warning {
+  background: var(--color-5a3b16);
+  color: var(--color-ffe1a8);
+}
+
 .workspace-call-banner.error {
   background: var(--color-4f1e2e);
   color: var(--color-ffd1dc);

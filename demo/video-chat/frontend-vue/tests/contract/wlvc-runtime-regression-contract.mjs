@@ -160,7 +160,10 @@ try {
   requireContains(switchRuntime, 'teardownSfuRemotePeers();', 'native switch tears down SFU peers');
   requireContains(switchRuntime, 'syncNativePeerConnectionsWithRoster();', 'native switch syncs roster');
   requireContains(switchRuntime, "else if (normalizedNextPath === 'wlvc_wasm')", 'WLVC switch branch');
-  requireContains(switchRuntime, 'teardownNativePeerConnections();', 'WLVC switch tears down native peers');
+  requireContains(switchRuntime, 'if (shouldUseNativeAudioBridge())', 'WLVC switch preserves native audio bridge when supported');
+  requireContains(switchRuntime, 'synchronizeNativePeerMediaElements(peer);', 'WLVC switch rebinds native peers for audio bridge mode');
+  requireContains(switchRuntime, 'void syncNativePeerLocalTracks(peer);', 'WLVC switch resyncs native audio tracks');
+  requireContains(switchRuntime, 'teardownNativePeerConnections();', 'WLVC switch still tears down native peers when no native bridge exists');
   requireContains(switchRuntime, 'await startEncodingPipeline(videoTrack);', 'WLVC switch starts local encode pipeline');
   requireMatch(switchRuntime, /else\s*\{[\s\S]*stopLocalEncodingPipeline\(\);[\s\S]*teardownNativePeerConnections\(\);[\s\S]*teardownSfuRemotePeers\(\);[\s\S]*\}/, 'unsupported switch fail-closed teardown');
 
@@ -171,15 +174,23 @@ try {
   requireContains(workspace, "await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b')", 'capability probe native switch');
   requireContains(workspace, "setMediaRuntimePath('unsupported', 'capability_probe_unsupported')", 'capability probe unsupported switch');
 
+  const nativeAudioBridge = extractFunction(workspace, 'shouldUseNativeAudioBridge');
+  requireContains(nativeAudioBridge, 'SFU_RUNTIME_ENABLED', 'native audio bridge requires SFU runtime');
+  requireContains(nativeAudioBridge, 'isWlvcRuntimePath()', 'native audio bridge only runs under WLVC runtime');
+  requireContains(nativeAudioBridge, 'mediaRuntimeCapabilities.value.stageB', 'native audio bridge requires native capability');
+  requireContains(nativeAudioBridge, 'MediaSecuritySession.supportsNativeTransforms()', 'native audio bridge requires insertable streams for E2E audio');
+  const nativePeerPolicy = extractFunction(workspace, 'shouldMaintainNativePeerConnections');
+  requireContains(nativePeerPolicy, 'isNativeWebRtcRuntimePath()', 'native peer policy keeps full native peers');
+  requireContains(nativePeerPolicy, 'shouldUseNativeAudioBridge()', 'native peer policy keeps hybrid audio peers');
   const nativeSignalBlock = extractFunction(workspace, 'shouldBlockNativeRuntimeSignaling');
   requireContains(nativeSignalBlock, 'SFU_RUNTIME_ENABLED', 'native signaling block honors SFU runtime flag');
   requireContains(nativeSignalBlock, "mediaRuntimePath.value === 'pending'", 'native signaling block protects SFU startup');
-  requireContains(nativeSignalBlock, 'isWlvcRuntimePath()', 'native signaling block protects active WLVC runtime');
   const handleSignal = extractFunction(workspace, 'handleSignalingEvent');
   requireContains(handleSignal, 'if (shouldBlockNativeRuntimeSignaling())', 'native signaling event block before fallback switch');
-  requireContains(handleSignal, "mediaDebugLog('[WebRTC] ignoring native signal while SFU runtime is active', type);", 'native signaling event block diagnostic');
+  requireContains(handleSignal, "mediaDebugLog('[WebRTC] ignoring native signal while runtime is still pending', type);", 'native signaling event block diagnostic');
   requireContains(handleSignal, 'void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});', 'native signaling fallback still available');
   const ensureNative = extractFunction(workspace, 'ensureNativeRuntimeForSignaling');
+  requireContains(ensureNative, 'if (shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight) return true;', 'hybrid audio bridge accepts native signaling without preempting WLVC');
   requireContains(ensureNative, 'if (shouldBlockNativeRuntimeSignaling()) return false;', 'native runtime switch cannot preempt SFU');
 
   const createPeer = extractFunction(workspace, 'createOrUpdateSfuRemotePeer');
@@ -217,6 +228,13 @@ try {
   const transportOnlyFallback = extractFunction(workspace, 'shouldSendTransportOnlySfuFrame');
   requireContains(transportOnlyFallback, "message.includes('unsupported_capability')", 'transport-only fallback handles missing media security capability');
   requireContains(transportOnlyFallback, "message.includes('blocked_capability')", 'transport-only fallback handles blocked media security capability');
+  const attachNativeSender = extractFunction(workspace, 'attachMediaSecurityNativeSender');
+  requireContains(attachNativeSender, 'session.attachNativeSenderTransform(sender, {', 'native sender transform attaches immediately');
+  requireNotContains(attachNativeSender, 'session.ensureReady()', 'native sender transform must not wait and leak unencrypted audio');
+  const attachNativeReceiver = extractFunction(workspace, 'attachMediaSecurityNativeReceiver');
+  requireContains(attachNativeReceiver, 'session.attachNativeReceiverTransform(receiver, senderUserId, {', 'native receiver transform attaches immediately');
+  requireNotContains(attachNativeReceiver, 'session.ensureReady()', 'native receiver transform must not wait and leak unencrypted audio');
+  requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
   const encodePipeline = extractFunction(workspace, 'startEncodingPipeline');
@@ -239,6 +257,8 @@ try {
 
   const remoteRenderable = extractFunction(workspace, 'remotePeerHasRenderableMedia');
   requireContains(remoteRenderable, "&& Number(peer.frameCount || 0) > 0", 'decoded canvas only counts as renderable after real frames');
+  requireContains(remoteRenderable, "streamHasLiveTrackKind(peer.remoteStream, 'video')", 'audio-only native streams must not count as renderable media');
+  requireNotContains(remoteRenderable, 'streamHasTracks(peer.remoteStream)', 'audio-only native streams must not satisfy renderability');
 
   const mediaNode = extractFunction(workspace, 'mediaNodeForUserId');
   requireContains(mediaNode, 'for (const peer of remotePeersRef.value.values())', 'remote media node user lookup');
