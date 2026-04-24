@@ -733,6 +733,9 @@ import {
   DEFAULT_NATIVE_ICE_SERVERS,
   LOBBY_PAGE_SIZE,
   LOCAL_REACTION_ECHO_TTL_MS,
+  LOCAL_CAMERA_CAPTURE_FRAME_RATE,
+  LOCAL_CAMERA_CAPTURE_HEIGHT,
+  LOCAL_CAMERA_CAPTURE_WIDTH,
   LOCAL_TRACK_RECOVERY_BASE_DELAY_MS,
   LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS,
   LOCAL_TRACK_RECOVERY_MAX_DELAY_MS,
@@ -752,6 +755,7 @@ import {
   SFU_PUBLISH_RETRY_DELAY_MS,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
+  SFU_WLVC_ENCODE_INTERVAL_MS,
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,
   SFU_WLVC_FRAME_WIDTH,
@@ -7226,8 +7230,17 @@ function buildLocalMediaConstraints() {
   const video = !wantsVideo
     ? false
     : cameraDeviceId !== ''
-    ? { width: 640, height: 480, frameRate: 15, deviceId: { exact: cameraDeviceId } }
-    : { width: 640, height: 480, frameRate: 15 };
+    ? {
+        width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
+        height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
+        frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+        deviceId: { exact: cameraDeviceId },
+      }
+    : {
+        width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
+        height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
+        frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+      };
   const audio = !wantsAudio
     ? false
     : microphoneDeviceId !== ''
@@ -7241,7 +7254,13 @@ function buildLooseLocalMediaConstraints() {
   const wantsVideo = controlState.cameraEnabled !== false;
   const wantsAudio = controlState.micEnabled !== false;
   return {
-    video: wantsVideo ? { width: 640, height: 480, frameRate: 15 } : false,
+    video: wantsVideo
+      ? {
+          width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
+          height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
+          frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+        }
+      : false,
     audio: wantsAudio ? true : false,
   };
 }
@@ -8077,7 +8096,7 @@ async function startEncodingPipeline(videoTrack) {
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
       }
     }
-  }, 66);
+  }, SFU_WLVC_ENCODE_INTERVAL_MS);
 }
 
 async function reconfigureLocalBackgroundFilterOnly() {

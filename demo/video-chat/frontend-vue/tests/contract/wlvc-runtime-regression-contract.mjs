@@ -191,7 +191,9 @@ try {
   requireContains(strictConstraints, 'const wantsAudio = controlState.micEnabled !== false;', 'strict media constraints honor microphone toggle state');
   requireContains(strictConstraints, 'return { video: false, audio: false };', 'strict media constraints can release both devices completely');
   const looseConstraints = extractFunction(workspace, 'buildLooseLocalMediaConstraints');
-  requireContains(looseConstraints, 'video: wantsVideo ? { width: 640, height: 480, frameRate: 15 } : false,', 'loose media constraints release disabled camera devices');
+  requireContains(looseConstraints, 'width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH }', 'loose media constraints keep HD width preference');
+  requireContains(looseConstraints, 'height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT }', 'loose media constraints keep HD height preference');
+  requireContains(looseConstraints, 'frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 }', 'loose media constraints keep upgraded frame rate preference');
   requireContains(looseConstraints, 'audio: wantsAudio ? true : false,', 'loose media constraints release disabled microphone devices');
   const acquireLocal = extractFunction(workspace, 'acquireLocalMediaStreamWithFallback');
   requireContains(acquireLocal, 'return new MediaStream();', 'local media acquisition returns an empty stream when both devices are disabled');
