@@ -4490,7 +4490,9 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
       if (accepted) {
         await sendMediaSecurityHello(normalizedSenderUserId);
         await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
-        scheduleMediaSecurityParticipantSync('hello_accepted', true);
+        if (mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
+          scheduleMediaSecurityParticipantSync('hello_accepted');
+        }
       }
       return;
     }
@@ -4498,8 +4500,8 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
     if (type === 'media-security/sender-key') {
       const accepted = await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
       mediaSecurityStateVersion.value += 1;
-      if (!accepted) {
-        scheduleMediaSecurityParticipantSync('sender_key_pending', true);
+      if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
+        scheduleMediaSecurityParticipantSync('sender_key_pending');
       }
     }
   } catch (error) {
