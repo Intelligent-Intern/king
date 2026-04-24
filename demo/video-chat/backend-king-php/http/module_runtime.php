@@ -79,6 +79,7 @@ function videochat_handle_runtime_routes(
             'logout_endpoint' => '/api/auth/logout',
             'admin_probe_endpoint' => '/api/admin/ping',
             'admin_infrastructure_endpoint' => '/api/admin/infrastructure',
+            'admin_marketplace_apps_endpoint' => '/api/admin/marketplace/apps',
             'admin_users_endpoint' => '/api/admin/users',
             'admin_user_update_endpoint_template' => '/api/admin/users/{id}',
             'admin_user_deactivate_endpoint_template' => '/api/admin/users/{id}/deactivate',

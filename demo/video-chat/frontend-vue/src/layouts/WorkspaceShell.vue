@@ -1037,6 +1037,7 @@ const navItems = computed(() => {
   const items = [
     { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
     { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/kingrt/icons/user.png', roles: ['admin'] },
+    { to: '/admin/marketplace', label: 'Marketplace', icon: '/assets/orgas/kingrt/icons/add_to_call.png', roles: ['admin'] },
     { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
     { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
   ];
@@ -1048,6 +1049,7 @@ const pageTitle = computed(() => {
   const mapping = {
     '/admin/overview': 'Video Operations',
     '/admin/users': 'User Management',
+    '/admin/marketplace': 'Marketplace',
     '/admin/calls': 'Video Call Management',
     '/user/dashboard': 'My Video Calls',
   };
@@ -1061,7 +1063,7 @@ const pageSubtitle = computed(() => {
   return '';
 });
 const showWorkspaceHeader = computed(() => (
-  !['/admin/users', '/admin/calls'].includes(route.path)
+  !['/admin/users', '/admin/marketplace', '/admin/calls'].includes(route.path)
   && !isCallWorkspace.value
 ));
 

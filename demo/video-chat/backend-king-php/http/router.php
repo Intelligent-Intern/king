@@ -6,6 +6,7 @@ require_once __DIR__ . '/module_runtime.php';
 require_once __DIR__ . '/module_auth_session.php';
 require_once __DIR__ . '/module_infrastructure.php';
 require_once __DIR__ . '/module_operations.php';
+require_once __DIR__ . '/module_marketplace.php';
 require_once __DIR__ . '/module_users.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
@@ -21,6 +22,7 @@ function videochat_dispatch_route_module_order(): array
         'auth_session',
         'infrastructure',
         'operations',
+        'marketplace',
         'users',
         'invites',
         'calls',
@@ -181,6 +183,17 @@ function videochat_dispatch_request(
                 $method,
                 $jsonResponse,
                 $errorResponse,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'marketplace') {
+            $response = videochat_handle_marketplace_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
                 $openDatabase
             );
         } elseif ($moduleName === 'users') {

@@ -49,6 +49,12 @@ const routes = [
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
+        path: 'admin/marketplace',
+        name: 'admin-marketplace',
+        component: () => import('../domain/marketplace/AdminMarketplaceView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'] },
+      },
+      {
         path: 'admin/calls',
         name: 'admin-calls',
         component: () => import('../domain/calls/AdminCallsView.vue'),

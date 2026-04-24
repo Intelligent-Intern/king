@@ -565,6 +565,29 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_client_diagnostics_event_time ON client_diagnostics(event_type, created_at DESC)",
             ],
         ],
+        19 => [
+            'name' => '0019_call_app_marketplace',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_apps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    manufacturer TEXT NOT NULL,
+    website TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT 'other' CHECK (category IN ('whiteboard', 'avatar', 'assistant', 'collaboration', 'utility', 'other')),
+    description TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_call_apps_category_name ON call_apps(category, name)",
+                "CREATE INDEX IF NOT EXISTS idx_call_apps_updated_at ON call_apps(updated_at DESC)",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_call_apps_name_manufacturer_nocase
+ON call_apps(lower(name), lower(manufacturer))
+SQL,
+            ],
+        ],
     ];
 }
 
