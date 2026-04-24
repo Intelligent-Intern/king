@@ -3,9 +3,9 @@ import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
 
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.
-const DEFAULT_INNER_CONTRACT_PX = 2;
-const DEFAULT_INNER_FEATHER_PX = 34;
-const DEFAULT_INNER_FEATHER_CURVE = 0.92;
+const DEFAULT_INNER_CONTRACT_PX = 20;
+const DEFAULT_INNER_FEATHER_PX = 48;
+const DEFAULT_INNER_FEATHER_CURVE = 1.18;
 const LONG_RAF_FRAME_MS = 44;
 
 // ITU-R BT.601 coefficients for RGB -> YCbCr conversion.
@@ -149,75 +149,13 @@ function applyTemporalMaskHysteresis(alpha, previous, riseRate, fallRate) {
   }
   return alpha;
 }
-function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, height, faces, vw, vh, previousAlpha, fastMatte) {
-  outputCtx.clearRect(0, 0, width, height);
-  outputCtx.drawImage(maskSource, 0, 0, width, height);
-  let maskData;
-  try {
-    maskData = outputCtx.getImageData(0, 0, width, height);
-  } catch {
-    return false;
-  }
+function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {
   const n = width * height;
-  const base = new Uint8ClampedArray(n);
-  if (fastMatte) {
-    for (let i = 0; i < n; i += 1) {
-      const p = i * 4;
-      const r = maskData.data[p] ?? 0;
-      const g = maskData.data[p + 1] ?? 0;
-      const b = maskData.data[p + 2] ?? 0;
-      const a = maskData.data[p + 3] ?? 0;
-      const raw = Math.max(a, r, g, b);
-      const prob = smoothstep(28, 176, raw) * 255;
-      base[i] = Math.max(0, Math.min(255, Math.round(prob)));
-    }
-    refineAlphaInPlace(base, width, height, 1);
-    applyTemporalMaskHysteresis(base, previousAlpha, 0.86, 0.74);
-    if (previousAlpha && previousAlpha.length === base.length) previousAlpha.set(base);
-    const outFast = outputCtx.createImageData(width, height);
-    for (let i = 0; i < n; i += 1) {
-      const p = i * 4;
-      outFast.data[p] = 255;
-      outFast.data[p + 1] = 255;
-      outFast.data[p + 2] = 255;
-      outFast.data[p + 3] = base[i] ?? 0;
-    }
-    outputCtx.putImageData(outFast, 0, 0);
-    return true;
-  }
-  videoCtx.clearRect(0, 0, width, height);
-  videoCtx.drawImage(video, 0, 0, width, height);
-  let videoData;
-  try {
-    videoData = videoCtx.getImageData(0, 0, width, height);
-  } catch {
-    return false;
-  }
   const fg = new Uint8Array(n);
   const dist = new Float32Array(n);
-  const skin = estimateSkinProfileFromFaces(videoData.data, width, height, faces, vw, vh);
   for (let i = 0; i < n; i += 1) {
-    const p = i * 4;
-    const r = maskData.data[p] ?? 0;
-    const g = maskData.data[p + 1] ?? 0;
-    const b = maskData.data[p + 2] ?? 0;
-    const a = maskData.data[p + 3] ?? 0;
-    const raw = Math.max(a, r, g, b);
-    let prob = smoothstep(24, 168, raw) * 255;
-    if (skin.valid && prob > 20 && prob < 235) {
-      const vr = videoData.data[p] ?? 0;
-      const vg = videoData.data[p + 1] ?? 0;
-      const vb = videoData.data[p + 2] ?? 0;
-      const yc = rgbToYCbCr(vr, vg, vb);
-      const d = Math.hypot(yc.cb - skin.cb, yc.cr - skin.cr);
-      if (yc.y > 32 && d < skin.tolerance) {
-        const gain = 1 - d / skin.tolerance;
-        prob = Math.min(255, prob + gain * 42);
-      }
-    }
-    const alpha = Math.max(0, Math.min(255, Math.round(prob)));
-    base[i] = alpha;
-    fg[i] = alpha >= 110 ? 1 : 0;
+    const alpha = base[i] ?? 0;
+    fg[i] = alpha >= threshold ? 1 : 0;
     dist[i] = fg[i] ? 1e9 : 0;
   }
   const diag = 1.41421356;
@@ -258,6 +196,78 @@ function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, he
     const inside = Math.pow(smoothstep(0, 1, t), innerFeatherCurve);
     outAlpha[i] = Math.round(inside * (base[i] / 255) * 255);
   }
+  return outAlpha;
+}
+function buildInnerFeatherMask(outputCtx, maskSource, videoCtx, video, width, height, faces, vw, vh, previousAlpha, fastMatte) {
+  outputCtx.clearRect(0, 0, width, height);
+  outputCtx.drawImage(maskSource, 0, 0, width, height);
+  let maskData;
+  try {
+    maskData = outputCtx.getImageData(0, 0, width, height);
+  } catch {
+    return false;
+  }
+  const n = width * height;
+  const base = new Uint8ClampedArray(n);
+  if (fastMatte) {
+    for (let i = 0; i < n; i += 1) {
+      const p = i * 4;
+      const r = maskData.data[p] ?? 0;
+      const g = maskData.data[p + 1] ?? 0;
+      const b = maskData.data[p + 2] ?? 0;
+      const a = maskData.data[p + 3] ?? 0;
+      const raw = Math.max(a, r, g, b);
+      const prob = smoothstep(28, 176, raw) * 255;
+      base[i] = Math.max(0, Math.min(255, Math.round(prob)));
+    }
+    refineAlphaInPlace(base, width, height, 1);
+    const outFastAlpha = buildInnerDistanceFeatherAlpha(base, width, height);
+    refineAlphaInPlace(outFastAlpha, width, height, 2);
+    applyTemporalMaskHysteresis(outFastAlpha, previousAlpha, 0.86, 0.74);
+    if (previousAlpha && previousAlpha.length === outFastAlpha.length) previousAlpha.set(outFastAlpha);
+    const outFast = outputCtx.createImageData(width, height);
+    for (let i = 0; i < n; i += 1) {
+      const p = i * 4;
+      outFast.data[p] = 255;
+      outFast.data[p + 1] = 255;
+      outFast.data[p + 2] = 255;
+      outFast.data[p + 3] = outFastAlpha[i] ?? 0;
+    }
+    outputCtx.putImageData(outFast, 0, 0);
+    return true;
+  }
+  videoCtx.clearRect(0, 0, width, height);
+  videoCtx.drawImage(video, 0, 0, width, height);
+  let videoData;
+  try {
+    videoData = videoCtx.getImageData(0, 0, width, height);
+  } catch {
+    return false;
+  }
+  const skin = estimateSkinProfileFromFaces(videoData.data, width, height, faces, vw, vh);
+  for (let i = 0; i < n; i += 1) {
+    const p = i * 4;
+    const r = maskData.data[p] ?? 0;
+    const g = maskData.data[p + 1] ?? 0;
+    const b = maskData.data[p + 2] ?? 0;
+    const a = maskData.data[p + 3] ?? 0;
+    const raw = Math.max(a, r, g, b);
+    let prob = smoothstep(24, 168, raw) * 255;
+    if (skin.valid && prob > 20 && prob < 235) {
+      const vr = videoData.data[p] ?? 0;
+      const vg = videoData.data[p + 1] ?? 0;
+      const vb = videoData.data[p + 2] ?? 0;
+      const yc = rgbToYCbCr(vr, vg, vb);
+      const d = Math.hypot(yc.cb - skin.cb, yc.cr - skin.cr);
+      if (yc.y > 32 && d < skin.tolerance) {
+        const gain = 1 - d / skin.tolerance;
+        prob = Math.min(255, prob + gain * 42);
+      }
+    }
+    const alpha = Math.max(0, Math.min(255, Math.round(prob)));
+    base[i] = alpha;
+  }
+  const outAlpha = buildInnerDistanceFeatherAlpha(base, width, height);
   refineAlphaInPlace(outAlpha, width, height, 2);
   applyTemporalMaskHysteresis(outAlpha, previousAlpha, 0.84, 0.72);
   if (previousAlpha && previousAlpha.length === outAlpha.length) {

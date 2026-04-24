@@ -11,6 +11,7 @@
     "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
     "test:contract:participant-roster": "node tests/contract/participant-roster-stability-contract.mjs",
     "test:contract:chat-attachments": "node tests/contract/chat-attachment-upload-timeout-contract.mjs",
+    "test:contract:background-filter": "node tests/contract/background-filter-mask-contract.mjs",
     "test:contract:admin-owner-rights": "node tests/contract/admin-owner-rights-contract.mjs",
     "test:contract:user-dashboard-participants": "node tests/contract/user-dashboard-participants-contract.mjs",
     "test:contract:call-compose-room-field": "node tests/contract/call-compose-room-field-contract.mjs",
