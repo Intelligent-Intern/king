@@ -39,8 +39,10 @@ try {
   assert.match(workspace, /attachForegroundReconnectHandlers/, 'workspace must use foreground reconnect helper');
   assert.match(workspace, /function reconnectWorkspaceAfterForeground\(\)/, 'workspace must define foreground reconnect');
   assert.match(workspace, /workspaceReconnectAfterForeground = true;/, 'workspace must mark reconnect pending');
+  assert.match(workspace, /if \(!hasLiveLocalMedia\(\) && \(controlState\.cameraEnabled !== false \|\| controlState\.micEnabled !== false\)\) \{\s*void publishLocalTracks\(\);/m, 'workspace foreground reconnect must reacquire local media when preview/tracks are gone');
   assert.match(workspace, /void connectSocket\(\);/, 'workspace foreground reconnect must reconnect the realtime socket');
   assert.match(workspace, /sfuClientRef\.value\.leave\(\);/, 'workspace foreground reconnect must recycle stale SFU state');
+  assert.match(workspace, /await publishLocalTracks\(\);\s*\n\s*if \(shouldConnectSfu\.value && sessionState\.sessionToken && sessionState\.userId\) \{\s*\n\s*initSFU\(\);/m, 'workspace mount must start local media before SFU connect');
 
   process.stdout.write('[foreground-reconnect-contract] PASS\n');
 } catch (error) {

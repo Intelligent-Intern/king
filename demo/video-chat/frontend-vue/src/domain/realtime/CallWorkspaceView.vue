@@ -3602,6 +3602,10 @@ function reconnectWorkspaceAfterForeground() {
   workspaceLastForegroundReconnectAt = now;
   reconnectAttempt.value = 0;
 
+  if (!hasLiveLocalMedia() && (controlState.cameraEnabled !== false || controlState.micEnabled !== false)) {
+    void publishLocalTracks();
+  }
+
   if (shouldConnectSfu.value) {
     if (sfuClientRef.value) {
       sfuClientRef.value.leave();
@@ -5440,6 +5444,8 @@ onMounted(async () => {
     };
     setMediaRuntimePath('unsupported', 'capability_probe_error');
   }
+
+  await publishLocalTracks();
 
   if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
     initSFU();
