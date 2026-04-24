@@ -675,15 +675,15 @@
   }
 
   .workspace-stage.compact {
-    grid-template-rows: 44px minmax(0, 1fr) 50px;
+    grid-template-rows: 44px minmax(0, 1fr);
   }
 
   .workspace-stage.compact.has-mini-strip {
-    grid-template-rows: 44px minmax(0, 1fr) var(--mini-strip-height) 50px;
+    grid-template-rows: 44px minmax(0, 1fr) var(--mini-strip-height);
   }
 
   .workspace-stage.compact.has-mini-strip.mini-strip-above {
-    grid-template-rows: 44px var(--mini-strip-height) minmax(0, 1fr) 50px;
+    grid-template-rows: 44px var(--mini-strip-height) minmax(0, 1fr);
   }
 
   .workspace-compact-header {
