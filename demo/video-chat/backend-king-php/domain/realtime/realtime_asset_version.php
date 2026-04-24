@@ -65,3 +65,28 @@ function videochat_realtime_asset_invalidation_frame(
         'time' => gmdate('c'),
     ];
 }
+
+function videochat_realtime_disconnect_stale_asset_client(
+    mixed $websocket,
+    string $clientAssetVersion,
+    callable $sendFrame,
+    string $transport = 'ws'
+): bool {
+    if (!videochat_realtime_asset_version_mismatch($clientAssetVersion)) {
+        return false;
+    }
+
+    try {
+        $sendFrame(videochat_realtime_asset_invalidation_frame($clientAssetVersion, $transport));
+    } catch (Throwable) {
+        // Best-effort invalidation; closing the websocket still forces a reconnect.
+    }
+
+    try {
+        king_client_websocket_close($websocket, 1012, 'asset_version_mismatch');
+    } catch (Throwable) {
+        // Best-effort close after signaling stale assets to the client.
+    }
+
+    return true;
+}

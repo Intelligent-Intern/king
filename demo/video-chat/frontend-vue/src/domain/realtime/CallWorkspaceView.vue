@@ -980,6 +980,7 @@ const mediaRuntimeReason = ref('boot');
 const nativePeerConnectionsRef = ref(new Map());
 const mediaRenderVersion = ref(0);
 const mediaSecurityStateVersion = ref(0);
+const nativeAudioBridgeStatusVersion = ref(0);
 const dynamicIceServers = ref([]);
 let runtimeSwitchInFlight = false;
 let wlvcEncodeFailureCount = 0;
@@ -1269,17 +1270,11 @@ function ensureMediaSecuritySession() {
 
 const nativeAudioSecurityBannerMessage = computed(() => {
   mediaSecurityStateVersion.value;
-  if (
-    SFU_RUNTIME_ENABLED
-    && isWlvcRuntimePath()
-    && Boolean(mediaRuntimeCapabilities.value.stageB)
-    && !MediaSecuritySession.supportsNativeTransforms()
-  ) {
-    return 'Audio is unavailable because this browser cannot run native end-to-end protected audio bridging.';
-  }
-  if (!shouldUseNativeAudioBridge()) return '';
   const targetUserIds = mediaSecurityTargetIds();
   if (targetUserIds.length <= 0) return '';
+  const blockedReason = nativeAudioBridgeBlockedReason(targetUserIds);
+  if (blockedReason !== '') return blockedReason;
+  if (!shouldUseNativeAudioBridge()) return '';
   const session = mediaSecuritySessionRef.value;
   if (!session) {
     return 'Audio is waiting for end-to-end encryption to become ready.';
@@ -1298,6 +1293,8 @@ const nativeAudioSecurityBannerMessage = computed(() => {
     }
     return 'Audio is waiting for end-to-end encryption to become ready.';
   }
+  const peerIssue = nativeAudioBridgePeerStatusMessage(targetUserIds);
+  if (peerIssue !== '') return peerIssue;
   return '';
 });
 
@@ -1305,6 +1302,43 @@ function mediaSecurityTargetIds() {
   return connectedParticipantUsers.value
     .map((row) => Number(row?.userId || 0))
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+}
+
+function nativeAudioBridgeBlockedReason(targetUserIds = []) {
+  const normalizedTargetIds = Array.from(new Set((Array.isArray(targetUserIds) ? targetUserIds : [])
+    .map((userId) => Number(userId))
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value)));
+  if (normalizedTargetIds.length <= 0) return '';
+  if (!SFU_RUNTIME_ENABLED || !isWlvcRuntimePath()) return '';
+  if (!Boolean(mediaRuntimeCapabilities.value.stageB)) {
+    return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for end-to-end encrypted audio.';
+  }
+  if (!MediaSecuritySession.supportsNativeTransforms()) {
+    return 'Audio is unavailable because this browser cannot run native end-to-end protected audio bridging.';
+  }
+  return '';
+}
+
+function nativeAudioBridgePeerStatusMessage(targetUserIds = []) {
+  nativeAudioBridgeStatusVersion.value;
+  const normalizedTargetIds = Array.from(new Set((Array.isArray(targetUserIds) ? targetUserIds : [])
+    .map((userId) => Number(userId))
+    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value)));
+  for (const userId of normalizedTargetIds) {
+    const peer = nativePeerConnectionsRef.value.get(userId);
+    if (!peer || typeof peer !== 'object') continue;
+    const state = String(peer.audioBridgeState || '').trim().toLowerCase();
+    if (state === 'blocked_playback') {
+      return 'Audio is blocked by the browser autoplay policy on this device.';
+    }
+    if (state === 'stalled_no_track') {
+      return 'Audio is unavailable because no encrypted remote audio track arrived from the other participant.';
+    }
+    if (state === 'play_failed') {
+      return 'Audio is unavailable because encrypted remote audio could not start playback on this device.';
+    }
+  }
+  return '';
 }
 
 function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
@@ -5908,6 +5942,130 @@ function createNativePeerAudioElement(userId) {
   return audio;
 }
 
+function bumpNativeAudioBridgeStatusVersion() {
+  nativeAudioBridgeStatusVersion.value = nativeAudioBridgeStatusVersion.value >= 1_000_000
+    ? 0
+    : nativeAudioBridgeStatusVersion.value + 1;
+}
+
+function setNativePeerAudioBridgeState(peer, state = '', errorMessage = '') {
+  if (!peer || typeof peer !== 'object') return false;
+  const nextState = String(state || '').trim().toLowerCase();
+  const nextErrorMessage = String(errorMessage || '').trim();
+  if (
+    String(peer.audioBridgeState || '').trim().toLowerCase() === nextState
+    && String(peer.audioBridgeErrorMessage || '').trim() === nextErrorMessage
+  ) {
+    return false;
+  }
+  peer.audioBridgeState = nextState;
+  peer.audioBridgeErrorMessage = nextErrorMessage;
+  bumpNativeAudioBridgeStatusVersion();
+  return true;
+}
+
+function clearNativePeerAudioTrackDeadline(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  if (peer.audioTrackDeadlineTimer !== null && peer.audioTrackDeadlineTimer !== undefined) {
+    clearTimeout(peer.audioTrackDeadlineTimer);
+  }
+  peer.audioTrackDeadlineTimer = null;
+}
+
+function nativeAudioPlaybackBlocked(error) {
+  const errorName = String(error?.name || '').trim().toLowerCase();
+  const message = extractDiagnosticMessage(error, '').trim().toLowerCase();
+  return errorName === 'notallowederror'
+    || message.includes('notallowederror')
+    || message.includes('user gesture')
+    || message.includes('play() failed because the user');
+}
+
+function nativeAudioSecurityTelemetrySnapshot() {
+  const session = mediaSecuritySessionRef.value;
+  if (!session || typeof session.telemetrySnapshot !== 'function') {
+    return null;
+  }
+  return session.telemetrySnapshot(currentMediaSecurityRuntimePath());
+}
+
+async function playNativePeerAudio(peer, reason = 'unknown') {
+  if (!(peer?.audio instanceof HTMLAudioElement)) return false;
+  if (!streamHasLiveTrackKind(peer.remoteStream, 'audio')) return false;
+
+  try {
+    await peer.audio.play();
+    setNativePeerAudioBridgeState(peer, 'playing', '');
+    return true;
+  } catch (error) {
+    const blocked = nativeAudioPlaybackBlocked(error);
+    const errorMessage = extractDiagnosticMessage(
+      error,
+      blocked ? 'The browser blocked remote audio playback.' : 'Remote encrypted audio playback failed.'
+    );
+    const nextState = blocked ? 'blocked_playback' : 'play_failed';
+    if (setNativePeerAudioBridgeState(peer, nextState, errorMessage)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: blocked ? 'warning' : 'error',
+        eventType: blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed',
+        code: blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed',
+        message: blocked
+          ? 'The browser blocked remote encrypted audio playback.'
+          : 'Remote encrypted audio playback failed.',
+        payload: {
+          target_user_id: Number(peer?.userId || 0),
+          reason: String(reason || 'unknown'),
+          connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
+          error_name: String(error?.name || '').trim(),
+          error_message: errorMessage,
+          media_runtime_path: mediaRuntimePath.value,
+          security: nativeAudioSecurityTelemetrySnapshot(),
+        },
+        immediate: !blocked,
+      });
+    }
+    return false;
+  }
+}
+
+function scheduleNativePeerAudioTrackDeadline(peer) {
+  clearNativePeerAudioTrackDeadline(peer);
+  if (!shouldUseNativeAudioBridge()) return;
+  if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+
+  const connectionState = String(peer.pc.connectionState || '').trim().toLowerCase();
+  if (connectionState !== 'connected' && connectionState !== 'completed') return;
+  if (streamHasLiveTrackKind(peer.remoteStream, 'audio')) return;
+
+  setNativePeerAudioBridgeState(peer, 'waiting_track', '');
+  peer.audioTrackDeadlineTimer = setTimeout(() => {
+    peer.audioTrackDeadlineTimer = null;
+    if (!shouldUseNativeAudioBridge()) return;
+    if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+    const currentConnectionState = String(peer.pc.connectionState || '').trim().toLowerCase();
+    if (currentConnectionState !== 'connected' && currentConnectionState !== 'completed') return;
+    if (streamHasLiveTrackKind(peer.remoteStream, 'audio')) return;
+
+    if (setNativePeerAudioBridgeState(peer, 'stalled_no_track', 'No encrypted remote audio track arrived.')) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'native_audio_track_missing',
+        code: 'native_audio_track_missing',
+        message: 'Encrypted remote audio track did not arrive after the native audio bridge connected.',
+        payload: {
+          target_user_id: Number(peer?.userId || 0),
+          connection_state: currentConnectionState,
+          media_runtime_path: mediaRuntimePath.value,
+          security: nativeAudioSecurityTelemetrySnapshot(),
+        },
+        immediate: true,
+      });
+    }
+  }, 6000);
+}
+
 function remotePeerMediaNode(peer) {
   if (!peer || typeof peer !== 'object') return null;
   if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return peer.decodedCanvas;
@@ -6205,7 +6363,9 @@ function synchronizeNativePeerMediaElements(peer) {
     }
     if (peer.audio instanceof HTMLAudioElement) {
       peer.audio.srcObject = peer.remoteStream instanceof MediaStream ? peer.remoteStream : null;
-      peer.audio.play().catch(() => {});
+      if (streamHasLiveTrackKind(peer.remoteStream, 'audio')) {
+        void playNativePeerAudio(peer, 'bind_stream');
+      }
     }
     if (peer.remoteStream instanceof MediaStream) {
       for (const track of peer.remoteStream.getVideoTracks()) {
@@ -6375,6 +6535,7 @@ function closeNativePeerConnection(targetUserId) {
   const peer = takeNativePeerConnection(normalizedTargetUserId);
   if (!peer) return;
 
+  clearNativePeerAudioTrackDeadline(peer);
   clearNativeOfferRetry(peer);
   if (peer.pc) {
     try {
@@ -6499,6 +6660,9 @@ function ensureNativePeerConnection(targetUserId) {
     video,
     audio,
     remoteStream,
+    audioBridgeState: '',
+    audioBridgeErrorMessage: '',
+    audioTrackDeadlineTimer: null,
     senderKinds: markRaw(new Map()),
   };
 
@@ -6546,6 +6710,14 @@ function ensureNativePeerConnection(targetUserId) {
         }
       }
     }
+    if (shouldUseNativeAudioBridge() && trackKind === 'audio') {
+      clearNativePeerAudioTrackDeadline(peer);
+      setNativePeerAudioBridgeState(peer, 'track_received', '');
+      event?.track?.addEventListener?.('ended', () => {
+        setNativePeerAudioBridgeState(peer, 'waiting_track', '');
+        scheduleNativePeerAudioTrackDeadline(peer);
+      }, { once: true });
+    }
     synchronizeNativePeerMediaElements(peer);
     if (!shouldUseNativeAudioBridge()) {
       bumpMediaRenderVersion();
@@ -6555,16 +6727,18 @@ function ensureNativePeerConnection(targetUserId) {
       peer.video.play().catch(() => {});
     }
     if (peer.audio instanceof HTMLAudioElement) {
-      peer.audio.play().catch(() => {});
+      void playNativePeerAudio(peer, 'remote_track');
     }
   });
 
   pc.addEventListener('connectionstatechange', () => {
     const state = String(pc.connectionState || '').toLowerCase();
     if (state === 'connected' || state === 'completed') {
+      scheduleNativePeerAudioTrackDeadline(peer);
       resetNativeOfferRetry(peer);
       return;
     }
+    clearNativePeerAudioTrackDeadline(peer);
     if (state === 'closed') {
       closeNativePeerConnection(normalizedTargetUserId);
       return;

@@ -60,14 +60,16 @@ try {
 
   const realtimeAssetVersion = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_asset_version.php'));
   assert.ok(realtimeAssetVersion.includes("'type' => 'assets/invalidate'"), 'realtime asset version helper must expose an assets invalidation frame');
+  assert.ok(realtimeAssetVersion.includes('function videochat_realtime_disconnect_stale_asset_client'), 'realtime asset version helper must expose a stale-client disconnect helper');
+  assert.ok(realtimeAssetVersion.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'stale-client disconnect helper must close stale sockets');
 
   const realtimeWs = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket.php'));
-  assert.ok(realtimeWs.includes('videochat_realtime_asset_version_mismatch($clientAssetVersion)'), 'presence websocket must reject stale asset builds');
-  assert.ok(realtimeWs.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'presence websocket must close stale clients after invalidation');
+  assert.ok(realtimeWs.includes('videochat_realtime_disconnect_stale_asset_client('), 'presence websocket must use the shared stale-client disconnect helper');
+  assert.ok((realtimeWs.match(/\$disconnectStaleAssetClient\(\)/g) || []).length >= 2, 'presence websocket must invalidate stale clients on connect and during the live loop');
 
   const realtimeSfu = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_sfu_gateway.php'));
-  assert.ok(realtimeSfu.includes('videochat_realtime_asset_version_mismatch($clientAssetVersion)'), 'sfu websocket must reject stale asset builds');
-  assert.ok(realtimeSfu.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'sfu websocket must close stale clients after invalidation');
+  assert.ok(realtimeSfu.includes('videochat_realtime_disconnect_stale_asset_client('), 'sfu websocket must use the shared stale-client disconnect helper');
+  assert.ok((realtimeSfu.match(/\$disconnectStaleAssetClient\(\)/g) || []).length >= 2, 'sfu websocket must invalidate stale clients on connect and during the live loop');
 
   console.log('[asset-cache-busting-contract] PASS');
 } catch (error) {

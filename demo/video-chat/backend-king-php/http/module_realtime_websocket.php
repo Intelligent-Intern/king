@@ -100,17 +100,17 @@ function videochat_handle_realtime_websocket_route(
         $requestedCallId = '';
         $queryParams = videochat_request_query_params($request);
         $clientAssetVersion = videochat_realtime_client_asset_version_from_query($queryParams);
-        if (videochat_realtime_asset_version_mismatch($clientAssetVersion)) {
-            videochat_presence_send_frame(
+        $disconnectStaleAssetClient = static function () use ($websocket, $clientAssetVersion): bool {
+            return videochat_realtime_disconnect_stale_asset_client(
                 $websocket,
-                videochat_realtime_asset_invalidation_frame($clientAssetVersion, 'ws')
+                $clientAssetVersion,
+                static function (array $frame) use ($websocket): void {
+                    videochat_presence_send_frame($websocket, $frame);
+                },
+                'ws'
             );
-            try {
-                king_client_websocket_close($websocket, 1012, 'asset_version_mismatch');
-            } catch (Throwable) {
-                // Best-effort close after signaling stale assets to the client.
-            }
-
+        };
+        if ($disconnectStaleAssetClient()) {
             return [
                 'status' => 101,
                 'headers' => [],
@@ -368,6 +368,10 @@ function videochat_handle_realtime_websocket_route(
 
         try {
             while (true) {
+                if ($disconnectStaleAssetClient()) {
+                    break;
+                }
+
                 $sessionLiveness = videochat_realtime_validate_session_liveness(
                     $authenticateRequest,
                     $authSessionId,

@@ -150,17 +150,20 @@ function videochat_handle_sfu_routes(
     }
 
     $clientAssetVersion = videochat_realtime_client_asset_version_from_query($queryParams);
-    if (videochat_realtime_asset_version_mismatch($clientAssetVersion)) {
-        king_websocket_send($websocket, json_encode(
-            videochat_realtime_asset_invalidation_frame($clientAssetVersion, 'sfu'),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-        ));
-        try {
-            king_client_websocket_close($websocket, 1012, 'asset_version_mismatch');
-        } catch (Throwable) {
-            // Best-effort close after signaling stale assets to the client.
-        }
-
+    $disconnectStaleAssetClient = static function () use ($websocket, $clientAssetVersion): bool {
+        return videochat_realtime_disconnect_stale_asset_client(
+            $websocket,
+            $clientAssetVersion,
+            static function (array $frame) use ($websocket): void {
+                king_websocket_send(
+                    $websocket,
+                    json_encode($frame, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                );
+            },
+            'sfu'
+        );
+    };
+    if ($disconnectStaleAssetClient()) {
         return [
             'status' => 101,
             'headers' => [],
@@ -447,6 +450,10 @@ function videochat_handle_sfu_routes(
     };
 
     while (true) {
+        if ($disconnectStaleAssetClient()) {
+            break;
+        }
+
         $cleanupPendingFrameChunks();
         $activeSfuDatabase = $ensureBrokerDatabase();
         if ($activeSfuDatabase instanceof PDO && videochat_sfu_now_ms() >= $nextBrokerPollMs) {

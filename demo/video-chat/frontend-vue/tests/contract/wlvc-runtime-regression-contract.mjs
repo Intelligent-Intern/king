@@ -179,7 +179,12 @@ try {
   requireContains(nativeAudioBridge, 'isWlvcRuntimePath()', 'native audio bridge only runs under WLVC runtime');
   requireContains(nativeAudioBridge, 'mediaRuntimeCapabilities.value.stageB', 'native audio bridge requires native capability');
   requireContains(nativeAudioBridge, 'MediaSecuritySession.supportsNativeTransforms()', 'native audio bridge requires insertable streams for E2E audio');
+  requireContains(workspace, 'function nativeAudioBridgeBlockedReason', 'audio bridge blocked-reason helper exists');
+  requireContains(workspace, 'function nativeAudioBridgePeerStatusMessage', 'audio bridge peer-status helper exists');
+  requireContains(workspace, "return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for end-to-end encrypted audio.';", 'audio bridge banner reports missing native WebRTC capability honestly');
   requireContains(workspace, "return 'Audio is unavailable because end-to-end encryption could not be initialized on this device.';", 'audio bridge banner reports blocked local capability honestly');
+  requireContains(workspace, "return 'Audio is unavailable because no encrypted remote audio track arrived from the other participant.';", 'audio bridge banner reports missing encrypted remote audio');
+  requireContains(workspace, "return 'Audio is blocked by the browser autoplay policy on this device.';", 'audio bridge banner reports autoplay blocking');
   const nativePeerPolicy = extractFunction(workspace, 'shouldMaintainNativePeerConnections');
   requireContains(nativePeerPolicy, 'isNativeWebRtcRuntimePath()', 'native peer policy keeps full native peers');
   requireContains(nativePeerPolicy, 'shouldUseNativeAudioBridge()', 'native peer policy keeps hybrid audio peers');
@@ -235,8 +240,13 @@ try {
   const attachNativeReceiver = extractFunction(workspace, 'attachMediaSecurityNativeReceiver');
   requireContains(attachNativeReceiver, 'session.attachNativeReceiverTransform(receiver, senderUserId, {', 'native receiver transform attaches immediately');
   requireNotContains(attachNativeReceiver, 'session.ensureReady()', 'native receiver transform must not wait and leak unencrypted audio');
+  requireContains(workspace, 'function playNativePeerAudio', 'native audio bridge playback helper exists');
+  requireContains(workspace, 'function scheduleNativePeerAudioTrackDeadline', 'native audio bridge track deadline helper exists');
+  requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
+  requireContains(workspace, "blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed'", 'native audio bridge emits distinct diagnostics for autoplay blocking and playback failure');
   requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
+  requireContains(extractFunction(workspace, 'synchronizeNativePeerMediaElements'), "void playNativePeerAudio(peer, 'bind_stream');", 'native audio bridge retries playback when the remote stream is rebound');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
   const encodePipeline = extractFunction(workspace, 'startEncodingPipeline');
@@ -274,6 +284,12 @@ try {
   requireContains(renderLayout, 'for (const participant of miniVideoParticipants.value)', 'mini remote render loop');
   requireContains(renderLayout, 'for (const participant of gridVideoParticipants.value)', 'grid remote render loop');
   requireContains(renderLayout, 'mountVideoNode(slot, node, assignedNodes)', 'slot render mount');
+  const ensureNativePeer = extractFunction(workspace, 'ensureNativePeerConnection');
+  requireContains(ensureNativePeer, "audioBridgeState: ''", 'native peer initializes audio bridge state');
+  requireContains(ensureNativePeer, "setNativePeerAudioBridgeState(peer, 'track_received', '');", 'native peer marks encrypted audio track arrival');
+  requireContains(ensureNativePeer, "void playNativePeerAudio(peer, 'remote_track');", 'native peer retries playback when encrypted audio track arrives');
+  requireContains(ensureNativePeer, 'scheduleNativePeerAudioTrackDeadline(peer);', 'native peer schedules encrypted audio-track deadline once connected');
+  requireContains(ensureNativePeer, 'clearNativePeerAudioTrackDeadline(peer);', 'native peer clears encrypted audio-track deadlines on disconnect');
 
   const bumpRender = extractFunction(workspace, 'bumpMediaRenderVersion');
   const bumpCount = (bumpRender.match(/mediaRenderVersion\.value = mediaRenderVersion\.value >= 1_000_000 \? 0 : mediaRenderVersion\.value \+ 1;/g) || []).length;
