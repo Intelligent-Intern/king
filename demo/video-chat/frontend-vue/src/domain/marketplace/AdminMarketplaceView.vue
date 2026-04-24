@@ -1,10 +1,6 @@
 <template>
   <section class="view-card marketplace-view">
-    <AppPageHeader class="section marketplace-head" title="Marketplace">
-      <template #actions>
-        <button class="btn btn-cyan" type="button" @click="openCreateApp">Add app</button>
-      </template>
-    </AppPageHeader>
+    <AppPageHeader class="section marketplace-head" title="Marketplace" />
 
     <section class="toolbar marketplace-toolbar">
       <label class="search-field search-field-main" aria-label="Search marketplace apps">
@@ -249,12 +245,6 @@ function resetForm(mode = 'create') {
   form.website = '';
   form.category = 'whiteboard';
   form.description = '';
-}
-
-function openCreateApp() {
-  resetForm('create');
-  formError.value = '';
-  dialogOpen.value = true;
 }
 
 function openEditApp(app) {
