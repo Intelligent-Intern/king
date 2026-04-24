@@ -48,6 +48,7 @@ final class ModelPartitioner
             $inputArtifact = $inputDep !== null
                 ? 'object://activations/' . $config['name'] . '/' . $inputDep . '/output'
                 : ($config['model_source'] ?? 'object://');
+            $outputArtifact = 'object://activations/' . $config['name'] . '/' . $blockId . '/output';
 
             $steps[] = [
                 'id' => $stepId,
@@ -56,11 +57,16 @@ final class ModelPartitioner
                 'params' => [
                     'run_id' => 'voltron-' . $config['name'],
                     'model_name' => $config['name'],
+                    'model_source' => $config['model_source'] ?? null,
                     'block_id' => $blockId,
                     'block_type' => $type,
+                    'layers' => $block['layers'],
+                    'layer_start' => $block['layers'][0],
+                    'layer_end' => $block['layers'][1],
                     'owner_node_id' => $assignedNode,
                     'memory_mb' => $memoryMb,
                     'input_artifact' => $inputArtifact,
+                    'output_artifact' => $outputArtifact,
                     'checkpoint_artifact' => self::findCheckpoint($config, $block['layers']),
                 ],
             ];

@@ -1,8 +1,10 @@
-# Delphi Compute Mesh Plan (King Infra Is Non-Negotiable)
+# Voltron Compute Mesh Plan (King Infra Is Non-Negotiable)
 
-This plan defines how to realize distributed agent compute on **King-native**
-infrastructure only: **IIBIN**, **WebSocket**, **SFU**, and **Gossip Mesh**.
-No alternative transport/control stack is allowed.
+**Purpose**: Voltron is the distributed inference layer that runs a **Qwen clone**
+on King's native infrastructure. Weights come from Ollama's GGUF copy of Qwen2.5-coder:3b.
+Voltron partitions the model into blocks, the King orchestrator executes them
+across a mesh of peers, and `king_gguf_tensor_scan` provides native C tensor ops.
+The goal is producing output indistinguishable from Qwen itself, distributed.
 
 ## Non-Negotiable Stack
 
@@ -15,56 +17,110 @@ No alternative transport/control stack is allowed.
    (`king_pipeline_orchestrator_*`, local/file-worker/remote-peer backends).
 6. **Semantic DNS** is discovery/routing policy (`king_semantic_dns_*`).
 7. **Object Store** is artifact/staging for large payloads.
+8. **GGUF in C/Assembly** is the native compute kernel for tensor operations
+   (`king_gguf_tensor_scan`): disk-backed GGUF parsing, quantization decode, and
+   tensor-vector projection in C/asm. Supports F32/F16/Q8_0/Q4_K/Q6_K. No PHP decode loops.
+
+## Extension API Policy
+
+The King extension public surface (`king_gguf_tensor_scan`) is implemented in C and
+disk-backed. Compatibility aliases are maintained only during migration windows and
+MUST be removed and replaced as part of code cleanup once callers migrate off them.
+Supported tensor types: F32 (0), F16 (1), Q8_0 (8), Q4_K (12), Q6_K (14).
 
 ## Current Branch Reality (`experiments/1.0.7-voltron`)
 
 1. Present and usable:
    - IIBIN runtime and docs
    - WebSocket client/server runtime
-   - Pipeline orchestrator (local, file-worker, remote-peer)
+   - Pipeline orchestrator (local, file-worker, remote-peer) with registered handler API
    - Semantic DNS runtime
-   - SFU signaling path in `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php`
+   - SFU signaling path
+   - Native GGUF tensor scan in C (`king_gguf_tensor_scan`)
+   - Voltron tokenizer with BPE encode/decode and byte-level fallback
 2. Gap to close first:
    - Gossip Mesh source/header is not fully present on this branch as tracked source.
    - Compute mesh work must start by porting the gossip-mesh primitives from
-     `experiments/1.0.7-gossip-mesh` into Delphi.
+     `experiments/1.0.7-gossip-mesh` into voltron.
 
-## Execution Notes (2026-04-22)
+## Execution Notes (2026-04-23)
 
-1. Orchestrator input now supports graph-shaped submission (`steps` + `id` + `deps`)
-   and normalizes it into deterministic topological order before run persistence.
-2. This is currently a control-plane scheduling improvement, not fine-grained
-   in-process parallel frontier execution. Step-boundary execution semantics remain.
-3. M0 scaffolding for recurrent loop + expert fanout is added in userland:
-   - IIBIN schema registration helpers
-   - one-loop expert fanout DAG template
-   - object-store artifact reference contract and encoder helpers
-4. Build and targeted contract tests are green for the DAG path and existing
-   orchestrator terminal-state visibility path.
-5. Build/test snapshot is tracked in `DELPHI_BUILD_STATE.md`.
+1. Orchestrator supports graph-shaped submission (`steps` + `id` + `deps`) and normalizes
+   into deterministic topological order before run persistence.
+2. Registered handler API is used: `king_pipeline_orchestrator_register_handler()` chains
+   step output into `current_payload`, which becomes the next step's input and the run's
+   final return value. Handler output `['output']` is flattened into the return value.
+3. Decode loop terminates via `decode_stop` flag: handler sets `output.decode_stop` from
+   `state.stop`, orchestrator flattens it to `result.decode_stop`, runner checks it per iteration.
+4. M0 scaffolding is operational: VoltronKernels executes block DAG, VoltronRunner drives
+   decode loop, VoltronScheduler assigns peer ownership, VoltronTokenizer handles BPE.
+5. Build/test snapshot is tracked in `VOLTRON_BUILD_STATE.md`.
 
-## Immediate M0 Follow-Through
+## M0 Status and Immediate Priority
 
-1. Bind concrete handlers for the scaffolded step IDs:
-   - `voltron.prepare_inputs`
-   - `voltron.route_tokens_topk`
-   - `voltron.dispatch_expert_batch`
-   - `voltron.collect_expert_results`
-   - `voltron.merge_weighted_outputs`
-   - `voltron.next_layer_or_decode`
-   - `voltron.emit_final`
-2. Land a contract test for one recurrent loop with at least 2 expert fanout branches
-   proving deterministic merge and idempotent duplicate-drop behavior.
-3. Wire route/expert payloads to real object-store artifact refs (no large inline payloads).
-4. Keep branch operations fork-only unless explicitly instructed otherwise:
-   - push to `origin` (`sashakolpakov`) only
-   - do not push to `upstream`.
+**M0 target: single-machine inference producing output indistinguishable from Qwen2.5-coder:3b**
+
+The Ollama GGUF weights are the ground truth. Voltron must decode them faithfully,
+the same way Qwen would. Current state is **partially working**: orchestrator loop
+executes, blocks partition, loop terminates, but output is garbage due to correctness bugs.
+Fix the bugs first, then validate output quality.
+
+### M0 Correctness Bugs (Must Fix)
+
+1. **Shared embedding (lm_head = token_embd.weight)**: Qwen uses the same weight matrix for
+   embedding and lm_head. VoltronKernels samples `hidden_indices` from lm_head rows, which
+   corrupts logits. Fix: use full embedding row (no sampling) for lm_head projection.
+2. **Tokenizer decode mismatch**: Model vocab uses byte-pair encoding where many tokens
+   are not pure byte sequences. `VoltronTokenizer::decodeId` returns empty strings because
+   `decodeRawToken` checks `<0x..>` byte patterns but most tokens are BPE merges. Fix:
+   detect vocab encoding from token types and implement proper BPE decode.
+3. **Format prompt not applied**: `VoltronTokenizer::formatPrompt()` checks `$this->pre !==
+   'qwen2'` but model does not set pre-field, so chat template (`<|im_start|>...<|im_end|>`)
+   is never injected. Fix: derive pre-field from model architecture metadata or default to
+   qwen2 for known model families.
+
+### M0 Performance Notes
+
+1. Native scan (`king_gguf_tensor_scan`) handles F32/Q4_K/Q6_K projection correctly in C.
+   Remaining bottleneck is PHP overhead: ~9s/token across 36 blocks, 151936 vocab.
+2. No SIMD or threading in extension. Acceptable for M0 demo; not acceptable for production.
+3. Future performance paths: batch inference, multi-threaded projection, or CUDA offload.
+
+### M0 Remaining Work (After Correctness Fixes)
+
+1. Verify readable output from voltron.php with 8-16 tokens.
+2. Land a smoke contract test that asserts non-garbage output (e.g., contains valid UTF-8,
+   contains expected keywords from prompt domain).
+3. Enable VOLTRON_KERNEL_WEIGHT_CACHE=1 to cache attention/FFN weights across iterations.
+
+### Gate B: M1 (LAN Multi-Node) - Not Yet Started
+
+1. Enable remote-peer orchestrator dispatch plus lease ownership rules.
+2. Use Semantic DNS registration/discovery for placement.
+3. Add gossip relay for heartbeat and task-offer propagation.
+4. Add SFU fanout for realtime partial output streams.
+
+### Gate C: M2 (Mixed Hardware) - Not Yet Started
+
+1. Capability-aware scheduler tuned for CPU-only + M1 + low GPU mix.
+2. Dynamic chunk sizing by node class.
+3. Quorum verification for selected critical chunks.
+4. Reputation and backpressure enabled by default.
+
+### Gate D: Gossip Mesh Port - Must Precede M1
+
+1. Port gossip mesh runtime from `experiments/1.0.7-gossip-mesh`:
+   - `extension/include/gossip_mesh.h`
+   - `extension/src/gossip_mesh/*`
+   - build/config glue required by `extension/config.m4`
+2. Add contract tests proving gossip primitives load in voltron branch.
+3. Required before M1 because gossip relay is part of M1's fanout plane.
 
 ## Architecture (King-Native)
 
 ### 1) Control Plane: WebSocket + IIBIN
 
-1. Every Delphi node keeps one long-lived King WebSocket session to edge/control.
+1. Every voltron node keeps one long-lived King WebSocket session to edge/control.
 2. All control messages are IIBIN binary envelopes (not ad hoc JSON).
 3. Control topics:
    - node registration and heartbeat
@@ -110,13 +166,13 @@ No alternative transport/control stack is allowed.
 
 ## Protocol Design (IIBIN Schemas)
 
-Define a Delphi protocol package on IIBIN with strict versioning:
+Define a voltron protocol package on IIBIN with strict versioning:
 
-1. `DelphiMessageKind` enum:
+1. `voltronMessageKind` enum:
    - `node_announce`, `node_heartbeat`, `task_offer`, `task_lease`,
      `task_chunk`, `task_partial`, `task_final`, `task_fail`,
      `artifact_ref`, `swarm_control`, `swarm_metrics`.
-2. `DelphiEnvelope` schema:
+2. `voltronEnvelope` schema:
    - `version`, `kind`, `trace_id`, `swarm_id`, `sender_node_id`,
      `message_id`, `sent_at_ms`, `payload(bytes)`.
 3. `NodeCapabilities` schema:
@@ -160,7 +216,7 @@ Compatibility rule: never reuse field numbers; add-only evolution.
 
 ### Short Answer
 
-1. Yes, nodes can own experts, and this should be the default for Delphi.
+1. Yes, nodes can own experts, and this should be the default for voltron.
 2. Yes, compute graph partitioning is possible, but do not split at single-op granularity.
 3. Fastest practical design is a hybrid:
    - expert-parallel for MoE layers
@@ -273,18 +329,20 @@ Never treat gossip propagation alone as committed run completion.
 
 ## Implementation Sequence (Code Order)
 
-### Gate A: Foundation Port into Delphi
+### Gate A: Foundation Port into voltron
 
 1. Port gossip mesh runtime artifacts from `experiments/1.0.7-gossip-mesh`:
    - `extension/include/gossip_mesh.h`
    - `extension/src/gossip_mesh/*`
    - any build/config glue required by `extension/config.m4`
 2. Keep SFU and WebSocket behavior stable while porting.
-3. Add/restore contract tests proving gossip primitives load in Delphi branch.
+3. Add/restore contract tests proving gossip primitives load in voltron branch.
 
 ### Gate B: M0 (Single Machine, Deterministic)
 
-1. Implement IIBIN Delphi protocol definitions.
+**Status: PARTIALLY WORKING - correctness bugs block readable output**
+
+1. Implement IIBIN voltron protocol definitions.
 2. Implement WebSocket control endpoint carrying binary IIBIN envelopes.
 3. Wire orchestrator-backed chunk execution over local/file-worker.
 4. Add simple in-process mesh simulation using gossip primitives.
@@ -312,6 +370,8 @@ Never treat gossip propagation alone as committed run completion.
    - gossip duplicate suppression and TTL bound
    - SFU fanout correctness for partial output stream
    - orchestrator resume/cancel over remote-peer boundary
+   - native GGUF scan correctness (F32/F16/Q4_K/Q6_K projection accuracy)
+   - Voltron output is valid UTF-8 and coherent text (after correctness fix)
 2. Integration tests:
    - single-node deterministic swarm
    - 3-node LAN churn/recovery
@@ -326,6 +386,8 @@ Never treat gossip propagation alone as committed run completion.
 2. Chunks execute on 3 local workers.
 3. Aggregated result is deterministic.
 4. Orchestrator run history remains truthful under retry/cancel.
+5. **CRITICAL**: Voltron output is valid UTF-8, coherent text matching prompt domain.
+   (Currently broken due to shared embedding + tokenizer decode bugs)
 
 ### M1 Acceptance
 
@@ -346,3 +408,7 @@ Never treat gossip propagation alone as committed run completion.
 3. No hidden execution state outside orchestrator snapshots for run truth.
 4. No bypass of Semantic DNS for production placement.
 5. No direct large-payload flood over control channel; use object-store references.
+6. No PHP decode loops in the extension; tensor scanning is native C and disk-backed.
+7. Compatibility aliases MUST be removed as part of code cleanup once callers migrate off them.
+8. No shared embedding corruption; lm_head must use full weight rows, not sampled subsets.
+9. No garbage output; tokenizer decode must produce valid UTF-8 for BPE vocab tokens.

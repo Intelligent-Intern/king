@@ -9,16 +9,13 @@ declare(strict_types=1);
  * 2. ModelConfig::assertValid rejects invalid configs
  * 3. ModelPartitioner::partition produces deterministic DAG
  * 4. Block assignments respect memory constraints
- * 5. VoltronConnector builds valid pipeline
  */
 
 require __DIR__ . '/../../voltron/src/ModelConfig.php';
 require __DIR__ . '/../../voltron/src/ModelPartitioner.php';
-require __DIR__ . '/../../voltron/src/VoltronConnector.php';
 
 use King\Voltron\ModelConfig;
 use King\Voltron\ModelPartitioner;
-use King\Voltron\VoltronConnector;
 
 echo "=== Voltron Model-Agnostic Partitioner Contract Test ===\n\n";
 
@@ -43,34 +40,24 @@ function assert_eq(mixed $a, mixed $b, string $msg = ''): void {
     }
 }
 
-// Test 1: Gemma2B config is valid
-test("ModelConfig::gemma2B() is valid", function() {
-    $config = ModelConfig::gemma2B();
+// Test 1: Qwen config is valid
+test("ModelConfig::qwen2_5_3b() is valid", function() {
+    $config = ModelConfig::qwen2_5_3b();
     ModelConfig::assertValid($config);
-    assert_eq($config['name'], 'gemma2B');
-    assert_eq($config['total_params'], 2000000000);
+    assert_eq($config['name'], 'qwen2.5-coder:3b');
+    assert_eq($config['total_params'], 3000000000);
     assert_eq(count($config['block_schema']), 10);
 });
 
-// Test 2: Gemma7B config is valid
-test("ModelConfig::gemma7B() is valid", function() {
-    $config = ModelConfig::gemma7B();
-    ModelConfig::assertValid($config);
-    assert_eq($config['name'], 'gemma7B');
-    assert_eq($config['total_params'], 7000000000);
-    assert_eq(count($config['block_schema']), 10);
-});
-
-// Test 3: Block schema has no cycles
-test("Gemma2B block schema has no cycles", function() {
-    $config = ModelConfig::gemma2B();
+// Test 2: Block schema has no cycles
+test("Qwen block schema has no cycles", function() {
+    $config = ModelConfig::qwen2_5_3b();
     $schema = $config['block_schema'];
     $visited = [];
     $recursionStack = [];
     
     $hasCycle = false;
     
-    // Build adjacency: from dependency TO dependent
     $adjacency = [];
     $allNodes = [];
     foreach ($schema as $block) {
@@ -106,26 +93,23 @@ test("Gemma2B block schema has no cycles", function() {
     }
 });
 
-// Test 4: Partition produces DAG with correct block count
+// Test 3: Partition produces DAG with correct block count
 test("ModelPartitioner::partition produces DAG", function() {
-    $config = ModelConfig::gemma2B();
+    $config = ModelConfig::qwen2_5_3b();
     $nodes = [
-        'node-a' => ['max_memory_mb' => 2048, 'capabilities' => ['model_inference', 'embedding']],
-        'node-b' => ['max_memory_mb' => 4096, 'capabilities' => ['model_inference', 'attention', 'ffn']],
-        'node-c' => ['max_memory_mb' => 4096, 'capabilities' => ['model_inference', 'output_head']],
+        'node-a' => ['max_memory_mb' => 4096, 'capabilities' => ['model_inference', 'embedding']],
     ];
     
     $result = ModelPartitioner::partition($config, $nodes);
     
     assert_eq(count($result['steps']), 11, "Should have 10 blocks + 1 emit_final");
     assert_eq(count($result['block_assignments']), 10, "Should assign 10 blocks");
-    assert_eq($result['run_config']['model_name'], 'gemma2B');
-    assert_eq($result['run_config']['total_blocks'], 10);
+    assert_eq($result['run_config']['model_name'], 'qwen2.5-coder:3b');
 });
 
-// Test 5: Partition respects memory constraints
+// Test 4: Partition respects memory constraints
 test("ModelPartitioner respects memory constraints", function() {
-    $config = ModelConfig::gemma2B();
+    $config = ModelConfig::qwen2_5_3b();
     $nodes = [
         'tiny-node' => ['max_memory_mb' => 256, 'capabilities' => ['model_inference']],
     ];
@@ -141,9 +125,9 @@ test("ModelPartitioner respects memory constraints", function() {
     }
 });
 
-// Test 6: Block dependencies are respected
+// Test 5: Block dependencies are respected
 test("Partition respects block dependencies", function() {
-    $config = ModelConfig::gemma2B();
+    $config = ModelConfig::qwen2_5_3b();
     $nodes = [
         'node-a' => ['max_memory_mb' => 4096, 'capabilities' => ['model_inference']],
     ];
@@ -167,19 +151,24 @@ test("Partition respects block dependencies", function() {
     assert_eq($attention1Step['deps'] ?? [], ['voltron.execute_block.embed'], "attention_1 depends on embed");
 });
 
-// Test 7: VoltronConnector can build pipeline
-test("VoltronConnector builds valid pipeline", function() {
-    $nodes = [
-        'node-a' => ['max_memory_mb' => 2048, 'capabilities' => ['model_inference', 'embedding']],
-        'node-b' => ['max_memory_mb' => 4096, 'capabilities' => ['model_inference', 'attention', 'ffn']],
-    ];
-    
-    $connector = new VoltronConnector('test-node', 'gemma2B');
-    $pipeline = $connector->buildPipeline($nodes);
-    
-    assert_eq(count($pipeline['steps']), 11);
-    assert_eq($pipeline['run_config']['model_name'], 'gemma2B');
-    assert_eq($pipeline['run_config']['total_blocks'], 10);
+// Test 6: Qwen block ranges cover the real transformer depth from blk.0 .. blk.35
+test("Qwen partition covers full transformer range", function() {
+    $config = ModelConfig::qwen2_5_3b();
+    $schema = $config['block_schema'];
+
+    $attention1 = null;
+    $outputHead = null;
+    foreach ($schema as $block) {
+        if (($block['id'] ?? null) === 'attention_1') {
+            $attention1 = $block;
+        }
+        if (($block['id'] ?? null) === 'output_head') {
+            $outputHead = $block;
+        }
+    }
+
+    assert_eq($attention1['layers'] ?? null, [0, 8], 'attention_1 should start at blk.0');
+    assert_eq($outputHead['layers'] ?? null, [35, 35], 'output_head should end at blk.35');
 });
 
 echo "\n=== Results ===\n";

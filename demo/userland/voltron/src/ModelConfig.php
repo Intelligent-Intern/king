@@ -337,4 +337,108 @@ final class ModelConfig
             ],
         ];
     }
+
+    public static function qwen2_5_3b(?int $blockCount = null): array
+    {
+        $resolvedBlockCount = is_int($blockCount) && $blockCount > 1 ? $blockCount : 36;
+        $transformerStart = 0;
+        $transformerEnd = $resolvedBlockCount - 1;
+        $ranges = self::splitLayerRange($transformerStart, $transformerEnd, 4);
+
+        $blockSchema = [
+            [
+                'id' => 'embed',
+                'type' => self::TYPE_EMBED,
+                'layers' => [0, 0],
+                'memory_mb' => 256,
+                'dependencies' => [],
+            ],
+        ];
+
+        $previousDependency = 'embed';
+        $rangeIndex = 0;
+        foreach ($ranges as $range) {
+            $rangeIndex++;
+            $rangeStart = (int) $range[0];
+            $rangeEnd = (int) $range[1];
+            $rangeSize = max(1, ($rangeEnd - $rangeStart + 1));
+
+            $attentionId = 'attention_' . $rangeIndex;
+            $ffnId = 'ffn_' . $rangeIndex;
+
+            $blockSchema[] = [
+                'id' => $attentionId,
+                'type' => self::TYPE_ATTENTION,
+                'layers' => [$rangeStart, $rangeEnd],
+                'memory_mb' => max(512, 128 * $rangeSize),
+                'dependencies' => [$previousDependency],
+            ];
+            $blockSchema[] = [
+                'id' => $ffnId,
+                'type' => self::TYPE_FFN,
+                'layers' => [$rangeStart, $rangeEnd],
+                'memory_mb' => max(768, 192 * $rangeSize),
+                'dependencies' => [$attentionId],
+            ];
+
+            $previousDependency = $ffnId;
+        }
+
+        $blockSchema[] = [
+            'id' => 'output_head',
+            'type' => self::TYPE_OUTPUT_HEAD,
+            'layers' => [$transformerEnd, $transformerEnd],
+            'memory_mb' => 128,
+            'dependencies' => [$previousDependency],
+        ];
+
+        return [
+            'type' => self::TYPE_FULL_MODEL,
+            'name' => 'qwen2.5-coder:3b',
+            'total_params' => 3000000000,
+            'quantization' => self::QUANT_Q4_K,
+            'model_source' => 'object://models/qwen2.5-coder:3b q4_k',
+            'block_schema' => $blockSchema,
+        ];
+    }
+
+    /**
+     * @return array<int,array{int,int}>
+     */
+    private static function splitLayerRange(int $start, int $end, int $parts): array
+    {
+        $parts = max(1, $parts);
+        if ($end < $start) {
+            return [[$start, $start]];
+        }
+
+        $total = ($end - $start + 1);
+        $base = intdiv($total, $parts);
+        $remainder = $total % $parts;
+
+        $ranges = [];
+        $cursor = $start;
+        for ($i = 0; $i < $parts; $i++) {
+            $width = $base + ($i < $remainder ? 1 : 0);
+            if ($width <= 0) {
+                $width = 1;
+            }
+            $rangeStart = $cursor;
+            $rangeEnd = min($end, $cursor + $width - 1);
+            $ranges[] = [$rangeStart, $rangeEnd];
+            $cursor = $rangeEnd + 1;
+            if ($cursor > $end) {
+                break;
+            }
+        }
+
+        if ($ranges === []) {
+            return [[$start, $end]];
+        }
+
+        $last = count($ranges) - 1;
+        $ranges[$last][1] = $end;
+
+        return $ranges;
+    }
 }

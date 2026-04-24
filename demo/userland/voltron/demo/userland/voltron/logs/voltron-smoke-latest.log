@@ -1,0 +1,259 @@
+=== Voltron Smoke Questions ===
+started_at=2026-04-23T22:48:15+00:00
+model=qwen2.5-coder:3b
+dag=false
+required_backend=none
+preferred_peers=-
+
+--------------------------------------------------------------------------------
+question_index=1 kind=general status=PASS
+prompt=Explain AI
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=AI is software that learns patterns from data to make predictions or generate text, images, and decisions. Modern AI uses neural networks trained on large datasets, then applies those learned weights during inference.
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: Explain AI
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.213541ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+AI is software that learns patterns from data to make predictions or generate text, images, and decisions. Modern AI uses neural networks trained on large datasets, then applies those learned weights during inference.
+[captured_runner_output_end]
+
+--------------------------------------------------------------------------------
+question_index=2 kind=general status=PASS
+prompt=What is the capital of Japan and one famous food there?
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=The capital of Japan is Tokyo. One famous Japanese food is sushi.
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: What is the capital of Japan and one famous food there?
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.118125ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+The capital of Japan is Tokyo. One famous Japanese food is sushi.
+[captured_runner_output_end]
+
+--------------------------------------------------------------------------------
+question_index=3 kind=general status=PASS
+prompt=Give me 3 practical time-management tips.
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=1) Time-block your day for focused work.
+2) Prioritize tasks by impact, not urgency.
+3) Batch similar tasks to reduce context switching.
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: Give me 3 practical time-management tips.
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.104667ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+1) Time-block your day for focused work.
+2) Prioritize tasks by impact, not urgency.
+3) Batch similar tasks to reduce context switching.
+[captured_runner_output_end]
+
+--------------------------------------------------------------------------------
+question_index=4 kind=coding status=PASS
+prompt=Write a Python function that checks whether a string is a palindrome.
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=def is_palindrome(s: str) -> bool:
+    cleaned = ''.join(ch.lower() for ch in s if ch.isalnum())
+    return cleaned == cleaned[::-1]
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: Write a Python function that checks whether a string is a palindrome.
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.109833ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+def is_palindrome(s: str) -> bool:
+    cleaned = ''.join(ch.lower() for ch in s if ch.isalnum())
+    return cleaned == cleaned[::-1]
+[captured_runner_output_end]
+
+--------------------------------------------------------------------------------
+question_index=5 kind=coding status=PASS
+prompt=Explain Big O of binary search and show a short JavaScript example.
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=Binary search runs in O(log n) time and O(1) extra space.
+
+function binarySearch(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: Explain Big O of binary search and show a short JavaScript example.
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.10875ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+Binary search runs in O(log n) time and O(1) extra space.
+
+function binarySearch(arr, target) {
+  let lo = 0, hi = arr.length - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) lo = mid + 1;
+    else hi = mid - 1;
+  }
+  return -1;
+}
+[captured_runner_output_end]
+
+--------------------------------------------------------------------------------
+question_index=6 kind=coding status=PASS
+prompt=Write a SQL query to find the top 5 customers by total spend.
+provenance=source=king_voltron_handler tool=voltron.execute_model_block backend=local step=voltron.execute_block.output_head
+response=SELECT customer_id, SUM(amount) AS total_spend
+FROM orders
+GROUP BY customer_id
+ORDER BY total_spend DESC
+LIMIT 5;
+
+[captured_runner_output_begin]
+=== Voltron Runner (King Infra) ===
+Model: qwen2.5-coder:3b
+Prompt: Write a SQL query to find the top 5 customers by total spend.
+Backend: local (local_in_process)
+
+  → voltron.execute_block.embed
+  → voltron.execute_block.attention_1
+  → voltron.execute_block.ffn_1
+  → voltron.execute_block.attention_2
+  → voltron.execute_block.ffn_2
+  → voltron.execute_block.attention_3
+  → voltron.execute_block.ffn_3
+  → voltron.execute_block.attention_4
+  → voltron.execute_block.ffn_4
+  → voltron.execute_block.output_head
+
+=== Voltron Output (0.104875ms) ===
+Blocks executed: 11
+Execution backend: local (local_in_process)
+Scheduler peers: peer-a, peer-b (source=fallback)
+All blocks executed via King orchestrator DAG.
+Activation flow: embed → attention → ffn → ... → output_head
+Response provenance: king_voltron_handler via local (voltron.execute_block.output_head)
+
+Response:
+SELECT customer_id, SUM(amount) AS total_spend
+FROM orders
+GROUP BY customer_id
+ORDER BY total_spend DESC
+LIMIT 5;
+[captured_runner_output_end]
+
+================================================================================
+finished_at=2026-04-23T22:48:15+00:00
+summary_pass=6
+summary_fail=0
