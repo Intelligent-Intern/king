@@ -3,6 +3,11 @@ import {
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from './backendOrigin';
+import {
+  appendAssetVersionQuery,
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from './assetVersion';
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 const MAX_PENDING_PUBLISHES = 20;
@@ -22,7 +27,7 @@ function normalizeReason(value) {
 }
 
 function socketUrlForOrigin(origin, sessionToken) {
-  const query = new URLSearchParams();
+  const query = appendAssetVersionQuery(new URLSearchParams());
   query.set('room', 'lobby');
   const token = String(sessionToken || '').trim();
   if (token !== '') {
@@ -168,6 +173,7 @@ export function createAdminSyncSocket(options = {}) {
         payload = null;
       }
       if (!payload || typeof payload !== 'object') return;
+      if (handleAssetVersionSocketPayload(payload)) return;
       if (String(payload.type || '').trim().toLowerCase() !== 'admin/sync') return;
 
       onSync(payload);
@@ -191,6 +197,10 @@ export function createAdminSyncSocket(options = {}) {
 
       if (manuallyClosed) {
         emitState('idle', 'closed');
+        return;
+      }
+
+      if (handleAssetVersionSocketClose(event)) {
         return;
       }
 

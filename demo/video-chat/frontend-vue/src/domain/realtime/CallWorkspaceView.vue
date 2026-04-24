@@ -716,6 +716,7 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
+import { createDecoder as createTsDecoder } from '../../lib/wavelet/codec.js';
 import { MEDIA_SECURITY_SIGNAL_TYPES, createMediaSecuritySession } from './mediaSecurity';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
@@ -745,7 +746,12 @@ import {
   SFU_CONNECT_RETRY_DELAY_MS,
   SFU_PUBLISH_MAX_RETRIES,
   SFU_PUBLISH_RETRY_DELAY_MS,
+  SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
+  SFU_WLVC_FRAME_HEIGHT,
+  SFU_WLVC_FRAME_QUALITY,
+  SFU_WLVC_FRAME_WIDTH,
+  SFU_WLVC_KEYFRAME_INTERVAL,
   TYPING_LOCAL_STOP_MS,
   TYPING_SWEEP_MS,
   USERS_PAGE_SIZE,
@@ -977,6 +983,7 @@ let wlvcEncodeWarmupUntilMs = 0;
 let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
 let mediaSecuritySyncInFlight = false;
+let mediaSecuritySyncHintLastAtMs = 0;
 const mediaSecurityHelloSignalsSent = new Set();
 const mediaSecuritySenderKeySignalsSent = new Set();
 const mediaSecurityRecoveryLastByUserId = new Map();
@@ -1003,6 +1010,7 @@ let activityLastMotionScore = 0;
 let dynamicIceServersPromise = null;
 let dynamicIceServersExpiresAtMs = 0;
 let remoteVideoStallTimer = null;
+const SFU_PROTECTED_MEDIA_ENABLED = false;
 
 function extractDiagnosticMessage(value, fallback = 'Client diagnostics event captured.') {
   if (value instanceof Error) {
@@ -1084,6 +1092,7 @@ function checkRemoteVideoStalls() {
         publisher_name: String(peer.displayName || '').trim(),
         track_count: trackCount,
         frame_count: frameCount,
+        received_frame_count: Number(peer.receivedFrameCount || 0),
         age_ms: Math.max(0, nowMs - createdAtMs),
         remote_peer_count: remotePeersRef.value.size,
         connected_participant_count: connectedParticipantUsers.value.length,
@@ -1241,6 +1250,33 @@ function mediaSecurityTargetIds() {
     .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
 }
 
+function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
+  const nowMs = Date.now();
+  if ((nowMs - mediaSecuritySyncHintLastAtMs) < 1000) return;
+  mediaSecuritySyncHintLastAtMs = nowMs;
+
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'media_security_sync_hint',
+    code: 'media_security_sync_hint',
+    message: 'Media security sync was requested to recover SFU frame delivery.',
+    payload: {
+      reason: String(reason || 'unspecified'),
+      target_user_ids: mediaSecurityTargetIds(),
+      media_runtime_path: mediaRuntimePath.value,
+      ...extraPayload,
+    },
+  });
+  void syncMediaSecurityWithParticipants();
+}
+
+function canProtectCurrentSfuTargets() {
+  const targetUserIds = mediaSecurityTargetIds();
+  if (targetUserIds.length <= 0) return false;
+  return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+}
+
 function mediaSecurityHelloSignalKey(targetUserId, session) {
   return [
     activeRoomId.value,
@@ -1268,11 +1304,38 @@ async function sendMediaSecurityHello(targetUserId, force = false) {
   const key = mediaSecurityHelloSignalKey(targetUserId, session);
   if (!force && mediaSecurityHelloSignalsSent.has(key)) return true;
   const signal = await session.buildHelloSignal(targetUserId, currentMediaSecurityRuntimePath());
-  if (!signal) return false;
+  if (!signal) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_hello_skipped',
+      code: 'media_security_hello_skipped',
+      message: 'Media security hello could not be built for the remote participant.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
   if (sendSocketFrame(signal)) {
     mediaSecurityHelloSignalsSent.add(key);
     return true;
   }
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: 'media_security_hello_send_failed',
+    code: 'media_security_hello_send_failed',
+    message: 'Media security hello could not be sent over the realtime websocket.',
+    payload: {
+      target_user_id: Number(targetUserId || 0),
+      media_runtime_path: mediaRuntimePath.value,
+      security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+    },
+    immediate: true,
+  });
   return false;
 }
 
@@ -1280,15 +1343,56 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
   if (!isSocketOnline.value) return false;
   const session = ensureMediaSecuritySession();
   const ready = await session.ensureReady();
-  if (!ready) return false;
+  if (!ready) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_sender_key_skipped',
+      code: 'media_security_sender_key_skipped',
+      message: 'Media security sender key generation is not ready yet.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
   const key = mediaSecuritySenderKeySignalKey(targetUserId, session);
   if (!force && mediaSecuritySenderKeySignalsSent.has(key)) return true;
   const signal = await session.buildSenderKeySignal(targetUserId);
-  if (!signal) return false;
+  if (!signal) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_sender_key_not_ready',
+      code: 'media_security_sender_key_not_ready',
+      message: 'Media security sender key could not be built for the remote participant.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
   if (sendSocketFrame(signal)) {
     mediaSecuritySenderKeySignalsSent.add(key);
     return true;
   }
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: 'media_security_sender_key_send_failed',
+    code: 'media_security_sender_key_send_failed',
+    message: 'Media security sender key could not be sent over the realtime websocket.',
+    payload: {
+      target_user_id: Number(targetUserId || 0),
+      media_runtime_path: mediaRuntimePath.value,
+      security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+    },
+    immediate: true,
+  });
   return false;
 }
 
@@ -1309,6 +1413,13 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
     }
   } catch (error) {
     mediaDebugLog('[MediaSecurity] sync failed', error);
+    captureClientDiagnosticError('media_security_sync_failed', error, {
+      target_user_ids: mediaSecurityTargetIds(),
+      media_runtime_path: mediaRuntimePath.value,
+    }, {
+      code: 'media_security_sync_failed',
+      immediate: true,
+    });
   } finally {
     mediaSecuritySyncInFlight = false;
   }
@@ -2275,6 +2386,13 @@ function setNotice(message, kind = 'ok') {
   } else {
     workspaceError.value = '';
   }
+}
+
+function clearTransientActivityPublishErrorNotice() {
+  const currentError = String(workspaceError.value || '').trim();
+  if (!/Could not publish participant activity/i.test(currentError)) return;
+  if (!/database (is locked|table is locked|schema is locked|busy)/i.test(currentError)) return;
+  workspaceError.value = '';
 }
 
 function setAdmissionGate(roomId, message = '') {
@@ -4115,6 +4233,15 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
     }
   } catch (error) {
     mediaDebugLog('[MediaSecurity] signaling failed', error);
+    captureClientDiagnosticError('media_security_signal_failed', error, {
+      signal_type: type,
+      sender_user_id: normalizedSenderUserId,
+      media_runtime_path: mediaRuntimePath.value,
+      security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+    }, {
+      code: 'media_security_signal_failed',
+      immediate: true,
+    });
   }
 }
 
@@ -4238,6 +4365,7 @@ function handleSocketMessage(event) {
   }
 
   if (type === 'participant/activity') {
+    clearTransientActivityPublishErrorNotice();
     applyParticipantActivityPayload(payload?.activity, payload?.participant);
     return;
   }
@@ -4329,6 +4457,47 @@ function handleSocketMessage(event) {
     }
     if (shouldSuppressExpectedSignalingError(payload)) {
       scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
+      return;
+    }
+    if (code === 'activity_publish_failed') {
+      const activityError = String(payload?.details?.error || '').trim();
+      const activityReason = String(payload?.details?.reason || '').trim();
+      const activityCallId = String(payload?.details?.call_id || '').trim();
+      const activityRoomId = String(payload?.details?.room_id || '').trim();
+      const activityExceptionClass = String(payload?.details?.exception_class || '').trim();
+      const activityExceptionMessage = String(payload?.details?.exception_message || '').trim();
+      const isTransientActivityStorageBusy = activityError === 'activity_backend_error'
+        && /database (is locked|table is locked|schema is locked|busy)/i.test(activityExceptionMessage);
+      const detailParts = [];
+      if (activityError !== '') detailParts.push(`error=${activityError}`);
+      if (activityCallId !== '') detailParts.push(`call=${activityCallId}`);
+      if (activityRoomId !== '') detailParts.push(`room=${activityRoomId}`);
+      if (activityExceptionClass !== '') detailParts.push(`exception=${activityExceptionClass}`);
+      if (activityExceptionMessage !== '') detailParts.push(activityExceptionMessage);
+
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'error',
+        eventType: 'participant_activity_publish_failed',
+        code: activityError || code,
+        message,
+        payload: {
+          details: payload?.details || {},
+        },
+        immediate: true,
+      });
+
+      if (isTransientActivityStorageBusy) {
+        clearTransientActivityPublishErrorNotice();
+        return;
+      }
+
+      const detailedMessage = [
+        message,
+        activityReason && !message.includes(activityReason) ? activityReason : '',
+        detailParts.length > 0 ? `[${detailParts.join(' | ')}]` : '',
+      ].filter(Boolean).join(' ');
+      setNotice(detailedMessage, 'error');
       return;
     }
     setNotice(message, 'error');
@@ -4944,6 +5113,7 @@ watch(
       }
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
+      stopSfuTrackAnnounceTimer();
       teardownSfuRemotePeers();
       return;
     }
@@ -5075,12 +5245,14 @@ function initSFU() {
     onConnected: () => {
       sfuConnected.value = true;
       sfuConnectRetryCount = 0;
+      startSfuTrackAnnounceTimer();
       scheduleLocalTrackPublish();
     },
     onDisconnect: () => {
       const hadActiveConnection = sfuConnected.value;
       sfuConnected.value = false;
       localTracksPublishedToSfu = false;
+      stopSfuTrackAnnounceTimer();
       sfuClientRef.value = null;
       if (manualSocketClose) {
         sfuConnectRetryCount = 0;
@@ -5167,10 +5339,106 @@ function normalizeSfuPublisherId(publisherId) {
   return String(publisherId || '').trim();
 }
 
-function setSfuRemotePeer(publisherId, peer) {
+function remoteDecoderRuntimeName(decoder) {
+  const constructorName = String(decoder?.constructor?.name || '').trim();
+  if (constructorName === 'WasmWaveletVideoDecoder') return 'wasm';
+  if (constructorName === 'WaveletVideoDecoder') return 'ts';
+  return constructorName !== '' ? constructorName : 'unknown';
+}
+
+function findSfuRemotePeerEntryByUserId(userId, excludePublisherId = '') {
+  const normalizedUserId = Number(userId || 0);
+  const normalizedExcludePublisherId = normalizeSfuPublisherId(excludePublisherId);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    return null;
+  }
+
+  for (const [publisherId, peer] of remotePeersRef.value.entries()) {
+    if (normalizeSfuPublisherId(publisherId) === normalizedExcludePublisherId) continue;
+    if (!peer || typeof peer !== 'object') continue;
+    if (Number(peer?.userId || 0) !== normalizedUserId) continue;
+    return {
+      publisherId: normalizeSfuPublisherId(publisherId),
+      peer,
+    };
+  }
+
+  return null;
+}
+
+function getSfuRemotePeerByFrameIdentity(publisherId, publisherUserId) {
+  const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+  const exactPeer = normalizedPublisherId !== ''
+    ? remotePeersRef.value.get(normalizedPublisherId)
+    : null;
+  if (exactPeer?.decoder) {
+    return {
+      publisherId: normalizedPublisherId,
+      peer: exactPeer,
+      matchedBy: 'publisher_id',
+    };
+  }
+
+  const normalizedPublisherUserId = Number(publisherUserId || 0);
+  if (!Number.isInteger(normalizedPublisherUserId) || normalizedPublisherUserId <= 0) {
+    return {
+      publisherId: normalizedPublisherId,
+      peer: exactPeer || null,
+      matchedBy: 'none',
+    };
+  }
+
+  const fallback = findSfuRemotePeerEntryByUserId(normalizedPublisherUserId, normalizedPublisherId);
+  if (!fallback?.peer?.decoder) {
+    return {
+      publisherId: normalizedPublisherId,
+      peer: exactPeer || null,
+      matchedBy: 'none',
+    };
+  }
+
+  return {
+    publisherId: fallback.publisherId,
+    peer: fallback.peer,
+    matchedBy: 'publisher_user_id',
+  };
+}
+
+function promotePeerToTsDecoder(peer) {
+  if (!peer || typeof peer !== 'object') return false;
+  const nextDecoder = createTsDecoder({
+    width: SFU_WLVC_FRAME_WIDTH,
+    height: SFU_WLVC_FRAME_HEIGHT,
+    quality: SFU_WLVC_FRAME_QUALITY,
+  });
+  if (!nextDecoder) return false;
+
+  try {
+    peer.decoder?.destroy?.();
+  } catch {
+    // ignore decoder cleanup failures during runtime fallback
+  }
+
+  peer.decoder = markRaw(nextDecoder);
+  peer.decoderRuntime = 'ts';
+  peer.decoderFallbackApplied = true;
+  return true;
+}
+
+function setSfuRemotePeer(publisherId, peer, previousPublisherId = '') {
   const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
   if (normalizedPublisherId === '') return;
   const nextPeers = new Map(remotePeersRef.value);
+  const normalizedPreviousPublisherId = normalizeSfuPublisherId(previousPublisherId);
+  if (normalizedPreviousPublisherId !== '' && normalizedPreviousPublisherId !== normalizedPublisherId) {
+    nextPeers.delete(normalizedPreviousPublisherId);
+  }
+  for (const [existingPublisherId, existingPeer] of nextPeers.entries()) {
+    if (normalizeSfuPublisherId(existingPublisherId) === normalizedPublisherId) continue;
+    if (existingPeer === peer) {
+      nextPeers.delete(existingPublisherId);
+    }
+  }
   nextPeers.set(normalizedPublisherId, peer);
   remotePeersRef.value = nextPeers;
   bumpMediaRenderVersion();
@@ -5202,7 +5470,14 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   }
 
   const tracks = sfuTrackRows(options.tracks);
-  const existingPeer = remotePeersRef.value.get(publisherId);
+  const exactPeer = remotePeersRef.value.get(publisherId) || null;
+  const fallbackPeerEntry = exactPeer
+    ? null
+    : findSfuRemotePeerEntryByUserId(publisherUserId, publisherId);
+  const existingPeerEntry = exactPeer
+    ? { publisherId, peer: exactPeer }
+    : fallbackPeerEntry;
+  const existingPeer = existingPeerEntry?.peer || null;
   if (existingPeer?.decoder) {
     const updatedPeer = {
       ...existingPeer,
@@ -5213,10 +5488,14 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
       tracks,
       createdAtMs: Number(existingPeer.createdAtMs || Date.now()),
       frameCount: Number(existingPeer.frameCount || 0),
+      receivedFrameCount: Number(existingPeer.receivedFrameCount || 0),
       lastFrameAtMs: Number(existingPeer.lastFrameAtMs || 0),
+      lastReceivedFrameAtMs: Number(existingPeer.lastReceivedFrameAtMs || 0),
       stalledLoggedAtMs: Number(existingPeer.stalledLoggedAtMs || 0),
+      decoderRuntime: String(existingPeer.decoderRuntime || remoteDecoderRuntimeName(existingPeer.decoder)),
+      decoderFallbackApplied: Boolean(existingPeer.decoderFallbackApplied),
     };
-    setSfuRemotePeer(publisherId, updatedPeer);
+    setSfuRemotePeer(publisherId, updatedPeer, existingPeerEntry?.publisherId || '');
     await nextTick();
     renderCallVideoLayout();
     return updatedPeer;
@@ -5225,7 +5504,11 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   let decoder = null;
   if (isWlvcRuntimePath()) {
     try {
-      decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });
+      decoder = await createHybridDecoder({
+        width: SFU_WLVC_FRAME_WIDTH,
+        height: SFU_WLVC_FRAME_HEIGHT,
+        quality: SFU_WLVC_FRAME_QUALITY,
+      });
       if (decoder) {
         decoder = markRaw(decoder);
         mediaDebugLog('[SFU] Remote decoder initialized for publisher', publisherId, decoder?.constructor?.name || 'unknown_decoder');
@@ -5249,8 +5532,8 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 480;
+  canvas.width = SFU_WLVC_FRAME_WIDTH;
+  canvas.height = SFU_WLVC_FRAME_HEIGHT;
   canvas.className = 'remote-video';
   canvas.dataset.publisherId = publisherId;
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
@@ -5269,10 +5552,14 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     tracks,
     stream: null,
     decoder,
+    decoderRuntime: remoteDecoderRuntimeName(decoder),
+    decoderFallbackApplied: false,
     decodedCanvas: canvas,
     createdAtMs: Date.now(),
     frameCount: 0,
+    receivedFrameCount: 0,
     lastFrameAtMs: 0,
+    lastReceivedFrameAtMs: 0,
     stalledLoggedAtMs: 0,
   };
   setSfuRemotePeer(publisherId, peer);
@@ -5286,7 +5573,8 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
 function ensureSfuRemotePeerForFrame(frame) {
   const publisherId = normalizeSfuPublisherId(frame?.publisherId);
   if (publisherId === '') return null;
-  const existingPeer = remotePeersRef.value.get(publisherId);
+  const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);
+  const existingPeer = fallbackPeer?.peer || remotePeersRef.value.get(publisherId);
   if (existingPeer?.decoder) return Promise.resolve(existingPeer);
   const pending = pendingSfuRemotePeerInitializers.get(publisherId);
   if (pending) return pending;
@@ -5338,17 +5626,18 @@ function handleSFUTracks(e) {
     return;
   }
   const publisherId = normalizeSfuPublisherId(e?.publisherId);
+  const publisherUserId = Number(e?.publisherUserId || 0);
   if (publisherId === '') return;
   const init = createOrUpdateSfuRemotePeer({
     publisherId,
-    publisherUserId: e?.publisherUserId,
+    publisherUserId,
     publisherName: e?.publisherName,
     tracks: e?.tracks,
   }).catch((error) => {
       mediaDebugLog('[SFU] Could not subscribe to publisher', publisherId, error);
       captureClientDiagnosticError('sfu_subscribe_failed', error, {
         publisher_id: publisherId,
-        publisher_user_id: e?.publisherUserId,
+        publisher_user_id: publisherUserId,
         track_count: Array.isArray(e?.tracks) ? e.tracks.length : 0,
       }, {
         code: 'sfu_subscribe_failed',
@@ -5360,6 +5649,9 @@ function handleSFUTracks(e) {
     publisherId,
     init.finally(() => pendingSfuRemotePeerInitializers.delete(publisherId))
   );
+  if (Number.isInteger(publisherUserId) && publisherUserId > 0 && publisherUserId !== currentUserId.value) {
+    void sendMediaSecurityHello(publisherUserId);
+  }
 }
 
 function handleSFUUnpublished(publisherId, trackId) {
@@ -5389,6 +5681,7 @@ let localFilteredStreamRef = ref(null);
 let localStreamRef = ref(null);
 let encodeIntervalRef = ref(null);
 let localTracksPublishedToSfu = false;
+let sfuTrackAnnounceTimer = null;
 let localPublisherTeardownInProgress = false;
 let localTrackRecoveryTimer = null;
 let localTrackRecoveryAttempts = 0;
@@ -5404,6 +5697,21 @@ function clearRemoteVideoContainer() {
   if (container) {
     container.replaceChildren();
   }
+}
+
+function stopSfuTrackAnnounceTimer() {
+  if (sfuTrackAnnounceTimer !== null) {
+    clearInterval(sfuTrackAnnounceTimer);
+    sfuTrackAnnounceTimer = null;
+  }
+}
+
+function startSfuTrackAnnounceTimer() {
+  stopSfuTrackAnnounceTimer();
+  if (!sfuConnected.value) return;
+  sfuTrackAnnounceTimer = setInterval(() => {
+    publishLocalTracksToSfuIfReady({ force: true });
+  }, SFU_TRACK_ANNOUNCE_INTERVAL_MS);
 }
 
 function teardownSfuRemotePeers() {
@@ -5437,6 +5745,13 @@ function bumpMediaRenderVersion() {
   mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
 }
 
+function markRemotePeerRenderable(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  if (Number(peer.frameCount || 0) !== 1) return;
+  bumpMediaRenderVersion();
+  renderCallVideoLayout();
+}
+
 function streamHasTracks(stream) {
   if (typeof MediaStream === 'undefined' || !(stream instanceof MediaStream)) return false;
   return stream.getTracks().some((track) => track?.readyState !== 'ended');
@@ -5444,7 +5759,13 @@ function streamHasTracks(stream) {
 
 function remotePeerHasRenderableMedia(peer) {
   if (!peer || typeof peer !== 'object') return false;
-  if (typeof HTMLCanvasElement !== 'undefined' && peer.decodedCanvas instanceof HTMLCanvasElement) return true;
+  if (
+    typeof HTMLCanvasElement !== 'undefined'
+    && peer.decodedCanvas instanceof HTMLCanvasElement
+    && Number(peer.frameCount || 0) > 0
+  ) {
+    return true;
+  }
   if (streamHasTracks(peer.remoteStream) || streamHasTracks(peer.stream)) return true;
   if (typeof HTMLVideoElement !== 'undefined' && peer.video instanceof HTMLVideoElement) {
     return streamHasTracks(peer.video.srcObject) || Number(peer.video.readyState || 0) > 0;
@@ -5489,6 +5810,16 @@ function mediaNodeForUserId(userId) {
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
   if (normalizedUserId === currentUserId.value) {
     return localVideoElement.value instanceof HTMLVideoElement ? localVideoElement.value : null;
+  }
+  for (const peer of remotePeersRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return remotePeerMediaNode(peer);
+    }
+  }
+  for (const peer of nativePeerConnectionsRef.value.values()) {
+    if (Number(peer?.userId || 0) === normalizedUserId && remotePeerHasRenderableMedia(peer)) {
+      return remotePeerMediaNode(peer);
+    }
   }
   for (const peer of remotePeersRef.value.values()) {
     if (Number(peer?.userId || 0) === normalizedUserId) {
@@ -6267,9 +6598,10 @@ async function acquireLocalMediaStreamWithFallback() {
   }
 }
 
-function publishLocalTracksToSfuIfReady() {
+function publishLocalTracksToSfuIfReady(options = {}) {
+  const force = options?.force === true;
   if (!sfuClientRef.value) return false;
-  if (localTracksPublishedToSfu) return true;
+  if (localTracksPublishedToSfu && !force) return true;
   if (sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) return false;
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
   if (!(stream instanceof MediaStream)) return false;
@@ -6397,6 +6729,12 @@ function publishLocalActivitySample(force = false) {
   const nowMs = Date.now();
   if (!force && (nowMs - activityLastPublishMs) < ACTIVITY_PUBLISH_INTERVAL_MS) return;
   if (!isSocketOnline.value || currentUserId.value <= 0 || activeSocketCallId.value === '') return;
+  if (String(normalizedCallLayout.value.strategy || '') === 'manual_pinned') {
+    clearTransientActivityPublishErrorNotice();
+    return;
+  }
+  const roomId = normalizeRoomId(activeRoomId.value);
+  if (roomId === '' || roomId === 'waiting-room' || roomId !== desiredRoomId.value) return;
 
   const audioLevel = controlState.micEnabled ? sampleLocalAudioLevel() : 0;
   const motionScore = controlState.cameraEnabled ? sampleLocalMotionScore(nowMs) : 0;
@@ -6818,6 +7156,7 @@ function unpublishAndStopLocalTracks() {
 
 function teardownLocalPublisher() {
   clearLocalTrackRecoveryTimer();
+  stopSfuTrackAnnounceTimer();
   stopActivityMonitor();
   stopLocalEncodingPipeline();
   unpublishAndStopLocalTracks();
@@ -6914,10 +7253,10 @@ async function startEncodingPipeline(videoTrack) {
 
   try {
     const nextEncoder = await createHybridEncoder({
-      width: 640, 
-      height: 480, 
-      quality: 75,
-      keyFrameInterval: 30,
+      width: SFU_WLVC_FRAME_WIDTH,
+      height: SFU_WLVC_FRAME_HEIGHT,
+      quality: SFU_WLVC_FRAME_QUALITY,
+      keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
     });
     videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
     if (!videoEncoderRef.value) {
@@ -6945,8 +7284,8 @@ async function startEncodingPipeline(videoTrack) {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = 640;
-  canvas.height = 480;
+  canvas.width = SFU_WLVC_FRAME_WIDTH;
+  canvas.height = SFU_WLVC_FRAME_HEIGHT;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   encodeIntervalRef.value = setInterval(async () => {
@@ -6972,25 +7311,40 @@ async function startEncodingPipeline(videoTrack) {
         protectionMode: 'transport_only',
       };
 
-      try {
-        const mediaSecurity = ensureMediaSecuritySession();
-        const protectedFrame = await mediaSecurity.protectFrame({
-          data: encoded.data,
-          runtimePath: 'wlvc_sfu',
-          trackKind: 'video',
-          frameKind: encoded.type,
-          trackId: videoTrack.id,
-          timestamp: encoded.timestamp,
-        });
-        outgoingFrame.data = new ArrayBuffer(0);
-        outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
-        outgoingFrame.protectionMode = 'protected';
-      } catch (securityError) {
-        if (!shouldSendTransportOnlySfuFrame(securityError)) {
-          throw securityError;
+      if (SFU_PROTECTED_MEDIA_ENABLED && canProtectCurrentSfuTargets()) {
+        try {
+          const mediaSecurity = ensureMediaSecuritySession();
+          const protectedFrame = await mediaSecurity.protectFrame({
+            data: encoded.data,
+            runtimePath: 'wlvc_sfu',
+            trackKind: 'video',
+            frameKind: encoded.type,
+            trackId: videoTrack.id,
+            timestamp: encoded.timestamp,
+          });
+          outgoingFrame.data = new ArrayBuffer(0);
+          outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
+          outgoingFrame.protectionMode = 'protected';
+        } catch (securityError) {
+          if (!shouldSendTransportOnlySfuFrame(securityError)) {
+            throw securityError;
+          }
+          mediaDebugLog('[MediaSecurity] protected SFU frame unavailable; sending transport-only frame', securityError);
+          hintMediaSecuritySync('protect_frame_unavailable', {
+            track_id: videoTrack.id,
+            media_runtime_path: mediaRuntimePath.value,
+          });
         }
-        mediaDebugLog('[MediaSecurity] protected SFU frame unavailable; sending transport-only frame', securityError);
-        void syncMediaSecurityWithParticipants();
+      } else {
+        hintMediaSecuritySync(
+          SFU_PROTECTED_MEDIA_ENABLED
+            ? 'peer_handshake_not_ready'
+            : 'protected_frames_temporarily_disabled',
+          {
+          track_id: videoTrack.id,
+          media_runtime_path: mediaRuntimePath.value,
+          }
+        );
       }
 
       sfuClientRef.value.sendEncodedFrame(outgoingFrame);
@@ -7219,6 +7573,8 @@ function markRemoteFrameActivity(publisherUserId) {
 
 async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   if (!peer || !peer.decoder) return;
+  peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
+  peer.lastReceivedFrameAtMs = Date.now();
   const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
     markRemoteFrameActivity(publisherUserId);
@@ -7236,6 +7592,16 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       });
     } catch (error) {
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
+        publisher_id: publisherId,
+        publisher_user_id: publisherUserId,
+        track_id: frame?.trackId,
+        frame_type: frame?.type,
+        frame_timestamp: frame?.timestamp,
+        media_runtime_path: mediaRuntimePath.value,
+      }, {
+        code: 'sfu_protected_frame_decrypt_failed',
+      });
       if (shouldRecoverMediaSecurityFromFrameError(error)) {
         recoverMediaSecurityForPublisher(publisherUserId);
       }
@@ -7253,6 +7619,16 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       });
     } catch (error) {
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
+      captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
+        publisher_id: publisherId,
+        publisher_user_id: publisherUserId,
+        track_id: frame?.trackId,
+        frame_type: frame?.type,
+        frame_timestamp: frame?.timestamp,
+        media_runtime_path: mediaRuntimePath.value,
+      }, {
+        code: 'sfu_protected_frame_decrypt_failed',
+      });
       if (shouldRecoverMediaSecurityFromFrameError(error)) {
         recoverMediaSecurityForPublisher(publisherUserId);
       }
@@ -7261,13 +7637,20 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   }
 
   try {
-    const decoded = peer.decoder.decodeFrame({
+    const frameDescriptor = {
       data: frameData,
       timestamp: frame.timestamp,
-      width: 640,
-      height: 480,
+      width: SFU_WLVC_FRAME_WIDTH,
+      height: SFU_WLVC_FRAME_HEIGHT,
       type: frame.type,
-    });
+    };
+    let decoded = peer.decoder.decodeFrame(frameDescriptor);
+    const decodedHasPixels = decoded && decoded.data && Number(decoded.data.length || 0) > 0;
+    if (!decodedHasPixels && !peer.decoderFallbackApplied && String(peer.decoderRuntime || '') === 'wasm') {
+      if (promotePeerToTsDecoder(peer)) {
+        decoded = peer.decoder.decodeFrame(frameDescriptor);
+      }
+    }
 
     if (decoded && decoded.data) {
       peer.frameCount = Number(peer.frameCount || 0) + 1;
@@ -7280,8 +7663,55 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       if (!(canvas.parentElement instanceof HTMLElement)) {
         renderCallVideoLayout();
       }
+      markRemotePeerRenderable(peer);
+    } else {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_decode_frame_empty',
+        code: 'sfu_decode_frame_empty',
+        message: 'SFU decoder returned no renderable pixels for a received frame.',
+        payload: {
+          publisher_id: publisherId,
+          publisher_user_id: publisherUserId,
+          track_id: frame?.trackId,
+          frame_type: frame?.type,
+          frame_timestamp: frame?.timestamp,
+          received_frame_count: Number(peer.receivedFrameCount || 0),
+          frame_count: Number(peer.frameCount || 0),
+          decoder_runtime: String(peer.decoderRuntime || remoteDecoderRuntimeName(peer.decoder)),
+          decoder_fallback_applied: Boolean(peer.decoderFallbackApplied),
+        },
+      });
     }
   } catch (e) {
+    if (!peer.decoderFallbackApplied && String(peer.decoderRuntime || '') === 'wasm' && promotePeerToTsDecoder(peer)) {
+      try {
+        const decoded = peer.decoder.decodeFrame({
+          data: frameData,
+          timestamp: frame.timestamp,
+          width: SFU_WLVC_FRAME_WIDTH,
+          height: SFU_WLVC_FRAME_HEIGHT,
+          type: frame.type,
+        });
+        if (decoded && decoded.data) {
+          peer.frameCount = Number(peer.frameCount || 0) + 1;
+          peer.lastFrameAtMs = Date.now();
+          peer.stalledLoggedAtMs = 0;
+          const canvas = peer.decodedCanvas;
+          const ctx = canvas.getContext('2d');
+          const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
+          ctx.putImageData(imageData, 0, 0);
+          if (!(canvas.parentElement instanceof HTMLElement)) {
+            renderCallVideoLayout();
+          }
+          markRemotePeerRenderable(peer);
+          return;
+        }
+      } catch {
+        // fall through to the existing diagnostic path
+      }
+    }
     mediaDebugLog('[SFU] Decode error:', e);
     captureClientDiagnosticError('sfu_decode_frame_failed', e, {
       publisher_id: publisherId,
@@ -7290,6 +7720,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       frame_type: frame?.type,
       frame_timestamp: frame?.timestamp,
       frame_count: Number(peer.frameCount || 0),
+      received_frame_count: Number(peer.receivedFrameCount || 0),
+      decoder_runtime: String(peer.decoderRuntime || remoteDecoderRuntimeName(peer.decoder)),
+      decoder_fallback_applied: Boolean(peer.decoderFallbackApplied),
     }, {
       code: 'sfu_decode_frame_failed',
     });
@@ -7300,11 +7733,29 @@ function handleSFUEncodedFrame(frame) {
   if (!isWlvcRuntimePath()) return;
   const publisherId = normalizeSfuPublisherId(frame?.publisherId);
   if (publisherId === '') return;
-  let peer = remotePeersRef.value.get(publisherId);
-  peer = updateSfuRemotePeerUserId(publisherId, peer, frame?.publisherUserId);
+  let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);
+  let peer = peerLookup?.peer || null;
+  if (peerLookup?.matchedBy === 'publisher_user_id') {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_publisher_id_alias_applied',
+      code: 'sfu_publisher_id_alias_applied',
+      message: 'SFU frame used a publisher id that did not match the known track publisher key, so the client matched by user id.',
+      payload: {
+        frame_publisher_id: publisherId,
+        resolved_publisher_id: String(peerLookup.publisherId || ''),
+        publisher_user_id: Number(frame?.publisherUserId || 0),
+      },
+    });
+  }
+  peer = updateSfuRemotePeerUserId(peerLookup?.publisherId || publisherId, peer, frame?.publisherUserId);
   const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
     markRemoteFrameActivity(publisherUserId);
+    if (frame?.protectedFrame && Number(peer?.frameCount || 0) <= 0) {
+      void sendMediaSecurityHello(publisherUserId);
+    }
   }
   if (!peer || !peer.decoder) {
     const init = ensureSfuRemotePeerForFrame(frame);
@@ -7353,6 +7804,7 @@ onBeforeUnmount(() => {
   clearReconnectTimer();
   clearPingTimer();
   clearLocalTrackRecoveryTimer();
+  stopSfuTrackAnnounceTimer();
   if (usersRefreshTimer.value !== null) {
     clearTimeout(usersRefreshTimer.value);
     usersRefreshTimer.value = null;

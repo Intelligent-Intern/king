@@ -30,18 +30,27 @@ function videochat_turn_ice_contract_env(string $name, ?string $value): void
 try {
     foreach ([
         'VIDEOCHAT_STUN_URIS',
+        'VIDEOCHAT_STUN_DEFAULT_DOMAIN',
+        'VIDEOCHAT_STUN_DOMAIN',
         'VIDEOCHAT_TURN_STATIC_AUTH_SECRET',
         'VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE',
         'VIDEOCHAT_TURN_URIS',
         'VIDEOCHAT_TURN_TTL_SECONDS',
         'VIDEOCHAT_TURN_USERNAME_PREFIX',
+        'VIDEOCHAT_DEPLOY_TURN_DOMAIN',
+        'VIDEOCHAT_EDGE_TURN_DOMAIN',
+        'VIDEOCHAT_V1_TURN_REALM',
+        'TURN_DOMAIN',
+        'VIDEOCHAT_V1_PUBLIC_HOST',
+        'VIDEOCHAT_EDGE_DOMAIN',
     ] as $name) {
         videochat_turn_ice_contract_env($name, null);
     }
 
+    videochat_turn_ice_contract_env('VIDEOCHAT_DEPLOY_TURN_DOMAIN', 'turn.example.test');
     $stunOnly = videochat_turn_ice_server_payload(1_000);
     videochat_turn_ice_contract_assert(($stunOnly['enabled'] ?? true) === false, 'STUN-only payload must report TURN disabled');
-    videochat_turn_ice_contract_assert(count((array) ($stunOnly['ice_servers'] ?? [])) >= 1, 'STUN fallback must remain available');
+    videochat_turn_ice_contract_assert((array) ($stunOnly['ice_servers'] ?? []) === [['urls' => 'stun:turn.example.test:3478']], 'STUN fallback must prefer the deployment TURN host');
 
     videochat_turn_ice_contract_env('VIDEOCHAT_TURN_STATIC_AUTH_SECRET', 'contract-secret-1234567890');
     videochat_turn_ice_contract_env('VIDEOCHAT_TURN_URIS', 'turn:turn.example.test:3478?transport=udp,turn:turn.example.test:3478?transport=tcp');

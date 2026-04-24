@@ -18,11 +18,16 @@ export const SFU_PUBLISH_RETRY_DELAY_MS = 500;
 export const SFU_PUBLISH_MAX_RETRIES = 24;
 export const SFU_CONNECT_RETRY_DELAY_MS = 1200;
 export const SFU_CONNECT_MAX_RETRIES = 1;
+export const SFU_TRACK_ANNOUNCE_INTERVAL_MS = 3000;
 export const LOCAL_REACTION_ECHO_TTL_MS = 6000;
 export const WLVC_ENCODE_FAILURE_THRESHOLD = 18;
 export const WLVC_ENCODE_FAILURE_WINDOW_MS = 4000;
 export const WLVC_ENCODE_WARMUP_MS = 2500;
 export const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
+export const SFU_WLVC_FRAME_WIDTH = 320;
+export const SFU_WLVC_FRAME_HEIGHT = 240;
+export const SFU_WLVC_FRAME_QUALITY = 50;
+export const SFU_WLVC_KEYFRAME_INTERVAL = 24;
 export const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
 export const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;
 export const LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS = 10;
@@ -83,10 +88,25 @@ function parseEnvFlag(value, fallback = false) {
   return ['1', 'true', 'yes', 'on'].includes(normalized);
 }
 
-export const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
+function defaultTurnHostFromLocation() {
+  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return '';
+
+  const hostname = String(window.location.hostname || '').trim().toLowerCase();
+  if (hostname === '') return '';
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return hostname;
+  if (hostname.startsWith('turn.')) return hostname;
+  if (/^[0-9.]+$/.test(hostname) || hostname.includes(':')) return hostname;
+
+  return `turn.${hostname.replace(/^(api|ws|sfu|cdn|cnd)\./, '')}`;
+}
+
+function buildDefaultNativeIceServers() {
+  const turnHost = defaultTurnHostFromLocation();
+  if (turnHost === '') return [];
+  return [{ urls: `stun:${turnHost}:3478` }];
+}
+
+export const DEFAULT_NATIVE_ICE_SERVERS = parseIceServersFromEnv(import.meta.env.VITE_VIDEOCHAT_ICE_SERVERS) || buildDefaultNativeIceServers();
 export const SFU_RUNTIME_ENABLED = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_ENABLE_SFU, false);
 
 export function mediaDebugLog(...args) {

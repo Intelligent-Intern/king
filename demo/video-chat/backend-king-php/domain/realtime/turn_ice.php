@@ -5,12 +5,52 @@ declare(strict_types=1);
 /**
  * @return array<int, array<string, mixed>>
  */
+function videochat_turn_default_stun_uris(): array
+{
+    $candidates = [
+        trim((string) (getenv('VIDEOCHAT_STUN_DEFAULT_DOMAIN') ?: '')),
+        trim((string) (getenv('VIDEOCHAT_STUN_DOMAIN') ?: '')),
+        trim((string) (getenv('VIDEOCHAT_DEPLOY_TURN_DOMAIN') ?: '')),
+        trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: '')),
+        trim((string) (getenv('VIDEOCHAT_V1_TURN_REALM') ?: '')),
+        trim((string) (getenv('TURN_DOMAIN') ?: '')),
+    ];
+
+    $publicHost = trim((string) (getenv('VIDEOCHAT_V1_PUBLIC_HOST') ?: getenv('VIDEOCHAT_EDGE_DOMAIN') ?: ''));
+    if ($publicHost !== '') {
+        $candidates[] = preg_match('/^(localhost|[0-9.]+)$/', $publicHost) === 1 || str_contains($publicHost, ':')
+            ? $publicHost
+            : 'turn.' . preg_replace('/^(api|ws|sfu|cdn|cnd|turn)\./i', '', $publicHost);
+    }
+
+    $uris = [];
+    foreach ($candidates as $candidate) {
+        $normalized = strtolower(trim((string) $candidate));
+        if ($normalized === '') {
+            continue;
+        }
+
+        $normalized = preg_replace('/^[a-z]+:\/\//i', '', $normalized) ?? $normalized;
+        $normalized = explode('/', $normalized, 2)[0];
+        if ($normalized === '') {
+            continue;
+        }
+
+        $uris['stun:' . $normalized . ':3478'] = true;
+    }
+
+    return array_keys($uris);
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
 function videochat_turn_static_stun_servers(): array
 {
     $raw = trim((string) (getenv('VIDEOCHAT_STUN_URIS') ?: ''));
     $uris = $raw !== ''
         ? preg_split('/\s*,\s*/', $raw) ?: []
-        : ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'];
+        : videochat_turn_default_stun_uris();
 
     $servers = [];
     foreach ($uris as $uri) {

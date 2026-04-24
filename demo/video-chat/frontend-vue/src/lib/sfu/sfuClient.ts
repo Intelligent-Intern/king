@@ -39,6 +39,7 @@ export interface SFUEncodedFrame {
   trackId: string
   timestamp: number
   data?: ArrayBuffer
+  dataBase64?: string | null
   type: 'keyframe' | 'delta'
   protected?: Record<string, unknown> | null
   protectedFrame?: string | null
@@ -53,6 +54,8 @@ export interface SFUClientCallbacks {
   onDisconnect:    () => void
   onEncodedFrame?: (frame: SFUEncodedFrame) => void
 }
+
+const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024
 
 export class SFUClient {
   private ws: WebSocket | null = null
@@ -249,9 +252,31 @@ export class SFUClient {
       payload.protected_frame = frame.protectedFrame
       payload.protection_mode = frame.protectionMode || 'protected'
     } else {
-      payload.data = Array.from(new Uint8Array(frame.data || new ArrayBuffer(0)))
+      const normalizedBase64 = String(frame.dataBase64 || '').trim()
+      if (normalizedBase64 !== '') {
+        payload.data_base64 = normalizedBase64
+      } else {
+        payload.data_base64 = arrayBufferToBase64Url(frame.data || new ArrayBuffer(0))
+      }
       payload.protection_mode = frame.protectionMode || 'transport_only'
     }
+
+    const protectedFrame = String(payload.protected_frame || '').trim()
+    if (protectedFrame !== '') {
+      if (protectedFrame.length > SFU_FRAME_CHUNK_MAX_CHARS) {
+        this.sendChunkedFramePayload(payload, 'protected_frame_chunk', protectedFrame)
+        return
+      }
+      this.send(payload)
+      return
+    }
+
+    const dataBase64 = String(payload.data_base64 || '').trim()
+    if (dataBase64.length > SFU_FRAME_CHUNK_MAX_CHARS) {
+      this.sendChunkedFramePayload(payload, 'data_base64_chunk', dataBase64)
+      return
+    }
+
     this.send(payload)
   }
 
@@ -268,6 +293,34 @@ export class SFUClient {
   private send(msg: object): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
+    }
+  }
+
+  private sendChunkedFramePayload(
+    payload: Record<string, unknown>,
+    chunkField: 'data_base64_chunk' | 'protected_frame_chunk',
+    chunkValue: string,
+  ): void {
+    const totalChunks = Math.max(1, Math.ceil(chunkValue.length / SFU_FRAME_CHUNK_MAX_CHARS))
+    const frameId = createSfuFrameId()
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      const start = chunkIndex * SFU_FRAME_CHUNK_MAX_CHARS
+      const end = start + SFU_FRAME_CHUNK_MAX_CHARS
+      const chunkPayload: Record<string, unknown> = {
+        type: 'sfu/frame-chunk',
+        frame_id: frameId,
+        publisher_id: payload.publisher_id,
+        publisher_user_id: payload.publisher_user_id,
+        track_id: payload.track_id,
+        timestamp: payload.timestamp,
+        frame_type: payload.frame_type,
+        protection_mode: payload.protection_mode,
+        chunk_index: chunkIndex,
+        chunk_count: totalChunks,
+      }
+      chunkPayload[chunkField] = chunkValue.slice(start, end)
+      this.send(chunkPayload)
     }
   }
 
@@ -314,12 +367,16 @@ export class SFUClient {
       case 'sfu/frame':
         if (this.cb.onEncodedFrame) {
           const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
+          const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
           this.cb.onEncodedFrame({
             publisherId: stringField(msg.publisherId, msg.publisher_id),
             publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
             trackId: stringField(msg.trackId, msg.track_id),
             timestamp: msg.timestamp,
-            data: Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0),
+            data: dataBase64 !== ''
+              ? base64UrlToArrayBuffer(dataBase64)
+              : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0)),
+            dataBase64: dataBase64 || null,
             type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
             protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
             protectedFrame: protectedFrame || null,
@@ -358,4 +415,36 @@ function normalizeIdentifier(value: string, fallback = ''): string {
     .replace(/^[_:.-]+|[_:.-]+$/g, '')
 
   return normalized || fallback
+}
+
+function createSfuFrameId(): string {
+  const randomValue = Math.random().toString(36).slice(2, 10)
+  return `frame_${Date.now().toString(36)}_${randomValue}`
+}
+
+function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
+  const view = new Uint8Array(buffer || new ArrayBuffer(0))
+  let binary = ''
+  for (let index = 0; index < view.byteLength; index += 1) {
+    binary += String.fromCharCode(view[index])
+  }
+  const base64 = typeof btoa === 'function'
+    ? btoa(binary)
+    : Buffer.from(view).toString('base64')
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+function base64UrlToArrayBuffer(value: string): ArrayBuffer {
+  const normalized = String(value || '').trim()
+  if (normalized === '') return new ArrayBuffer(0)
+  const base64 = normalized.replace(/-/g, '+').replace(/_/g, '/')
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4)
+  const binary = typeof atob === 'function'
+    ? atob(padded)
+    : Buffer.from(padded, 'base64').toString('binary')
+  const out = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    out[index] = binary.charCodeAt(index)
+  }
+  return out.buffer
 }

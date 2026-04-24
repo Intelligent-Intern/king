@@ -411,6 +411,50 @@ function videochat_realtime_handle_reaction_websocket_command(
     return videochat_realtime_secondary_handled_result();
 }
 
+function videochat_realtime_activity_error_reason(string $errorCode): string
+{
+    return match ($errorCode) {
+        'missing_call_context' => 'The websocket connection has no active call or room context.',
+        'forged_activity_user' => 'The reported user_id does not match the authenticated websocket user.',
+        'invalid_command' => 'The activity command payload is invalid.',
+        'activity_backend_error' => 'The backend failed while storing the activity sample.',
+        default => $errorCode !== '' ? 'Activity publishing failed with an unknown backend reason.' : 'Activity publishing failed.',
+    };
+}
+
+function videochat_realtime_activity_error_details(
+    array $activityResult,
+    array $presenceConnection,
+    array $activityCommand
+): array {
+    $errorCode = trim((string) ($activityResult['error'] ?? 'unknown'));
+    $details = [
+        'error' => $errorCode,
+        'reason' => videochat_realtime_activity_error_reason($errorCode),
+        'call_id' => videochat_realtime_connection_call_id($presenceConnection),
+        'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
+        'user_id' => (int) ($presenceConnection['user_id'] ?? 0),
+        'reported_user_id' => (int) ($activityCommand['user_id'] ?? 0),
+        'audio_level' => (float) ($activityCommand['audio_level'] ?? 0),
+        'motion_score' => (float) ($activityCommand['motion_score'] ?? 0),
+        'speaking' => (bool) ($activityCommand['speaking'] ?? false),
+        'gesture' => (string) ($activityCommand['gesture'] ?? ''),
+        'source' => (string) ($activityCommand['source'] ?? 'client_observed'),
+    ];
+
+    $exceptionClass = trim((string) ($activityResult['exception_class'] ?? ''));
+    if ($exceptionClass !== '') {
+        $details['exception_class'] = $exceptionClass;
+    }
+
+    $exceptionMessage = trim((string) ($activityResult['exception_message'] ?? ''));
+    if ($exceptionMessage !== '') {
+        $details['exception_message'] = substr($exceptionMessage, 0, 240);
+    }
+
+    return $details;
+}
+
 function videochat_realtime_handle_activity_websocket_command(
     array $activityCommand,
     mixed $websocket,
@@ -426,24 +470,28 @@ function videochat_realtime_handle_activity_websocket_command(
 
     try {
         $activityResult = videochat_activity_apply_command($openDatabase(), $presenceState, $presenceConnection, $activityCommand);
-    } catch (Throwable) {
+    } catch (Throwable $error) {
+        if (videochat_activity_is_transient_database_lock($error)) {
+            return videochat_realtime_secondary_handled_result();
+        }
+
         $activityResult = [
             'ok' => false,
             'error' => 'activity_backend_error',
+            'exception_class' => get_debug_type($error),
+            'exception_message' => $error->getMessage(),
         ];
     }
 
     if (!(bool) ($activityResult['ok'] ?? false)) {
+        $details = videochat_realtime_activity_error_details($activityResult, $presenceConnection, $activityCommand);
         videochat_presence_send_frame(
             $websocket,
             [
                 'type' => 'system/error',
                 'code' => 'activity_publish_failed',
-                'message' => 'Could not publish participant activity.',
-                'details' => [
-                    'error' => (string) ($activityResult['error'] ?? 'unknown'),
-                    'room_id' => (string) ($presenceConnection['room_id'] ?? 'lobby'),
-                ],
+                'message' => 'Could not publish participant activity: ' . (string) ($details['reason'] ?? 'Activity publishing failed.'),
+                'details' => $details,
                 'time' => gmdate('c'),
             ]
         );

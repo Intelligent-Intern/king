@@ -226,6 +226,33 @@ SQL
     videochat_realtime_activity_layout_assert((bool) ($coalescedResult['ok'] ?? false), 'coalesced activity should still return ok');
     videochat_realtime_activity_layout_assert((bool) ($coalescedResult['coalesced'] ?? false), 'low activity inside rate window should coalesce');
 
+    $waitingSpeakerConnection = $speakerConnection;
+    $waitingSpeakerConnection['room_id'] = 'waiting-room';
+    $waitingSpeakerConnection['pending_room_id'] = $roomId;
+    $frames = [];
+    $waitingRoomResult = videochat_activity_apply_command($pdo, $presenceState, $waitingSpeakerConnection, $activityCommand, $sender, 1_776_000_010_500);
+    videochat_realtime_activity_layout_assert((bool) ($waitingRoomResult['ok'] ?? false), 'waiting-room activity should not hard-fail');
+    videochat_realtime_activity_layout_assert((bool) ($waitingRoomResult['ignored'] ?? false), 'waiting-room activity should be ignored');
+    videochat_realtime_activity_layout_assert((string) ($waitingRoomResult['skipped_reason'] ?? '') === 'waiting_room_context', 'waiting-room activity skip reason mismatch');
+    videochat_realtime_activity_layout_assert((int) ($waitingRoomResult['sent_count'] ?? 0) === 0, 'waiting-room activity should not broadcast');
+    videochat_realtime_activity_layout_assert($frames === [], 'waiting-room activity should not emit frames');
+
+    $lockPdo = new PDO('sqlite:' . $databasePath);
+    $lockPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $lockPdo->exec('PRAGMA busy_timeout = 1');
+    $pdo->exec('PRAGMA busy_timeout = 1');
+    $lockPdo->exec('BEGIN IMMEDIATE');
+    $frames = [];
+    $busyResult = videochat_activity_apply_command($pdo, $presenceState, $speakerConnection, $activityCommand, $sender, 1_776_000_020_000);
+    $lockPdo->exec('ROLLBACK');
+    videochat_realtime_activity_layout_assert((bool) ($busyResult['ok'] ?? false), 'busy activity publish should still succeed');
+    videochat_realtime_activity_layout_assert((bool) ($busyResult['storage_busy'] ?? false), 'busy activity publish should be marked as storage busy');
+    videochat_realtime_activity_layout_assert((bool) ($busyResult['storage_persisted'] ?? true) === false, 'busy activity publish should skip persistence');
+    videochat_realtime_activity_layout_assert((string) ($busyResult['skipped_reason'] ?? '') === 'activity_storage_busy', 'busy activity skip reason mismatch');
+    videochat_realtime_activity_layout_assert((int) ($busyResult['sent_count'] ?? 0) === 3, 'busy activity publish should still broadcast to the room');
+    $busyOwnerFrame = videochat_realtime_activity_layout_last_frame($frames, 'socket-owner', 'participant/activity');
+    videochat_realtime_activity_layout_assert((int) (($busyOwnerFrame['activity'] ?? [])['user_id'] ?? 0) === 1002, 'busy activity publish should still emit the participant payload');
+
     $userLayoutCommand = videochat_layout_decode_client_frame(json_encode([
         'type' => 'layout/mode',
         'mode' => 'grid',

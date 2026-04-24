@@ -99,6 +99,24 @@ function videochat_handle_realtime_websocket_route(
         $requestedRoomId = '';
         $requestedCallId = '';
         $queryParams = videochat_request_query_params($request);
+        $clientAssetVersion = videochat_realtime_client_asset_version_from_query($queryParams);
+        if (videochat_realtime_asset_version_mismatch($clientAssetVersion)) {
+            videochat_presence_send_frame(
+                $websocket,
+                videochat_realtime_asset_invalidation_frame($clientAssetVersion, 'ws')
+            );
+            try {
+                king_client_websocket_close($websocket, 1012, 'asset_version_mismatch');
+            } catch (Throwable) {
+                // Best-effort close after signaling stale assets to the client.
+            }
+
+            return [
+                'status' => 101,
+                'headers' => [],
+                'body' => '',
+            ];
+        }
         if (is_string($queryParams['room'] ?? null)) {
             $requestedRoomId = (string) $queryParams['room'];
         }
@@ -280,6 +298,7 @@ function videochat_handle_realtime_websocket_route(
                         'event' => 'admin/sync',
                     ],
                 ],
+                'runtime' => videochat_realtime_runtime_descriptor(),
                 'auth' => [
                     'session' => $websocketAuth['session'] ?? null,
                     'user' => $websocketAuth['user'] ?? null,
@@ -504,6 +523,7 @@ function videochat_handle_realtime_websocket_route(
                         $websocket,
                         [
                             'type' => 'system/pong',
+                            'runtime' => videochat_realtime_runtime_descriptor(),
                             'time' => gmdate('c'),
                         ]
                     );

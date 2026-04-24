@@ -50,6 +50,12 @@ try {
   requireContains(sfuClient, "frame_type: frame.type", 'snake_case frame type');
   requireContains(sfuClient, 'payload.protected_frame = frame.protectedFrame', 'snake_case protected frame');
   requireContains(sfuClient, 'payload.protection_mode = frame.protectionMode ||', 'snake_case protection mode');
+  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
+  requireContains(sfuClient, "type: 'sfu/frame-chunk'", 'chunked frame command');
+  requireContains(sfuClient, "frame_id: frameId", 'chunked frame id');
+  requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');
+  requireContains(sfuClient, "chunk_count: totalChunks", 'chunk count');
+  requireContains(sfuClient, 'this.sendChunkedFramePayload(payload,', 'chunked frame sender');
 
   requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');
   requireContains(sfuClient, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');

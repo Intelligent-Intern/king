@@ -12,8 +12,19 @@ function videochat_sfu_protected_frame_max_total_bytes(): int
     return 16_781_320;
 }
 
+function videochat_sfu_presence_ttl_ms(): int
+{
+    return 20_000;
+}
+
+function videochat_sfu_presence_cutoff_ms(): int
+{
+    return videochat_sfu_now_ms() - videochat_sfu_presence_ttl_ms();
+}
+
 function videochat_sfu_bootstrap(PDO $pdo): void
 {
+    $pdo->query('PRAGMA journal_mode = WAL');
     $pdo->exec(
         <<<'SQL'
 CREATE TABLE IF NOT EXISTS sfu_publishers (
@@ -108,6 +119,31 @@ SQL
     ]);
 }
 
+function videochat_sfu_touch_publisher(PDO $pdo, string $roomId, string $publisherId): void
+{
+    $statement = $pdo->prepare(
+        'UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id'
+    );
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':updated_at_ms' => videochat_sfu_now_ms(),
+    ]);
+}
+
+function videochat_sfu_touch_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
+{
+    $statement = $pdo->prepare(
+        'UPDATE sfu_tracks SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id AND track_id = :track_id'
+    );
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':track_id' => $trackId,
+        ':updated_at_ms' => videochat_sfu_now_ms(),
+    ]);
+}
+
 function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherId, string $trackId): void
 {
     $statement = $pdo->prepare(
@@ -122,9 +158,18 @@ function videochat_sfu_remove_track(PDO $pdo, string $roomId, string $publisherI
 function videochat_sfu_fetch_publishers(PDO $pdo, string $roomId): array
 {
     $statement = $pdo->prepare(
-        'SELECT publisher_id, user_id, user_name FROM sfu_publishers WHERE room_id = :room_id ORDER BY publisher_id ASC'
+        <<<'SQL'
+SELECT publisher_id, user_id, user_name
+FROM sfu_publishers
+WHERE room_id = :room_id
+  AND updated_at_ms >= :cutoff_ms
+ORDER BY publisher_id ASC
+SQL
     );
-    $statement->execute([':room_id' => $roomId]);
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':cutoff_ms' => videochat_sfu_presence_cutoff_ms(),
+    ]);
     $rows = [];
     while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
         if (!is_array($row)) {
@@ -150,10 +195,15 @@ SELECT track_id, kind, label
 FROM sfu_tracks
 WHERE room_id = :room_id
   AND publisher_id = :publisher_id
+  AND updated_at_ms >= :cutoff_ms
 ORDER BY track_id ASC
 SQL
     );
-    $statement->execute([':room_id' => $roomId, ':publisher_id' => $publisherId]);
+    $statement->execute([
+        ':room_id' => $roomId,
+        ':publisher_id' => $publisherId,
+        ':cutoff_ms' => videochat_sfu_presence_cutoff_ms(),
+    ]);
     $tracks = [];
     while (($row = $statement->fetch(PDO::FETCH_ASSOC)) !== false) {
         if (!is_array($row)) {
@@ -344,9 +394,15 @@ function videochat_sfu_parse_protected_frame_envelope(mixed $protectedFrame): ar
 /**
  * @return array<int|string, mixed>
  */
-function videochat_sfu_encode_stored_frame_payload(array $frameData, string $protectedFrame = ''): array
+function videochat_sfu_encode_stored_frame_payload(array $frameData, string $protectedFrame = '', string $dataBase64 = ''): array
 {
     if ($protectedFrame === '') {
+        if ($dataBase64 !== '') {
+            return [
+                'data_base64' => $dataBase64,
+                'protection_mode' => 'transport_only',
+            ];
+        }
         return $frameData;
     }
     return [
@@ -356,7 +412,7 @@ function videochat_sfu_encode_stored_frame_payload(array $frameData, string $pro
 }
 
 /**
- * @return array{data: array<int, mixed>, protected_frame: string, protection_mode: string}
+ * @return array{data: array<int, mixed>, data_base64: string, protected_frame: string, protection_mode: string}
  */
 function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
 {
@@ -364,14 +420,26 @@ function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
     if ($protectedFrame !== '') {
         return [
             'data' => [],
+            'data_base64' => '',
             'protected_frame' => $protectedFrame,
             'protection_mode' => 'protected',
+        ];
+    }
+
+    $dataBase64 = is_string($decodedData['data_base64'] ?? null) ? trim((string) $decodedData['data_base64']) : '';
+    if ($dataBase64 !== '') {
+        return [
+            'data' => [],
+            'data_base64' => $dataBase64,
+            'protected_frame' => '',
+            'protection_mode' => 'transport_only',
         ];
     }
 
     if (array_key_exists('data', $decodedData) && is_array($decodedData['data'])) {
         return [
             'data' => $decodedData['data'],
+            'data_base64' => '',
             'protected_frame' => '',
             'protection_mode' => 'transport_only',
         ];
@@ -379,6 +447,7 @@ function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
 
     return [
         'data' => $decodedData,
+        'data_base64' => '',
         'protected_frame' => '',
         'protection_mode' => 'transport_only',
     ];
@@ -393,9 +462,10 @@ function videochat_sfu_insert_frame(
     int $timestamp,
     string $frameType,
     array $frameData,
-    string $protectedFrame = ''
+    string $protectedFrame = '',
+    string $dataBase64 = ''
 ): void {
-    $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedFrame);
+    $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedFrame, $dataBase64);
     $encodedData = json_encode($storedPayload, JSON_UNESCAPED_SLASHES);
     if (!is_string($encodedData)) {
         return;
@@ -416,6 +486,10 @@ SQL
         ':data_json' => $encodedData,
         ':created_at_ms' => videochat_sfu_now_ms(),
     ]);
+    videochat_sfu_touch_publisher($pdo, $roomId, $publisherId);
+    if ($trackId !== '') {
+        videochat_sfu_touch_track($pdo, $roomId, $publisherId, $trackId);
+    }
 }
 
 /**
@@ -452,6 +526,30 @@ function videochat_sfu_cleanup_frames(PDO $pdo): void
 {
     $statement = $pdo->prepare('DELETE FROM sfu_frames WHERE created_at_ms < :cutoff_ms');
     $statement->execute([':cutoff_ms' => videochat_sfu_now_ms() - 15_000]);
+}
+
+function videochat_sfu_cleanup_stale_presence(PDO $pdo): void
+{
+    $cutoffMs = videochat_sfu_presence_cutoff_ms();
+
+    $deleteTracks = $pdo->prepare('DELETE FROM sfu_tracks WHERE updated_at_ms < :cutoff_ms');
+    $deleteTracks->execute([':cutoff_ms' => $cutoffMs]);
+
+    $deleteOrphanTracks = $pdo->prepare(
+        <<<'SQL'
+DELETE FROM sfu_tracks
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM sfu_publishers
+    WHERE sfu_publishers.room_id = sfu_tracks.room_id
+      AND sfu_publishers.publisher_id = sfu_tracks.publisher_id
+)
+SQL
+    );
+    $deleteOrphanTracks->execute();
+
+    $deletePublishers = $pdo->prepare('DELETE FROM sfu_publishers WHERE updated_at_ms < :cutoff_ms');
+    $deletePublishers->execute([':cutoff_ms' => $cutoffMs]);
 }
 
 /**
@@ -519,7 +617,7 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
-    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/leave'], true)) {
+    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
         return [
             'ok' => false,
             'type' => $type,
@@ -569,7 +667,11 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
 
         $protectedFrameRaw = $decoded['protected_frame'] ?? ($decoded['protectedFrame'] ?? null);
         if (is_string($protectedFrameRaw) && trim($protectedFrameRaw) !== '') {
-            if (array_key_exists('data', $decoded) || array_key_exists('protected', $decoded)) {
+            if (
+                array_key_exists('data', $decoded)
+                || array_key_exists('data_base64', $decoded)
+                || array_key_exists('protected', $decoded)
+            ) {
                 return [
                     'ok' => false,
                     'type' => $type,
@@ -590,7 +692,7 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
             }
             $payload['protected_frame'] = (string) ($protectedFrame['protected_frame'] ?? '');
             $payload['protection_mode'] = $protectionMode === 'required' ? 'required' : 'protected';
-            unset($payload['data'], $payload['protected']);
+            unset($payload['data'], $payload['data_base64'], $payload['protected']);
         } else {
             if ($protectionMode === 'required' || $protectionMode === 'protected') {
                 return [
@@ -610,8 +712,120 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
                     'error' => 'legacy_protected_metadata_rejected',
                 ];
             }
+            $dataBase64 = is_string($decoded['data_base64'] ?? null) ? trim((string) $decoded['data_base64']) : '';
+            if ($dataBase64 !== '') {
+                $binary = videochat_sfu_base64url_decode_strict($dataBase64);
+                if (!is_string($binary) || $binary === '') {
+                    return [
+                        'ok' => false,
+                        'type' => $type,
+                        'room_id' => $normalizedBoundRoomId,
+                        'payload' => [],
+                        'error' => 'invalid_transport_frame',
+                    ];
+                }
+                $payload['data_base64'] = $dataBase64;
+                unset($payload['data']);
+            } elseif (!is_array($decoded['data'] ?? null)) {
+                return [
+                    'ok' => false,
+                    'type' => $type,
+                    'room_id' => $normalizedBoundRoomId,
+                    'payload' => [],
+                    'error' => 'missing_transport_frame',
+                ];
+            }
             $payload['protection_mode'] = 'transport_only';
         }
+    } elseif ($type === 'sfu/frame-chunk') {
+        $protectionMode = strtolower(trim((string) ($decoded['protection_mode'] ?? ($decoded['protectionMode'] ?? 'transport_only'))));
+        if (!in_array($protectionMode, ['transport_only', 'protected', 'required'], true)) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_protection_mode',
+            ];
+        }
+
+        $frameId = trim((string) ($decoded['frame_id'] ?? ($decoded['frameId'] ?? '')));
+        if ($frameId === '' || !preg_match('/^[A-Za-z0-9._:-]{1,160}$/', $frameId)) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_frame_id',
+            ];
+        }
+
+        $chunkIndex = (int) ($decoded['chunk_index'] ?? ($decoded['chunkIndex'] ?? -1));
+        $chunkCount = (int) ($decoded['chunk_count'] ?? ($decoded['chunkCount'] ?? 0));
+        if ($chunkCount < 1 || $chunkCount > 4096 || $chunkIndex < 0 || $chunkIndex >= $chunkCount) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_frame_chunk',
+            ];
+        }
+
+        $dataChunk = is_string($decoded['data_base64_chunk'] ?? null) ? trim((string) $decoded['data_base64_chunk']) : '';
+        $protectedChunk = is_string($decoded['protected_frame_chunk'] ?? null) ? trim((string) $decoded['protected_frame_chunk']) : '';
+        if (($dataChunk === '' && $protectedChunk === '') || ($dataChunk !== '' && $protectedChunk !== '')) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_frame_chunk',
+            ];
+        }
+
+        $chunkValue = $protectedChunk !== '' ? $protectedChunk : $dataChunk;
+        if (!preg_match('/^[A-Za-z0-9_-]+$/', $chunkValue) || strlen($chunkValue) > 16384) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_frame_chunk',
+            ];
+        }
+
+        if ($protectedChunk !== '') {
+            if ($protectionMode === 'transport_only') {
+                return [
+                    'ok' => false,
+                    'type' => $type,
+                    'room_id' => $normalizedBoundRoomId,
+                    'payload' => [],
+                    'error' => 'invalid_protection_mode',
+                ];
+            }
+            $payload['protected_frame_chunk'] = $protectedChunk;
+            $payload['protection_mode'] = $protectionMode === 'required' ? 'required' : 'protected';
+            unset($payload['data_base64_chunk']);
+        } else {
+            if ($protectionMode === 'required' || $protectionMode === 'protected') {
+                return [
+                    'ok' => false,
+                    'type' => $type,
+                    'room_id' => $normalizedBoundRoomId,
+                    'payload' => [],
+                    'error' => 'protected_frame_required',
+                ];
+            }
+            $payload['data_base64_chunk'] = $dataChunk;
+            $payload['protection_mode'] = 'transport_only';
+            unset($payload['protected_frame_chunk']);
+        }
+
+        $payload['frame_id'] = $frameId;
+        $payload['chunk_index'] = $chunkIndex;
+        $payload['chunk_count'] = $chunkCount;
     }
     return [
         'ok' => true,
@@ -691,6 +905,8 @@ function videochat_sfu_poll_broker(
         ];
         if (($storedPayload['protected_frame'] ?? '') !== '') {
             $outboundFrame['protected_frame'] = $storedPayload['protected_frame'];
+        } elseif (($storedPayload['data_base64'] ?? '') !== '') {
+            $outboundFrame['data_base64'] = $storedPayload['data_base64'];
         } else {
             $outboundFrame['data'] = $storedPayload['data'];
         }

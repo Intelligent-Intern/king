@@ -258,21 +258,19 @@ function videochat_activity_apply_command(PDO $pdo, array $presenceState, array 
     if ($reportedUserId > 0 && $reportedUserId !== $userId) {
         return ['ok' => false, 'error' => 'forged_activity_user', 'event' => null, 'emitted' => false];
     }
-
-    videochat_activity_layout_bootstrap($pdo);
-    $nowMs = videochat_activity_now_ms($nowUnixMs);
-    $score = videochat_activity_score_from_command($command);
-    $existing = $pdo->prepare('SELECT raw_score, updated_at_ms FROM call_participant_activity WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
-    $existing->execute([':call_id' => $callId, ':user_id' => $userId]);
-    $previous = $existing->fetch(PDO::FETCH_ASSOC);
-    if (is_array($previous)) {
-        $ageMs = $nowMs - (int) ($previous['updated_at_ms'] ?? 0);
-        $previousScore = (float) ($previous['raw_score'] ?? 0);
-        if ($ageMs >= 0 && $ageMs < 250 && (float) $score['raw_score'] <= ($previousScore + 12.0)) {
-            return ['ok' => true, 'error' => '', 'event' => null, 'emitted' => false, 'coalesced' => true];
-        }
+    if ($roomId === videochat_realtime_waiting_room_id()) {
+        return [
+            'ok' => true,
+            'error' => '',
+            'event' => null,
+            'emitted' => false,
+            'ignored' => true,
+            'skipped_reason' => 'waiting_room_context',
+        ];
     }
 
+    $nowMs = videochat_activity_now_ms($nowUnixMs);
+    $score = videochat_activity_score_from_command($command);
     $updatedAt = gmdate('c', (int) floor($nowMs / 1000));
     $upsert = $pdo->prepare(
         <<<'SQL'
@@ -290,7 +288,7 @@ ON CONFLICT(call_id, user_id) DO UPDATE SET
     updated_at = excluded.updated_at
 SQL
     );
-    $upsert->execute([
+    $params = [
         ':call_id' => $callId,
         ':room_id' => $roomId,
         ':user_id' => $userId,
@@ -302,7 +300,7 @@ SQL
         ':source' => $score['source'],
         ':updated_at_ms' => $nowMs,
         ':updated_at' => $updatedAt,
-    ]);
+    ];
 
     $payload = videochat_activity_row_payload([
         'user_id' => $userId,
@@ -319,9 +317,53 @@ SQL
         'activity' => $payload,
         'time' => $updatedAt,
     ];
-    $sent = videochat_presence_broadcast_room_event($presenceState, $roomId, $event, null, $sender);
+    try {
+        videochat_activity_layout_bootstrap($pdo);
+        $existing = $pdo->prepare('SELECT raw_score, updated_at_ms FROM call_participant_activity WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
+        $existing->execute([':call_id' => $callId, ':user_id' => $userId]);
+        $previous = $existing->fetch(PDO::FETCH_ASSOC);
+        if (is_array($previous)) {
+            $ageMs = $nowMs - (int) ($previous['updated_at_ms'] ?? 0);
+            $previousScore = (float) ($previous['raw_score'] ?? 0);
+            if ($ageMs >= 0 && $ageMs < 250 && (float) $score['raw_score'] <= ($previousScore + 12.0)) {
+                return ['ok' => true, 'error' => '', 'event' => null, 'emitted' => false, 'coalesced' => true];
+            }
+        }
 
+        $upsert->execute($params);
+    } catch (Throwable $error) {
+        if (!videochat_activity_is_transient_database_lock($error)) {
+            throw $error;
+        }
+
+        $sent = videochat_presence_broadcast_room_event($presenceState, $roomId, $event, null, $sender);
+        return [
+            'ok' => true,
+            'error' => '',
+            'event' => $event,
+            'emitted' => $sent > 0,
+            'sent_count' => $sent,
+            'storage_busy' => true,
+            'storage_persisted' => false,
+            'skipped_reason' => 'activity_storage_busy',
+        ];
+    }
+
+    $sent = videochat_presence_broadcast_room_event($presenceState, $roomId, $event, null, $sender);
     return ['ok' => true, 'error' => '', 'event' => $event, 'emitted' => $sent > 0, 'sent_count' => $sent];
+}
+
+function videochat_activity_is_transient_database_lock(Throwable $error): bool
+{
+    $message = strtolower(trim($error->getMessage()));
+    if ($message === '') {
+        return false;
+    }
+
+    return str_contains($message, 'database is locked')
+        || str_contains($message, 'database table is locked')
+        || str_contains($message, 'database schema is locked')
+        || str_contains($message, 'database busy');
 }
 
 function videochat_layout_default_state(string $callId, string $roomId): array

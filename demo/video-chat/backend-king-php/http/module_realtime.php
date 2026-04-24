@@ -9,6 +9,7 @@ require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+require_once __DIR__ . '/../domain/realtime/realtime_asset_version.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../domain/realtime/realtime_gossipmesh.php';

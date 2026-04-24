@@ -32,8 +32,21 @@ try {
   assert.ok(app.includes("const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';"), 'app must compare against the edge build-version header');
   assert.ok(app.includes('window.location.reload();'), 'app must hard-reload stale tabs after a deploy');
 
+  const assetVersionSupport = readUtf8(path.join(frontendRoot, 'src/support/assetVersion.js'));
+  assert.ok(assetVersionSupport.includes("const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);"), 'asset version helper must understand websocket invalidation frames');
+  assert.ok(assetVersionSupport.includes("query.set('asset_version', BUILD_VERSION);"), 'asset version helper must append the frontend build version to websocket queries');
+  assert.ok(assetVersionSupport.includes("closeReason !== 'asset_version_mismatch'"), 'asset version helper must react to websocket close reasons from stale builds');
+
+  const adminSync = readUtf8(path.join(frontendRoot, 'src/support/adminSyncSocket.js'));
+  assert.ok(adminSync.includes('appendAssetVersionQuery'), 'admin sync websocket must advertise the current asset version');
+  assert.ok(adminSync.includes('handleAssetVersionSocketPayload'), 'admin sync websocket must reload on invalidation frames');
+
+  const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/callWorkspaceApi.js'));
+  assert.ok(workspaceApi.includes('appendAssetVersionQuery'), 'call workspace websocket URLs must advertise the current asset version');
+
   const compose = readUtf8(path.join(repoVideoChatRoot, 'docker-compose.v1.yml'));
   assert.ok(compose.includes('VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"'), 'compose builds must forward the asset version');
+  assert.ok(compose.includes('VIDEOCHAT_KING_SERVER_MODE: ws') && compose.includes('VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"'), 'compose runtime services must expose the asset version to websocket workers');
 
   const deploy = readUtf8(path.join(repoVideoChatRoot, 'scripts/deploy.sh'));
   assert.ok(deploy.includes('VIDEOCHAT_ASSET_VERSION=\\${ASSET_VERSION}'), 'remote bootstrap must persist an initial asset version');
@@ -42,6 +55,17 @@ try {
   const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));
   assert.ok(edge.includes("'X-KingRT-Asset-Version'"), 'edge must expose the asset version header on static responses');
   assert.ok(edge.includes('use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion)'), 'edge static handler must capture the asset version for response headers');
+
+  const realtimeAssetVersion = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_asset_version.php'));
+  assert.ok(realtimeAssetVersion.includes("'type' => 'assets/invalidate'"), 'realtime asset version helper must expose an assets invalidation frame');
+
+  const realtimeWs = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_realtime_websocket.php'));
+  assert.ok(realtimeWs.includes('videochat_realtime_asset_version_mismatch($clientAssetVersion)'), 'presence websocket must reject stale asset builds');
+  assert.ok(realtimeWs.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'presence websocket must close stale clients after invalidation');
+
+  const realtimeSfu = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_sfu_gateway.php'));
+  assert.ok(realtimeSfu.includes('videochat_realtime_asset_version_mismatch($clientAssetVersion)'), 'sfu websocket must reject stale asset builds');
+  assert.ok(realtimeSfu.includes("king_client_websocket_close($websocket, 1012, 'asset_version_mismatch')"), 'sfu websocket must close stale clients after invalidation');
 
   console.log('[asset-cache-busting-contract] PASS');
 } catch (error) {

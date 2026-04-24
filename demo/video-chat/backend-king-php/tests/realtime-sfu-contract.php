@@ -40,6 +40,18 @@ function videochat_realtime_sfu_protected_frame(array $header, string $ciphertex
 }
 
 try {
+    putenv('VIDEOCHAT_KING_DB_PATH=/tmp/video-chat-main.sqlite');
+    putenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH');
+    videochat_realtime_sfu_assert(
+        videochat_sfu_broker_database_path() === '/tmp/video-chat-sfu-broker.sqlite',
+        'SFU broker path should default to a sibling sqlite file'
+    );
+    putenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH=/tmp/video-chat-custom-sfu-broker.sqlite');
+    videochat_realtime_sfu_assert(
+        videochat_sfu_broker_database_path() === '/tmp/video-chat-custom-sfu-broker.sqlite',
+        'SFU broker path should honor the dedicated environment override'
+    );
+
     $validKey = base64_encode(random_bytes(16));
     $baseRequest = [
         'method' => 'GET',
@@ -284,6 +296,62 @@ try {
         'room-alpha'
     );
     videochat_realtime_sfu_assert(!(bool) ($legacyProtectedMetadataCommand['ok'] ?? true), 'SFU must reject legacy protected metadata');
+    $chunkedTransportCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame-chunk',
+            'room_id' => 'room-alpha',
+            'frame_id' => 'frame_alpha_01',
+            'track_id' => 'camera-a',
+            'timestamp' => 12345,
+            'frame_type' => 'keyframe',
+            'chunk_index' => 0,
+            'chunk_count' => 2,
+            'data_base64_chunk' => 'QUJDREVGRw',
+            'protection_mode' => 'transport_only',
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($chunkedTransportCommand['ok'] ?? false), 'chunked SFU transport frame should decode');
+    videochat_realtime_sfu_assert(
+        (($chunkedTransportCommand['payload'] ?? [])['data_base64_chunk'] ?? '') === 'QUJDREVGRw',
+        'chunked SFU transport payload must preserve the chunk'
+    );
+    $chunkedProtectedCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame-chunk',
+            'room_id' => 'room-alpha',
+            'frame_id' => 'frame_alpha_02',
+            'track_id' => 'camera-a',
+            'timestamp' => 12346,
+            'frame_type' => 'delta',
+            'chunk_index' => 1,
+            'chunk_count' => 3,
+            'protected_frame_chunk' => 'QUJDREVGR0g',
+            'protection_mode' => 'required',
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($chunkedProtectedCommand['ok'] ?? false), 'chunked protected SFU frame should decode');
+    videochat_realtime_sfu_assert(
+        (($chunkedProtectedCommand['payload'] ?? [])['protection_mode'] ?? '') === 'required',
+        'chunked protected SFU frame must preserve required mode'
+    );
+    $invalidChunkCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame-chunk',
+            'room_id' => 'room-alpha',
+            'frame_id' => 'bad frame id',
+            'track_id' => 'camera-a',
+            'timestamp' => 12347,
+            'frame_type' => 'delta',
+            'chunk_index' => 0,
+            'chunk_count' => 1,
+            'data_base64_chunk' => 'QUJD',
+            'protection_mode' => 'transport_only',
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert(!(bool) ($invalidChunkCommand['ok'] ?? true), 'invalid SFU chunk frame id must fail closed');
 
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[realtime-sfu-contract] SKIP: pdo_sqlite is not available for persistence relay checks\n");
@@ -318,6 +386,33 @@ try {
     videochat_realtime_sfu_assert(count($reconnectedPublishers) === 2, 'SFU reconnect should recover publishers from store');
     $reconnectedTracks = videochat_sfu_fetch_tracks($pdoReconnect, 'room-alpha', 'publisher-b');
     videochat_realtime_sfu_assert(count($reconnectedTracks) === 2, 'SFU reconnect should recover track list from store');
+
+    $staleCutoffMs = videochat_sfu_now_ms() - videochat_sfu_presence_ttl_ms() - 1000;
+    $pdo->prepare('UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id')
+        ->execute([
+            ':updated_at_ms' => $staleCutoffMs,
+            ':room_id' => 'room-alpha',
+            ':publisher_id' => 'publisher-a',
+        ]);
+    $pdo->prepare('UPDATE sfu_tracks SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id')
+        ->execute([
+            ':updated_at_ms' => $staleCutoffMs,
+            ':room_id' => 'room-alpha',
+            ':publisher_id' => 'publisher-a',
+        ]);
+    videochat_realtime_sfu_assert(
+        count(videochat_sfu_fetch_publishers($pdo, 'room-alpha')) === 1,
+        'SFU broker fetch must ignore stale publishers'
+    );
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_tracks($pdo, 'room-alpha', 'publisher-a') === [],
+        'SFU broker fetch must ignore stale tracks'
+    );
+    videochat_sfu_cleanup_stale_presence($pdo);
+    $remainingPublisherRows = (int) $pdo->query("SELECT COUNT(*) FROM sfu_publishers WHERE room_id = 'room-alpha' AND publisher_id = 'publisher-a'")->fetchColumn();
+    $remainingTrackRows = (int) $pdo->query("SELECT COUNT(*) FROM sfu_tracks WHERE room_id = 'room-alpha' AND publisher_id = 'publisher-a'")->fetchColumn();
+    videochat_realtime_sfu_assert($remainingPublisherRows === 0, 'SFU stale publisher cleanup must remove expired publishers');
+    videochat_realtime_sfu_assert($remainingTrackRows === 0, 'SFU stale publisher cleanup must remove expired tracks');
 
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-a', '100', 'camera-a', 1000, 'keyframe', [1, 2, 3]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1001, 'delta', [4, 5, 6]);

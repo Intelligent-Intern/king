@@ -721,6 +721,23 @@ export class MediaSecuritySession {
     return { changed, userIds: normalized };
   }
 
+  canProtectForTargets(userIds) {
+    const normalized = Array.from(new Set((Array.isArray(userIds) ? userIds : [])
+      .map(normalizeUserId)
+      .filter((userId) => userId > 0 && userId !== this.userId)));
+    if (normalized.length <= 0) return false;
+
+    for (const userId of normalized) {
+      const peer = this.peers.get(userId);
+      const state = asString(peer?.state);
+      if (!peer?.wrappingKey) return false;
+      if (state !== 'active') return false;
+      if (state === 'blocked_capability' || state === 'removed') return false;
+    }
+
+    return true;
+  }
+
   async forceRekey(reason = 'forced_rekey') {
     await this.rotateSenderKey(asString(reason) || 'forced_rekey');
     for (const peer of this.peers.values()) {

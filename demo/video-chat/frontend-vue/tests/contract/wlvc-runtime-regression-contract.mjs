@@ -194,7 +194,7 @@ try {
   requireContains(createPeer, 'renderCallVideoLayout();', 'remote peer initial render');
 
   const ensurePeer = extractFunction(workspace, 'ensureSfuRemotePeerForFrame');
-  requireContains(ensurePeer, 'const existingPeer = remotePeersRef.value.get(publisherId)', 'remote frame existing peer lookup');
+  requireContains(ensurePeer, 'const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame existing peer lookup');
   requireContains(ensurePeer, 'const pending = pendingSfuRemotePeerInitializers.get(publisherId)', 'remote frame pending peer guard');
   requireContains(ensurePeer, 'tracks: trackId ===', 'remote frame creates track placeholder');
   requireContains(ensurePeer, 'pendingSfuRemotePeerInitializers.set(publisherId, init)', 'remote frame stores pending initializer');
@@ -204,6 +204,7 @@ try {
   requireContains(decodePeer, 'decryptProtectedFrameEnvelope({', 'remote protected frame decrypt');
   requireContains(decodePeer, 'const decoded = peer.decoder.decodeFrame({', 'remote decode invocation');
   requireContains(decodePeer, 'ctx.putImageData(imageData, 0, 0);', 'remote decoded canvas paint');
+  requireContains(decodePeer, 'markRemotePeerRenderable(peer);', 'remote decoded frame reveals renderable media');
   requireContains(decodePeer, 'renderCallVideoLayout();', 'remote decode render recovery');
 
   const transportOnlyFallback = extractFunction(workspace, 'shouldSendTransportOnlySfuFrame');
@@ -221,12 +222,20 @@ try {
   requireContains(encodePipeline, 'sfuClientRef.value.sendEncodedFrame(outgoingFrame);', 'SFU encoder sends transport-only or protected frame');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');
+  requireContains(handleFrame, 'let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame peer lookup supports publisher-key aliasing');
   requireContains(handleFrame, 'const init = ensureSfuRemotePeerForFrame(frame);', 'remote frame can create peer before tracks');
   requireContains(handleFrame, 'void decodeSfuFrameForPeer(publisherId, nextPeer, frame);', 'remote frame decodes after async peer create');
   requireContains(handleFrame, 'void decodeSfuFrameForPeer(publisherId, peer, frame);', 'remote frame decodes existing peer');
 
+  const ensurePeerForFrame = extractFunction(workspace, 'ensureSfuRemotePeerForFrame');
+  requireContains(ensurePeerForFrame, 'const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'frame peer bootstrap reuses existing peer by publisher identity');
+
+  const remoteRenderable = extractFunction(workspace, 'remotePeerHasRenderableMedia');
+  requireContains(remoteRenderable, "&& Number(peer.frameCount || 0) > 0", 'decoded canvas only counts as renderable after real frames');
+
   const mediaNode = extractFunction(workspace, 'mediaNodeForUserId');
   requireContains(mediaNode, 'for (const peer of remotePeersRef.value.values())', 'remote media node user lookup');
+  requireContains(mediaNode, 'remotePeerHasRenderableMedia(peer)', 'remote media node prefers renderable peer');
   requireContains(mediaNode, 'return remotePeerMediaNode(peer);', 'remote media node return');
   const renderLayout = extractFunction(workspace, 'renderCallVideoLayout');
   requireContains(renderLayout, 'const primaryNode = mediaNodeForUserId(primaryUserId);', 'primary remote render lookup');
@@ -237,6 +246,8 @@ try {
   const bumpRender = extractFunction(workspace, 'bumpMediaRenderVersion');
   const bumpCount = (bumpRender.match(/mediaRenderVersion\.value = mediaRenderVersion\.value >= 1_000_000 \? 0 : mediaRenderVersion\.value \+ 1;/g) || []).length;
   assert.equal(bumpCount, 1, 'render version must bump exactly once per peer-map mutation');
+  requireContains(extractFunction(workspace, 'setSfuRemotePeer'), 'previousPublisherId =', 'remote peer setter accepts rekey source');
+  requireContains(extractFunction(workspace, 'setSfuRemotePeer'), 'if (existingPeer === peer)', 'remote peer setter removes duplicate peer-object aliases');
   requireContains(extractFunction(workspace, 'setSfuRemotePeer'), 'bumpMediaRenderVersion();', 'remote peer add/update render bump');
   requireContains(extractFunction(workspace, 'deleteSfuRemotePeer'), 'bumpMediaRenderVersion();', 'remote peer delete render bump');
 

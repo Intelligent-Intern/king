@@ -20,6 +20,7 @@ Target architecture:
 - media security session contract: `demo/video-chat/contracts/v1/e2ee-session.contract.json`
 - protected media frame contract: `demo/video-chat/contracts/v1/protected-media-frame.contract.json`
 - transport payload format: `@intelligentintern/iibin` from `node_modules`
+- forbidden runtime states: `documentation/dev/video-chat/forbidden-states.md`
 
 Documentation policy for this README:
 

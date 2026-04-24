@@ -18,8 +18,12 @@ const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const waveletCodec = read('src/lib/wavelet/codec.ts');
 
 requireContains(workspace, "import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';", 'hybrid codec import');
-requireContains(workspace, 'decoder = await createHybridDecoder({ width: 640, height: 480, quality: 75 });', 'remote hybrid decoder');
+requireContains(workspace, 'SFU_WLVC_FRAME_WIDTH', 'shared WLVC frame width constant');
+requireContains(workspace, 'SFU_WLVC_FRAME_HEIGHT', 'shared WLVC frame height constant');
+requireContains(workspace, 'SFU_WLVC_FRAME_QUALITY', 'shared WLVC frame quality constant');
+requireContains(workspace, 'decoder = await createHybridDecoder({', 'remote hybrid decoder');
 requireContains(workspace, 'const nextEncoder = await createHybridEncoder({', 'local hybrid encoder');
+requireContains(workspace, 'SFU_TRACK_ANNOUNCE_INTERVAL_MS', 'periodic SFU track re-announce');
 requireContains(waveletCodec, 'destroy(): void {', 'software codec destroy method');
 requireContains(waveletCodec, 'this.reset()', 'software codec destroy reset delegation');
 

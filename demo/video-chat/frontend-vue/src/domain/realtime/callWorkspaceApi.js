@@ -1,6 +1,7 @@
 import { sessionState } from '../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
 import { buildWebSocketUrl } from '../../support/backendOrigin';
+import { appendAssetVersionQuery } from '../../support/assetVersion';
 import { normalizeRoomId, normalizeSocketCallId } from './callWorkspaceUtils';
 
 export function requestHeaders(withBody = false) {
@@ -69,7 +70,7 @@ export async function apiRequest(path, { method = 'GET', query = null, body = nu
 }
 
 export function socketUrlForRoom(roomId, socketOrigin, callId = '') {
-  const query = new URLSearchParams();
+  const query = appendAssetVersionQuery(new URLSearchParams());
   query.set('room', normalizeRoomId(roomId));
   const normalizedCallId = normalizeSocketCallId(callId);
   if (normalizedCallId !== '') {
