@@ -140,6 +140,7 @@ import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
+import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -158,6 +159,7 @@ const previewStreamRef = ref(null);
 const previewAspectRatio = ref('16 / 9');
 
 let detachDeviceWatcher = null;
+let detachForegroundReconnect = null;
 let resizeBound = null;
 let admissionSocket = null;
 let admissionSocketGeneration = 0;
@@ -165,9 +167,12 @@ let admissionAccepted = false;
 let admissionManuallyClosed = false;
 let admissionReconnectTimer = 0;
 let admissionReconnectAttempt = 0;
+let admissionReconnectAfterForeground = false;
+let admissionLastForegroundReconnectAt = 0;
 
 const ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
+const ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
 const state = reactive({
   loadingContext: true,
@@ -278,6 +283,18 @@ function sendAdmissionFrame(payload) {
   }
 }
 
+function retireAdmissionSocket(closeReason = 'admission_reconnect') {
+  const socket = admissionSocket;
+  admissionSocket = null;
+  if (typeof WebSocket !== 'undefined' && socket instanceof WebSocket) {
+    try {
+      socket.close(1000, closeReason);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function closeAdmissionSocket({ cancel = false } = {}) {
   admissionManuallyClosed = true;
   clearAdmissionReconnectTimer();
@@ -289,15 +306,7 @@ function closeAdmissionSocket({ cancel = false } = {}) {
     });
   }
 
-  const socket = admissionSocket;
-  admissionSocket = null;
-  if (typeof WebSocket !== 'undefined' && socket instanceof WebSocket) {
-    try {
-      socket.close(1000, cancel ? 'admission_cancelled' : 'admission_closed');
-    } catch {
-      // ignore
-    }
-  }
+  retireAdmissionSocket(cancel ? 'admission_cancelled' : 'admission_closed');
 }
 
 function scheduleAdmissionReconnect(accessId) {
@@ -314,6 +323,32 @@ function scheduleAdmissionReconnect(accessId) {
     admissionReconnectTimer = 0;
     connectAdmissionSocket(accessId);
   }, delay);
+}
+
+function markAdmissionReconnectAfterForeground() {
+  if (!state.waitingForAdmission || admissionAccepted || admissionManuallyClosed) return;
+  admissionReconnectAfterForeground = true;
+}
+
+function reconnectAdmissionAfterForeground() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!state.waitingForAdmission || admissionAccepted || admissionManuallyClosed) return;
+  if (!admissionReconnectAfterForeground) return;
+
+  const accessId = normalizeAccessId(route.params.accessId);
+  if (accessId === '') return;
+
+  const now = Date.now();
+  if ((now - admissionLastForegroundReconnectAt) < ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS) {
+    return;
+  }
+
+  admissionReconnectAfterForeground = false;
+  admissionLastForegroundReconnectAt = now;
+  admissionReconnectAttempt = 0;
+  clearAdmissionReconnectTimer();
+  state.admissionMessage = 'Reconnecting lobby connection...';
+  connectAdmissionSocket(accessId);
 }
 
 async function enterAdmittedCall(accessId) {
@@ -466,6 +501,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
 
     opened = true;
     admissionReconnectAttempt = 0;
+    admissionReconnectAfterForeground = false;
     setBackendWebSocketOrigin(socketOrigin);
   });
 
@@ -501,6 +537,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
 }
 
 function connectAdmissionSocket(accessId) {
+  retireAdmissionSocket('admission_reconnect');
   const candidates = resolveBackendWebSocketOriginCandidates();
   connectAdmissionSocketWithOriginAt(candidates, 0, admissionSocketGeneration, accessId);
 }
@@ -516,6 +553,7 @@ function startAdmissionWait(accessId) {
   admissionAccepted = false;
   admissionManuallyClosed = false;
   admissionReconnectAttempt = 0;
+  admissionReconnectAfterForeground = false;
   admissionSocketGeneration += 1;
   state.joining = false;
   state.waitingForAdmission = true;
@@ -681,6 +719,10 @@ onMounted(async () => {
     window.addEventListener('resize', resizeBound);
     window.addEventListener('orientationchange', resizeBound);
   }
+  detachForegroundReconnect = attachForegroundReconnectHandlers({
+    onBackground: markAdmissionReconnectAfterForeground,
+    onForeground: reconnectAdmissionAfterForeground,
+  });
   detachDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   await loadJoinContext();
   if (state.contextError) return;
@@ -698,6 +740,10 @@ onBeforeUnmount(() => {
   if (typeof detachDeviceWatcher === 'function') {
     detachDeviceWatcher();
     detachDeviceWatcher = null;
+  }
+  if (typeof detachForegroundReconnect === 'function') {
+    detachForegroundReconnect();
+    detachForegroundReconnect = null;
   }
   stopPreview();
 });

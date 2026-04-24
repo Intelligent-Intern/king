@@ -528,6 +528,7 @@ import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
+import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
 import { createAdminSyncSocket } from '../../support/adminSyncSocket';
 import {
   formatDateDisplay,
@@ -729,6 +730,7 @@ const { openChatArchive, closeChatArchive } = chatArchiveStore;
 let adminSyncReloadTimer = 0;
 let adminSyncClient = null;
 let fallbackRefreshTimer = 0;
+let detachForegroundReconnect = null;
 
 function clearAdminSyncReloadTimer() {
   if (adminSyncReloadTimer > 0) {
@@ -938,9 +940,12 @@ let enterAdmissionAccepted = false;
 let enterAdmissionManuallyClosed = false;
 let enterAdmissionReconnectTimer = 0;
 let enterAdmissionReconnectAttempt = 0;
+let enterAdmissionReconnectAfterForeground = false;
+let enterAdmissionLastForegroundReconnectAt = 0;
 
 const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ENTER_ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
+const ENTER_ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
 const enterCallState = reactive({
   open: false,
@@ -1022,6 +1027,18 @@ function sendEnterAdmissionFrame(payload) {
   }
 }
 
+function retireEnterAdmissionSocket(closeReason = 'admission_reconnect') {
+  const socket = enterAdmissionSocket;
+  enterAdmissionSocket = null;
+  if (typeof WebSocket !== 'undefined' && socket instanceof WebSocket) {
+    try {
+      socket.close(1000, closeReason);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 function closeEnterAdmissionSocket({ cancel = false } = {}) {
   enterAdmissionManuallyClosed = true;
   clearEnterAdmissionReconnectTimer();
@@ -1033,15 +1050,7 @@ function closeEnterAdmissionSocket({ cancel = false } = {}) {
     });
   }
 
-  const socket = enterAdmissionSocket;
-  enterAdmissionSocket = null;
-  if (typeof WebSocket !== 'undefined' && socket instanceof WebSocket) {
-    try {
-      socket.close(1000, cancel ? 'admission_cancelled' : 'admission_closed');
-    } catch {
-      // ignore
-    }
-  }
+  retireEnterAdmissionSocket(cancel ? 'admission_cancelled' : 'admission_closed');
 }
 
 function scheduleEnterAdmissionReconnect() {
@@ -1058,6 +1067,29 @@ function scheduleEnterAdmissionReconnect() {
     enterAdmissionReconnectTimer = 0;
     connectEnterAdmissionSocket();
   }, delay);
+}
+
+function markEnterAdmissionReconnectAfterForeground() {
+  if (!enterCallState.waitingForAdmission || enterAdmissionAccepted || enterAdmissionManuallyClosed) return;
+  enterAdmissionReconnectAfterForeground = true;
+}
+
+function reconnectEnterAdmissionAfterForeground() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!enterCallState.waitingForAdmission || enterAdmissionAccepted || enterAdmissionManuallyClosed) return;
+  if (!enterAdmissionReconnectAfterForeground) return;
+
+  const now = Date.now();
+  if ((now - enterAdmissionLastForegroundReconnectAt) < ENTER_ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS) {
+    return;
+  }
+
+  enterAdmissionReconnectAfterForeground = false;
+  enterAdmissionLastForegroundReconnectAt = now;
+  enterAdmissionReconnectAttempt = 0;
+  clearEnterAdmissionReconnectTimer();
+  enterCallState.admissionMessage = 'Reconnecting lobby connection...';
+  connectEnterAdmissionSocket();
 }
 
 async function enterAdmittedCall() {
@@ -1210,6 +1242,7 @@ function connectEnterAdmissionSocketWithOriginAt(candidates, originIndex, genera
 
     opened = true;
     enterAdmissionReconnectAttempt = 0;
+    enterAdmissionReconnectAfterForeground = false;
     setBackendWebSocketOrigin(socketOrigin);
   });
 
@@ -1245,6 +1278,7 @@ function connectEnterAdmissionSocketWithOriginAt(candidates, originIndex, genera
 }
 
 function connectEnterAdmissionSocket() {
+  retireEnterAdmissionSocket('admission_reconnect');
   const candidates = resolveBackendWebSocketOriginCandidates();
   connectEnterAdmissionSocketWithOriginAt(candidates, 0, enterAdmissionSocketGeneration);
 }
@@ -1268,6 +1302,7 @@ function startEnterAdmissionWait(target = null) {
   enterAdmissionAccepted = false;
   enterAdmissionManuallyClosed = false;
   enterAdmissionReconnectAttempt = 0;
+  enterAdmissionReconnectAfterForeground = false;
   enterAdmissionSocketGeneration += 1;
   connectEnterAdmissionSocket();
   return true;
@@ -2095,6 +2130,10 @@ function handleEscape(event) {
 
 onMounted(() => {
   detachCallMediaWatcher = attachCallMediaDeviceWatcher({ requestPermissions: false });
+  detachForegroundReconnect = attachForegroundReconnectHandlers({
+    onBackground: markEnterAdmissionReconnectAfterForeground,
+    onForeground: reconnectEnterAdmissionAfterForeground,
+  });
   startAdminSyncSocket();
   startFallbackRefreshLoop();
   window.addEventListener('keydown', handleEscape);
@@ -2112,6 +2151,10 @@ onBeforeUnmount(() => {
   if (typeof detachCallMediaWatcher === 'function') {
     detachCallMediaWatcher();
     detachCallMediaWatcher = null;
+  }
+  if (typeof detachForegroundReconnect === 'function') {
+    detachForegroundReconnect();
+    detachForegroundReconnect = null;
   }
   closeEnterAdmissionSocket({
     cancel: enterCallState.waitingForAdmission && !enterAdmissionAccepted,

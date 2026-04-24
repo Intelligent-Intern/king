@@ -318,20 +318,20 @@ SQL
     $staleAllowedConnection['active_call_id'] = 'call-db-sync';
     $staleAllowedConnection['user_id'] = 20;
     videochat_realtime_lobby_db_sync_assert(
-        !videochat_realtime_connection_can_bypass_admission_for_room($staleAllowedConnection, 'room-db-sync', $openDatabase),
-        'left allowed participant should be gated again'
+        videochat_realtime_connection_can_bypass_admission_for_room($staleAllowedConnection, 'room-db-sync', $openDatabase),
+        'left allowed participant should keep admission for reconnect'
     );
     videochat_realtime_lobby_db_sync_assert(
-        videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $staleAllowedConnection),
-        'queue join should turn stale allowed participant back into pending'
+        !videochat_realtime_mark_call_participant_pending_for_queue($openDatabase, $staleAllowedConnection),
+        'queue join must not demote an already allowed participant back to pending'
     );
     $staleQueued = $pdo->query(
         "SELECT invite_state, joined_at, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
     )->fetch(PDO::FETCH_ASSOC);
     videochat_realtime_lobby_db_sync_assert(is_array($staleQueued), 'stale queued participant row missing');
-    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['invite_state'] ?? '') === 'pending', 'stale allowed queue join should write pending');
-    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['joined_at'] ?? '') === '', 'stale allowed queue join should clear joined_at');
-    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['left_at'] ?? '') === '', 'stale allowed queue join should clear left_at');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['invite_state'] ?? '') === 'allowed', 'stale allowed queue join should preserve allowed');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['joined_at'] ?? '') === '2026-04-19T10:10:00Z', 'stale allowed queue join should preserve joined_at');
+    videochat_realtime_lobby_db_sync_assert((string) ($staleQueued['left_at'] ?? '') === '2026-04-19T10:15:00Z', 'stale allowed queue join should preserve left_at');
 
     $pdo->exec(
         "UPDATE call_participants SET invite_state = 'allowed', joined_at = '2026-04-19T10:20:00Z', left_at = NULL WHERE call_id = 'call-db-sync' AND user_id = 20"
@@ -362,7 +362,7 @@ SQL
         "SELECT invite_state, left_at FROM call_participants WHERE call_id = 'call-db-sync' AND user_id = 20"
     )->fetch(PDO::FETCH_ASSOC);
     videochat_realtime_lobby_db_sync_assert(is_array($leftRow), 'left participant row missing');
-    videochat_realtime_lobby_db_sync_assert((string) ($leftRow['invite_state'] ?? '') === 'invited', 'leaving an admitted participant should reset to invited');
+    videochat_realtime_lobby_db_sync_assert((string) ($leftRow['invite_state'] ?? '') === 'allowed', 'leaving an admitted participant should preserve allowed');
     videochat_realtime_lobby_db_sync_assert(trim((string) ($leftRow['left_at'] ?? '')) !== '', 'leaving an admitted participant should set left_at');
 
     fwrite(STDOUT, "[realtime-lobby-db-sync-contract] PASS\n");

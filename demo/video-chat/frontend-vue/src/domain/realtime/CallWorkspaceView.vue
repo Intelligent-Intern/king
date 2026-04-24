@@ -708,6 +708,7 @@ import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
+import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
 import {
   configureClientDiagnostics,
   reportClientDiagnostic,
@@ -3560,6 +3561,11 @@ let aloneIdleLastActiveMs = Date.now();
 let localTypingStarted = false;
 let manualSocketClose = false;
 let connectGeneration = 0;
+let detachForegroundReconnect = null;
+let workspaceReconnectAfterForeground = false;
+let workspaceLastForegroundReconnectAt = 0;
+
+const WORKSPACE_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
 function clearReconnectTimer() {
   if (reconnectTimer !== null) {
@@ -3572,6 +3578,47 @@ function clearPingTimer() {
   if (pingTimer !== null) {
     clearInterval(pingTimer);
     pingTimer = null;
+  }
+}
+
+function markWorkspaceReconnectAfterForeground() {
+  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
+  workspaceReconnectAfterForeground = true;
+}
+
+function reconnectWorkspaceAfterForeground() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!workspaceReconnectAfterForeground) return;
+  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
+  if (routeCallResolve.pending || routeCallResolve.redirecting) return;
+  if (String(sessionState.sessionToken || '').trim() === '') return;
+
+  const now = Date.now();
+  if ((now - workspaceLastForegroundReconnectAt) < WORKSPACE_FOREGROUND_RECONNECT_DEBOUNCE_MS) {
+    return;
+  }
+
+  workspaceReconnectAfterForeground = false;
+  workspaceLastForegroundReconnectAt = now;
+  reconnectAttempt.value = 0;
+
+  if (shouldConnectSfu.value) {
+    if (sfuClientRef.value) {
+      sfuClientRef.value.leave();
+      sfuClientRef.value = null;
+    }
+    sfuConnected.value = false;
+    localTracksPublishedToSfu = false;
+    stopSfuTrackAnnounceTimer();
+  }
+
+  void connectSocket();
+  if (shouldConnectSfu.value && Number.isInteger(sessionState.userId) && sessionState.userId > 0) {
+    setTimeout(() => {
+      if (manualSocketClose || routeCallResolve.pending || routeCallResolve.redirecting) return;
+      if (!shouldConnectSfu.value || sfuClientRef.value) return;
+      initSFU();
+    }, 0);
   }
 }
 
@@ -5342,6 +5389,10 @@ onMounted(async () => {
 
   attachAloneIdleActivityListeners();
   aloneIdleLastActiveMs = Date.now();
+  detachForegroundReconnect = attachForegroundReconnectHandlers({
+    onBackground: markWorkspaceReconnectAfterForeground,
+    onForeground: reconnectWorkspaceAfterForeground,
+  });
 
   detachMediaDeviceWatcher = attachCallMediaDeviceWatcher({ requestPermissions: true });
   const canEnterWorkspace = await resolveRouteCallRef(routeCallRef.value);
@@ -8394,6 +8445,10 @@ onBeforeUnmount(() => {
   if (detachMediaDeviceWatcher) {
     detachMediaDeviceWatcher();
     detachMediaDeviceWatcher = null;
+  }
+  if (typeof detachForegroundReconnect === 'function') {
+    detachForegroundReconnect();
+    detachForegroundReconnect = null;
   }
   detachAloneIdleActivityListeners();
   manualSocketClose = true;

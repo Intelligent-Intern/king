@@ -182,14 +182,7 @@ SET invite_state = 'pending',
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
-  AND (
-      invite_state IN ('invited', 'declined', 'cancelled')
-      OR (
-          invite_state IN ('allowed', 'accepted')
-          AND joined_at IS NOT NULL
-          AND left_at IS NOT NULL
-      )
-  )
+  AND invite_state IN ('invited', 'declined', 'cancelled')
 SQL
         );
         $statement->execute([
@@ -372,12 +365,7 @@ function videochat_realtime_mark_call_participant_left(
         $markLeft = $pdo->prepare(
             <<<'SQL'
 UPDATE call_participants
-SET left_at = :left_at,
-    invite_state = CASE
-        WHEN call_role IN ('owner', 'moderator') THEN invite_state
-        WHEN invite_state IN ('allowed', 'accepted') THEN 'invited'
-        ELSE invite_state
-    END
+SET left_at = :left_at
 WHERE call_id = :call_id
   AND user_id = :user_id
   AND source = 'internal'
@@ -459,9 +447,7 @@ function videochat_realtime_call_context_allows_admission_bypass(array $context)
         return false;
     }
 
-    $joinedAt = trim((string) ($context['joined_at'] ?? ''));
-    $leftAt = trim((string) ($context['left_at'] ?? ''));
-    return !($joinedAt !== '' && $leftAt !== '');
+    return true;
 }
 
 function videochat_realtime_is_user_moderator_for_room(

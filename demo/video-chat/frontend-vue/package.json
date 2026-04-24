@@ -20,6 +20,7 @@
     "test:contract:call-layout-ui-options": "node tests/contract/call-layout-ui-options-contract.mjs",
     "test:contract:shared-ui-primitives": "node tests/contract/shared-ui-primitives-contract.mjs",
     "test:contract:frontend-state-stores": "node tests/contract/frontend-state-stores-contract.mjs",
+    "test:contract:foreground-reconnect": "node tests/contract/foreground-reconnect-contract.mjs",
     "test:contract:asset-cache-busting": "node tests/contract/asset-cache-busting-contract.mjs",
     "test:contract:client-diagnostics": "node tests/contract/client-diagnostics-contract.mjs",
     "test:contract:visual-standards": "node tests/contract/visual-standards-contract.mjs",

@@ -33,6 +33,8 @@ disconnecting the websocket, or abandoning the flow.
 Reaction:
 Reset the admission state back to the last valid durable state and remove the
 stale lobby presence.
+For an explicitly admitted participant, that durable state remains `allowed`
+until the host/admin removes the access or the call ends.
 
 5. User is listed as a connected participant without a live room presence
 connection.

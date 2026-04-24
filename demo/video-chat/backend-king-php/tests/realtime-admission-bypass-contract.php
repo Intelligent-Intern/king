@@ -309,8 +309,8 @@ SQL
         "UPDATE call_participants SET joined_at = '2026-04-17T00:05:00Z', left_at = '2026-04-17T00:10:00Z' WHERE call_id = 'call-owner-room' AND user_id = 79"
     );
     videochat_realtime_admission_bypass_assert(
-        !videochat_realtime_connection_can_bypass_admission_for_room($allowedParticipantConnection, 'demo-call-room', $openDatabase),
-        'left allowed participant must not bypass admission on a later join'
+        videochat_realtime_connection_can_bypass_admission_for_room($allowedParticipantConnection, 'demo-call-room', $openDatabase),
+        'left allowed participant must still bypass admission on a later reconnect'
     );
     $pdo->exec("UPDATE call_participants SET invite_state = 'invited' WHERE call_id = 'call-owner-room' AND user_id = 79");
 
