@@ -190,6 +190,42 @@ try {
     videochat_realtime_signaling_assert((string) ($mediaSecurityTargetFrame['type'] ?? '') === 'media-security/hello', 'target should receive media-security hello');
     videochat_realtime_signaling_assert((string) (($mediaSecurityTargetFrame['payload'] ?? [])['kind'] ?? '') === 'media_security_hello', 'media-security payload kind mismatch');
 
+    $decodedControlState = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/control-state',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'workspace-control-state',
+            'state' => [
+                'handRaised' => true,
+                'cameraEnabled' => false,
+            ],
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedControlState['ok'] ?? false), 'call/control-state should decode');
+    $controlStatePublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedControlState,
+        $sender,
+        1_780_300_124_700
+    );
+    videochat_realtime_signaling_assert((bool) ($controlStatePublish['ok'] ?? false), 'call/control-state publish should succeed');
+    $controlStateTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($controlStateTargetFrame['type'] ?? '') === 'call/control-state', 'target should receive control-state');
+    videochat_realtime_signaling_assert((string) (($controlStateTargetFrame['payload'] ?? [])['kind'] ?? '') === 'workspace-control-state', 'control-state payload kind mismatch');
+
+    $decodedModerationState = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/moderation-state',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'workspace-moderation-state',
+            'moderated_users' => [
+                'pin:200' => ['pinned' => true],
+            ],
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedModerationState['ok'] ?? false), 'call/moderation-state should decode');
+
     $decodedInvalidSelfTarget = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/ice',
         'target_user_id' => 100,

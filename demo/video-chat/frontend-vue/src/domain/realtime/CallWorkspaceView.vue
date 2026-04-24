@@ -812,6 +812,11 @@ import {
   socketUrlForRoom,
 } from './callWorkspaceApi';
 
+const CALL_STATE_SIGNAL_TYPES = Object.freeze([
+  'call/control-state',
+  'call/moderation-state',
+]);
+
 const route = useRoute();
 const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
@@ -1220,6 +1225,10 @@ function shouldUseNativeAudioBridge() {
     && MediaSecuritySession.supportsNativeTransforms();
 }
 
+function nativeAudioBridgeFailureMessage() {
+  return 'Audio is unavailable because encrypted audio transform setup failed on this device.';
+}
+
 function shouldMaintainNativePeerConnections() {
   return isNativeWebRtcRuntimePath() || shouldUseNativeAudioBridge();
 }
@@ -1331,6 +1340,9 @@ function nativeAudioBridgePeerStatusMessage(targetUserIds = []) {
     if (state === 'blocked_playback') {
       return 'Audio is blocked by the browser autoplay policy on this device.';
     }
+    if (state === 'transform_attach_failed') {
+      return String(peer.audioBridgeErrorMessage || '').trim() || nativeAudioBridgeFailureMessage();
+    }
     if (state === 'stalled_no_track') {
       return 'Audio is unavailable because no encrypted remote audio track arrived from the other participant.';
     }
@@ -1366,6 +1378,26 @@ function canProtectCurrentSfuTargets() {
   const targetUserIds = mediaSecurityTargetIds();
   if (targetUserIds.length <= 0) return false;
   return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+}
+
+function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
+  const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
+  setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: String(code || 'native_audio_bridge_failed'),
+    code: String(code || 'native_audio_bridge_failed'),
+    message: normalizedMessage,
+    payload: {
+      target_user_id: Number(peer?.userId || 0),
+      connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
+      media_runtime_path: mediaRuntimePath.value,
+      security: nativeAudioSecurityTelemetrySnapshot(),
+      ...extraPayload,
+    },
+    immediate: true,
+  });
 }
 
 function mediaSecurityHelloSignalKey(targetUserId, session) {
@@ -2539,6 +2571,7 @@ function isCallSignalType(type) {
     || normalized === 'call/answer'
     || normalized === 'call/ice'
     || normalized === 'call/hangup'
+    || CALL_STATE_SIGNAL_TYPES.includes(normalized)
     || MEDIA_SECURITY_SIGNAL_TYPES.includes(normalized);
 }
 
@@ -2549,7 +2582,9 @@ function shouldSuppressCallAckNotice(signalType) {
   return normalized === 'offer'
     || normalized === 'answer'
     || normalized === 'ice'
-    || normalized === 'hangup';
+    || normalized === 'hangup'
+    || normalized === 'control-state'
+    || normalized === 'moderation-state';
 }
 
 function shouldSuppressExpectedSignalingError(payload) {
@@ -2999,7 +3034,7 @@ function syncControlStateToPeers() {
   let sentCount = 0;
   for (const targetUserId of peerIds) {
     const sent = sendSocketFrame({
-      type: 'call/ice',
+      type: 'call/control-state',
       target_user_id: targetUserId,
       payload: {
         kind: 'workspace-control-state',
@@ -3036,7 +3071,7 @@ function syncModerationStateToPeersWithPayload(moderatedUsers) {
   let sentCount = 0;
   for (const targetUserId of peerIds) {
     const sent = sendSocketFrame({
-      type: 'call/ice',
+      type: 'call/moderation-state',
       target_user_id: targetUserId,
       payload: {
         kind: 'workspace-moderation-state',
@@ -4393,7 +4428,7 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
 
 function handleSignalingEvent(payload) {
   const type = String(payload?.type || '').trim().toLowerCase();
-  if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...MEDIA_SECURITY_SIGNAL_TYPES].includes(type)) return;
+  if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...CALL_STATE_SIGNAL_TYPES, ...MEDIA_SECURITY_SIGNAL_TYPES].includes(type)) return;
 
   const sender = typeof payload.sender === 'object' ? payload.sender : {};
   const senderUserId = Number(sender.user_id || 0);
@@ -6253,10 +6288,14 @@ function renderNativeRemoteVideos() {
 }
 
 function nativeWebRtcConfig() {
-  return {
+  const config = {
     iceServers: currentNativeIceServers(),
     iceCandidatePoolSize: 4,
   };
+  if (MediaSecuritySession.supportsNativeTransforms()) {
+    config.encodedInsertableStreams = true;
+  }
+  return config;
 }
 
 function normalizeIceServerEntry(value) {
@@ -6329,24 +6368,36 @@ function localTracksByKind(stream) {
 }
 
 function attachMediaSecurityNativeSender(sender, track) {
-  if (!sender || !track || !shouldMaintainNativePeerConnections()) return;
+  if (!sender || !track || !shouldMaintainNativePeerConnections()) return false;
   const session = ensureMediaSecuritySession();
-  if (session.attachNativeSenderTransform(sender, {
-    trackKind: String(track.kind || 'video'),
-    trackId: String(track.id || ''),
-  })) {
-    mediaSecurityStateVersion.value += 1;
+  try {
+    if (session.attachNativeSenderTransform(sender, {
+      trackKind: String(track.kind || 'video'),
+      trackId: String(track.id || ''),
+    })) {
+      mediaSecurityStateVersion.value += 1;
+      return true;
+    }
+  } catch (error) {
+    mediaDebugLog('[MediaSecurity] native sender transform attach failed', error);
   }
+  return false;
 }
 
 function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
-  if (!receiver || !shouldMaintainNativePeerConnections()) return;
+  if (!receiver || !shouldMaintainNativePeerConnections()) return false;
   const session = ensureMediaSecuritySession();
-  if (session.attachNativeReceiverTransform(receiver, senderUserId, {
-    trackId: String(track?.id || ''),
-  })) {
-    mediaSecurityStateVersion.value += 1;
+  try {
+    if (session.attachNativeReceiverTransform(receiver, senderUserId, {
+      trackId: String(track?.id || ''),
+    })) {
+      mediaSecurityStateVersion.value += 1;
+      return true;
+    }
+  } catch (error) {
+    mediaDebugLog('[MediaSecurity] native receiver transform attach failed', error);
   }
+  return false;
 }
 
 function synchronizeNativePeerMediaElements(peer) {
@@ -6401,7 +6452,23 @@ async function syncNativePeerLocalTracks(peer) {
       ? (byKind[senderKind] || null)
       : null;
     if (nextTrack && sender.track?.id === nextTrack.id) {
-      attachMediaSecurityNativeSender(sender, nextTrack);
+      const attached = attachMediaSecurityNativeSender(sender, nextTrack);
+      if (!attached && shouldUseNativeAudioBridge() && senderKind === 'audio') {
+        try {
+          peer.pc.removeTrack?.(sender);
+        } catch {
+          try {
+            await sender.replaceTrack(null);
+          } catch {
+            // ignore track detach failures while failing closed
+          }
+        }
+        reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
+          track_id: String(nextTrack?.id || ''),
+          sender_kind: senderKind,
+        });
+        continue;
+      }
       delete byKind[senderKind];
       continue;
     }
@@ -6411,7 +6478,23 @@ async function syncNativePeerLocalTracks(peer) {
       // ignore replace failures for unstable peers
     }
     if (nextTrack) {
-      attachMediaSecurityNativeSender(sender, nextTrack);
+      const attached = attachMediaSecurityNativeSender(sender, nextTrack);
+      if (!attached && shouldUseNativeAudioBridge() && senderKind === 'audio') {
+        try {
+          peer.pc.removeTrack?.(sender);
+        } catch {
+          try {
+            await sender.replaceTrack(null);
+          } catch {
+            // ignore track detach failures while failing closed
+          }
+        }
+        reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
+          track_id: String(nextTrack?.id || ''),
+          sender_kind: senderKind,
+        });
+        continue;
+      }
       delete byKind[senderKind];
     }
   }
@@ -6424,7 +6507,22 @@ async function syncNativePeerLocalTracks(peer) {
     try {
       const sender = peer.pc.addTrack(track, stream);
       peer?.senderKinds?.set?.(sender, kind);
-      attachMediaSecurityNativeSender(sender, track);
+      const attached = attachMediaSecurityNativeSender(sender, track);
+      if (!attached && shouldUseNativeAudioBridge() && kind === 'audio') {
+        try {
+          peer.pc.removeTrack?.(sender);
+        } catch {
+          try {
+            await sender.replaceTrack(null);
+          } catch {
+            // ignore track detach failures while failing closed
+          }
+        }
+        reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
+          track_id: String(track?.id || ''),
+          sender_kind: kind,
+        });
+      }
     } catch {
       // ignore duplicate addTrack attempts
     }
@@ -6553,6 +6651,24 @@ function closeNativePeerConnection(targetUserId) {
     peer.audio.remove();
   }
   renderNativeRemoteVideos();
+}
+
+function nativePeerRequiresAudioOnlyRebuild(peer) {
+  if (!peer || typeof peer !== 'object') return false;
+  if (!shouldUseNativeAudioBridge()) return false;
+  if (peer?.senderKinds instanceof Map) {
+    for (const kind of peer.senderKinds.values()) {
+      if (String(kind || '').trim().toLowerCase() === 'video') {
+        return true;
+      }
+    }
+  }
+  const pc = peer?.pc || null;
+  if (!pc || typeof pc.getSenders !== 'function') return false;
+  return pc.getSenders().some((sender) => {
+    const trackKind = String(sender?.track?.kind || '').trim().toLowerCase();
+    return trackKind === 'video';
+  });
 }
 
 function teardownNativePeerConnections() {
@@ -6685,7 +6801,20 @@ function ensureNativePeerConnection(targetUserId) {
     markParticipantActivity(normalizedTargetUserId, 'media_track');
     const trackKind = String(event?.track?.kind || '').trim().toLowerCase();
     if (trackKind === 'audio' || isNativeWebRtcRuntimePath()) {
-      attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
+      const attached = attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
+      if (!attached && shouldUseNativeAudioBridge() && trackKind === 'audio') {
+        clearNativePeerAudioTrackDeadline(peer);
+        reportNativeAudioBridgeFailure(
+          peer,
+          'native_audio_receiver_transform_failed',
+          nativeAudioBridgeFailureMessage(),
+          {
+            track_id: String(event?.track?.id || ''),
+            sender_user_id: normalizedTargetUserId,
+          },
+        );
+        return;
+      }
     }
     if (shouldUseNativeAudioBridge() && trackKind === 'video') {
       return;
@@ -6775,6 +6904,10 @@ function syncNativePeerConnectionsWithRoster() {
     const userId = Number(row?.userId || 0);
     if (!Number.isInteger(userId) || userId <= 0 || userId === currentUserId.value) continue;
     activePeerIds.add(userId);
+    const existing = nativePeerConnectionsRef.value.get(userId);
+    if (nativePeerRequiresAudioOnlyRebuild(existing)) {
+      closeNativePeerConnection(userId);
+    }
     ensureNativePeerConnection(userId);
   }
 
@@ -6954,6 +7087,7 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
       wlvcEncodeLastErrorLogAtMs = 0;
     } else if (normalizedNextPath === 'wlvc_wasm') {
       if (shouldUseNativeAudioBridge()) {
+        teardownNativePeerConnections();
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
           synchronizeNativePeerMediaElements(peer);

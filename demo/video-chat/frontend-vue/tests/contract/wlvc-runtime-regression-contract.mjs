@@ -161,6 +161,7 @@ try {
   requireContains(switchRuntime, 'syncNativePeerConnectionsWithRoster();', 'native switch syncs roster');
   requireContains(switchRuntime, "else if (normalizedNextPath === 'wlvc_wasm')", 'WLVC switch branch');
   requireContains(switchRuntime, 'if (shouldUseNativeAudioBridge())', 'WLVC switch preserves native audio bridge when supported');
+  requireMatch(switchRuntime, /if \(shouldUseNativeAudioBridge\(\)\) \{[\s\S]*teardownNativePeerConnections\(\);[\s\S]*syncNativePeerConnectionsWithRoster\(\);/, 'WLVC switch rebuilds native peers before audio bridge reuse');
   requireContains(switchRuntime, 'synchronizeNativePeerMediaElements(peer);', 'WLVC switch rebinds native peers for audio bridge mode');
   requireContains(switchRuntime, 'void syncNativePeerLocalTracks(peer);', 'WLVC switch resyncs native audio tracks');
   requireContains(switchRuntime, 'teardownNativePeerConnections();', 'WLVC switch still tears down native peers when no native bridge exists');
@@ -192,6 +193,7 @@ try {
   requireContains(nativeSignalBlock, 'SFU_RUNTIME_ENABLED', 'native signaling block honors SFU runtime flag');
   requireContains(nativeSignalBlock, "mediaRuntimePath.value === 'pending'", 'native signaling block protects SFU startup');
   const handleSignal = extractFunction(workspace, 'handleSignalingEvent');
+  requireContains(handleSignal, "...CALL_STATE_SIGNAL_TYPES, ...MEDIA_SECURITY_SIGNAL_TYPES", 'signaling handler accepts dedicated call state signal types');
   requireContains(handleSignal, 'if (shouldBlockNativeRuntimeSignaling())', 'native signaling event block before fallback switch');
   requireContains(handleSignal, "mediaDebugLog('[WebRTC] ignoring native signal while runtime is still pending', type);", 'native signaling event block diagnostic');
   requireContains(handleSignal, 'void handleNativeSignalingEvent(type, senderUserId, payloadBody || {});', 'native signaling fallback still available');
@@ -234,12 +236,24 @@ try {
   const transportOnlyFallback = extractFunction(workspace, 'shouldSendTransportOnlySfuFrame');
   requireContains(transportOnlyFallback, "message.includes('unsupported_capability')", 'transport-only fallback handles missing media security capability');
   requireContains(transportOnlyFallback, "message.includes('blocked_capability')", 'transport-only fallback handles blocked media security capability');
+  const nativeWebRtcConfig = extractFunction(workspace, 'nativeWebRtcConfig');
+  requireContains(nativeWebRtcConfig, 'config.encodedInsertableStreams = true;', 'native WebRTC config enables encoded insertable streams when available');
   const attachNativeSender = extractFunction(workspace, 'attachMediaSecurityNativeSender');
   requireContains(attachNativeSender, 'session.attachNativeSenderTransform(sender, {', 'native sender transform attaches immediately');
+  requireContains(attachNativeSender, 'return true;', 'native sender transform helper returns success explicitly');
+  requireContains(attachNativeSender, 'return false;', 'native sender transform helper returns failure explicitly');
   requireNotContains(attachNativeSender, 'session.ensureReady()', 'native sender transform must not wait and leak unencrypted audio');
   const attachNativeReceiver = extractFunction(workspace, 'attachMediaSecurityNativeReceiver');
   requireContains(attachNativeReceiver, 'session.attachNativeReceiverTransform(receiver, senderUserId, {', 'native receiver transform attaches immediately');
+  requireContains(attachNativeReceiver, 'return true;', 'native receiver transform helper returns success explicitly');
+  requireContains(attachNativeReceiver, 'return false;', 'native receiver transform helper returns failure explicitly');
   requireNotContains(attachNativeReceiver, 'session.ensureReady()', 'native receiver transform must not wait and leak unencrypted audio');
+  const syncControlState = extractFunction(workspace, 'syncControlStateToPeers');
+  requireContains(syncControlState, "type: 'call/control-state'", 'control-state sync uses dedicated signaling type');
+  requireNotContains(syncControlState, "type: 'call/ice'", 'control-state sync must not masquerade as ICE');
+  const syncModerationState = extractFunction(workspace, 'syncModerationStateToPeersWithPayload');
+  requireContains(syncModerationState, "type: 'call/moderation-state'", 'moderation-state sync uses dedicated signaling type');
+  requireNotContains(syncModerationState, "type: 'call/ice'", 'moderation-state sync must not masquerade as ICE');
   requireContains(workspace, 'function playNativePeerAudio', 'native audio bridge playback helper exists');
   requireContains(workspace, 'function scheduleNativePeerAudioTrackDeadline', 'native audio bridge track deadline helper exists');
   requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
@@ -286,10 +300,17 @@ try {
   requireContains(renderLayout, 'mountVideoNode(slot, node, assignedNodes)', 'slot render mount');
   const ensureNativePeer = extractFunction(workspace, 'ensureNativePeerConnection');
   requireContains(ensureNativePeer, "audioBridgeState: ''", 'native peer initializes audio bridge state');
+  requireContains(ensureNativePeer, "reportNativeAudioBridgeFailure(", 'native peer reports explicit bridge failures');
+  requireContains(ensureNativePeer, "'native_audio_receiver_transform_failed'", 'native peer distinguishes encrypted audio receiver attach failures');
   requireContains(ensureNativePeer, "setNativePeerAudioBridgeState(peer, 'track_received', '');", 'native peer marks encrypted audio track arrival');
   requireContains(ensureNativePeer, "void playNativePeerAudio(peer, 'remote_track');", 'native peer retries playback when encrypted audio track arrives');
   requireContains(ensureNativePeer, 'scheduleNativePeerAudioTrackDeadline(peer);', 'native peer schedules encrypted audio-track deadline once connected');
   requireContains(ensureNativePeer, 'clearNativePeerAudioTrackDeadline(peer);', 'native peer clears encrypted audio-track deadlines on disconnect');
+  const rebuildAudioOnlyPeer = extractFunction(workspace, 'nativePeerRequiresAudioOnlyRebuild');
+  requireContains(rebuildAudioOnlyPeer, 'if (!shouldUseNativeAudioBridge()) return false;', 'audio-only peer rebuild only applies in hybrid audio bridge mode');
+  requireContains(rebuildAudioOnlyPeer, "=== 'video'", 'audio-only peer rebuild detects stale video senders');
+  const syncNativePeers = extractFunction(workspace, 'syncNativePeerConnectionsWithRoster');
+  requireContains(syncNativePeers, 'if (nativePeerRequiresAudioOnlyRebuild(existing))', 'roster sync rebuilds stale native peers for audio-only bridge mode');
 
   const bumpRender = extractFunction(workspace, 'bumpMediaRenderVersion');
   const bumpCount = (bumpRender.match(/mediaRenderVersion\.value = mediaRenderVersion\.value >= 1_000_000 \? 0 : mediaRenderVersion\.value \+ 1;/g) || []).length;
