@@ -18,6 +18,8 @@ try {
   assert.ok(viteConfig.includes('kingrt-asset-version'), 'vite config must register the asset version plugin');
   assert.ok(viteConfig.includes('(?:assets|cdn)'), 'vite config must rewrite /assets and /cdn paths');
   assert.ok(viteConfig.includes('VIDEOCHAT_ASSET_VERSION'), 'vite config must accept deploy-time asset versions');
+  assert.ok(viteConfig.includes('const hasTerminalFilename = /\\/[^/?#]+\\.[A-Za-z0-9]+$/.test(assetPath);'), 'vite config must only append asset versions to concrete asset files');
+  assert.ok(viteConfig.includes('if (!hasTerminalFilename) {'), 'vite config must leave /cdn directory base paths unchanged');
 
   const frontendDockerfile = readUtf8(path.join(frontendRoot, 'Dockerfile'));
   assert.ok(frontendDockerfile.includes('ARG VIDEOCHAT_ASSET_VERSION=""'), 'frontend image must accept build-time asset version');

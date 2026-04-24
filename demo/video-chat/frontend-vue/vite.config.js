@@ -44,6 +44,10 @@ const buildAssetVersion = resolveAssetVersion();
 const appendAssetVersion = (source) => source.replace(
   /(['"`])(\/(?:assets|cdn)\/[^'"`?#]+)(\?[^'"`#]*)?(#[^'"`]*)?\1/g,
   (match, quote, assetPath, query = '', hash = '') => {
+    const hasTerminalFilename = /\/[^/?#]+\.[A-Za-z0-9]+$/.test(assetPath);
+    if (!hasTerminalFilename) {
+      return match;
+    }
     if (/(?:^|[?&])v=/.test(query)) {
       return match;
     }
