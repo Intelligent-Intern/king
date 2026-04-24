@@ -3,7 +3,12 @@ declare(strict_types=1);
 
 namespace King\Voltron;
 
+require_once __DIR__ . '/VoltronExecutionMode.php';
+require_once __DIR__ . '/LlamaCppBackend.php';
+require_once __DIR__ . '/OllamaBackend.php';
+
 use RuntimeException;
+use King\Voltron\VoltronExecutionMode;
 
 final class VoltronKernels
 {
@@ -60,14 +65,64 @@ final class VoltronKernels
             return $state;
         }
 
+        if (VoltronExecutionMode::requiresSingleFullWorker()) {
+            return self::executeBlockViaLlamaCpp($blockType, $state, $params);
+        }
+
+        return self::executeBlockNative($blockType, $state, $params);
+    }
+
+    private static function executeBlockViaLlamaCpp(string $blockType, array $state, array $params): array
+    {
+        return match ($blockType) {
+            'embed', 'attention', 'ffn', 'layer_chunk' => $state,
+            'output_head' => self::executeOutputHeadViaLlamaCpp($state, $params),
+            default => throw new RuntimeException("Unsupported Voltron block type: {$blockType}"),
+        };
+    }
+
+    private static function executeBlockNative(string $blockType, array $state, array $params): array
+    {
         return match ($blockType) {
             'embed' => self::executeEmbed($state, $params),
             'attention' => self::executeAttention($state, $params),
             'ffn' => self::executeFfn($state, $params),
-            'layer_chunk' => (function(array $s, array $p) { $s = (array) self::executeAttention($s, $p); return (array) self::executeFfn($s, $p); })($state, $params),
+            'layer_chunk' => self::executeAttentionFfn($state, $params),
             'output_head' => self::executeOutputHead($state, $params),
             default => throw new RuntimeException("Unsupported Voltron block type: {$blockType}"),
         };
+    }
+
+    private static function executeOutputHeadViaLlamaCpp(array $state, array $params): array
+    {
+        static $backend = null;
+        if ($backend === null) {
+            $baseUrl = getenv('VOLTRON_OLLAMA_URL') ?: 'http://127.0.0.1:11434';
+            $model = getenv('VOLTRON_OLLAMA_MODEL') ?: 'qwen2.5-coder:3b';
+            $backend = new OllamaBackend($baseUrl, $model);
+        }
+
+        $prompt = $state['prompt'] ?? '';
+        
+        $options = [
+            'num_predict' => 1,
+            'temperature' => 0.0,
+            'top_p' => 1.0,
+            'top_k' => 1,
+            'repeat_penalty' => 1.0,
+        ];
+
+        $result = $backend->generate($prompt, $options);
+        $content = $result['response'] ?? '';
+
+        $generated = is_array($state['generated_token_ids'] ?? null) ? $state['generated_token_ids'] : [];
+        $generated[] = 0;
+        $state['generated_token_ids'] = $generated;
+        $state['generated_text'] = (string) ($state['generated_text'] ?? '') . $content;
+        $state['stop'] = $result['done'] ?? false;
+        $state['finished_reason'] = $state['stop'] ? 'stop' : null;
+
+        return $state;
     }
 
     /**
