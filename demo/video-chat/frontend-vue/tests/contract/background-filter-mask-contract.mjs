@@ -13,7 +13,7 @@ function readUtf8(file) {
 
 try {
   const source = readUtf8(path.join(frontendRoot, 'src/domain/realtime/backgroundFilterStream.js'));
-  assert.ok(source.includes('const DEFAULT_INNER_CONTRACT_PX = 20;'), 'background filter must contract the matte around 20px inward from the detected contour');
+  assert.ok(source.includes('const DEFAULT_INNER_CONTRACT_PX = 16;'), 'background filter must contract the matte around 16px inward from the detected contour');
   assert.ok(source.includes('const DEFAULT_INNER_FEATHER_PX = 24;'), 'background filter must keep the feathered edge half as wide for a faster blur falloff');
   assert.ok(source.includes("{ progress: 0.0, alpha: 0.05 }"), 'background filter must start the inner feather ramp near 5 percent alpha');
   assert.ok(source.includes("{ progress: 0.2, alpha: 0.15 }"), 'background filter must include the 15 percent inner feather stop');

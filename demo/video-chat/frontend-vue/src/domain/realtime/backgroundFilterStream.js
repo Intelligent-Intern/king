@@ -3,7 +3,7 @@ import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
 
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.
-const DEFAULT_INNER_CONTRACT_PX = 20;
+const DEFAULT_INNER_CONTRACT_PX = 16;
 const DEFAULT_INNER_FEATHER_PX = 24;
 const DEFAULT_INNER_FEATHER_STOPS = Object.freeze([
   { progress: 0.0, alpha: 0.05 },
