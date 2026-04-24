@@ -186,12 +186,19 @@ try {
   requireContains(workspace, 'markRaw', 'Vue raw marker for native codec objects');
   requireContains(createPeer, 'Number.isInteger(publisherUserId)', 'SFU self-publisher integer guard');
   requireContains(createPeer, 'publisherUserId === currentUserId.value', 'SFU does not render local publisher as remote');
+  requireContains(createPeer, 'if (tracks.length > 0 && !sfuTrackListHasVideo(tracks))', 'audio-only SFU track updates must not keep a remote video peer alive');
   requireContains(createPeer, 'decoder = markRaw(decoder);', 'remote WASM decoder is not Vue-proxied');
   requireContains(createPeer, "canvas.className = 'remote-video'", 'remote decoded canvas class');
   requireContains(createPeer, 'canvas.dataset.publisherId = publisherId', 'remote canvas publisher id');
   requireContains(createPeer, 'canvas.dataset.userId = String(publisherUserId)', 'remote canvas user id');
   requireContains(createPeer, 'setSfuRemotePeer(publisherId, peer);', 'remote peer map mutation');
   requireContains(createPeer, 'renderCallVideoLayout();', 'remote peer initial render');
+
+  const handleUnpublished = extractFunction(workspace, 'handleSFUUnpublished');
+  requireContains(handleUnpublished, 'const nextTracks = sfuTrackRows(peer.tracks)', 'track unpublish computes the remaining track list');
+  requireContains(handleUnpublished, 'if (nextTracks.length > 0 && sfuTrackListHasVideo(nextTracks))', 'track unpublish keeps the peer while a video track still exists');
+  requireContains(handleUnpublished, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer);', 'track unpublish updates peer tracks in place');
+  requireContains(handleUnpublished, 'deleteSfuRemotePeer(normalizedPublisherId);', 'track unpublish still removes peers with no remaining video');
 
   const ensurePeer = extractFunction(workspace, 'ensureSfuRemotePeerForFrame');
   requireContains(ensurePeer, 'const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame existing peer lookup');

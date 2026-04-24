@@ -5460,6 +5460,10 @@ function sfuTrackRows(tracks) {
   return Array.isArray(tracks) ? tracks : [];
 }
 
+function sfuTrackListHasVideo(tracks) {
+  return sfuTrackRows(tracks).some((track) => String(track?.kind || '').trim().toLowerCase() === 'video');
+}
+
 async function createOrUpdateSfuRemotePeer(options = {}) {
   if (!isWlvcRuntimePath()) return null;
   const publisherId = normalizeSfuPublisherId(options.publisherId);
@@ -5478,6 +5482,14 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     ? { publisherId, peer: exactPeer }
     : fallbackPeerEntry;
   const existingPeer = existingPeerEntry?.peer || null;
+  if (tracks.length > 0 && !sfuTrackListHasVideo(tracks)) {
+    if (existingPeer) {
+      teardownRemotePeer(existingPeer);
+      deleteSfuRemotePeer(existingPeerEntry?.publisherId || publisherId);
+      renderCallVideoLayout();
+    }
+    return null;
+  }
   if (existingPeer?.decoder) {
     const updatedPeer = {
       ...existingPeer,
@@ -5657,11 +5669,25 @@ function handleSFUTracks(e) {
 function handleSFUUnpublished(publisherId, trackId) {
   const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
   const peer = remotePeersRef.value.get(normalizedPublisherId);
-  if (peer) {
-    teardownRemotePeer(peer);
-    deleteSfuRemotePeer(normalizedPublisherId);
+  if (!peer) return;
+
+  const normalizedTrackId = String(trackId || '').trim();
+  const nextTracks = sfuTrackRows(peer.tracks)
+    .filter((track) => String(track?.id || '').trim() !== normalizedTrackId);
+
+  if (nextTracks.length > 0 && sfuTrackListHasVideo(nextTracks)) {
+    const updatedPeer = {
+      ...peer,
+      tracks: nextTracks,
+    };
+    setSfuRemotePeer(normalizedPublisherId, updatedPeer);
     renderCallVideoLayout();
+    return;
   }
+
+  teardownRemotePeer(peer);
+  deleteSfuRemotePeer(normalizedPublisherId);
+  renderCallVideoLayout();
 }
 
 function handleSFUPublisherLeft(publisherId) {
