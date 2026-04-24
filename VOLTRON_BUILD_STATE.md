@@ -1,95 +1,131 @@
-# Delphi Build State
+# Voltron Build State
 
-Last updated: 2026-04-23 (America/Chicago)
+Last updated: 2026-04-24 (America/Chicago)
 Branch: `experiments/1.0.7-voltron`
+
+**Purpose**: Voltron is the distributed inference layer that runs a **Qwen clone**
+on King's native infrastructure. Voltron nodes form a compute mesh where each node
+runs a subset of model layers. The King orchestrator DAG coordinates execution across
+nodes, and `king_gguf_tensor_scan` provides native C tensor ops.
+
+## Architecture: Voltron as DAG Orchestrator Nodes
+
+Each Voltron node is a **King pipeline orchestrator** that:
+1. Executes model layer blocks via DAG scheduling
+2. Communicates with peer nodes via TCP (IIBIN wire protocol)
+3. Uses Semantic DNS for node discovery
+4. Stores activations/checkpoints in Object Store
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        King Orchestrator                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
+│  │  llama.cpp  │  │  llama.cpp  │  │  llama.cpp  │             │
+│  │  Shard 0    │  │  Shard 1    │  │  Shard 2    │   ...       │
+│  │  Layers 0-5 │  │ Layers 6-11 │  │Layers 12-17 │             │
+│  │  (port 9700)│  │ (port 9701) │  │ (port 9702) │             │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
+│         │                │                │                     │
+│         └────────────────┴────────────────┘                     │
+│                     TCP/JSON Protocol                            │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ## Current Snapshot
 
-1. DAG-shaped orchestrator submission support is implemented via submission-time normalization:
-   - accepts top-level `steps` graph form
-   - honors per-step `id` + `deps`
-   - validates duplicates, unknown deps, self-deps, and cycles
-   - normalizes to deterministic topological step order before persistence/execution
-2. New DAG contract test is present:
-   - `extension/tests/707-orchestrator-dag-topological-scheduling-contract.phpt`
-3. Delphi M0 scaffold is present:
-   - `demo/userland/voltron/src/M0Scaffold.php`
-   - `demo/userland/voltron/README.md`
-4. Orchestrator docs include graph submission semantics and the explicit scope caveat (control-plane normalization, not fine-grained parallel runtime).
-5. Voltron model-agnostic partitioner is implemented:
-   - `demo/userland/voltron/src/ModelConfig.php` - model block schema definitions for Gemma2B, Gemma7B
-   - `demo/userland/voltron/src/ModelPartitioner.php` - partition any model into DAG of blocks
-   - `demo/userland/voltron/src/VoltronConnector.php` - wire to King infra (orchestrator + semantic DNS)
-   - `demo/userland/voltron/contracts/700-voltron-model-partitioner-contract.php` - contract tests
+### Distributed Llama.cpp Shards (NEW 2026-04-24)
 
-## Verified Build/Test Status
+**APPROACH CHANGED**: Instead of PHP LayerWorker (which couldn't match llama.cpp correctness),
+we now spawn actual llama.cpp server instances as workers. Each server handles a layer range.
 
-1. Release extension build succeeded:
-   - command: `cd extension && ../infra/scripts/build-profile.sh release`
-   - output artifact: `extension/modules/king.so`
-2. Targeted PHPT checks passed:
-   - `tests/707-orchestrator-dag-topological-scheduling-contract.phpt`
-   - `tests/594-orchestrator-userland-terminal-state-visibility-contract.phpt`
-3. `php -l demo/userland/voltron/src/M0Scaffold.php` passed.
-4. PHP lint passed for all new Voltron files:
-   - `demo/userland/voltron/src/ModelConfig.php`
-   - `demo/userland/voltron/src/ModelPartitioner.php`
-   - `demo/userland/voltron/src/VoltronConnector.php`
-5. Voltron contract test passed (7/7):
-   - ModelConfig::gemma2B() is valid
-   - ModelConfig::gemma7B() is valid
-   - Gemma2B block schema has no cycles
-   - ModelPartitioner::partition produces DAG
-   - ModelPartitioner respects memory constraints
-   - Partition respects block dependencies
-   - VoltronConnector builds valid pipeline
+- `LlamaCppShardServer.php` - PHP wrapper around llama-server processes (ports 9700+)
+- `LlamaCppShardOrchestrator.php` - Orchestrates shard spawning and health checking
+- `run_sharded_inference.php` - Demo script
 
-## Git State (Most Recent Work)
+### Why PHP LayerWorker Failed
 
-1. Commit:
-   - `ca16a3a` - `Add DAG submission normalization and Delphi M0 scaffold`
-2. New commits (to be staged):
-   - Voltron model-agnostic partitioner implementation
-   - ModelConfig with Gemma2B/Gemma7B block schemas
-   - ModelPartitioner for DAG-based block partitioning
-   - VoltronConnector to King infra
-   - Contract tests
-3. Pushed to fork:
-   - `origin/experiments/1.0.7-voltron`
-4. Push policy for this branch:
-   - do not push to `upstream`
-   - push only to fork remote (`origin`, `sashakolpakov`) unless explicitly overridden by the user.
+The PHP implementation of Qwen2 attention and FFN couldn't match llama.cpp output:
+- RMSNorm, RoPE, attention math diverged from C++ implementation
+- GQA (8 heads query, 2 heads KV) required correct cross-head attention
+- Float precision accumulation caused drift across 36 layers
+- Output was garbage tokens instead of coherent text
 
-## Voltron Architecture (Voltron-style Model Parallelism)
+**Solution**: Delegate to actual llama.cpp binaries instead of reimplementing in PHP.
 
-The implementation follows the "dismember" pattern from VOLTRON_PLANNING.md:
+### Verified Build/Test Status
 
-1. **ModelConfig** defines model block schemas (model-agnostic):
-   - embed, attention, ffn, output_head block types
-   - layer ranges, memory requirements, dependencies
-   - built-in configs for Gemma2B, Gemma7B
+1. **llama-server builds**: `/tmp/llama.cpp/build/bin/llama-server` ✓
 
-2. **ModelPartitioner** partitions model into block DAG:
-   - topological sort of blocks
-   - node capability matching (memory, role capabilities)
-   - generates orchestrator steps with correct deps
+2. **Shard spawning**:
+   - 6 shards spawn on ports 9700-9705
+   - Each serves layers 0-5, 6-11, 12-17, 18-23, 24-29, 30-35
+   - Health checks pass ✓
 
-3. **VoltronConnector** wires to King infra:
-   - registers node via Semantic DNS
-   - discovers cluster nodes
-   - builds pipeline from node capabilities
-   - registers tool handlers with orchestrator
+3. **Direct inference test**:
+   - `curl localhost:9700/infill` works ✓
 
-4. **Execution flow**:
-   ```
-   input → embed → attention → ffn → attention → ffn → ... → output_head
-   ```
-   Each block runs as separate orchestrator step with artifact refs passed between them.
+4. **Native GGUF scan**: `king_gguf_tensor_scan` still available for embed lookups ✓
 
-## Non-Negotiable Stack (Used)
+## Git State
 
-- IIBIN: artifact refs for tensor payloads
-- Semantic DNS: node capability registration/discovery
-- Pipeline Orchestrator: step execution with DAG dependencies
-- Object Store: checkpoint/activation staging (integrated, not yet fully wired)
+1. Latest commit: cleanup + new shard orchestration code
+2. Pushed to: `origin/experiments/1.0.7-voltron`
 
+## Voltron Node Architecture (CURRENT)
+
+Each Voltron node now runs:
+
+1. **llama.cpp server process** - actual model execution
+   - Each process loads full GGUF but only processes assigned layers
+   - Communicates via HTTP/TCP on assigned port
+   - Actions: `embed`, `forward`, `generate`, `health`
+
+2. **LlamaCppShardServer** (PHP) - wrapper/metadata server
+   - Provides shard coordination info
+   - Health checking
+   - Protocol: 4-byte length header + JSON request
+
+3. **King Pipeline Orchestrator** - DAG execution
+   - Chains requests across shard ports
+   - Sample tokens from final hidden state
+
+## Layer Distribution
+
+For Qwen2.5-coder:3b (36 layers):
+```
+Node 0 (port 9700): layers 0-5
+Node 1 (port 9701): layers 6-11
+Node 2 (port 9702): layers 12-17
+Node 3 (port 9703): layers 18-23
+Node 4 (port 9704): layers 24-29
+Node 5 (port 9705): layers 30-35
+```
+
+## Issues and Limitations
+
+1. **NOT ACTUALLY DISTRIBUTED YET**: Shards run locally, not across network nodes
+2. **No KV cache transfer**: Each llama-server maintains own KV cache, no sharing
+3. **No cross-shard communication**: Hidden states passed through PHP orchestrator
+4. **PHP bottleneck**: Still using PHP for layer chaining, not native IIBIN
+
+## M0 Status
+
+**REGRESSED**: We went from "PHP LayerWorker somewhat working" to "delegating to llama.cpp"
+but haven't yet wired the distributed path to produce correct output.
+
+What's working:
+- llama-server binary runs
+- Shards spawn and health-check pass
+
+What's broken:
+- Haven't tested full generation loop through shards
+- No IIBIN protocol for shard communication
+- No real multi-node deployment
+
+## Next Steps Required
+
+1. Wire PHP orchestrator to call each shard via HTTP
+2. Pass hidden states between shards correctly  
+3. Implement output_norm + lm_head at end of chain
+4. Test full generation produces readable output
+5. Then: add remote-peer dispatch for actual multi-node

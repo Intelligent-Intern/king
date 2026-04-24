@@ -7,6 +7,9 @@ static const zend_function_entry king_functions[] = {
     PHP_FE(king_version, arginfo_king_no_args)
     PHP_FE(king_health, arginfo_king_no_args)
     PHP_FE(king_new_config, arginfo_king_new_config)
+    PHP_FE(king_gguf_tensor_scan, arginfo_king_gguf_tensor_scan)
+    PHP_FE(king_native_gguf_tensor_scan, arginfo_king_gguf_tensor_scan)
+    PHP_FE(king_native_voltron_layer_worker, arginfo_king_voltron_layer_worker)
 
     PHP_FE(king_connect, arginfo_king_connect)
     PHP_FE(king_close, arginfo_king_session_resource)

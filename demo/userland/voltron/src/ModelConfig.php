@@ -11,6 +11,7 @@ final class ModelConfig
     public const TYPE_EMBED = 'embed';
     public const TYPE_ATTENTION = 'attention';
     public const TYPE_FFN = 'ffn';
+    public const TYPE_LAYER_CHUNK = 'layer_chunk';
     public const TYPE_OUTPUT_HEAD = 'output_head';
     public const TYPE_FULL_MODEL = 'full_model';
 
@@ -69,8 +70,8 @@ final class ModelConfig
         }
 
         $type = $block['type'] ?? '';
-        if (!in_array($type, [self::TYPE_EMBED, self::TYPE_ATTENTION, self::TYPE_FFN, self::TYPE_OUTPUT_HEAD, self::TYPE_FULL_MODEL], true)) {
-            throw new InvalidArgumentException('block.type must be embed|attention|ffn|output_head|full_model.');
+        if (!in_array($type, [self::TYPE_EMBED, self::TYPE_ATTENTION, self::TYPE_FFN, self::TYPE_LAYER_CHUNK, self::TYPE_OUTPUT_HEAD, self::TYPE_FULL_MODEL], true)) {
+            throw new InvalidArgumentException('block.type must be embed|attention|ffn|layer_chunk|output_head|full_model.');
         }
 
         $layers = $block['layers'] ?? null;
@@ -336,5 +337,98 @@ final class ModelConfig
                 ],
             ],
         ];
+    }
+
+    public static function qwen2_5_3b(?int $blockCount = null): array
+    {
+        $resolvedBlockCount = is_int($blockCount) && $blockCount > 1 ? $blockCount : 36;
+        $transformerStart = 0;
+        $transformerEnd = $resolvedBlockCount - 1;
+        $ranges = self::splitLayerRange($transformerStart, $transformerEnd, 4);
+
+        $blockSchema = [
+            [
+                'id' => 'embed',
+                'type' => self::TYPE_EMBED,
+                'layers' => [0, 0],
+                'memory_mb' => 256,
+                'dependencies' => [],
+            ],
+        ];
+
+        $previousDependency = 'embed';
+        $rangeIndex = 0;
+        foreach ($ranges as $range) {
+            $rangeIndex++;
+            $rangeStart = (int) $range[0];
+            $rangeEnd = (int) $range[1];
+            $rangeSize = max(1, ($rangeEnd - $rangeStart + 1));
+
+            $blockSchema[] = [
+                'id' => 'layer_chunk_' . $rangeIndex,
+                'type' => self::TYPE_LAYER_CHUNK,
+                'layers' => [$rangeStart, $rangeEnd],
+                'memory_mb' => max(1024, 320 * $rangeSize),
+                'dependencies' => [$previousDependency],
+            ];
+            $previousDependency = 'layer_chunk_' . $rangeIndex;
+        }
+
+        $blockSchema[] = [
+            'id' => 'output_head',
+            'type' => self::TYPE_OUTPUT_HEAD,
+            'layers' => [$transformerEnd, $transformerEnd],
+            'memory_mb' => 128,
+            'dependencies' => [$previousDependency],
+        ];
+
+        return [
+            'type' => self::TYPE_FULL_MODEL,
+            'name' => 'qwen2.5-coder:3b',
+            'total_params' => 3000000000,
+            'quantization' => self::QUANT_Q4_K,
+            'model_source' => 'object://models/qwen2.5-coder:3b q4_k',
+            'block_schema' => $blockSchema,
+        ];
+    }
+
+    /**
+     * @return array<int,array{int,int}>
+     */
+    private static function splitLayerRange(int $start, int $end, int $parts): array
+    {
+        $parts = max(1, $parts);
+        if ($end < $start) {
+            return [[$start, $start]];
+        }
+
+        $total = ($end - $start + 1);
+        $base = intdiv($total, $parts);
+        $remainder = $total % $parts;
+
+        $ranges = [];
+        $cursor = $start;
+        for ($i = 0; $i < $parts; $i++) {
+            $width = $base + ($i < $remainder ? 1 : 0);
+            if ($width <= 0) {
+                $width = 1;
+            }
+            $rangeStart = $cursor;
+            $rangeEnd = min($end, $cursor + $width - 1);
+            $ranges[] = [$rangeStart, $rangeEnd];
+            $cursor = $rangeEnd + 1;
+            if ($cursor > $end) {
+                break;
+            }
+        }
+
+        if ($ranges === []) {
+            return [[$start, $end]];
+        }
+
+        $last = count($ranges) - 1;
+        $ranges[$last][1] = $end;
+
+        return $ranges;
     }
 }
