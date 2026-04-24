@@ -262,7 +262,10 @@ try {
 
   const workspaceSource = read('../../src/domain/realtime/CallWorkspaceView.vue');
   assert.match(workspaceSource, /MEDIA_SECURITY_SIGNAL_TYPES/, 'workspace must handle media-security signaling');
-  assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*sendEncodedFrame\(\{[\s\S]*protectedFrame: protectedFrame\.protectedFrame/, 'workspace must protect WLVC frames before SFU send');
+  assert.match(workspaceSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'workspace must expose a scheduled media-security participant sync helper');
+  assert.match(workspaceSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'workspace must resync media security after session context resets');
+  assert.match(workspaceSource, /watch\(\s*\(\) => \[\s*String\(activeSocketCallId\.value \|\| activeCallId\.value \|\| ''\),\s*activeRoomId\.value,\s*String\(currentUserId\.value \|\| 0\),[\s\S]*scheduleMediaSecurityParticipantSync\('context_watch'\);/m, 'workspace must resync media security when call or room context changes');
+  assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*outgoingFrame\.protectedFrame = protectedFrame\.protectedFrame;[\s\S]*sendEncodedFrame\(outgoingFrame\);/, 'workspace must protect WLVC frames before SFU send');
   assert.match(workspaceSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'/, 'workspace must decrypt WLVC transport envelopes before decode');
   assert.match(workspaceSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(publisherUserId\);/, 'workspace must recover the media-security handshake when protected SFU frames arrive before keys');
   assert.match(workspaceSource, /await sendMediaSecurityHello\(normalizedUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedUserId, true\);/, 'workspace recovery must retry hello and sender-key signals for the remote publisher');

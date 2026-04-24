@@ -995,6 +995,8 @@ let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
 let mediaSecuritySyncInFlight = false;
 let mediaSecuritySyncHintLastAtMs = 0;
+let mediaSecurityResyncTimer = null;
+let mediaSecurityResyncForceRekey = false;
 const mediaSecurityHelloSignalsSent = new Set();
 const mediaSecuritySenderKeySignalsSent = new Set();
 const mediaSecurityRecoveryLastByUserId = new Map();
@@ -1251,6 +1253,31 @@ function currentMediaSecurityRuntimePath() {
   return 'wlvc_sfu';
 }
 
+function clearMediaSecurityResyncTimer() {
+  if (mediaSecurityResyncTimer !== null) {
+    clearTimeout(mediaSecurityResyncTimer);
+    mediaSecurityResyncTimer = null;
+  }
+}
+
+function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
+  if (!isSocketOnline.value || currentUserId.value <= 0) return;
+  if (mediaSecurityTargetIds().length <= 0) return;
+
+  mediaSecurityResyncForceRekey = mediaSecurityResyncForceRekey || Boolean(forceRekey);
+  if (mediaSecurityResyncTimer !== null) return;
+
+  mediaSecurityResyncTimer = setTimeout(() => {
+    mediaSecurityResyncTimer = null;
+    const shouldForceRekey = mediaSecurityResyncForceRekey;
+    mediaSecurityResyncForceRekey = false;
+    if (!isSocketOnline.value || currentUserId.value <= 0) return;
+    if (mediaSecurityTargetIds().length <= 0) return;
+    mediaDebugLog('[MediaSecurity] scheduled participant sync', { reason, forceRekey: shouldForceRekey });
+    void syncMediaSecurityWithParticipants(shouldForceRekey);
+  }, 0);
+}
+
 function ensureMediaSecuritySession() {
   const context = {
     callId: activeSocketCallId.value || activeCallId.value,
@@ -1272,6 +1299,7 @@ function ensureMediaSecuritySession() {
     mediaSecurityRecoveryLastByUserId.clear();
     mediaSecuritySessionRef.value = createMediaSecuritySession(context);
     mediaSecurityStateVersion.value += 1;
+    scheduleMediaSecurityParticipantSync('context_changed');
   } else {
     mediaSecuritySessionRef.value.updateContext(context);
   }
@@ -5169,6 +5197,18 @@ watch(
 
 watch(
   () => [
+    String(activeSocketCallId.value || activeCallId.value || ''),
+    activeRoomId.value,
+    String(currentUserId.value || 0),
+  ].join('|'),
+  (nextValue, previousValue) => {
+    if (nextValue === previousValue) return;
+    scheduleMediaSecurityParticipantSync('context_watch');
+  }
+);
+
+watch(
+  () => [
     shouldUseNativeAudioBridge() ? '1' : '0',
     currentMediaSecurityRuntimePath(),
     connectedParticipantUsers.value
@@ -8466,6 +8506,7 @@ onBeforeUnmount(() => {
   clearLobbyToastTimer();
   clearReconnectTimer();
   clearPingTimer();
+  clearMediaSecurityResyncTimer();
   clearLocalTrackRecoveryTimer();
   stopSfuTrackAnnounceTimer();
   if (usersRefreshTimer.value !== null) {
