@@ -246,6 +246,7 @@ final class VoltronKernels
         $loader = $runtime['loader'];
 
         $hidden = self::hiddenFromState($state, (int) $runtime['hidden_dim']);
+        fwrite(STDERR, "OUTPUT_HEAD: hidden_sum=" . array_sum($hidden) . " output_tensor=" . ($runtime['output_tensor'] ?? 'MISSING') . "\n");
 
         if (is_string($runtime['output_norm_tensor'] ?? null) && $runtime['output_norm_tensor'] !== '') {
             $norm = $loader->readRow((string) $runtime['output_norm_tensor'], 0);
@@ -366,7 +367,7 @@ final class VoltronKernels
             'embedding'
         );
 
-        $outTensor = self::resolveTensor(
+$outTensor = self::resolveTensor(
             $loader,
             ['lm_head.weight', 'output.weight', 'token_embd.weight'],
             'output_head'
