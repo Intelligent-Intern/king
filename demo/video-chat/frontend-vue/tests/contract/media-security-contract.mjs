@@ -162,6 +162,15 @@ try {
   bob.markParticipantSet([101, 303]);
   await alice.forceRekey('forced_rekey');
   assert.equal(alice.epoch, previousEpoch + 1, 'forced rekey must advance epoch after participant churn');
+  assert.equal(
+    await alice.buildSenderKeySignal(202),
+    null,
+    'sender-key must wait for a fresh hello when the participant set changes',
+  );
+  const aliceRehello = await alice.buildHelloSignal(202, 'wlvc_sfu');
+  const bobRehello = await bob.buildHelloSignal(101, 'wlvc_sfu');
+  await bob.handleHelloSignal(101, aliceRehello.payload);
+  await alice.handleHelloSignal(202, bobRehello.payload);
   const rekeyedSenderKey = await alice.buildSenderKeySignal(202);
   assert.equal(rekeyedSenderKey.payload.rekey_reason, 'forced_rekey');
   await bob.handleSenderKeySignal(101, rekeyedSenderKey.payload);

@@ -603,6 +603,12 @@ export class MediaSecuritySession {
       participantSetHash,
     });
     this.participantSetHash = participantSetHash;
+    if (
+      asString(peer.participantSetHash) !== participantSetHash
+      || asString(peer.transcriptHash) !== transcriptHash
+    ) {
+      return null;
+    }
     peer.participantSetHash = participantSetHash;
     peer.transcriptHash = transcriptHash;
     const aad = buildWrapAad({
@@ -667,6 +673,13 @@ export class MediaSecuritySession {
     this.participantSetHash = participantSetHash;
     if (asString(payload.kex_transcript_hash) !== transcriptHash) throw new Error('downgrade_attempt');
     if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('downgrade_attempt');
+    if (
+      asString(peer.participantSetHash) !== participantSetHash
+      || asString(peer.transcriptHash) !== transcriptHash
+    ) {
+      this.pendingSenderKeys.set(sender, payload);
+      return false;
+    }
 
     const epoch = Number(payload.epoch || 0);
     const senderKeyId = asString(payload.sender_key_id);
