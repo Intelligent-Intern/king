@@ -733,9 +733,6 @@ import {
   DEFAULT_NATIVE_ICE_SERVERS,
   LOBBY_PAGE_SIZE,
   LOCAL_REACTION_ECHO_TTL_MS,
-  LOCAL_CAMERA_CAPTURE_FRAME_RATE,
-  LOCAL_CAMERA_CAPTURE_HEIGHT,
-  LOCAL_CAMERA_CAPTURE_WIDTH,
   LOCAL_TRACK_RECOVERY_BASE_DELAY_MS,
   LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS,
   LOCAL_TRACK_RECOVERY_MAX_DELAY_MS,
@@ -747,6 +744,7 @@ import {
   REACTION_CLIENT_MAX_QUEUE,
   REACTION_CLIENT_WINDOW_MS,
   RECONNECT_DELAYS_MS,
+  resolveSfuVideoQualityProfile,
   ROSTER_VIRTUAL_OVERSCAN,
   ROSTER_VIRTUAL_ROW_HEIGHT,
   SFU_CONNECT_MAX_RETRIES,
@@ -755,7 +753,6 @@ import {
   SFU_PUBLISH_RETRY_DELAY_MS,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
-  SFU_WLVC_ENCODE_INTERVAL_MS,
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,
   SFU_WLVC_FRAME_WIDTH,
@@ -5324,6 +5321,14 @@ watch(
 );
 
 watch(
+  () => callMediaPrefs.outgoingVideoQualityProfile,
+  (nextValue, previousValue) => {
+    if (nextValue === previousValue) return;
+    void reconfigureLocalTracksFromSelectedDevices();
+  }
+);
+
+watch(
   () => [
     callMediaPrefs.backgroundFilterMode,
     callMediaPrefs.backgroundBackdropMode,
@@ -6109,6 +6114,16 @@ function nativeAudioPlaybackBlocked(error) {
     || message.includes('play() failed because the user');
 }
 
+function nativeAudioPlaybackInterrupted(error) {
+  const errorName = String(error?.name || '').trim().toLowerCase();
+  const message = extractDiagnosticMessage(error, '').trim().toLowerCase();
+  return errorName === 'aborterror'
+    && (
+      message.includes('interrupted by a new load request')
+      || message.includes('play() request was interrupted by a new load request')
+    );
+}
+
 function nativeAudioSecurityTelemetrySnapshot() {
   const session = mediaSecuritySessionRef.value;
   if (!session || typeof session.telemetrySnapshot !== 'function') {
@@ -6126,6 +6141,10 @@ async function playNativePeerAudio(peer, reason = 'unknown') {
     setNativePeerAudioBridgeState(peer, 'playing', '');
     return true;
   } catch (error) {
+    if (nativeAudioPlaybackInterrupted(error)) {
+      setNativePeerAudioBridgeState(peer, 'track_received', '');
+      return false;
+    }
     const blocked = nativeAudioPlaybackBlocked(error);
     const errorMessage = extractDiagnosticMessage(
       error,
@@ -6506,9 +6525,23 @@ function synchronizeNativePeerMediaElements(peer) {
       peer.audio = createNativePeerAudioElement(peer.userId);
     }
     if (peer.audio instanceof HTMLAudioElement) {
-      peer.audio.srcObject = peer.remoteStream instanceof MediaStream ? peer.remoteStream : null;
-      if (streamHasLiveTrackKind(peer.remoteStream, 'audio')) {
-        void playNativePeerAudio(peer, 'bind_stream');
+      const nextAudioStream = peer.remoteStream instanceof MediaStream ? peer.remoteStream : null;
+      const audioNeedsRebind = peer.audio.srcObject !== nextAudioStream;
+      if (audioNeedsRebind) {
+        peer.audio.srcObject = nextAudioStream;
+      }
+      const audioBridgeState = String(peer.audioBridgeState || '').trim().toLowerCase();
+      const shouldAttemptPlayback = streamHasLiveTrackKind(peer.remoteStream, 'audio')
+        && (
+          audioNeedsRebind
+          || peer.audio.paused
+          || audioBridgeState === 'track_received'
+          || audioBridgeState === 'waiting_track'
+          || audioBridgeState === 'stalled_no_track'
+          || audioBridgeState === 'play_failed'
+        );
+      if (shouldAttemptPlayback) {
+        void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');
       }
     }
     if (peer.remoteStream instanceof MediaStream) {
@@ -7217,11 +7250,16 @@ async function maybeFallbackToNativeRuntime(reason) {
   return switchMediaRuntimePath('webrtc_native', reason);
 }
 
+function currentSfuVideoProfile() {
+  return resolveSfuVideoQualityProfile(callMediaPrefs.outgoingVideoQualityProfile);
+}
+
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
   const wantsVideo = controlState.cameraEnabled !== false;
   const wantsAudio = controlState.micEnabled !== false;
+  const videoProfile = currentSfuVideoProfile();
 
   if (!wantsVideo && !wantsAudio) {
     return { video: false, audio: false };
@@ -7231,15 +7269,15 @@ function buildLocalMediaConstraints() {
     ? false
     : cameraDeviceId !== ''
     ? {
-        width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
-        height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
-        frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+        width: { ideal: videoProfile.captureWidth },
+        height: { ideal: videoProfile.captureHeight },
+        frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
         deviceId: { exact: cameraDeviceId },
       }
     : {
-        width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
-        height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
-        frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+        width: { ideal: videoProfile.captureWidth },
+        height: { ideal: videoProfile.captureHeight },
+        frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
       };
   const audio = !wantsAudio
     ? false
@@ -7253,12 +7291,13 @@ function buildLocalMediaConstraints() {
 function buildLooseLocalMediaConstraints() {
   const wantsVideo = controlState.cameraEnabled !== false;
   const wantsAudio = controlState.micEnabled !== false;
+  const videoProfile = currentSfuVideoProfile();
   return {
     video: wantsVideo
       ? {
-          width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH },
-          height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT },
-          frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 },
+          width: { ideal: videoProfile.captureWidth },
+          height: { ideal: videoProfile.captureHeight },
+          frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
         }
       : false,
     audio: wantsAudio ? true : false,
@@ -7963,12 +8002,14 @@ async function startEncodingPipeline(videoTrack) {
     return;
   }
 
+  const videoProfile = currentSfuVideoProfile();
+
   try {
     const nextEncoder = await createHybridEncoder({
-      width: SFU_WLVC_FRAME_WIDTH,
-      height: SFU_WLVC_FRAME_HEIGHT,
-      quality: SFU_WLVC_FRAME_QUALITY,
-      keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+      width: videoProfile.frameWidth,
+      height: videoProfile.frameHeight,
+      quality: videoProfile.frameQuality,
+      keyFrameInterval: videoProfile.keyFrameInterval,
     });
     videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
     if (!videoEncoderRef.value) {
@@ -7996,8 +8037,8 @@ async function startEncodingPipeline(videoTrack) {
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = SFU_WLVC_FRAME_WIDTH;
-  canvas.height = SFU_WLVC_FRAME_HEIGHT;
+  canvas.width = videoProfile.frameWidth;
+  canvas.height = videoProfile.frameHeight;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
   encodeIntervalRef.value = setInterval(async () => {
@@ -8096,7 +8137,7 @@ async function startEncodingPipeline(videoTrack) {
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
       }
     }
-  }, SFU_WLVC_ENCODE_INTERVAL_MS);
+  }, videoProfile.encodeIntervalMs);
 }
 
 async function reconfigureLocalBackgroundFilterOnly() {

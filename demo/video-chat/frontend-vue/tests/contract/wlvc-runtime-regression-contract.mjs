@@ -142,6 +142,21 @@ try {
   requireContains(capabilities, 'const stageA = Boolean(wlvcWasm.encoder)', 'WLVC stage A gate');
   requireContains(capabilities, 'const stageB = Boolean(webRtcNative)', 'native stage B gate');
 
+  const callMediaPreferences = readFromFrontend('src/domain/realtime/callMediaPreferences.js');
+  requireContains(callMediaPreferences, 'outgoing_video_quality_profile', 'outgoing video quality profile persists in call media preferences');
+  requireContains(callMediaPreferences, 'outgoingVideoQualityProfile', 'call media preferences expose outgoing video quality profile');
+  requireContains(callMediaPreferences, 'export function setCallOutgoingVideoQualityProfile(profile)', 'call media preferences export outgoing video quality setter');
+
+  const workspaceConfig = readFromFrontend('src/domain/realtime/callWorkspaceConfig.js');
+  requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
+  requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
+  requireContains(workspaceConfig, 'export function resolveSfuVideoQualityProfile(value)', 'WLVC video quality profile resolver exists');
+
+  const workspaceShell = readFromFrontend('src/layouts/WorkspaceShell.vue');
+  requireContains(workspaceShell, 'id="call-left-video-quality"', 'workspace sidebar exposes outgoing video quality select');
+  requireContains(workspaceShell, 'setCallOutgoingVideoQualityProfile', 'workspace sidebar can update outgoing video quality');
+  requireContains(workspaceShell, 'callVideoQualityOptions', 'workspace sidebar renders outgoing video quality options');
+
   const telemetry = readFromFrontend('src/domain/realtime/mediaRuntimeTelemetry.js');
   requireContains(telemetry, "type: 'media_runtime_transition'", 'runtime transition telemetry');
   requireContains(telemetry, 'preferred_path: normalizePath(event?.capabilities?.preferred_path)', 'runtime transition capability telemetry');
@@ -189,11 +204,16 @@ try {
   const strictConstraints = extractFunction(workspace, 'buildLocalMediaConstraints');
   requireContains(strictConstraints, 'const wantsVideo = controlState.cameraEnabled !== false;', 'strict media constraints honor camera toggle state');
   requireContains(strictConstraints, 'const wantsAudio = controlState.micEnabled !== false;', 'strict media constraints honor microphone toggle state');
+  requireContains(strictConstraints, 'const videoProfile = currentSfuVideoProfile();', 'strict media constraints resolve the configured SFU video profile');
+  requireContains(strictConstraints, 'width: { ideal: videoProfile.captureWidth }', 'strict media constraints honor configured capture width');
+  requireContains(strictConstraints, 'height: { ideal: videoProfile.captureHeight }', 'strict media constraints honor configured capture height');
+  requireContains(strictConstraints, 'frameRate: { ideal: videoProfile.captureFrameRate, max: 30 }', 'strict media constraints honor configured capture frame rate');
   requireContains(strictConstraints, 'return { video: false, audio: false };', 'strict media constraints can release both devices completely');
   const looseConstraints = extractFunction(workspace, 'buildLooseLocalMediaConstraints');
-  requireContains(looseConstraints, 'width: { ideal: LOCAL_CAMERA_CAPTURE_WIDTH }', 'loose media constraints keep HD width preference');
-  requireContains(looseConstraints, 'height: { ideal: LOCAL_CAMERA_CAPTURE_HEIGHT }', 'loose media constraints keep HD height preference');
-  requireContains(looseConstraints, 'frameRate: { ideal: LOCAL_CAMERA_CAPTURE_FRAME_RATE, max: 30 }', 'loose media constraints keep upgraded frame rate preference');
+  requireContains(looseConstraints, 'const videoProfile = currentSfuVideoProfile();', 'loose media constraints resolve the configured SFU video profile');
+  requireContains(looseConstraints, 'width: { ideal: videoProfile.captureWidth }', 'loose media constraints keep configured capture width preference');
+  requireContains(looseConstraints, 'height: { ideal: videoProfile.captureHeight }', 'loose media constraints keep configured capture height preference');
+  requireContains(looseConstraints, 'frameRate: { ideal: videoProfile.captureFrameRate, max: 30 }', 'loose media constraints keep configured frame rate preference');
   requireContains(looseConstraints, 'audio: wantsAudio ? true : false,', 'loose media constraints release disabled microphone devices');
   const acquireLocal = extractFunction(workspace, 'acquireLocalMediaStreamWithFallback');
   requireContains(acquireLocal, 'return new MediaStream();', 'local media acquisition returns an empty stream when both devices are disabled');
@@ -274,16 +294,21 @@ try {
   requireNotContains(syncModerationState, "type: 'call/ice'", 'moderation-state sync must not masquerade as ICE');
   requireContains(workspace, 'function playNativePeerAudio', 'native audio bridge playback helper exists');
   requireContains(workspace, 'function scheduleNativePeerAudioTrackDeadline', 'native audio bridge track deadline helper exists');
+  requireContains(workspace, 'function nativeAudioPlaybackInterrupted', 'native audio bridge recognizes benign playback interruptions');
   requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
   requireContains(workspace, "blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed'", 'native audio bridge emits distinct diagnostics for autoplay blocking and playback failure');
   requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
-  requireContains(extractFunction(workspace, 'synchronizeNativePeerMediaElements'), "void playNativePeerAudio(peer, 'bind_stream');", 'native audio bridge retries playback when the remote stream is rebound');
+  const syncNativeMedia = extractFunction(workspace, 'synchronizeNativePeerMediaElements');
+  requireContains(syncNativeMedia, 'const audioNeedsRebind = peer.audio.srcObject !== nextAudioStream;', 'native audio bridge only rebinds the audio element when the stream object changed');
+  requireContains(syncNativeMedia, "void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');", 'native audio bridge retries playback without forcing a fresh load on every sync');
+  requireContains(workspace, "() => callMediaPrefs.outgoingVideoQualityProfile", 'workspace watches outgoing video quality profile changes');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
   requireContains(publishLocal, 'stopLocalEncodingPipeline();', 'local publish tears down encoding when no camera track remains');
   requireContains(publishLocal, 'clearLocalPreviewElement();', 'local publish clears stale preview when no camera track remains');
   const encodePipeline = extractFunction(workspace, 'startEncodingPipeline');
+  requireContains(encodePipeline, 'const videoProfile = currentSfuVideoProfile();', 'encode pipeline resolves the configured SFU video profile');
   requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
   requireNotContains(encodePipeline, 'document.hidden', 'SFU frame publishing must continue from background tabs');
   requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
@@ -291,6 +316,9 @@ try {
   requireContains(encodePipeline, "outgoingFrame.protectionMode = 'protected';", 'SFU encoder marks protected frames');
   requireContains(encodePipeline, 'if (!shouldSendTransportOnlySfuFrame(securityError))', 'SFU encoder only falls back for media security capability failures');
   requireContains(encodePipeline, 'sfuClientRef.value.sendEncodedFrame(outgoingFrame);', 'SFU encoder sends transport-only or protected frame');
+  requireContains(encodePipeline, 'videoProfile.frameQuality', 'encode pipeline honors configured frame quality');
+  requireContains(encodePipeline, 'videoProfile.keyFrameInterval', 'encode pipeline honors configured keyframe interval');
+  requireContains(encodePipeline, 'videoProfile.encodeIntervalMs', 'encode pipeline honors configured encode interval');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');
   requireContains(handleFrame, 'let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame peer lookup supports publisher-key aliasing');

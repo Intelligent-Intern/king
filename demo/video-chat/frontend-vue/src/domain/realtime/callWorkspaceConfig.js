@@ -32,6 +32,59 @@ export const SFU_WLVC_FRAME_HEIGHT = 360;
 export const SFU_WLVC_FRAME_QUALITY = 68;
 export const SFU_WLVC_KEYFRAME_INTERVAL = 36;
 export const SFU_WLVC_ENCODE_INTERVAL_MS = 42;
+export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';
+export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
+  realtime: Object.freeze({
+    label: 'Fast',
+    captureWidth: 960,
+    captureHeight: 540,
+    captureFrameRate: 18,
+    frameWidth: SFU_WLVC_FRAME_WIDTH,
+    frameHeight: SFU_WLVC_FRAME_HEIGHT,
+    frameQuality: 60,
+    keyFrameInterval: 42,
+    encodeIntervalMs: 55,
+  }),
+  balanced: Object.freeze({
+    label: 'Balanced',
+    captureWidth: LOCAL_CAMERA_CAPTURE_WIDTH,
+    captureHeight: LOCAL_CAMERA_CAPTURE_HEIGHT,
+    captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,
+    frameWidth: SFU_WLVC_FRAME_WIDTH,
+    frameHeight: SFU_WLVC_FRAME_HEIGHT,
+    frameQuality: SFU_WLVC_FRAME_QUALITY,
+    keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+    encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+  }),
+  quality: Object.freeze({
+    label: 'Sharp',
+    captureWidth: 1600,
+    captureHeight: 900,
+    captureFrameRate: 24,
+    frameWidth: SFU_WLVC_FRAME_WIDTH,
+    frameHeight: SFU_WLVC_FRAME_HEIGHT,
+    frameQuality: 78,
+    keyFrameInterval: 30,
+    encodeIntervalMs: 42,
+  }),
+});
+export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(
+  Object.entries(SFU_VIDEO_QUALITY_PROFILES).map(([value, profile]) => ({
+    value,
+    label: profile.label,
+  }))
+);
+
+export function normalizeSfuVideoQualityProfile(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SFU_VIDEO_QUALITY_PROFILES, normalized)
+    ? normalized
+    : DEFAULT_SFU_VIDEO_QUALITY_PROFILE;
+}
+
+export function resolveSfuVideoQualityProfile(value) {
+  return SFU_VIDEO_QUALITY_PROFILES[normalizeSfuVideoQualityProfile(value)];
+}
 export const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
 export const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;
 export const LOCAL_TRACK_RECOVERY_MAX_ATTEMPTS = 10;

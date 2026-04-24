@@ -1,4 +1,8 @@
 import { reactive } from 'vue';
+import {
+  DEFAULT_SFU_VIDEO_QUALITY_PROFILE,
+  normalizeSfuVideoQualityProfile,
+} from './callWorkspaceConfig';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 
@@ -46,6 +50,10 @@ function toAvatarQualityProfile(value) {
   return 'balanced';
 }
 
+function toOutgoingVideoQualityProfile(value) {
+  return normalizeSfuVideoQualityProfile(value);
+}
+
 function toApplyOutgoing(value) {
   return typeof value === 'boolean' ? value : true;
 }
@@ -71,6 +79,7 @@ function readPersistedCallMediaPrefs() {
       backgroundBackdropMode: toBackgroundBackdropMode(parsed.background_backdrop_mode),
       backgroundQualityProfile: toBackgroundQualityProfile(parsed.background_quality_profile),
       avatarQualityProfile: toAvatarQualityProfile(parsed.avatar_quality_profile),
+      outgoingVideoQualityProfile: toOutgoingVideoQualityProfile(parsed.outgoing_video_quality_profile),
       backgroundBlurStrength: clampInteger(parsed.background_blur_strength, 2, 0, 4),
       backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
       backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
@@ -95,6 +104,7 @@ function serializeCallMediaPrefs() {
     background_backdrop_mode: toBackgroundBackdropMode(callMediaPrefs.backgroundBackdropMode),
     background_quality_profile: toBackgroundQualityProfile(callMediaPrefs.backgroundQualityProfile),
     avatar_quality_profile: toAvatarQualityProfile(callMediaPrefs.avatarQualityProfile),
+    outgoing_video_quality_profile: toOutgoingVideoQualityProfile(callMediaPrefs.outgoingVideoQualityProfile),
     background_blur_strength: clampInteger(callMediaPrefs.backgroundBlurStrength, 2, 0, 4),
     background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
     background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),
@@ -153,6 +163,7 @@ export const callMediaPrefs = reactive({
   backgroundBackdropMode: persistedPrefs?.backgroundBackdropMode || 'blur7',
   backgroundQualityProfile: persistedPrefs?.backgroundQualityProfile || 'balanced',
   avatarQualityProfile: persistedPrefs?.avatarQualityProfile || 'balanced',
+  outgoingVideoQualityProfile: persistedPrefs?.outgoingVideoQualityProfile || DEFAULT_SFU_VIDEO_QUALITY_PROFILE,
   backgroundBlurStrength: persistedPrefs?.backgroundBlurStrength ?? 2,
   backgroundMaskVariant: persistedPrefs?.backgroundMaskVariant ?? 4,
   backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
@@ -303,6 +314,11 @@ export function setCallBackgroundBackdropMode(mode) {
 
 export function setCallBackgroundQualityProfile(profile) {
   callMediaPrefs.backgroundQualityProfile = toBackgroundQualityProfile(profile);
+  persistCallMediaPrefs();
+}
+
+export function setCallOutgoingVideoQualityProfile(profile) {
+  callMediaPrefs.outgoingVideoQualityProfile = toOutgoingVideoQualityProfile(profile);
   persistCallMediaPrefs();
 }
 
