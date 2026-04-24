@@ -4,8 +4,15 @@ import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.
 const DEFAULT_INNER_CONTRACT_PX = 20;
-const DEFAULT_INNER_FEATHER_PX = 48;
-const DEFAULT_INNER_FEATHER_CURVE = 1.18;
+const DEFAULT_INNER_FEATHER_PX = 24;
+const DEFAULT_INNER_FEATHER_STOPS = Object.freeze([
+  { progress: 0.0, alpha: 0.05 },
+  { progress: 0.2, alpha: 0.15 },
+  { progress: 0.4, alpha: 0.4 },
+  { progress: 0.6, alpha: 0.7 },
+  { progress: 0.8, alpha: 0.9 },
+  { progress: 1.0, alpha: 1.0 },
+]);
 const LONG_RAF_FRAME_MS = 44;
 
 // ITU-R BT.601 coefficients for RGB -> YCbCr conversion.
@@ -40,6 +47,19 @@ function clamp01(value) {
 function smoothstep(edge0, edge1, x) {
   const t = clamp01((x - edge0) / Math.max(1e-6, edge1 - edge0));
   return t * t * (3 - 2 * t);
+}
+function sampleInnerFeatherRamp(progress) {
+  const clamped = clamp01(progress);
+  const first = DEFAULT_INNER_FEATHER_STOPS[0];
+  if (clamped <= first.progress) return first.alpha;
+  for (let i = 1; i < DEFAULT_INNER_FEATHER_STOPS.length; i += 1) {
+    const prev = DEFAULT_INNER_FEATHER_STOPS[i - 1];
+    const next = DEFAULT_INNER_FEATHER_STOPS[i];
+    if (clamped > next.progress) continue;
+    const localT = clamp01((clamped - prev.progress) / Math.max(1e-6, next.progress - prev.progress));
+    return lerp(prev.alpha, next.alpha, smoothstep(0, 1, localT));
+  }
+  return DEFAULT_INNER_FEATHER_STOPS[DEFAULT_INNER_FEATHER_STOPS.length - 1].alpha;
 }
 async function loadBackgroundImage(url) {
   const src = url.trim();
@@ -185,7 +205,6 @@ function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {
   }
   const innerContractPx = DEFAULT_INNER_CONTRACT_PX;
   const innerFeatherPx = DEFAULT_INNER_FEATHER_PX;
-  const innerFeatherCurve = DEFAULT_INNER_FEATHER_CURVE;
   const outAlpha = new Uint8ClampedArray(n);
   for (let i = 0; i < n; i += 1) {
     if (!fg[i]) {
@@ -193,7 +212,7 @@ function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {
       continue;
     }
     const t = clamp01(((dist[i] ?? 0) - innerContractPx) / innerFeatherPx);
-    const inside = Math.pow(smoothstep(0, 1, t), innerFeatherCurve);
+    const inside = sampleInnerFeatherRamp(t);
     outAlpha[i] = Math.round(inside * (base[i] / 255) * 255);
   }
   return outAlpha;
