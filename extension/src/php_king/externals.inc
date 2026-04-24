@@ -19,6 +19,9 @@ void king_object_store_shutdown_system(void);
 
 PHP_FUNCTION(king_version);
 PHP_FUNCTION(king_health);
+PHP_FUNCTION(king_gguf_tensor_scan);
+PHP_FUNCTION(king_native_gguf_tensor_scan);
+PHP_FUNCTION(king_native_voltron_layer_worker);
 PHP_FUNCTION(king_get_last_error);
 PHP_FUNCTION(king_client_websocket_get_last_error);
 PHP_FUNCTION(king_mcp_get_error);

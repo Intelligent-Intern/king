@@ -46,7 +46,7 @@ test("ModelConfig::qwen2_5_3b() is valid", function() {
     ModelConfig::assertValid($config);
     assert_eq($config['name'], 'qwen2.5-coder:3b');
     assert_eq($config['total_params'], 3000000000);
-    assert_eq(count($config['block_schema']), 10);
+    assert_eq(count($config['block_schema']), 6);
 });
 
 // Test 2: Block schema has no cycles
@@ -102,8 +102,8 @@ test("ModelPartitioner::partition produces DAG", function() {
     
     $result = ModelPartitioner::partition($config, $nodes);
     
-    assert_eq(count($result['steps']), 11, "Should have 10 blocks + 1 emit_final");
-    assert_eq(count($result['block_assignments']), 10, "Should assign 10 blocks");
+    assert_eq(count($result['steps']), 7, "Should have 6 blocks + 1 emit_final");
+    assert_eq(count($result['block_assignments']), 6, "Should assign 6 blocks");
     assert_eq($result['run_config']['model_name'], 'qwen2.5-coder:3b');
 });
 
@@ -136,38 +136,38 @@ test("Partition respects block dependencies", function() {
     $steps = $result['steps'];
     
     $embedStep = null;
-    $attention1Step = null;
+    $chunk1Step = null;
     
     foreach ($steps as $step) {
         if ($step['id'] === 'voltron.execute_block.embed') {
             $embedStep = $step;
         }
-        if ($step['id'] === 'voltron.execute_block.attention_1') {
-            $attention1Step = $step;
+        if ($step['id'] === 'voltron.execute_block.layer_chunk_1') {
+            $chunk1Step = $step;
         }
     }
     
     assert_eq($embedStep['deps'] ?? [], [], "embed should have no deps");
-    assert_eq($attention1Step['deps'] ?? [], ['voltron.execute_block.embed'], "attention_1 depends on embed");
+    assert_eq($chunk1Step['deps'] ?? [], ['voltron.execute_block.embed'], "layer_chunk_1 depends on embed");
 });
 
-// Test 6: Qwen block ranges cover the real transformer depth from blk.0 .. blk.35
+// Test 6: Qwen chunk ranges cover the real transformer depth from blk.0 .. blk.35
 test("Qwen partition covers full transformer range", function() {
     $config = ModelConfig::qwen2_5_3b();
     $schema = $config['block_schema'];
 
-    $attention1 = null;
+    $chunk1 = null;
     $outputHead = null;
     foreach ($schema as $block) {
-        if (($block['id'] ?? null) === 'attention_1') {
-            $attention1 = $block;
+        if (($block['id'] ?? null) === 'layer_chunk_1') {
+            $chunk1 = $block;
         }
         if (($block['id'] ?? null) === 'output_head') {
             $outputHead = $block;
         }
     }
 
-    assert_eq($attention1['layers'] ?? null, [0, 8], 'attention_1 should start at blk.0');
+    assert_eq($chunk1['layers'] ?? null, [0, 8], 'layer_chunk_1 should start at blk.0');
     assert_eq($outputHead['layers'] ?? null, [35, 35], 'output_head should end at blk.35');
 });
 

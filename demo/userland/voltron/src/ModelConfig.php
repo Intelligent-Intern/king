@@ -11,6 +11,7 @@ final class ModelConfig
     public const TYPE_EMBED = 'embed';
     public const TYPE_ATTENTION = 'attention';
     public const TYPE_FFN = 'ffn';
+    public const TYPE_LAYER_CHUNK = 'layer_chunk';
     public const TYPE_OUTPUT_HEAD = 'output_head';
     public const TYPE_FULL_MODEL = 'full_model';
 
@@ -69,8 +70,8 @@ final class ModelConfig
         }
 
         $type = $block['type'] ?? '';
-        if (!in_array($type, [self::TYPE_EMBED, self::TYPE_ATTENTION, self::TYPE_FFN, self::TYPE_OUTPUT_HEAD, self::TYPE_FULL_MODEL], true)) {
-            throw new InvalidArgumentException('block.type must be embed|attention|ffn|output_head|full_model.');
+        if (!in_array($type, [self::TYPE_EMBED, self::TYPE_ATTENTION, self::TYPE_FFN, self::TYPE_LAYER_CHUNK, self::TYPE_OUTPUT_HEAD, self::TYPE_FULL_MODEL], true)) {
+            throw new InvalidArgumentException('block.type must be embed|attention|ffn|layer_chunk|output_head|full_model.');
         }
 
         $layers = $block['layers'] ?? null;
@@ -363,25 +364,14 @@ final class ModelConfig
             $rangeEnd = (int) $range[1];
             $rangeSize = max(1, ($rangeEnd - $rangeStart + 1));
 
-            $attentionId = 'attention_' . $rangeIndex;
-            $ffnId = 'ffn_' . $rangeIndex;
-
             $blockSchema[] = [
-                'id' => $attentionId,
-                'type' => self::TYPE_ATTENTION,
+                'id' => 'layer_chunk_' . $rangeIndex,
+                'type' => self::TYPE_LAYER_CHUNK,
                 'layers' => [$rangeStart, $rangeEnd],
-                'memory_mb' => max(512, 128 * $rangeSize),
+                'memory_mb' => max(1024, 320 * $rangeSize),
                 'dependencies' => [$previousDependency],
             ];
-            $blockSchema[] = [
-                'id' => $ffnId,
-                'type' => self::TYPE_FFN,
-                'layers' => [$rangeStart, $rangeEnd],
-                'memory_mb' => max(768, 192 * $rangeSize),
-                'dependencies' => [$attentionId],
-            ];
-
-            $previousDependency = $ffnId;
+            $previousDependency = 'layer_chunk_' . $rangeIndex;
         }
 
         $blockSchema[] = [

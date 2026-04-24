@@ -11,7 +11,7 @@
 /* #undef HAVE_INTTYPES_H */
 
 /* Whether optional BoringSSL build paths were configured */
-/* #undef HAVE_KING_BORINGSSL */
+#define HAVE_KING_BORINGSSL 1
 
 /* Whether optional LSQUIC build paths were configured */
 /* #undef HAVE_KING_LSQUIC */

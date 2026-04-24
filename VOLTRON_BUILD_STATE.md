@@ -20,92 +20,112 @@ Each Voltron node is a **King pipeline orchestrator** that:
 ┌─────────────────────────────────────────────────────────────────┐
 │                        King Orchestrator                         │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │ Voltron Node│  │ Voltron Node│  │ Voltron Node│             │
-│  │  Layers 0-5 │  │ Layers 6-11 │  │Layers 12-17 │   ...       │
-│  │  (port 9533)│  │ (port 9534) │  │ (port 9535) │             │
+│  │  llama.cpp  │  │  llama.cpp  │  │  llama.cpp  │             │
+│  │  Shard 0    │  │  Shard 1    │  │  Shard 2    │   ...       │
+│  │  Layers 0-5 │  │ Layers 6-11 │  │Layers 12-17 │             │
+│  │  (port 9700)│  │ (port 9701) │  │ (port 9702) │             │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
 │         │                │                │                     │
 │         └────────────────┴────────────────┘                     │
-│                     TCP/IIBIN Protocol                           │
+│                     TCP/JSON Protocol                            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Current Snapshot
 
-### Distributed Layer Worker (NEW)
-- `OllamaLayerServer.php` - TCP server for layer execution (port 9533+)
-- `LayerWorker.php` - llama.cpp-compatible PHP implementation
-- `test_client.php` - test client for layer servers
-- `OllamaBackend.php` - Ollama HTTP API client (fallback)
-- `OllamaKernels.php` - kernel delegation to Ollama
+### Distributed Llama.cpp Shards (NEW 2026-04-24)
+
+**APPROACH CHANGED**: Instead of PHP LayerWorker (which couldn't match llama.cpp correctness),
+we now spawn actual llama.cpp server instances as workers. Each server handles a layer range.
+
+- `LlamaCppShardServer.php` - PHP wrapper around llama-server processes (ports 9700+)
+- `LlamaCppShardOrchestrator.php` - Orchestrates shard spawning and health checking
+- `run_sharded_inference.php` - Demo script
+
+### Why PHP LayerWorker Failed
+
+The PHP implementation of Qwen2 attention and FFN couldn't match llama.cpp output:
+- RMSNorm, RoPE, attention math diverged from C++ implementation
+- GQA (8 heads query, 2 heads KV) required correct cross-head attention
+- Float precision accumulation caused drift across 36 layers
+- Output was garbage tokens instead of coherent text
+
+**Solution**: Delegate to actual llama.cpp binaries instead of reimplementing in PHP.
 
 ### Verified Build/Test Status
 
-1. **GGUF Export**: Ollama blob copied to standalone GGUF (~1.9GB Q4_K)
-   - Path: `/Users/sasha/qwen2.5-coder-3b-Q4_K.gguf`
-   
-2. **Layer Worker Test**:
-   - Embed token → hidden vector (norm: 0.97) ✓
-   - Forward 6 layers → output norm: 322 ✓
-   - Duration: ~1.3s per 6 layers ✓
-   
-3. **TCP Server**: OllamaLayerServer accepts connections and processes requests ✓
+1. **llama-server builds**: `/tmp/llama.cpp/build/bin/llama-server` ✓
 
-4. **Native GGUF Scan**: `king_gguf_tensor_scan` handles F32/F16/Q4_K/Q6_K ✓
+2. **Shard spawning**:
+   - 6 shards spawn on ports 9700-9705
+   - Each serves layers 0-5, 6-11, 12-17, 18-23, 24-29, 30-35
+   - Health checks pass ✓
 
-## Git State (Pushed)
+3. **Direct inference test**:
+   - `curl localhost:9700/infill` works ✓
 
-1. Latest commit:
-   - `02dedf9` - `Voltron分布式Ollama layer worker infrastructure`
-2. Pushed to fork:
-   - `origin/experiments/1.0.7-voltron`
+4. **Native GGUF scan**: `king_gguf_tensor_scan` still available for embed lookups ✓
 
-## Voltron Node Architecture
+## Git State
 
-Each Voltron node runs:
+1. Latest commit: cleanup + new shard orchestration code
+2. Pushed to: `origin/experiments/1.0.7-voltron`
 
-1. **LayerWorker** - executes assigned layer range
-   - RMSNorm (attn_norm, ffn_norm)
-   - QKV projections via `king_native_gguf_tensor_scan`
-   - RoPE positioning
-   - Attention with KV cache
-   - FFN (gate/up/down + SiLU)
+## Voltron Node Architecture (CURRENT)
 
-2. **OllamaLayerServer** - TCP server for inter-node communication
+Each Voltron node now runs:
+
+1. **llama.cpp server process** - actual model execution
+   - Each process loads full GGUF but only processes assigned layers
+   - Communicates via HTTP/TCP on assigned port
+   - Actions: `embed`, `forward`, `generate`, `health`
+
+2. **LlamaCppShardServer** (PHP) - wrapper/metadata server
+   - Provides shard coordination info
+   - Health checking
    - Protocol: 4-byte length header + JSON request
-   - Actions: `embed`, `forward`, `health`
-   
+
 3. **King Pipeline Orchestrator** - DAG execution
-   - Discovers peers via Semantic DNS
-   - Schedules block ownership across nodes
-   - Chains activations via IIBIN
+   - Chains requests across shard ports
+   - Sample tokens from final hidden state
 
 ## Layer Distribution
 
 For Qwen2.5-coder:3b (36 layers):
 ```
-Node 0 (port 9533): layers 0-5
-Node 1 (port 9534): layers 6-11
-Node 2 (port 9535): layers 12-17
-Node 3 (port 9536): layers 18-23
-Node 4 (port 9537): layers 24-29
-Node 5 (port 9538): layers 30-35 (+ output_head)
+Node 0 (port 9700): layers 0-5
+Node 1 (port 9701): layers 6-11
+Node 2 (port 9702): layers 12-17
+Node 3 (port 9703): layers 18-23
+Node 4 (port 9704): layers 24-29
+Node 5 (port 9705): layers 30-35
 ```
 
-## King Extension Public API
+## Issues and Limitations
 
-Primary: `king_gguf_tensor_scan` - disk-backed GGUF tensor scan
-- Supported: F32 (0), F16 (1), Q8_0 (8), Q4_K (12), Q6_K (14)
-
-## Known Issues
-
-1. **Single-node only**: Multi-node orchestration not yet wired
-2. **No KV cache transfer**: KV cache stays local per node
-3. **No checkpointing**: Activations not persisted to Object Store
+1. **NOT ACTUALLY DISTRIBUTED YET**: Shards run locally, not across network nodes
+2. **No KV cache transfer**: Each llama-server maintains own KV cache, no sharing
+3. **No cross-shard communication**: Hidden states passed through PHP orchestrator
+4. **PHP bottleneck**: Still using PHP for layer chaining, not native IIBIN
 
 ## M0 Status
 
-Single-node M0 partially working:
-- Layer worker executes forward pass correctly
-- TCP server handles requests
-- Need: wire into King orchestrator DAG for multi-node coordination
+**REGRESSED**: We went from "PHP LayerWorker somewhat working" to "delegating to llama.cpp"
+but haven't yet wired the distributed path to produce correct output.
+
+What's working:
+- llama-server binary runs
+- Shards spawn and health-check pass
+
+What's broken:
+- Haven't tested full generation loop through shards
+- No IIBIN protocol for shard communication
+- No real multi-node deployment
+
+## Next Steps Required
+
+1. Wire PHP orchestrator to call each shard via HTTP
+2. Pass hidden states between shards correctly  
+3. Implement output_norm + lm_head at end of chain
+4. Test full generation produces readable output
+5. Then: add remote-peer dispatch for actual multi-node

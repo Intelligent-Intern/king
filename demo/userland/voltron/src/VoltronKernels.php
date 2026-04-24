@@ -64,6 +64,7 @@ final class VoltronKernels
             'embed' => self::executeEmbed($state, $params),
             'attention' => self::executeAttention($state, $params),
             'ffn' => self::executeFfn($state, $params),
+            'layer_chunk' => (function(array $s, array $p) { $s = (array) self::executeAttention($s, $p); return (array) self::executeFfn($s, $p); })($state, $params),
             'output_head' => self::executeOutputHead($state, $params),
             default => throw new RuntimeException("Unsupported Voltron block type: {$blockType}"),
         };
@@ -291,6 +292,7 @@ final class VoltronKernels
         }
 
         $nextTokenId = self::sampleFromLogits($logits, $temperature, $topK, $topP);
+        fwrite(STDERR, "FIRST_TOKEN: id={$nextTokenId} token=" . $tokenizer->decodeId($nextTokenId) . "\n");
 
         $tokenIds = is_array($state['token_ids'] ?? null) ? $state['token_ids'] : [];
         $tokenIds[] = $nextTokenId;
@@ -366,7 +368,7 @@ final class VoltronKernels
 
         $outTensor = self::resolveTensor(
             $loader,
-            ['output.weight', 'lm_head.weight', 'token_embd.weight'],
+            ['lm_head.weight', 'output.weight', 'token_embd.weight'],
             'output_head'
         );
 
