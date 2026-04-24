@@ -1284,6 +1284,10 @@ const nativeAudioSecurityBannerMessage = computed(() => {
   if (!session) {
     return 'Audio is waiting for end-to-end encryption to become ready.';
   }
+  const sessionState = String(session?.state || '').trim().toLowerCase();
+  if (sessionState === 'blocked_capability') {
+    return 'Audio is unavailable because end-to-end encryption could not be initialized on this device.';
+  }
   if (!session?.canProtectForTargets(targetUserIds)) {
     const blocked = targetUserIds.some((userId) => {
       const peer = session?.peers instanceof Map ? session.peers.get(userId) : null;
@@ -1354,6 +1358,23 @@ function mediaSecuritySenderKeySignalKey(targetUserId, session) {
 async function sendMediaSecurityHello(targetUserId, force = false) {
   if (!isSocketOnline.value) return false;
   const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  if (!ready) {
+    mediaSecurityStateVersion.value += 1;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_hello_skipped',
+      code: 'media_security_hello_not_ready',
+      message: 'Media security hello could not be built because local end-to-end encryption is not ready.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
   const key = mediaSecurityHelloSignalKey(targetUserId, session);
   if (!force && mediaSecurityHelloSignalsSent.has(key)) return true;
   const signal = await session.buildHelloSignal(targetUserId, currentMediaSecurityRuntimePath());
@@ -1397,6 +1418,7 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
   const session = ensureMediaSecuritySession();
   const ready = await session.ensureReady();
   if (!ready) {
+    mediaSecurityStateVersion.value += 1;
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -1455,10 +1477,15 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
   try {
     const session = ensureMediaSecuritySession();
     const marked = session.markParticipantSet(mediaSecurityTargetIds());
+    mediaSecurityStateVersion.value += 1;
     if (forceRekey || marked.changed) {
       const ready = await session.ensureReady();
-      if (!ready) return;
+      if (!ready) {
+        mediaSecurityStateVersion.value += 1;
+        return;
+      }
       await session.rotateSenderKey(forceRekey ? 'forced' : 'participant_change');
+      mediaSecurityStateVersion.value += 1;
     }
     for (const targetUserId of marked.userIds) {
       await sendMediaSecurityHello(targetUserId);
@@ -5020,8 +5047,29 @@ watch(
     .join(','),
   () => {
     nextTick(() => renderCallVideoLayout());
+    if (isSocketOnline.value) {
+      void syncMediaSecurityWithParticipants();
+    }
     if (!shouldMaintainNativePeerConnections()) return;
     syncNativePeerConnectionsWithRoster();
+  }
+);
+
+watch(
+  () => [
+    shouldUseNativeAudioBridge() ? '1' : '0',
+    currentMediaSecurityRuntimePath(),
+    connectedParticipantUsers.value
+      .map((row) => Number(row?.userId || 0))
+      .filter((userId) => Number.isInteger(userId) && userId > 0)
+      .sort((left, right) => left - right)
+      .join(','),
+  ].join('|'),
+  (nextValue, previousValue) => {
+    if (nextValue === previousValue) return;
+    if (!isSocketOnline.value) return;
+    if (connectedParticipantUsers.value.length <= 1) return;
+    void syncMediaSecurityWithParticipants();
   }
 );
 

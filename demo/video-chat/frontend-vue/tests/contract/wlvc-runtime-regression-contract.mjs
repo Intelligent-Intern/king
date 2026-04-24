@@ -179,6 +179,7 @@ try {
   requireContains(nativeAudioBridge, 'isWlvcRuntimePath()', 'native audio bridge only runs under WLVC runtime');
   requireContains(nativeAudioBridge, 'mediaRuntimeCapabilities.value.stageB', 'native audio bridge requires native capability');
   requireContains(nativeAudioBridge, 'MediaSecuritySession.supportsNativeTransforms()', 'native audio bridge requires insertable streams for E2E audio');
+  requireContains(workspace, "return 'Audio is unavailable because end-to-end encryption could not be initialized on this device.';", 'audio bridge banner reports blocked local capability honestly');
   const nativePeerPolicy = extractFunction(workspace, 'shouldMaintainNativePeerConnections');
   requireContains(nativePeerPolicy, 'isNativeWebRtcRuntimePath()', 'native peer policy keeps full native peers');
   requireContains(nativePeerPolicy, 'shouldUseNativeAudioBridge()', 'native peer policy keeps hybrid audio peers');
@@ -234,6 +235,7 @@ try {
   const attachNativeReceiver = extractFunction(workspace, 'attachMediaSecurityNativeReceiver');
   requireContains(attachNativeReceiver, 'session.attachNativeReceiverTransform(receiver, senderUserId, {', 'native receiver transform attaches immediately');
   requireNotContains(attachNativeReceiver, 'session.ensureReady()', 'native receiver transform must not wait and leak unencrypted audio');
+  requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
@@ -259,6 +261,9 @@ try {
   requireContains(remoteRenderable, "&& Number(peer.frameCount || 0) > 0", 'decoded canvas only counts as renderable after real frames');
   requireContains(remoteRenderable, "streamHasLiveTrackKind(peer.remoteStream, 'video')", 'audio-only native streams must not count as renderable media');
   requireNotContains(remoteRenderable, 'streamHasTracks(peer.remoteStream)', 'audio-only native streams must not satisfy renderability');
+  requireContains(workspace, 'if (isSocketOnline.value) {', 'connected participant watcher resyncs security only on an open socket');
+  requireContains(workspace, 'void syncMediaSecurityWithParticipants();', 'connected participant and bridge watchers resync media security');
+  requireContains(workspace, "shouldUseNativeAudioBridge() ? '1' : '0'", 'media security watcher reacts when hybrid audio bridge availability flips');
 
   const mediaNode = extractFunction(workspace, 'mediaNodeForUserId');
   requireContains(mediaNode, 'for (const peer of remotePeersRef.value.values())', 'remote media node user lookup');
