@@ -3199,11 +3199,7 @@ function toggleHandRaised() {
 
 function toggleCamera() {
   controlState.cameraEnabled = !controlState.cameraEnabled;
-  for (const track of localTracksRef.value) {
-    if (track.kind === 'video') {
-      track.enabled = controlState.cameraEnabled;
-    }
-  }
+  void reconfigureLocalTracksFromSelectedDevices();
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
   publishLocalActivitySample(true);
@@ -3211,11 +3207,7 @@ function toggleCamera() {
 
 function toggleMicrophone() {
   controlState.micEnabled = !controlState.micEnabled;
-  for (const track of localTracksRef.value) {
-    if (track.kind === 'audio') {
-      track.enabled = controlState.micEnabled;
-    }
-  }
+  void reconfigureLocalTracksFromSelectedDevices();
   refreshUsersDirectoryPresentation();
   void syncControlStateToPeers();
   publishLocalActivitySample(true);
@@ -7127,11 +7119,21 @@ async function maybeFallbackToNativeRuntime(reason) {
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
+  const wantsVideo = controlState.cameraEnabled !== false;
+  const wantsAudio = controlState.micEnabled !== false;
 
-  const video = cameraDeviceId !== ''
+  if (!wantsVideo && !wantsAudio) {
+    return { video: false, audio: false };
+  }
+
+  const video = !wantsVideo
+    ? false
+    : cameraDeviceId !== ''
     ? { width: 640, height: 480, frameRate: 15, deviceId: { exact: cameraDeviceId } }
     : { width: 640, height: 480, frameRate: 15 };
-  const audio = microphoneDeviceId !== ''
+  const audio = !wantsAudio
+    ? false
+    : microphoneDeviceId !== ''
     ? { deviceId: { exact: microphoneDeviceId } }
     : true;
 
@@ -7139,9 +7141,11 @@ function buildLocalMediaConstraints() {
 }
 
 function buildLooseLocalMediaConstraints() {
+  const wantsVideo = controlState.cameraEnabled !== false;
+  const wantsAudio = controlState.micEnabled !== false;
   return {
-    video: { width: 640, height: 480, frameRate: 15 },
-    audio: true,
+    video: wantsVideo ? { width: 640, height: 480, frameRate: 15 } : false,
+    audio: wantsAudio ? true : false,
   };
 }
 
@@ -7156,6 +7160,9 @@ function shouldRetryWithLooseConstraints(error) {
 async function acquireLocalMediaStreamWithFallback() {
   const strictConstraints = buildLocalMediaConstraints();
   const looseConstraints = buildLooseLocalMediaConstraints();
+  if (strictConstraints.video === false && strictConstraints.audio === false) {
+    return new MediaStream();
+  }
 
   try {
     return await navigator.mediaDevices.getUserMedia(strictConstraints);
@@ -7168,7 +7175,14 @@ async function acquireLocalMediaStreamWithFallback() {
   try {
     return await navigator.mediaDevices.getUserMedia(looseConstraints);
   } catch {
-    return navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const fallbackConstraints = {
+      video: controlState.cameraEnabled !== false,
+      audio: controlState.micEnabled !== false,
+    };
+    if (fallbackConstraints.video !== true && fallbackConstraints.audio !== true) {
+      return new MediaStream();
+    }
+    return navigator.mediaDevices.getUserMedia(fallbackConstraints);
   }
 }
 
@@ -7740,10 +7754,15 @@ function teardownLocalPublisher() {
 async function publishLocalTracks() {
   if (localStreamRef.value instanceof MediaStream) {
     publishLocalTracksToSfuIfReady();
-    if (isWlvcRuntimePath() && !encodeIntervalRef.value) {
+    if (isWlvcRuntimePath()) {
       const videoTrack = localStreamRef.value.getVideoTracks?.()[0] || null;
       if (videoTrack) {
-        await startEncodingPipeline(videoTrack);
+        if (!encodeIntervalRef.value) {
+          await startEncodingPipeline(videoTrack);
+        }
+      } else {
+        stopLocalEncodingPipeline();
+        clearLocalPreviewElement();
       }
     }
     return true;
@@ -7782,6 +7801,9 @@ async function publishLocalTracks() {
     const videoTrack = stream.getVideoTracks()[0];
     if (videoTrack) {
       await startEncodingPipeline(videoTrack);
+    } else {
+      stopLocalEncodingPipeline();
+      clearLocalPreviewElement();
     }
     return true;
   } catch (e) {
@@ -8017,6 +8039,9 @@ async function reconfigureLocalBackgroundFilterOnly() {
       const videoTrack = nextStream.getVideoTracks()[0] || null;
       if (videoTrack) {
         await startEncodingPipeline(videoTrack);
+      } else {
+        stopLocalEncodingPipeline();
+        clearLocalPreviewElement();
       }
       stopRetiredLocalStreams(
         [previousOutputStream, previousFilteredStream],
@@ -8103,6 +8128,9 @@ async function reconfigureLocalTracksFromSelectedDevices() {
     const videoTrack = nextOutputStream.getVideoTracks()[0] || null;
     if (videoTrack) {
       await startEncodingPipeline(videoTrack);
+    } else {
+      stopLocalEncodingPipeline();
+      clearLocalPreviewElement();
     }
 
     stopRetiredLocalStreams(
