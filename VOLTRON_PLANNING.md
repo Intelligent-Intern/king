@@ -28,6 +28,64 @@ disk-backed. Compatibility aliases are maintained only during migration windows 
 MUST be removed and replaced as part of code cleanup once callers migrate off them.
 Supported tensor types: F32 (0), F16 (1), Q8_0 (8), Q4_K (12), Q6_K (14).
 
+## Distributed Layer Architecture (NEW 2026-04-24)
+
+Voltron nodes form a compute mesh where each node runs a subset of model layers.
+The King pipeline orchestrator DAG coordinates execution across nodes.
+
+### Node Components
+
+1. **LayerWorker** (PHP) - llama.cpp-compatible layer execution
+   - RMSNorm (attn_norm, ffn_norm) 
+   - QKV projections via `king_native_gguf_tensor_scan`
+   - RoPE positioning (YaRN support)
+   - Attention with KV cache
+   - FFN (gate/up/down + SiLU)
+
+2. **OllamaLayerServer** (PHP) - TCP server for inter-node communication
+   - Protocol: 4-byte length header + JSON body
+   - Actions: `embed`, `forward`, `health`
+   - Default port: 9533 (increment for additional nodes)
+
+3. **King Pipeline Orchestrator** - DAG execution
+   - Discovers peers via Semantic DNS
+   - Schedules block ownership across nodes
+   - Chains activations via IIBIN
+
+### Layer Distribution (Qwen2.5-coder:3b = 36 layers)
+
+```
+Node 0 (port 9533): layers 0-5
+Node 1 (port 9534): layers 6-11
+Node 2 (port 9535): layers 12-17
+Node 3 (port 9536): layers 18-23
+Node 4 (port 9537): layers 24-29
+Node 5 (port 9538): layers 30-35 (+ output_head)
+```
+
+### Execution Flow
+
+1. Input prompt → embed → LayerWorker(0-5) → hidden
+2. hidden → LayerWorker(6-11) → hidden
+3. ... (chain through all node layer ranges)
+4. hidden → output_head → logits → sample → token
+5. Repeat for next token
+
+### GGUF Distribution
+
+Ollama models stored as blobs. Export to standalone GGUF:
+```bash
+# Ollama blob is already GGUF format - copy directly
+cp ~/.ollama/models/blobs/sha256-* ~/qwen2.5-coder-3b-Q4_K.gguf
+```
+
+### Performance Notes
+
+- Single node (6 layers): ~1.3s forward pass
+- Native `king_gguf_tensor_scan` handles F32/Q4_K/Q6_K projection
+- Bottleneck: PHP orchestration overhead, not tensor ops
+- Future: batch inference, multi-threaded projection, CUDA offload
+
 ## Current Branch Reality (`experiments/1.0.7-voltron`)
 
 1. Present and usable:
