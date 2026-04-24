@@ -56,6 +56,11 @@ try {
   requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');
   requireContains(sfuClient, "chunk_count: totalChunks", 'chunk count');
   requireContains(sfuClient, 'this.sendChunkedFramePayload(payload,', 'chunked frame sender');
+  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
+  requireContains(sfuClient, 'private pendingInboundFrameChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');
+  requireContains(sfuClient, 'private acceptInboundFrameChunk(msg: any): any | null {', 'inbound chunk assembler');
+  requireContains(sfuClient, "case 'sfu/frame-chunk': {", 'inbound chunk message handler');
+  requireContains(sfuClient, 'const reassembledFrame = this.acceptInboundFrameChunk(msg)', 'inbound chunk reassembly dispatch');
 
   requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');
   requireContains(sfuClient, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');

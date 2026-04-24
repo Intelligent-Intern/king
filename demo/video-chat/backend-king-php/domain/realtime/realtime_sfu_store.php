@@ -22,6 +22,76 @@ function videochat_sfu_presence_cutoff_ms(): int
     return videochat_sfu_now_ms() - videochat_sfu_presence_ttl_ms();
 }
 
+function videochat_sfu_frame_chunk_max_chars(): int
+{
+    return 8 * 1024;
+}
+
+function videochat_sfu_create_frame_id(): string
+{
+    return 'frame_' . bin2hex(random_bytes(12));
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_expand_outbound_frame_payload(array $frame): array
+{
+    $chunkMaxChars = videochat_sfu_frame_chunk_max_chars();
+    $protectedFrame = is_string($frame['protected_frame'] ?? null) ? trim((string) $frame['protected_frame']) : '';
+    if ($protectedFrame !== '' && strlen($protectedFrame) > $chunkMaxChars) {
+        return videochat_sfu_chunk_outbound_frame_payload($frame, 'protected_frame_chunk', $protectedFrame, $chunkMaxChars);
+    }
+
+    $dataBase64 = is_string($frame['data_base64'] ?? null) ? trim((string) $frame['data_base64']) : '';
+    if ($dataBase64 !== '' && strlen($dataBase64) > $chunkMaxChars) {
+        return videochat_sfu_chunk_outbound_frame_payload($frame, 'data_base64_chunk', $dataBase64, $chunkMaxChars);
+    }
+
+    return [$frame];
+}
+
+/**
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_chunk_outbound_frame_payload(
+    array $frame,
+    string $chunkField,
+    string $chunkValue,
+    int $chunkMaxChars
+): array {
+    if ($chunkValue === '' || $chunkMaxChars < 1) {
+        return [$frame];
+    }
+
+    $chunkCount = max(1, (int) ceil(strlen($chunkValue) / $chunkMaxChars));
+    if ($chunkCount === 1) {
+        return [$frame];
+    }
+
+    $frameId = videochat_sfu_create_frame_id();
+    $messages = [];
+
+    for ($chunkIndex = 0; $chunkIndex < $chunkCount; $chunkIndex += 1) {
+        $start = $chunkIndex * $chunkMaxChars;
+        $messages[] = [
+            'type' => 'sfu/frame-chunk',
+            'frame_id' => $frameId,
+            'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
+            'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
+            'track_id' => (string) ($frame['track_id'] ?? ''),
+            'timestamp' => (int) ($frame['timestamp'] ?? 0),
+            'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+            'protection_mode' => (string) ($frame['protection_mode'] ?? 'transport_only'),
+            'chunk_index' => $chunkIndex,
+            'chunk_count' => $chunkCount,
+            $chunkField => substr($chunkValue, $start, $chunkMaxChars),
+        ];
+    }
+
+    return $messages;
+}
+
 function videochat_sfu_bootstrap(PDO $pdo): void
 {
     $pdo->query('PRAGMA journal_mode = WAL');
@@ -910,6 +980,8 @@ function videochat_sfu_poll_broker(
         } else {
             $outboundFrame['data'] = $storedPayload['data'];
         }
-        videochat_presence_send_frame($websocket, $outboundFrame);
+        foreach (videochat_sfu_expand_outbound_frame_payload($outboundFrame) as $outboundMessage) {
+            videochat_presence_send_frame($websocket, $outboundMessage);
+        }
     }
 }

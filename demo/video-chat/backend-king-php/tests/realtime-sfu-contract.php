@@ -336,6 +336,44 @@ try {
         (($chunkedProtectedCommand['payload'] ?? [])['protection_mode'] ?? '') === 'required',
         'chunked protected SFU frame must preserve required mode'
     );
+    $chunkedOutboundTransport = videochat_sfu_expand_outbound_frame_payload([
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-a',
+        'publisher_user_id' => '100',
+        'track_id' => 'camera-a',
+        'timestamp' => 12348,
+        'frame_type' => 'delta',
+        'protection_mode' => 'transport_only',
+        'data_base64' => str_repeat('QUJDREVGR0g', 1_200),
+    ]);
+    videochat_realtime_sfu_assert(count($chunkedOutboundTransport) > 1, 'large outbound SFU transport frame should chunk');
+    videochat_realtime_sfu_assert(
+        (string) ($chunkedOutboundTransport[0]['type'] ?? '') === 'sfu/frame-chunk',
+        'chunked outbound SFU transport frame must switch message type'
+    );
+    $reassembledOutboundTransport = '';
+    foreach ($chunkedOutboundTransport as $chunk) {
+        $reassembledOutboundTransport .= (string) ($chunk['data_base64_chunk'] ?? '');
+    }
+    videochat_realtime_sfu_assert(
+        $reassembledOutboundTransport === str_repeat('QUJDREVGR0g', 1_200),
+        'chunked outbound SFU transport frame must preserve payload bytes'
+    );
+    $chunkedOutboundProtected = videochat_sfu_expand_outbound_frame_payload([
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-a',
+        'publisher_user_id' => '100',
+        'track_id' => 'camera-a',
+        'timestamp' => 12349,
+        'frame_type' => 'keyframe',
+        'protection_mode' => 'required',
+        'protected_frame' => str_repeat('QUJDREVGR0g', 1_200),
+    ]);
+    videochat_realtime_sfu_assert(count($chunkedOutboundProtected) > 1, 'large outbound protected SFU frame should chunk');
+    videochat_realtime_sfu_assert(
+        (string) ($chunkedOutboundProtected[0]['protected_frame_chunk'] ?? '') !== '',
+        'chunked outbound protected SFU frame must use protected_frame_chunk'
+    );
     $invalidChunkCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame-chunk',

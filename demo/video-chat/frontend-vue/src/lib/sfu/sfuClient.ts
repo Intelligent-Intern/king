@@ -56,12 +56,27 @@ export interface SFUClientCallbacks {
 }
 
 const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024
+const SFU_FRAME_CHUNK_TTL_MS = 5000
+
+interface PendingInboundFrameChunk {
+  publisherId: string
+  publisherUserId: string
+  trackId: string
+  timestamp: number
+  frameType: 'keyframe' | 'delta'
+  protectionMode: 'transport_only' | 'protected' | 'required'
+  chunkField: 'data_base64_chunk' | 'protected_frame_chunk'
+  chunkCount: number
+  updatedAtMs: number
+  chunks: Map<number, string>
+}
 
 export class SFUClient {
   private ws: WebSocket | null = null
   private cb: SFUClientCallbacks
   private connectGeneration = 0
   private disconnectNotified = false
+  private pendingInboundFrameChunks = new Map<string, PendingInboundFrameChunk>()
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -202,6 +217,7 @@ export class SFUClient {
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     this.connectGeneration += 1
     this.disconnectNotified = false
+    this.pendingInboundFrameChunks.clear()
     const generation = this.connectGeneration
 
     if (this.ws) {
@@ -283,6 +299,7 @@ export class SFUClient {
   leave(): void {
     this.connectGeneration += 1
     this.disconnectNotified = false
+    this.pendingInboundFrameChunks.clear()
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
       this.retireSocket(this.ws)
@@ -321,6 +338,127 @@ export class SFUClient {
       }
       chunkPayload[chunkField] = chunkValue.slice(start, end)
       this.send(chunkPayload)
+    }
+  }
+
+  private cleanupPendingInboundFrameChunks(): void {
+    const cutoffMs = Date.now() - SFU_FRAME_CHUNK_TTL_MS
+    for (const [frameId, entry] of this.pendingInboundFrameChunks.entries()) {
+      if (entry.updatedAtMs < cutoffMs) {
+        this.pendingInboundFrameChunks.delete(frameId)
+      }
+    }
+  }
+
+  private acceptInboundFrameChunk(msg: any): any | null {
+    const stringField = (...values: any[]): string => {
+      for (const value of values) {
+        const normalized = String(value ?? '').trim()
+        if (normalized !== '') return normalized
+      }
+      return ''
+    }
+
+    const frameId = stringField(msg.frameId, msg.frame_id)
+    const chunkCount = Number(msg.chunkCount ?? msg.chunk_count ?? 0)
+    const chunkIndex = Number(msg.chunkIndex ?? msg.chunk_index ?? -1)
+    const protectedChunk = stringField(msg.protectedFrameChunk, msg.protected_frame_chunk)
+    const dataChunk = stringField(msg.dataBase64Chunk, msg.data_base64_chunk)
+    const chunkField = protectedChunk !== '' ? 'protected_frame_chunk' : 'data_base64_chunk'
+    const chunkValue = protectedChunk !== '' ? protectedChunk : dataChunk
+
+    if (
+      frameId === ''
+      || !Number.isInteger(chunkCount)
+      || !Number.isInteger(chunkIndex)
+      || chunkCount < 1
+      || chunkIndex < 0
+      || chunkIndex >= chunkCount
+      || chunkValue === ''
+    ) {
+      return null
+    }
+
+    this.cleanupPendingInboundFrameChunks()
+
+    const publisherId = stringField(msg.publisherId, msg.publisher_id)
+    const publisherUserId = stringField(msg.publisherUserId, msg.publisher_user_id)
+    const trackId = stringField(msg.trackId, msg.track_id)
+    const timestamp = Number(msg.timestamp || 0)
+    const frameType = stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta'
+    const protectionMode = stringField(msg.protectionMode, msg.protection_mode) === 'required'
+      ? 'required'
+      : (chunkField === 'protected_frame_chunk' ? 'protected' : 'transport_only')
+
+    const existing = this.pendingInboundFrameChunks.get(frameId)
+    if (!existing) {
+      this.pendingInboundFrameChunks.set(frameId, {
+        publisherId,
+        publisherUserId,
+        trackId,
+        timestamp,
+        frameType,
+        protectionMode,
+        chunkField,
+        chunkCount,
+        updatedAtMs: Date.now(),
+        chunks: new Map([[chunkIndex, chunkValue]]),
+      })
+      return chunkCount === 1
+        ? {
+            type: 'sfu/frame',
+            publisher_id: publisherId,
+            publisher_user_id: publisherUserId,
+            track_id: trackId,
+            timestamp,
+            frame_type: frameType,
+            protection_mode: protectionMode,
+            ...(chunkField === 'protected_frame_chunk'
+              ? { protected_frame: chunkValue }
+              : { data_base64: chunkValue }),
+          }
+        : null
+    }
+
+    if (
+      existing.publisherId !== publisherId
+      || existing.publisherUserId !== publisherUserId
+      || existing.trackId !== trackId
+      || existing.timestamp !== timestamp
+      || existing.frameType !== frameType
+      || existing.protectionMode !== protectionMode
+      || existing.chunkField !== chunkField
+      || existing.chunkCount !== chunkCount
+    ) {
+      this.pendingInboundFrameChunks.delete(frameId)
+      return null
+    }
+
+    existing.updatedAtMs = Date.now()
+    existing.chunks.set(chunkIndex, chunkValue)
+    if (existing.chunks.size < existing.chunkCount) return null
+
+    let assembled = ''
+    for (let index = 0; index < existing.chunkCount; index += 1) {
+      const nextChunk = existing.chunks.get(index)
+      if (typeof nextChunk !== 'string' || nextChunk === '') {
+        return null
+      }
+      assembled += nextChunk
+    }
+
+    this.pendingInboundFrameChunks.delete(frameId)
+    return {
+      type: 'sfu/frame',
+      publisher_id: existing.publisherId,
+      publisher_user_id: existing.publisherUserId,
+      track_id: existing.trackId,
+      timestamp: existing.timestamp,
+      frame_type: existing.frameType,
+      protection_mode: existing.protectionMode,
+      ...(existing.chunkField === 'protected_frame_chunk'
+        ? { protected_frame: assembled }
+        : { data_base64: assembled }),
     }
   }
 
@@ -386,6 +524,14 @@ export class SFUClient {
           })
         }
         break
+
+      case 'sfu/frame-chunk': {
+        const reassembledFrame = this.acceptInboundFrameChunk(msg)
+        if (reassembledFrame) {
+          this.handleMessage(reassembledFrame)
+        }
+        break
+      }
 
       case 'sfu/error':
         reportClientDiagnostic({

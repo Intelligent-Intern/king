@@ -4477,18 +4477,30 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
 
   try {
     if (type === 'media-security/hello') {
+      const marked = session.markParticipantSet([
+        ...mediaSecurityTargetIds(),
+        normalizedSenderUserId,
+      ]);
+      if (marked.changed) {
+        clearMediaSecuritySignalCaches();
+        mediaSecurityStateVersion.value += 1;
+      }
       const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
       mediaSecurityStateVersion.value += 1;
       if (accepted) {
         await sendMediaSecurityHello(normalizedSenderUserId);
         await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
+        scheduleMediaSecurityParticipantSync('hello_accepted', true);
       }
       return;
     }
 
     if (type === 'media-security/sender-key') {
-      await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
+      const accepted = await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
       mediaSecurityStateVersion.value += 1;
+      if (!accepted) {
+        scheduleMediaSecurityParticipantSync('sender_key_pending', true);
+      }
     }
   } catch (error) {
     mediaDebugLog('[MediaSecurity] signaling failed', error);

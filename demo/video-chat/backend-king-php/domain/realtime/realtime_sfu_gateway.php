@@ -377,7 +377,9 @@ function videochat_handle_sfu_routes(
                 } else {
                     $outboundFrame['data'] = $frameData;
                 }
-                king_websocket_send($subClient['websocket'], json_encode($outboundFrame));
+                foreach (videochat_sfu_expand_outbound_frame_payload($outboundFrame) as $outboundMessage) {
+                    videochat_presence_send_frame($subClient['websocket'], $outboundMessage);
+                }
             }
         }
     };
