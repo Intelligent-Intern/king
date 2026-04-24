@@ -581,6 +581,10 @@
 }
 
 @media (max-width: 760px) {
+  .workspace-call-view {
+    --workspace-mobile-controls-gap: 5px;
+  }
+
   .workspace-idle-toast {
     top: 8px;
     width: min(96vw, 520px);
@@ -605,6 +609,53 @@
 
   .workspace-context {
     width: 100%;
+  }
+
+  .workspace-stage {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .workspace-stage.has-mini-strip {
+    grid-template-rows: minmax(0, 1fr) var(--mini-strip-height);
+  }
+
+  .workspace-stage.compact {
+    grid-template-rows: 50px minmax(0, 1fr);
+  }
+
+  .workspace-stage.compact.has-mini-strip {
+    grid-template-rows: 50px minmax(0, 1fr) var(--mini-strip-height);
+  }
+
+  .workspace-stage.compact.has-mini-strip.mini-strip-above {
+    grid-template-rows: 50px var(--mini-strip-height) minmax(0, 1fr);
+  }
+
+  .workspace-controls {
+    position: absolute;
+    left: 50%;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + var(--workspace-mobile-controls-gap));
+    transform: translateX(-50%);
+    width: calc(100% - 10px);
+    max-width: calc(100% - 10px);
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    gap: 6px;
+    z-index: 40;
+  }
+
+  .workspace-stage.has-mini-strip:not(.mini-strip-above) .workspace-controls {
+    bottom: calc(var(--mini-strip-height) + env(safe-area-inset-bottom, 0px) + var(--workspace-mobile-controls-gap));
+  }
+
+  .call-control-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .call-control-btn.hangup {
+    width: 76px;
   }
 
   .workspace-grid-video {
@@ -647,7 +698,7 @@
   .workspace-controls {
     gap: 8px;
     min-height: 50px;
-    padding: 0 8px 6px;
+    padding: 0;
   }
 
   .call-control-btn {
