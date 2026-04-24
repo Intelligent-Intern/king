@@ -6512,6 +6512,24 @@ function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
   return false;
 }
 
+function ensureNativePeerAudioTransceiver(peer) {
+  if (!peer?.pc || typeof peer.pc.addTransceiver !== 'function') return false;
+  for (const sender of peer.pc.getSenders()) {
+    const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
+    if (senderKind === 'audio') {
+      peer?.senderKinds?.set?.(sender, 'audio');
+      return true;
+    }
+  }
+  try {
+    const transceiver = peer.pc.addTransceiver('audio', { direction: 'sendrecv' });
+    peer?.senderKinds?.set?.(transceiver?.sender, 'audio');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function synchronizeNativePeerMediaElements(peer) {
   if (!peer || typeof peer !== 'object') return;
 
@@ -6567,6 +6585,7 @@ function synchronizeNativePeerMediaElements(peer) {
 
 async function syncNativePeerLocalTracks(peer) {
   if (!peer?.pc || peer.pc.signalingState === 'closed') return;
+  ensureNativePeerAudioTransceiver(peer);
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
   const byKind = localTracksByKind(stream);
   const senders = peer.pc.getSenders();

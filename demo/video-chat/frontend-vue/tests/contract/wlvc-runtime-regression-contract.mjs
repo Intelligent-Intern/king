@@ -302,6 +302,7 @@ try {
   const syncNativeMedia = extractFunction(workspace, 'synchronizeNativePeerMediaElements');
   requireContains(syncNativeMedia, 'const audioNeedsRebind = peer.audio.srcObject !== nextAudioStream;', 'native audio bridge only rebinds the audio element when the stream object changed');
   requireContains(syncNativeMedia, "void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');", 'native audio bridge retries playback without forcing a fresh load on every sync');
+  requireContains(workspace, 'function ensureNativePeerAudioTransceiver', 'native audio bridge ensures an explicit audio transceiver for negotiation');
   requireContains(workspace, "() => callMediaPrefs.outgoingVideoQualityProfile", 'workspace watches outgoing video quality profile changes');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
@@ -359,6 +360,8 @@ try {
   requireContains(rebuildAudioOnlyPeer, "=== 'video'", 'audio-only peer rebuild detects stale video senders');
   const syncNativePeers = extractFunction(workspace, 'syncNativePeerConnectionsWithRoster');
   requireContains(syncNativePeers, 'if (nativePeerRequiresAudioOnlyRebuild(existing))', 'roster sync rebuilds stale native peers for audio-only bridge mode');
+  const syncNativeLocalTracks = extractFunction(workspace, 'syncNativePeerLocalTracks');
+  requireContains(syncNativeLocalTracks, 'ensureNativePeerAudioTransceiver(peer);', 'native local track sync provisions an audio transceiver before negotiation');
 
   const bumpRender = extractFunction(workspace, 'bumpMediaRenderVersion');
   const bumpCount = (bumpRender.match(/mediaRenderVersion\.value = mediaRenderVersion\.value >= 1_000_000 \? 0 : mediaRenderVersion\.value \+ 1;/g) || []).length;
