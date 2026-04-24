@@ -3676,6 +3676,25 @@ function handleChatPaste(event) {
   }
 }
 
+const CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MIN_MS = 30_000;
+const CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS = 180_000;
+const CHAT_ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS = 20_000;
+const CHAT_ATTACHMENT_UPLOAD_TIMEOUT_PER_MIB_MS = 8_000;
+
+function chatAttachmentUploadTimeoutMs(draft) {
+  const sizeBytes = Math.max(0, Number(draft?.sizeBytes || draft?.file?.size || 0));
+  const sizeMiB = Math.max(1, Math.ceil(sizeBytes / (1024 * 1024)));
+  const timeoutMs = CHAT_ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS + (sizeMiB * CHAT_ATTACHMENT_UPLOAD_TIMEOUT_PER_MIB_MS);
+  return Math.max(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MIN_MS, Math.min(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS, timeoutMs));
+}
+
+function isUploadTimeoutError(error) {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'TimeoutError') return true;
+  const message = String(error.message || '').trim().toLowerCase();
+  return message.includes('timed out') || message.includes('aborted without reason');
+}
+
 async function uploadChatAttachmentDraft(draft) {
   const callId = String(activeCallId.value || '').trim();
   if (callId === '') {
@@ -3687,17 +3706,28 @@ async function uploadChatAttachmentDraft(draft) {
     throw new Error(validation.message || 'Attachment is not allowed.');
   }
 
-  const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
-    method: 'POST',
-    body: {
-      file_name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
-      content_type: validation.contentType,
-      content_base64: await chatAttachmentDraftToBase64({
-        ...draft,
-        name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
-      }),
-    },
-  });
+  const timeoutMs = chatAttachmentUploadTimeoutMs(draft);
+  let payload = null;
+  try {
+    payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
+      method: 'POST',
+      timeoutMs,
+      body: {
+        file_name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
+        content_type: validation.contentType,
+        content_base64: await chatAttachmentDraftToBase64({
+          ...draft,
+          name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
+        }),
+      },
+    });
+  } catch (error) {
+    if (isUploadTimeoutError(error)) {
+      const timeoutSeconds = Math.round(timeoutMs / 1000);
+      throw new Error(`Chat attachment upload timed out after ${timeoutSeconds}s. Try again or use a smaller file / faster connection.`);
+    }
+    throw error;
+  }
 
   const attachment = payload?.result?.attachment;
   if (!attachment || typeof attachment !== 'object' || String(attachment.id || '').trim() === '') {

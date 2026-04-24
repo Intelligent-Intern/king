@@ -33,7 +33,7 @@ export function buildApiRequestError(payload, fallbackMessage, responseStatus = 
   return error;
 }
 
-export async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
+export async function apiRequest(path, { method = 'GET', query = null, body = null, timeoutMs = undefined } = {}) {
   let response = null;
   try {
     const result = await fetchBackend(path, {
@@ -41,10 +41,14 @@ export async function apiRequest(path, { method = 'GET', query = null, body = nu
       query,
       headers: requestHeaders(body !== null),
       body: body === null ? undefined : JSON.stringify(body),
+      timeoutMs,
     });
     response = result.response;
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : '';
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new Error(message || 'Backend request timed out.');
+    }
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
       throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
     }
