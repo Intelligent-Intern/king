@@ -37,7 +37,7 @@ final class VoltronKernels
             'token_ids' => $tokenIds,
             'generated_token_ids' => [],
             'generated_text' => '',
-            'position' => max(0, count($tokenIds) - 1),
+            'position' => 0,
             'stop' => false,
             'max_tokens' => $maxTokens,
             'latent_dim' => $runtime['hidden_dim'],
