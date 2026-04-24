@@ -14,6 +14,7 @@ const DEFAULT_INNER_FEATHER_STOPS = Object.freeze([
   { progress: 1.0, alpha: 1.0 },
 ]);
 const LONG_RAF_FRAME_MS = 44;
+const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;
 
 // ITU-R BT.601 coefficients for RGB -> YCbCr conversion.
 // Keeping these as named constants documents intent and avoids "magic numbers".
@@ -508,6 +509,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   let smoothedFaces = [];
   let hasMatteMask = false;
   let previousMaskAlpha = null;
+  let readyResolved = false;
   let frameCount = 0;
   let detectCount = 0;
   let detectDurationSum = 0;
@@ -523,7 +525,17 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   let lastFrameProcessMs = 0;
   let lastBackgroundRefreshAt = 0;
   let stableFrameStreak = 0;
+  let resolveReady = () => {};
   const backgroundRefreshIntervalMs = 180;
+  const markReady = () => {
+    if (readyResolved) return;
+    readyResolved = true;
+    resolveReady();
+  };
+  const ready = new Promise((resolve) => {
+    resolveReady = resolve;
+  });
+  const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));
   const buildMaskFromPayload = (job) => {
     if (!job || !job.matteMask) return false;
     if (!previousMaskAlpha || previousMaskAlpha.length !== canvas.width * canvas.height) {
@@ -635,11 +647,14 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       personLayer.restore();
       ctx.drawImage(personLayerCanvas, 0, 0, canvas.width, canvas.height);
     } else {
+      // Keep the whole frame blurred until the fresh matte is ready instead of
+      // briefly exposing the raw camera frame during a blur-strength handoff.
       ctx.save();
-      ctx.filter = "none";
+      ctx.filter = `blur(${blurPx}px)`;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.restore();
     }
+    markReady();
     frameCount += 1;
     const frameProcessMs = Math.max(0, performance.now() - frameStartedAt);
     lastFrameProcessMs = frameProcessMs;
@@ -717,6 +732,8 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     if (disposed) return;
     disposed = true;
     if (rafId) cancelAnimationFrame(rafId);
+    clearTimeout(readyTimer);
+    markReady();
     try {
       video.pause();
       video.srcObject = null;
@@ -737,6 +754,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     active: true,
     reason: "ok",
     backend: segmentationBackend.kind,
+    ready,
     dispose
   };
 }

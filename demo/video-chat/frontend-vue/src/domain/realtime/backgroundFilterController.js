@@ -22,6 +22,14 @@ export class BackgroundFilterController {
     const previousHandle = this.currentHandle;
 
     const handle = await createBackgroundFilterStream(sourceStream, options);
+    const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);
+    if (shouldAwaitReadyHandoff && handle?.ready && typeof handle.ready.then === 'function') {
+      try {
+        await handle.ready;
+      } catch {
+        // ignore readiness failures; the stream object itself is still authoritative
+      }
+    }
     if (revision !== this.revision) {
       try {
         handle.dispose();
