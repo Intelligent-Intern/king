@@ -33,6 +33,7 @@ for marker in \
   'deploy_dns_targets' \
   'VIDEOCHAT_DEPLOY_CDN_DOMAIN' \
   'VIDEOCHAT_DEPLOY_HCLOUD_DNS' \
+  'VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE' \
   'ensure_hcloud_dns_records_if_configured' \
   'resolved_ips_for_domain "${target}"' \
   'restore_certbot_stopped_services' \
@@ -60,6 +61,7 @@ for marker in \
   'manual deploy actions write the effective deploy' \
   'Hetzner Cloud API token, derived' \
   '`api/ws/sfu/turn/cdn` hostnames' \
+  '`VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=1`' \
   'auto-enable this when `VIDEOCHAT_DEPLOY_PUBLIC_IP` is' \
   'same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`' \
   'safe to rerun'

@@ -513,9 +513,10 @@ public domain and subdomains to point at the server. Production actions run the
 same DNS preflight for the root domain and `api/ws/sfu/turn/cdn`; when
 `VIDEOCHAT_DEPLOY_PUBLIC_IP` is set every name must resolve to that IP before
 Certbot is allowed to run.
-When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1` and `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is
-present, normal `deploy` reruns also refresh those DNS records before the
-preflight.
+Normal `deploy` reruns do not mutate DNS anymore. When `VIDEOCHAT_DEPLOY_HCLOUD_DNS=1`
+and `VIDEOCHAT_DEPLOY_HCLOUD_TOKEN` is present, the wizard can provision the
+initial records automatically, and later reruns only verify DNS unless
+`VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=1` is set explicitly.
 
 Useful optional overrides:
 

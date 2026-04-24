@@ -68,6 +68,10 @@ Optional Hetzner wizard environment:
   VIDEOCHAT_DEPLOY_HCLOUD_IMAGE       Server image, default: ubuntu-24.04.
   VIDEOCHAT_DEPLOY_HCLOUD_SERVER_NAME Server name, generated from domain if omitted.
   VIDEOCHAT_DEPLOY_HCLOUD_DNS         Set Hetzner DNS A record if zone exists, default: prompt yes.
+  VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE
+                              Refresh Hetzner DNS during prepare/deploy when
+                              HCLOUD DNS is enabled. Default: 0. The wizard
+                              still handles initial DNS provisioning.
   VIDEOCHAT_DEPLOY_DNS_WAIT_SECONDS   DNS wait timeout, default: 900.
 
 Actions:
@@ -331,6 +335,14 @@ ensure_hcloud_dns_records_if_configured() {
   case "${VIDEOCHAT_DEPLOY_HCLOUD_DNS:-0}" in
     1|true|TRUE|yes|YES) ;;
     *) return 0 ;;
+  esac
+
+  case "${VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE:-0}" in
+    1|true|TRUE|yes|YES) ;;
+    *)
+      log "Hetzner DNS refresh skipped during prepare; set VIDEOCHAT_DEPLOY_REFRESH_DNS_ON_PREPARE=1 to force it."
+      return 0
+      ;;
   esac
 
   [[ -n "${VIDEOCHAT_DEPLOY_HCLOUD_TOKEN:-}" && -n "${DEPLOY_PUBLIC_IP}" ]] || {
