@@ -57,6 +57,9 @@ export interface SFUClientCallbacks {
 
 const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024
 const SFU_FRAME_CHUNK_TTL_MS = 5000
+const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024
+const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
+const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 2000
 
 interface PendingInboundFrameChunk {
   publisherId: string
@@ -263,7 +266,7 @@ export class SFUClient {
     this.send({ type: 'sfu/unpublish', track_id: trackId })
   }
 
-  sendEncodedFrame(frame: SFUEncodedFrame): void {
+  async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean> {
     const payload: Record<string, unknown> = {
       type: 'sfu/frame',
       publisher_id: frame.publisherId,
@@ -288,20 +291,17 @@ export class SFUClient {
     const protectedFrame = String(payload.protected_frame || '').trim()
     if (protectedFrame !== '') {
       if (protectedFrame.length > SFU_FRAME_CHUNK_MAX_CHARS) {
-        this.sendChunkedFramePayload(payload, 'protected_frame_chunk', protectedFrame)
-        return
+        return this.sendChunkedFramePayload(payload, 'protected_frame_chunk', protectedFrame)
       }
-      this.send(payload)
-      return
+      return this.send(payload)
     }
 
     const dataBase64 = String(payload.data_base64 || '').trim()
     if (dataBase64.length > SFU_FRAME_CHUNK_MAX_CHARS) {
-      this.sendChunkedFramePayload(payload, 'data_base64_chunk', dataBase64)
-      return
+      return this.sendChunkedFramePayload(payload, 'data_base64_chunk', dataBase64)
     }
 
-    this.send(payload)
+    return this.send(payload)
   }
 
   leave(): void {
@@ -317,21 +317,41 @@ export class SFUClient {
     this.ws = null
   }
 
-  private send(msg: object): void {
+  private send(msg: object): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
+      return true
     }
+    return false
   }
 
-  private sendChunkedFramePayload(
+  private wait(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      setTimeout(resolve, ms)
+    })
+  }
+
+  private async waitForSendBufferDrain(): Promise<boolean> {
+    const startMs = Date.now()
+    while (this.ws?.readyState === WebSocket.OPEN && this.getBufferedAmount() > SFU_FRAME_CHUNK_BACKPRESSURE_BYTES) {
+      if ((Date.now() - startMs) >= SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS) {
+        return false
+      }
+      await this.wait(SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS)
+    }
+    return this.ws?.readyState === WebSocket.OPEN
+  }
+
+  private async sendChunkedFramePayload(
     payload: Record<string, unknown>,
     chunkField: 'data_base64_chunk' | 'protected_frame_chunk',
     chunkValue: string,
-  ): void {
+  ): Promise<boolean> {
     const totalChunks = Math.max(1, Math.ceil(chunkValue.length / SFU_FRAME_CHUNK_MAX_CHARS))
     const frameId = createSfuFrameId()
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      if (!(await this.waitForSendBufferDrain())) return false
       const start = chunkIndex * SFU_FRAME_CHUNK_MAX_CHARS
       const end = start + SFU_FRAME_CHUNK_MAX_CHARS
       const chunkPayload: Record<string, unknown> = {
@@ -347,8 +367,9 @@ export class SFUClient {
         chunk_count: totalChunks,
       }
       chunkPayload[chunkField] = chunkValue.slice(start, end)
-      this.send(chunkPayload)
+      if (!this.send(chunkPayload)) return false
     }
+    return true
   }
 
   private cleanupPendingInboundFrameChunks(): void {

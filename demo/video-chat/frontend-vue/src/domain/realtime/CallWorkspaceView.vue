@@ -769,12 +769,16 @@ import {
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
   SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD,
+  SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
+  SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS,
+  SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS,
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,
   SFU_WLVC_FRAME_WIDTH,
   SFU_WLVC_KEYFRAME_INTERVAL,
   SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES,
   SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES,
+  SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES,
   TYPING_LOCAL_STOP_MS,
   TYPING_SWEEP_MS,
   USERS_PAGE_SIZE,
@@ -859,7 +863,6 @@ const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
 const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
 const SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS = 15_000;
 const SFU_BACKPRESSURE_LOG_COOLDOWN_MS = 3000;
-const SFU_BACKPRESSURE_RECONNECT_AFTER_MS = 8000;
 const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
@@ -1038,6 +1041,7 @@ let wlvcEncodeInFlight = false;
 let wlvcBackpressureSkipCount = 0;
 let wlvcBackpressureFirstAtMs = 0;
 let wlvcBackpressureLastLogAtMs = 0;
+let wlvcBackpressurePauseUntilMs = 0;
 let sfuAutoQualityDowngradeLastAtMs = 0;
 let sfuVideoRecoveryLastAtMs = 0;
 let mediaSecuritySyncInFlight = false;
@@ -1149,6 +1153,41 @@ function getSfuClientBufferedAmount() {
 function resetWlvcBackpressureCounters() {
   wlvcBackpressureSkipCount = 0;
   wlvcBackpressureFirstAtMs = 0;
+  wlvcBackpressurePauseUntilMs = 0;
+}
+
+function wlvcBackpressurePauseMs(bufferedAmount) {
+  const normalizedBuffered = Math.max(0, Number(bufferedAmount || 0));
+  const pressureRatio = Math.max(
+    1,
+    normalizedBuffered / Math.max(1, SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES)
+  );
+  const pauseMs = Math.round(SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS * pressureRatio);
+  return Math.min(
+    SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS,
+    Math.max(SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS, pauseMs)
+  );
+}
+
+function shouldThrottleWlvcEncodeLoop(nowMs = Date.now()) {
+  return wlvcBackpressurePauseUntilMs > nowMs;
+}
+
+function shouldDelayWlvcFrameForBackpressure(bufferedAmount) {
+  const normalizedBuffered = Math.max(0, Number(bufferedAmount || 0));
+  if (normalizedBuffered >= SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) return true;
+  return wlvcBackpressureSkipCount > 0
+    && normalizedBuffered >= SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES;
+}
+
+function resetWlvcEncoderAfterDroppedEncodedFrame(reason = 'dropped_encoded_frame') {
+  const encoder = videoEncoderRef.value;
+  if (!encoder || typeof encoder.reset !== 'function') return;
+  try {
+    encoder.reset();
+  } catch (error) {
+    mediaDebugLog('[SFU] WLVC encoder reset after dropped encoded frame failed', reason, error);
+  }
 }
 
 function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
@@ -1157,6 +1196,10 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
     wlvcBackpressureFirstAtMs = nowMs;
   }
   wlvcBackpressureSkipCount += 1;
+  wlvcBackpressurePauseUntilMs = Math.max(
+    wlvcBackpressurePauseUntilMs,
+    nowMs + wlvcBackpressurePauseMs(bufferedAmount)
+  );
 
   if ((nowMs - wlvcBackpressureLastLogAtMs) >= SFU_BACKPRESSURE_LOG_COOLDOWN_MS) {
     wlvcBackpressureLastLogAtMs = nowMs;
@@ -1193,9 +1236,9 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
   const sustainedBackpressureMs = wlvcBackpressureFirstAtMs > 0
     ? Math.max(0, nowMs - wlvcBackpressureFirstAtMs)
     : 0;
-  const shouldReconnect = sustainedBackpressureMs >= SFU_BACKPRESSURE_RECONNECT_AFTER_MS
-    || wlvcBackpressureSkipCount >= (SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD * 4);
-  if (shouldReconnect && restartSfuAfterVideoStall('sfu_send_backpressure', {
+  const socketLooksStuck = bufferedAmount >= SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES
+    && sustainedBackpressureMs >= SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS;
+  if (socketLooksStuck && restartSfuAfterVideoStall('sfu_send_buffer_stuck', {
     buffered_amount: bufferedAmount,
     skipped_frame_count: wlvcBackpressureSkipCount,
     sustained_backpressure_ms: sustainedBackpressureMs,
@@ -2006,6 +2049,13 @@ function shouldRecoverMediaSecurityFromFrameError(error) {
     || message.includes('downgrade_attempt');
 }
 
+function shouldTreatNativeFrameErrorAsTransient(direction, error) {
+  const normalizedDirection = String(direction || '').trim().toLowerCase();
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return normalizedDirection === 'receiver'
+    && message.includes('malformed_protected_frame');
+}
+
 function shouldSendTransportOnlySfuFrame(error) {
   const message = String(error?.message || error || '').trim().toLowerCase();
   return message.includes('unsupported_capability')
@@ -2099,6 +2149,7 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   const code = direction === 'receiver'
     ? 'native_e2ee_frame_decrypt_failed'
     : 'native_e2ee_frame_encrypt_failed';
+  const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error);
   const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
   const nowMs = Date.now();
   const lastLogMs = Number(nativeFrameErrorLastLogByKey.get(logKey) || 0);
@@ -2108,7 +2159,8 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   }
 
   if (shouldLog) {
-    console.error(
+    const logMethod = transientFrameDrop ? console.warn : console.error;
+    logMethod(
       '[KingRT] SFU/native E2EE frame transform failed',
       `direction=${direction || 'unknown'}`,
       `user=${senderUserId || 'n/a'}`,
@@ -2119,7 +2171,7 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   if (shouldLog) {
     captureClientDiagnostic({
       category: 'media',
-      level: 'error',
+      level: transientFrameDrop ? 'warning' : 'error',
       eventType: code,
       code,
       message: errorMessage,
@@ -2130,7 +2182,7 @@ function handleNativeMediaSecurityFrameError(event = {}) {
         media_runtime_path: mediaRuntimePath.value,
         security: nativeAudioSecurityTelemetrySnapshot(),
       },
-      immediate: true,
+      immediate: !transientFrameDrop,
     });
   }
 
@@ -5868,19 +5920,32 @@ watch(isSocketOnline, (online) => {
   publishLocalActivitySample(true);
 });
 
+function isNativeAudioSecurityWaitingMessage(message) {
+  return /waiting for end-to-end encryption/i.test(String(message || ''));
+}
+
 // M7: Mirror the audio bridge banner to the console so audio-blocking states are
 // immediately visible in devtools, not just as a UI text banner.
 watch(nativeAudioSecurityBannerMessage, (message) => {
   if (message === '') return;
-  console.error('[KingRT] 🔇 AUDIO BRIDGE BLOCKED:', message);
-  const diagnosticKey = `${activeRoomId.value}:${message}`;
+  const waitingForSecurity = isNativeAudioSecurityWaitingMessage(message);
+  const diagnosticEventType = waitingForSecurity
+    ? 'native_audio_bridge_waiting'
+    : 'native_audio_bridge_blocked';
+  const diagnosticLevel = waitingForSecurity ? 'warning' : 'error';
+  const logMethod = waitingForSecurity ? console.warn : console.error;
+  logMethod(
+    waitingForSecurity ? '[KingRT] 🔇 AUDIO BRIDGE WAITING:' : '[KingRT] 🔇 AUDIO BRIDGE BLOCKED:',
+    message
+  );
+  const diagnosticKey = `${activeRoomId.value}:${diagnosticEventType}:${message}`;
   if (nativeAudioBridgeBlockDiagnosticsSent.has(diagnosticKey)) return;
   nativeAudioBridgeBlockDiagnosticsSent.add(diagnosticKey);
   captureClientDiagnostic({
     category: 'media',
-    level: 'error',
-    eventType: 'native_audio_bridge_blocked',
-    code: 'native_audio_bridge_blocked',
+    level: diagnosticLevel,
+    eventType: diagnosticEventType,
+    code: diagnosticEventType,
     message,
     payload: {
       media_runtime_path: mediaRuntimePath.value,
@@ -5888,7 +5953,7 @@ watch(nativeAudioSecurityBannerMessage, (message) => {
       stage_b: Boolean(mediaRuntimeCapabilities.value.stageB),
       security: nativeAudioSecurityTelemetrySnapshot(),
     },
-    immediate: true,
+    immediate: !waitingForSecurity,
   });
 });
 
@@ -6040,6 +6105,7 @@ function initSFU() {
     onConnected: () => {
       sfuConnected.value = true;
       sfuConnectRetryCount = 0;
+      resetWlvcBackpressureCounters();
       startSfuTrackAnnounceTimer();
       scheduleLocalTrackPublish();
     },
@@ -8201,7 +8267,7 @@ function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure')
 
   const nowMs = Date.now();
   if ((nowMs - sfuAutoQualityDowngradeLastAtMs) < SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS) {
-    return true;
+    return false;
   }
   sfuAutoQualityDowngradeLastAtMs = nowMs;
 
@@ -8959,6 +9025,7 @@ async function publishLocalTracks() {
 
 async function startEncodingPipeline(videoTrack) {
   stopLocalEncodingPipeline();
+  resetWlvcBackpressureCounters();
 
   let video = localVideoElement.value;
   if (!(video instanceof HTMLVideoElement)) {
@@ -9030,10 +9097,14 @@ async function startEncodingPipeline(videoTrack) {
     if (!videoEncoderRef.value || !sfuClientRef.value || !isSfuClientOpen()) {
       return;
     }
+    if (shouldThrottleWlvcEncodeLoop()) return;
     const bufferedAmount = getSfuClientBufferedAmount();
-    if (bufferedAmount >= SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) {
+    if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
       handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
       return;
+    }
+    if (wlvcBackpressureSkipCount > 0) {
+      resetWlvcBackpressureCounters();
     }
     if (video.readyState < 2) return;
     if (!ctx) return;
@@ -9091,7 +9162,12 @@ async function startEncodingPipeline(videoTrack) {
         );
       }
 
-      sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+      const frameSent = await sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+      if (frameSent === false) {
+        resetWlvcEncoderAfterDroppedEncodedFrame('sfu_chunk_backpressure_abort');
+        handleWlvcEncodeBackpressure(getSfuClientBufferedAmount(), videoTrack.id);
+        return;
+      }
       if (getSfuClientBufferedAmount() < SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) {
         resetWlvcBackpressureCounters();
       }

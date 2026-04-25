@@ -53,6 +53,8 @@ try {
   requireContains(sfuClient, 'payload.protected_frame = frame.protectedFrame', 'snake_case protected frame');
   requireContains(sfuClient, 'payload.protection_mode = frame.protectionMode ||', 'snake_case protection mode');
   requireContains(sfuClient, 'const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
+  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024', 'chunk send backpressure guard');
+  requireContains(sfuClient, 'private async waitForSendBufferDrain()', 'chunk sender waits for websocket drain');
   requireContains(sfuClient, "type: 'sfu/frame-chunk'", 'chunked frame command');
   requireContains(sfuClient, "frame_id: frameId", 'chunked frame id');
   requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');

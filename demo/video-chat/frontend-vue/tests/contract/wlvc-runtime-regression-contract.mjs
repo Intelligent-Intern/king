@@ -321,7 +321,9 @@ try {
   requireContains(nativeAudioBridgeHelpers, 'function nativeAudioPlaybackInterrupted', 'native audio bridge recognizes benign playback interruptions');
   requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
   requireContains(workspace, "blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed'", 'native audio bridge emits distinct diagnostics for autoplay blocking and playback failure');
-  requireContains(workspace, "eventType: 'native_audio_bridge_blocked'", 'native audio bridge blocked state emits diagnostics');
+  requireContains(workspace, "'native_audio_bridge_waiting'", 'native audio bridge waiting state emits warning diagnostics');
+  requireContains(workspace, "'native_audio_bridge_blocked'", 'native audio bridge blocked state emits error diagnostics');
+  requireContains(workspace, 'eventType: diagnosticEventType', 'native audio bridge banner diagnostics use the resolved state');
   requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
   requireContains(workspace, 'const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;', 'native audio bridge missing-track recovery is bounded');
@@ -411,8 +413,11 @@ try {
   requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
   requireNotContains(encodePipeline, 'document.hidden', 'SFU frame publishing must continue from background tabs');
   requireContains(encodePipeline, 'if (wlvcEncodeInFlight) return;', 'WLVC encode loop avoids overlapping async interval work');
+  requireContains(encodePipeline, 'if (shouldThrottleWlvcEncodeLoop()) return;', 'WLVC encode loop honors adaptive backpressure pacing');
   requireContains(encodePipeline, 'getSfuClientBufferedAmount()', 'WLVC encode loop checks websocket bufferedAmount');
+  requireContains(encodePipeline, 'shouldDelayWlvcFrameForBackpressure(bufferedAmount)', 'WLVC encode loop waits for websocket low-water recovery');
   requireContains(encodePipeline, 'handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);', 'WLVC encode loop skips frames under websocket backpressure');
+  requireContains(encodePipeline, "resetWlvcEncoderAfterDroppedEncodedFrame('sfu_chunk_backpressure_abort')", 'WLVC encoder state resets after aborted chunk sends');
   requireContains(encodePipeline, 'const encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);', 'WLVC encode loop derives keyframe state from encoded payload header');
   requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
   requireContains(encodePipeline, 'outgoingFrame.protectedFrame = protectedFrame.protectedFrame;', 'SFU encoder upgrades to protected frame when available');
@@ -424,7 +429,11 @@ try {
   requireContains(encodePipeline, 'videoProfile.encodeIntervalMs', 'encode pipeline honors configured encode interval');
   requireContains(encodePipeline, "downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')", 'repeated encode failures lower SFU quality before fallback');
   requireContains(workspace, 'function handleWlvcEncodeBackpressure', 'workspace exposes WLVC send-buffer backpressure handling');
+  requireContains(workspace, 'function resetWlvcEncoderAfterDroppedEncodedFrame', 'workspace can reset WLVC encoder state after an unsent encoded frame');
+  requireContains(workspace, 'wlvcBackpressurePauseUntilMs', 'WLVC send-buffer backpressure uses adaptive pacing instead of reconnect loops');
   requireContains(workspace, "eventType: 'sfu_video_backpressure'", 'WLVC send-buffer backpressure emits diagnostics');
+  requireNotContains(workspace, "restartSfuAfterVideoStall('sfu_send_backpressure'", 'WLVC send-buffer backpressure must not reconnect as a normal control path');
+  requireContains(workspace, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'WLVC send-buffer hard reset is reserved for stuck critical buffers');
   requireContains(workspace, "eventType: 'sfu_remote_video_frozen'", 'remote video freeze detector emits diagnostics');
   requireContains(workspace, 'function restartSfuAfterVideoStall', 'workspace can reconnect SFU after hard video stalls');
 

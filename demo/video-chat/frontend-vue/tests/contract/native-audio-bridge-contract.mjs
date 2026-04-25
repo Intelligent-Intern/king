@@ -92,6 +92,7 @@ try {
   requireContains(workspace, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
   requireContains(workspace, 'function ensureNativeAudioBridgeSecurityReady', 'native bridge gates negotiation on active E2EE');
   requireContains(workspace, 'function handleNativeMediaSecurityFrameError(event = {})', 'workspace handles native frame errors');
+  requireContains(workspace, 'function shouldTreatNativeFrameErrorAsTransient', 'workspace separates transient native frame drops from hard E2EE failures');
   requireContains(workspace, "code = direction === 'receiver'", 'workspace separates decrypt and encrypt diagnostics');
   requireContains(workspace, "'[KingRT] SFU/native E2EE frame transform failed'", 'native frame errors are visible in devtools');
   requireContains(workspace, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger E2EE recovery');
@@ -102,8 +103,9 @@ try {
   requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
   requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(\n        normalizedUserId,\n        'native_audio_track_recovery_rejoin',\n        true", 'audio-track recovery may force a renegotiation offer');
   requireContains(workspace, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
-  requireContains(workspace, 'SFU_BACKPRESSURE_RECONNECT_AFTER_MS', 'sustained SFU websocket backpressure has reconnect threshold');
-  requireContains(workspace, "restartSfuAfterVideoStall('sfu_send_backpressure'", 'sustained SFU websocket backpressure reconnects the SFU socket');
+  requireContains(workspace, 'SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS', 'sustained critical SFU websocket backpressure has a bounded hard-reset threshold');
+  requireContains(workspace, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
+  requireContains(workspace, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
   requireContains(workspace, 'function nativePeerHasLocalLiveAudioSender', 'native bridge validates local audio sender before answering');
   requireContains(workspace, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');
   requireContains(workspace, 'native_audio_sender_replace_track_failed', 'native bridge reports replaceTrack failures');
