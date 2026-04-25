@@ -12,6 +12,7 @@
  * 
  * Uses shell_exec(curl) to avoid PHP curl extension requirement.
  */
+class OllamaBackend
 {
     private string $baseUrl;
     private string $model;
