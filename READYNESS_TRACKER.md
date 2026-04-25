@@ -1,5 +1,7 @@
 # King Readiness Log
 
+**NOTE:** e2e tests are SKIPPED on purpose in this branch.
+
 Purpose:
 - This file is a completion log only.
 - Open work lives in `BACKLOG.md`.
