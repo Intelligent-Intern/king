@@ -7183,6 +7183,9 @@ async function ensureNativeRuntimeForSignaling() {
   if (shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight) return true;
   if (shouldBlockNativeRuntimeSignaling()) return false;
   if (!(await waitForNativeCapabilityForSignaling())) return false;
+  if (SFU_RUNTIME_ENABLED && !isNativeWebRtcRuntimePath()) {
+    return shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight;
+  }
 
   if (!runtimeSwitchInFlight) {
     await switchMediaRuntimePath('webrtc_native', 'inbound_native_signaling');

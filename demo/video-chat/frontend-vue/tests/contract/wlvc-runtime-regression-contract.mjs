@@ -238,6 +238,8 @@ try {
   const ensureNative = extractFunction(workspace, 'ensureNativeRuntimeForSignaling');
   requireContains(ensureNative, 'if (shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight) return true;', 'hybrid audio bridge accepts native signaling without preempting WLVC');
   requireContains(ensureNative, 'if (shouldBlockNativeRuntimeSignaling()) return false;', 'native runtime switch cannot preempt SFU');
+  requireContains(ensureNative, 'if (SFU_RUNTIME_ENABLED && !isNativeWebRtcRuntimePath()) {', 'SFU mode must not switch the global media runtime to native just because auxiliary native signaling arrived');
+  requireContains(ensureNative, 'return shouldMaintainNativePeerConnections() && !runtimeSwitchInFlight;', 'SFU auxiliary signaling must wait for WLVC hybrid-audio readiness instead of forcing a native runtime switch');
 
   const createPeer = extractFunction(workspace, 'createOrUpdateSfuRemotePeer');
   requireContains(workspace, 'markRaw', 'Vue raw marker for native codec objects');
