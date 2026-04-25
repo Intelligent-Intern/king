@@ -1,8 +1,17 @@
-<?php
-declare(strict_types=1);
-
-namespace King\Voltron;
-
+/**
+ * Ollama Backend Client
+ * 
+ * Works with ANY Ollama-compatible model:
+ *   - llama, llama2, llama3, llama3.1, llama3.2
+ *   - qwen, qwen2, qwen2.5, qwen2.5-coder
+ *   - mistral, mistral-small
+ *   - gemma, gemma2
+ *   - phi, phi3
+ *   - codellama, codellama2
+ *   - Any model available via `ollama pull <model>`
+ * 
+ * Uses shell_exec(curl) to avoid PHP curl extension requirement.
+ */
 class OllamaBackend
 {
     private string $baseUrl;
@@ -46,84 +55,32 @@ class OllamaBackend
             }
         }
 
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_RETURNTRANSFER => true,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($response === false || $httpCode !== 200) {
-            throw new \RuntimeException(
-                "Ollama request failed: {$error} (HTTP {$httpCode})"
-            );
+        $jsonPayload = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        
+        $cmd = sprintf(
+            'curl -s -X POST %s -H "Content-Type: application/json" -d %s --max-time %d',
+            escapeshellarg($url),
+            escapeshellarg($jsonPayload),
+            $this->timeout
+        );
+        
+        $response = shell_exec($cmd);
+        
+        if ($response === null || $response === '') {
+            throw new \RuntimeException("Ollama generate failed");
         }
 
         $data = json_decode($response, true);
-        if (!is_array($data)) {
-            throw new \RuntimeException("Invalid Ollama response");
-        }
-
         return [
-            'response' => $data['response'] ?? '',
-            'done' => $data['done'] ?? false,
-            'done_reason' => $data['done_reason'] ?? '',
-            'context' => $data['context'] ?? [],
-            'total_duration' => $data['total_duration'] ?? 0,
-            'load_duration' => $data['load_duration'] ?? 0,
-            'prompt_eval_count' => $data['prompt_eval_count'] ?? 0,
-            'eval_count' => $data['eval_count'] ?? 0,
+            'response' => (string) ($data['response'] ?? ''),
+            'done' => (bool) ($data['done'] ?? false),
         ];
-    }
-
-    public function embedding(string $text): array
-    {
-        $url = $this->baseUrl . '/api/embeddings';
-        $payload = [
-            'model' => $this->model,
-            'prompt' => $text,
-        ];
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload),
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
-            CURLOPT_TIMEOUT => $this->timeout,
-            CURLOPT_RETURNTRANSFER => true,
-        ]);
-
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        if ($httpCode !== 200) {
-            throw new \RuntimeException("Ollama embedding failed (HTTP {$httpCode})");
-        }
-
-        $data = json_decode($response, true);
-        return $data['embedding'] ?? [];
     }
 
     public static function isAvailable(string $baseUrl = 'http://127.0.0.1:11434'): bool
     {
-        $ch = curl_init($baseUrl . '/api/tags');
-        curl_setopt_array($ch, [
-            CURLOPT_TIMEOUT => 2,
-            CURLOPT_RETURNTRANSFER => true,
-        ]);
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        return $httpCode === 200;
+        $cmd = sprintf('curl -s -X GET %s --max-time 2', escapeshellarg($baseUrl . '/api/tags'));
+        $response = shell_exec($cmd);
+        return $response !== null && $response !== '';
     }
 }
