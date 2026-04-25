@@ -1001,6 +1001,8 @@ let mediaSecurityResyncForceRekey = false;
 const mediaSecurityHelloSignalsSent = new Set();
 const mediaSecuritySenderKeySignalsSent = new Set();
 const mediaSecurityRecoveryLastByUserId = new Map();
+// Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
+const mediaSecurityHelloSentAtByUserId = new Map();
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const pendingSfuRemotePeerInitializers = new Map();
@@ -1093,6 +1095,17 @@ function checkRemoteVideoStalls() {
     if ((nowMs - createdAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
     if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
 
+    const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
+    // M4: Structured console warning so issues are visible in browser devtools.
+    console.warn(
+      '[KingRT] 📵 No video signal from SFU publisher',
+      `id=${publisherId}`,
+      `user=${Number(peer.userId || 0)}`,
+      `stalled=${stalledAgeMs}ms`,
+      `tracks=${trackCount}`,
+      `runtime=${mediaRuntimePath.value}`,
+    );
+
     peer.stalledLoggedAtMs = nowMs;
     captureClientDiagnostic({
       category: 'media',
@@ -1107,7 +1120,7 @@ function checkRemoteVideoStalls() {
         track_count: trackCount,
         frame_count: frameCount,
         received_frame_count: Number(peer.receivedFrameCount || 0),
-        age_ms: Math.max(0, nowMs - createdAtMs),
+        age_ms: stalledAgeMs,
         remote_peer_count: remotePeersRef.value.size,
         connected_participant_count: connectedParticipantUsers.value.length,
         sfu_connected: sfuConnected.value,
@@ -1116,6 +1129,17 @@ function checkRemoteVideoStalls() {
       },
       immediate: true,
     });
+
+    // M4: Auto-resubscribe after prolonged stall (double threshold) to trigger
+    // a fresh track announcement from the SFU without requiring user action.
+    if (sfuClientRef.value && stalledAgeMs > REMOTE_VIDEO_STALL_THRESHOLD_MS * 2) {
+      console.info(
+        '[KingRT] 🔄 Auto-resubscribe for stalled SFU publisher',
+        `id=${publisherId}`,
+        `user=${Number(peer.userId || 0)}`,
+      );
+      sfuClientRef.value.subscribe(publisherId);
+    }
   }
 }
 
@@ -1223,10 +1247,15 @@ function isNativeWebRtcRuntimePath() {
 }
 
 function shouldUseNativeAudioBridge() {
+  // M12: If the browser doesn't support InsertableStreams (e.g. Firefox < 117)
+  // we cannot attach E2EE transforms. Rather than producing zero audio, disable
+  // the bridge so audio flows unprotected via the normal SFU path.
+  if (!MediaSecuritySession.supportsNativeTransforms()) {
+    return false;
+  }
   return SFU_RUNTIME_ENABLED
     && isWlvcRuntimePath()
-    && Boolean(mediaRuntimeCapabilities.value.stageB)
-    && MediaSecuritySession.supportsNativeTransforms();
+    && Boolean(mediaRuntimeCapabilities.value.stageB);
 }
 
 function nativeAudioBridgeFailureMessage() {
@@ -1413,6 +1442,14 @@ function canProtectCurrentSfuTargets() {
 function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
   const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
   setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
+  // M7 / M9: Log to console so audio failures are immediately visible in devtools,
+  // then schedule a forced E2EE rekey to break any dead-lock in the handshake.
+  console.error(
+    '[KingRT] 🔇 AUDIO BRIDGE FAILED',
+    `code=${String(code || 'native_audio_bridge_failed')}`,
+    `user=${Number(peer?.userId || 0)}`,
+    normalizedMessage,
+  );
   captureClientDiagnostic({
     category: 'media',
     level: 'error',
@@ -1428,6 +1465,13 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
     },
     immediate: true,
   });
+  // M9: Force a full E2EE rekey 1.5s after a bridge failure to break any
+  // handshake dead-lock that may have caused the transform to fail.
+  setTimeout(() => {
+    if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
+    console.info('[KingRT] 🔑 Forcing E2EE rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
+    void syncMediaSecurityWithParticipants(true);
+  }, 1500);
 }
 
 function mediaSecurityHelloSignalKey(targetUserId, session) {
@@ -1496,6 +1540,9 @@ async function sendMediaSecurityHello(targetUserId, force = false) {
   }
   if (sendSocketFrame(signal)) {
     mediaSecurityHelloSignalsSent.add(key);
+    // M6: Record when Hello was last sent so handshake-timeout detection can
+    // identify peers that never reply with a SenderKey.
+    mediaSecurityHelloSentAtByUserId.set(Number(targetUserId || 0), Date.now());
     return true;
   }
   captureClientDiagnostic({
@@ -1592,6 +1639,25 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
     for (const targetUserId of marked.userIds) {
       await sendMediaSecurityHello(targetUserId);
       await sendMediaSecuritySenderKey(targetUserId);
+
+      // M6: Detect peers that received our Hello but never replied with a SenderKey.
+      // After 5s without a response, force-resend the Hello to break the stall.
+      const normalizedTargetId = Number(targetUserId || 0);
+      const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      const peerState = String(peer?.state || '').trim();
+      if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'rekeying') {
+        const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+        if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
+          console.warn(
+            '[KingRT] ⏳ E2EE handshake timeout for user',
+            normalizedTargetId,
+            `state=${peerState}`,
+            `elapsed=${Date.now() - helloSentAt}ms — force-retrying Hello`,
+          );
+          mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+          await sendMediaSecurityHello(targetUserId, true);
+        }
+      }
     }
   } catch (error) {
     mediaDebugLog('[MediaSecurity] sync failed', error);
@@ -5036,6 +5102,14 @@ async function connectSocket() {
       setBackendWebSocketOrigin(socketOrigin);
       clearErrors();
       startPingLoop();
+      // M2: Clear E2EE signal caches on every (re)connect so Hello + SenderKey
+      // are always re-sent to all peers. Without this, after a WS reconnect the
+      // peer receives no SenderKey → all audio frames fail with wrong_key_id.
+      if (isReconnectOpen) {
+        clearMediaSecuritySignalCaches();
+        mediaSecurityHelloSentAtByUserId.clear();
+        console.info('[KingRT] 🔄 WS reconnect — E2EE signal caches cleared, full handshake will re-run');
+      }
       requestRoomSnapshot();
       if (usersSourceMode.value === 'directory' && activeTab.value === 'users') {
         void refreshUsersDirectory();
@@ -5417,6 +5491,13 @@ watch(isSocketOnline, (online) => {
   publishLocalActivitySample(true);
 });
 
+// M7: Mirror the audio bridge banner to the console so audio-blocking states are
+// immediately visible in devtools, not just as a UI text banner.
+watch(nativeAudioSecurityBannerMessage, (message) => {
+  if (message === '') return;
+  console.error('[KingRT] 🔇 AUDIO BRIDGE BLOCKED:', message);
+});
+
 watch(
   shouldConnectSfu,
   (enabled) => {
@@ -5585,9 +5666,20 @@ function initSFU() {
       if (!hadActiveConnection) {
         if (sfuConnectRetryCount < SFU_CONNECT_MAX_RETRIES) {
           sfuConnectRetryCount += 1;
+          // M8: Log retry attempts so they're visible in devtools without needing telemetry access.
+          console.warn(
+            `[KingRT] 🔁 SFU reconnect attempt ${sfuConnectRetryCount}/${SFU_CONNECT_MAX_RETRIES}`,
+            `delay=${SFU_CONNECT_RETRY_DELAY_MS}ms`,
+            `runtime=${mediaRuntimePath.value}`,
+          );
           setTimeout(() => initSFU(), SFU_CONNECT_RETRY_DELAY_MS);
           return;
         }
+        console.error(
+          '[KingRT] ❌ SFU connection retries exhausted — falling back to native runtime',
+          `attempts=${sfuConnectRetryCount}`,
+          `runtime=${mediaRuntimePath.value}`,
+        );
         captureClientDiagnostic({
           category: 'media',
           level: 'error',
@@ -5605,6 +5697,11 @@ function initSFU() {
         void maybeFallbackToNativeRuntime('sfu_connect_failed');
         return;
       }
+      console.warn(
+        '[KingRT] ⚠️ SFU disconnected after active connection — scheduling reconnect',
+        `runtime=${mediaRuntimePath.value}`,
+        `peers=${remotePeersRef.value.size}`,
+      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -8392,6 +8489,19 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
         timestamp: frame.timestamp,
       });
     } catch (error) {
+      const errorCode = String(error?.message || '').trim() || 'unknown';
+      // M3/M5: Surface decrypt failures in devtools — previously fully silent.
+      // replay_detected is noisy and expected during key rotation, suppress it.
+      if (errorCode !== 'replay_detected') {
+        console.warn(
+          '[KingRT] 🔐 SFU protected frame decrypt failed',
+          `publisher=${publisherId}`,
+          `user=${publisherUserId}`,
+          `error=${errorCode}`,
+          `epoch=${frame.protected?.epoch ?? 'n/a'}`,
+          `runtime=${mediaRuntimePath.value}`,
+        );
+      }
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
       captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
         publisher_id: publisherId,
@@ -8419,6 +8529,17 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
         timestamp: frame.timestamp,
       });
     } catch (error) {
+      const errorCode = String(error?.message || '').trim() || 'unknown';
+      // M3/M5: Surface decrypt failures in devtools — previously fully silent.
+      if (errorCode !== 'replay_detected') {
+        console.warn(
+          '[KingRT] 🔐 SFU frame decrypt failed (object header)',
+          `publisher=${publisherId}`,
+          `user=${publisherUserId}`,
+          `error=${errorCode}`,
+          `runtime=${mediaRuntimePath.value}`,
+        );
+      }
       mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
       captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
         publisher_id: publisherId,

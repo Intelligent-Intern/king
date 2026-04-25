@@ -384,6 +384,12 @@ export class MediaSecuritySession {
     if (!subtle) throw new Error('unsupported_capability');
     if (reason !== 'initial') this.epoch += 1;
     this.sequence = 0;
+    // M11: Purge replay-detection counters for the previous epoch so frames from
+    // the new epoch are not rejected as replay_detected after a key rotation.
+    const ownPrefix = `${this.userId}:`;
+    for (const key of Array.from(this.replayBySenderEpoch.keys())) {
+      if (key.startsWith(ownPrefix)) this.replayBySenderEpoch.delete(key);
+    }
     this.senderKey = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
     this.senderKeyId = bytesToBase64Url(randomBytes(16));
     this.lastRekeyReason = asString(reason) || 'rekey';

@@ -302,7 +302,9 @@ export class SFUClient {
     this.pendingInboundFrameChunks.clear()
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
-      this.retireSocket(this.ws)
+      // Force-close even when still CONNECTING to prevent orphaned sockets
+      // that cause "WebSocket is closed before the connection is established".
+      this.retireSocket(this.ws, true)
     }
     this.ws = null
   }
