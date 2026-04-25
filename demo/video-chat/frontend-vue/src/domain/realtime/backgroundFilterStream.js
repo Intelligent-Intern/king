@@ -1,5 +1,6 @@
 import { createMediaPipeSegmentationBackend } from "./backgroundFilterBackendMediapipe";
 import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
+import { clamp01, lerp, smoothstep, toNumber } from "./backgroundFilterMath";
 
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.
@@ -29,26 +30,6 @@ const BT601_CR_R = 0.5;
 const BT601_CR_G = -0.418688;
 const BT601_CR_B = -0.081312;
 
-function toNumber(value, fallback) {
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-/**
- * Performs linear interpolation between two values.
- * @param {number} a Start value.
- * @param {number} b End value.
- * @param {number} t Interpolation factor between 0 and 1.
- * @returns {number} Interpolated value.
- */
-function lerp(a, b, t) {
-  return a + (b - a) * t;
-}
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
-}
-function smoothstep(edge0, edge1, x) {
-  const t = clamp01((x - edge0) / Math.max(1e-6, edge1 - edge0));
-  return t * t * (3 - 2 * t);
-}
 function sampleInnerFeatherRamp(progress) {
   const clamped = clamp01(progress);
   const first = DEFAULT_INNER_FEATHER_STOPS[0];
