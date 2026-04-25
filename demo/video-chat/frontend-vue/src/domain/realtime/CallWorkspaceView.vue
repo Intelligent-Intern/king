@@ -836,6 +836,9 @@ const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
 });
+const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;
+const NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS = 500;
+const NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS = 250;
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -1014,6 +1017,7 @@ const mediaSecurityRecoveryLastByUserId = new Map();
 const mediaSecurityHelloSentAtByUserId = new Map();
 const mediaSecurityHandshakeRetryingByUserId = new Set();
 const nativeAudioBridgeBlockDiagnosticsSent = new Set();
+const nativeAudioTrackRecoveryAttemptsByUserId = new Map();
 let mediaSecurityHandshakeWatchdogTimer = null;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
@@ -6354,6 +6358,122 @@ function nativeAudioSecurityTelemetrySnapshot() {
   return session.telemetrySnapshot(currentMediaSecurityRuntimePath());
 }
 
+function summarizeNativeSender(sender) {
+  const kind = String(sender?.track?.kind || '').trim().toLowerCase();
+  return {
+    track_kind: kind,
+    track_id: String(sender?.track?.id || '').trim(),
+    track_state: String(sender?.track?.readyState || '').trim().toLowerCase(),
+  };
+}
+
+function summarizeNativeReceiver(receiver) {
+  return {
+    track_kind: String(receiver?.track?.kind || '').trim().toLowerCase(),
+    track_id: String(receiver?.track?.id || '').trim(),
+    track_state: String(receiver?.track?.readyState || '').trim().toLowerCase(),
+  };
+}
+
+function summarizeNativeTransceiver(transceiver) {
+  return {
+    direction: String(transceiver?.direction || '').trim().toLowerCase(),
+    current_direction: String(transceiver?.currentDirection || '').trim().toLowerCase(),
+    mid: String(transceiver?.mid || '').trim(),
+    sender: summarizeNativeSender(transceiver?.sender),
+    receiver: summarizeNativeReceiver(transceiver?.receiver),
+  };
+}
+
+function nativePeerConnectionTelemetry(peer) {
+  const pc = peer?.pc || null;
+  const senders = typeof pc?.getSenders === 'function' ? pc.getSenders().map(summarizeNativeSender) : [];
+  const receivers = typeof pc?.getReceivers === 'function' ? pc.getReceivers().map(summarizeNativeReceiver) : [];
+  const transceivers = typeof pc?.getTransceivers === 'function' ? pc.getTransceivers().map(summarizeNativeTransceiver) : [];
+  return {
+    target_user_id: Number(peer?.userId || 0),
+    connection_state: String(pc?.connectionState || '').trim().toLowerCase(),
+    ice_connection_state: String(pc?.iceConnectionState || '').trim().toLowerCase(),
+    ice_gathering_state: String(pc?.iceGatheringState || '').trim().toLowerCase(),
+    signaling_state: String(pc?.signalingState || '').trim().toLowerCase(),
+    audio_bridge_state: String(peer?.audioBridgeState || '').trim().toLowerCase(),
+    remote_audio_tracks: typeof MediaStream !== 'undefined' && peer?.remoteStream instanceof MediaStream
+      ? peer.remoteStream.getAudioTracks().map((track) => ({
+          track_id: String(track?.id || '').trim(),
+          track_state: String(track?.readyState || '').trim().toLowerCase(),
+          enabled: Boolean(track?.enabled),
+        }))
+      : [],
+    senders,
+    receivers,
+    transceivers,
+  };
+}
+
+function resetNativeAudioTrackRecovery(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  nativeAudioTrackRecoveryAttemptsByUserId.delete(normalizedUserId);
+}
+
+function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
+  const normalizedUserId = Number(peer?.userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  if (!shouldUseNativeAudioBridge()) return false;
+
+  const currentAttempt = Number(nativeAudioTrackRecoveryAttemptsByUserId.get(normalizedUserId) || 0);
+  if (currentAttempt >= NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS) {
+    console.error(
+      '[KingRT] native audio bridge recovery exhausted',
+      `user=${normalizedUserId}`,
+      `reason=${String(reason || 'missing_track')}`,
+      nativePeerConnectionTelemetry(peer),
+    );
+    return false;
+  }
+
+  const nextAttempt = currentAttempt + 1;
+  nativeAudioTrackRecoveryAttemptsByUserId.set(normalizedUserId, nextAttempt);
+  console.warn(
+    '[KingRT] native audio bridge missing track - rebuilding peer',
+    `user=${normalizedUserId}`,
+    `attempt=${nextAttempt}/${NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS}`,
+    nativePeerConnectionTelemetry(peer),
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'native_audio_track_recovery',
+    code: 'native_audio_track_recovery',
+    message: 'Native encrypted audio bridge connected without a remote audio track; rebuilding peer connection.',
+    payload: {
+      reason: String(reason || 'missing_track'),
+      attempt: nextAttempt,
+      media_runtime_path: mediaRuntimePath.value,
+      security: nativeAudioSecurityTelemetrySnapshot(),
+      peer: nativePeerConnectionTelemetry(peer),
+    },
+    immediate: true,
+  });
+
+  setTimeout(() => {
+    if (!shouldUseNativeAudioBridge()) return;
+    const currentPeer = nativePeerConnectionsRef.value.get(normalizedUserId);
+    if (currentPeer && streamHasLiveTrackKind(currentPeer.remoteStream, 'audio')) {
+      resetNativeAudioTrackRecovery(normalizedUserId);
+      return;
+    }
+    void syncMediaSecurityWithParticipants(true);
+    closeNativePeerConnection(normalizedUserId);
+    setTimeout(() => {
+      if (!shouldUseNativeAudioBridge()) return;
+      syncNativePeerConnectionsWithRoster();
+    }, NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS);
+  }, NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS);
+
+  return true;
+}
+
 async function playNativePeerAudio(peer, reason = 'unknown') {
   if (!(peer?.audio instanceof HTMLAudioElement)) return false;
   if (!streamHasLiveTrackKind(peer.remoteStream, 'audio')) return false;
@@ -6361,6 +6481,7 @@ async function playNativePeerAudio(peer, reason = 'unknown') {
   try {
     await peer.audio.play();
     setNativePeerAudioBridgeState(peer, 'playing', '');
+    resetNativeAudioTrackRecovery(peer.userId);
     return true;
   } catch (error) {
     if (nativeAudioPlaybackInterrupted(error)) {
@@ -6431,6 +6552,7 @@ function scheduleNativePeerAudioTrackDeadline(peer) {
         },
         immediate: true,
       });
+      scheduleNativeAudioTrackRecovery(peer, 'deadline_no_remote_audio_track');
     }
   }, 6000);
 }
@@ -6694,6 +6816,7 @@ function localTracksByKind(stream) {
   const out = {};
   if (!(stream instanceof MediaStream)) return out;
   for (const track of stream.getTracks()) {
+    if (track?.readyState === 'ended') continue;
     if (track.kind === 'audio' || track.kind === 'video') {
       out[track.kind] = track;
     }
@@ -6898,7 +7021,12 @@ async function syncNativePeerLocalTracks(peer) {
 
 async function ensureLocalMediaForNativeNegotiation() {
   if (!shouldMaintainNativePeerConnections()) return false;
-  if (localStreamRef.value instanceof MediaStream) return true;
+  if (localStreamRef.value instanceof MediaStream) {
+    if (controlState.micEnabled !== false && !streamHasLiveTrackKind(localStreamRef.value, 'audio')) {
+      return reconfigureLocalTracksFromSelectedDevices();
+    }
+    return true;
+  }
   return publishLocalTracks();
 }
 
@@ -7042,6 +7170,7 @@ function teardownNativePeerConnections() {
   for (const targetUserId of Array.from(nativePeerConnectionsRef.value.keys())) {
     closeNativePeerConnection(targetUserId);
   }
+  nativeAudioTrackRecoveryAttemptsByUserId.clear();
   if (nativePeerConnectionsRef.value.size > 0) {
     nativePeerConnectionsRef.value = new Map();
   }
@@ -7208,6 +7337,7 @@ function ensureNativePeerConnection(targetUserId) {
     }
     if (shouldUseNativeAudioBridge() && trackKind === 'audio') {
       clearNativePeerAudioTrackDeadline(peer);
+      resetNativeAudioTrackRecovery(normalizedTargetUserId);
       setNativePeerAudioBridgeState(peer, 'track_received', '');
       event?.track?.addEventListener?.('ended', () => {
         setNativePeerAudioBridgeState(peer, 'waiting_track', '');
@@ -7281,6 +7411,7 @@ function syncNativePeerConnectionsWithRoster() {
   for (const [userId] of nativePeerConnectionsRef.value) {
     if (!activePeerIds.has(userId)) {
       closeNativePeerConnection(userId);
+      resetNativeAudioTrackRecovery(userId);
     }
   }
 }
@@ -8014,9 +8145,13 @@ function unpublishSfuTracks(tracks) {
 
 function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
   const preserved = new Set();
+  const preservedTrackIds = new Set();
   for (const stream of preservedStreams) {
     if (stream instanceof MediaStream) {
       preserved.add(stream);
+      for (const track of stream.getTracks()) {
+        if (track?.id) preservedTrackIds.add(track.id);
+      }
     }
   }
 
@@ -8024,6 +8159,7 @@ function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
     if (!(stream instanceof MediaStream)) continue;
     if (preserved.has(stream)) continue;
     for (const track of stream.getTracks()) {
+      if (track?.id && preservedTrackIds.has(track.id)) continue;
       try {
         track.stop();
       } catch {
