@@ -336,10 +336,13 @@ try {
   requireContains(syncNativeMedia, 'const audioNeedsRebind = peer.audio.srcObject !== nextAudioStream;', 'native audio bridge only rebinds the audio element when the stream object changed');
   requireContains(syncNativeMedia, "void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');", 'native audio bridge retries playback without forcing a fresh load on every sync');
   requireContains(workspace, 'function ensureNativePeerAudioTransceiver', 'native audio bridge ensures an explicit audio transceiver for negotiation');
+  requireContains(workspace, 'function findNativePeerAudioTransceiver', 'native audio bridge selects the correct offered audio transceiver');
+  const findAudioTransceiver = extractFunction(workspace, 'findNativePeerAudioTransceiver');
+  requireContains(findAudioTransceiver, 'peer.pc.getTransceivers()', 'native audio bridge reuses transceivers created by the remote offer');
+  requireContains(findAudioTransceiver, "receiverKind === 'audio'", 'native audio bridge detects remote-offered audio transceivers by receiver kind');
+  requireContains(findAudioTransceiver, "mid !== '' || currentDirection !== ''", 'native audio bridge prefers the negotiated remote-offer audio transceiver');
   const ensureAudioTransceiver = extractFunction(workspace, 'ensureNativePeerAudioTransceiver');
-  requireContains(ensureAudioTransceiver, 'peer.pc.getTransceivers()', 'native audio bridge reuses transceivers created by the remote offer');
-  requireContains(ensureAudioTransceiver, "receiverKind !== 'audio'", 'native audio bridge detects remote-offered audio transceivers by receiver kind');
-  requireContains(ensureAudioTransceiver, "transceiver.direction = 'sendrecv';", 'native audio bridge upgrades remote-offered audio transceivers to sendrecv');
+  requireContains(ensureAudioTransceiver, "existing.direction = 'sendrecv';", 'native audio bridge upgrades remote-offered audio transceivers to sendrecv');
   const localTracksByKind = extractFunction(workspace, 'localTracksByKind');
   requireContains(localTracksByKind, "if (track?.readyState === 'ended') continue;", 'native audio bridge must not negotiate ended local tracks');
   requireContains(workspace, 'function nativeAudioBridgeHasLocalAudioTrack', 'native audio bridge can check for a live local mic before SDP negotiation');
@@ -467,7 +470,8 @@ try {
   const syncNativePeers = extractFunction(workspace, 'syncNativePeerConnectionsWithRoster');
   requireContains(syncNativePeers, 'if (nativePeerRequiresAudioOnlyRebuild(existing))', 'roster sync rebuilds stale native peers for audio-only bridge mode');
   const syncNativeLocalTracks = extractFunction(workspace, 'syncNativePeerLocalTracks');
-  requireContains(syncNativeLocalTracks, 'ensureNativePeerAudioTransceiver(peer);', 'native local track sync provisions an audio transceiver before negotiation');
+  requireContains(syncNativeLocalTracks, 'const audioTransceiver = ensureNativePeerAudioTransceiver(peer);', 'native local track sync provisions an audio transceiver before negotiation');
+  requireContains(syncNativeLocalTracks, 'sender !== primaryAudioSender', 'native local track sync detaches stale pre-offer audio senders');
 
   const bumpRender = extractFunction(workspace, 'bumpMediaRenderVersion');
   const bumpCount = (bumpRender.match(/mediaRenderVersion\.value = mediaRenderVersion\.value >= 1_000_000 \? 0 : mediaRenderVersion\.value \+ 1;/g) || []).length;

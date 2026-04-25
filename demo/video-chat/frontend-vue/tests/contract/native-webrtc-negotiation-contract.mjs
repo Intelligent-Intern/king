@@ -47,8 +47,8 @@ try {
   const answerBody = functionBody(source, 'handleNativeOfferSignal');
   assert.match(
     answerBody,
-    /await ensureLocalMediaForNativeNegotiation\(\);[\s\S]*await syncNativePeerLocalTracks\(peer\);[\s\S]*setRemoteDescription[\s\S]*createAnswer\(\)/,
-    'native answers must include current local tracks before createAnswer'
+    /await ensureLocalMediaForNativeNegotiation\(\);[\s\S]*setRemoteDescription[\s\S]*await syncNativePeerLocalTracks\(peer\);[\s\S]*createAnswer\(\)/,
+    'native answers must bind current local tracks to the offered transceiver before createAnswer'
   );
 
   assert.match(

@@ -57,6 +57,13 @@ export function createMediaSecuritySession(options = {}) {
   return new MediaSecuritySession(options);
 }
 
+function nativeEncodedFrameAadTrackId(trackKind = 'data') {
+  const normalizedKind = asString(trackKind).toLowerCase();
+  if (normalizedKind === 'audio') return 'native_audio';
+  if (normalizedKind === 'video') return 'native_video';
+  return 'native_data';
+}
+
 export class MediaSecuritySession {
   constructor(options = {}) {
     this.callId = asString(options.callId);
@@ -66,6 +73,15 @@ export class MediaSecuritySession {
     this.kexPolicy = normalizeKexPolicy(options.kexPolicy);
     this.deviceId = asString(options.deviceId) || `dev_${randomToken(16)}`;
     this.logger = typeof options.logger === 'function' ? options.logger : () => {};
+    this.nativeFrameErrorHandler = typeof options.onNativeFrameError === 'function'
+      ? options.onNativeFrameError
+      : null;
+    this.nativeSenderFrameErrorHandler = typeof options.onNativeSenderFrameError === 'function'
+      ? options.onNativeSenderFrameError
+      : null;
+    this.nativeReceiverFrameErrorHandler = typeof options.onNativeReceiverFrameError === 'function'
+      ? options.onNativeReceiverFrameError
+      : null;
     this.hybridKexProvider = hasHybridProvider(options.hybridKexProvider) ? options.hybridKexProvider : null;
     this.state = 'transport_only';
     this.epoch = 1;
@@ -609,7 +625,14 @@ export class MediaSecuritySession {
       throw new Error('wrong_key_id');
     }
 
-    const replayKey = `${sender}:${Number(header.epoch)}:${asString(header.sender_key_id)}`;
+    const replayKey = [
+      sender,
+      Number(header.epoch),
+      asString(header.sender_key_id),
+      asString(header.runtime_path),
+      asString(header.track_kind),
+      asString(trackId),
+    ].join(':');
     const lastSequence = Number(this.replayBySenderEpoch.get(replayKey) || 0);
     const sequence = Number(header.sequence || 0);
     if (sequence <= lastSequence) throw new Error('replay_detected');
@@ -635,12 +658,13 @@ export class MediaSecuritySession {
   }
 
   async protectNativeEncodedFrame(encodedFrame, { trackKind = 'video', trackId = '', timestamp = 0 } = {}) {
+    const aadTrackId = nativeEncodedFrameAadTrackId(trackKind || nativeFrameKind(encodedFrame));
     const protectedFrame = await this.protectFrame({
       data: encodedFrame?.data,
       runtimePath: 'webrtc_native',
       trackKind,
       frameKind: nativeFrameKind(encodedFrame),
-      trackId,
+      trackId: aadTrackId || trackId,
       timestamp: timestamp || Number(encodedFrame?.timestamp || Date.now()),
     });
     return protectedFrame.envelope;
@@ -648,12 +672,13 @@ export class MediaSecuritySession {
 
   async decryptNativeEncodedFrame(encodedFrame, senderUserId, { trackId = '', timestamp = 0 } = {}) {
     const envelope = decodeProtectedFrameEnvelope(encodedFrame?.data);
+    const aadTrackId = nativeEncodedFrameAadTrackId(envelope?.header?.track_kind);
     return this.decryptFrame({
       data: envelope.ciphertext,
       protected: envelope.header,
       publisherUserId: senderUserId,
       runtimePath: 'webrtc_native',
-      trackId,
+      trackId: aadTrackId || trackId,
       timestamp: timestamp || Number(encodedFrame?.timestamp || Date.now()),
     });
   }
@@ -672,6 +697,31 @@ export class MediaSecuritySession {
     });
   }
 
+  reportNativeFrameTransformError(direction, error, details = {}) {
+    const normalizedDirection = asString(direction) || 'unknown';
+    const payload = {
+      ...details,
+      direction: normalizedDirection,
+    };
+    this.logger(`[MediaSecurity] native ${normalizedDirection} frame dropped`, error, payload);
+
+    const handlers = [this.nativeFrameErrorHandler];
+    if (normalizedDirection === 'sender') handlers.push(this.nativeSenderFrameErrorHandler);
+    if (normalizedDirection === 'receiver') handlers.push(this.nativeReceiverFrameErrorHandler);
+
+    for (const handler of handlers) {
+      if (typeof handler !== 'function') continue;
+      try {
+        handler({
+          ...payload,
+          error,
+        });
+      } catch {
+        // Diagnostics callbacks must never break the fail-closed transform.
+      }
+    }
+  }
+
   attachNativeSenderTransform(sender, { trackKind = 'video', trackId = '' } = {}) {
     if (!sender || typeof sender.createEncodedStreams !== 'function') return false;
     if (this.nativeSenders.has(sender)) return true;
@@ -685,7 +735,10 @@ export class MediaSecuritySession {
             encodedFrame.data = await this.protectNativeEncodedFrame(encodedFrame, { trackKind, trackId });
             controller.enqueue(encodedFrame);
           } catch (error) {
-            this.logger('[MediaSecurity] native sender frame dropped', error);
+            this.reportNativeFrameTransformError('sender', error, {
+              trackKind,
+              trackId,
+            });
           }
         },
       }))
@@ -707,7 +760,10 @@ export class MediaSecuritySession {
             encodedFrame.data = await this.decryptNativeEncodedFrame(encodedFrame, senderUserId, { trackId });
             controller.enqueue(encodedFrame);
           } catch (error) {
-            this.logger('[MediaSecurity] native receiver frame dropped', error);
+            this.reportNativeFrameTransformError('receiver', error, {
+              senderUserId: normalizeUserId(senderUserId),
+              trackId,
+            });
           }
         },
       }))

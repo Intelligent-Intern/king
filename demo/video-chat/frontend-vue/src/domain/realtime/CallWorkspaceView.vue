@@ -724,6 +724,7 @@ import {
   nativeAudioPlaybackInterrupted,
   nativePeerConnectionTelemetry,
   nativeSdpAudioSummary,
+  nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
 } from './nativeAudioBridgeHelpers';
 import { SFUClient } from '../../lib/sfu/sfuClient';
@@ -858,10 +859,12 @@ const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
 const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
 const SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS = 15_000;
 const SFU_BACKPRESSURE_LOG_COOLDOWN_MS = 3000;
+const SFU_BACKPRESSURE_RECONNECT_AFTER_MS = 8000;
 const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
 });
+const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;
 const NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS = 500;
 const NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS = 250;
@@ -1047,6 +1050,7 @@ const mediaSecurityRecoveryLastByUserId = new Map();
 // Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
 const mediaSecurityHelloSentAtByUserId = new Map();
 const mediaSecurityHandshakeRetryingByUserId = new Set();
+const nativeFrameErrorLastLogByKey = new Map();
 const nativeAudioBridgeBlockDiagnosticsSent = new Set();
 const nativeAudioTrackRecoveryAttemptsByUserId = new Map();
 let mediaSecurityHandshakeWatchdogTimer = null;
@@ -1182,6 +1186,21 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
   const shouldDowngrade = bufferedAmount >= SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES
     || wlvcBackpressureSkipCount >= SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD;
   if (shouldDowngrade && downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')) {
+    resetWlvcBackpressureCounters();
+    return;
+  }
+
+  const sustainedBackpressureMs = wlvcBackpressureFirstAtMs > 0
+    ? Math.max(0, nowMs - wlvcBackpressureFirstAtMs)
+    : 0;
+  const shouldReconnect = sustainedBackpressureMs >= SFU_BACKPRESSURE_RECONNECT_AFTER_MS
+    || wlvcBackpressureSkipCount >= (SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD * 4);
+  if (shouldReconnect && restartSfuAfterVideoStall('sfu_send_backpressure', {
+    buffered_amount: bufferedAmount,
+    skipped_frame_count: wlvcBackpressureSkipCount,
+    sustained_backpressure_ms: sustainedBackpressureMs,
+    outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+  })) {
     resetWlvcBackpressureCounters();
   }
 }
@@ -1555,6 +1574,7 @@ function ensureMediaSecuritySession() {
     userId: currentUserId.value,
     policy: 'preferred',
     logger: mediaDebugLog,
+    onNativeFrameError: handleNativeMediaSecurityFrameError,
   };
   const existing = mediaSecuritySessionRef.value;
   const contextChanged = existing
@@ -1860,6 +1880,7 @@ async function sendMediaSecurityHello(targetUserId, force = false) {
 
 async function sendMediaSecuritySenderKey(targetUserId, force = false) {
   if (!isSocketOnline.value) return false;
+  const normalizedTargetId = Number(targetUserId || 0);
   const session = ensureMediaSecuritySession();
   const ready = await session.ensureReady();
   if (!ready) {
@@ -1882,6 +1903,14 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
   if (!force && mediaSecuritySenderKeySignalsSent.has(key)) return true;
   const signal = await session.buildSenderKeySignal(targetUserId);
   if (!signal) {
+    if (
+      Number.isInteger(normalizedTargetId)
+      && normalizedTargetId > 0
+      && !mediaSecurityHelloSentAtByUserId.has(normalizedTargetId)
+    ) {
+      mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
+      startMediaSecurityHandshakeWatchdog();
+    }
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -1942,7 +1971,7 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
       const normalizedTargetId = Number(targetUserId || 0);
       const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
       const peerState = String(peer?.state || '').trim();
-      if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'rekeying') {
+      if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'capability_ready' || peerState === 'rekeying') {
         const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
         if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
           console.warn(
@@ -1997,6 +2026,118 @@ function recoverMediaSecurityForPublisher(publisherUserId) {
     await sendMediaSecuritySenderKey(normalizedUserId, true);
     await syncMediaSecurityWithParticipants();
   })();
+}
+
+async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation') {
+  const targetUserId = Number(peer?.userId || 0);
+  if (!shouldUseNativeAudioBridge()) return true;
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === currentUserId.value) return false;
+  if (!isSocketOnline.value) return false;
+
+  const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  mediaSecurityStateVersion.value += 1;
+  if (!ready) return false;
+  if (session.canProtectForTargets([targetUserId])) return true;
+
+  await sendMediaSecurityHello(targetUserId, true);
+  await sendMediaSecuritySenderKey(targetUserId, true);
+  await syncMediaSecurityWithParticipants();
+
+  const secured = session.canProtectForTargets([targetUserId]);
+  if (!secured) {
+    setNativePeerAudioBridgeState(peer, 'waiting_security', '');
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'native_audio_waiting_for_e2ee',
+      code: 'native_audio_waiting_for_e2ee',
+      message: 'Native encrypted audio negotiation is waiting for the media-security handshake.',
+      payload: {
+        target_user_id: targetUserId,
+        reason: String(reason || 'native_audio_negotiation'),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+  }
+  return secured;
+}
+
+function resyncNativeAudioBridgePeerAfterSecurityReady(userId, reason = 'security_ready', forceOffer = false) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
+  if (!shouldMaintainNativePeerConnections()) return false;
+  if (shouldUseNativeAudioBridge() && !ensureMediaSecuritySession().canProtectForTargets([normalizedUserId])) return false;
+
+  const peer = nativePeerConnectionsRef.value.get(normalizedUserId) || ensureNativePeerConnection(normalizedUserId);
+  if (!peer?.pc || peer.pc.signalingState === 'closed') return false;
+  if (!forceOffer && !shouldSyncNativeLocalTracksBeforeOffer(peer)) return true;
+
+  void syncNativePeerLocalTracks(peer)
+    .then(() => {
+      synchronizeNativePeerMediaElements(peer);
+      scheduleNativePeerAudioTrackDeadline(peer);
+      if (peer.negotiating) {
+        peer.needsRenegotiate = true;
+        return;
+      }
+      if (peer.initiator || forceOffer) {
+        void sendNativeOffer(peer);
+      }
+    })
+    .catch((error) => mediaDebugLog('[WebRTC] native audio bridge resync failed', reason, error));
+  return true;
+}
+
+function handleNativeMediaSecurityFrameError(event = {}) {
+  const direction = String(event?.direction || '').trim().toLowerCase();
+  const error = event?.error;
+  const senderUserId = Number(event?.senderUserId || event?.sender_user_id || 0);
+  const trackId = String(event?.trackId || event?.track_id || '').trim();
+  const errorMessage = extractDiagnosticMessage(error, 'Native encrypted media frame could not be processed.');
+  const code = direction === 'receiver'
+    ? 'native_e2ee_frame_decrypt_failed'
+    : 'native_e2ee_frame_encrypt_failed';
+  const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
+  const nowMs = Date.now();
+  const lastLogMs = Number(nativeFrameErrorLastLogByKey.get(logKey) || 0);
+  const shouldLog = (nowMs - lastLogMs) >= NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS;
+  if (shouldLog) {
+    nativeFrameErrorLastLogByKey.set(logKey, nowMs);
+  }
+
+  if (shouldLog) {
+    console.error(
+      '[KingRT] SFU/native E2EE frame transform failed',
+      `direction=${direction || 'unknown'}`,
+      `user=${senderUserId || 'n/a'}`,
+      `track=${trackId || 'n/a'}`,
+      `error=${errorMessage}`,
+    );
+  }
+  if (shouldLog) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'error',
+      eventType: code,
+      code,
+      message: errorMessage,
+      payload: {
+        direction,
+        sender_user_id: senderUserId,
+        track_id: trackId,
+        media_runtime_path: mediaRuntimePath.value,
+        security: nativeAudioSecurityTelemetrySnapshot(),
+      },
+      immediate: true,
+    });
+  }
+
+  if (direction !== 'receiver' || !shouldRecoverMediaSecurityFromFrameError(error)) return;
+  if (!Number.isInteger(senderUserId) || senderUserId <= 0 || senderUserId === currentUserId.value) return;
+  recoverMediaSecurityForPublisher(senderUserId);
+  resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_e2ee_frame_error');
 }
 
 function setMediaRuntimePath(nextPath, reason) {
@@ -4783,6 +4924,7 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
         if (mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
           scheduleMediaSecurityParticipantSync('hello_accepted');
         }
+        resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'hello_accepted');
       }
       return;
     }
@@ -4793,6 +4935,7 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
       if (accepted) {
         mediaSecurityHelloSentAtByUserId.delete(normalizedSenderUserId);
         mediaSecurityHandshakeRetryingByUserId.delete(normalizedSenderUserId);
+        resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted');
       }
       if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
         scheduleMediaSecurityParticipantSync('sender_key_pending');
@@ -5546,6 +5689,11 @@ watch(
     if (!isSocketOnline.value) return;
     if (connectedParticipantUsers.value.length <= 1) return;
     void syncMediaSecurityWithParticipants();
+    if (!shouldMaintainNativePeerConnections()) return;
+    syncNativePeerConnectionsWithRoster();
+    for (const targetUserId of mediaSecurityTargetIds()) {
+      resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed');
+    }
   }
 );
 
@@ -6541,6 +6689,11 @@ function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
     setTimeout(() => {
       if (!shouldUseNativeAudioBridge()) return;
       syncNativePeerConnectionsWithRoster();
+      resyncNativeAudioBridgePeerAfterSecurityReady(
+        normalizedUserId,
+        'native_audio_track_recovery_rejoin',
+        true
+      );
     }, NATIVE_AUDIO_TRACK_RECOVERY_REJOIN_DELAY_MS);
   }, NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS);
 
@@ -6902,6 +7055,22 @@ function nativeAudioBridgeHasLocalAudioTrack() {
     && streamHasLiveTrackKind(localStreamRef.value, 'audio');
 }
 
+function nativeAudioBridgeLocalTrackTelemetry() {
+  const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
+  return {
+    stream_present: stream instanceof MediaStream,
+    mic_enabled: controlState.micEnabled !== false,
+    tracks: stream instanceof MediaStream
+      ? stream.getTracks().map((track) => ({
+          kind: String(track?.kind || '').trim().toLowerCase(),
+          id: String(track?.id || '').trim(),
+          ready_state: String(track?.readyState || '').trim().toLowerCase(),
+          enabled: Boolean(track?.enabled),
+        }))
+      : [],
+  };
+}
+
 function shouldExpectLocalNativeAudioTrack() {
   return controlState.micEnabled !== false;
 }
@@ -6943,37 +7112,60 @@ function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
   return false;
 }
 
-function ensureNativePeerAudioTransceiver(peer) {
-  if (!peer?.pc || typeof peer.pc.addTransceiver !== 'function') return false;
-  const transceivers = typeof peer.pc.getTransceivers === 'function' ? peer.pc.getTransceivers() : [];
+function findNativePeerAudioTransceiver(peer) {
+  const transceivers = typeof peer?.pc?.getTransceivers === 'function' ? peer.pc.getTransceivers() : [];
+  for (const transceiver of transceivers) {
+    const receiverKind = String(transceiver?.receiver?.track?.kind || '').trim().toLowerCase();
+    const mid = String(transceiver?.mid || '').trim();
+    const currentDirection = String(transceiver?.currentDirection || '').trim().toLowerCase();
+    if (receiverKind === 'audio' && (mid !== '' || currentDirection !== '')) return transceiver;
+  }
   for (const transceiver of transceivers) {
     const sender = transceiver?.sender || null;
     const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
     const receiverKind = String(transceiver?.receiver?.track?.kind || '').trim().toLowerCase();
-    if (senderKind !== 'audio' && receiverKind !== 'audio') continue;
+    if (senderKind === 'audio' || receiverKind === 'audio') return transceiver;
+  }
+  return null;
+}
+
+function nativePeerHasLocalLiveAudioSender(peer) {
+  const pc = peer?.pc || null;
+  if (!pc || typeof pc.getSenders !== 'function') return false;
+  return pc.getSenders().some((sender) => {
+    const kind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
+    return kind === 'audio' && sender?.track?.readyState !== 'ended';
+  });
+}
+
+function ensureNativePeerAudioTransceiver(peer) {
+  if (!peer?.pc || typeof peer.pc.addTransceiver !== 'function') return false;
+  const existing = findNativePeerAudioTransceiver(peer);
+  if (existing) {
+    const sender = existing?.sender || null;
     if (sender) {
       peer?.senderKinds?.set?.(sender, 'audio');
     }
     try {
-      if (transceiver.direction === 'recvonly' || transceiver.direction === 'inactive') {
-        transceiver.direction = 'sendrecv';
+      if (existing.direction === 'recvonly' || existing.direction === 'inactive') {
+        existing.direction = 'sendrecv';
       }
     } catch {
       // ignore transceiver direction updates on read-only browser shims
     }
-    return true;
+    return existing;
   }
   for (const sender of peer.pc.getSenders()) {
     const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
     if (senderKind === 'audio') {
       peer?.senderKinds?.set?.(sender, 'audio');
-      return true;
+      return sender;
     }
   }
   try {
     const transceiver = peer.pc.addTransceiver('audio', { direction: 'sendrecv' });
     peer?.senderKinds?.set?.(transceiver?.sender, 'audio');
-    return true;
+    return transceiver;
   } catch {
     return false;
   }
@@ -7000,6 +7192,32 @@ function reportNativeAudioSdpRejected(peer, code, message, payload = {}) {
     },
     immediate: true,
   });
+}
+
+async function replaceNativePeerSenderTrack(peer, sender, nextTrack, senderKind, reason = 'sync') {
+  try {
+    await sender.replaceTrack(nextTrack);
+    return true;
+  } catch (error) {
+    const normalizedKind = String(senderKind || '').trim().toLowerCase();
+    if (shouldUseNativeAudioBridge() && normalizedKind === 'audio') {
+      reportNativeAudioBridgeFailure(
+        peer,
+        'native_audio_sender_replace_track_failed',
+        'Audio is unavailable because the browser could not attach the local microphone to the encrypted audio bridge.',
+        {
+          reason: String(reason || 'sync'),
+          target_track_id: String(nextTrack?.id || ''),
+          target_track_state: String(nextTrack?.readyState || '').trim().toLowerCase(),
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
+          error_name: String(error?.name || '').trim(),
+          error_message: extractDiagnosticMessage(error, 'replaceTrack failed'),
+        },
+      );
+    }
+    return false;
+  }
 }
 
 function synchronizeNativePeerMediaElements(peer) {
@@ -7057,15 +7275,50 @@ function synchronizeNativePeerMediaElements(peer) {
 
 async function syncNativePeerLocalTracks(peer) {
   if (!peer?.pc || peer.pc.signalingState === 'closed') return;
-  ensureNativePeerAudioTransceiver(peer);
+  const audioTransceiver = ensureNativePeerAudioTransceiver(peer);
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
   const byKind = localTracksByKind(stream);
+  const primaryAudioSender = audioTransceiver?.sender || null;
+
+  if (
+    shouldUseNativeAudioBridge()
+    && shouldSendNativeTrackKind('audio')
+    && byKind.audio
+    && primaryAudioSender
+  ) {
+    const audioSender = primaryAudioSender;
+    peer?.senderKinds?.set?.(audioSender, 'audio');
+    try {
+      if (audioTransceiver.direction === 'recvonly' || audioTransceiver.direction === 'inactive') {
+        audioTransceiver.direction = 'sendrecv';
+      }
+    } catch {
+      // read-only shims still expose the sender, which is enough for tests
+    }
+    if (audioSender.track?.id !== byKind.audio.id) {
+      const replaced = await replaceNativePeerSenderTrack(
+        peer,
+        audioSender,
+        byKind.audio,
+        'audio',
+        'audio_transceiver_sync',
+      );
+      if (!replaced) return;
+    }
+  }
+
   const senders = peer.pc.getSenders();
 
   for (const sender of senders) {
     const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').toLowerCase();
     if (senderKind !== 'audio' && senderKind !== 'video') continue;
-    const nextTrack = shouldSendNativeTrackKind(senderKind)
+    const isStaleNativeAudioSender = shouldUseNativeAudioBridge()
+      && senderKind === 'audio'
+      && primaryAudioSender
+      && sender !== primaryAudioSender;
+    const nextTrack = isStaleNativeAudioSender
+      ? null
+      : shouldSendNativeTrackKind(senderKind)
       ? (byKind[senderKind] || null)
       : null;
     if (nextTrack && sender.track?.id === nextTrack.id) {
@@ -7083,17 +7336,16 @@ async function syncNativePeerLocalTracks(peer) {
         reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
           track_id: String(nextTrack?.id || ''),
           sender_kind: senderKind,
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
         });
         continue;
       }
       delete byKind[senderKind];
       continue;
     }
-    try {
-      await sender.replaceTrack(nextTrack);
-    } catch {
-      // ignore replace failures for unstable peers
-    }
+    const replaced = await replaceNativePeerSenderTrack(peer, sender, nextTrack, senderKind, 'sender_sync');
+    if (!replaced) continue;
     if (nextTrack) {
       const attached = attachMediaSecurityNativeSender(sender, nextTrack);
       if (!attached && shouldUseNativeAudioBridge() && senderKind === 'audio') {
@@ -7109,6 +7361,8 @@ async function syncNativePeerLocalTracks(peer) {
         reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
           track_id: String(nextTrack?.id || ''),
           sender_kind: senderKind,
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
         });
         continue;
       }
@@ -7138,10 +7392,26 @@ async function syncNativePeerLocalTracks(peer) {
         reportNativeAudioBridgeFailure(peer, 'native_audio_sender_transform_failed', nativeAudioBridgeFailureMessage(), {
           track_id: String(track?.id || ''),
           sender_kind: kind,
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
         });
       }
-    } catch {
-      // ignore duplicate addTrack attempts
+    } catch (error) {
+      if (shouldUseNativeAudioBridge() && kind === 'audio') {
+        reportNativeAudioBridgeFailure(
+          peer,
+          'native_audio_sender_add_track_failed',
+          'Audio is unavailable because the browser could not add the local microphone to the encrypted audio bridge.',
+          {
+            track_id: String(track?.id || ''),
+            track_state: String(track?.readyState || '').trim().toLowerCase(),
+            local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+            peer: nativePeerConnectionTelemetry(peer),
+            error_name: String(error?.name || '').trim(),
+            error_message: extractDiagnosticMessage(error, 'addTrack failed'),
+          },
+        );
+      }
     }
   }
 }
@@ -7187,6 +7457,14 @@ function resetNativeOfferRetry(peer) {
 
 function nativePeerHasRemoteAnswer(peer) {
   return Boolean(peer?.pc?.remoteDescription?.type);
+}
+
+function shouldSyncNativeLocalTracksBeforeOffer(peer) {
+  if (!peer?.pc) return false;
+  if (!shouldMaintainNativePeerConnections()) return false;
+  if (!shouldUseNativeAudioBridge()) return true;
+  if (peer.initiator) return true;
+  return Boolean(peer.pc.remoteDescription?.type);
 }
 
 function nativePeerConnectionIsFinal(peer) {
@@ -7314,6 +7592,10 @@ async function sendNativeOffer(peer) {
     return;
   }
   if (peer.pc.signalingState === 'closed') return;
+  if (shouldUseNativeAudioBridge() && !(await ensureNativeAudioBridgeSecurityReady(peer, 'native_offer'))) {
+    scheduleNativeOfferRetry(peer, 'media_security_not_ready');
+    return;
+  }
 
   peer.negotiating = true;
   try {
@@ -7353,7 +7635,10 @@ async function sendNativeOffer(peer) {
         'Native encrypted audio bridge blocked an offer without send-capable audio.',
         {
           sdp_summary: nativeSdpAudioSummary(local.sdp),
+          sdp_audio_summaries: nativeSdpAudioSummaries(local.sdp),
           signaling_state: String(peer.pc.signalingState || ''),
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
         },
       );
       return;
@@ -7544,7 +7829,9 @@ function ensureNativePeerConnection(targetUserId) {
 
   setNativePeerConnection(normalizedTargetUserId, peer);
   synchronizeNativePeerMediaElements(peer);
-  void syncNativePeerLocalTracks(peer);
+  if (shouldSyncNativeLocalTracksBeforeOffer(peer)) {
+    void syncNativePeerLocalTracks(peer);
+  }
   renderNativeRemoteVideos();
   if (peer.initiator) {
     void sendNativeOffer(peer);
@@ -7603,13 +7890,35 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       {
         sender_user_id: Number(senderUserId || 0),
         sdp_summary: nativeSdpAudioSummary(sdp),
+        sdp_audio_summaries: nativeSdpAudioSummaries(sdp),
       },
     );
+    return;
+  }
+  if (shouldUseNativeAudioBridge() && !(await ensureNativeAudioBridgeSecurityReady(peer, 'native_offer_received'))) {
+    scheduleNativeOfferRetryForUserId(senderUserId, 'media_security_not_ready');
     return;
   }
 
   try {
     resetNativeOfferRetry(peer);
+    const signalingState = String(peer.pc.signalingState || '').trim().toLowerCase();
+    if (signalingState === 'have-local-offer') {
+      const remoteOfferHasPriority = Number(senderUserId || 0) < currentUserId.value;
+      if (!remoteOfferHasPriority) {
+        mediaDebugLog('[WebRTC] ignoring colliding native offer from lower-priority peer', senderUserId);
+        return;
+      }
+      try {
+        await peer.pc.setLocalDescription({ type: 'rollback' });
+      } catch (rollbackError) {
+        mediaDebugLog('[WebRTC] native offer collision rollback failed', senderUserId, rollbackError);
+        return;
+      }
+    } else if (signalingState !== 'stable' && signalingState !== '') {
+      mediaDebugLog('[WebRTC] ignoring native offer while signaling state is not stable', senderUserId, signalingState);
+      return;
+    }
     const mediaReady = await ensureLocalMediaForNativeNegotiation();
     if (
       shouldUseNativeAudioBridge()
@@ -7631,6 +7940,23 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
     await syncNativePeerLocalTracks(peer);
     await flushNativePendingIce(peer);
+    if (
+      shouldUseNativeAudioBridge()
+      && shouldExpectLocalNativeAudioTrack()
+      && !nativePeerHasLocalLiveAudioSender(peer)
+    ) {
+      reportNativeAudioSdpRejected(
+        peer,
+        'native_audio_answer_without_sender_track',
+        'Native encrypted audio bridge cannot answer because the local microphone sender is not attached.',
+        {
+          sender_user_id: Number(senderUserId || 0),
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
+        },
+      );
+      return;
+    }
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     const local = peer.pc.localDescription;
@@ -7647,7 +7973,10 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
         {
           sender_user_id: Number(senderUserId || 0),
           sdp_summary: nativeSdpAudioSummary(local.sdp),
+          sdp_audio_summaries: nativeSdpAudioSummaries(local.sdp),
           signaling_state: String(peer.pc.signalingState || ''),
+          local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
+          peer: nativePeerConnectionTelemetry(peer),
         },
       );
       return;
@@ -7689,10 +8018,15 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
       {
         sender_user_id: Number(senderUserId || 0),
         sdp_summary: nativeSdpAudioSummary(sdp),
+        sdp_audio_summaries: nativeSdpAudioSummaries(sdp),
         signaling_state: String(peer.pc.signalingState || ''),
       },
     );
     scheduleNativeOfferRetry(peer, 'answer_without_send_audio');
+    return;
+  }
+  if (shouldUseNativeAudioBridge() && !(await ensureNativeAudioBridgeSecurityReady(peer, 'native_answer_received'))) {
+    scheduleNativeOfferRetry(peer, 'media_security_not_ready');
     return;
   }
 
@@ -7807,7 +8141,9 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
       }
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
-        void syncNativePeerLocalTracks(peer);
+        if (shouldSyncNativeLocalTracksBeforeOffer(peer)) {
+          void syncNativePeerLocalTracks(peer);
+        }
       }
       wlvcEncodeFailureCount = 0;
       wlvcEncodeWarmupUntilMs = 0;
@@ -7819,7 +8155,9 @@ async function switchMediaRuntimePath(nextPath, reason = 'unspecified') {
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
           synchronizeNativePeerMediaElements(peer);
-          void syncNativePeerLocalTracks(peer);
+          if (shouldSyncNativeLocalTracksBeforeOffer(peer)) {
+            void syncNativePeerLocalTracks(peer);
+          }
         }
       } else {
         teardownNativePeerConnections();
@@ -8589,6 +8927,7 @@ async function publishLocalTracks() {
     if (shouldMaintainNativePeerConnections()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
+        if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
         void syncNativePeerLocalTracks(peer).then(() => {
           if (peer.initiator && !peer.negotiating) {
             void sendNativeOffer(peer);
@@ -8848,6 +9187,7 @@ async function reconfigureLocalBackgroundFilterOnly() {
       if (shouldMaintainNativePeerConnections()) {
         syncNativePeerConnectionsWithRoster();
         for (const peer of nativePeerConnectionsRef.value.values()) {
+          if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
           await syncNativePeerLocalTracks(peer);
           if (peer.initiator && !peer.negotiating) {
             void sendNativeOffer(peer);
@@ -8937,6 +9277,7 @@ async function reconfigureLocalTracksFromSelectedDevices() {
     if (shouldMaintainNativePeerConnections()) {
       syncNativePeerConnectionsWithRoster();
       for (const peer of nativePeerConnectionsRef.value.values()) {
+        if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
         await syncNativePeerLocalTracks(peer);
         if (peer.initiator && !peer.negotiating) {
           void sendNativeOffer(peer);

@@ -93,6 +93,18 @@ export function nativeSdpAudioSection(sdp) {
   return '';
 }
 
+export function nativeSdpAudioSections(sdp) {
+  const normalized = String(sdp || '').replace(/\r?\n/g, '\n');
+  if (normalized.trim() === '') return [];
+  const sections = normalized.split(/\nm=/);
+  const out = [];
+  for (let index = 1; index < sections.length; index += 1) {
+    const section = `m=${sections[index]}`;
+    if (/^m=audio(?:\s|$)/.test(section)) out.push(section);
+  }
+  return out;
+}
+
 export function nativeSdpSectionDirection(section) {
   const normalized = String(section || '');
   if (/\na=inactive(?:\n|$)/.test(normalized)) return 'inactive';
@@ -115,10 +127,25 @@ export function nativeSdpAudioSummary(sdp) {
   };
 }
 
+export function nativeSdpAudioSummaries(sdp) {
+  return nativeSdpAudioSections(sdp).map((audioSection) => {
+    const portMatch = /^m=audio\s+([0-9]+)/.exec(audioSection);
+    const port = portMatch ? Number(portMatch[1]) : null;
+    const hasMsid = /\na=msid:[^\n]+/.test(audioSection) || /\na=ssrc:\d+ msid:/.test(audioSection);
+    return {
+      has_audio: true,
+      rejected: port === 0,
+      direction: nativeSdpSectionDirection(audioSection),
+      has_msid: hasMsid,
+    };
+  });
+}
+
 export function nativeSdpHasSendableAudio(sdp) {
-  const summary = nativeSdpAudioSummary(sdp);
-  if (!summary.has_audio) return false;
-  if (summary.rejected) return false;
-  if (summary.direction !== 'sendrecv' && summary.direction !== 'sendonly') return false;
-  return summary.has_msid;
+  return nativeSdpAudioSummaries(sdp).some((summary) => {
+    if (!summary.has_audio) return false;
+    if (summary.rejected) return false;
+    if (summary.direction !== 'sendrecv' && summary.direction !== 'sendonly') return false;
+    return summary.has_msid;
+  });
 }

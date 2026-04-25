@@ -14,7 +14,7 @@ const DEFAULT_INNER_FEATHER_STOPS = Object.freeze([
   { progress: 0.8, alpha: 0.9 },
   { progress: 1.0, alpha: 1.0 },
 ]);
-const LONG_RAF_FRAME_MS = 44;
+const LONG_RAF_FRAME_MS = 300;
 const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;
 
 // ITU-R BT.601 coefficients for RGB -> YCbCr conversion.
