@@ -816,6 +816,13 @@ import {
   layoutStrategyOptionsFor,
 } from './callLayoutUiOptions';
 import {
+  mergeLiveMediaPeerIntoRoster,
+  normalizeParticipantRow,
+  participantActivityWeight,
+  participantSnapshotSignature,
+  replaceNumericArray,
+} from './callWorkspaceRoster';
+import {
   apiRequest,
   extractErrorMessage,
   requestHeaders,
@@ -2014,39 +2021,6 @@ function ensureRoomBuckets(roomId) {
   }
 }
 
-function normalizeParticipantRow(raw) {
-  const user = raw && typeof raw.user === 'object' ? raw.user : {};
-  const userId = Number(user.id);
-  const connectionId = String(raw?.connection_id || '').trim();
-  return {
-    connectionId,
-    hasConnection: connectionId !== '',
-    roomId: normalizeRoomId(raw?.room_id || 'lobby'),
-    userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
-    displayName: String(user.display_name || '').trim() || `User ${userId || 'unknown'}`,
-    role: normalizeRole(user.role),
-    callRole: normalizeCallRole(user.call_role || raw?.call_role || 'participant'),
-    connectedAt: String(raw?.connected_at || ''),
-  };
-}
-
-function participantSnapshotSignature(rows) {
-  const normalizedRows = Array.isArray(rows) ? rows : [];
-  return normalizedRows
-    .map((row) => normalizeParticipantRow(row))
-    .filter((row) => row.userId > 0 || row.connectionId !== '')
-    .map((row) => [
-      row.roomId,
-      row.userId,
-      row.displayName,
-      row.role,
-      row.callRole,
-      row.hasConnection ? '1' : '0',
-    ].join('\u001f'))
-    .sort()
-    .join('\u001e');
-}
-
 function applyParticipantsSnapshot(rows) {
   const nextRows = Array.isArray(rows) ? rows : [];
   const nextSignature = participantSnapshotSignature(nextRows);
@@ -2072,35 +2046,6 @@ function currentUserParticipantRow() {
     connectedAt: currentUserConnectedAt,
     connections: 1,
   };
-}
-
-function mergeLiveMediaPeerIntoRoster(aggregate, peer, source = 'media') {
-  if (!(aggregate instanceof Map) || !peer || typeof peer !== 'object') return;
-  const peerUserId = Number(peer?.userId || 0);
-  if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId.value) return;
-
-  const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
-  const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || peer?.callRole || 'participant');
-  const existing = aggregate.get(peerUserId);
-  if (existing) {
-    existing.connections = Math.max(1, Number(existing.connections || 0));
-    if (String(existing.displayName || '').trim() === '') {
-      existing.displayName = displayName;
-    }
-    existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || callRole);
-    existing.mediaPeerSource = String(source || 'media');
-    return;
-  }
-
-  aggregate.set(peerUserId, {
-    userId: peerUserId,
-    displayName,
-    role: 'user',
-    callRole,
-    connectedAt: '',
-    connections: 1,
-    mediaPeerSource: String(source || 'media'),
-  });
 }
 
 const participantUsers = computed(() => {
@@ -2138,11 +2083,19 @@ const participantUsers = computed(() => {
   }
 
   for (const peer of remotePeersRef.value.values()) {
-    mergeLiveMediaPeerIntoRoster(aggregate, peer, 'sfu');
+    mergeLiveMediaPeerIntoRoster(aggregate, peer, {
+      currentUserId: currentUserId.value,
+      callParticipantRoles,
+      source: 'sfu',
+    });
   }
 
   for (const peer of nativePeerConnectionsRef.value.values()) {
-    mergeLiveMediaPeerIntoRoster(aggregate, peer, 'native');
+    mergeLiveMediaPeerIntoRoster(aggregate, peer, {
+      currentUserId: currentUserId.value,
+      callParticipantRoles,
+      source: 'native',
+    });
   }
 
   const currentUser = currentUserParticipantRow();
@@ -2190,19 +2143,6 @@ const isAloneInCall = computed(() => {
   if (participants.length !== 1) return false;
   return Number(participants[0]?.userId || 0) === currentUserId.value;
 });
-
-function participantActivityWeight(source) {
-  const normalized = String(source || '').trim().toLowerCase();
-  if (normalized === 'speaking') return 1;
-  if (normalized === 'motion') return 0.9;
-  if (normalized === 'media_frame') return 1;
-  if (normalized === 'media_track') return 0.85;
-  if (normalized === 'reaction') return 0.72;
-  if (normalized === 'chat') return 0.68;
-  if (normalized === 'typing') return 0.6;
-  if (normalized === 'control') return 0.45;
-  return 0.5;
-}
 
 function markParticipantActivity(userId, source = 'control', atMs = Date.now()) {
   const normalizedUserId = Number(userId);
@@ -2285,12 +2225,6 @@ function applyActivitySnapshot(rows) {
   for (const row of rows) {
     applyParticipantActivityPayload(row);
   }
-}
-
-function replaceNumericArray(target, values) {
-  target.splice(0, target.length, ...values
-    .map((value) => Number(value))
-    .filter((value) => Number.isInteger(value) && value > 0));
 }
 
 function applyCallLayoutPayload(payload) {
