@@ -6,20 +6,21 @@ Voltron partitions the model into blocks, the King orchestrator executes them
 across a mesh of peers, and `king_gguf_tensor_scan` provides native C tensor ops.
 The goal is producing output indistinguishable from Qwen itself, distributed.
 
-## Current Status: 2026-04-24
+## Current Status: 2026-04-25
 
-**IMPLEMENTED**: Fork built with layer range args. `--layer-start` and `--layer-end` CLI args work.
+**IMPLEMENTED & VERIFIED**: Fork built with layer range args. `--layer-start` and `--layer-end` CLI args work. All 3 math tests pass.
 
 ### Implementation Status
 
 | Component | Status |
 |-----------|--------|
-| CLI args (`--layer-start`, `--layer-end`) | ✓ Implemented |
-| `llama_cparams::layer_start/end` | ✓ Implemented |
-| Layer loop modification | ✓ Implemented |
+| CLI args (`--layer-start`, `--layer-end`) | ✓ Verified |
+| `llama_cparams::layer_start/end` | ✓ Verified |
+| Layer loop modification | ✓ Verified |
 | Build | ✓ Success (`llama-server` built) |
-| HTTP endpoint (`/v1/worker/layer`) | ✓ Working |
-| Distributed test | ⬜ Next |
+| HTTP endpoint (`/v1/worker/layer`) | ✓ Implemented |
+| Math tests (`2+2=`, `3+3=`, `10+1=`) | ✓ All PASS |
+| Distributed orchestration | ⬜ Next |
 
 ## Non-Negotiable Stack (UNCHANGED)
 
