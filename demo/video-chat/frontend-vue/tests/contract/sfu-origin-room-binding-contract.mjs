@@ -42,6 +42,8 @@ try {
   requireContains(sfuClient, "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })", 'snake_case join room binding');
 
   requireContains(sfuClient, "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })", 'snake_case publish command');
+  requireContains(sfuClient, 'isOpen(): boolean {', 'SFU client exposes socket open state without leaking private ws access');
+  requireContains(sfuClient, 'getBufferedAmount(): number {', 'SFU client exposes websocket send-buffer size for encoder backpressure');
   requireContains(sfuClient, "this.send({ type: 'sfu/subscribe', publisher_id: publisherId })", 'snake_case subscribe command');
   requireContains(sfuClient, "this.send({ type: 'sfu/unpublish', track_id: trackId })", 'snake_case unpublish command');
   requireContains(sfuClient, "publisher_id: frame.publisherId", 'snake_case frame publisher');

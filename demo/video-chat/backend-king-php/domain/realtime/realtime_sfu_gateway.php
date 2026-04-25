@@ -290,6 +290,7 @@ function videochat_handle_sfu_routes(
     $lastBrokerFrameId = $sfuDatabase instanceof PDO ? videochat_sfu_latest_frame_id($sfuDatabase, $roomId) : 0;
     $nextBrokerPollMs = 0;
     $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
+    $nextBrokerFramePresenceTouchMs = 0;
     $pendingFrameChunks = [];
     $cleanupPendingFrameChunks = static function () use (&$pendingFrameChunks): void {
         if ($pendingFrameChunks === []) {
@@ -313,6 +314,7 @@ function videochat_handle_sfu_routes(
         $userName,
         &$sfuDatabase,
         &$nextBrokerOpenAttemptMs,
+        &$nextBrokerFramePresenceTouchMs,
         $ensureBrokerDatabase
     ): void {
         $trackId = $msg['track_id'] ?? $msg['trackId'] ?? '';
@@ -325,13 +327,20 @@ function videochat_handle_sfu_routes(
         $activeSfuDatabase = $ensureBrokerDatabase();
         if ($activeSfuDatabase instanceof PDO && ($protectedFrame !== '' || $dataBase64 !== '' || is_array($frameData))) {
             try {
-                videochat_sfu_upsert_publisher(
-                    $activeSfuDatabase,
-                    $roomId,
-                    (string) $clientId,
-                    $userIdString,
-                    $userName
-                );
+                $nowMs = videochat_sfu_now_ms();
+                if ($nowMs >= $nextBrokerFramePresenceTouchMs) {
+                    videochat_sfu_upsert_publisher(
+                        $activeSfuDatabase,
+                        $roomId,
+                        (string) $clientId,
+                        $userIdString,
+                        $userName
+                    );
+                    if ((string) $trackId !== '') {
+                        videochat_sfu_touch_track($activeSfuDatabase, $roomId, (string) $clientId, (string) $trackId);
+                    }
+                    $nextBrokerFramePresenceTouchMs = $nowMs + 2000;
+                }
                 videochat_sfu_insert_frame(
                     $activeSfuDatabase,
                     $roomId,
@@ -342,7 +351,8 @@ function videochat_handle_sfu_routes(
                     (string) $frameType,
                     is_array($frameData) ? $frameData : [],
                     $protectedFrame,
-                    $dataBase64
+                    $dataBase64,
+                    false
                 );
             } catch (Throwable $error) {
                 videochat_sfu_log_runtime_warning('sfu_frame_broker_insert_failed', $error, [

@@ -452,6 +452,26 @@ try {
     videochat_realtime_sfu_assert($remainingPublisherRows === 0, 'SFU stale publisher cleanup must remove expired publishers');
     videochat_realtime_sfu_assert($remainingTrackRows === 0, 'SFU stale publisher cleanup must remove expired tracks');
 
+    videochat_sfu_upsert_publisher($pdo, 'room-gamma', 'publisher-stale', '400', 'Stale Publisher');
+    videochat_sfu_upsert_track($pdo, 'room-gamma', 'publisher-stale', 'camera-stale', 'video', 'Camera Stale');
+    $pdo->prepare('UPDATE sfu_publishers SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id')
+        ->execute([
+            ':updated_at_ms' => $staleCutoffMs,
+            ':room_id' => 'room-gamma',
+            ':publisher_id' => 'publisher-stale',
+        ]);
+    $pdo->prepare('UPDATE sfu_tracks SET updated_at_ms = :updated_at_ms WHERE room_id = :room_id AND publisher_id = :publisher_id')
+        ->execute([
+            ':updated_at_ms' => $staleCutoffMs,
+            ':room_id' => 'room-gamma',
+            ':publisher_id' => 'publisher-stale',
+        ]);
+    videochat_sfu_insert_frame($pdo, 'room-gamma', 'publisher-stale', '400', 'camera-stale', 1000, 'delta', [9], '', '', false);
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_publishers($pdo, 'room-gamma') === [],
+        'SFU frame insert can skip per-frame presence touches to reduce broker write pressure'
+    );
+
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-a', '100', 'camera-a', 1000, 'keyframe', [1, 2, 3]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1001, 'delta', [4, 5, 6]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1003, 'delta', [], $protectedFrame);

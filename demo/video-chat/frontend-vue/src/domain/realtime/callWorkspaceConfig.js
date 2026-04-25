@@ -27,11 +27,14 @@ export const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
 export const LOCAL_CAMERA_CAPTURE_WIDTH = 1280;
 export const LOCAL_CAMERA_CAPTURE_HEIGHT = 720;
 export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 24;
-export const SFU_WLVC_FRAME_WIDTH = 640;
-export const SFU_WLVC_FRAME_HEIGHT = 360;
-export const SFU_WLVC_FRAME_QUALITY = 68;
-export const SFU_WLVC_KEYFRAME_INTERVAL = 36;
-export const SFU_WLVC_ENCODE_INTERVAL_MS = 42;
+export const SFU_WLVC_FRAME_WIDTH = 960;
+export const SFU_WLVC_FRAME_HEIGHT = 540;
+export const SFU_WLVC_FRAME_QUALITY = 76;
+export const SFU_WLVC_KEYFRAME_INTERVAL = 24;
+export const SFU_WLVC_ENCODE_INTERVAL_MS = 50;
+export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
+export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 6 * 1024 * 1024;
+export const SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD = 10;
 export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';
 export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   realtime: Object.freeze({
@@ -39,11 +42,11 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     captureWidth: 960,
     captureHeight: 540,
     captureFrameRate: 18,
-    frameWidth: SFU_WLVC_FRAME_WIDTH,
-    frameHeight: SFU_WLVC_FRAME_HEIGHT,
-    frameQuality: 60,
-    keyFrameInterval: 42,
-    encodeIntervalMs: 55,
+    frameWidth: 640,
+    frameHeight: 360,
+    frameQuality: 62,
+    keyFrameInterval: 36,
+    encodeIntervalMs: 66,
   }),
   balanced: Object.freeze({
     label: 'Balanced',
@@ -58,14 +61,14 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   }),
   quality: Object.freeze({
     label: 'Sharp',
-    captureWidth: 1600,
-    captureHeight: 900,
+    captureWidth: 1920,
+    captureHeight: 1080,
     captureFrameRate: 24,
-    frameWidth: SFU_WLVC_FRAME_WIDTH,
-    frameHeight: SFU_WLVC_FRAME_HEIGHT,
-    frameQuality: 78,
-    keyFrameInterval: 30,
-    encodeIntervalMs: 42,
+    frameWidth: 1280,
+    frameHeight: 720,
+    frameQuality: 82,
+    keyFrameInterval: 20,
+    encodeIntervalMs: 50,
   }),
 });
 export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(

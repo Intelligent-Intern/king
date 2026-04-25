@@ -151,6 +151,10 @@ try {
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
   requireContains(workspaceConfig, 'export function resolveSfuVideoQualityProfile(value)', 'WLVC video quality profile resolver exists');
+  requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 960;', 'balanced WLVC frame width is higher than the old 360p baseline');
+  requireContains(workspaceConfig, 'frameWidth: 1280,', 'quality WLVC profile exposes a 720p output option');
+  requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES', 'WLVC encode loop has a websocket backpressure high-water mark');
+  requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES', 'WLVC encode loop has a websocket backpressure critical mark');
 
   const workspaceShell = readFromFrontend('src/layouts/WorkspaceShell.vue');
   requireContains(workspaceShell, 'id="call-left-video-quality"', 'workspace sidebar exposes outgoing video quality select');
@@ -162,6 +166,7 @@ try {
   requireContains(telemetry, 'preferred_path: normalizePath(event?.capabilities?.preferred_path)', 'runtime transition capability telemetry');
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
+  const sfuWlvcFrameMetadata = readFromFrontend('src/domain/realtime/sfuWlvcFrameMetadata.js');
   const nativeAudioBridgeHelpers = readFromFrontend('src/domain/realtime/nativeAudioBridgeHelpers.js');
   const setRuntime = extractFunction(workspace, 'setMediaRuntimePath');
   requireContains(setRuntime, 'appendMediaRuntimeTransitionEvent({', 'runtime switch telemetry append');
@@ -269,10 +274,26 @@ try {
   const decodePeer = extractFunction(workspace, 'decodeSfuFrameForPeer');
   requireContains(decodePeer, 'markRemoteFrameActivity(publisherUserId);', 'remote frame activity marking');
   requireContains(decodePeer, 'decryptProtectedFrameEnvelope({', 'remote protected frame decrypt');
-  requireContains(decodePeer, 'const decoded = peer.decoder.decodeFrame({', 'remote decode invocation');
-  requireContains(decodePeer, 'ctx.putImageData(imageData, 0, 0);', 'remote decoded canvas paint');
-  requireContains(decodePeer, 'markRemotePeerRenderable(peer);', 'remote decoded frame reveals renderable media');
-  requireContains(decodePeer, 'renderCallVideoLayout();', 'remote decode render recovery');
+  requireContains(decodePeer, 'const frameMetadata = readWlvcFrameMetadata(frameData, {', 'remote decode reads WLVC frame metadata from payload');
+  requireContains(decodePeer, 'await ensureSfuRemotePeerDecoderForFrame(publisherId, peer, frameMetadata);', 'remote decode reconfigures decoder for payload dimensions');
+  requireContains(decodePeer, 'const frameDescriptor = buildSfuFrameDescriptor(frameData, frame.timestamp, frameMetadata, frame.type);', 'remote decode descriptor uses metadata dimensions');
+  requireContains(decodePeer, 'let decoded = peer.decoder.decodeFrame(frameDescriptor);', 'remote decode invocation');
+  requireContains(decodePeer, 'renderDecodedSfuFrame(peer, decoded);', 'remote decode delegates canvas paint');
+  const frameMetadataHelper = extractFunction(sfuWlvcFrameMetadata, 'readWlvcFrameMetadata');
+  requireContains(frameMetadataHelper, 'wlvcDecodeFrame(frameData)', 'WLVC metadata helper parses the payload header');
+  requireContains(frameMetadataHelper, 'width: normalizePositiveInteger(decoded.frame.width, fallbackWidth)', 'WLVC metadata helper returns payload width');
+  requireContains(frameMetadataHelper, 'type: normalizeSfuFrameType(decoded.frame.frame_type, fallbackType)', 'WLVC metadata helper returns payload frame type');
+  const frameDescriptorHelper = extractFunction(sfuWlvcFrameMetadata, 'buildSfuFrameDescriptor');
+  requireContains(frameDescriptorHelper, 'width: normalizePositiveInteger(metadata?.width, SFU_WLVC_FRAME_WIDTH)', 'WLVC descriptor helper uses payload width with config fallback');
+  requireContains(frameDescriptorHelper, 'height: normalizePositiveInteger(metadata?.height, SFU_WLVC_FRAME_HEIGHT)', 'WLVC descriptor helper uses payload height with config fallback');
+  const ensureDecoderForFrame = extractFunction(workspace, 'ensureSfuRemotePeerDecoderForFrame');
+  requireContains(ensureDecoderForFrame, 'width: nextWidth', 'remote decoder reconfigure uses payload width');
+  requireContains(ensureDecoderForFrame, 'height: nextHeight', 'remote decoder reconfigure uses payload height');
+  requireContains(ensureDecoderForFrame, 'peer.decoder = markRaw(nextDecoder);', 'remote decoder reconfigure preserves raw codec instances');
+  const renderDecodedFrame = extractFunction(workspace, 'renderDecodedSfuFrame');
+  requireContains(renderDecodedFrame, 'ctx.putImageData(imageData, 0, 0);', 'remote decoded canvas paint');
+  requireContains(renderDecodedFrame, 'markRemotePeerRenderable(peer);', 'remote decoded frame reveals renderable media');
+  requireContains(renderDecodedFrame, 'renderCallVideoLayout();', 'remote decode render recovery');
 
   const transportOnlyFallback = extractFunction(workspace, 'shouldSendTransportOnlySfuFrame');
   requireContains(transportOnlyFallback, "message.includes('unsupported_capability')", 'transport-only fallback handles missing media security capability');
@@ -386,6 +407,10 @@ try {
   requireContains(encodePipeline, 'const videoProfile = currentSfuVideoProfile();', 'encode pipeline resolves the configured SFU video profile');
   requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
   requireNotContains(encodePipeline, 'document.hidden', 'SFU frame publishing must continue from background tabs');
+  requireContains(encodePipeline, 'if (wlvcEncodeInFlight) return;', 'WLVC encode loop avoids overlapping async interval work');
+  requireContains(encodePipeline, 'getSfuClientBufferedAmount()', 'WLVC encode loop checks websocket bufferedAmount');
+  requireContains(encodePipeline, 'handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);', 'WLVC encode loop skips frames under websocket backpressure');
+  requireContains(encodePipeline, 'const encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);', 'WLVC encode loop derives keyframe state from encoded payload header');
   requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
   requireContains(encodePipeline, 'outgoingFrame.protectedFrame = protectedFrame.protectedFrame;', 'SFU encoder upgrades to protected frame when available');
   requireContains(encodePipeline, "outgoingFrame.protectionMode = 'protected';", 'SFU encoder marks protected frames');
@@ -395,6 +420,10 @@ try {
   requireContains(encodePipeline, 'videoProfile.keyFrameInterval', 'encode pipeline honors configured keyframe interval');
   requireContains(encodePipeline, 'videoProfile.encodeIntervalMs', 'encode pipeline honors configured encode interval');
   requireContains(encodePipeline, "downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')", 'repeated encode failures lower SFU quality before fallback');
+  requireContains(workspace, 'function handleWlvcEncodeBackpressure', 'workspace exposes WLVC send-buffer backpressure handling');
+  requireContains(workspace, "eventType: 'sfu_video_backpressure'", 'WLVC send-buffer backpressure emits diagnostics');
+  requireContains(workspace, "eventType: 'sfu_remote_video_frozen'", 'remote video freeze detector emits diagnostics');
+  requireContains(workspace, 'function restartSfuAfterVideoStall', 'workspace can reconnect SFU after hard video stalls');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');
   requireContains(handleFrame, 'let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame peer lookup supports publisher-key aliasing');

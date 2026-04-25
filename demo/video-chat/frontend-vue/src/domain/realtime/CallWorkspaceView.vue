@@ -729,6 +729,12 @@ import {
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 import { createDecoder as createTsDecoder } from '../../lib/wavelet/codec.js';
+import {
+  buildSfuFrameDescriptor,
+  normalizePositiveInteger,
+  readWlvcFrameMetadata,
+  sfuFrameTypeFromWlvcData,
+} from './sfuWlvcFrameMetadata';
 import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './mediaSecurity';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
@@ -761,10 +767,13 @@ import {
   SFU_PUBLISH_RETRY_DELAY_MS,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
+  SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD,
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,
   SFU_WLVC_FRAME_WIDTH,
   SFU_WLVC_KEYFRAME_INTERVAL,
+  SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES,
+  SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES,
   TYPING_LOCAL_STOP_MS,
   TYPING_SWEEP_MS,
   USERS_PAGE_SIZE,
@@ -842,10 +851,13 @@ const ACTIVITY_PUBLISH_INTERVAL_MS = 800;
 const ACTIVITY_MOTION_SAMPLE_MS = 500;
 const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
 const REMOTE_VIDEO_STALL_THRESHOLD_MS = 8000;
+const REMOTE_VIDEO_FREEZE_THRESHOLD_MS = 7000;
 const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 3000;
 const MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS = 5000;
 const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
 const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
+const SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS = 15_000;
+const SFU_BACKPRESSURE_LOG_COOLDOWN_MS = 3000;
 const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
@@ -1019,7 +1031,12 @@ let wlvcEncodeFailureCount = 0;
 let wlvcEncodeWarmupUntilMs = 0;
 let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
+let wlvcEncodeInFlight = false;
+let wlvcBackpressureSkipCount = 0;
+let wlvcBackpressureFirstAtMs = 0;
+let wlvcBackpressureLastLogAtMs = 0;
 let sfuAutoQualityDowngradeLastAtMs = 0;
+let sfuVideoRecoveryLastAtMs = 0;
 let mediaSecuritySyncInFlight = false;
 let mediaSecuritySyncHintLastAtMs = 0;
 let mediaSecurityResyncTimer = null;
@@ -1109,6 +1126,109 @@ function captureClientDiagnosticError(eventType, error, payload = {}, options = 
   });
 }
 
+function isSfuClientOpen() {
+  const client = sfuClientRef.value;
+  if (!client) return false;
+  if (typeof client.isOpen === 'function') return client.isOpen();
+  return client.ws?.readyState === WebSocket.OPEN;
+}
+
+function getSfuClientBufferedAmount() {
+  const client = sfuClientRef.value;
+  if (!client) return 0;
+  const amount = typeof client.getBufferedAmount === 'function'
+    ? client.getBufferedAmount()
+    : Number(client.ws?.bufferedAmount || 0);
+  return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+function resetWlvcBackpressureCounters() {
+  wlvcBackpressureSkipCount = 0;
+  wlvcBackpressureFirstAtMs = 0;
+}
+
+function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
+  const nowMs = Date.now();
+  if (wlvcBackpressureFirstAtMs <= 0) {
+    wlvcBackpressureFirstAtMs = nowMs;
+  }
+  wlvcBackpressureSkipCount += 1;
+
+  if ((nowMs - wlvcBackpressureLastLogAtMs) >= SFU_BACKPRESSURE_LOG_COOLDOWN_MS) {
+    wlvcBackpressureLastLogAtMs = nowMs;
+    console.warn(
+      '[KingRT] SFU video backpressure - skipping outgoing WLVC frame',
+      `buffered=${bufferedAmount}`,
+      `skipped=${wlvcBackpressureSkipCount}`,
+      `track=${String(trackId || '')}`,
+      `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
+    );
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_video_backpressure',
+      code: 'sfu_video_backpressure',
+      message: 'Outgoing SFU video frames are being skipped because the websocket send buffer is full.',
+      payload: {
+        buffered_amount: bufferedAmount,
+        skipped_frame_count: wlvcBackpressureSkipCount,
+        track_id: String(trackId || ''),
+        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+        media_runtime_path: mediaRuntimePath.value,
+      },
+    });
+  }
+
+  const shouldDowngrade = bufferedAmount >= SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES
+    || wlvcBackpressureSkipCount >= SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD;
+  if (shouldDowngrade && downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')) {
+    resetWlvcBackpressureCounters();
+  }
+}
+
+function restartSfuAfterVideoStall(reason, payload = {}) {
+  const nowMs = Date.now();
+  if ((nowMs - sfuVideoRecoveryLastAtMs) < SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS) {
+    return false;
+  }
+  sfuVideoRecoveryLastAtMs = nowMs;
+
+  console.warn(
+    '[KingRT] restarting SFU socket after video stall',
+    `reason=${String(reason || 'video_stall')}`,
+    `runtime=${mediaRuntimePath.value}`,
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'sfu_video_reconnect_after_stall',
+    code: 'sfu_video_reconnect_after_stall',
+    message: 'The SFU socket is being reconnected because remote video stopped producing fresh frames.',
+    payload: {
+      ...payload,
+      reason: String(reason || 'video_stall'),
+      media_runtime_path: mediaRuntimePath.value,
+      remote_peer_count: remotePeersRef.value.size,
+    },
+    immediate: true,
+  });
+
+  if (sfuClientRef.value) {
+    sfuClientRef.value.leave();
+    sfuClientRef.value = null;
+  }
+  sfuConnected.value = false;
+  localTracksPublishedToSfu = false;
+  stopSfuTrackAnnounceTimer();
+
+  setTimeout(() => {
+    if (shouldConnectSfu.value) {
+      initSFU();
+    }
+  }, SFU_CONNECT_RETRY_DELAY_MS);
+  return true;
+}
+
 function checkRemoteVideoStalls() {
   if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
@@ -1121,7 +1241,76 @@ function checkRemoteVideoStalls() {
     const createdAtMs = Number(peer.createdAtMs || 0);
     const frameCount = Number(peer.frameCount || 0);
     const stalledLoggedAtMs = Number(peer.stalledLoggedAtMs || 0);
-    if (createdAtMs <= 0 || frameCount > 0) continue;
+    const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
+    const lastReceivedFrameAtMs = Number(peer.lastReceivedFrameAtMs || 0);
+    if (createdAtMs <= 0) continue;
+
+    if (frameCount > 0) {
+      if (lastFrameAtMs <= 0 || (nowMs - lastFrameAtMs) < REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
+        continue;
+      }
+      if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
+        continue;
+      }
+
+      const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
+      const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
+      console.warn(
+        '[KingRT] SFU remote video frozen',
+        `id=${publisherId}`,
+        `user=${Number(peer.userId || 0)}`,
+        `last_frame=${frozenAgeMs}ms`,
+        `last_received=${receiveGapMs}ms`,
+        `frames=${frameCount}`,
+        `runtime=${mediaRuntimePath.value}`,
+      );
+      peer.stalledLoggedAtMs = nowMs;
+      peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
+      if (typeof peer.decoder?.reset === 'function' && receiveGapMs < REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
+        try {
+          peer.decoder.reset();
+        } catch {
+          // decoder recovery is best-effort; reconnect below handles hard stalls.
+        }
+      }
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'error',
+        eventType: 'sfu_remote_video_frozen',
+        code: 'sfu_remote_video_frozen',
+        message: 'Remote SFU video rendered earlier but stopped producing fresh decoded frames.',
+        payload: {
+          publisher_id: publisherId,
+          publisher_user_id: Number(peer.userId || 0),
+          publisher_name: String(peer.displayName || '').trim(),
+          track_count: trackCount,
+          frame_count: frameCount,
+          received_frame_count: Number(peer.receivedFrameCount || 0),
+          frozen_age_ms: frozenAgeMs,
+          receive_gap_ms: receiveGapMs,
+          freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+          remote_peer_count: remotePeersRef.value.size,
+          sfu_connected: sfuConnected.value,
+          connection_state: connectionState.value,
+          media_runtime_path: mediaRuntimePath.value,
+        },
+        immediate: true,
+      });
+      if (sfuClientRef.value) {
+        sfuClientRef.value.subscribe(publisherId);
+      }
+      if (Number(peer.freezeRecoveryCount || 0) >= 2 || receiveGapMs >= REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 2) {
+        restartSfuAfterVideoStall('remote_video_frozen', {
+          publisher_id: publisherId,
+          publisher_user_id: Number(peer.userId || 0),
+          frozen_age_ms: frozenAgeMs,
+          receive_gap_ms: receiveGapMs,
+          freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+        });
+      }
+      continue;
+    }
+
     if ((nowMs - createdAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
     if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < REMOTE_VIDEO_STALL_THRESHOLD_MS) continue;
 
@@ -1169,6 +1358,13 @@ function checkRemoteVideoStalls() {
         `user=${Number(peer.userId || 0)}`,
       );
       sfuClientRef.value.subscribe(publisherId);
+    }
+    if (stalledAgeMs > REMOTE_VIDEO_STALL_THRESHOLD_MS * 3) {
+      restartSfuAfterVideoStall('remote_video_never_started', {
+        publisher_id: publisherId,
+        publisher_user_id: Number(peer.userId || 0),
+        age_ms: stalledAgeMs,
+      });
     }
   }
 }
@@ -5874,9 +6070,9 @@ function getSfuRemotePeerByFrameIdentity(publisherId, publisherUserId) {
 function promotePeerToTsDecoder(peer) {
   if (!peer || typeof peer !== 'object') return false;
   const nextDecoder = createTsDecoder({
-    width: SFU_WLVC_FRAME_WIDTH,
-    height: SFU_WLVC_FRAME_HEIGHT,
-    quality: SFU_WLVC_FRAME_QUALITY,
+    width: Number(peer.frameWidth || SFU_WLVC_FRAME_WIDTH),
+    height: Number(peer.frameHeight || SFU_WLVC_FRAME_HEIGHT),
+    quality: Number(peer.frameQuality || SFU_WLVC_FRAME_QUALITY),
   });
   if (!nextDecoder) return false;
 
@@ -5971,6 +6167,9 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
       lastFrameAtMs: Number(existingPeer.lastFrameAtMs || 0),
       lastReceivedFrameAtMs: Number(existingPeer.lastReceivedFrameAtMs || 0),
       stalledLoggedAtMs: Number(existingPeer.stalledLoggedAtMs || 0),
+      frameWidth: Number(existingPeer.frameWidth || SFU_WLVC_FRAME_WIDTH),
+      frameHeight: Number(existingPeer.frameHeight || SFU_WLVC_FRAME_HEIGHT),
+      frameQuality: Number(existingPeer.frameQuality || SFU_WLVC_FRAME_QUALITY),
       decoderRuntime: String(existingPeer.decoderRuntime || remoteDecoderRuntimeName(existingPeer.decoder)),
       decoderFallbackApplied: Boolean(existingPeer.decoderFallbackApplied),
     };
@@ -6040,6 +6239,10 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     lastFrameAtMs: 0,
     lastReceivedFrameAtMs: 0,
     stalledLoggedAtMs: 0,
+    frameWidth: SFU_WLVC_FRAME_WIDTH,
+    frameHeight: SFU_WLVC_FRAME_HEIGHT,
+    frameQuality: SFU_WLVC_FRAME_QUALITY,
+    freezeRecoveryCount: 0,
   };
   setSfuRemotePeer(publisherId, peer);
 
@@ -7779,7 +7982,7 @@ function publishLocalTracksToSfuIfReady(options = {}) {
   const force = options?.force === true;
   if (!sfuClientRef.value) return false;
   if (localTracksPublishedToSfu && !force) return true;
-  if (sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) return false;
+  if (!isSfuClientOpen()) return false;
   const stream = localStreamRef.value instanceof MediaStream ? localStreamRef.value : null;
   if (!(stream instanceof MediaStream)) return false;
 
@@ -8250,6 +8453,8 @@ function stopLocalEncodingPipeline() {
     clearInterval(encodeIntervalRef.value);
     encodeIntervalRef.value = null;
   }
+  wlvcEncodeInFlight = false;
+  resetWlvcBackpressureCounters();
   if (videoEncoderRef.value) {
     if (typeof videoEncoderRef.value.destroy === 'function') {
       videoEncoderRef.value.destroy();
@@ -8482,24 +8687,32 @@ async function startEncodingPipeline(videoTrack) {
 
   encodeIntervalRef.value = setInterval(async () => {
     if (!isWlvcRuntimePath()) return;
-    if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
+    if (wlvcEncodeInFlight) return;
+    if (!videoEncoderRef.value || !sfuClientRef.value || !isSfuClientOpen()) {
+      return;
+    }
+    const bufferedAmount = getSfuClientBufferedAmount();
+    if (bufferedAmount >= SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) {
+      handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
       return;
     }
     if (video.readyState < 2) return;
+    if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const timestamp = Date.now();
-
+    wlvcEncodeInFlight = true;
     try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const timestamp = Date.now();
       const encoded = videoEncoderRef.value.encodeFrame(imageData, timestamp);
+      const encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);
       const outgoingFrame = {
         publisherId: String(sessionState.userId),
         publisherUserId: String(sessionState.userId),
         trackId: videoTrack.id,
         timestamp: encoded.timestamp,
         data: encoded.data,
-        type: encoded.type,
+        type: encodedFrameType,
         protectionMode: 'transport_only',
       };
 
@@ -8510,7 +8723,7 @@ async function startEncodingPipeline(videoTrack) {
             data: encoded.data,
             runtimePath: 'wlvc_sfu',
             trackKind: 'video',
-            frameKind: encoded.type,
+            frameKind: encodedFrameType,
             trackId: videoTrack.id,
             timestamp: encoded.timestamp,
           });
@@ -8540,6 +8753,9 @@ async function startEncodingPipeline(videoTrack) {
       }
 
       sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+      if (getSfuClientBufferedAmount() < SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) {
+        resetWlvcBackpressureCounters();
+      }
       wlvcEncodeFailureCount = 0;
       wlvcEncodeFirstFailureAtMs = 0;
     } catch (e) {
@@ -8580,6 +8796,8 @@ async function startEncodingPipeline(videoTrack) {
         wlvcEncodeFirstFailureAtMs = 0;
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
       }
+    } finally {
+      wlvcEncodeInFlight = false;
     }
   }, videoProfile.encodeIntervalMs);
 }
@@ -8774,6 +8992,81 @@ function markRemoteFrameActivity(publisherUserId) {
   markParticipantActivity(normalizedUserId, 'media_frame', nowMs);
 }
 
+async function ensureSfuRemotePeerDecoderForFrame(publisherId, peer, metadata) {
+  if (!peer || typeof peer !== 'object') return false;
+  const nextWidth = normalizePositiveInteger(metadata?.width, Number(peer.frameWidth || SFU_WLVC_FRAME_WIDTH));
+  const nextHeight = normalizePositiveInteger(metadata?.height, Number(peer.frameHeight || SFU_WLVC_FRAME_HEIGHT));
+  const nextQuality = normalizePositiveInteger(metadata?.quality, Number(peer.frameQuality || SFU_WLVC_FRAME_QUALITY));
+  const currentWidth = normalizePositiveInteger(peer.frameWidth, SFU_WLVC_FRAME_WIDTH);
+  const currentHeight = normalizePositiveInteger(peer.frameHeight, SFU_WLVC_FRAME_HEIGHT);
+  const currentQuality = normalizePositiveInteger(peer.frameQuality, SFU_WLVC_FRAME_QUALITY);
+
+  if (peer.decoder && currentWidth === nextWidth && currentHeight === nextHeight && currentQuality === nextQuality) {
+    return true;
+  }
+
+  let nextDecoder = null;
+  try {
+    nextDecoder = await createHybridDecoder({
+      width: nextWidth,
+      height: nextHeight,
+      quality: nextQuality,
+    });
+  } catch (error) {
+    captureClientDiagnosticError('sfu_remote_decoder_reconfigure_failed', error, {
+      publisher_id: publisherId,
+      frame_width: nextWidth,
+      frame_height: nextHeight,
+      frame_quality: nextQuality,
+    }, {
+      code: 'sfu_remote_decoder_reconfigure_failed',
+    });
+    return false;
+  }
+
+  if (!nextDecoder) return false;
+
+  try {
+    peer.decoder?.destroy?.();
+  } catch {
+    // ignore stale decoder cleanup failures during size switches
+  }
+
+  peer.decoder = markRaw(nextDecoder);
+  peer.decoderRuntime = remoteDecoderRuntimeName(nextDecoder);
+  peer.decoderFallbackApplied = false;
+  peer.frameWidth = nextWidth;
+  peer.frameHeight = nextHeight;
+  peer.frameQuality = nextQuality;
+  if (peer.decodedCanvas instanceof HTMLCanvasElement) {
+    peer.decodedCanvas.width = nextWidth;
+    peer.decodedCanvas.height = nextHeight;
+  }
+  mediaDebugLog('[SFU] Remote decoder reconfigured', publisherId, `${nextWidth}x${nextHeight}`, `q=${nextQuality}`);
+  return true;
+}
+
+function renderDecodedSfuFrame(peer, decoded) {
+  if (!peer || !decoded?.data) return false;
+  peer.frameCount = Number(peer.frameCount || 0) + 1;
+  peer.lastFrameAtMs = Date.now();
+  peer.stalledLoggedAtMs = 0;
+  peer.freezeRecoveryCount = 0;
+  const canvas = peer.decodedCanvas;
+  if (!(canvas instanceof HTMLCanvasElement)) return false;
+  if (canvas.width !== decoded.width) canvas.width = decoded.width;
+  if (canvas.height !== decoded.height) canvas.height = decoded.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
+  ctx.putImageData(imageData, 0, 0);
+  if (!(canvas.parentElement instanceof HTMLElement)) {
+    renderCallVideoLayout();
+  }
+  markRemotePeerRenderable(peer);
+  return true;
+}
+
 async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   if (!peer || !peer.decoder) return;
   peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
@@ -8863,14 +9156,16 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     }
   }
 
+  const frameMetadata = readWlvcFrameMetadata(frameData, {
+    width: peer.frameWidth || SFU_WLVC_FRAME_WIDTH,
+    height: peer.frameHeight || SFU_WLVC_FRAME_HEIGHT,
+    quality: peer.frameQuality || SFU_WLVC_FRAME_QUALITY,
+    type: frame.type,
+  });
+  await ensureSfuRemotePeerDecoderForFrame(publisherId, peer, frameMetadata);
+  const frameDescriptor = buildSfuFrameDescriptor(frameData, frame.timestamp, frameMetadata, frame.type);
+
   try {
-    const frameDescriptor = {
-      data: frameData,
-      timestamp: frame.timestamp,
-      width: SFU_WLVC_FRAME_WIDTH,
-      height: SFU_WLVC_FRAME_HEIGHT,
-      type: frame.type,
-    };
     let decoded = peer.decoder.decodeFrame(frameDescriptor);
     const decodedHasPixels = decoded && decoded.data && Number(decoded.data.length || 0) > 0;
     if (!decodedHasPixels && !peer.decoderFallbackApplied && String(peer.decoderRuntime || '') === 'wasm') {
@@ -8880,17 +9175,7 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     }
 
     if (decoded && decoded.data) {
-      peer.frameCount = Number(peer.frameCount || 0) + 1;
-      peer.lastFrameAtMs = Date.now();
-      peer.stalledLoggedAtMs = 0;
-      const canvas = peer.decodedCanvas;
-      const ctx = canvas.getContext('2d');
-      const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
-      ctx.putImageData(imageData, 0, 0);
-      if (!(canvas.parentElement instanceof HTMLElement)) {
-        renderCallVideoLayout();
-      }
-      markRemotePeerRenderable(peer);
+      renderDecodedSfuFrame(peer, decoded);
     } else {
       captureClientDiagnostic({
         category: 'media',
@@ -8906,6 +9191,11 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
           frame_timestamp: frame?.timestamp,
           received_frame_count: Number(peer.receivedFrameCount || 0),
           frame_count: Number(peer.frameCount || 0),
+          frame_width: frameMetadata.width,
+          frame_height: frameMetadata.height,
+          frame_quality: frameMetadata.quality,
+          frame_metadata_ok: Boolean(frameMetadata.decodeOk),
+          frame_metadata_error: String(frameMetadata.errorCode || ''),
           decoder_runtime: String(peer.decoderRuntime || remoteDecoderRuntimeName(peer.decoder)),
           decoder_fallback_applied: Boolean(peer.decoderFallbackApplied),
         },
@@ -8914,25 +9204,8 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   } catch (e) {
     if (!peer.decoderFallbackApplied && String(peer.decoderRuntime || '') === 'wasm' && promotePeerToTsDecoder(peer)) {
       try {
-        const decoded = peer.decoder.decodeFrame({
-          data: frameData,
-          timestamp: frame.timestamp,
-          width: SFU_WLVC_FRAME_WIDTH,
-          height: SFU_WLVC_FRAME_HEIGHT,
-          type: frame.type,
-        });
-        if (decoded && decoded.data) {
-          peer.frameCount = Number(peer.frameCount || 0) + 1;
-          peer.lastFrameAtMs = Date.now();
-          peer.stalledLoggedAtMs = 0;
-          const canvas = peer.decodedCanvas;
-          const ctx = canvas.getContext('2d');
-          const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
-          ctx.putImageData(imageData, 0, 0);
-          if (!(canvas.parentElement instanceof HTMLElement)) {
-            renderCallVideoLayout();
-          }
-          markRemotePeerRenderable(peer);
+        const decoded = peer.decoder.decodeFrame(frameDescriptor);
+        if (decoded && decoded.data && renderDecodedSfuFrame(peer, decoded)) {
           return;
         }
       } catch {
@@ -8948,6 +9221,11 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       frame_timestamp: frame?.timestamp,
       frame_count: Number(peer.frameCount || 0),
       received_frame_count: Number(peer.receivedFrameCount || 0),
+      frame_width: frameMetadata.width,
+      frame_height: frameMetadata.height,
+      frame_quality: frameMetadata.quality,
+      frame_metadata_ok: Boolean(frameMetadata.decodeOk),
+      frame_metadata_error: String(frameMetadata.errorCode || ''),
       decoder_runtime: String(peer.decoderRuntime || remoteDecoderRuntimeName(peer.decoder)),
       decoder_fallback_applied: Boolean(peer.decoderFallbackApplied),
     }, {

@@ -533,7 +533,8 @@ function videochat_sfu_insert_frame(
     string $frameType,
     array $frameData,
     string $protectedFrame = '',
-    string $dataBase64 = ''
+    string $dataBase64 = '',
+    bool $touchPresence = true
 ): void {
     $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedFrame, $dataBase64);
     $encodedData = json_encode($storedPayload, JSON_UNESCAPED_SLASHES);
@@ -556,9 +557,11 @@ SQL
         ':data_json' => $encodedData,
         ':created_at_ms' => videochat_sfu_now_ms(),
     ]);
-    videochat_sfu_touch_publisher($pdo, $roomId, $publisherId);
-    if ($trackId !== '') {
-        videochat_sfu_touch_track($pdo, $roomId, $publisherId, $trackId);
+    if ($touchPresence) {
+        videochat_sfu_touch_publisher($pdo, $roomId, $publisherId);
+        if ($trackId !== '') {
+            videochat_sfu_touch_track($pdo, $roomId, $publisherId, $trackId);
+        }
     }
 }
 

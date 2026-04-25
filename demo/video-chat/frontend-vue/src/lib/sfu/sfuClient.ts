@@ -247,6 +247,14 @@ export class SFUClient {
     }
   }
 
+  isOpen(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN
+  }
+
+  getBufferedAmount(): number {
+    return Math.max(0, Number(this.ws?.bufferedAmount || 0))
+  }
+
   subscribe(publisherId: string): void {
     this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
   }
