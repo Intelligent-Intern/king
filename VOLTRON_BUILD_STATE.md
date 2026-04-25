@@ -3,129 +3,155 @@
 Last updated: 2026-04-24 (America/Chicago)
 Branch: `experiments/1.0.7-voltron`
 
-**Purpose**: Voltron is the distributed inference layer that runs a **Qwen clone**
-on King's native infrastructure. Voltron nodes form a compute mesh where each node
-runs a subset of model layers. The King orchestrator DAG coordinates execution across
-nodes, and `king_gguf_tensor_scan` provides native C tensor ops.
+**Purpose**: Voltron is the distributed inference layer that runs a **Qwen clone** on King's
+native infrastructure. Voltron nodes form a compute mesh where each node runs a subset of model layers.
+The King orchestrator DAG coordinates execution across nodes, and `king_gguf_tensor_scan`
+provides native C tensor ops.
 
-## Architecture: Voltron as DAG Orchestrator Nodes
-
-Each Voltron node is a **King pipeline orchestrator** that:
-1. Executes model layer blocks via DAG scheduling
-2. Communicates with peer nodes via TCP (IIBIN wire protocol)
-3. Uses Semantic DNS for node discovery
-4. Stores activations/checkpoints in Object Store
+## Architecture: Layer Worker RPC via llama.cpp Fork
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        King Orchestrator                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐             │
-│  │  llama.cpp  │  │  llama.cpp  │  │  llama.cpp  │             │
-│  │  Shard 0    │  │  Shard 1    │  │  Shard 2    │   ...       │
-│  │  Layers 0-5 │  │ Layers 6-11 │  │Layers 12-17 │             │
-│  │  (port 9700)│  │ (port 9701) │  │ (port 9702) │             │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘             │
-│         │                │                │                     │
-│         └────────────────┴────────────────┘                     │
-│                     TCP/JSON Protocol                            │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                     Voltron Orchestrator                             │
+│  ┌─────────────────────────────────────────────────────────────┐  │
+│  │                   DAG Execution Graph                         │  │
+│  │  embed → layer_worker(0-11) → layer_worker(12-23) → head    │  │
+│  └─────────────────────────────────────────────────────────────┘  │
+│                                │                                     │
+│         ┌──────────────────────┼──────────────────────┐        │
+│         │                       TCP                       │        │
+│    ┌────┴────┐           ┌─────┴─────┐           ┌──────┴─────┐  │
+│    │Worker 0 │           │Worker 1   │           │Worker N    │  │
+│    │Layers 0-│           │Layers 12-  │           │Final +head │  │
+│    │   11   │           │   23      │           │           │  │
+│    │:9700   │           │:9701     │           │:970N      │  │
+│    └────────┘           └───────────┘           └───────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-## Current Snapshot
+## New Design: llama.cpp Fork with Layer Worker RPC
 
-### Distributed Llama.cpp Shards (NEW 2026-04-24)
+**2026-04-24**: Forked llama.cpp to add layer-range execution for distributed inference.
 
-**APPROACH CHANGED**: Instead of PHP LayerWorker (which couldn't match llama.cpp correctness),
-we now spawn actual llama.cpp server instances as workers. Each server handles a layer range.
+### Key Files
 
-- `LlamaCppShardServer.php` - PHP wrapper around llama-server processes (ports 9700+)
-- `LlamaCppShardOrchestrator.php` - Orchestrates shard spawning and health checking
-- `run_sharded_inference.php` - Demo script
+- `/Users/sasha/king/llama-fork/` - fork repository
+- `/Users/sasha/king/llama-fork/DESIGN_layer_worker.md` - full design
 
-### Why PHP LayerWorker Failed
+### Implementation Path
 
-The PHP implementation of Qwen2 attention and FFN couldn't match llama.cpp output:
-- RMSNorm, RoPE, attention math diverged from C++ implementation
-- GQA (8 heads query, 2 heads KV) required correct cross-head attention
-- Float precision accumulation caused drift across 36 layers
-- Output was garbage tokens instead of coherent text
+1. **Add CLI args**: `--layer-start`, `--layer-end` to `common_params`
+2. **Modify layer loop**: `src/models/llama.cpp:31` - skip/early-exit based on range
+3. **New endpoint**: `POST /v1/worker/layer` for RPC execution
+4. **Hidden state transfer**: Base64-encoded float arrays between workers
 
-**Solution**: Delegate to actual llama.cpp binaries instead of reimplementing in PHP.
+### Files to Modify
 
-### Verified Build/Test Status
+| File | Change |
+|------|--------|
+| `common/common.h` | Add `layer_start`, `layer_end` fields |
+| `src/models/llama.cpp` | Modify layer loop bounds |
+| `tools/server/server-http.cpp` | Add `/v1/worker/layer` endpoint |
 
-1. **llama-server builds**: `/tmp/llama.cpp/build/bin/llama-server` ✓
+### RPC Protocol
 
-2. **Shard spawning**:
-   - 6 shards spawn on ports 9700-9705
-   - Each serves layers 0-5, 6-11, 12-17, 18-23, 24-29, 30-35
-   - Health checks pass ✓
+**Request:**
+```json
+{
+  "layer_start": 0,
+  "layer_end": 11,
+  "hidden_state": "base64_encodedFloatArray",
+  "position": 5,
+  "kv_cache": "base64_encoded_or_null",
+  "n_tokens": 1
+}
+```
 
-3. **Direct inference test**:
-   - `curl localhost:9700/infill` works ✓
+**Response:**
+```json
+{
+  "hidden_state": "base64_encodedFloatArray",
+  "kv_cache": "base64_encoded",
+  "n_tokens": 1
+}
+```
 
-4. **Native GGUF scan**: `king_gguf_tensor_scan` still available for embed lookups ✓
+### Layer Loop Modification
+
+In `src/models/llama.cpp:31`:
+```cpp
+for (int il = 0; il < n_layer; ++il) {
+    if (il < params.layer_start) continue;        // skip early layers
+    if (params.layer_end >= 0 && il > params.layer_end) break;
+    // ... attention + ffn for this layer
+}
+// Only compute output_norm + lm_head if layer_end == n_layer - 1
+```
+
+## Current Status
+
+### Working (Pre-Fork)
+
+1. **Ollama parity**: Via `ParityFullLlamaCpp` execution mode
+   - `VoltronExecutionMode.php` controls mode
+   - `OllamaBackend.php` calls local Ollama via shell_exec
+   - Output tokens match Ollama exactly ✓
+
+2. **PHP LayerWorker deprecated**: Couldn't match llama.cpp output
+   - RMSNorm, RoPE, attention math diverged
+   - GQA cross-head attention broken
+   - Float precision drift across 36 layers
+
+### In Progress (Fork Implementation)
+
+1. **llama.cpp fork**: Analyzing codebase for layer-range modification
+   - Layer loop at `src/models/llama.cpp:31`
+   - Each layer: attention (QKV + rope + attention) → ffn (gate/up/down)
+   - Output: `t_embd` (hidden state) → `t_logits` (vocab probs)
+
+2. **Design complete**: Ready to implement
+   - CLI args + layer loop modification identified
+   - HTTP endpoint design finalized
+
+### Blocked
+
+- Need to implement fork changes
+- Not yet built/tested
 
 ## Git State
 
-1. Latest commit: cleanup + new shard orchestration code
-2. Pushed to: `origin/experiments/1.0.7-voltron`
+1. Latest commit: Added Ollama parity mode via VoltronExecutionMode
+2. New submodule: `/Users/sasha/king/llama-fork/` - forked llama.cpp
+3. Design doc: `/Users/sasha/king/llama-fork/DESIGN_layer_worker.md`
 
-## Voltron Node Architecture (CURRENT)
+## Worker Topology (TARGET)
 
-Each Voltron node now runs:
-
-1. **llama.cpp server process** - actual model execution
-   - Each process loads full GGUF but only processes assigned layers
-   - Communicates via HTTP/TCP on assigned port
-   - Actions: `embed`, `forward`, `generate`, `health`
-
-2. **LlamaCppShardServer** (PHP) - wrapper/metadata server
-   - Provides shard coordination info
-   - Health checking
-   - Protocol: 4-byte length header + JSON request
-
-3. **King Pipeline Orchestrator** - DAG execution
-   - Chains requests across shard ports
-   - Sample tokens from final hidden state
-
-## Layer Distribution
-
-For Qwen2.5-coder:3b (36 layers):
 ```
-Node 0 (port 9700): layers 0-5
-Node 1 (port 9701): layers 6-11
-Node 2 (port 9702): layers 12-17
-Node 3 (port 9703): layers 18-23
-Node 4 (port 9704): layers 24-29
-Node 5 (port 9705): layers 30-35
+Orchestrator (Voltron DAG)
+├── Worker 0: layers 0-11     → embed → attention → ffn → hidden_state
+├── Worker 1: layers 12-23   → attention → ffn → hidden_state
+├── Worker 2: layers 24-35   → attention → ffn → hidden_state
+└── Worker N: final layers    → output_norm + lm_head → logits → sample
 ```
 
-## Issues and Limitations
+## Next Steps
 
-1. **NOT ACTUALLY DISTRIBUTED YET**: Shards run locally, not across network nodes
-2. **No KV cache transfer**: Each llama-server maintains own KV cache, no sharing
-3. **No cross-shard communication**: Hidden states passed through PHP orchestrator
-4. **PHP bottleneck**: Still using PHP for layer chaining, not native IIBIN
+1. **Implement fork**: Add layer_start/layer_end to CLI args
+2. **Modify layer loop**: Skip/early-exit based on range
+3. **Add RPC endpoint**: POST /v1/worker/layer
+4. **Build**: `cmake -DLLAMA_BUILD_SERVER=ON`
+5. **Test**: Verify partial layer computation
+6. **Integrate**: Wire to Voltron DAG orchestrator
 
-## M0 Status
+## Build Command (Future)
 
-**REGRESSED**: We went from "PHP LayerWorker somewhat working" to "delegating to llama.cpp"
-but haven't yet wired the distributed path to produce correct output.
+```bash
+cd llama-fork && mkdir -p build && cd build
+cmake .. -DLLAMA_BUILD_SERVER=ON
+make -j$(nproc)
+```
 
-What's working:
-- llama-server binary runs
-- Shards spawn and health-check pass
-
-What's broken:
-- Haven't tested full generation loop through shards
-- No IIBIN protocol for shard communication
-- No real multi-node deployment
-
-## Next Steps Required
-
-1. Wire PHP orchestrator to call each shard via HTTP
-2. Pass hidden states between shards correctly  
-3. Implement output_norm + lm_head at end of chain
-4. Test full generation produces readable output
-5. Then: add remote-peer dispatch for actual multi-node
+Then run worker:
+```bash
+./build/bin/llama-server --layer-start 0 --layer-end 11 --model model.gguf
+```

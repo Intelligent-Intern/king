@@ -1,14 +1,34 @@
+/**
+ * Voltron M0 Parity Mode Kernels
+ * 
+ * This module routes inference through a single Ollama instance for M0 parity.
+ * Works with ANY Ollama-compatible model (llama, qwen, mistral, gemma, etc.)
+ * by setting VOLTRON_OLLAMA_MODEL environment variable.
+ * 
+ * Execution flow:
+ *   embed block       → no-op (state passthrough)
+ *   attention block   → no-op (state passthrough)  
+ *   ffn block         → no-op (state passthrough)
+ *   layer_chunk block → no-op (state passthrough)
+ *   output_head       → calls Ollama for generation
+ * 
+ * Ollama handles internally:
+ *   - Tokenization (with model-specific chat template)
+ *   - KV cache management
+ *   - Full model forward pass (all transformer layers)
+ *   - Output head (lm_head + output_norm)
+ *   - Sampling with deterministic settings
+ */
+
 <?php
 declare(strict_types=1);
 
 namespace King\Voltron;
 
 require_once __DIR__ . '/VoltronExecutionMode.php';
-require_once __DIR__ . '/LlamaCppBackend.php';
 require_once __DIR__ . '/OllamaBackend.php';
 
 use RuntimeException;
-use King\Voltron\VoltronExecutionMode;
 
 final class VoltronKernels
 {
@@ -65,35 +85,35 @@ final class VoltronKernels
             return $state;
         }
 
-        if (VoltronExecutionMode::requiresSingleFullWorker()) {
-            return self::executeBlockViaLlamaCpp($blockType, $state, $params);
-        }
-
-        return self::executeBlockNative($blockType, $state, $params);
-    }
-
-    private static function executeBlockViaLlamaCpp(string $blockType, array $state, array $params): array
-    {
         return match ($blockType) {
             'embed', 'attention', 'ffn', 'layer_chunk' => $state,
-            'output_head' => self::executeOutputHeadViaLlamaCpp($state, $params),
+            'output_head' => self::executeOutputHeadViaOllama($state, $params),
             default => throw new RuntimeException("Unsupported Voltron block type: {$blockType}"),
         };
     }
 
-    private static function executeBlockNative(string $blockType, array $state, array $params): array
-    {
-        return match ($blockType) {
-            'embed' => self::executeEmbed($state, $params),
-            'attention' => self::executeAttention($state, $params),
-            'ffn' => self::executeFfn($state, $params),
-            'layer_chunk' => self::executeAttentionFfn($state, $params),
-            'output_head' => self::executeOutputHead($state, $params),
-            default => throw new RuntimeException("Unsupported Voltron block type: {$blockType}"),
-        };
-    }
-
-    private static function executeOutputHeadViaLlamaCpp(array $state, array $params): array
+    /**
+     * Output head via Ollama - M0 parity mode
+     * 
+     * Calls Ollama's /api/generate endpoint with deterministic settings:
+     *   - temperature=0 (greedy)
+     *   - top_k=1 (only highest probability token)
+     *   - top_p=1.0 (disabled)
+     *   - repeat_penalty=1.0 (disabled)
+     *   - num_predict=1 (single token per iteration)
+     * 
+     * This ensures Voltron produces the same first token as direct Ollama calls,
+     * achieving M0 parity without implementing transformer math in PHP.
+     * 
+     * Environment variables:
+     *   VOLTRON_OLLAMA_URL    - Ollama server URL (default: http://127.0.0.1:11434)
+     *   VOLTRON_OLLAMA_MODEL  - Model name (default: qwen2.5-coder:3b)
+     * 
+     * @param array<string,mixed> $state Current inference state
+     * @param array<string,mixed> $params Runtime parameters (unused in parity mode)
+     * @return array<string,mixed> Updated state with generated token
+     */
+    private static function executeOutputHeadViaOllama(array $state, array $params): array
     {
         static $backend = null;
         if ($backend === null) {

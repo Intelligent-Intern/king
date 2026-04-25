@@ -1,9 +1,17 @@
-<?php
-declare(strict_types=1);
-
-namespace King\Voltron;
-
-class OllamaBackend
+/**
+ * Ollama Backend Client
+ * 
+ * Works with ANY Ollama-compatible model:
+ *   - llama, llama2, llama3, llama3.1, llama3.2
+ *   - qwen, qwen2, qwen2.5, qwen2.5-coder
+ *   - mistral, mistral-small
+ *   - gemma, gemma2
+ *   - phi, phi3
+ *   - codellama, codellama2
+ *   - Any model available via `ollama pull <model>`
+ * 
+ * Uses shell_exec(curl) to avoid PHP curl extension requirement.
+ */
 {
     private string $baseUrl;
     private string $model;
