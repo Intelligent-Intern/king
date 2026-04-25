@@ -8,16 +8,18 @@ The goal is producing output indistinguishable from Qwen itself, distributed.
 
 ## Current Status: 2026-04-24
 
-**APPROACH**: Fork llama.cpp to add layer-worker RPC, enabling true distributed inference.
+**IMPLEMENTED**: Fork built with layer range args. `--layer-start` and `--layer-end` CLI args work.
 
-The previous approach - reimplementing Qwen2 attention/FFN in PHP - failed because:
-1. PHP float math doesn't match llama.cpp's C++ precision
-2. GQA attention requires complex cross-head routing that was buggy
-3. RoPE, RMSNorm, SiLU implementations diverged from llama.cpp
-4. 36-layer accumulation amplifies errors into garbage
+### Implementation Status
 
-**NEW APPROACH**: Fork llama.cpp to add `--layer-start` and `--layer-end` parameters.
-Each forked worker computes only its layer range, returning hidden states via RPC.
+| Component | Status |
+|-----------|--------|
+| CLI args (`--layer-start`, `--layer-end`) | ✓ Implemented |
+| `llama_cparams::layer_start/end` | ✓ Implemented |
+| Layer loop modification | ✓ Implemented |
+| Build | ✓ Success (`llama-server` built) |
+| HTTP endpoint (`/v1/worker/layer`) | ✓ Working |
+| Distributed test | ⬜ Next |
 
 ## Non-Negotiable Stack (UNCHANGED)
 

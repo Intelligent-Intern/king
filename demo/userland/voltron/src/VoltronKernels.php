@@ -1,17 +1,20 @@
+<?php
+declare(strict_types=1);
+
 /**
  * Voltron M0 Parity Mode Kernels
- * 
+ *
  * This module routes inference through a single Ollama instance for M0 parity.
  * Works with ANY Ollama-compatible model (llama, qwen, mistral, gemma, etc.)
  * by setting VOLTRON_OLLAMA_MODEL environment variable.
- * 
+ *
  * Execution flow:
  *   embed block       → no-op (state passthrough)
- *   attention block   → no-op (state passthrough)  
+ *   attention block   → no-op (state passthrough)
  *   ffn block         → no-op (state passthrough)
  *   layer_chunk block → no-op (state passthrough)
  *   output_head       → calls Ollama for generation
- * 
+ *
  * Ollama handles internally:
  *   - Tokenization (with model-specific chat template)
  *   - KV cache management
@@ -19,9 +22,6 @@
  *   - Output head (lm_head + output_norm)
  *   - Sampling with deterministic settings
  */
-
-<?php
-declare(strict_types=1);
 
 namespace King\Voltron;
 
