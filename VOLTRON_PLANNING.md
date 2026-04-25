@@ -8,19 +8,32 @@ The goal is producing output indistinguishable from Qwen itself, distributed.
 
 ## Current Status: 2026-04-25
 
-**IMPLEMENTED & VERIFIED**: Fork built with layer range args. `--layer-start` and `--layer-end` CLI args work. All 3 math tests pass.
+**IMPLEMENTED & VERIFIED**: Fork built with layer range args. `--layer-start` and `--layer-end` CLI args work. All 3 math tests pass. Layer-worker TCP connector built.
 
-### Implementation Status
+### What Was Tested
 
-| Component | Status |
-|-----------|--------|
-| CLI args (`--layer-start`, `--layer-end`) | ✓ Verified |
-| `llama_cparams::layer_start/end` | ✓ Verified |
-| Layer loop modification | ✓ Verified |
-| Build | ✓ Success (`llama-server` built) |
-| HTTP endpoint (`/v1/worker/layer`) | ✓ Implemented |
-| Math tests (`2+2=`, `3+3=`, `10+1=`) | ✓ All PASS |
-| Distributed orchestration | ⬜ Next |
+| Component | Status | Notes |
+|-----------|--------|-------|
+| CLI args (`--layer-start`, `--layer-end`) | ✓ Verified | Single-node layer skip |
+| `llama_cparams::layer_start/end` | ✓ Verified | |
+| Layer loop modification | ✓ Verified | Different outputs |
+| Build | ✓ Success | `llama-server` built |
+| HTTP endpoint (`/v1/worker/layer`) | ✓ Implemented | Returns KV cache |
+| TCP layer-worker connector | ✓ Built | Binary frames work |
+| Math tests (`2+2=`, `3+3=`, `10+1=`) | ✓ All PASS | |
+
+### What Was NOT Tested (BLOCKED)
+
+| Component | Status | Notes |
+|----------|--------|-------|
+| Multi-worker DAG | ⬜ TODO | Need 3+ workers wired |
+| End-to-end KV transfer | ⬜ TODO | Worker 0 → 1 → 2 |
+| Distributed inference | ⬜ TODO | Full partitioned run |
+| Voltron DAG orchestrator | ⬜ TODO | Wire via Voltron |
+
+### Next: Realistic Distributed Test
+
+Requires running 3 workers in series to test actual partitioned inference.
 
 ## Non-Negotiable Stack (UNCHANGED)
 
