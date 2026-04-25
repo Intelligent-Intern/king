@@ -703,6 +703,7 @@ import {
   callMediaPrefs,
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
+  setCallOutgoingVideoQualityProfile,
 } from './callMediaPreferences';
 import {
   handleAssetVersionSocketClose,
@@ -828,6 +829,13 @@ const ACTIVITY_MOTION_SAMPLE_MS = 500;
 const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
 const REMOTE_VIDEO_STALL_THRESHOLD_MS = 8000;
 const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 3000;
+const MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS = 5000;
+const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
+const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
+const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
+  quality: 'balanced',
+  balanced: 'realtime',
+});
 
 const activeTab = ref('users');
 const usersSearch = ref('');
@@ -994,6 +1002,7 @@ let wlvcEncodeFailureCount = 0;
 let wlvcEncodeWarmupUntilMs = 0;
 let wlvcEncodeFirstFailureAtMs = 0;
 let wlvcEncodeLastErrorLogAtMs = 0;
+let sfuAutoQualityDowngradeLastAtMs = 0;
 let mediaSecuritySyncInFlight = false;
 let mediaSecuritySyncHintLastAtMs = 0;
 let mediaSecurityResyncTimer = null;
@@ -1003,6 +1012,9 @@ const mediaSecuritySenderKeySignalsSent = new Set();
 const mediaSecurityRecoveryLastByUserId = new Map();
 // Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
 const mediaSecurityHelloSentAtByUserId = new Map();
+const mediaSecurityHandshakeRetryingByUserId = new Set();
+const nativeAudioBridgeBlockDiagnosticsSent = new Set();
+let mediaSecurityHandshakeWatchdogTimer = null;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
 const pendingSfuRemotePeerInitializers = new Map();
@@ -1247,9 +1259,8 @@ function isNativeWebRtcRuntimePath() {
 }
 
 function shouldUseNativeAudioBridge() {
-  // M12: If the browser doesn't support InsertableStreams (e.g. Firefox < 117)
-  // we cannot attach E2EE transforms. Rather than producing zero audio, disable
-  // the bridge so audio flows unprotected via the normal SFU path.
+  // M12: Without encoded InsertableStreams we cannot attach E2EE transforms.
+  // Fail closed and let nativeAudioBridgeBlockedReason surface the explicit state.
   if (!MediaSecuritySession.supportsNativeTransforms()) {
     return false;
   }
@@ -1288,6 +1299,21 @@ function clearMediaSecurityResyncTimer() {
     clearTimeout(mediaSecurityResyncTimer);
     mediaSecurityResyncTimer = null;
   }
+}
+
+function clearMediaSecurityHandshakeWatchdog() {
+  if (mediaSecurityHandshakeWatchdogTimer !== null) {
+    clearInterval(mediaSecurityHandshakeWatchdogTimer);
+    mediaSecurityHandshakeWatchdogTimer = null;
+  }
+  mediaSecurityHandshakeRetryingByUserId.clear();
+}
+
+function startMediaSecurityHandshakeWatchdog() {
+  if (mediaSecurityHandshakeWatchdogTimer !== null) return;
+  mediaSecurityHandshakeWatchdogTimer = setInterval(() => {
+    void checkMediaSecurityHandshakeTimeouts();
+  }, MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS);
 }
 
 function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
@@ -1498,6 +1524,62 @@ function mediaSecuritySenderKeySignalKey(targetUserId, session) {
 function clearMediaSecuritySignalCaches() {
   mediaSecurityHelloSignalsSent.clear();
   mediaSecuritySenderKeySignalsSent.clear();
+  mediaSecurityHelloSentAtByUserId.clear();
+  mediaSecurityHandshakeRetryingByUserId.clear();
+}
+
+async function checkMediaSecurityHandshakeTimeouts() {
+  if (!isSocketOnline.value || currentUserId.value <= 0) return;
+  const targetIds = mediaSecurityTargetIds();
+  if (targetIds.length <= 0) return;
+
+  const session = ensureMediaSecuritySession();
+  const nowMs = Date.now();
+  for (const targetUserId of targetIds) {
+    const normalizedTargetId = Number(targetUserId || 0);
+    if (!Number.isInteger(normalizedTargetId) || normalizedTargetId <= 0) continue;
+    if (mediaSecurityHandshakeRetryingByUserId.has(normalizedTargetId)) continue;
+
+    const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+    const peerState = String(peer?.state || '').trim().toLowerCase();
+    if (peerState === 'active') {
+      mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+      continue;
+    }
+
+    const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+    if (helloSentAt <= 0 || (nowMs - helloSentAt) <= MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS) continue;
+
+    mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
+    mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+    console.warn(
+      '[KingRT] E2EE handshake timeout - retrying media-security exchange',
+      `user=${normalizedTargetId}`,
+      `state=${peerState || 'missing'}`,
+      `elapsed=${nowMs - helloSentAt}ms`,
+    );
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_handshake_timeout',
+      code: 'media_security_handshake_timeout',
+      message: 'Media security handshake timed out and is being retried.',
+      payload: {
+        target_user_id: normalizedTargetId,
+        peer_state: peerState,
+        elapsed_ms: nowMs - helloSentAt,
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+
+    try {
+      await sendMediaSecurityHello(normalizedTargetId, true);
+      await sendMediaSecuritySenderKey(normalizedTargetId, true);
+    } finally {
+      mediaSecurityHandshakeRetryingByUserId.delete(normalizedTargetId);
+    }
+  }
 }
 
 async function sendMediaSecurityHello(targetUserId, force = false) {
@@ -1543,6 +1625,7 @@ async function sendMediaSecurityHello(targetUserId, force = false) {
     // M6: Record when Hello was last sent so handshake-timeout detection can
     // identify peers that never reply with a SenderKey.
     mediaSecurityHelloSentAtByUserId.set(Number(targetUserId || 0), Date.now());
+    startMediaSecurityHandshakeWatchdog();
     return true;
   }
   captureClientDiagnostic({
@@ -4566,6 +4649,10 @@ async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
     if (type === 'media-security/sender-key') {
       const accepted = await session.handleSenderKeySignal(normalizedSenderUserId, payloadBody || {});
       mediaSecurityStateVersion.value += 1;
+      if (accepted) {
+        mediaSecurityHelloSentAtByUserId.delete(normalizedSenderUserId);
+        mediaSecurityHandshakeRetryingByUserId.delete(normalizedSenderUserId);
+      }
       if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
         scheduleMediaSecurityParticipantSync('sender_key_pending');
       }
@@ -5102,14 +5189,14 @@ async function connectSocket() {
       setBackendWebSocketOrigin(socketOrigin);
       clearErrors();
       startPingLoop();
-      // M2: Clear E2EE signal caches on every (re)connect so Hello + SenderKey
-      // are always re-sent to all peers. Without this, after a WS reconnect the
-      // peer receives no SenderKey → all audio frames fail with wrong_key_id.
-      if (isReconnectOpen) {
-        clearMediaSecuritySignalCaches();
-        mediaSecurityHelloSentAtByUserId.clear();
-        console.info('[KingRT] 🔄 WS reconnect — E2EE signal caches cleared, full handshake will re-run');
-      }
+      // M2: Clear E2EE signal caches on every socket open so foreground resumes
+      // and fresh connects both re-send Hello + SenderKey to all peers.
+      clearMediaSecuritySignalCaches();
+      startMediaSecurityHandshakeWatchdog();
+      console.info(
+        '[KingRT] WS open - E2EE signal caches cleared, full handshake will run',
+        `reconnect=${isReconnectOpen ? '1' : '0'}`,
+      );
       requestRoomSnapshot();
       if (usersSourceMode.value === 'directory' && activeTab.value === 'users') {
         void refreshUsersDirectory();
@@ -5135,6 +5222,7 @@ async function connectSocket() {
       if (generation !== connectGeneration) return;
 
       clearPingTimer();
+      clearMediaSecurityHandshakeWatchdog();
       if (socketRef.value === socket) {
         socketRef.value = null;
       }
@@ -5496,6 +5584,23 @@ watch(isSocketOnline, (online) => {
 watch(nativeAudioSecurityBannerMessage, (message) => {
   if (message === '') return;
   console.error('[KingRT] 🔇 AUDIO BRIDGE BLOCKED:', message);
+  const diagnosticKey = `${activeRoomId.value}:${message}`;
+  if (nativeAudioBridgeBlockDiagnosticsSent.has(diagnosticKey)) return;
+  nativeAudioBridgeBlockDiagnosticsSent.add(diagnosticKey);
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: 'native_audio_bridge_blocked',
+    code: 'native_audio_bridge_blocked',
+    message,
+    payload: {
+      media_runtime_path: mediaRuntimePath.value,
+      supports_native_transforms: MediaSecuritySession.supportsNativeTransforms(),
+      stage_b: Boolean(mediaRuntimeCapabilities.value.stageB),
+      security: nativeAudioSecurityTelemetrySnapshot(),
+    },
+    immediate: true,
+  });
 });
 
 watch(
@@ -7393,6 +7498,41 @@ function currentSfuVideoProfile() {
   return resolveSfuVideoQualityProfile(callMediaPrefs.outgoingVideoQualityProfile);
 }
 
+function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure') {
+  const currentProfile = String(callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+  const nextProfile = SFU_AUTO_QUALITY_DOWNGRADE_NEXT[currentProfile] || '';
+  if (nextProfile === '') return false;
+
+  const nowMs = Date.now();
+  if ((nowMs - sfuAutoQualityDowngradeLastAtMs) < SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS) {
+    return true;
+  }
+  sfuAutoQualityDowngradeLastAtMs = nowMs;
+
+  console.warn(
+    '[KingRT] SFU encode pressure - lowering outgoing video quality',
+    `from=${currentProfile || 'default'}`,
+    `to=${nextProfile}`,
+    `reason=${String(reason || 'encode_pressure')}`,
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'sfu_encode_quality_downgraded',
+    code: 'sfu_encode_quality_downgraded',
+    message: 'Outgoing SFU video quality was lowered after repeated encode failures.',
+    payload: {
+      from_profile: currentProfile,
+      to_profile: nextProfile,
+      failure_count: wlvcEncodeFailureCount,
+      media_runtime_path: mediaRuntimePath.value,
+    },
+    immediate: true,
+  });
+  setCallOutgoingVideoQualityProfile(nextProfile);
+  return true;
+}
+
 function buildLocalMediaConstraints() {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
@@ -8271,6 +8411,11 @@ async function startEncodingPipeline(videoTrack) {
 
       wlvcEncodeFailureCount += 1;
       if (wlvcEncodeFailureCount >= WLVC_ENCODE_FAILURE_THRESHOLD) {
+        if (downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')) {
+          wlvcEncodeFailureCount = 0;
+          wlvcEncodeFirstFailureAtMs = 0;
+          return;
+        }
         wlvcEncodeFailureCount = 0;
         wlvcEncodeFirstFailureAtMs = 0;
         void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
@@ -8730,6 +8875,7 @@ onBeforeUnmount(() => {
   clearReconnectTimer();
   clearPingTimer();
   clearMediaSecurityResyncTimer();
+  clearMediaSecurityHandshakeWatchdog();
   clearLocalTrackRecoveryTimer();
   stopSfuTrackAnnounceTimer();
   if (usersRefreshTimer.value !== null) {

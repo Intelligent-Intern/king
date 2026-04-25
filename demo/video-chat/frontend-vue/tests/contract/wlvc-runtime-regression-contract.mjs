@@ -299,6 +299,7 @@ try {
   requireContains(workspace, 'function nativeAudioPlaybackInterrupted', 'native audio bridge recognizes benign playback interruptions');
   requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
   requireContains(workspace, "blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed'", 'native audio bridge emits distinct diagnostics for autoplay blocking and playback failure');
+  requireContains(workspace, "eventType: 'native_audio_bridge_blocked'", 'native audio bridge blocked state emits diagnostics');
   requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
   const syncNativeMedia = extractFunction(workspace, 'synchronizeNativePeerMediaElements');
@@ -306,7 +307,26 @@ try {
   requireContains(syncNativeMedia, "void playNativePeerAudio(peer, audioNeedsRebind ? 'bind_stream' : 'resume_stream');", 'native audio bridge retries playback without forcing a fresh load on every sync');
   requireContains(workspace, 'function ensureNativePeerAudioTransceiver', 'native audio bridge ensures an explicit audio transceiver for negotiation');
   requireContains(workspace, 'function clearMediaSecuritySignalCaches', 'workspace exposes media security signal cache reset helper');
+  const clearSecurityCaches = extractFunction(workspace, 'clearMediaSecuritySignalCaches');
+  requireContains(clearSecurityCaches, 'mediaSecurityHelloSentAtByUserId.clear();', 'media security cache reset clears handshake timeout tracking');
+  requireContains(clearSecurityCaches, 'mediaSecurityHandshakeRetryingByUserId.clear();', 'media security cache reset clears in-flight handshake retries');
+  const connectSocket = extractFunction(workspace, 'connectSocket');
+  requireContains(connectSocket, 'clearMediaSecuritySignalCaches();', 'websocket open always clears media security dedupe caches');
+  requireContains(connectSocket, 'startMediaSecurityHandshakeWatchdog();', 'websocket open starts media security handshake watchdog');
+  requireNotContains(connectSocket, 'if (isReconnectOpen) {', 'media security cache clearing must not depend on reconnectAttempt');
+  requireContains(workspace, 'const MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS = 5000;', 'media security handshake timeout is explicitly bounded to 5s');
+  requireContains(workspace, 'function startMediaSecurityHandshakeWatchdog', 'media security handshake watchdog starter exists');
+  const handshakeWatchdog = extractFunction(workspace, 'checkMediaSecurityHandshakeTimeouts');
+  requireContains(handshakeWatchdog, "eventType: 'media_security_handshake_timeout'", 'media security handshake timeout emits diagnostics');
+  requireContains(handshakeWatchdog, 'await sendMediaSecurityHello(normalizedTargetId, true);', 'media security handshake timeout force-retries Hello');
+  requireContains(handshakeWatchdog, 'await sendMediaSecuritySenderKey(normalizedTargetId, true);', 'media security handshake timeout force-retries SenderKey');
+  const sendHello = extractFunction(workspace, 'sendMediaSecurityHello');
+  requireContains(sendHello, 'startMediaSecurityHandshakeWatchdog();', 'sending Hello arms the media security handshake watchdog');
   requireContains(workspace, "() => callMediaPrefs.outgoingVideoQualityProfile", 'workspace watches outgoing video quality profile changes');
+  requireContains(workspace, 'function downgradeSfuVideoQualityAfterEncodePressure', 'workspace can lower SFU video quality after encode pressure');
+  const downgradeQuality = extractFunction(workspace, 'downgradeSfuVideoQualityAfterEncodePressure');
+  requireContains(downgradeQuality, 'setCallOutgoingVideoQualityProfile(nextProfile);', 'automatic SFU quality downgrade updates the persisted profile');
+  requireContains(downgradeQuality, "eventType: 'sfu_encode_quality_downgraded'", 'automatic SFU quality downgrade emits diagnostics');
   const publishLocal = extractFunction(workspace, 'publishLocalTracks');
   requireMatch(publishLocal, /if \(localStreamRef\.value instanceof MediaStream\) \{[\s\S]*publishLocalTracksToSfuIfReady\(\);[\s\S]*await startEncodingPipeline\(videoTrack\);[\s\S]*return true;[\s\S]*\}/, 'existing local stream starts SFU encoding pipeline');
   requireContains(publishLocal, 'stopLocalEncodingPipeline();', 'local publish tears down encoding when no camera track remains');
@@ -323,6 +343,7 @@ try {
   requireContains(encodePipeline, 'videoProfile.frameQuality', 'encode pipeline honors configured frame quality');
   requireContains(encodePipeline, 'videoProfile.keyFrameInterval', 'encode pipeline honors configured keyframe interval');
   requireContains(encodePipeline, 'videoProfile.encodeIntervalMs', 'encode pipeline honors configured encode interval');
+  requireContains(encodePipeline, "downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')", 'repeated encode failures lower SFU quality before fallback');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');
   requireContains(handleFrame, 'let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);', 'remote frame peer lookup supports publisher-key aliasing');
