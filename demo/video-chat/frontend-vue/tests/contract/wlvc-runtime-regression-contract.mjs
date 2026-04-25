@@ -162,6 +162,7 @@ try {
   requireContains(telemetry, 'preferred_path: normalizePath(event?.capabilities?.preferred_path)', 'runtime transition capability telemetry');
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
+  const nativeAudioBridgeHelpers = readFromFrontend('src/domain/realtime/nativeAudioBridgeHelpers.js');
   const setRuntime = extractFunction(workspace, 'setMediaRuntimePath');
   requireContains(setRuntime, 'appendMediaRuntimeTransitionEvent({', 'runtime switch telemetry append');
   requireContains(setRuntime, 'from_path: previousPath', 'runtime switch previous path telemetry');
@@ -296,14 +297,14 @@ try {
   requireNotContains(syncModerationState, "type: 'call/ice'", 'moderation-state sync must not masquerade as ICE');
   requireContains(workspace, 'function playNativePeerAudio', 'native audio bridge playback helper exists');
   requireContains(workspace, 'function scheduleNativePeerAudioTrackDeadline', 'native audio bridge track deadline helper exists');
-  requireContains(workspace, 'function nativeAudioPlaybackInterrupted', 'native audio bridge recognizes benign playback interruptions');
+  requireContains(nativeAudioBridgeHelpers, 'function nativeAudioPlaybackInterrupted', 'native audio bridge recognizes benign playback interruptions');
   requireContains(workspace, "eventType: 'native_audio_track_missing'", 'native audio bridge emits diagnostics when encrypted audio track never arrives');
   requireContains(workspace, "blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed'", 'native audio bridge emits distinct diagnostics for autoplay blocking and playback failure');
   requireContains(workspace, "eventType: 'native_audio_bridge_blocked'", 'native audio bridge blocked state emits diagnostics');
   requireContains(workspace, 'mediaSecurityStateVersion.value += 1;', 'media security state changes bump the reactive version');
   requireContains(workspace, 'function createNativePeerAudioElement', 'hybrid runtime creates hidden native audio elements');
   requireContains(workspace, 'const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;', 'native audio bridge missing-track recovery is bounded');
-  requireContains(workspace, 'function nativePeerConnectionTelemetry', 'native audio bridge exposes peer connection telemetry for missing-track diagnostics');
+  requireContains(nativeAudioBridgeHelpers, 'function nativePeerConnectionTelemetry', 'native audio bridge exposes peer connection telemetry for missing-track diagnostics');
   requireContains(workspace, 'function scheduleNativeAudioTrackRecovery', 'native audio bridge can recover when connected peers never receive audio tracks');
   const nativeTrackRecovery = extractFunction(workspace, 'scheduleNativeAudioTrackRecovery');
   requireContains(nativeTrackRecovery, "eventType: 'native_audio_track_recovery'", 'native audio bridge recovery emits diagnostics');
@@ -323,8 +324,11 @@ try {
   requireContains(workspace, 'function nativeAudioBridgeHasLocalAudioTrack', 'native audio bridge can check for a live local mic before SDP negotiation');
   requireContains(workspace, 'function shouldExpectLocalNativeAudioTrack', 'native audio bridge only requires local sendable SDP when the local mic is expected');
   requireContains(workspace, 'function shouldExpectRemoteNativeAudioTrack', 'native audio bridge only rejects remote recvonly SDP when that peer is expected to send');
-  requireContains(workspace, 'function nativeSdpHasSendableAudio', 'native audio bridge validates that SDP contains a sendable audio track');
-  const nativeSdpSendable = extractFunction(workspace, 'nativeSdpHasSendableAudio');
+  requireContains(workspace, 'nativeSdpHasSendableAudio,', 'workspace imports native audio SDP validation from the helper module');
+  requireContains(nativeAudioBridgeHelpers, 'function nativeSdpHasSendableAudio', 'native audio bridge validates that SDP contains a sendable audio track');
+  requireContains(nativeAudioBridgeHelpers, 'function nativePeerConnectionTelemetry', 'native audio bridge peer telemetry lives outside the workspace view');
+  requireContains(nativeAudioBridgeHelpers, 'function nativeAudioPlaybackInterrupted', 'native audio playback interruption detection lives outside the workspace view');
+  const nativeSdpSendable = extractFunction(nativeAudioBridgeHelpers, 'nativeSdpHasSendableAudio');
   requireContains(nativeSdpSendable, 'if (summary.rejected) return false;', 'native audio bridge rejects port-0 audio SDP');
   requireContains(nativeSdpSendable, "summary.direction !== 'sendrecv' && summary.direction !== 'sendonly'", 'native audio bridge rejects recvonly/inactive audio SDP');
   requireContains(nativeSdpSendable, 'return summary.has_msid;', 'native audio bridge requires an msid-backed audio track in SDP');
