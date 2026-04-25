@@ -6824,6 +6824,19 @@ function localTracksByKind(stream) {
   return out;
 }
 
+function nativeAudioBridgeHasLocalAudioTrack() {
+  return localStreamRef.value instanceof MediaStream
+    && streamHasLiveTrackKind(localStreamRef.value, 'audio');
+}
+
+function shouldExpectLocalNativeAudioTrack() {
+  return controlState.micEnabled !== false;
+}
+
+function shouldExpectRemoteNativeAudioTrack(userId) {
+  return peerControlSnapshot(userId).micEnabled !== false;
+}
+
 function attachMediaSecurityNativeSender(sender, track) {
   if (!sender || !track || !shouldMaintainNativePeerConnections()) return false;
   const session = ensureMediaSecuritySession();
@@ -6859,6 +6872,24 @@ function attachMediaSecurityNativeReceiver(receiver, senderUserId, track) {
 
 function ensureNativePeerAudioTransceiver(peer) {
   if (!peer?.pc || typeof peer.pc.addTransceiver !== 'function') return false;
+  const transceivers = typeof peer.pc.getTransceivers === 'function' ? peer.pc.getTransceivers() : [];
+  for (const transceiver of transceivers) {
+    const sender = transceiver?.sender || null;
+    const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
+    const receiverKind = String(transceiver?.receiver?.track?.kind || '').trim().toLowerCase();
+    if (senderKind !== 'audio' && receiverKind !== 'audio') continue;
+    if (sender) {
+      peer?.senderKinds?.set?.(sender, 'audio');
+    }
+    try {
+      if (transceiver.direction === 'recvonly' || transceiver.direction === 'inactive') {
+        transceiver.direction = 'sendrecv';
+      }
+    } catch {
+      // ignore transceiver direction updates on read-only browser shims
+    }
+    return true;
+  }
   for (const sender of peer.pc.getSenders()) {
     const senderKind = String(sender?.track?.kind || peer?.senderKinds?.get?.(sender) || '').trim().toLowerCase();
     if (senderKind === 'audio') {
@@ -6873,6 +6904,70 @@ function ensureNativePeerAudioTransceiver(peer) {
   } catch {
     return false;
   }
+}
+
+function nativeSdpAudioSection(sdp) {
+  const normalized = String(sdp || '').replace(/\r?\n/g, '\n');
+  if (normalized.trim() === '') return '';
+  const sections = normalized.split(/\nm=/);
+  for (let index = 1; index < sections.length; index += 1) {
+    const section = `m=${sections[index]}`;
+    if (/^m=audio(?:\s|$)/.test(section)) return section;
+  }
+  return '';
+}
+
+function nativeSdpSectionDirection(section) {
+  const normalized = String(section || '');
+  if (/\na=inactive(?:\n|$)/.test(normalized)) return 'inactive';
+  if (/\na=sendonly(?:\n|$)/.test(normalized)) return 'sendonly';
+  if (/\na=recvonly(?:\n|$)/.test(normalized)) return 'recvonly';
+  if (/\na=sendrecv(?:\n|$)/.test(normalized)) return 'sendrecv';
+  return 'sendrecv';
+}
+
+function nativeSdpAudioSummary(sdp) {
+  const audioSection = nativeSdpAudioSection(sdp);
+  const portMatch = /^m=audio\s+([0-9]+)/.exec(audioSection);
+  const port = portMatch ? Number(portMatch[1]) : null;
+  const hasMsid = /\na=msid:[^\n]+/.test(audioSection) || /\na=ssrc:\d+ msid:/.test(audioSection);
+  return {
+    has_audio: audioSection !== '',
+    rejected: port === 0,
+    direction: audioSection === '' ? '' : nativeSdpSectionDirection(audioSection),
+    has_msid: hasMsid,
+  };
+}
+
+function nativeSdpHasSendableAudio(sdp) {
+  const summary = nativeSdpAudioSummary(sdp);
+  if (!summary.has_audio) return false;
+  if (summary.rejected) return false;
+  if (summary.direction !== 'sendrecv' && summary.direction !== 'sendonly') return false;
+  return summary.has_msid;
+}
+
+function reportNativeAudioSdpRejected(peer, code, message, payload = {}) {
+  const normalizedCode = String(code || 'native_audio_sdp_rejected').trim() || 'native_audio_sdp_rejected';
+  const normalizedMessage = String(message || 'Native encrypted audio negotiation rejected invalid SDP.').trim();
+  console.warn(
+    '[KingRT] native audio bridge rejected SDP',
+    `user=${Number(peer?.userId || 0)}`,
+    `code=${normalizedCode}`,
+    payload,
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: normalizedCode,
+    code: normalizedCode,
+    message: normalizedMessage,
+    payload: {
+      target_user_id: Number(peer?.userId || 0),
+      ...payload,
+    },
+    immediate: true,
+  });
 }
 
 function synchronizeNativePeerMediaElements(peer) {
@@ -7190,7 +7285,23 @@ async function sendNativeOffer(peer) {
 
   peer.negotiating = true;
   try {
-    await ensureLocalMediaForNativeNegotiation();
+    const mediaReady = await ensureLocalMediaForNativeNegotiation();
+    if (
+      shouldUseNativeAudioBridge()
+      && shouldExpectLocalNativeAudioTrack()
+      && (!mediaReady || !nativeAudioBridgeHasLocalAudioTrack())
+    ) {
+      reportNativeAudioSdpRejected(
+        peer,
+        'native_audio_offer_without_local_track',
+        'Native encrypted audio bridge cannot create an offer without a live local mic track.',
+        {
+          media_ready: Boolean(mediaReady),
+          mic_enabled: shouldExpectLocalNativeAudioTrack(),
+        },
+      );
+      return;
+    }
     let local = peer.pc.localDescription;
     if (!(peer.pc.signalingState === 'have-local-offer' && local?.type === 'offer' && local?.sdp)) {
       await syncNativePeerLocalTracks(peer);
@@ -7199,6 +7310,22 @@ async function sendNativeOffer(peer) {
       local = peer.pc.localDescription;
     }
     if (!local || !local.sdp) return;
+    if (
+      shouldUseNativeAudioBridge()
+      && shouldExpectLocalNativeAudioTrack()
+      && !nativeSdpHasSendableAudio(local.sdp)
+    ) {
+      reportNativeAudioSdpRejected(
+        peer,
+        'native_audio_offer_without_send_audio',
+        'Native encrypted audio bridge blocked an offer without send-capable audio.',
+        {
+          sdp_summary: nativeSdpAudioSummary(local.sdp),
+          signaling_state: String(peer.pc.signalingState || ''),
+        },
+      );
+      return;
+    }
 
     const sent = sendSocketFrame({
       type: 'call/offer',
@@ -7432,17 +7559,67 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
   const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'offer' || sdp === '') return;
+  if (
+    shouldUseNativeAudioBridge()
+    && shouldExpectRemoteNativeAudioTrack(senderUserId)
+    && !nativeSdpHasSendableAudio(sdp)
+  ) {
+    reportNativeAudioSdpRejected(
+      peer,
+      'native_audio_remote_offer_without_send_audio',
+      'Native encrypted audio bridge ignored an offer without send-capable audio.',
+      {
+        sender_user_id: Number(senderUserId || 0),
+        sdp_summary: nativeSdpAudioSummary(sdp),
+      },
+    );
+    return;
+  }
 
   try {
     resetNativeOfferRetry(peer);
-    await ensureLocalMediaForNativeNegotiation();
-    await syncNativePeerLocalTracks(peer);
+    const mediaReady = await ensureLocalMediaForNativeNegotiation();
+    if (
+      shouldUseNativeAudioBridge()
+      && shouldExpectLocalNativeAudioTrack()
+      && (!mediaReady || !nativeAudioBridgeHasLocalAudioTrack())
+    ) {
+      reportNativeAudioSdpRejected(
+        peer,
+        'native_audio_answer_without_local_track',
+        'Native encrypted audio bridge cannot answer without a live local mic track.',
+        {
+          sender_user_id: Number(senderUserId || 0),
+          media_ready: Boolean(mediaReady),
+          mic_enabled: shouldExpectLocalNativeAudioTrack(),
+        },
+      );
+      return;
+    }
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+    await syncNativePeerLocalTracks(peer);
     await flushNativePendingIce(peer);
     const answer = await peer.pc.createAnswer();
     await peer.pc.setLocalDescription(answer);
     const local = peer.pc.localDescription;
     if (!local || !local.sdp) return;
+    if (
+      shouldUseNativeAudioBridge()
+      && shouldExpectLocalNativeAudioTrack()
+      && !nativeSdpHasSendableAudio(local.sdp)
+    ) {
+      reportNativeAudioSdpRejected(
+        peer,
+        'native_audio_answer_without_send_audio',
+        'Native encrypted audio bridge blocked an answer without send-capable audio.',
+        {
+          sender_user_id: Number(senderUserId || 0),
+          sdp_summary: nativeSdpAudioSummary(local.sdp),
+          signaling_state: String(peer.pc.signalingState || ''),
+        },
+      );
+      return;
+    }
     sendSocketFrame({
       type: 'call/answer',
       target_user_id: senderUserId,
@@ -7468,6 +7645,24 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
   const type = String(sdpPayload?.type || '').trim().toLowerCase();
   const sdp = normalizeNativeSdpForRemoteDescription(sdpPayload?.sdp);
   if (type !== 'answer' || sdp === '') return;
+  if (
+    shouldUseNativeAudioBridge()
+    && shouldExpectRemoteNativeAudioTrack(senderUserId)
+    && !nativeSdpHasSendableAudio(sdp)
+  ) {
+    reportNativeAudioSdpRejected(
+      peer,
+      'native_audio_remote_answer_without_send_audio',
+      'Native encrypted audio bridge ignored an answer without send-capable audio.',
+      {
+        sender_user_id: Number(senderUserId || 0),
+        sdp_summary: nativeSdpAudioSummary(sdp),
+        signaling_state: String(peer.pc.signalingState || ''),
+      },
+    );
+    scheduleNativeOfferRetry(peer, 'answer_without_send_audio');
+    return;
+  }
 
   try {
     await peer.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
