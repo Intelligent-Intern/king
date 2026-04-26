@@ -1,0 +1,173 @@
+[1777179605] Log start
+[1777179605] Cmd: /Users/sasha/king/llama-fork/build/bin/llama-cli -m /Users/sasha/king/demo/models/qwen2.5-coder-3b-q4_k.gguf -n 4 -c 512 --temp 0.0 -p 2+2= -ls 10 -le 20
+[1777179605] main: build = 1 (1e6f655)
+[1777179605] main: built with Apple clang version 13.1.6 (clang-1316.0.21.2.5) for arm64-apple-darwin21.5.0
+[1777179605] main: seed  = 1777179605
+[1777179605] main: llama backend init
+[1777179605] main: load the model and apply lora adapter, if any
+[1777179605] llama_model_loader: loaded meta data with 35 key-value pairs and 434 tensors from /Users/sasha/king/demo/models/qwen2.5-coder-3b-q4_k.gguf (version GGUF V3 (latest))
+[1777179605] llama_model_loader: Dumping metadata keys/values. Note: KV overrides do not apply in this output.
+[1777179605] llama_model_loader: - kv   0:                       general.architecture str              = qwen2
+[1777179605] llama_model_loader: - kv   1:                               general.type str              = model
+[1777179605] llama_model_loader: - kv   2:                               general.name str              = Qwen2.5 Coder 3B Instruct
+[1777179605] llama_model_loader: - kv   3:                           general.finetune str              = Instruct
+[1777179605] llama_model_loader: - kv   4:                           general.basename str              = Qwen2.5-Coder
+[1777179605] llama_model_loader: - kv   5:                         general.size_label str              = 3B
+[1777179605] llama_model_loader: - kv   6:                            general.license str              = other
+[1777179605] llama_model_loader: - kv   7:                       general.license.name str              = qwen-research
+[1777179605] llama_model_loader: - kv   8:                       general.license.link str              = https://huggingface.co/Qwen/Qwen2.5-C...
+[1777179605] llama_model_loader: - kv   9:                   general.base_model.count u32              = 1
+[1777179605] llama_model_loader: - kv  10:                  general.base_model.0.name str              = Qwen2.5 Coder 3B
+[1777179605] llama_model_loader: - kv  11:          general.base_model.0.organization str              = Qwen
+[1777179605] llama_model_loader: - kv  12:              general.base_model.0.repo_url str              = https://huggingface.co/Qwen/Qwen2.5-C...
+[1777179605] llama_model_loader: - kv  13:                               general.tags arr[str,6]       = ["code", "codeqwen", "chat", "qwen", ...
+[1777179605] llama_model_loader: - kv  14:                          general.languages arr[str,1]       = ["en"]
+[1777179605] llama_model_loader: - kv  15:                          qwen2.block_count u32              = 36
+[1777179605] llama_model_loader: - kv  16:                       qwen2.context_length u32              = 32768
+[1777179605] llama_model_loader: - kv  17:                     qwen2.embedding_length u32              = 2048
+[1777179605] llama_model_loader: - kv  18:                  qwen2.feed_forward_length u32              = 11008
+[1777179605] llama_model_loader: - kv  19:                 qwen2.attention.head_count u32              = 16
+[1777179605] llama_model_loader: - kv  20:              qwen2.attention.head_count_kv u32              = 2
+[1777179605] llama_model_loader: - kv  21:                       qwen2.rope.freq_base f32              = 1000000.000000
+[1777179605] llama_model_loader: - kv  22:     qwen2.attention.layer_norm_rms_epsilon f32              = 0.000001
+[1777179605] llama_model_loader: - kv  23:                          general.file_type u32              = 15
+[1777179605] llama_model_loader: - kv  24:                       tokenizer.ggml.model str              = gpt2
+[1777179605] llama_model_loader: - kv  25:                         tokenizer.ggml.pre str              = qwen2
+[1777179605] llama_model_loader: - kv  26:                      tokenizer.ggml.tokens arr[str,151936]  = ["!", "\"", "#", "$", "%", "&", "'", ...
+[1777179605] llama_model_loader: - kv  27:                  tokenizer.ggml.token_type arr[i32,151936]  = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ...
+[1777179605] llama_model_loader: - kv  28:                      tokenizer.ggml.merges arr[str,151387]  = ["Ġ Ġ", "ĠĠ ĠĠ", "i n", "Ġ t",...
+[1777179605] llama_model_loader: - kv  29:                tokenizer.ggml.eos_token_id u32              = 151645
+[1777179605] llama_model_loader: - kv  30:            tokenizer.ggml.padding_token_id u32              = 151643
+[1777179605] llama_model_loader: - kv  31:                tokenizer.ggml.bos_token_id u32              = 151643
+[1777179605] llama_model_loader: - kv  32:               tokenizer.ggml.add_bos_token bool             = false
+[1777179605] llama_model_loader: - kv  33:                    tokenizer.chat_template str              = {%- if tools %}\n    {{- '<|im_start|>...
+[1777179605] llama_model_loader: - kv  34:               general.quantization_version u32              = 2
+[1777179605] llama_model_loader: - type  f32:  181 tensors
+[1777179605] llama_model_loader: - type q4_K:  216 tensors
+[1777179605] llama_model_loader: - type q6_K:   37 tensors
+[1777179605] llm_load_vocab: special tokens cache size = 22
+[1777179605] llm_load_vocab: token to piece cache size = 0.9310 MB
+[1777179605] llm_load_print_meta: format           = GGUF V3 (latest)
+[1777179605] llm_load_print_meta: arch             = qwen2
+[1777179605] llm_load_print_meta: vocab type       = BPE
+[1777179605] llm_load_print_meta: n_vocab          = 151936
+[1777179605] llm_load_print_meta: n_merges         = 151387
+[1777179605] llm_load_print_meta: vocab_only       = 0
+[1777179605] llm_load_print_meta: n_ctx_train      = 32768
+[1777179605] llm_load_print_meta: n_embd           = 2048
+[1777179605] llm_load_print_meta: n_layer          = 36
+[1777179605] llm_load_print_meta: n_head           = 16
+[1777179605] llm_load_print_meta: n_head_kv        = 2
+[1777179605] llm_load_print_meta: n_rot            = 128
+[1777179605] llm_load_print_meta: n_swa            = 0
+[1777179605] llm_load_print_meta: n_embd_head_k    = 128
+[1777179605] llm_load_print_meta: n_embd_head_v    = 128
+[1777179605] llm_load_print_meta: n_gqa            = 8
+[1777179605] llm_load_print_meta: n_embd_k_gqa     = 256
+[1777179605] llm_load_print_meta: n_embd_v_gqa     = 256
+[1777179605] llm_load_print_meta: f_norm_eps       = 0.0e+00
+[1777179605] llm_load_print_meta: f_norm_rms_eps   = 1.0e-06
+[1777179605] llm_load_print_meta: f_clamp_kqv      = 0.0e+00
+[1777179605] llm_load_print_meta: f_max_alibi_bias = 0.0e+00
+[1777179605] llm_load_print_meta: f_logit_scale    = 0.0e+00
+[1777179605] llm_load_print_meta: n_ff             = 11008
+[1777179605] llm_load_print_meta: n_expert         = 0
+[1777179605] llm_load_print_meta: n_expert_used    = 0
+[1777179605] llm_load_print_meta: causal attn      = 1
+[1777179605] llm_load_print_meta: pooling type     = 0
+[1777179605] llm_load_print_meta: rope type        = 2
+[1777179605] llm_load_print_meta: rope scaling     = linear
+[1777179605] llm_load_print_meta: freq_base_train  = 1000000.0
+[1777179605] llm_load_print_meta: freq_scale_train = 1
+[1777179605] llm_load_print_meta: n_ctx_orig_yarn  = 32768
+[1777179605] llm_load_print_meta: rope_finetuned   = unknown
+[1777179605] llm_load_print_meta: ssm_d_conv       = 0
+[1777179605] llm_load_print_meta: ssm_d_inner      = 0
+[1777179605] llm_load_print_meta: ssm_d_state      = 0
+[1777179605] llm_load_print_meta: ssm_dt_rank      = 0
+[1777179605] llm_load_print_meta: model type       = ?B
+[1777179605] llm_load_print_meta: model ftype      = Q4_K - Medium
+[1777179605] llm_load_print_meta: model params     = 3.09 B
+[1777179605] llm_load_print_meta: model size       = 1.79 GiB (4.99 BPW) 
+[1777179605] llm_load_print_meta: general.name     = Qwen2.5 Coder 3B Instruct
+[1777179605] llm_load_print_meta: BOS token        = 151643 '<|endoftext|>'
+[1777179605] llm_load_print_meta: EOS token        = 151645 '<|im_end|>'
+[1777179605] llm_load_print_meta: PAD token        = 151643 '<|endoftext|>'
+[1777179605] llm_load_print_meta: LF token         = 148848 'ÄĬ'
+[1777179605] llm_load_print_meta: EOT token        = 151645 '<|im_end|>'
+[1777179605] llm_load_print_meta: max token length = 256
+[1777179605] llm_load_tensors: ggml ctx size =    0.38 MiB
+[1777179605] ggml_backend_metal_log_allocated_size: allocated buffer, size =  1834.83 MiB, ( 1834.89 /  5461.34)[1777179605] 
+[1777179605] llm_load_tensors: offloading 36 repeating layers to GPU
+[1777179605] llm_load_tensors: offloading non-repeating layers to GPU
+[1777179605] llm_load_tensors: offloaded 37/37 layers to GPU
+[1777179605] llm_load_tensors:        CPU buffer size =   243.43 MiB
+[1777179605] llm_load_tensors:      Metal buffer size =  1834.83 MiB
+[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] .[1777179605] 
+[1777179605] llama_new_context_with_model: n_ctx      = 512
+[1777179605] llama_new_context_with_model: n_batch    = 512
+[1777179605] llama_new_context_with_model: n_ubatch   = 512
+[1777179605] llama_new_context_with_model: flash_attn = 0
+[1777179605] llama_new_context_with_model: freq_base  = 1000000.0
+[1777179605] llama_new_context_with_model: freq_scale = 1
+[1777179605] ggml_metal_init: allocating
+[1777179605] ggml_metal_init: found device: Apple M1
+[1777179605] ggml_metal_init: picking default device: Apple M1
+[1777179605] ggml_metal_init: using embedded metal library
+[1777179605] ggml_metal_init: GPU name:   Apple M1
+[1777179605] ggml_metal_init: GPU family: MTLGPUFamilyApple7  (1007)
+[1777179605] ggml_metal_init: GPU family: MTLGPUFamilyCommon3 (3003)
+[1777179605] ggml_metal_init: simdgroup reduction support   = true
+[1777179605] ggml_metal_init: simdgroup matrix mul. support = true
+[1777179605] ggml_metal_init: hasUnifiedMemory              = true
+[1777179605] ggml_metal_init: recommendedMaxWorkingSetSize  =  5726.63 MB
+[1777179605] llama_kv_cache_init:      Metal KV buffer size =    18.00 MiB
+[1777179605] llama_new_context_with_model: KV self size  =   18.00 MiB, K (f16):    9.00 MiB, V (f16):    9.00 MiB
+[1777179605] llama_new_context_with_model:        CPU  output buffer size =     0.58 MiB
+[1777179605] llama_new_context_with_model:      Metal compute buffer size =   300.75 MiB
+[1777179605] llama_new_context_with_model:        CPU compute buffer size =     5.01 MiB
+[1777179605] llama_new_context_with_model: graph nodes  = 1266
+[1777179605] llama_new_context_with_model: graph splits = 2
+[1777179605] warming up the model with an empty run
+[1777179605] n_ctx: 512
+[1777179605] 
+[1777179605] system_info: n_threads = 4 / 8 | AVX = 0 | AVX_VNNI = 0 | AVX2 = 0 | AVX512 = 0 | AVX512_VBMI = 0 | AVX512_VNNI = 0 | AVX512_BF16 = 0 | FMA = 0 | NEON = 1 | SVE = 0 | ARM_FMA = 1 | F16C = 0 | FP16_VA = 1 | WASM_SIMD = 0 | BLAS = 1 | SSE3 = 0 | SSSE3 = 0 | VSX = 0 | MATMUL_INT8 = 0 | LLAMAFILE = 1 | 
+[1777179605] add_bos: 0
+[1777179605] tokenize the prompt
+[1777179605] prompt: "2+2="
+[1777179605] tokens: [ '2':17, '+':10, '2':17, '=':28 ]
+[1777179605] recalculate the cached logits (check): embd_inp.empty() false, n_matching_session_tokens 0, embd_inp.size() 4, session_tokens.size() 0, embd_inp.size() 4
+[1777179605] sampling: 
+	repeat_last_n = 64, repeat_penalty = 1.000, frequency_penalty = 0.000, presence_penalty = 0.000
+	top_k = 40, tfs_z = 1.000, top_p = 0.950, min_p = 0.050, typical_p = 1.000, temp = 0.000
+	mirostat = 0, mirostat_lr = 0.100, mirostat_ent = 5.000
+[1777179605] sampling order: 
+CFG -> Penalties -> top_k -> tfs_z -> typical_p -> top_p -> min_p -> temperature 
+[1777179605] generate: n_ctx = 512, n_batch = 2048, n_predict = 4, n_keep = 0
+[1777179605] 
+
+[1777179605] embd_inp.size(): 4, n_consumed: 0
+[1777179605] eval: [ '2':17, '+':10, '2':17, '=':28 ]
+[1777179606] n_past = 4
+[1777179606] last: [ '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '2':17, '+':10, '2':17, '=':28, '4':19 ]
+[1777179606] n_remain: 3
+[1777179606] eval: [ '4':19 ]
+[1777179606] n_past = 5
+[1777179606] last: [ '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '2':17, '+':10, '2':17, '=':28, '4':19, ',':11 ]
+[1777179606] n_remain: 2
+[1777179606] eval: [ ',':11 ]
+[1777179606] n_past = 6
+[1777179606] last: [ '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '2':17, '+':10, '2':17, '=':28, '4':19, ',':11, ' ':220 ]
+[1777179606] n_remain: 1
+[1777179606] eval: [ ' ':220 ]
+[1777179606] n_past = 7
+[1777179606] last: [ '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '!':0, '2':17, '+':10, '2':17, '=':28, '4':19, ',':11, ' ':220, '2':17 ]
+[1777179606] n_remain: 0
+[1777179606] 
+[1777179606] llama_print_timings:        load time =     379.68 ms
+[1777179606] llama_print_timings:      sample time =       6.53 ms /     4 runs   (    1.63 ms per token,   612.56 tokens per second)
+[1777179606] llama_print_timings: prompt eval time =     212.34 ms /     4 tokens (   53.09 ms per token,    18.84 tokens per second)
+[1777179606] llama_print_timings:        eval time =     201.89 ms /     3 runs   (   67.30 ms per token,    14.86 tokens per second)
+[1777179606] llama_print_timings:       total time =     427.54 ms /     7 tokens
+[1777179606] ggml_metal_free: deallocating
+[1777179606] Log end

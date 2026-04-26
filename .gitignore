@@ -131,3 +131,5 @@ demo/video-chat/backend-king-php/.local/
 !mock/assets/orgas/kingrt/icon.svg
 !mock/assets/orgas/kingrt/king_logo-withslogan.svg
 !mock/assets/orgas/kingrt/icons/*.png
+lsquic/
+# llama-fork/
