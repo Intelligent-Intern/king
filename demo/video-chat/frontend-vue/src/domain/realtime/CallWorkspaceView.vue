@@ -8238,7 +8238,7 @@ function bindLocalTrackLifecycle(stream) {
 
 function stopLocalEncodingPipeline() {
   if (encodeIntervalRef.value) {
-    clearInterval(encodeIntervalRef.value);
+    clearTimeout(encodeIntervalRef.value);
     encodeIntervalRef.value = null;
   }
   wlvcEncodeInFlight = false;
@@ -8475,26 +8475,37 @@ async function startEncodingPipeline(videoTrack) {
   canvas.height = videoProfile.frameHeight;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-  encodeIntervalRef.value = setInterval(async () => {
-    if (!isWlvcRuntimePath()) return;
-    if (wlvcEncodeInFlight) return;
-    if (!videoEncoderRef.value || !sfuClientRef.value || !isSfuClientOpen()) {
+  const scheduleNextWlvcEncodeTick = (delayMs = videoProfile.encodeIntervalMs) => {
+    if (!videoEncoderRef.value || !isWlvcRuntimePath()) {
+      encodeIntervalRef.value = null;
       return;
     }
-    if (shouldThrottleWlvcEncodeLoop()) return;
-    const bufferedAmount = getSfuClientBufferedAmount();
-    if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
-      handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
-      return;
-    }
-    if (wlvcBackpressureSkipCount > 0) {
-      resetWlvcBackpressureCounters();
-    }
-    if (video.readyState < 2) return;
-    if (!ctx) return;
+    encodeIntervalRef.value = setTimeout(runWlvcEncodeTick, Math.max(0, Math.round(delayMs)));
+  };
 
-    wlvcEncodeInFlight = true;
+  const runWlvcEncodeTick = async () => {
+    const startedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
     try {
+      if (!isWlvcRuntimePath()) return;
+      if (wlvcEncodeInFlight) return;
+      if (!videoEncoderRef.value || !sfuClientRef.value || !isSfuClientOpen()) {
+        return;
+      }
+      if (shouldThrottleWlvcEncodeLoop()) return;
+      const bufferedAmount = getSfuClientBufferedAmount();
+      if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
+        handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
+        return;
+      }
+      if (wlvcBackpressureSkipCount > 0) {
+        resetWlvcBackpressureCounters();
+      }
+      if (video.readyState < 2) return;
+      if (!ctx) return;
+
+      wlvcEncodeInFlight = true;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const timestamp = Date.now();
@@ -8600,8 +8611,17 @@ async function startEncodingPipeline(videoTrack) {
       }
     } finally {
       wlvcEncodeInFlight = false;
+      if (encodeIntervalRef.value !== null) {
+        const finishedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : Date.now();
+        const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
+        scheduleNextWlvcEncodeTick(videoProfile.encodeIntervalMs - elapsedMs);
+      }
     }
-  }, videoProfile.encodeIntervalMs);
+  };
+
+  scheduleNextWlvcEncodeTick(0);
 }
 
 async function reconfigureLocalBackgroundFilterOnly() {

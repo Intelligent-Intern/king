@@ -63,6 +63,7 @@ Implemented second hardening pass:
 - [x] `sfuClient.ts` remains under the 800 LOC limit after the queue extraction.
 - [x] `sendEncodedFrame=false` with `bufferedAmount=0` is no longer reported as websocket backpressure; failed sends now emit `sfu_frame_send_failed`.
 - [x] Native `malformed_protected_frame` receiver errors now force media-security recovery plus a bounded audio-bridge rebuild instead of staying in a waiting state.
+- [x] WLVC encode scheduling is self-paced after each encode tick instead of a fixed `setInterval`, reducing timer backlog while preserving the HD profile.
 
 Investigation and hardening plan:
 - [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.
@@ -73,7 +74,7 @@ Investigation and hardening plan:
 - [ ] Split native audio bridge readiness into explicit phases: media-security active, local mic live, offer SDP sendable, answer SDP sendable, ICE connected, encrypted receiver transform attached, remote track arrived, playback unblocked.
 - [ ] Add a two-participant E2E gate: encrypted remote audio RMS must exceed threshold and remote video must render continuously without SFU stall for at least 60 seconds.
 - [ ] Add backend contracts for SFU chunk ordering, chunk loss, chunk timeout, protected-frame required mode, broker fanout ordering, and multi-worker publisher/subscriber paths.
-- [ ] Move the WLVC encode hot path off the UI thread or replace it with binary/WebRTC media transport; Chrome `[Violation] setInterval` spam is a symptom of 720p encode work still running in a timer callback.
+- [ ] Move the WLVC encode hot path off the UI thread or replace it with binary/WebRTC media transport; Chrome long-task warnings are a symptom of 720p encode work still running on the UI thread.
 
 Open root-cause candidates:
 - [ ] JSON/base64 frame carriage is too expensive for realtime video and produces the observed send-buffer growth.

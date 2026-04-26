@@ -418,6 +418,8 @@ try {
   requireContains(encodePipeline, 'videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;', 'local WASM encoder is not Vue-proxied');
   requireNotContains(encodePipeline, 'document.hidden', 'SFU frame publishing must continue from background tabs');
   requireContains(encodePipeline, 'if (wlvcEncodeInFlight) return;', 'WLVC encode loop avoids overlapping async interval work');
+  requireNotContains(encodePipeline, 'setInterval(async () =>', 'WLVC encode loop is self-paced instead of a fixed interval timer');
+  requireContains(encodePipeline, 'setTimeout(runWlvcEncodeTick', 'WLVC encode loop schedules the next tick only after the previous encode finishes');
   requireContains(encodePipeline, 'if (shouldThrottleWlvcEncodeLoop()) return;', 'WLVC encode loop honors adaptive backpressure pacing');
   requireContains(encodePipeline, 'getSfuClientBufferedAmount()', 'WLVC encode loop checks websocket bufferedAmount');
   requireContains(encodePipeline, 'shouldDelayWlvcFrameForBackpressure(bufferedAmount)', 'WLVC encode loop waits for websocket low-water recovery');
