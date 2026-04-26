@@ -5281,7 +5281,8 @@ function startPingLoop() {
   }, 12_000);
 }
 
-function closeSocket() {
+function closeSocket(options = {}) {
+  const leaveRoom = options?.leaveRoom === true;
   clearReconnectTimer();
   clearPingTimer();
   hasRealtimeRoomSync.value = false;
@@ -5289,8 +5290,15 @@ function closeSocket() {
   const socket = socketRef.value;
   socketRef.value = null;
   if (!(socket instanceof WebSocket)) return;
+  if (leaveRoom && socket.readyState === WebSocket.OPEN) {
+    try {
+      socket.send(JSON.stringify({ type: 'room/leave' }));
+    } catch {
+      // Best-effort leave. Closing the socket still lets the server clean up.
+    }
+  }
   try {
-    socket.close(1000, 'client_close');
+    socket.close(1000, leaveRoom ? 'client_leave' : 'client_close');
   } catch {
     // ignore
   }
@@ -9741,7 +9749,7 @@ onBeforeUnmount(() => {
     clearInterval(typingSweepTimer);
     typingSweepTimer = null;
   }
-  closeSocket();
+  closeSocket({ leaveRoom: true });
   teardownLocalPublisher();
   teardownNativePeerConnections();
   teardownSfuRemotePeers();

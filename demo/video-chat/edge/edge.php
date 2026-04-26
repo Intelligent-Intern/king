@@ -130,7 +130,7 @@ $parseUpstream = static function (string $upstream): array {
     return [$parts[0] ?: '127.0.0.1', isset($parts[1]) ? (int) $parts[1] : 80];
 };
 
-$readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTimeout, $zeroWriteSleepMicros): ?string {
+$readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTimeout, $zeroWriteSleepMicros): array {
     $head = '';
     $deadline = microtime(true) + 10.0;
     $lastReadProgress = microtime(true);
@@ -142,7 +142,7 @@ $readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTim
         $except = null;
         $ready = @stream_select($read, $write, $except, 1, 0);
         if ($ready === false) {
-            return null;
+            return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'select_failed'];
         }
         if ($ready === 0) {
             continue;
@@ -150,14 +150,14 @@ $readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTim
 
         $chunk = @fread($client, 8192);
         if ($chunk === false) {
-            return null;
+            return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'read_failed'];
         }
         if ($chunk === '') {
             if (feof($client)) {
-                return null;
+                return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'client_closed'];
             }
             if ((microtime(true) - $lastReadProgress) >= $readStallTimeout) {
-                return null;
+                return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'read_stalled'];
             }
             usleep($zeroWriteSleepMicros);
             continue;
@@ -166,14 +166,14 @@ $readRequestHead = static function ($client) use ($maxHeaderBytes, $readStallTim
         $lastReadProgress = microtime(true);
         $head .= $chunk;
         if (strlen($head) > $maxHeaderBytes) {
-            return null;
+            return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'header_too_large'];
         }
         if (strpos($head, "\r\n\r\n") !== false) {
-            return $head;
+            return ['head' => $head, 'bytes_read' => strlen($head), 'reason' => 'complete'];
         }
     }
 
-    return null;
+    return ['head' => null, 'bytes_read' => strlen($head), 'reason' => 'deadline'];
 };
 
 $parseRequest = static function (string $head) use ($normalizeHost): array {
@@ -582,8 +582,13 @@ $handleClient = static function ($client, bool $tls) use ($domain, $readRequestH
         }
     }
 
-    $head = $readRequestHead($client);
+    $requestHead = $readRequestHead($client);
+    $head = $requestHead['head'] ?? null;
     if ($head === null) {
+        if ((int) ($requestHead['bytes_read'] ?? 0) <= 0) {
+            @fclose($client);
+            return;
+        }
         $writeResponse($client, 400, 'Bad Request', ['Content-Type' => 'text/plain; charset=utf-8'], "Bad Request\n");
         @fclose($client);
         return;
