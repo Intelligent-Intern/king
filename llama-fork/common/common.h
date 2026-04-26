@@ -5,6 +5,7 @@
 #include "llama.h"
 
 #include "sampling.h"
+#include "voltron_transport.h"
 
 #define LOG_NO_FILE_LINE_FUNCTION
 #include "log.h"
@@ -91,6 +92,7 @@ int32_t n_gpu_layers_draft    =    -1; // number of layers to store in VRAM for 
     int32_t layer_start          =     0; // first layer to compute (0 = first layer)
     int32_t layer_end           =    -1; // last layer to compute (-1 = all layers)
     std::string kv_cache_out;        // file to save KV cache state after generation
+    enum voltron_backend kv_transport_backend = VOLTRON_BACKEND_FILE; // transport backend for KV cache
     std::string kv_cache_in;         // file to load KV cache state before generation
     int32_t grp_attn_n            =     1; // group-attention factor
     int32_t grp_attn_w            =   512; // group-attention width

@@ -2,6 +2,7 @@
 
 #include "console.h"
 #include "llama.h"
+#include "voltron_transport.h"
 
 #include <cassert>
 #include <cinttypes>
@@ -211,6 +212,12 @@ int main(int argc, char ** argv) {
 
     model = llama_init.model;
     ctx = llama_init.context;
+    // initialize KV transport based on selected backend
+    voltron_transport* kv_transport = voltron_transport_init(params.kv_transport_backend);
+    if (!kv_transport) {
+        LOG_TEE("%s: error: failed to init KV transport\n", __func__);
+        return 1;
+    }
     if (sparams.cfg_scale > 1.f) {
         struct llama_context_params lparams = llama_context_params_from_gpt_params(params);
         ctx_guidance = llama_new_context_with_model(model, lparams);
@@ -224,19 +231,27 @@ int main(int argc, char ** argv) {
     // load KV cache state if provided
     if (!params.kv_cache_in.empty()) {
         LOG("%s: loading KV cache from '%s'\n", __func__, params.kv_cache_in.c_str());
-        FILE * f = fopen(params.kv_cache_in.c_str(), "rb");
-        if (!f) {
-            LOG_TEE("%s: error: failed to open '%s'\n", __func__, params.kv_cache_in.c_str());
+        if (params.kv_transport_backend == VOLTRON_BACKEND_FILE) {
+            FILE * f = fopen(params.kv_cache_in.c_str(), "rb");
+            if (!f) {
+                LOG_TEE("%s: error: failed to open '%s'\n", __func__, params.kv_cache_in.c_str());
+                return 1;
+            }
+            fseek(f, 0, SEEK_END);
+            size_t size = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            std::vector<uint8_t> kv_data(size);
+            fread(kv_data.data(), 1, size, f);
+            fclose(f);
+            llama_state_set_data(ctx, kv_data.data(), kv_data.size());
+            LOG("%s: KV cache loaded\n", __func__);
+        } else if (params.kv_transport_backend == VOLTRON_BACKEND_SHM) {
+            LOG_TEE("%s: SHM transport not yet implemented\n", __func__);
+            return 1;
+        } else if (params.kv_transport_backend == VOLTRON_BACKEND_TCP) {
+            LOG_TEE("%s: TCP transport not yet implemented\n", __func__);
             return 1;
         }
-        fseek(f, 0, SEEK_END);
-        size_t size = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        std::vector<uint8_t> kv_data(size);
-        fread(kv_data.data(), 1, size, f);
-        fclose(f);
-        llama_state_set_data(ctx, kv_data.data(), kv_data.size());
-        LOG("%s: KV cache loaded\n", __func__);
     }
 
     const int n_ctx_train = llama_n_ctx_train(model);
@@ -750,16 +765,24 @@ int main(int argc, char ** argv) {
                 LOG("saved session to %s\n", path_session.c_str());
             }
 
-            // save KV cache state if requested
-            if (!params.kv_cache_out.empty()) {
-                size_t state_size = llama_state_get_size(ctx);
-                std::vector<uint8_t> state(state_size);
-                llama_state_get_data(ctx, state.data(), state.size());
-                FILE * f = fopen(params.kv_cache_out.c_str(), "wb");
-                fwrite(state.data(), 1, state.size(), f);
-                fclose(f);
-                LOG("saved KV cache to %s\n", params.kv_cache_out.c_str());
-            }
+    // save KV cache state if requested
+    if (!params.kv_cache_out.empty()) {
+        if (params.kv_transport_backend == VOLTRON_BACKEND_FILE) {
+            size_t state_size = llama_state_get_size(ctx);
+            std::vector<uint8_t> state(state_size);
+            llama_state_get_data(ctx, state.data(), state.size());
+            FILE * f = fopen(params.kv_cache_out.c_str(), "wb");
+            fwrite(state.data(), 1, state.size(), f);
+            fclose(f);
+            LOG("saved KV cache to %s\n", params.kv_cache_out.c_str());
+        } else if (params.kv_transport_backend == VOLTRON_BACKEND_SHM) {
+            LOG_TEE("%s: SHM transport not yet implemented for saving\n", __func__);
+            return 1;
+        } else if (params.kv_transport_backend == VOLTRON_BACKEND_TCP) {
+            LOG_TEE("%s: TCP transport not yet implemented for saving\n", __func__);
+            return 1;
+        }
+    }
 
             const llama_token id = llama_sampling_sample(ctx_sampling, ctx, ctx_guidance);
 
@@ -1010,6 +1033,11 @@ int main(int argc, char ** argv) {
 
     llama_print_timings(ctx);
     write_logfile(ctx, params, model, input_tokens, output_ss.str(), output_tokens);
+
+    // clean up KV transport
+    if (kv_transport) {
+        voltron_transport_destroy(kv_transport);
+    }
 
     if (ctx_guidance) { llama_free(ctx_guidance); }
     llama_free(ctx);

@@ -59,7 +59,8 @@ TEST_TARGETS = \
 	tests/test-sampling \
 	tests/test-tokenizer-0 \
 	tests/test-tokenizer-1-bpe \
-	tests/test-tokenizer-1-spm
+tests/test-tokenizer-1-spm \
+	tests/test-voltron-transport
 
 # Legacy build targets that were renamed in #7809, but should still be removed when the project is cleaned
 LEGACY_TARGETS_CLEAN = main quantize quantize-stats perplexity imatrix embedding vdot q8dot convert-llama2c-to-ggml \
@@ -925,7 +926,7 @@ OBJ_COMMON = \
 	common/build-info.o \
 	common/json-schema-to-grammar.o
 
-OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON)
+OBJ_ALL = $(OBJ_GGML) $(OBJ_LLAMA) $(OBJ_COMMON) src/voltron_transport.o
 
 LIB_GGML   = $(LIB_PRE)ggml$(DSO_EXT)
 LIB_GGML_S = $(LIB_PRE)ggml.a
@@ -1123,11 +1124,18 @@ src/llama-grammar.o: \
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 src/llama-sampling.o: \
-	src/llama-sampling.cpp \
-	src/llama-sampling.h \
-	src/llama-impl.h \
-	include/llama.h
+    src/llama-sampling.cpp \
+    src/llama-sampling.h \
+    src/llama-impl.h \
+    include/llama.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# voltron transport implementation
+src/voltron_transport.o: \
+    src/voltron_transport.c \
+    include/voltron_transport.h
+	$(CC) $(CFLAGS) -c $< -o $@
+
 
 $(LIB_LLAMA): \
 	$(OBJ_LLAMA) \
@@ -1556,6 +1564,12 @@ tests/test-tokenizer-1-spm: tests/test-tokenizer-1-spm.cpp \
 	$(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+
+# Test for voltron transport (FILE backend)
+	tests/test-voltron-transport: tests/test-voltron-transport.cpp include/voltron_transport.h \
+ $(OBJ_ALL)
+	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
+	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) src/voltron_transport.o $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-rope: tests/test-rope.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)

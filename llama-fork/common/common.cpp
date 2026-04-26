@@ -8,6 +8,7 @@
 #include "json.hpp"
 #include "json-schema-to-grammar.h"
 #include "llama.h"
+#include "voltron_transport.h"
 
 #include <algorithm>
 #include <cinttypes>
@@ -860,6 +861,21 @@ bool gpt_params_find_arg(int argc, char ** argv, const std::string & arg, gpt_pa
     if (arg == "--kv-cache-in") {
         CHECK_ARG
         params.kv_cache_in = argv[i];
+        return true;
+    }
+    if (arg == "--kv-transport") {
+        CHECK_ARG
+        std::string backend = argv[i];
+        if (backend == "file") {
+            params.kv_transport_backend = VOLTRON_BACKEND_FILE;
+        } else if (backend == "shm") {
+            params.kv_transport_backend = VOLTRON_BACKEND_SHM;
+        } else if (backend == "tcp") {
+            params.kv_transport_backend = VOLTRON_BACKEND_TCP;
+        } else {
+            fprintf(stderr, "error: unknown transport backend '%s'\n", backend.c_str());
+            return false;
+        }
         return true;
     }
     if (arg == "--split-mode" || arg == "-sm") {
