@@ -850,7 +850,7 @@ function isNativeWebRtcRuntimePath() {
 }
 
 function shouldUseNativeAudioBridge() {
-  // M12: Without encoded InsertableStreams we cannot attach E2EE transforms.
+  // M12: Without encoded InsertableStreams we cannot attach media transforms.
   // Fail closed and let nativeAudioBridgeBlockedReason surface the explicit state.
   if (!MediaSecuritySession.supportsNativeTransforms()) {
     return false;
@@ -861,7 +861,7 @@ function shouldUseNativeAudioBridge() {
 }
 
 function nativeAudioBridgeFailureMessage() {
-  return 'Audio is unavailable because encrypted audio transform setup failed on this device.';
+  return 'Audio is unavailable because protected audio transform setup failed on this device.';
 }
 
 function shouldMaintainNativePeerConnections() {
@@ -963,11 +963,11 @@ const nativeAudioSecurityBannerMessage = computed(() => {
   if (!shouldUseNativeAudioBridge()) return '';
   const session = mediaSecuritySessionRef.value;
   if (!session) {
-    return 'Audio is waiting for end-to-end encryption to become ready.';
+    return 'Audio is waiting for the media-security handshake to become ready.';
   }
   const sessionState = String(session?.state || '').trim().toLowerCase();
   if (sessionState === 'blocked_capability') {
-    return 'Audio is unavailable because end-to-end encryption could not be initialized on this device.';
+    return 'Audio is unavailable because protected media could not be initialized on this device.';
   }
   if (!session?.canProtectForTargets(targetUserIds)) {
     const blocked = targetUserIds.some((userId) => {
@@ -975,9 +975,9 @@ const nativeAudioSecurityBannerMessage = computed(() => {
       return String(peer?.state || '').trim().toLowerCase() === 'blocked_capability';
     });
     if (blocked) {
-      return 'Audio is muted because end-to-end encryption is unavailable for at least one participant.';
+      return 'Audio is muted because protected media is unavailable for at least one participant.';
     }
-    return 'Audio is waiting for end-to-end encryption to become ready.';
+    return 'Audio is waiting for the media-security handshake to become ready.';
   }
   const peerIssue = nativeAudioBridgePeerStatusMessage(targetUserIds);
   if (peerIssue !== '') return peerIssue;
@@ -997,10 +997,10 @@ function nativeAudioBridgeBlockedReason(targetUserIds = []) {
   if (normalizedTargetIds.length <= 0) return '';
   if (!SFU_RUNTIME_ENABLED || !isWlvcRuntimePath()) return '';
   if (!Boolean(mediaRuntimeCapabilities.value.stageB)) {
-    return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for end-to-end encrypted audio.';
+    return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for protected audio.';
   }
   if (!MediaSecuritySession.supportsNativeTransforms()) {
-    return 'Audio is unavailable because this browser cannot run native end-to-end protected audio bridging.';
+    return 'Audio is unavailable because this browser cannot run native protected audio bridging.';
   }
   return '';
 }
@@ -1021,10 +1021,10 @@ function nativeAudioBridgePeerStatusMessage(targetUserIds = []) {
       return String(peer.audioBridgeErrorMessage || '').trim() || nativeAudioBridgeFailureMessage();
     }
     if (state === 'stalled_no_track') {
-      return 'Audio is unavailable because no encrypted remote audio track arrived from the other participant.';
+      return 'Audio is unavailable because no protected remote audio track arrived from the other participant.';
     }
     if (state === 'play_failed') {
-      return 'Audio is unavailable because encrypted remote audio could not start playback on this device.';
+      return 'Audio is unavailable because protected remote audio could not start playback on this device.';
     }
   }
   return '';
@@ -1061,7 +1061,7 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
   const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
   setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
   // M7 / M9: Log to console so audio failures are immediately visible in devtools,
-  // then schedule a forced E2EE rekey to break any dead-lock in the handshake.
+  // then schedule a forced media-security rekey to break any dead-lock in the handshake.
   console.error(
     '[KingRT] 🔇 AUDIO BRIDGE FAILED',
     `code=${String(code || 'native_audio_bridge_failed')}`,
@@ -1083,11 +1083,11 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
     },
     immediate: true,
   });
-  // M9: Force a full E2EE rekey 1.5s after a bridge failure to break any
+  // M9: Force a full media-security rekey 1.5s after a bridge failure to break any
   // handshake dead-lock that may have caused the transform to fail.
   setTimeout(() => {
     if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
-    console.info('[KingRT] 🔑 Forcing E2EE rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
+    console.info('[KingRT] 🔑 Forcing media-security rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
     void syncMediaSecurityWithParticipants(true);
   }, 1500);
 }
@@ -1145,7 +1145,7 @@ async function checkMediaSecurityHandshakeTimeouts() {
     mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
     mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
     console.warn(
-      '[KingRT] E2EE handshake timeout - retrying media-security exchange',
+      '[KingRT] Media-security handshake timeout - retrying media-security exchange',
       `user=${normalizedTargetId}`,
       `state=${peerState || 'missing'}`,
       `elapsed=${nowMs - helloSentAt}ms`,
@@ -1185,7 +1185,7 @@ async function sendMediaSecurityHello(targetUserId, force = false) {
       level: 'warning',
       eventType: 'media_security_hello_skipped',
       code: 'media_security_hello_not_ready',
-      message: 'Media security hello could not be built because local end-to-end encryption is not ready.',
+      message: 'Media security hello could not be built because the local media-security session is not ready.',
       payload: {
         target_user_id: Number(targetUserId || 0),
         media_runtime_path: mediaRuntimePath.value,
@@ -1333,7 +1333,7 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
         const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
         if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
           console.warn(
-            '[KingRT] ⏳ E2EE handshake timeout for user',
+            '[KingRT] ⏳ Media-security handshake timeout for user',
             normalizedTargetId,
             `state=${peerState}`,
             `elapsed=${Date.now() - helloSentAt}ms — force-retrying Hello`,
@@ -1415,9 +1415,9 @@ async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
-      eventType: 'native_audio_waiting_for_e2ee',
-      code: 'native_audio_waiting_for_e2ee',
-      message: 'Native encrypted audio negotiation is waiting for the media-security handshake.',
+      eventType: 'native_audio_waiting_for_media_security',
+      code: 'native_audio_waiting_for_media_security',
+      message: 'Native protected audio negotiation is waiting for the media-security handshake.',
       payload: {
         target_user_id: targetUserId,
         reason: String(reason || 'native_audio_negotiation'),
@@ -1460,10 +1460,10 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   const error = event?.error;
   const senderUserId = Number(event?.senderUserId || event?.sender_user_id || 0);
   const trackId = String(event?.trackId || event?.track_id || '').trim();
-  const errorMessage = extractDiagnosticMessage(error, 'Native encrypted media frame could not be processed.');
+  const errorMessage = extractDiagnosticMessage(error, 'Native protected media frame could not be processed.');
   const code = direction === 'receiver'
-    ? 'native_e2ee_frame_decrypt_failed'
-    : 'native_e2ee_frame_encrypt_failed';
+    ? 'native_media_frame_decrypt_failed'
+    : 'native_media_frame_encrypt_failed';
   const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error);
   const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
   const nowMs = Date.now();
@@ -1476,7 +1476,7 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   if (shouldLog) {
     const logMethod = transientFrameDrop ? console.warn : console.error;
     logMethod(
-      '[KingRT] SFU/native E2EE frame transform failed',
+      '[KingRT] SFU/native media-security frame transform failed',
       `direction=${direction || 'unknown'}`,
       `user=${senderUserId || 'n/a'}`,
       `track=${trackId || 'n/a'}`,
@@ -1504,7 +1504,7 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   if (direction !== 'receiver' || !shouldRecoverMediaSecurityFromFrameError(error)) return;
   if (!Number.isInteger(senderUserId) || senderUserId <= 0 || senderUserId === currentUserId.value) return;
   recoverMediaSecurityForPublisher(senderUserId);
-  resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_e2ee_frame_error');
+  resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error');
 }
 
 function setMediaRuntimePath(nextPath, reason) {
@@ -4848,12 +4848,12 @@ async function connectSocket() {
       setBackendWebSocketOrigin(socketOrigin);
       clearErrors();
       startPingLoop();
-      // M2: Clear E2EE signal caches on every socket open so foreground resumes
+      // M2: Clear media-security signal caches on every socket open so foreground resumes
       // and fresh connects both re-send Hello + SenderKey to all peers.
       clearMediaSecuritySignalCaches();
       startMediaSecurityHandshakeWatchdog();
       console.info(
-        '[KingRT] WS open - E2EE signal caches cleared, full handshake will run',
+        '[KingRT] WS open - media-security signal caches cleared, full handshake will run',
         `reconnect=${isReconnectOpen ? '1' : '0'}`,
       );
       requestRoomSnapshot();
@@ -5244,7 +5244,7 @@ watch(isSocketOnline, (online) => {
 });
 
 function isNativeAudioSecurityWaitingMessage(message) {
-  return /waiting for end-to-end encryption/i.test(String(message || ''));
+  return /waiting for the media-security handshake/i.test(String(message || ''));
 }
 
 // M7: Mirror the audio bridge banner to the console so audio-blocking states are
@@ -6055,7 +6055,7 @@ function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
     level: 'warning',
     eventType: 'native_audio_track_recovery',
     code: 'native_audio_track_recovery',
-    message: 'Native encrypted audio bridge connected without a remote audio track; rebuilding peer connection.',
+    message: 'Native protected audio bridge connected without a remote audio track; rebuilding peer connection.',
     payload: {
       reason: String(reason || 'missing_track'),
       attempt: nextAttempt,
@@ -6106,7 +6106,7 @@ async function playNativePeerAudio(peer, reason = 'unknown') {
     const blocked = nativeAudioPlaybackBlocked(error);
     const errorMessage = extractDiagnosticMessage(
       error,
-      blocked ? 'The browser blocked remote audio playback.' : 'Remote encrypted audio playback failed.'
+      blocked ? 'The browser blocked remote audio playback.' : 'Remote protected audio playback failed.'
     );
     const nextState = blocked ? 'blocked_playback' : 'play_failed';
     if (setNativePeerAudioBridgeState(peer, nextState, errorMessage)) {
@@ -6116,8 +6116,8 @@ async function playNativePeerAudio(peer, reason = 'unknown') {
         eventType: blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed',
         code: blocked ? 'native_audio_play_blocked' : 'native_audio_play_failed',
         message: blocked
-          ? 'The browser blocked remote encrypted audio playback.'
-          : 'Remote encrypted audio playback failed.',
+          ? 'The browser blocked remote protected audio playback.'
+          : 'Remote protected audio playback failed.',
         payload: {
           target_user_id: Number(peer?.userId || 0),
           reason: String(reason || 'unknown'),
@@ -6152,13 +6152,13 @@ function scheduleNativePeerAudioTrackDeadline(peer) {
     if (currentConnectionState !== 'connected' && currentConnectionState !== 'completed') return;
     if (streamHasLiveTrackKind(peer.remoteStream, 'audio')) return;
 
-    if (setNativePeerAudioBridgeState(peer, 'stalled_no_track', 'No encrypted remote audio track arrived.')) {
+    if (setNativePeerAudioBridgeState(peer, 'stalled_no_track', 'No protected remote audio track arrived.')) {
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
         eventType: 'native_audio_track_missing',
         code: 'native_audio_track_missing',
-        message: 'Encrypted remote audio track did not arrive after the native audio bridge connected.',
+        message: 'Protected remote audio track did not arrive after the native audio bridge connected.',
         payload: {
           target_user_id: Number(peer?.userId || 0),
           connection_state: currentConnectionState,
@@ -6562,7 +6562,7 @@ function ensureNativePeerAudioTransceiver(peer) {
 
 function reportNativeAudioSdpRejected(peer, code, message, payload = {}) {
   const normalizedCode = String(code || 'native_audio_sdp_rejected').trim() || 'native_audio_sdp_rejected';
-  const normalizedMessage = String(message || 'Native encrypted audio negotiation rejected invalid SDP.').trim();
+  const normalizedMessage = String(message || 'Native protected audio negotiation rejected invalid SDP.').trim();
   console.warn(
     '[KingRT] native audio bridge rejected SDP',
     `user=${Number(peer?.userId || 0)}`,
@@ -6593,7 +6593,7 @@ async function replaceNativePeerSenderTrack(peer, sender, nextTrack, senderKind,
       reportNativeAudioBridgeFailure(
         peer,
         'native_audio_sender_replace_track_failed',
-        'Audio is unavailable because the browser could not attach the local microphone to the encrypted audio bridge.',
+        'Audio is unavailable because the browser could not attach the local microphone to the protected audio bridge.',
         {
           reason: String(reason || 'sync'),
           target_track_id: String(nextTrack?.id || ''),
@@ -6790,7 +6790,7 @@ async function syncNativePeerLocalTracks(peer) {
         reportNativeAudioBridgeFailure(
           peer,
           'native_audio_sender_add_track_failed',
-          'Audio is unavailable because the browser could not add the local microphone to the encrypted audio bridge.',
+          'Audio is unavailable because the browser could not add the local microphone to the protected audio bridge.',
           {
             track_id: String(track?.id || ''),
             track_state: String(track?.readyState || '').trim().toLowerCase(),
@@ -6997,7 +6997,7 @@ async function sendNativeOffer(peer) {
       reportNativeAudioSdpRejected(
         peer,
         'native_audio_offer_without_local_track',
-        'Native encrypted audio bridge cannot create an offer without a live local mic track.',
+        'Native protected audio bridge cannot create an offer without a live local mic track.',
         {
           media_ready: Boolean(mediaReady),
           mic_enabled: shouldExpectLocalNativeAudioTrack(),
@@ -7021,7 +7021,7 @@ async function sendNativeOffer(peer) {
       reportNativeAudioSdpRejected(
         peer,
         'native_audio_offer_without_send_audio',
-        'Native encrypted audio bridge blocked an offer without send-capable audio.',
+        'Native protected audio bridge blocked an offer without send-capable audio.',
         {
           sdp_summary: nativeSdpAudioSummary(local.sdp),
           sdp_audio_summaries: nativeSdpAudioSummaries(local.sdp),
@@ -7275,7 +7275,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
     reportNativeAudioSdpRejected(
       peer,
       'native_audio_remote_offer_without_send_audio',
-      'Native encrypted audio bridge ignored an offer without send-capable audio.',
+      'Native protected audio bridge ignored an offer without send-capable audio.',
       {
         sender_user_id: Number(senderUserId || 0),
         sdp_summary: nativeSdpAudioSummary(sdp),
@@ -7317,7 +7317,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       reportNativeAudioSdpRejected(
         peer,
         'native_audio_answer_without_local_track',
-        'Native encrypted audio bridge cannot answer without a live local mic track.',
+        'Native protected audio bridge cannot answer without a live local mic track.',
         {
           sender_user_id: Number(senderUserId || 0),
           media_ready: Boolean(mediaReady),
@@ -7337,7 +7337,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       reportNativeAudioSdpRejected(
         peer,
         'native_audio_answer_without_sender_track',
-        'Native encrypted audio bridge cannot answer because the local microphone sender is not attached.',
+        'Native protected audio bridge cannot answer because the local microphone sender is not attached.',
         {
           sender_user_id: Number(senderUserId || 0),
           local_tracks: nativeAudioBridgeLocalTrackTelemetry(),
@@ -7358,7 +7358,7 @@ async function handleNativeOfferSignal(senderUserId, payloadBody) {
       reportNativeAudioSdpRejected(
         peer,
         'native_audio_answer_without_send_audio',
-        'Native encrypted audio bridge blocked an answer without send-capable audio.',
+        'Native protected audio bridge blocked an answer without send-capable audio.',
         {
           sender_user_id: Number(senderUserId || 0),
           sdp_summary: nativeSdpAudioSummary(local.sdp),
@@ -7403,7 +7403,7 @@ async function handleNativeAnswerSignal(senderUserId, payloadBody) {
     reportNativeAudioSdpRejected(
       peer,
       'native_audio_remote_answer_without_send_audio',
-      'Native encrypted audio bridge ignored an answer without send-capable audio.',
+      'Native protected audio bridge ignored an answer without send-capable audio.',
       {
         sender_user_id: Number(senderUserId || 0),
         sdp_summary: nativeSdpAudioSummary(sdp),

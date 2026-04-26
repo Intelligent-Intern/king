@@ -90,13 +90,13 @@ try {
   const workspace = readFrontend('src/domain/realtime/CallWorkspaceView.vue');
   requireContains(workspace, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
   requireContains(workspace, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
-  requireContains(workspace, 'function ensureNativeAudioBridgeSecurityReady', 'native bridge gates negotiation on active E2EE');
+  requireContains(workspace, 'function ensureNativeAudioBridgeSecurityReady', 'native bridge gates negotiation on active media security');
   requireContains(workspace, 'function handleNativeMediaSecurityFrameError(event = {})', 'workspace handles native frame errors');
-  requireContains(workspace, 'function shouldTreatNativeFrameErrorAsTransient', 'workspace separates transient native frame drops from hard E2EE failures');
+  requireContains(workspace, 'function shouldTreatNativeFrameErrorAsTransient', 'workspace separates transient native frame drops from hard media-security failures');
   requireContains(workspace, "code = direction === 'receiver'", 'workspace separates decrypt and encrypt diagnostics');
-  requireContains(workspace, "'[KingRT] SFU/native E2EE frame transform failed'", 'native frame errors are visible in devtools');
-  requireContains(workspace, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger E2EE recovery');
-  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_e2ee_frame_error')", 'native frame recovery resyncs audio bridge');
+  requireContains(workspace, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
+  requireContains(workspace, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');
+  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
   requireContains(workspace, "peerState === 'capability_ready'", 'handshake retry covers capability_ready sender-key deadlocks');
   requireContains(workspace, 'mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());', 'missing sender-key schedules handshake watchdog');
   requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted')", 'accepted sender-key resyncs native audio tracks');
@@ -109,8 +109,8 @@ try {
   requireContains(workspace, 'function nativePeerHasLocalLiveAudioSender', 'native bridge validates local audio sender before answering');
   requireContains(workspace, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');
   requireContains(workspace, 'native_audio_sender_replace_track_failed', 'native bridge reports replaceTrack failures');
-  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer')", 'native offers wait for active E2EE before SDP');
-  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer_received')", 'native answers wait for active E2EE before SDP');
+  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer')", 'native offers wait for active media security before SDP');
+  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer_received')", 'native answers wait for active media security before SDP');
   requireContains(workspace, 'sdp_audio_summaries: nativeSdpAudioSummaries', 'native SDP diagnostics include every audio m-section');
 
   process.stdout.write('[native-audio-bridge-contract] PASS\n');

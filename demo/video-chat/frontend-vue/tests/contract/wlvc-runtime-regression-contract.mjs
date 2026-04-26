@@ -226,9 +226,9 @@ try {
   requireContains(acquireLocal, 'const fallbackConstraints = {', 'local media acquisition preserves disabled device state through fallback retries');
   requireContains(workspace, 'function nativeAudioBridgeBlockedReason', 'audio bridge blocked-reason helper exists');
   requireContains(workspace, 'function nativeAudioBridgePeerStatusMessage', 'audio bridge peer-status helper exists');
-  requireContains(workspace, "return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for end-to-end encrypted audio.';", 'audio bridge banner reports missing native WebRTC capability honestly');
-  requireContains(workspace, "return 'Audio is unavailable because end-to-end encryption could not be initialized on this device.';", 'audio bridge banner reports blocked local capability honestly');
-  requireContains(workspace, "return 'Audio is unavailable because no encrypted remote audio track arrived from the other participant.';", 'audio bridge banner reports missing encrypted remote audio');
+  requireContains(workspace, "return 'Audio is unavailable because this browser cannot run the native WebRTC audio bridge required for protected audio.';", 'audio bridge banner reports missing native WebRTC capability honestly');
+  requireContains(workspace, "return 'Audio is unavailable because protected media could not be initialized on this device.';", 'audio bridge banner reports blocked local capability honestly');
+  requireContains(workspace, "return 'Audio is unavailable because no protected remote audio track arrived from the other participant.';", 'audio bridge banner reports missing protected remote audio');
   requireContains(workspace, "return 'Audio is blocked by the browser autoplay policy on this device.';", 'audio bridge banner reports autoplay blocking');
   const nativePeerPolicy = extractFunction(workspace, 'shouldMaintainNativePeerConnections');
   requireContains(nativePeerPolicy, 'isNativeWebRtcRuntimePath()', 'native peer policy keeps full native peers');
@@ -331,7 +331,7 @@ try {
   requireContains(workspace, 'function scheduleNativeAudioTrackRecovery', 'native audio bridge can recover when connected peers never receive audio tracks');
   const nativeTrackRecovery = extractFunction(workspace, 'scheduleNativeAudioTrackRecovery');
   requireContains(nativeTrackRecovery, "eventType: 'native_audio_track_recovery'", 'native audio bridge recovery emits diagnostics');
-  requireContains(nativeTrackRecovery, 'void syncMediaSecurityWithParticipants(true);', 'native audio bridge recovery forces an E2EE rekey before rebuilding');
+  requireContains(nativeTrackRecovery, 'void syncMediaSecurityWithParticipants(true);', 'native audio bridge recovery forces a media-security rekey before rebuilding');
   requireContains(nativeTrackRecovery, 'closeNativePeerConnection(normalizedUserId);', 'native audio bridge recovery rebuilds the stuck peer connection');
   requireContains(nativeTrackRecovery, 'syncNativePeerConnectionsWithRoster();', 'native audio bridge recovery rejoins the roster after rebuild');
   const syncNativeMedia = extractFunction(workspace, 'synchronizeNativePeerMediaElements');
