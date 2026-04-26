@@ -16,6 +16,7 @@ function requireContains(source, needle, label) {
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
+const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
 const diagnostics = read('src/support/clientDiagnostics.js');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
@@ -27,6 +28,9 @@ requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket
 requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_pressure'", 'sfu frame send pressure diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_aborted'", 'sfu frame send abort diagnostics hook');
+requireContains(sfuClient, "'sfu_frame_send_queue_pressure'", 'sfu frame send queue pressure diagnostics hook');
+requireContains(outboundFrameQueue, "'sfu_frame_send_queue_dropped'", 'sfu frame send queue drop diagnostics hook');
+requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'sfu keyframe queue blocking diagnostics hook');
 requireContains(sfuClient, 'chunk_count: totalChunks', 'sfu frame diagnostics include chunk count');
 requireContains(sfuClient, 'send_wait_ms: totalWaitMs', 'sfu frame diagnostics include send wait time');
 requireContains(sfuClient, 'payload_chars', 'sfu frame diagnostics include base64/protected payload size');

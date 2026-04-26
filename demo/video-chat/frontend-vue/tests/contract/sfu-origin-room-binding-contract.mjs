@@ -23,6 +23,8 @@ function read(relativePath) {
 }
 
 const sfuClient = read('../../src/lib/sfu/sfuClient.ts');
+const framePayload = read('../../src/lib/sfu/framePayload.ts');
+const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const backendOrigin = read('../../src/support/backendOrigin.js');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
@@ -46,20 +48,25 @@ try {
   requireContains(sfuClient, 'getBufferedAmount(): number {', 'SFU client exposes websocket send-buffer size for encoder backpressure');
   requireContains(sfuClient, "this.send({ type: 'sfu/subscribe', publisher_id: publisherId })", 'snake_case subscribe command');
   requireContains(sfuClient, "this.send({ type: 'sfu/unpublish', track_id: trackId })", 'snake_case unpublish command');
-  requireContains(sfuClient, "publisher_id: frame.publisherId", 'snake_case frame publisher');
-  requireContains(sfuClient, "publisher_user_id: frame.publisherUserId || ''", 'snake_case frame publisher user');
-  requireContains(sfuClient, "track_id: frame.trackId", 'snake_case frame track');
-  requireContains(sfuClient, "frame_type: frame.type", 'snake_case frame type');
-  requireContains(sfuClient, 'payload.protected_frame = frame.protectedFrame', 'snake_case protected frame');
-  requireContains(sfuClient, 'payload.protection_mode = frame.protectionMode ||', 'snake_case protection mode');
-  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
+  requireContains(framePayload, "publisher_id: frame.publisherId", 'snake_case frame publisher');
+  requireContains(framePayload, "publisher_user_id: frame.publisherUserId || ''", 'snake_case frame publisher user');
+  requireContains(framePayload, "track_id: frame.trackId", 'snake_case frame track');
+  requireContains(framePayload, "frame_type: frame.type", 'snake_case frame type');
+  requireContains(framePayload, 'payload.protected_frame = protectedFrame', 'snake_case protected frame');
+  requireContains(framePayload, 'payload.protection_mode = normalizeProtectionMode(frame.protectionMode,', 'snake_case protection mode');
+  requireContains(framePayload, 'export const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
   requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024', 'chunk send backpressure guard');
   requireContains(sfuClient, 'private async waitForSendBufferDrain()', 'chunk sender waits for websocket drain');
+  requireContains(sfuClient, 'this.outboundFrameQueue.enqueue(prepared)', 'bounded outbound frame queue');
+  requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3', 'bounded queue frame cap');
+  requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 2 * 1024 * 1024', 'bounded queue byte cap');
+  requireContains(outboundFrameQueue, "this.dropQueuedDeltaFrames('replaced_by_newer_delta', prepared.trackId)", 'queued delta replacement');
+  requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'keyframe queue reject diagnostic');
   requireContains(sfuClient, "type: 'sfu/frame-chunk'", 'chunked frame command');
   requireContains(sfuClient, "frame_id: frameId", 'chunked frame id');
   requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');
   requireContains(sfuClient, "chunk_count: totalChunks", 'chunk count');
-  requireContains(sfuClient, 'this.sendChunkedFramePayload(payload,', 'chunked frame sender');
+  requireContains(sfuClient, 'this.sendChunkedFramePayload(prepared.payload, prepared.chunkField, prepared.chunkValue, metrics)', 'chunked frame sender');
   requireContains(sfuClient, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
   requireContains(sfuClient, 'private pendingInboundFrameChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');
   requireContains(sfuClient, 'private acceptInboundFrameChunk(msg: any): any | null {', 'inbound chunk assembler');

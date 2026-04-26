@@ -42,7 +42,7 @@ HD-first video quality plan:
 - [ ] Move the realtime media hot path away from JSON/base64 frame carriage before tuning compression, because base64 chunking inflates payloads and amplifies websocket backpressure.
 - [ ] Prefer binary WebSocket/IIBIN or real WebRTC media transport for the HD baseline; only keep WLVC-over-JSON if instrumentation proves it can sustain HD without skipped frames.
 - [x] Add a hard contract that any skipped, aborted, late, or missing frame sequence forces the next video frame to be a keyframe and resets stale decoder state.
-- [ ] Add bounded send queues with explicit drop policy: drop only obsolete delta frames, never silently drop keyframes, and surface all drops in diagnostics.
+- [x] Add bounded send queues with explicit drop policy: drop only obsolete delta frames, never silently drop keyframes, and surface all drops in diagnostics.
 - [x] Add receiver-side frame continuity checks so out-of-order chunks, missing chunks, stale deltas, and decoder resets are visible instead of becoming tiled video.
 - [ ] Keep compression, quantizer tuning, lower FPS fallback, and adaptive downscale as phase-two optimizations after the HD baseline is stable.
 - [ ] Define an explicit quality gate: two real browser clients must show 720p remote video continuously for 60 seconds with zero `sfu_remote_video_stalled` events and no websocket buffer growth beyond the agreed high-water mark.
@@ -54,6 +54,13 @@ Implemented first hardening pass:
 - [x] Remote decoders wait for a keyframe after subscription, freeze recovery, reconfigure, empty decode, or decode error.
 - [x] Frontend SFU diagnostics now include payload size, chunk count, send wait time, websocket buffer pressure, and frame-send abort reason.
 - [x] Backend SFU runtime logs now surface broker insert pressure and direct fanout chunk pressure with worker PID context.
+
+Implemented second hardening pass:
+- [x] SFU client now prepares frame payloads outside the socket client so chunk/base64 metrics are reusable and testable.
+- [x] Outgoing SFU media frames now pass through a bounded send queue.
+- [x] Queued delta frames are replaced/dropped under pressure; keyframes are never silently dropped and emit explicit diagnostics if the queue cannot accept them.
+- [x] Public SFU send pressure now includes websocket buffered bytes plus active/queued frame payload pressure, so the WLVC encode loop sees queue pressure before the browser buffer explodes.
+- [x] `sfuClient.ts` remains under the 800 LOC limit after the queue extraction.
 
 Investigation and hardening plan:
 - [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.
