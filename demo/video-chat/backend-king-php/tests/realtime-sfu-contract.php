@@ -218,6 +218,19 @@ try {
     );
     videochat_realtime_sfu_assert(!(bool) ($joinMismatch['ok'] ?? true), 'SFU join room mismatch must fail');
     videochat_realtime_sfu_assert((string) ($joinMismatch['error'] ?? '') === 'sfu_room_mismatch', 'SFU join mismatch reason mismatch');
+    videochat_realtime_sfu_assert(
+        function_exists('videochat_sfu_log_runtime_event'),
+        'SFU runtime events should be available for HD transport pressure diagnostics'
+    );
+    $sfuGatewaySource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
+    videochat_realtime_sfu_assert(
+        str_contains($sfuGatewaySource, 'sfu_frame_broker_pressure'),
+        'SFU broker pressure diagnostics should be wired'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($sfuGatewaySource, 'sfu_frame_direct_fanout_pressure'),
+        'SFU direct fanout pressure diagnostics should be wired'
+    );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),
         'room-alpha'

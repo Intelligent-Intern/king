@@ -5,6 +5,7 @@ import {
 } from '../workspace/config';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
+const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 2;
 
 function clampVolume(value) {
   const numeric = Number(value);
@@ -68,6 +69,8 @@ function readPersistedCallMediaPrefs() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
 
+    const outgoingVideoProfileVersion = Number(parsed.outgoing_video_quality_profile_version || 0);
+
     return {
       selectedCameraId: toStringValue(parsed.video_id),
       selectedMicrophoneId: toStringValue(parsed.audio_id),
@@ -79,7 +82,9 @@ function readPersistedCallMediaPrefs() {
       backgroundBackdropMode: toBackgroundBackdropMode(parsed.background_backdrop_mode),
       backgroundQualityProfile: toBackgroundQualityProfile(parsed.background_quality_profile),
       avatarQualityProfile: toAvatarQualityProfile(parsed.avatar_quality_profile),
-      outgoingVideoQualityProfile: toOutgoingVideoQualityProfile(parsed.outgoing_video_quality_profile),
+      outgoingVideoQualityProfile: outgoingVideoProfileVersion >= CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION
+        ? toOutgoingVideoQualityProfile(parsed.outgoing_video_quality_profile)
+        : DEFAULT_SFU_VIDEO_QUALITY_PROFILE,
       backgroundBlurStrength: clampInteger(parsed.background_blur_strength, 2, 0, 4),
       backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
       backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
@@ -105,6 +110,7 @@ function serializeCallMediaPrefs() {
     background_quality_profile: toBackgroundQualityProfile(callMediaPrefs.backgroundQualityProfile),
     avatar_quality_profile: toAvatarQualityProfile(callMediaPrefs.avatarQualityProfile),
     outgoing_video_quality_profile: toOutgoingVideoQualityProfile(callMediaPrefs.outgoingVideoQualityProfile),
+    outgoing_video_quality_profile_version: CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION,
     background_blur_strength: clampInteger(callMediaPrefs.backgroundBlurStrength, 2, 0, 4),
     background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
     background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),

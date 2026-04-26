@@ -144,6 +144,8 @@ try {
 
   const callMediaPreferences = readFromFrontend('src/domain/realtime/media/preferences.js');
   requireContains(callMediaPreferences, 'outgoing_video_quality_profile', 'outgoing video quality profile persists in call media preferences');
+  requireContains(callMediaPreferences, 'outgoing_video_quality_profile_version', 'HD baseline migration versions persisted outgoing video quality');
+  requireContains(callMediaPreferences, 'CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION', 'outgoing video quality migration version is explicit');
   requireContains(callMediaPreferences, 'outgoingVideoQualityProfile', 'call media preferences expose outgoing video quality profile');
   requireContains(callMediaPreferences, 'export function setCallOutgoingVideoQualityProfile(profile)', 'call media preferences export outgoing video quality setter');
 
@@ -151,7 +153,10 @@ try {
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
   requireContains(workspaceConfig, 'export function resolveSfuVideoQualityProfile(value)', 'WLVC video quality profile resolver exists');
-  requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 960;', 'balanced WLVC frame width is higher than the old 360p baseline');
+  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'quality';", 'HD quality profile is the default while stabilizing transport');
+  requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;', 'HD baseline captures 30fps camera video');
+  requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p video width');
+  requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_HEIGHT = 720;', 'HD baseline encodes 720p video height');
   requireContains(workspaceConfig, 'frameWidth: 1280,', 'quality WLVC profile exposes a 720p output option');
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES', 'WLVC encode loop has a websocket backpressure high-water mark');
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES', 'WLVC encode loop has a websocket backpressure critical mark');
@@ -278,7 +283,7 @@ try {
   requireContains(decodePeer, 'await ensureSfuRemotePeerDecoderForFrame(publisherId, peer, frameMetadata);', 'remote decode reconfigures decoder for payload dimensions');
   requireContains(decodePeer, 'const frameDescriptor = buildSfuFrameDescriptor(frameData, frame.timestamp, frameMetadata, frame.type);', 'remote decode descriptor uses metadata dimensions');
   requireContains(decodePeer, 'let decoded = peer.decoder.decodeFrame(frameDescriptor);', 'remote decode invocation');
-  requireContains(decodePeer, 'renderDecodedSfuFrame(peer, decoded);', 'remote decode delegates canvas paint');
+  requireContains(decodePeer, 'renderDecodedSfuFrame(peer, decoded)', 'remote decode delegates canvas paint');
   const frameMetadataHelper = extractFunction(sfuWlvcFrameMetadata, 'readWlvcFrameMetadata');
   requireContains(frameMetadataHelper, 'wlvcDecodeFrame(frameData)', 'WLVC metadata helper parses the payload header');
   requireContains(frameMetadataHelper, 'width: normalizePositiveInteger(decoded.frame.width, fallbackWidth)', 'WLVC metadata helper returns payload width');
@@ -429,12 +434,19 @@ try {
   requireContains(encodePipeline, 'videoProfile.encodeIntervalMs', 'encode pipeline honors configured encode interval');
   requireContains(encodePipeline, "downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')", 'repeated encode failures lower SFU quality before fallback');
   requireContains(workspace, 'function handleWlvcEncodeBackpressure', 'workspace exposes WLVC send-buffer backpressure handling');
+  const handleBackpressure = extractFunction(workspace, 'handleWlvcEncodeBackpressure');
+  requireContains(handleBackpressure, "resetWlvcEncoderAfterDroppedEncodedFrame('sfu_send_backpressure_skip')", 'WLVC backpressure skips force the next frame to be a keyframe');
+  requireContains(handleBackpressure, 'hd_baseline_no_auto_downgrade: true', 'HD baseline does not silently solve transport pressure by lowering quality');
+  requireNotContains(handleBackpressure, "downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')", 'send-buffer backpressure must not silently downgrade the HD baseline');
   requireContains(workspace, 'function resetWlvcEncoderAfterDroppedEncodedFrame', 'workspace can reset WLVC encoder state after an unsent encoded frame');
   requireContains(workspace, 'wlvcBackpressurePauseUntilMs', 'WLVC send-buffer backpressure uses adaptive pacing instead of reconnect loops');
   requireContains(workspace, "eventType: 'sfu_video_backpressure'", 'WLVC send-buffer backpressure emits diagnostics');
   requireNotContains(workspace, "restartSfuAfterVideoStall('sfu_send_backpressure'", 'WLVC send-buffer backpressure must not reconnect as a normal control path');
   requireContains(workspace, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'WLVC send-buffer hard reset is reserved for stuck critical buffers');
   requireContains(workspace, "eventType: 'sfu_remote_video_frozen'", 'remote video freeze detector emits diagnostics');
+  requireContains(workspace, "eventType: 'sfu_delta_before_keyframe_dropped'", 'remote decoder drops stale deltas until a keyframe arrives');
+  requireContains(workspace, 'peer.needsKeyframe = true;', 'remote decoder marks keyframe required after reset or decode failure');
+  requireContains(workspace, 'peer.needsKeyframe = false;', 'remote decoder clears keyframe wait after a renderable keyframe');
   requireContains(workspace, 'function restartSfuAfterVideoStall', 'workspace can reconnect SFU after hard video stalls');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');

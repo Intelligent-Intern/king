@@ -25,6 +25,24 @@ function videochat_sfu_log_runtime_warning(string $code, Throwable $error, array
     error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : ($code . ': ' . $error->getMessage())));
 }
 
+function videochat_sfu_log_runtime_event(string $code, array $context = [], int $cooldownMs = 5000): void
+{
+    static $lastLoggedAtByCode = [];
+
+    $nowMs = function_exists('videochat_sfu_now_ms')
+        ? videochat_sfu_now_ms()
+        : (int) floor(microtime(true) * 1000);
+    $lastLoggedAt = (int) ($lastLoggedAtByCode[$code] ?? 0);
+    if (($nowMs - $lastLoggedAt) < $cooldownMs) {
+        return;
+    }
+    $lastLoggedAtByCode[$code] = $nowMs;
+
+    $payload = ['code' => $code, 'context' => $context];
+    $encoded = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : $code));
+}
+
 function videochat_sfu_broker_database_path(): string
 {
     $configuredPath = trim((string) (getenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH') ?: ''));
@@ -328,6 +346,11 @@ function videochat_handle_sfu_routes(
         if ($activeSfuDatabase instanceof PDO && ($protectedFrame !== '' || $dataBase64 !== '' || is_array($frameData))) {
             try {
                 $nowMs = videochat_sfu_now_ms();
+                $brokerInsertStartedAtMs = $nowMs;
+                $payloadChars = $protectedFrame !== '' ? strlen($protectedFrame) : strlen($dataBase64);
+                $brokerChunkCount = $payloadChars > 0
+                    ? (int) ceil($payloadChars / max(1, videochat_sfu_frame_chunk_max_chars()))
+                    : 1;
                 if ($nowMs >= $nextBrokerFramePresenceTouchMs) {
                     videochat_sfu_upsert_publisher(
                         $activeSfuDatabase,
@@ -351,9 +374,24 @@ function videochat_handle_sfu_routes(
                     (string) $frameType,
                     is_array($frameData) ? $frameData : [],
                     $protectedFrame,
-                    $dataBase64,
-                    false
-                );
+                        $dataBase64,
+                        false
+                    );
+                $brokerInsertMs = videochat_sfu_now_ms() - $brokerInsertStartedAtMs;
+                if ($brokerInsertMs >= 50 || $brokerChunkCount >= 16) {
+                    videochat_sfu_log_runtime_event('sfu_frame_broker_pressure', [
+                        'room_id' => $roomId,
+                        'publisher_id' => (string) $clientId,
+                        'publisher_user_id' => $userIdString,
+                        'track_id' => (string) $trackId,
+                        'frame_type' => (string) $frameType,
+                        'protection_mode' => (string) $protectionMode,
+                        'payload_chars' => $payloadChars,
+                        'chunk_count' => $brokerChunkCount,
+                        'insert_ms' => $brokerInsertMs,
+                        'worker_pid' => getmypid(),
+                    ]);
+                }
             } catch (Throwable $error) {
                 videochat_sfu_log_runtime_warning('sfu_frame_broker_insert_failed', $error, [
                     'room_id' => $roomId,
@@ -387,7 +425,20 @@ function videochat_handle_sfu_routes(
                 } else {
                     $outboundFrame['data'] = $frameData;
                 }
-                foreach (videochat_sfu_expand_outbound_frame_payload($outboundFrame) as $outboundMessage) {
+                $outboundMessages = videochat_sfu_expand_outbound_frame_payload($outboundFrame);
+                if (count($outboundMessages) >= 16) {
+                    videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_pressure', [
+                        'room_id' => $roomId,
+                        'publisher_id' => (string) $clientId,
+                        'subscriber_id' => (string) $subClientId,
+                        'track_id' => (string) $trackId,
+                        'frame_type' => (string) $frameType,
+                        'protection_mode' => (string) $protectionMode,
+                        'message_count' => count($outboundMessages),
+                        'worker_pid' => getmypid(),
+                    ]);
+                }
+                foreach ($outboundMessages as $outboundMessage) {
                     videochat_presence_send_frame($subClient['websocket'], $outboundMessage);
                 }
             }

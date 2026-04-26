@@ -83,7 +83,6 @@ import {
   SFU_PUBLISH_RETRY_DELAY_MS,
   SFU_TRACK_ANNOUNCE_INTERVAL_MS,
   SFU_RUNTIME_ENABLED,
-  SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD,
   SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
   SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS,
   SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS,
@@ -173,6 +172,7 @@ const REMOTE_FRAME_ACTIVITY_MARK_INTERVAL_MS = 1000;
 const REMOTE_VIDEO_STALL_THRESHOLD_MS = 8000;
 const REMOTE_VIDEO_FREEZE_THRESHOLD_MS = 7000;
 const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 3000;
+const REMOTE_VIDEO_KEYFRAME_WAIT_LOG_COOLDOWN_MS = 3000;
 const MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS = 5000;
 const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
 const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
@@ -511,6 +511,7 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
     wlvcBackpressureFirstAtMs = nowMs;
   }
   wlvcBackpressureSkipCount += 1;
+  resetWlvcEncoderAfterDroppedEncodedFrame('sfu_send_backpressure_skip');
   wlvcBackpressurePauseUntilMs = Math.max(
     wlvcBackpressurePauseUntilMs,
     nowMs + wlvcBackpressurePauseMs(bufferedAmount)
@@ -534,18 +535,13 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
       payload: {
         buffered_amount: bufferedAmount,
         skipped_frame_count: wlvcBackpressureSkipCount,
+        forced_next_keyframe: true,
+        hd_baseline_no_auto_downgrade: true,
         track_id: String(trackId || ''),
         outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
         media_runtime_path: mediaRuntimePath.value,
       },
     });
-  }
-
-  const shouldDowngrade = bufferedAmount >= SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES
-    || wlvcBackpressureSkipCount >= SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD;
-  if (shouldDowngrade && downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')) {
-    resetWlvcBackpressureCounters();
-    return;
   }
 
   const sustainedBackpressureMs = wlvcBackpressureFirstAtMs > 0
@@ -646,6 +642,7 @@ function checkRemoteVideoStalls() {
       if (typeof peer.decoder?.reset === 'function' && receiveGapMs < REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
         try {
           peer.decoder.reset();
+          peer.needsKeyframe = true;
         } catch {
           // decoder recovery is best-effort; reconnect below handles hard stalls.
         }
@@ -5709,6 +5706,8 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
       frameQuality: Number(existingPeer.frameQuality || SFU_WLVC_FRAME_QUALITY),
       decoderRuntime: String(existingPeer.decoderRuntime || remoteDecoderRuntimeName(existingPeer.decoder)),
       decoderFallbackApplied: Boolean(existingPeer.decoderFallbackApplied),
+      needsKeyframe: Boolean(existingPeer.needsKeyframe),
+      lastDeltaBeforeKeyframeLoggedAtMs: Number(existingPeer.lastDeltaBeforeKeyframeLoggedAtMs || 0),
     };
     setSfuRemotePeer(publisherId, updatedPeer, existingPeerEntry?.publisherId || '');
     await nextTick();
@@ -5780,6 +5779,8 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     frameHeight: SFU_WLVC_FRAME_HEIGHT,
     frameQuality: SFU_WLVC_FRAME_QUALITY,
     freezeRecoveryCount: 0,
+    needsKeyframe: true,
+    lastDeltaBeforeKeyframeLoggedAtMs: 0,
   };
   setSfuRemotePeer(publisherId, peer);
 
@@ -8778,6 +8779,7 @@ async function ensureSfuRemotePeerDecoderForFrame(publisherId, peer, metadata) {
   peer.frameWidth = nextWidth;
   peer.frameHeight = nextHeight;
   peer.frameQuality = nextQuality;
+  peer.needsKeyframe = true;
   if (peer.decodedCanvas instanceof HTMLCanvasElement) {
     peer.decodedCanvas.width = nextWidth;
     peer.decodedCanvas.height = nextHeight;
@@ -8902,7 +8904,45 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     quality: peer.frameQuality || SFU_WLVC_FRAME_QUALITY,
     type: frame.type,
   });
+  if (peer.needsKeyframe && frameMetadata.type !== 'keyframe') {
+    const nowMs = Date.now();
+    if (
+      !peer.lastDeltaBeforeKeyframeLoggedAtMs
+      || (nowMs - Number(peer.lastDeltaBeforeKeyframeLoggedAtMs || 0)) >= REMOTE_VIDEO_KEYFRAME_WAIT_LOG_COOLDOWN_MS
+    ) {
+      peer.lastDeltaBeforeKeyframeLoggedAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_delta_before_keyframe_dropped',
+        code: 'sfu_delta_before_keyframe_dropped',
+        message: 'Remote SFU delta frame was dropped while waiting for a keyframe after decoder reset or subscription.',
+        payload: {
+          publisher_id: publisherId,
+          publisher_user_id: publisherUserId,
+          track_id: frame?.trackId,
+          frame_timestamp: frame?.timestamp,
+          received_frame_count: Number(peer.receivedFrameCount || 0),
+          frame_count: Number(peer.frameCount || 0),
+          frame_width: frameMetadata.width,
+          frame_height: frameMetadata.height,
+          frame_quality: frameMetadata.quality,
+          frame_metadata_ok: Boolean(frameMetadata.decodeOk),
+          frame_metadata_error: String(frameMetadata.errorCode || ''),
+          decoder_runtime: String(peer.decoderRuntime || remoteDecoderRuntimeName(peer.decoder)),
+        },
+      });
+    }
+    return;
+  }
   await ensureSfuRemotePeerDecoderForFrame(publisherId, peer, frameMetadata);
+  if (frameMetadata.type === 'keyframe' && peer.needsKeyframe) {
+    try {
+      peer.decoder?.reset?.();
+    } catch {
+      // keyframe decode below can still recover via the normal diagnostic path.
+    }
+  }
   const frameDescriptor = buildSfuFrameDescriptor(frameData, frame.timestamp, frameMetadata, frame.type);
 
   try {
@@ -8915,8 +8955,11 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
     }
 
     if (decoded && decoded.data) {
-      renderDecodedSfuFrame(peer, decoded);
+      if (renderDecodedSfuFrame(peer, decoded) && frameMetadata.type === 'keyframe') {
+        peer.needsKeyframe = false;
+      }
     } else {
+      peer.needsKeyframe = true;
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -8946,6 +8989,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       try {
         const decoded = peer.decoder.decodeFrame(frameDescriptor);
         if (decoded && decoded.data && renderDecodedSfuFrame(peer, decoded)) {
+          if (frameMetadata.type === 'keyframe') {
+            peer.needsKeyframe = false;
+          }
           return;
         }
       } catch {
@@ -8953,6 +8999,12 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
       }
     }
     mediaDebugLog('[SFU] Decode error:', e);
+    peer.needsKeyframe = true;
+    try {
+      peer.decoder?.reset?.();
+    } catch {
+      // the next keyframe will recreate clean state if the decoder supports it.
+    }
     captureClientDiagnosticError('sfu_decode_frame_failed', e, {
       publisher_id: publisherId,
       publisher_user_id: publisherUserId,

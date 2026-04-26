@@ -38,15 +38,22 @@ Non-negotiable contracts:
 
 HD-first video quality plan:
 - [ ] Treat the current pixelated/freezing stream as a transport correctness issue, not as a compression-quality issue.
-- [ ] Establish an HD baseline profile with camera capture at 1280x720, 30 fps, no forced low-resolution fallback, and no aggressive WLVC quality reduction while the transport is being debugged.
+- [x] Establish an HD baseline profile with camera capture at 1280x720, 30 fps, no forced low-resolution fallback, and no aggressive WLVC quality reduction while the transport is being debugged.
 - [ ] Move the realtime media hot path away from JSON/base64 frame carriage before tuning compression, because base64 chunking inflates payloads and amplifies websocket backpressure.
 - [ ] Prefer binary WebSocket/IIBIN or real WebRTC media transport for the HD baseline; only keep WLVC-over-JSON if instrumentation proves it can sustain HD without skipped frames.
-- [ ] Add a hard contract that any skipped, aborted, late, or missing frame sequence forces the next video frame to be a keyframe and resets stale decoder state.
+- [x] Add a hard contract that any skipped, aborted, late, or missing frame sequence forces the next video frame to be a keyframe and resets stale decoder state.
 - [ ] Add bounded send queues with explicit drop policy: drop only obsolete delta frames, never silently drop keyframes, and surface all drops in diagnostics.
-- [ ] Add receiver-side frame continuity checks so out-of-order chunks, missing chunks, stale deltas, and decoder resets are visible instead of becoming tiled video.
+- [x] Add receiver-side frame continuity checks so out-of-order chunks, missing chunks, stale deltas, and decoder resets are visible instead of becoming tiled video.
 - [ ] Keep compression, quantizer tuning, lower FPS fallback, and adaptive downscale as phase-two optimizations after the HD baseline is stable.
 - [ ] Define an explicit quality gate: two real browser clients must show 720p remote video continuously for 60 seconds with zero `sfu_remote_video_stalled` events and no websocket buffer growth beyond the agreed high-water mark.
 - [ ] Record HD performance metrics in diagnostics: capture resolution, encode resolution, decoded resolution, fps, encode time, frame byte size, chunk count, send wait time, websocket bufferedAmount, broker latency, decode time, and rendered frame age.
+
+Implemented first hardening pass:
+- [x] Default outgoing SFU video profile is HD/Sharp for stale and new browser preferences.
+- [x] SFU backpressure skips reset the WLVC encoder so the next sent frame is a keyframe.
+- [x] Remote decoders wait for a keyframe after subscription, freeze recovery, reconfigure, empty decode, or decode error.
+- [x] Frontend SFU diagnostics now include payload size, chunk count, send wait time, websocket buffer pressure, and frame-send abort reason.
+- [x] Backend SFU runtime logs now surface broker insert pressure and direct fanout chunk pressure with worker PID context.
 
 Investigation and hardening plan:
 - [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.

@@ -26,20 +26,19 @@ export const WLVC_ENCODE_WARMUP_MS = 2500;
 export const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
 export const LOCAL_CAMERA_CAPTURE_WIDTH = 1280;
 export const LOCAL_CAMERA_CAPTURE_HEIGHT = 720;
-export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 24;
-export const SFU_WLVC_FRAME_WIDTH = 960;
-export const SFU_WLVC_FRAME_HEIGHT = 540;
-export const SFU_WLVC_FRAME_QUALITY = 76;
-export const SFU_WLVC_KEYFRAME_INTERVAL = 24;
-export const SFU_WLVC_ENCODE_INTERVAL_MS = 50;
+export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;
+export const SFU_WLVC_FRAME_WIDTH = 1280;
+export const SFU_WLVC_FRAME_HEIGHT = 720;
+export const SFU_WLVC_FRAME_QUALITY = 88;
+export const SFU_WLVC_KEYFRAME_INTERVAL = 15;
+export const SFU_WLVC_ENCODE_INTERVAL_MS = 33;
 export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
 export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 512 * 1024;
 export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 6 * 1024 * 1024;
-export const SFU_WLVC_BACKPRESSURE_DOWNGRADE_THRESHOLD = 10;
 export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 250;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2000;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
-export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';
+export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'quality';
 export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   realtime: Object.freeze({
     label: 'Fast',
@@ -65,14 +64,14 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   }),
   quality: Object.freeze({
     label: 'Sharp',
-    captureWidth: 1920,
-    captureHeight: 1080,
-    captureFrameRate: 24,
+    captureWidth: LOCAL_CAMERA_CAPTURE_WIDTH,
+    captureHeight: LOCAL_CAMERA_CAPTURE_HEIGHT,
+    captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,
     frameWidth: 1280,
     frameHeight: 720,
-    frameQuality: 82,
-    keyFrameInterval: 20,
-    encodeIntervalMs: 50,
+    frameQuality: SFU_WLVC_FRAME_QUALITY,
+    keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
+    encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
   }),
 });
 export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(
