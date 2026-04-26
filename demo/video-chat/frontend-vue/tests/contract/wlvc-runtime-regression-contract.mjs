@@ -135,19 +135,19 @@ try {
   assertDecodeFailure('oversized channel', () => wlvcDecodeFrame(buildHeaderOnlyFrame({ yLength: 16 * 1024 * 1024 + 1 })), 'channel_too_large');
   assertDecodeFailure('invalid quality', () => wlvcDecodeFrame(buildHeaderOnlyFrame({ quality: 0 })), 'quality_invalid');
 
-  const capabilities = readFromFrontend('src/domain/realtime/mediaRuntimeCapabilities.js');
+  const capabilities = readFromFrontend('src/domain/realtime/media/runtimeCapabilities.js');
   requireContains(capabilities, "preferredPath = 'wlvc_wasm'", 'WLVC preferred runtime');
   requireContains(capabilities, "preferredPath = 'webrtc_native'", 'native fallback runtime');
   requireContains(capabilities, "preferredPath = 'unsupported'", 'unsupported fail-closed runtime');
   requireContains(capabilities, 'const stageA = Boolean(wlvcWasm.encoder)', 'WLVC stage A gate');
   requireContains(capabilities, 'const stageB = Boolean(webRtcNative)', 'native stage B gate');
 
-  const callMediaPreferences = readFromFrontend('src/domain/realtime/callMediaPreferences.js');
+  const callMediaPreferences = readFromFrontend('src/domain/realtime/media/preferences.js');
   requireContains(callMediaPreferences, 'outgoing_video_quality_profile', 'outgoing video quality profile persists in call media preferences');
   requireContains(callMediaPreferences, 'outgoingVideoQualityProfile', 'call media preferences expose outgoing video quality profile');
   requireContains(callMediaPreferences, 'export function setCallOutgoingVideoQualityProfile(profile)', 'call media preferences export outgoing video quality setter');
 
-  const workspaceConfig = readFromFrontend('src/domain/realtime/callWorkspaceConfig.js');
+  const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
   requireContains(workspaceConfig, 'export function resolveSfuVideoQualityProfile(value)', 'WLVC video quality profile resolver exists');
@@ -161,13 +161,13 @@ try {
   requireContains(workspaceShell, 'setCallOutgoingVideoQualityProfile', 'workspace sidebar can update outgoing video quality');
   requireContains(workspaceShell, 'callVideoQualityOptions', 'workspace sidebar renders outgoing video quality options');
 
-  const telemetry = readFromFrontend('src/domain/realtime/mediaRuntimeTelemetry.js');
+  const telemetry = readFromFrontend('src/domain/realtime/media/runtimeTelemetry.js');
   requireContains(telemetry, "type: 'media_runtime_transition'", 'runtime transition telemetry');
   requireContains(telemetry, 'preferred_path: normalizePath(event?.capabilities?.preferred_path)', 'runtime transition capability telemetry');
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
-  const sfuWlvcFrameMetadata = readFromFrontend('src/domain/realtime/sfuWlvcFrameMetadata.js');
-  const nativeAudioBridgeHelpers = readFromFrontend('src/domain/realtime/nativeAudioBridgeHelpers.js');
+  const sfuWlvcFrameMetadata = readFromFrontend('src/domain/realtime/sfu/wlvcFrameMetadata.js');
+  const nativeAudioBridgeHelpers = readFromFrontend('src/domain/realtime/native/audioBridgeHelpers.js');
   const setRuntime = extractFunction(workspace, 'setMediaRuntimePath');
   requireContains(setRuntime, 'appendMediaRuntimeTransitionEvent({', 'runtime switch telemetry append');
   requireContains(setRuntime, 'from_path: previousPath', 'runtime switch previous path telemetry');

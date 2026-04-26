@@ -82,7 +82,7 @@
 </template>
 
 <script setup>
-import AppIconButton from '../../components/AppIconButton.vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
 
 defineProps({
   calls: {
@@ -128,4 +128,4 @@ defineEmits([
 ]);
 </script>
 
-<style scoped src="./CallsListTable.css"></style>
+<style scoped src="./ListTable.css"></style>

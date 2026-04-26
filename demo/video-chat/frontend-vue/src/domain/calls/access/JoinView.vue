@@ -127,20 +127,20 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import AppSelect from '../../components/AppSelect.vue';
-import { loginWithCallAccess, sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import AppSelect from '../../../components/AppSelect.vue';
+import { loginWithCallAccess, sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
   buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
-} from '../../support/backendOrigin';
+} from '../../../support/backendOrigin';
 import {
   appendAssetVersionQuery,
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
-} from '../../support/assetVersion';
-import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
+} from '../../../support/assetVersion';
+import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -150,7 +150,7 @@ import {
   setCallMicrophoneVolume,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
-} from '../realtime/callMediaPreferences';
+} from '../../realtime/media/preferences';
 
 const route = useRoute();
 const router = useRouter();
@@ -749,4 +749,4 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style scoped src="./CallAccessJoinView.css"></style>
+<style scoped src="./JoinView.css"></style>

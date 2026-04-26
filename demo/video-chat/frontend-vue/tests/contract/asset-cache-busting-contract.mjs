@@ -43,7 +43,7 @@ try {
   assert.ok(adminSync.includes('appendAssetVersionQuery'), 'admin sync websocket must advertise the current asset version');
   assert.ok(adminSync.includes('handleAssetVersionSocketPayload'), 'admin sync websocket must reload on invalidation frames');
 
-  const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/callWorkspaceApi.js'));
+  const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/api.js'));
   assert.ok(workspaceApi.includes('appendAssetVersionQuery'), 'call workspace websocket URLs must advertise the current asset version');
 
   const compose = readUtf8(path.join(repoVideoChatRoot, 'docker-compose.v1.yml'));

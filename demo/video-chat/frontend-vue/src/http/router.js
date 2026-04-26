@@ -12,13 +12,13 @@ const routes = [
   {
     path: '/join/:accessId',
     name: 'call-access-join',
-    component: () => import('../domain/calls/CallAccessJoinView.vue'),
+    component: () => import('../domain/calls/access/JoinView.vue'),
     meta: { public: true },
   },
   {
     path: '/call-goodbye',
     name: 'call-goodbye',
-    component: () => import('../domain/calls/CallGoodbyeView.vue'),
+    component: () => import('../domain/calls/access/GoodbyeView.vue'),
     meta: { requiresAuth: true, roles: ['user'] },
   },
   {
@@ -39,13 +39,13 @@ const routes = [
       {
         path: 'admin/overview',
         name: 'admin-overview',
-        component: () => import('../domain/users/AdminOverviewView.vue'),
+        component: () => import('../domain/users/overview/OverviewView.vue'),
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
         path: 'admin/users',
         name: 'admin-users',
-        component: () => import('../domain/users/AdminUsersView.vue'),
+        component: () => import('../domain/users/admin/UsersView.vue'),
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
@@ -57,13 +57,13 @@ const routes = [
       {
         path: 'admin/calls',
         name: 'admin-calls',
-        component: () => import('../domain/calls/AdminCallsView.vue'),
+        component: () => import('../domain/calls/admin/CallsView.vue'),
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
         path: 'user/dashboard',
         name: 'user-dashboard',
-        component: () => import('../domain/calls/UserDashboardView.vue'),
+        component: () => import('../domain/calls/dashboard/UserDashboardView.vue'),
         meta: { requiresAuth: true, roles: ['user'] },
       },
       {

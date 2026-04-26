@@ -9,7 +9,7 @@ import {
   nativeSdpAudioSummary,
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
-} from '../../src/domain/realtime/nativeAudioBridgeHelpers.js';
+} from '../../src/domain/realtime/native/audioBridgeHelpers.js';
 
 function fail(message) {
   throw new Error(`[native-audio-bridge-contract] FAIL: ${message}`);
@@ -77,7 +77,7 @@ try {
   assert.equal(nativeAudioPlaybackBlocked(new DOMException('user gesture required', 'NotAllowedError')), true);
   assert.equal(nativeAudioPlaybackInterrupted(new DOMException('play() request was interrupted by a new load request', 'AbortError')), true);
 
-  const mediaSecurity = readFrontend('src/domain/realtime/mediaSecurity.js');
+  const mediaSecurity = readFrontend('src/domain/realtime/media/security.js');
   requireContains(mediaSecurity, 'this.nativeFrameErrorHandler', 'media security session stores native frame error callback');
   requireContains(mediaSecurity, "function nativeEncodedFrameAadTrackId(trackKind = 'data')", 'native frame AAD uses stable track ids');
   requireContains(mediaSecurity, 'asString(header.runtime_path)', 'native replay counters are scoped by runtime path');

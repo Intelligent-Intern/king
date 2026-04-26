@@ -23,13 +23,13 @@ try {
   assert.match(helper, /window\.addEventListener\('online', handleForeground\)/, 'foreground helper must track online');
   assert.match(helper, /document\.addEventListener\('visibilitychange', handleVisibilityChange\)/, 'foreground helper must track visibility changes');
 
-  const joinView = read(root, 'src/domain/calls/CallAccessJoinView.vue');
+  const joinView = read(root, 'src/domain/calls/access/JoinView.vue');
   assert.match(joinView, /attachForegroundReconnectHandlers/, 'call access join view must use foreground reconnect helper');
   assert.match(joinView, /function reconnectAdmissionAfterForeground\(\)/, 'call access join view must define foreground reconnect');
   assert.match(joinView, /admissionReconnectAfterForeground = true;/, 'call access join view must mark reconnect pending');
   assert.match(joinView, /connectAdmissionSocket\(accessId\)/, 'call access join view must reconnect the admission socket');
 
-  const dashboard = read(root, 'src/domain/calls/UserDashboardView.vue');
+  const dashboard = read(root, 'src/domain/calls/dashboard/UserDashboardView.vue');
   assert.match(dashboard, /attachForegroundReconnectHandlers/, 'user dashboard must use foreground reconnect helper');
   assert.match(dashboard, /function reconnectEnterAdmissionAfterForeground\(\)/, 'user dashboard must define modal foreground reconnect');
   assert.match(dashboard, /enterAdmissionReconnectAfterForeground = true;/, 'user dashboard must mark reconnect pending');

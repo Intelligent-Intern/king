@@ -2,7 +2,7 @@ import {
   normalizeCallRole,
   normalizeRole,
   normalizeRoomId,
-} from './callWorkspaceUtils';
+} from './utils';
 
 export function normalizeParticipantRow(raw) {
   const user = raw && typeof raw.user === 'object' ? raw.user : {};

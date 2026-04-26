@@ -605,20 +605,20 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import AppPagination from '../../components/AppPagination.vue';
-import AppSelect from '../../components/AppSelect.vue';
-import ChatArchiveModal from './ChatArchiveModal.vue';
-import CallsListTable from './CallsListTable.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AppSelect from '../../../components/AppSelect.vue';
+import ChatArchiveModal from '../components/ChatArchiveModal.vue';
+import CallsListTable from '../components/ListTable.vue';
 import {
   createCallListStore,
   createChatArchiveStore,
   createNoticeStore,
   createParticipantDirectoryStore,
-} from './callViewState';
-import { sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
-import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
-import { createAdminSyncSocket } from '../../support/adminSyncSocket';
+} from '../dashboard/viewState';
+import { sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
+import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
+import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
 import {
   applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
@@ -630,8 +630,8 @@ import {
   setCallMicrophoneVolume,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
-} from '../realtime/callMediaPreferences';
-import { BackgroundFilterController } from '../realtime/backgroundFilterController';
+} from '../../realtime/media/preferences';
+import { BackgroundFilterController } from '../../realtime/background/controller';
 
 const router = useRouter();
 const applyBackgroundPreset = applyCallBackgroundPreset;
@@ -2506,5 +2506,5 @@ watch(
 );
 </script>
 
-<style scoped src="./AdminCallsView.css"></style>
-<style scoped src="./AdminCallsViewResponsive.css"></style>
+<style scoped src="./CallsView.css"></style>
+<style scoped src="./CallsViewResponsive.css"></style>

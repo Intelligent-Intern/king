@@ -1,6 +1,6 @@
-import { createMediaPipeSegmentationBackend } from "./backgroundFilterBackendMediapipe";
-import { createTfjsSegmentationBackend } from "./backgroundFilterBackendTfjs";
-import { clamp01, lerp, smoothstep, toNumber } from "./backgroundFilterMath";
+import { createMediaPipeSegmentationBackend } from './backendMediapipe';
+import { createTfjsSegmentationBackend } from './backendTfjs';
+import { clamp01, lerp, smoothstep, toNumber } from './math';
 
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.

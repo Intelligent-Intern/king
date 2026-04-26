@@ -86,21 +86,21 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import AppIconButton from '../../components/AppIconButton.vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
-import AppPagination from '../../components/AppPagination.vue';
-import AdminUserEditorModal from './AdminUserEditorModal.vue';
-import AdminUsersTable from './AdminUsersTable.vue';
-import { createAdminSyncReloadController } from './adminSyncReload';
-import { createAdminUsersApi, normalizeAdminAvatarSrc } from './adminUsersApi';
+import AppIconButton from '../../../components/AppIconButton.vue';
+import AppPageHeader from '../../../components/AppPageHeader.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AdminUserEditorModal from '../components/UserEditorModal.vue';
+import AdminUsersTable from '../components/UsersTable.vue';
+import { createAdminSyncReloadController } from './syncReload';
+import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
 import {
   applyAdminUserPermissions,
   canDeleteAdminUser,
   canToggleAdminUserStatus,
   resetAdminUserPermissions,
-} from './adminUserPermissions';
-import { sessionState } from '../auth/session';
+} from './permissions';
+import { sessionState } from '../../auth/session';
 
 const router = useRouter();
 const route = useRoute();
@@ -738,4 +738,4 @@ watch(
 );
 </script>
 
-<style scoped src="./AdminUsersView.css"></style>
+<style scoped src="./UsersView.css"></style>

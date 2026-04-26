@@ -693,7 +693,7 @@ import {
   CALL_UUID_PATTERN,
   callRequiresJoinModalForViewer,
   joinPathFromAccessPayload,
-} from '../calls/callAdmissionGate';
+} from '../calls/access/admissionGate';
 import {
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
@@ -704,7 +704,7 @@ import {
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
   setCallOutgoingVideoQualityProfile,
-} from './callMediaPreferences';
+} from './media/preferences';
 import {
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
@@ -714,11 +714,11 @@ import {
   configureClientDiagnostics,
   reportClientDiagnostic,
 } from '../../support/clientDiagnostics';
-import { BackgroundFilterController } from './backgroundFilterController';
-import { BackgroundFilterBaselineCollector } from './backgroundFilterBaseline';
-import { evaluateBackgroundFilterGates } from './backgroundFilterGates';
-import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
-import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
+import { BackgroundFilterController } from './background/controller';
+import { BackgroundFilterBaselineCollector } from './background/baseline';
+import { evaluateBackgroundFilterGates } from './background/gates';
+import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
+import { appendMediaRuntimeTransitionEvent } from './media/runtimeTelemetry';
 import {
   nativeAudioPlaybackBlocked,
   nativeAudioPlaybackInterrupted,
@@ -726,7 +726,7 @@ import {
   nativeSdpAudioSummary,
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
-} from './nativeAudioBridgeHelpers';
+} from './native/audioBridgeHelpers';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createHybridEncoder, createHybridDecoder } from '../../lib/wasm/wasm-codec';
 import { createDecoder as createTsDecoder } from '../../lib/wavelet/codec.js';
@@ -735,8 +735,8 @@ import {
   normalizePositiveInteger,
   readWlvcFrameMetadata,
   sfuFrameTypeFromWlvcData,
-} from './sfuWlvcFrameMetadata';
-import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './mediaSecurity';
+} from './sfu/wlvcFrameMetadata';
+import { MEDIA_SECURITY_SIGNAL_TYPES, MediaSecuritySession, createMediaSecuritySession } from './media/security';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
   ALONE_IDLE_COUNTDOWN_MS,
@@ -789,7 +789,7 @@ import {
   WLVC_ENCODE_WARMUP_MS,
   mediaDebugLog,
   reactionOptions,
-} from './callWorkspaceConfig';
+} from './workspace/config';
 import {
   CHAT_ATTACHMENT_MAX_COUNT,
   CHAT_INLINE_MAX_BYTES,
@@ -801,7 +801,7 @@ import {
   isChatTextInlineAllowed,
   sanitizeChatAttachmentName,
   validateChatAttachmentDraft,
-} from './chatAttachments';
+} from './chat/attachments';
 import {
   callRoleRank,
   formatTimestamp,
@@ -816,32 +816,32 @@ import {
   normalizeUsersDirectoryStatus,
   parseUsersDirectoryQuery,
   roleRank,
-} from './callWorkspaceUtils';
+} from './workspace/utils';
 import {
   CALL_LAYOUT_MODES,
   CALL_LAYOUT_STRATEGIES,
   normalizeCallLayoutMode,
   normalizeCallLayoutState,
   selectCallLayoutParticipants,
-} from './callLayoutStrategies';
+} from './layout/strategies';
 import {
   gridVideoSlotId,
   layoutModeOptionsFor,
   layoutStrategyOptionsFor,
-} from './callLayoutUiOptions';
+} from './layout/uiOptions';
 import {
   mergeLiveMediaPeerIntoRoster,
   normalizeParticipantRow,
   participantActivityWeight,
   participantSnapshotSignature,
   replaceNumericArray,
-} from './callWorkspaceRoster';
+} from './workspace/roster';
 import {
   apiRequest,
   extractErrorMessage,
   requestHeaders,
   socketUrlForRoom,
-} from './callWorkspaceApi';
+} from './workspace/api';
 
 const CALL_STATE_SIGNAL_TYPES = Object.freeze([
   'call/control-state',

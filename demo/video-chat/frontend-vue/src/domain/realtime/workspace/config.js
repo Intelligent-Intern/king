@@ -1,4 +1,4 @@
-import { debugLog } from '../../support/debugLogs';
+import { debugLog } from '../../../support/debugLogs';
 
 export const USERS_PAGE_SIZE = 10;
 export const LOBBY_PAGE_SIZE = 10;

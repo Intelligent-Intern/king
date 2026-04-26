@@ -17,9 +17,9 @@ import {
 } from './helpers/videochatMatrixHarness.js';
 
 async function withAttachmentHelpers(page, callbackSource) {
-  await page.goto('/src/domain/realtime/chatAttachments.js', { waitUntil: 'domcontentloaded' });
+  await page.goto('/src/domain/realtime/chat/attachments.js', { waitUntil: 'domcontentloaded' });
   return page.evaluate(async (source) => {
-    const helpers = await import('/src/domain/realtime/chatAttachments.js');
+    const helpers = await import('/src/domain/realtime/chat/attachments.js');
     const callback = new Function('helpers', `return (${source})(helpers);`);
     return callback(helpers);
   }, callbackSource.toString());
@@ -62,11 +62,11 @@ async function matrixRealtimeCounts(page) {
       roomSockets: roomSockets.length,
       snapshotRequests: frames.filter((frame) => frame?.type === 'room/snapshot/request').length,
       controlSyncs: frames.filter((frame) => (
-        frame?.type === 'call/ice'
+        frame?.type === 'call/control-state'
         && frame?.payload?.kind === 'workspace-control-state'
       )).length,
       currentControlSyncs: frames.filter((frame) => (
-        frame?.type === 'call/ice'
+        frame?.type === 'call/control-state'
         && frame?.payload?.kind === 'workspace-control-state'
         && frame?.payload?.state?.handRaised === true
         && frame?.payload?.state?.micEnabled === false
@@ -402,7 +402,7 @@ test('websocket reconnect resyncs room snapshot, media security, and control sta
     await expect(admin.page.getByTitle('Toggle microphone')).not.toHaveClass(/active/);
     await admin.page.waitForFunction(() => (
       (window.__matrixSocketFrames || []).some((frame) => (
-        frame?.type === 'call/ice'
+        frame?.type === 'call/control-state'
         && frame?.payload?.kind === 'workspace-control-state'
         && frame?.payload?.state?.handRaised === true
         && frame?.payload?.state?.micEnabled === false
@@ -437,7 +437,7 @@ test('websocket reconnect resyncs room snapshot, media security, and control sta
     await admin.page.waitForFunction((previous) => {
       const frames = window.__matrixSocketFrames || [];
       const controlSyncs = frames.filter((frame) => (
-        frame?.type === 'call/ice'
+        frame?.type === 'call/control-state'
         && frame?.payload?.kind === 'workspace-control-state'
         && frame?.payload?.state?.handRaised === true
         && frame?.payload?.state?.micEnabled === false

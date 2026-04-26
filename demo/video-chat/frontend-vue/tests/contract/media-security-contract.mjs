@@ -7,7 +7,7 @@ import {
   createMediaSecuritySession,
   MEDIA_SECURITY_SIGNAL_TYPES,
   mediaSecurityInternalsForTests,
-} from '../../src/domain/realtime/mediaSecurity.js';
+} from '../../src/domain/realtime/media/security.js';
 
 function fail(message) {
   throw new Error(`[media-security-frontend-contract] FAIL: ${message}`);

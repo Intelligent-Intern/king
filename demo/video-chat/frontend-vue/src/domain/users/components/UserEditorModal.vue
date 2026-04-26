@@ -174,9 +174,9 @@
 
 <script setup>
 import { computed } from 'vue';
-import AppIconButton from '../../components/AppIconButton.vue';
-import AppModalShell from '../../components/AppModalShell.vue';
-import AppSelect from '../../components/AppSelect.vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
+import AppModalShell from '../../../components/AppModalShell.vue';
+import AppSelect from '../../../components/AppSelect.vue';
 
 const props = defineProps({
   open: {
@@ -267,4 +267,4 @@ const emailDraftModel = computed({
 });
 </script>
 
-<style scoped src="./AdminUsersView.css"></style>
+<style scoped src="../admin/UsersView.css"></style>

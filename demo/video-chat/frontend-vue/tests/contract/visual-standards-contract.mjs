@@ -24,6 +24,7 @@ const modalRootAllowList = new Set([
   'call-owner-edit-modal',
   'calls-modal',
   'chat-archive-modal',
+  'marketplace-modal',
   'settings-modal',
   'users-modal',
 ]);

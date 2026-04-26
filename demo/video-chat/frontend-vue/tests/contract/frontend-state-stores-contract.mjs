@@ -8,7 +8,7 @@ import {
   createChatArchiveStore,
   createNoticeStore,
   createParticipantDirectoryStore,
-} from '../../src/domain/calls/callViewState.js';
+} from '../../src/domain/calls/dashboard/viewState.js';
 
 function fail(message) {
   throw new Error(`[frontend-state-stores-contract] FAIL: ${message}`);
@@ -23,8 +23,8 @@ function readSource(relativePath) {
 }
 
 try {
-  const adminCalls = readSource('src/domain/calls/AdminCallsView.vue');
-  const userCalls = readSource('src/domain/calls/UserDashboardView.vue');
+  const adminCalls = readSource('src/domain/calls/admin/CallsView.vue');
+  const userCalls = readSource('src/domain/calls/dashboard/UserDashboardView.vue');
 
   const listStore = createCallListStore({ defaultScope: 'all', pageSize: 25 });
   assert.equal(listStore.scopeFilter.value, 'all', 'call list store must own the default scope');

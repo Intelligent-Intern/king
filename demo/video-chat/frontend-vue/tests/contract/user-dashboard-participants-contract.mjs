@@ -30,8 +30,8 @@ function functionBody(source, name) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const viewPath = path.resolve(__dirname, '../../src/domain/calls/UserDashboardView.vue');
-const stylePath = path.resolve(__dirname, '../../src/domain/calls/UserDashboardView.css');
+const viewPath = path.resolve(__dirname, '../../src/domain/calls/dashboard/UserDashboardView.vue');
+const stylePath = path.resolve(__dirname, '../../src/domain/calls/dashboard/UserDashboardView.css');
 const source = fs.readFileSync(viewPath, 'utf8');
 const styles = fs.readFileSync(stylePath, 'utf8');
 

@@ -2,7 +2,7 @@ import { reactive } from 'vue';
 import {
   DEFAULT_SFU_VIDEO_QUALITY_PROFILE,
   normalizeSfuVideoQualityProfile,
-} from './callWorkspaceConfig';
+} from '../workspace/config';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 

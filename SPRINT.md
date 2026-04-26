@@ -15,6 +15,38 @@ Rules:
 - Preserve contributor credit when porting experiment-branch work.
 - No path may be labeled secure, encrypted, E2EE, or post-quantum unless implementation, contracts, negative tests, and runtime/UI state prove the claim.
 
+## Video Chat Domain Refactor Queue
+
+Goal:
+- Keep `demo/video-chat/frontend-vue/src/domain` navigable with fewer than 10 files per folder and no production source file above 1,500 LOC.
+- Refactor large files iteratively: first split files above 6,000 LOC into roughly 1,500 LOC slices, then tighten extracted slices toward the 750 LOC target.
+- Preserve realtime, admission, media, and E2EE contracts while moving code; every extraction needs build and targeted contract coverage.
+
+Folder hygiene:
+- [x] Move realtime domain helpers into focused folders: `background`, `chat`, `layout`, `media`, `native`, `sfu`, and `workspace`.
+- [x] Move calls domain files into focused folders: `access`, `admin`, `chat`, `components`, and `dashboard`.
+- [x] Move users domain files into focused folders: `admin`, `components`, and `overview`.
+- [x] Keep every current `src/domain` folder below 10 direct files after the first cleanup pass.
+
+Mega files, largest first:
+- [ ] `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue` (9,765 LOC)
+- [ ] Iteration 1: split into roughly 1,500 LOC slices for shell/state wiring, SFU/WLVC transport, E2EE/media security, native audio bridge, local media/background, participant roster/layout, and chat/activity.
+- [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
+- [ ] Add or update targeted realtime contracts for every extraction.
+- [ ] `demo/video-chat/frontend-vue/src/domain/calls/admin/CallsView.vue` (2,510 LOC)
+- [ ] Iteration 1: split calendar, compose/edit form, background preview, call list, sync/archive flows, and admin API orchestration toward roughly 1,500 LOC.
+- [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
+- [ ] Add or update admin-calls contracts for every extraction.
+- [ ] `demo/video-chat/frontend-vue/src/domain/calls/dashboard/UserDashboardView.vue` (2,183 LOC)
+- [ ] Iteration 1: split dashboard shell, admission/join flows, call list, chat archive, media preview, and foreground reconnect handling toward roughly 1,500 LOC.
+- [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
+- [ ] Add or update user-dashboard contracts for every extraction.
+
+Near-limit follow-up:
+- [ ] `demo/video-chat/frontend-vue/src/domain/users/overview/OverviewView.vue` (1,216 LOC)
+- [ ] `demo/video-chat/frontend-vue/src/domain/realtime/media/security.js` (805 LOC)
+- [ ] `demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue` (752 LOC)
+
 ## Batch 3: Core Runtime, Experiment Intake, And Release Closure (`1.0.7-beta`)
 
 ### #Q-11 Full HTTP/3 Regression Against New Stack

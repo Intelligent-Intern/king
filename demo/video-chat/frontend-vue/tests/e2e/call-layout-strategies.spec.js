@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 async function withCallLayoutHelpers(page, callbackSource) {
-  await page.goto('/src/domain/realtime/callLayoutStrategies.js', { waitUntil: 'domcontentloaded' });
+  await page.goto('/src/domain/realtime/layout/strategies.js', { waitUntil: 'domcontentloaded' });
   return page.evaluate(async (source) => {
-    const helpers = await import('/src/domain/realtime/callLayoutStrategies.js');
+    const helpers = await import('/src/domain/realtime/layout/strategies.js');
     const callback = new Function('helpers', `return (${source})(helpers);`);
     return callback(helpers);
   }, callbackSource.toString());

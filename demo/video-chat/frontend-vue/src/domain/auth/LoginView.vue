@@ -64,7 +64,7 @@ import {
   CALL_UUID_PATTERN,
   callRequiresJoinModalForViewer,
   joinPathFromAccessPayload,
-} from '../calls/callAdmissionGate';
+} from '../calls/access/admissionGate';
 import {
   defaultRouteForRole,
   loginWithEmailChangeToken,

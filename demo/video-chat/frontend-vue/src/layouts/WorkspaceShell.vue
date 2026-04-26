@@ -929,8 +929,8 @@ import {
   setCallOutgoingVideoQualityProfile,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
-} from '../domain/realtime/callMediaPreferences';
-import { SFU_VIDEO_QUALITY_PROFILE_OPTIONS } from '../domain/realtime/callWorkspaceConfig';
+} from '../domain/realtime/media/preferences';
+import { SFU_VIDEO_QUALITY_PROFILE_OPTIONS } from '../domain/realtime/workspace/config';
 
 const router = useRouter();
 const route = useRoute();

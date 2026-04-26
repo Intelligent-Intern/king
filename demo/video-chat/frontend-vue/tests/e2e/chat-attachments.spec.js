@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 async function withChatAttachmentHelpers(page, callbackSource) {
-  await page.goto('/src/domain/realtime/chatAttachments.js', { waitUntil: 'domcontentloaded' });
+  await page.goto('/src/domain/realtime/chat/attachments.js', { waitUntil: 'domcontentloaded' });
   return page.evaluate(async (source) => {
-    const helpers = await import('/src/domain/realtime/chatAttachments.js');
+    const helpers = await import('/src/domain/realtime/chat/attachments.js');
     const callback = new Function('helpers', `return (${source})(helpers);`);
     return callback(helpers);
   }, callbackSource.toString());

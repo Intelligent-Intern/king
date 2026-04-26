@@ -1,9 +1,9 @@
-import { wlvcDecodeFrame } from '../../support/wlvcFrame.js';
+import { wlvcDecodeFrame } from '../../../support/wlvcFrame.js';
 import {
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,
   SFU_WLVC_FRAME_WIDTH,
-} from './callWorkspaceConfig';
+} from '../workspace/config';
 
 export function normalizePositiveInteger(value, fallback) {
   const number = Number(value || 0);

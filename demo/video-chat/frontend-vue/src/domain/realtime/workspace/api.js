@@ -1,8 +1,8 @@
-import { sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
-import { buildWebSocketUrl } from '../../support/backendOrigin';
-import { appendAssetVersionQuery } from '../../support/assetVersion';
-import { normalizeRoomId, normalizeSocketCallId } from './callWorkspaceUtils';
+import { sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
+import { buildWebSocketUrl } from '../../../support/backendOrigin';
+import { appendAssetVersionQuery } from '../../../support/assetVersion';
+import { normalizeRoomId, normalizeSocketCallId } from './utils';
 
 export function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };

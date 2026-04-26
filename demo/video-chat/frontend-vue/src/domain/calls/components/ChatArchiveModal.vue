@@ -128,18 +128,18 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
-import AppModalShell from '../../components/AppModalShell.vue';
-import AppSelect from '../../components/AppSelect.vue';
-import { sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
-import { formatDateTimeDisplay } from '../../support/dateTimeFormat';
+import AppModalShell from '../../../components/AppModalShell.vue';
+import AppSelect from '../../../components/AppSelect.vue';
+import { sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
+import { formatDateTimeDisplay } from '../../../support/dateTimeFormat';
 import {
   CHAT_ARCHIVE_FILE_GROUPS,
   CHAT_ARCHIVE_FILE_KIND_OPTIONS,
   chatArchiveFileCount,
   formatChatArchiveBytes,
   normalizeChatArchivePayload,
-} from './chatArchive';
+} from '../chat/archive';
 
 const props = defineProps({
   open: {

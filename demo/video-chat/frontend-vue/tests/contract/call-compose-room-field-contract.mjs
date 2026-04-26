@@ -10,8 +10,8 @@ function fail(message) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const files = [
-  '../../src/domain/calls/AdminCallsView.vue',
-  '../../src/domain/calls/UserDashboardView.vue',
+  '../../src/domain/calls/admin/CallsView.vue',
+  '../../src/domain/calls/dashboard/UserDashboardView.vue',
   '../../src/layouts/WorkspaceShell.vue',
 ].map((file) => path.resolve(__dirname, file));
 

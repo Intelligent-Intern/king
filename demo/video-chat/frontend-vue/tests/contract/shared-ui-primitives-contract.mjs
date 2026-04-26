@@ -16,14 +16,14 @@ function readSource(relativePath) {
 }
 
 try {
-  const adminCalls = readSource('src/domain/calls/AdminCallsView.vue');
-  const userCalls = readSource('src/domain/calls/UserDashboardView.vue');
-  const callTable = readSource('src/domain/calls/CallsListTable.vue');
-  const chatArchive = readSource('src/domain/calls/ChatArchiveModal.vue');
-  const adminUserEditor = readSource('src/domain/users/AdminUserEditorModal.vue');
-  const adminUsers = readSource('src/domain/users/AdminUsersView.vue');
+  const adminCalls = readSource('src/domain/calls/admin/CallsView.vue');
+  const userCalls = readSource('src/domain/calls/dashboard/UserDashboardView.vue');
+  const callTable = readSource('src/domain/calls/components/ListTable.vue');
+  const chatArchive = readSource('src/domain/calls/components/ChatArchiveModal.vue');
+  const adminUserEditor = readSource('src/domain/users/components/UserEditorModal.vue');
+  const adminUsers = readSource('src/domain/users/admin/UsersView.vue');
 
-  assert.match(callTable, /import AppIconButton from '..\/..\/components\/AppIconButton\.vue';/, 'call table actions must use the shared icon button');
+  assert.match(callTable, /import AppIconButton from '..\/..\/..\/components\/AppIconButton\.vue';/, 'call table actions must use the shared icon button');
   assert.match(callTable, /<table class="calls-list-table"/, 'call table markup must live in one shared component');
   assert.match(callTable, /adminMode/, 'call table must preserve admin-only cancel/delete actions through admin mode');
 
@@ -31,8 +31,8 @@ try {
     ['AdminCallsView', adminCalls],
     ['UserDashboardView', userCalls],
   ]) {
-    assert.match(source, /import AppPagination from '..\/..\/components\/AppPagination\.vue';/, `${name} must import shared pagination`);
-    assert.match(source, /import CallsListTable from '.\/CallsListTable\.vue';/, `${name} must import the shared call list table`);
+    assert.match(source, /import AppPagination from '..\/..\/..\/components\/AppPagination\.vue';/, `${name} must import shared pagination`);
+    assert.match(source, /import CallsListTable from '..\/components\/ListTable\.vue';/, `${name} must import the shared call list table`);
     assert.match(source, /<CallsListTable/, `${name} must render the shared call list table`);
     assert.match(source, /<AppPagination/, `${name} must render shared pagination`);
     assert.doesNotMatch(source, /<table class="calls-list-table">/, `${name} must not duplicate call table markup`);

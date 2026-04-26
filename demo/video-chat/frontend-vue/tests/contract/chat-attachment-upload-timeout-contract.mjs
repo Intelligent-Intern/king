@@ -15,7 +15,7 @@ function requireContains(source, needle, label) {
 }
 
 const backendFetch = read('src/support/backendFetch.js');
-const workspaceApi = read('src/domain/realtime/callWorkspaceApi.js');
+const workspaceApi = read('src/domain/realtime/workspace/api.js');
 const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
 
 requireContains(backendFetch, 'controller.abort(buildBackendTimeoutError(timeoutMs))', 'timeout abort reason');

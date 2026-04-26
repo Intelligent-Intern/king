@@ -18,7 +18,7 @@ import {
   isGuestSession,
   logoutSession,
   sessionState,
-} from '../auth/session';
+} from '../../auth/session';
 
 const router = useRouter();
 

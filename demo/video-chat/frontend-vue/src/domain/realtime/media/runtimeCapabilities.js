@@ -1,4 +1,4 @@
-import { createWasmDecoder, createWasmEncoder } from '../../lib/wasm/wasm-codec';
+import { createWasmDecoder, createWasmEncoder } from '../../../lib/wasm/wasm-codec';
 
 function hasWebRtcBaseSupport() {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;

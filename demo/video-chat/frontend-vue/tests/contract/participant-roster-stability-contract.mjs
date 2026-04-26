@@ -11,7 +11,9 @@ function functionBody(source, name) {
   const marker = `function ${name}`;
   const start = source.indexOf(marker);
   assert.notEqual(start, -1, `missing ${name}`);
-  const open = source.indexOf('{', start);
+  const closeParams = source.indexOf(')', start);
+  assert.notEqual(closeParams, -1, `missing ${name} parameters`);
+  const open = source.indexOf('{', closeParams);
   assert.notEqual(open, -1, `missing ${name} body`);
 
   let depth = 0;
@@ -31,10 +33,12 @@ function functionBody(source, name) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const workspacePath = path.resolve(__dirname, '../../src/domain/realtime/CallWorkspaceView.vue');
-const source = fs.readFileSync(workspacePath, 'utf8');
+const rosterPath = path.resolve(__dirname, '../../src/domain/realtime/workspace/roster.js');
+const workspaceSource = fs.readFileSync(workspacePath, 'utf8');
+const rosterSource = fs.readFileSync(rosterPath, 'utf8');
 
 try {
-  const signatureBody = functionBody(source, 'participantSnapshotSignature');
+  const signatureBody = functionBody(rosterSource, 'participantSnapshotSignature');
   assert.match(signatureBody, /row\.userId/, 'roster signature must include user id');
   assert.match(signatureBody, /row\.displayName/, 'roster signature must include display name');
   assert.match(signatureBody, /row\.callRole/, 'roster signature must include call role');
@@ -49,7 +53,7 @@ try {
     'roster signature must ignore reconnect timestamps'
   );
 
-  const snapshotBody = functionBody(source, 'applyRoomSnapshot');
+  const snapshotBody = functionBody(workspaceSource, 'applyRoomSnapshot');
   assert.match(
     snapshotBody,
     /const participantsChanged = applyParticipantsSnapshot\(payload\?\.participants\);/,
@@ -70,10 +74,10 @@ try {
     'room snapshots must not refresh the roster presentation unconditionally'
   );
 
-  const liveMediaPeerMergeBody = functionBody(source, 'mergeLiveMediaPeerIntoRoster');
+  const liveMediaPeerMergeBody = functionBody(rosterSource, 'mergeLiveMediaPeerIntoRoster');
   assert.match(
     liveMediaPeerMergeBody,
-    /peerUserId === currentUserId\.value/,
+    /peerUserId === currentUserId/,
     'live media peer roster merge must never add the local user as a remote peer'
   );
   assert.match(
@@ -92,13 +96,13 @@ try {
     'backend-confirmed live media peers may supplement a missing snapshot row'
   );
   assert.match(
-    source,
-    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, 'sfu'\);/,
+    workspaceSource,
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'sfu',[\s\S]*\}\);/,
     'SFU remote peers must supplement the call roster so decoded canvases get a layout slot'
   );
   assert.match(
-    source,
-    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, 'native'\);/,
+    workspaceSource,
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'native',[\s\S]*\}\);/,
     'native WebRTC peers must supplement the call roster so remote videos get a layout slot'
   );
 

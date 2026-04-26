@@ -506,36 +506,36 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import AppPagination from '../../components/AppPagination.vue';
-import AppSelect from '../../components/AppSelect.vue';
-import ChatArchiveModal from './ChatArchiveModal.vue';
-import CallsListTable from './CallsListTable.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AppSelect from '../../../components/AppSelect.vue';
+import ChatArchiveModal from '../components/ChatArchiveModal.vue';
+import CallsListTable from '../components/ListTable.vue';
 import {
   createCallListStore,
   createChatArchiveStore,
   createNoticeStore,
   createParticipantDirectoryStore,
-} from './callViewState';
-import { sessionState } from '../auth/session';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+} from './viewState';
+import { sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import {
   buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
-} from '../../support/backendOrigin';
+} from '../../../support/backendOrigin';
 import {
   appendAssetVersionQuery,
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
-} from '../../support/assetVersion';
-import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
-import { createAdminSyncSocket } from '../../support/adminSyncSocket';
+} from '../../../support/assetVersion';
+import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
+import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
 import {
   formatDateDisplay,
   formatDateRangeDisplay,
   formatDateTimeDisplay,
   formatWeekdayShort,
-} from '../../support/dateTimeFormat';
+} from '../../../support/dateTimeFormat';
 import {
   applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
@@ -547,8 +547,8 @@ import {
   setCallMicrophoneVolume,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
-} from '../realtime/callMediaPreferences';
-import { BackgroundFilterController } from '../realtime/backgroundFilterController';
+} from '../../realtime/media/preferences';
+import { BackgroundFilterController } from '../../realtime/background/controller';
 
 const router = useRouter();
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';

@@ -1,4 +1,4 @@
-import { createBackgroundFilterStream } from './backgroundFilterStream';
+import { createBackgroundFilterStream } from './stream';
 
 export class BackgroundFilterController {
   constructor() {

@@ -308,9 +308,9 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
-import { logoutSession, refreshSession, sessionState } from '../auth/session';
-import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../support/dateTimeFormat';
+import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
+import { logoutSession, refreshSession, sessionState } from '../../auth/session';
+import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
 
 const router = useRouter();
 const activeOverviewView = ref('dashboard');
@@ -1213,4 +1213,4 @@ watch(
 );
 </script>
 
-<style scoped src="./AdminOverviewView.css"></style>
+<style scoped src="./OverviewView.css"></style>
