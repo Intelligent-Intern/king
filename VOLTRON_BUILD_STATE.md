@@ -56,6 +56,23 @@ Both workers run full model but KV cache enables:
 | 3+3= arithmetic | ✓ PASS |
 | Build scripts | ✓ PASS |
 
+## Voltron Transport Implementation
+
+- **Backend Implemented**: FILE, SHM, TCP, FILE handling, CRC32C.
+- **Makefile**: `src/voltron_transport.o` added to OBJ_ALL and compilation rule added.
+- **Dry-run Build**: Successful verification.
+
+### Current Todo
+
+- [✓] Implement voltron_transport.c with FILE backend, CRC32C, shared memory, TCP, and file handling
+- [✓] Add src/voltron_transport.o to OBJ_ALL in Makefile
+- [✓] Create Makefile rule for src/voltron_transport.o compilation
+- [✓] Run dry-run build to verify integration
+- [ ] Implement CLI option to select transport backend (FILE/SHM/TCP)
+- [ ] Write unit tests for voltron transport (send/recv, shm, tcp)
+- [ ] Run lint and typecheck on the project
+- [ ] Commit changes to repository
+
 ## TODO
 
 - [ ] Partitioned layer inference (Worker 0: layers 0-17, Worker 1: layers 18-35)

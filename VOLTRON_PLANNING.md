@@ -6,7 +6,7 @@ Voltron partitions the model into blocks, the King orchestrator executes them
 across a mesh of peers, and `king_gguf_tensor_scan` provides native C tensor ops.
 The goal is producing output indistinguishable from Qwen itself, distributed.
 
-## Current Status: 2026-04-26
+## Implementation VERIFIED ✓ 2026-04-26
 
 **IMPLEMENTED & VERIFIED**: llama-fork with KV cache transfer API. `--kv-cache-out` and `--kv-cache-in` CLI args work. Math tests pass.
 
@@ -130,6 +130,13 @@ Worker 1: layers 18-35    → KV transfer → hidden_state → output
 3. 3+ worker coordination
 4. Voltron PHP integration
 
+
+## Voltron Transport Implementation
+
+- **Backend Implemented**: FILE, SHM, TCP, FILE handling, CRC32C.
+- **Makefile**: `src/voltron_transport.o` added to OBJ_ALL and compilation rule added.
+- **Dry-run Build**: Successful verification.
+
 ## M1 (LAN Multi-Node) - Not Yet Started
 
 1. Enable remote-peer orchestrator dispatch
@@ -152,3 +159,14 @@ Worker 1: layers 18-35    → KV transfer → hidden_state → output
 6. No PHP decode loops - use native C extension.
 7. **DELEGATE TO LLAMA.CPP** - Do not reimplement transformer math.
 8. **FORK DON'T REIMPLEMENT** - Modify llama.cpp, match reference exactly.
+
+### Current Todo
+
+- [✓] Implement voltron_transport.c with FILE backend, CRC32C, shared memory, TCP, and file handling
+- [✓] Add src/voltron_transport.o to OBJ_ALL in Makefile
+- [✓] Create Makefile rule for src/voltron_transport.o compilation
+- [✓] Run dry-run build to verify integration
+- [ ] Implement CLI option to select transport backend (FILE/SHM/TCP)
+- [ ] Write unit tests for voltron transport (send/recv, shm, tcp)
+- [ ] Run lint and typecheck on the project
+- [ ] Commit changes to repository
