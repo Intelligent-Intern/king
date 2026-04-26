@@ -15,11 +15,48 @@ Rules:
 - Preserve contributor credit when porting experiment-branch work.
 - No path may be labeled secure, encrypted, E2EE, or post-quantum unless implementation, contracts, negative tests, and runtime/UI state prove the claim.
 
+## Realtime Media Recovery Sprint
+
+Goal:
+- Root-cause and fix the tiled/freezing video signal, missing audio transfer, and unstable E2EE readiness across WLVC/SFU, native audio bridge, media security, and King realtime worker paths.
+- Treat this as a production media transport blocker, not as a cosmetic UI issue.
+
+Field evidence:
+- [ ] Browser logs show SFU send-buffer backpressure above 2 MiB while outgoing WLVC frames are skipped.
+- [ ] Remote video stalls after advertised SFU tracks, with no decoded frame for roughly 10 seconds.
+- [ ] Native audio bridge first waits for E2EE readiness, then exhausts recovery because no encrypted remote audio track arrives.
+- [ ] Current video SFU sends WLVC frames as base64 JSON over WebSocket chunk messages, with 8 KiB chunks and SQLite broker fanout for cross-worker paths.
+- [ ] Current `SFU_PROTECTED_MEDIA_ENABLED` is false, so video media E2EE is not proven on the active SFU publishing path.
+
+Non-negotiable contracts:
+- [ ] No hidden downgrade from protected/E2EE media to transport-only media.
+- [ ] Any fallback or unavailable protected-media state must be visible in UI and diagnostics.
+- [ ] No client-created call, room, or admission authority.
+- [ ] SFU behavior must work across multiple King workers or explicitly pin/route room media to one worker.
+- [ ] Reconnect/retry logic must not create duplicate publishers, stale tracks, or bad-request leave/rejoin loops.
+
+Investigation and hardening plan:
+- [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.
+- [ ] Prove whether WLVC-over-JSON-WebSocket can sustain the target profiles. If not, replace the hot path with binary WebSocket/IIBIN or a real WebRTC media SFU path instead of threshold tuning.
+- [ ] Add a forced keyframe/decoder reset contract after any skipped, aborted, or missing chunk sequence so delta frames cannot mosaic after transport loss.
+- [ ] Audit cross-worker SFU fanout. SQLite broker writes per frame are a suspected hot path and must either be removed from realtime media delivery or bounded with explicit backpressure and room-worker affinity.
+- [ ] Enable and prove protected SFU video frames, or block E2EE claims for video until the protected path is active and tested.
+- [ ] Split native audio bridge readiness into explicit phases: media-security active, local mic live, offer SDP sendable, answer SDP sendable, ICE connected, encrypted receiver transform attached, remote track arrived, playback unblocked.
+- [ ] Add a two-participant E2E gate: encrypted remote audio RMS must exceed threshold and remote video must render continuously without SFU stall for at least 60 seconds.
+- [ ] Add backend contracts for SFU chunk ordering, chunk loss, chunk timeout, protected-frame required mode, broker fanout ordering, and multi-worker publisher/subscriber paths.
+
+Open root-cause candidates:
+- [ ] JSON/base64 frame carriage is too expensive for realtime video and produces the observed send-buffer growth.
+- [ ] Chunk loss or skipped frame sends leave remote decoders on stale delta state, causing tiled video before freeze.
+- [ ] SQLite broker fanout under multiple workers can add latency, locks, or frame gaps that are fatal for realtime media.
+- [ ] Media-security handshake reaches neither active sender-key state nor native receiver transform readiness reliably enough before audio negotiation.
+- [ ] Native audio SDP can negotiate connected ICE without a usable remote audio track when local mic state, transceiver reuse, or E2EE transform attach happens in the wrong order.
+
 ## Video Chat Domain Refactor Queue
 
 Goal:
-- Keep `demo/video-chat/frontend-vue/src/domain` navigable with fewer than 10 files per folder and no production source file above 1,500 LOC.
-- Refactor large files iteratively: first split files above 6,000 LOC into roughly 1,500 LOC slices, then tighten extracted slices toward the 750 LOC target.
+- Keep `demo/video-chat/frontend-vue/src/domain` navigable with fewer than 10 files per folder and no production source file above 800 LOC.
+- Refactor large files iteratively: first split files above 6,000 LOC into roughly 1,500 LOC slices, then tighten extracted slices toward the 750 LOC target and never leave a production source file above 800 LOC.
 - Preserve realtime, admission, media, and E2EE contracts while moving code; every extraction needs build and targeted contract coverage.
 
 Folder hygiene:
@@ -29,22 +66,16 @@ Folder hygiene:
 - [x] Keep every current `src/domain` folder below 10 direct files after the first cleanup pass.
 
 Mega files, largest first:
-- [ ] `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue` (9,765 LOC)
+- [ ] `demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue` (9,080 LOC)
 - [ ] Iteration 1: split into roughly 1,500 LOC slices for shell/state wiring, SFU/WLVC transport, E2EE/media security, native audio bridge, local media/background, participant roster/layout, and chat/activity.
 - [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
 - [ ] Add or update targeted realtime contracts for every extraction.
-- [ ] `demo/video-chat/frontend-vue/src/domain/calls/admin/CallsView.vue` (2,510 LOC)
-- [ ] Iteration 1: split calendar, compose/edit form, background preview, call list, sync/archive flows, and admin API orchestration toward roughly 1,500 LOC.
-- [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
-- [ ] Add or update admin-calls contracts for every extraction.
-- [ ] `demo/video-chat/frontend-vue/src/domain/calls/dashboard/UserDashboardView.vue` (2,183 LOC)
-- [ ] Iteration 1: split dashboard shell, admission/join flows, call list, chat archive, media preview, and foreground reconnect handling toward roughly 1,500 LOC.
-- [ ] Iteration 2: tighten extracted modules/components toward roughly 750 LOC each.
-- [ ] Add or update user-dashboard contracts for every extraction.
+- [x] `demo/video-chat/frontend-vue/src/domain/calls/admin/CallsView.vue` split to 742 LOC plus focused controllers below 800 LOC.
+- [x] `demo/video-chat/frontend-vue/src/domain/calls/dashboard/UserDashboardView.vue` split to 534 LOC plus focused controllers below 800 LOC.
 
 Near-limit follow-up:
-- [ ] `demo/video-chat/frontend-vue/src/domain/users/overview/OverviewView.vue` (1,216 LOC)
-- [ ] `demo/video-chat/frontend-vue/src/domain/realtime/media/security.js` (805 LOC)
+- [x] `demo/video-chat/frontend-vue/src/domain/users/overview/OverviewView.vue` reduced to 799 LOC.
+- [x] `demo/video-chat/frontend-vue/src/domain/realtime/media/security.js` reduced to 792 LOC.
 - [ ] `demo/video-chat/frontend-vue/src/domain/calls/access/JoinView.vue` (752 LOC)
 
 ## Batch 3: Core Runtime, Experiment Intake, And Release Closure (`1.0.7-beta`)
