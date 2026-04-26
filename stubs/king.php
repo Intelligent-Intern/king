@@ -1839,6 +1839,11 @@ namespace {
      * Returns `false` when the run cannot be cancelled anymore.
      */
     function king_pipeline_orchestrator_cancel_run(string $run_id): bool {}
+
+// Stub definitions for missing runtime functions
+function king_gguf_tensor_scan(string $path, array $tensor, array $input, ?array $options = null) {}
+function king_native_gguf_tensor_scan(string $path, array $tensor, array $input, ?array $options = null) {}
+function king_native_voltron_layer_worker(string $path, array $request) {}
 }
 
 /* The OO surface below mirrors the currently exported runtime classes. */
