@@ -76,6 +76,34 @@ Investigation and hardening plan:
 - [ ] Add backend contracts for SFU chunk ordering, chunk loss, chunk timeout, protected-frame required mode, broker fanout ordering, and multi-worker publisher/subscriber paths.
 - [ ] Move the WLVC encode hot path off the UI thread or replace it with binary/WebRTC media transport; Chrome long-task warnings are a symptom of 720p encode work still running on the UI thread.
 
+Additional hardening backlog:
+- [ ] Move WLVC capture, pixel readback, encode, and frame-payload preparation into a Worker/OffscreenCanvas pipeline so 720p encode cannot block the UI thread or trigger timer/render long tasks.
+- [ ] Add a capability check for Worker/OffscreenCanvas/ImageBitmap/WASM support and expose a visible degraded-state banner when the browser cannot run the hardened media path.
+- [ ] Replace JSON/base64 SFU frame transport with binary WebSocket/IIBIN framing, or switch the active video media path to WebRTC media SFU once the room/admission/security contracts are preserved.
+- [ ] Define a versioned SFU frame protocol with frame id, sequence number, keyframe flag, codec/runtime id, chunk index, total chunks, payload byte length, protection mode, key id, and sender timestamp.
+- [ ] Make chunk assembly fail-fast: missing, late, duplicate, oversized, mixed-key, or out-of-order chunks must discard the full frame, reset delta decode state, and request a fresh keyframe.
+- [ ] Add sender-side keyframe priority lanes so keyframes bypass obsolete delta backlog and cannot be delayed behind dropped or expired delta frames.
+- [ ] Add receiver-side stale-frame TTLs so old frames are discarded instead of rendered after reconnect, worker switch, or browser tab suspension.
+- [ ] Add explicit SFU room-worker affinity or a proven broker fanout path; realtime media must not depend on best-effort cross-worker SQLite polling under load.
+- [ ] Move any SQLite writes out of the per-frame hot path or enforce bounded media queues with backpressure diagnostics before database locks can stall media delivery.
+- [ ] Add SFU per-room metrics: publisher count, subscriber count, active worker, queued bytes, dropped delta frames, delayed keyframes, fanout latency, broker lag, and reconnect count.
+- [ ] Add client metrics: capture fps, encode fps, encode ms, payload bytes, chunk count, send queue bytes, socket bufferedAmount, decode ms, render fps, rendered frame age, and stall duration.
+- [ ] Rate-limit noisy media diagnostics while preserving first occurrence, state transitions, and aggregate counters so console output remains useful during failure.
+- [ ] Promote media-security into an explicit per-peer, per-track state machine instead of scattered booleans: capability, hello, key exchange, sender key, transform attached, decrypt ok, audio bridge ok.
+- [ ] Add media-security generation ids so stale websocket handshakes, reconnect signals, old keys, and old tracks cannot update the current peer state.
+- [ ] Treat `wrong_key_id`, `malformed_protected_frame`, `replay_detected`, and decrypt-auth failures as separate recovery classes with bounded retries and visible final states.
+- [ ] Clear replay counters and pending decrypt state only on a proven rekey boundary, never on generic reconnect noise.
+- [ ] Require protected-media readiness before advertising audio as available; if fail-closed blocks audio, the UI must state exactly which phase is missing.
+- [ ] Add a visible non-E2EE/degraded/fail-closed indicator for every media kind independently: video, audio, chat files, and activity signals.
+- [ ] Add a native audio bridge state machine with local mic live, sender transceiver attached, offer sent, answer applied, ICE connected, receiver transform attached, remote track received, playback started, and RMS detected.
+- [ ] Add audio watchdog recovery that checks remote track mute/ended state and WebAudio RMS, not just whether a `MediaStreamTrack` object exists.
+- [ ] Add deterministic two-browser E2E tests with fake camera and fake microphone that assert encrypted remote audio RMS and continuous remote video for at least 60 seconds.
+- [ ] Add negative E2E tests for missing Insertable Streams, wrong key id, dropped chunks, reconnect during handshake, leave/rejoin, mobile reload, and background/foreground resume.
+- [ ] Add backend SFU tests for multi-worker publisher/subscriber routing, room affinity, chunk loss, chunk timeout, duplicate chunks, oversized frames, and broker-fanout ordering.
+- [ ] Add leave/rejoin idempotency tests so stale publishers, stale sockets, and already-left sessions cannot cause `400 bad request` on the next join.
+- [ ] Add browser lifecycle recovery tests for focus regain, mobile reload, tab suspension, media-device restart, and owner/admin admission persistence.
+- [ ] Keep HD as the first acceptance gate: no adaptive quality reduction, no compression tuning, and no hidden fallback until 720p/30fps is stable in the hardened transport path.
+
 Open root-cause candidates:
 - [ ] JSON/base64 frame carriage is too expensive for realtime video and produces the observed send-buffer growth.
 - [ ] Chunk loss or skipped frame sends leave remote decoders on stale delta state, causing tiled video before freeze.
