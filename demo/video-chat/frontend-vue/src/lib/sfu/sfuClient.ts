@@ -18,6 +18,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion'
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
+import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
 import {
   SFU_FRAME_CHUNK_MAX_CHARS,
   base64UrlToArrayBuffer,
@@ -53,6 +54,12 @@ export interface SFUEncodedFrame {
   protected?: Record<string, unknown> | null
   protectedFrame?: string | null
   protectionMode?: 'transport_only' | 'protected' | 'required'
+  protocolVersion?: number
+  frameSequence?: number
+  payloadChars?: number
+  chunkCount?: number
+  frameId?: string
+  senderSentAtMs?: number
 }
 
 export interface SFUClientCallbacks {
@@ -64,26 +71,12 @@ export interface SFUClientCallbacks {
   onEncodedFrame?: (frame: SFUEncodedFrame) => void
 }
 
-const SFU_FRAME_CHUNK_TTL_MS = 5000
 const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024
 const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
 const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 2000
 const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
-
-interface PendingInboundFrameChunk {
-  publisherId: string
-  publisherUserId: string
-  trackId: string
-  timestamp: number
-  frameType: 'keyframe' | 'delta'
-  protectionMode: 'transport_only' | 'protected' | 'required'
-  chunkField: 'data_base64_chunk' | 'protected_frame_chunk'
-  chunkCount: number
-  updatedAtMs: number
-  chunks: Map<number, string>
-}
 
 interface SendBufferDrainResult {
   ok: boolean
@@ -97,8 +90,9 @@ export class SFUClient {
   private roomId = ''
   private connectGeneration = 0
   private disconnectNotified = false
-  private pendingInboundFrameChunks = new Map<string, PendingInboundFrameChunk>()
+  private inboundFrameAssembler = new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })
   private outboundFrameQueue: SfuOutboundFrameQueue
+  private outboundFrameSequenceByTrack = new Map<string, number>()
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
 
@@ -248,7 +242,8 @@ export class SFUClient {
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     this.connectGeneration += 1
     this.disconnectNotified = false
-    this.pendingInboundFrameChunks.clear()
+    this.inboundFrameAssembler.clear()
+    this.outboundFrameSequenceByTrack.clear()
     this.clearOutboundFrameQueue('socket_reconnect')
     this.roomId = roomId
     const generation = this.connectGeneration
@@ -297,13 +292,19 @@ export class SFUClient {
   }
 
   async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean> {
-    return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload(frame))
+    const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
+    return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
+      ...frame,
+      frameSequence,
+      senderSentAtMs: Date.now(),
+    }))
   }
 
   leave(): void {
     this.connectGeneration += 1
     this.disconnectNotified = false
-    this.pendingInboundFrameChunks.clear()
+    this.inboundFrameAssembler.clear()
+    this.outboundFrameSequenceByTrack.clear()
     this.clearOutboundFrameQueue('leave')
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
@@ -349,6 +350,13 @@ export class SFUClient {
 
   private getWebSocketBufferedAmount(): number {
     return Math.max(0, Number(this.ws?.bufferedAmount || 0))
+  }
+
+  private nextOutboundFrameSequence(trackId: string): number {
+    const key = String(trackId || '').trim() || 'default'
+    const next = Math.max(1, Number(this.outboundFrameSequenceByTrack.get(key) || 0) + 1)
+    this.outboundFrameSequenceByTrack.set(key, next)
+    return next
   }
 
   private enqueueEncodedFrame(prepared: PreparedSfuOutboundFramePayload): Promise<boolean> {
@@ -489,13 +497,18 @@ export class SFUClient {
       const end = start + SFU_FRAME_CHUNK_MAX_CHARS
       const chunkPayload: Record<string, unknown> = {
         type: 'sfu/frame-chunk',
+        protocol_version: payload.protocol_version,
         frame_id: frameId,
         publisher_id: payload.publisher_id,
         publisher_user_id: payload.publisher_user_id,
         track_id: payload.track_id,
         timestamp: payload.timestamp,
         frame_type: payload.frame_type,
+        frame_sequence: payload.frame_sequence,
+        sender_sent_at_ms: payload.sender_sent_at_ms,
         protection_mode: payload.protection_mode,
+        payload_chars: chunkValue.length,
+        chunk_payload_chars: Math.max(0, chunkValue.slice(start, end).length),
         chunk_index: chunkIndex,
         chunk_count: totalChunks,
       }
@@ -576,127 +589,6 @@ export class SFUClient {
     })
   }
 
-  private cleanupPendingInboundFrameChunks(): void {
-    const cutoffMs = Date.now() - SFU_FRAME_CHUNK_TTL_MS
-    for (const [frameId, entry] of this.pendingInboundFrameChunks.entries()) {
-      if (entry.updatedAtMs < cutoffMs) {
-        this.pendingInboundFrameChunks.delete(frameId)
-      }
-    }
-  }
-
-  private acceptInboundFrameChunk(msg: any): any | null {
-    const stringField = (...values: any[]): string => {
-      for (const value of values) {
-        const normalized = String(value ?? '').trim()
-        if (normalized !== '') return normalized
-      }
-      return ''
-    }
-
-    const frameId = stringField(msg.frameId, msg.frame_id)
-    const chunkCount = Number(msg.chunkCount ?? msg.chunk_count ?? 0)
-    const chunkIndex = Number(msg.chunkIndex ?? msg.chunk_index ?? -1)
-    const protectedChunk = stringField(msg.protectedFrameChunk, msg.protected_frame_chunk)
-    const dataChunk = stringField(msg.dataBase64Chunk, msg.data_base64_chunk)
-    const chunkField = protectedChunk !== '' ? 'protected_frame_chunk' : 'data_base64_chunk'
-    const chunkValue = protectedChunk !== '' ? protectedChunk : dataChunk
-
-    if (
-      frameId === ''
-      || !Number.isInteger(chunkCount)
-      || !Number.isInteger(chunkIndex)
-      || chunkCount < 1
-      || chunkIndex < 0
-      || chunkIndex >= chunkCount
-      || chunkValue === ''
-    ) {
-      return null
-    }
-
-    this.cleanupPendingInboundFrameChunks()
-
-    const publisherId = stringField(msg.publisherId, msg.publisher_id)
-    const publisherUserId = stringField(msg.publisherUserId, msg.publisher_user_id)
-    const trackId = stringField(msg.trackId, msg.track_id)
-    const timestamp = Number(msg.timestamp || 0)
-    const frameType = stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta'
-    const protectionMode = stringField(msg.protectionMode, msg.protection_mode) === 'required'
-      ? 'required'
-      : (chunkField === 'protected_frame_chunk' ? 'protected' : 'transport_only')
-
-    const existing = this.pendingInboundFrameChunks.get(frameId)
-    if (!existing) {
-      this.pendingInboundFrameChunks.set(frameId, {
-        publisherId,
-        publisherUserId,
-        trackId,
-        timestamp,
-        frameType,
-        protectionMode,
-        chunkField,
-        chunkCount,
-        updatedAtMs: Date.now(),
-        chunks: new Map([[chunkIndex, chunkValue]]),
-      })
-      return chunkCount === 1
-        ? {
-            type: 'sfu/frame',
-            publisher_id: publisherId,
-            publisher_user_id: publisherUserId,
-            track_id: trackId,
-            timestamp,
-            frame_type: frameType,
-            protection_mode: protectionMode,
-            ...(chunkField === 'protected_frame_chunk'
-              ? { protected_frame: chunkValue }
-              : { data_base64: chunkValue }),
-          }
-        : null
-    }
-
-    if (
-      existing.publisherId !== publisherId
-      || existing.publisherUserId !== publisherUserId
-      || existing.trackId !== trackId
-      || existing.timestamp !== timestamp
-      || existing.frameType !== frameType
-      || existing.protectionMode !== protectionMode
-      || existing.chunkField !== chunkField
-      || existing.chunkCount !== chunkCount
-    ) {
-      this.pendingInboundFrameChunks.delete(frameId)
-      return null
-    }
-
-    existing.updatedAtMs = Date.now()
-    existing.chunks.set(chunkIndex, chunkValue)
-    if (existing.chunks.size < existing.chunkCount) return null
-
-    let assembled = ''
-    for (let index = 0; index < existing.chunkCount; index += 1) {
-      const nextChunk = existing.chunks.get(index)
-      if (typeof nextChunk !== 'string' || nextChunk === '') {
-        return null
-      }
-      assembled += nextChunk
-    }
-
-    this.pendingInboundFrameChunks.delete(frameId)
-    return {
-      type: 'sfu/frame',
-      publisher_id: existing.publisherId,
-      publisher_user_id: existing.publisherUserId,
-      track_id: existing.trackId,
-      timestamp: existing.timestamp,
-      frame_type: existing.frameType,
-      protection_mode: existing.protectionMode,
-      ...(existing.chunkField === 'protected_frame_chunk'
-        ? { protected_frame: assembled }
-        : { data_base64: assembled }),
-    }
-  }
-
   private handleMessage(msg: any): void {
     const stringField = (...values: any[]): string => {
       for (const value of values) {
@@ -704,6 +596,13 @@ export class SFUClient {
         if (normalized !== '') return normalized
       }
       return ''
+    }
+    const integerField = (fallback: number, ...values: any[]): number => {
+      for (const value of values) {
+        const normalized = Number(value)
+        if (Number.isFinite(normalized)) return Math.floor(normalized)
+      }
+      return fallback
     }
 
     switch (msg.type) {
@@ -741,6 +640,8 @@ export class SFUClient {
         if (this.cb.onEncodedFrame) {
           const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
           const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
+          const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
+          if (this.inboundFrameAssembler.rejectFramePayloadLengthMismatch(msg)) return
           this.cb.onEncodedFrame({
             publisherId: stringField(msg.publisherId, msg.publisher_id),
             publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
@@ -756,12 +657,18 @@ export class SFUClient {
             protectionMode: stringField(msg.protectionMode, msg.protection_mode) === 'required'
               ? 'required'
               : (protectedFrame !== '' ? 'protected' : 'transport_only'),
+            protocolVersion: Math.max(1, integerField(1, msg.protocolVersion, msg.protocol_version)),
+            frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
+            payloadChars,
+            chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
+            frameId: stringField(msg.frameId, msg.frame_id),
+            senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
           })
         }
         break
 
       case 'sfu/frame-chunk': {
-        const reassembledFrame = this.acceptInboundFrameChunk(msg)
+        const reassembledFrame = this.inboundFrameAssembler.acceptChunk(msg)
         if (reassembledFrame) {
           this.handleMessage(reassembledFrame)
         }

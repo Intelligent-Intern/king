@@ -17,6 +17,7 @@ function requireContains(source, needle, label) {
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
+const inboundFrameAssembler = read('src/lib/sfu/inboundFrameAssembler.ts');
 const diagnostics = read('src/support/clientDiagnostics.js');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
@@ -32,8 +33,13 @@ requireContains(workspace, "eventType: 'sfu_frame_send_failed'", 'workspace fail
 requireContains(sfuClient, "'sfu_frame_send_queue_pressure'", 'sfu frame send queue pressure diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_dropped'", 'sfu frame send queue drop diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'sfu keyframe queue blocking diagnostics hook');
+requireContains(inboundFrameAssembler, "'sfu_frame_chunk_timeout'", 'sfu inbound chunk timeout diagnostics hook');
+requireContains(inboundFrameAssembler, "'sfu_frame_chunk_rejected'", 'sfu inbound chunk rejection diagnostics hook');
+requireContains(inboundFrameAssembler, "'sfu_frame_rejected'", 'sfu inbound frame rejection diagnostics hook');
+requireContains(workspace, "eventType: 'sfu_remote_frame_dropped'", 'remote frame continuity drop diagnostics hook');
 requireContains(sfuClient, 'chunk_count: totalChunks', 'sfu frame diagnostics include chunk count');
 requireContains(sfuClient, 'send_wait_ms: totalWaitMs', 'sfu frame diagnostics include send wait time');
 requireContains(sfuClient, 'payload_chars', 'sfu frame diagnostics include base64/protected payload size');
+requireContains(sfuClient, 'frame_sequence', 'sfu frame diagnostics include frame sequence');
 
 process.stdout.write('[client-diagnostics-contract] PASS\n');

@@ -173,6 +173,8 @@ export class SfuOutboundFrameQueue {
           chunkCount: 0,
           frameType: 'delta',
           protectionMode: 'transport_only',
+          frameSequence: 0,
+          senderSentAtMs: Date.now(),
           metrics: {},
         },
         {

@@ -317,6 +317,11 @@ try {
             'track_id' => 'camera-a',
             'timestamp' => 12345,
             'frame_type' => 'keyframe',
+            'protocol_version' => 2,
+            'frame_sequence' => 41,
+            'sender_sent_at_ms' => 1770000000000,
+            'payload_chars' => 10,
+            'chunk_payload_chars' => 10,
             'chunk_index' => 0,
             'chunk_count' => 2,
             'data_base64_chunk' => 'QUJDREVGRw',
@@ -329,6 +334,14 @@ try {
         (($chunkedTransportCommand['payload'] ?? [])['data_base64_chunk'] ?? '') === 'QUJDREVGRw',
         'chunked SFU transport payload must preserve the chunk'
     );
+    videochat_realtime_sfu_assert(
+        (int) (($chunkedTransportCommand['payload'] ?? [])['frame_sequence'] ?? 0) === 41,
+        'chunked SFU transport payload must preserve frame sequence'
+    );
+    videochat_realtime_sfu_assert(
+        (int) (($chunkedTransportCommand['payload'] ?? [])['payload_chars'] ?? 0) === 10,
+        'chunked SFU transport payload must preserve advertised payload length'
+    );
     $chunkedProtectedCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame-chunk',
@@ -337,6 +350,11 @@ try {
             'track_id' => 'camera-a',
             'timestamp' => 12346,
             'frame_type' => 'delta',
+            'protocol_version' => 2,
+            'frame_sequence' => 42,
+            'sender_sent_at_ms' => 1770000000100,
+            'payload_chars' => 11,
+            'chunk_payload_chars' => 11,
             'chunk_index' => 1,
             'chunk_count' => 3,
             'protected_frame_chunk' => 'QUJDREVGR0g',
@@ -349,6 +367,26 @@ try {
         (($chunkedProtectedCommand['payload'] ?? [])['protection_mode'] ?? '') === 'required',
         'chunked protected SFU frame must preserve required mode'
     );
+    $invalidChunkLengthCommand = videochat_sfu_decode_client_frame(
+        json_encode([
+            'type' => 'sfu/frame-chunk',
+            'room_id' => 'room-alpha',
+            'frame_id' => 'frame_alpha_bad_length',
+            'track_id' => 'camera-a',
+            'timestamp' => 12347,
+            'frame_type' => 'delta',
+            'protocol_version' => 2,
+            'frame_sequence' => 43,
+            'payload_chars' => 4,
+            'chunk_payload_chars' => 99,
+            'chunk_index' => 0,
+            'chunk_count' => 1,
+            'data_base64_chunk' => 'QUJD',
+            'protection_mode' => 'transport_only',
+        ], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert(!(bool) ($invalidChunkLengthCommand['ok'] ?? true), 'invalid SFU chunk payload length must fail closed');
     $chunkedOutboundTransport = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -357,6 +395,10 @@ try {
         'timestamp' => 12348,
         'frame_type' => 'delta',
         'protection_mode' => 'transport_only',
+        'protocol_version' => 2,
+        'frame_sequence' => 99,
+        'sender_sent_at_ms' => 1770000000200,
+        'payload_chars' => strlen(str_repeat('QUJDREVGR0g', 1_200)),
         'data_base64' => str_repeat('QUJDREVGR0g', 1_200),
     ]);
     videochat_realtime_sfu_assert(count($chunkedOutboundTransport) > 1, 'large outbound SFU transport frame should chunk');
@@ -371,6 +413,13 @@ try {
     videochat_realtime_sfu_assert(
         $reassembledOutboundTransport === str_repeat('QUJDREVGR0g', 1_200),
         'chunked outbound SFU transport frame must preserve payload bytes'
+    );
+    videochat_realtime_sfu_assert(
+        (int) ($chunkedOutboundTransport[0]['protocol_version'] ?? 0) === 2
+        && (int) ($chunkedOutboundTransport[0]['frame_sequence'] ?? 0) === 99
+        && (int) ($chunkedOutboundTransport[0]['payload_chars'] ?? 0) === strlen(str_repeat('QUJDREVGR0g', 1_200))
+        && (int) ($chunkedOutboundTransport[0]['chunk_payload_chars'] ?? 0) === strlen((string) ($chunkedOutboundTransport[0]['data_base64_chunk'] ?? '')),
+        'chunked outbound SFU transport frame must carry protocol, sequence, and chunk length metadata'
     );
     $chunkedOutboundProtected = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',

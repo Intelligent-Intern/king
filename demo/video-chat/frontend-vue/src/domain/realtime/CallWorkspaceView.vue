@@ -173,6 +173,8 @@ const REMOTE_VIDEO_STALL_THRESHOLD_MS = 8000;
 const REMOTE_VIDEO_FREEZE_THRESHOLD_MS = 7000;
 const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 3000;
 const REMOTE_VIDEO_KEYFRAME_WAIT_LOG_COOLDOWN_MS = 3000;
+const REMOTE_SFU_FRAME_STALE_TTL_MS = 5000;
+const REMOTE_SFU_FRAME_DROP_LOG_COOLDOWN_MS = 2500;
 const MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS = 5000;
 const MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS = 1000;
 const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 10_000;
@@ -5761,6 +5763,13 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
       decoderFallbackApplied: Boolean(existingPeer.decoderFallbackApplied),
       needsKeyframe: Boolean(existingPeer.needsKeyframe),
       lastDeltaBeforeKeyframeLoggedAtMs: Number(existingPeer.lastDeltaBeforeKeyframeLoggedAtMs || 0),
+      lastSfuFrameSequenceByTrack: existingPeer.lastSfuFrameSequenceByTrack && typeof existingPeer.lastSfuFrameSequenceByTrack === 'object'
+        ? { ...existingPeer.lastSfuFrameSequenceByTrack }
+        : {},
+      lastSfuFrameTimestampByTrack: existingPeer.lastSfuFrameTimestampByTrack && typeof existingPeer.lastSfuFrameTimestampByTrack === 'object'
+        ? { ...existingPeer.lastSfuFrameTimestampByTrack }
+        : {},
+      lastSfuFrameDropLoggedAtMs: Number(existingPeer.lastSfuFrameDropLoggedAtMs || 0),
     };
     setSfuRemotePeer(publisherId, updatedPeer, existingPeerEntry?.publisherId || '');
     await nextTick();
@@ -5834,6 +5843,9 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
     freezeRecoveryCount: 0,
     needsKeyframe: true,
     lastDeltaBeforeKeyframeLoggedAtMs: 0,
+    lastSfuFrameSequenceByTrack: {},
+    lastSfuFrameTimestampByTrack: {},
+    lastSfuFrameDropLoggedAtMs: 0,
   };
   setSfuRemotePeer(publisherId, peer);
 
@@ -8892,6 +8904,127 @@ function renderDecodedSfuFrame(peer, decoded) {
   return true;
 }
 
+function normalizeSfuFrameNumber(value, fallback = 0) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return fallback;
+  return Math.floor(normalized);
+}
+
+function sfuFrameTrackStateKey(frame) {
+  return String(frame?.trackId || '').trim() || 'default';
+}
+
+function logDroppedRemoteSfuFrame(peer, publisherId, frame, reason, extraPayload = {}, immediate = false) {
+  const nowMs = Date.now();
+  if (!immediate && (nowMs - Number(peer?.lastSfuFrameDropLoggedAtMs || 0)) < REMOTE_SFU_FRAME_DROP_LOG_COOLDOWN_MS) {
+    return;
+  }
+  if (peer && typeof peer === 'object') {
+    peer.lastSfuFrameDropLoggedAtMs = nowMs;
+  }
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'sfu_remote_frame_dropped',
+    code: 'sfu_remote_frame_dropped',
+    message: 'Remote SFU frame was dropped by transport continuity checks before decode.',
+    payload: {
+      publisher_id: publisherId,
+      publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+      track_id: frame?.trackId,
+      frame_id: String(frame?.frameId || ''),
+      frame_type: String(frame?.type || ''),
+      frame_timestamp: normalizeSfuFrameNumber(frame?.timestamp),
+      frame_sequence: normalizeSfuFrameNumber(frame?.frameSequence),
+      protocol_version: normalizeSfuFrameNumber(frame?.protocolVersion, 1),
+      payload_chars: normalizeSfuFrameNumber(frame?.payloadChars),
+      chunk_count: normalizeSfuFrameNumber(frame?.chunkCount, 1),
+      sender_sent_at_ms: normalizeSfuFrameNumber(frame?.senderSentAtMs),
+      drop_reason: reason,
+      ...extraPayload,
+    },
+    immediate,
+  });
+}
+
+function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame) {
+  if (!peer || typeof peer !== 'object') return false;
+  const trackKey = sfuFrameTrackStateKey(frame);
+  if (!peer.lastSfuFrameSequenceByTrack || typeof peer.lastSfuFrameSequenceByTrack !== 'object') {
+    peer.lastSfuFrameSequenceByTrack = {};
+  }
+  if (!peer.lastSfuFrameTimestampByTrack || typeof peer.lastSfuFrameTimestampByTrack !== 'object') {
+    peer.lastSfuFrameTimestampByTrack = {};
+  }
+
+  const nowMs = Date.now();
+  const frameType = String(frame?.type || '').trim().toLowerCase() === 'keyframe' ? 'keyframe' : 'delta';
+  const frameSequence = Math.max(0, normalizeSfuFrameNumber(frame?.frameSequence));
+  const frameTimestamp = Math.max(0, normalizeSfuFrameNumber(frame?.timestamp));
+  const senderSentAtMs = Math.max(0, normalizeSfuFrameNumber(frame?.senderSentAtMs));
+  const ageReferenceMs = senderSentAtMs > 0 ? senderSentAtMs : frameTimestamp;
+  if (ageReferenceMs > 0 && (nowMs - ageReferenceMs) > REMOTE_SFU_FRAME_STALE_TTL_MS) {
+    peer.needsKeyframe = true;
+    try {
+      peer.decoder?.reset?.();
+    } catch {
+      // A fresh keyframe is enough if the decoder cannot be reset explicitly.
+    }
+    logDroppedRemoteSfuFrame(peer, publisherId, frame, 'stale_frame_ttl', {
+      frame_age_ms: nowMs - ageReferenceMs,
+      stale_ttl_ms: REMOTE_SFU_FRAME_STALE_TTL_MS,
+    });
+    return true;
+  }
+
+  if (frameSequence > 0) {
+    const lastSequence = Math.max(0, normalizeSfuFrameNumber(peer.lastSfuFrameSequenceByTrack[trackKey]));
+    if (lastSequence > 0 && frameSequence <= lastSequence) {
+      logDroppedRemoteSfuFrame(peer, publisherId, frame, 'duplicate_or_reordered_sequence', {
+        last_frame_sequence: lastSequence,
+      });
+      return true;
+    }
+    if (lastSequence > 0 && frameSequence > (lastSequence + 1)) {
+      peer.needsKeyframe = true;
+      try {
+        peer.decoder?.reset?.();
+      } catch {
+        // Decoder will recover on the next accepted keyframe.
+      }
+      if (frameType !== 'keyframe') {
+        logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_delta', {
+          last_frame_sequence: lastSequence,
+          missing_frame_count: frameSequence - lastSequence - 1,
+        }, true);
+        return true;
+      }
+      logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_keyframe', {
+        last_frame_sequence: lastSequence,
+        missing_frame_count: frameSequence - lastSequence - 1,
+      });
+    }
+    peer.lastSfuFrameSequenceByTrack[trackKey] = frameSequence;
+    if (frameTimestamp > 0) {
+      peer.lastSfuFrameTimestampByTrack[trackKey] = frameTimestamp;
+    }
+    return false;
+  }
+
+  if (frameTimestamp > 0) {
+    const lastTimestamp = Math.max(0, normalizeSfuFrameNumber(peer.lastSfuFrameTimestampByTrack[trackKey]));
+    if (lastTimestamp > 0 && frameTimestamp < lastTimestamp) {
+      logDroppedRemoteSfuFrame(peer, publisherId, frame, 'reordered_timestamp', {
+        last_frame_timestamp: lastTimestamp,
+      });
+      return true;
+    }
+    peer.lastSfuFrameTimestampByTrack[trackKey] = frameTimestamp;
+  }
+
+  return false;
+}
+
 async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   if (!peer || !peer.decoder) return;
   peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
@@ -8899,6 +9032,9 @@ async function decodeSfuFrameForPeer(publisherId, peer, frame) {
   const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
   if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
     markRemoteFrameActivity(publisherUserId);
+  }
+  if (shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame)) {
+    return;
   }
 
   let frameData = frame.data;

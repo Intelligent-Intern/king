@@ -1,4 +1,5 @@
 export const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024
+export const SFU_FRAME_PROTOCOL_VERSION = 2
 
 export type SfuFrameType = 'keyframe' | 'delta'
 export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
@@ -14,6 +15,8 @@ export interface SfuOutboundFrameInput {
   type: SfuFrameType
   protectedFrame?: string | null
   protectionMode?: SfuProtectionMode
+  frameSequence?: number
+  senderSentAtMs?: number
 }
 
 export interface PreparedSfuOutboundFramePayload {
@@ -29,17 +32,24 @@ export interface PreparedSfuOutboundFramePayload {
   publisherId: string
   trackId: string
   timestamp: number
+  frameSequence: number
+  senderSentAtMs: number
 }
 
 export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): PreparedSfuOutboundFramePayload {
   const rawByteLength = Number(frame.data?.byteLength || 0)
+  const frameSequence = normalizeNonNegativeInteger(frame.frameSequence)
+  const senderSentAtMs = normalizePositiveInteger(frame.senderSentAtMs, Date.now())
   const payload: Record<string, unknown> = {
     type: 'sfu/frame',
+    protocol_version: SFU_FRAME_PROTOCOL_VERSION,
     publisher_id: frame.publisherId,
     publisher_user_id: frame.publisherUserId || '',
     track_id: frame.trackId,
     timestamp: frame.timestamp,
     frame_type: frame.type,
+    frame_sequence: frameSequence,
+    sender_sent_at_ms: senderSentAtMs,
   }
 
   let chunkField: SfuChunkField | null = null
@@ -64,6 +74,8 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
   const payloadChars = chunkValue.length
   const chunkCount = frameChunkCount(payloadChars)
   const protectionMode = normalizeProtectionMode(payload.protection_mode, 'transport_only')
+  payload.payload_chars = payloadChars
+  payload.chunk_count = chunkCount
 
   return {
     payload,
@@ -77,10 +89,15 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     publisherId: frame.publisherId,
     trackId: frame.trackId,
     timestamp: frame.timestamp,
+    frameSequence,
+    senderSentAtMs,
     metrics: {
+      protocol_version: SFU_FRAME_PROTOCOL_VERSION,
       publisher_id: frame.publisherId,
       track_id: frame.trackId,
       frame_type: frame.type,
+      frame_sequence: frameSequence,
+      sender_sent_at_ms: senderSentAtMs,
       protection_mode: protectionMode,
       raw_byte_length: rawByteLength,
       payload_chars: payloadChars,
@@ -96,6 +113,18 @@ export function createSfuFrameId(): string {
 
 export function frameChunkCount(payloadChars: number): number {
   return Math.max(1, Math.ceil(Math.max(0, payloadChars) / SFU_FRAME_CHUNK_MAX_CHARS))
+}
+
+function normalizeNonNegativeInteger(value: unknown): number {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized < 0) return 0
+  return Math.floor(normalized)
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number): number {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized <= 0) return fallback
+  return Math.floor(normalized)
 }
 
 export function base64UrlToArrayBuffer(value: string): ArrayBuffer {

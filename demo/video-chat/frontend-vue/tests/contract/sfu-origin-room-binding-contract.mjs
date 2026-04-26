@@ -25,6 +25,7 @@ function read(relativePath) {
 const sfuClient = read('../../src/lib/sfu/sfuClient.ts');
 const framePayload = read('../../src/lib/sfu/framePayload.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
+const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
 const backendOrigin = read('../../src/support/backendOrigin.js');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
@@ -52,11 +53,17 @@ try {
   requireContains(framePayload, "publisher_user_id: frame.publisherUserId || ''", 'snake_case frame publisher user');
   requireContains(framePayload, "track_id: frame.trackId", 'snake_case frame track');
   requireContains(framePayload, "frame_type: frame.type", 'snake_case frame type');
+  requireContains(framePayload, 'export const SFU_FRAME_PROTOCOL_VERSION = 2', 'versioned SFU frame protocol');
+  requireContains(framePayload, 'protocol_version: SFU_FRAME_PROTOCOL_VERSION', 'SFU frame protocol version field');
+  requireContains(framePayload, 'frame_sequence: frameSequence', 'SFU frame sequence field');
+  requireContains(framePayload, 'payload.payload_chars = payloadChars', 'SFU frame advertised payload length');
   requireContains(framePayload, 'payload.protected_frame = protectedFrame', 'snake_case protected frame');
   requireContains(framePayload, 'payload.protection_mode = normalizeProtectionMode(frame.protectionMode,', 'snake_case protection mode');
   requireContains(framePayload, 'export const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
   requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024', 'chunk send backpressure guard');
   requireContains(sfuClient, 'private async waitForSendBufferDrain()', 'chunk sender waits for websocket drain');
+  requireContains(sfuClient, 'private outboundFrameSequenceByTrack = new Map<string, number>()', 'per-track outgoing frame sequence');
+  requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
   requireContains(sfuClient, 'this.outboundFrameQueue.enqueue(prepared)', 'bounded outbound frame queue');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3', 'bounded queue frame cap');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 2 * 1024 * 1024', 'bounded queue byte cap');
@@ -64,14 +71,24 @@ try {
   requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'keyframe queue reject diagnostic');
   requireContains(sfuClient, "type: 'sfu/frame-chunk'", 'chunked frame command');
   requireContains(sfuClient, "frame_id: frameId", 'chunked frame id');
+  requireContains(sfuClient, "protocol_version: payload.protocol_version", 'chunked frame protocol version');
+  requireContains(sfuClient, "frame_sequence: payload.frame_sequence", 'chunked frame sequence');
+  requireContains(sfuClient, "payload_chars: chunkValue.length", 'chunked frame payload length');
+  requireContains(sfuClient, "chunk_payload_chars:", 'chunked frame chunk length');
   requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');
   requireContains(sfuClient, "chunk_count: totalChunks", 'chunk count');
   requireContains(sfuClient, 'this.sendChunkedFramePayload(prepared.payload, prepared.chunkField, prepared.chunkValue, metrics)', 'chunked frame sender');
-  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
-  requireContains(sfuClient, 'private pendingInboundFrameChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');
-  requireContains(sfuClient, 'private acceptInboundFrameChunk(msg: any): any | null {', 'inbound chunk assembler');
+  requireContains(sfuClient, 'new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })', 'inbound chunk assembler wiring');
+  requireContains(inboundFrameAssembler, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
+  requireContains(inboundFrameAssembler, 'private pendingChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');
+  requireContains(inboundFrameAssembler, 'acceptChunk(msg: any): Record<string, unknown> | null {', 'inbound chunk assembler');
+  requireContains(inboundFrameAssembler, 'chunkPayloadChars !== chunkValue.length', 'inbound chunk advertised length validation');
+  requireContains(inboundFrameAssembler, 'assembled.length !== existing.payloadChars', 'inbound assembled payload length validation');
+  requireContains(inboundFrameAssembler, "'duplicate_chunk_mismatch'", 'inbound duplicate chunk fail-fast');
+  requireContains(inboundFrameAssembler, "'out_of_order_chunk'", 'inbound out-of-order chunk fail-fast');
   requireContains(sfuClient, "case 'sfu/frame-chunk': {", 'inbound chunk message handler');
-  requireContains(sfuClient, 'const reassembledFrame = this.acceptInboundFrameChunk(msg)', 'inbound chunk reassembly dispatch');
+  requireContains(sfuClient, 'const reassembledFrame = this.inboundFrameAssembler.acceptChunk(msg)', 'inbound chunk reassembly dispatch');
+  requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
   requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');
   requireContains(sfuClient, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');
@@ -82,6 +99,7 @@ try {
   requireContains(sfuClient, 'const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)', 'protected frame inbound compatibility');
   requireContains(sfuClient, 'stringField(msg.protectionMode, msg.protection_mode)', 'protection mode inbound compatibility');
   requireContains(sfuClient, 'stringField(msg.frameType, msg.frame_type)', 'frame type inbound compatibility');
+  requireContains(sfuClient, 'frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence))', 'frame sequence inbound compatibility');
 
   requireContains(backendOrigin, 'export function resolveBackendSfuOriginCandidates()', 'SFU origin candidate resolver');
   requireContains(backendOrigin, 'const primarySfuOrigin = resolveBackendSfuOrigin();', 'primary SFU origin');

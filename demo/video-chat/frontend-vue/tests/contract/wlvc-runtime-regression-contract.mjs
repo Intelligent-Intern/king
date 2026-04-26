@@ -454,6 +454,9 @@ try {
   requireContains(workspace, "eventType: 'sfu_delta_before_keyframe_dropped'", 'remote decoder drops stale deltas until a keyframe arrives');
   requireContains(workspace, 'peer.needsKeyframe = true;', 'remote decoder marks keyframe required after reset or decode failure');
   requireContains(workspace, 'peer.needsKeyframe = false;', 'remote decoder clears keyframe wait after a renderable keyframe');
+  requireContains(workspace, 'function shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame)', 'remote receiver enforces SFU frame continuity before decode');
+  requireContains(workspace, "'sequence_gap_delta'", 'remote receiver drops deltas after sequence gaps');
+  requireContains(workspace, 'REMOTE_SFU_FRAME_STALE_TTL_MS', 'remote receiver drops stale SFU frames by TTL');
   requireContains(workspace, 'function restartSfuAfterVideoStall', 'workspace can reconnect SFU after hard video stalls');
 
   const handleFrame = extractFunction(workspace, 'handleSFUEncodedFrame');

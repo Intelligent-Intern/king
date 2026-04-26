@@ -65,6 +65,15 @@ Implemented second hardening pass:
 - [x] Native `malformed_protected_frame` receiver errors now force media-security recovery plus a bounded audio-bridge rebuild instead of staying in a waiting state.
 - [x] WLVC encode scheduling is self-paced after each encode tick instead of a fixed `setInterval`, reducing timer backlog while preserving the HD profile.
 
+Implemented third hardening pass:
+- [x] SFU frame transport now carries protocol version, per-track frame sequence, sender timestamp, advertised payload length, chunk count, frame id, frame type, and protection mode through frontend, direct gateway fanout, and broker fanout.
+- [x] Frontend and gateway chunk assembly now fail closed on invalid chunk headers, duplicate chunks with different bytes, metadata drift, advertised payload-length mismatch, oversized chunk counts, and out-of-order chunk arrival.
+- [x] Incomplete inbound chunks expire after the TTL and emit `sfu_frame_chunk_timeout` diagnostics instead of silently leaving partial frame state behind.
+- [x] Direct inbound SFU frames with an advertised payload length mismatch are rejected with `sfu_frame_rejected` diagnostics before decode.
+- [x] Remote SFU receivers now drop stale, duplicate, reordered, and sequence-gap delta frames before WLVC decode, reset decoder state, and require a fresh keyframe.
+- [x] Inbound SFU chunk assembly was extracted to `inboundFrameAssembler.ts`, keeping `sfuClient.ts` below the 800 LOC limit after the hardening work.
+- [x] Contract coverage was extended for versioned frame metadata, chunk metadata preservation, chunk length validation, out-of-order chunk rejection, stale-frame TTLs, and receiver continuity diagnostics.
+
 Investigation and hardening plan:
 - [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.
 - [ ] Prove whether WLVC-over-JSON-WebSocket can sustain the target profiles. If not, replace the hot path with binary WebSocket/IIBIN or a real WebRTC media SFU path instead of threshold tuning.
@@ -81,9 +90,9 @@ Additional hardening backlog:
 - [ ] Add a capability check for Worker/OffscreenCanvas/ImageBitmap/WASM support and expose a visible degraded-state banner when the browser cannot run the hardened media path.
 - [ ] Replace JSON/base64 SFU frame transport with binary WebSocket/IIBIN framing, or switch the active video media path to WebRTC media SFU once the room/admission/security contracts are preserved.
 - [ ] Define a versioned SFU frame protocol with frame id, sequence number, keyframe flag, codec/runtime id, chunk index, total chunks, payload byte length, protection mode, key id, and sender timestamp.
-- [ ] Make chunk assembly fail-fast: missing, late, duplicate, oversized, mixed-key, or out-of-order chunks must discard the full frame, reset delta decode state, and request a fresh keyframe.
+- [x] Make chunk assembly fail-fast: missing, late, duplicate, oversized, mixed-key, or out-of-order chunks must discard the full frame, reset delta decode state, and request a fresh keyframe.
 - [ ] Add sender-side keyframe priority lanes so keyframes bypass obsolete delta backlog and cannot be delayed behind dropped or expired delta frames.
-- [ ] Add receiver-side stale-frame TTLs so old frames are discarded instead of rendered after reconnect, worker switch, or browser tab suspension.
+- [x] Add receiver-side stale-frame TTLs so old frames are discarded instead of rendered after reconnect, worker switch, or browser tab suspension.
 - [ ] Add explicit SFU room-worker affinity or a proven broker fanout path; realtime media must not depend on best-effort cross-worker SQLite polling under load.
 - [ ] Move any SQLite writes out of the per-frame hot path or enforce bounded media queues with backpressure diagnostics before database locks can stall media delivery.
 - [ ] Add SFU per-room metrics: publisher count, subscriber count, active worker, queued bytes, dropped delta frames, delayed keyframes, fanout latency, broker lag, and reconnect count.

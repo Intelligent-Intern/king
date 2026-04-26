@@ -70,22 +70,30 @@ function videochat_sfu_chunk_outbound_frame_payload(
     }
 
     $frameId = videochat_sfu_create_frame_id();
+    $payloadChars = strlen($chunkValue);
+    $transportMetadata = videochat_sfu_normalize_frame_transport_metadata($frame);
     $messages = [];
 
     for ($chunkIndex = 0; $chunkIndex < $chunkCount; $chunkIndex += 1) {
         $start = $chunkIndex * $chunkMaxChars;
+        $chunkPayload = substr($chunkValue, $start, $chunkMaxChars);
         $messages[] = [
             'type' => 'sfu/frame-chunk',
             'frame_id' => $frameId,
+            'protocol_version' => (int) ($transportMetadata['protocol_version'] ?? 1),
             'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
             'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
             'track_id' => (string) ($frame['track_id'] ?? ''),
             'timestamp' => (int) ($frame['timestamp'] ?? 0),
             'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
             'protection_mode' => (string) ($frame['protection_mode'] ?? 'transport_only'),
+            'frame_sequence' => (int) ($transportMetadata['frame_sequence'] ?? 0),
+            'sender_sent_at_ms' => (int) ($transportMetadata['sender_sent_at_ms'] ?? 0),
+            'payload_chars' => $payloadChars,
+            'chunk_payload_chars' => strlen($chunkPayload),
             'chunk_index' => $chunkIndex,
             'chunk_count' => $chunkCount,
-            $chunkField => substr($chunkValue, $start, $chunkMaxChars),
+            $chunkField => $chunkPayload,
         ];
     }
 
@@ -464,35 +472,47 @@ function videochat_sfu_parse_protected_frame_envelope(mixed $protectedFrame): ar
 /**
  * @return array<int|string, mixed>
  */
-function videochat_sfu_encode_stored_frame_payload(array $frameData, string $protectedFrame = '', string $dataBase64 = ''): array
+/**
+ * @param array<string, mixed> $frameMetadata
+ * @return array<string|int, mixed>
+ */
+function videochat_sfu_encode_stored_frame_payload(
+    array $frameData,
+    string $protectedFrame = '',
+    string $dataBase64 = '',
+    array $frameMetadata = []
+): array
 {
+    $metadata = videochat_sfu_normalize_frame_transport_metadata($frameMetadata);
     if ($protectedFrame === '') {
         if ($dataBase64 !== '') {
-            return [
+            return array_merge([
                 'data_base64' => $dataBase64,
                 'protection_mode' => 'transport_only',
-            ];
+            ], $metadata);
         }
-        return $frameData;
+        return array_merge(['data' => $frameData, 'protection_mode' => 'transport_only'], $metadata);
     }
-    return [
+    return array_merge([
         'protected_frame' => $protectedFrame,
-        'protection_mode' => 'protected',
-    ];
+        'protection_mode' => (string) ($metadata['protection_mode'] ?? 'protected'),
+    ], $metadata);
 }
 
 /**
- * @return array{data: array<int, mixed>, data_base64: string, protected_frame: string, protection_mode: string}
+ * @return array{data: array<int, mixed>, data_base64: string, protected_frame: string, protection_mode: string, metadata: array<string, mixed>}
  */
 function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
 {
+    $metadata = videochat_sfu_normalize_frame_transport_metadata($decodedData);
     $protectedFrame = is_string($decodedData['protected_frame'] ?? null) ? trim((string) $decodedData['protected_frame']) : '';
     if ($protectedFrame !== '') {
         return [
             'data' => [],
             'data_base64' => '',
             'protected_frame' => $protectedFrame,
-            'protection_mode' => 'protected',
+            'protection_mode' => (string) ($metadata['protection_mode'] ?? 'protected'),
+            'metadata' => $metadata,
         ];
     }
 
@@ -503,6 +523,7 @@ function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
             'data_base64' => $dataBase64,
             'protected_frame' => '',
             'protection_mode' => 'transport_only',
+            'metadata' => $metadata,
         ];
     }
 
@@ -512,6 +533,7 @@ function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
             'data_base64' => '',
             'protected_frame' => '',
             'protection_mode' => 'transport_only',
+            'metadata' => $metadata,
         ];
     }
 
@@ -520,7 +542,46 @@ function videochat_sfu_decode_stored_frame_payload(array $decodedData): array
         'data_base64' => '',
         'protected_frame' => '',
         'protection_mode' => 'transport_only',
+        'metadata' => $metadata,
     ];
+}
+
+/**
+ * @param array<string|int, mixed> $source
+ * @return array<string, mixed>
+ */
+function videochat_sfu_normalize_frame_transport_metadata(array $source): array
+{
+    $metadata = [];
+    $protocolVersion = (int) ($source['protocol_version'] ?? ($source['protocolVersion'] ?? 0));
+    if ($protocolVersion > 0) {
+        $metadata['protocol_version'] = min(100, $protocolVersion);
+    }
+    $frameSequence = (int) ($source['frame_sequence'] ?? ($source['frameSequence'] ?? 0));
+    if ($frameSequence > 0) {
+        $metadata['frame_sequence'] = $frameSequence;
+    }
+    $senderSentAtMs = (int) ($source['sender_sent_at_ms'] ?? ($source['senderSentAtMs'] ?? 0));
+    if ($senderSentAtMs > 0) {
+        $metadata['sender_sent_at_ms'] = $senderSentAtMs;
+    }
+    $payloadChars = (int) ($source['payload_chars'] ?? ($source['payloadChars'] ?? 0));
+    if ($payloadChars > 0) {
+        $metadata['payload_chars'] = $payloadChars;
+    }
+    $chunkCount = (int) ($source['chunk_count'] ?? ($source['chunkCount'] ?? 0));
+    if ($chunkCount > 0) {
+        $metadata['chunk_count'] = min(4096, $chunkCount);
+    }
+    $frameId = trim((string) ($source['frame_id'] ?? ($source['frameId'] ?? '')));
+    if ($frameId !== '' && preg_match('/^[A-Za-z0-9._:-]{1,160}$/', $frameId) === 1) {
+        $metadata['frame_id'] = $frameId;
+    }
+    $protectionMode = strtolower(trim((string) ($source['protection_mode'] ?? ($source['protectionMode'] ?? ''))));
+    if (in_array($protectionMode, ['transport_only', 'protected', 'required'], true)) {
+        $metadata['protection_mode'] = $protectionMode;
+    }
+    return $metadata;
 }
 
 function videochat_sfu_insert_frame(
@@ -534,9 +595,10 @@ function videochat_sfu_insert_frame(
     array $frameData,
     string $protectedFrame = '',
     string $dataBase64 = '',
-    bool $touchPresence = true
+    bool $touchPresence = true,
+    array $frameMetadata = []
 ): void {
-    $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedFrame, $dataBase64);
+    $storedPayload = videochat_sfu_encode_stored_frame_payload($frameData, $protectedFrame, $dataBase64, $frameMetadata);
     $encodedData = json_encode($storedPayload, JSON_UNESCAPED_SLASHES);
     if (!is_string($encodedData)) {
         return;
@@ -726,6 +788,11 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
 
     $payload = $decoded;
     $payload['room_id'] = $normalizedBoundRoomId;
+    $payload['protocol_version'] = max(1, (int) ($decoded['protocol_version'] ?? ($decoded['protocolVersion'] ?? 1)));
+    $payload['frame_sequence'] = max(0, (int) ($decoded['frame_sequence'] ?? ($decoded['frameSequence'] ?? 0)));
+    $payload['sender_sent_at_ms'] = max(0, (int) ($decoded['sender_sent_at_ms'] ?? ($decoded['senderSentAtMs'] ?? 0)));
+    $payload['payload_chars'] = max(0, (int) ($decoded['payload_chars'] ?? ($decoded['payloadChars'] ?? 0)));
+    $payload['chunk_count'] = max(1, (int) ($decoded['chunk_count'] ?? ($decoded['chunkCount'] ?? 1)));
     if ($type === 'sfu/frame') {
         $protectionMode = strtolower(trim((string) ($decoded['protection_mode'] ?? ($decoded['protectionMode'] ?? 'transport_only'))));
         if (!in_array($protectionMode, ['transport_only', 'protected', 'required'], true)) {
@@ -867,6 +934,16 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
                 'error' => 'invalid_frame_chunk',
             ];
         }
+        $chunkPayloadChars = (int) ($decoded['chunk_payload_chars'] ?? ($decoded['chunkPayloadChars'] ?? strlen($chunkValue)));
+        if ($chunkPayloadChars !== strlen($chunkValue)) {
+            return [
+                'ok' => false,
+                'type' => $type,
+                'room_id' => $normalizedBoundRoomId,
+                'payload' => [],
+                'error' => 'invalid_frame_chunk',
+            ];
+        }
 
         if ($protectedChunk !== '') {
             if ($protectionMode === 'transport_only') {
@@ -899,6 +976,11 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
         $payload['frame_id'] = $frameId;
         $payload['chunk_index'] = $chunkIndex;
         $payload['chunk_count'] = $chunkCount;
+        $payload['protocol_version'] = max(1, (int) ($decoded['protocol_version'] ?? ($decoded['protocolVersion'] ?? 1)));
+        $payload['frame_sequence'] = max(0, (int) ($decoded['frame_sequence'] ?? ($decoded['frameSequence'] ?? 0)));
+        $payload['sender_sent_at_ms'] = max(0, (int) ($decoded['sender_sent_at_ms'] ?? ($decoded['senderSentAtMs'] ?? 0)));
+        $payload['payload_chars'] = max(0, (int) ($decoded['payload_chars'] ?? ($decoded['payloadChars'] ?? 0)));
+        $payload['chunk_payload_chars'] = $chunkPayloadChars;
     }
     return [
         'ok' => true,
@@ -967,6 +1049,7 @@ function videochat_sfu_poll_broker(
             continue;
         }
         $storedPayload = videochat_sfu_decode_stored_frame_payload($decodedData);
+        $storedMetadata = is_array($storedPayload['metadata'] ?? null) ? $storedPayload['metadata'] : [];
         $outboundFrame = [
             'type' => 'sfu/frame',
             'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
@@ -975,7 +1058,16 @@ function videochat_sfu_poll_broker(
             'timestamp' => (int) ($frame['timestamp'] ?? 0),
             'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
             'protection_mode' => (string) ($storedPayload['protection_mode'] ?? 'transport_only'),
+            'protocol_version' => (int) ($storedMetadata['protocol_version'] ?? 1),
+            'frame_sequence' => (int) ($storedMetadata['frame_sequence'] ?? 0),
+            'sender_sent_at_ms' => (int) ($storedMetadata['sender_sent_at_ms'] ?? 0),
+            'payload_chars' => (int) ($storedMetadata['payload_chars'] ?? 0),
+            'chunk_count' => (int) ($storedMetadata['chunk_count'] ?? 1),
         ];
+        $storedFrameId = trim((string) ($storedMetadata['frame_id'] ?? ''));
+        if ($storedFrameId !== '') {
+            $outboundFrame['frame_id'] = $storedFrameId;
+        }
         if (($storedPayload['protected_frame'] ?? '') !== '') {
             $outboundFrame['protected_frame'] = $storedPayload['protected_frame'];
         } elseif (($storedPayload['data_base64'] ?? '') !== '') {
