@@ -422,7 +422,7 @@ try {
   requireContains(encodePipeline, 'getSfuClientBufferedAmount()', 'WLVC encode loop checks websocket bufferedAmount');
   requireContains(encodePipeline, 'shouldDelayWlvcFrameForBackpressure(bufferedAmount)', 'WLVC encode loop waits for websocket low-water recovery');
   requireContains(encodePipeline, 'handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);', 'WLVC encode loop skips frames under websocket backpressure');
-  requireContains(encodePipeline, "resetWlvcEncoderAfterDroppedEncodedFrame('sfu_chunk_backpressure_abort')", 'WLVC encoder state resets after aborted chunk sends');
+  requireContains(encodePipeline, "handleWlvcFrameSendFailure(\n          getSfuClientBufferedAmount(),\n          videoTrack.id,\n          'sfu_chunk_send_failed'", 'WLVC encoder separates failed sends from websocket backpressure');
   requireContains(encodePipeline, 'const encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);', 'WLVC encode loop derives keyframe state from encoded payload header');
   requireContains(encodePipeline, "protectionMode: 'transport_only'", 'SFU encoder defaults to transport-only frames');
   requireContains(encodePipeline, 'outgoingFrame.protectedFrame = protectedFrame.protectedFrame;', 'SFU encoder upgrades to protected frame when available');
@@ -438,6 +438,11 @@ try {
   requireContains(handleBackpressure, "resetWlvcEncoderAfterDroppedEncodedFrame('sfu_send_backpressure_skip')", 'WLVC backpressure skips force the next frame to be a keyframe');
   requireContains(handleBackpressure, 'hd_baseline_no_auto_downgrade: true', 'HD baseline does not silently solve transport pressure by lowering quality');
   requireNotContains(handleBackpressure, "downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')", 'send-buffer backpressure must not silently downgrade the HD baseline');
+  requireContains(workspace, 'function handleWlvcFrameSendFailure', 'workspace handles failed SFU frame sends separately from bufferedAmount backpressure');
+  const handleFrameSendFailure = extractFunction(workspace, 'handleWlvcFrameSendFailure');
+  requireContains(handleFrameSendFailure, 'if (shouldDelayWlvcFrameForBackpressure(normalizedBuffered))', 'failed SFU frame sends only become backpressure when bufferedAmount is actually high');
+  requireContains(handleFrameSendFailure, "eventType: 'sfu_frame_send_failed'", 'failed SFU frame sends emit their own diagnostics');
+  requireContains(handleFrameSendFailure, 'hd_baseline_no_auto_downgrade: true', 'failed SFU frame sends do not silently lower the HD baseline');
   requireContains(workspace, 'function resetWlvcEncoderAfterDroppedEncodedFrame', 'workspace can reset WLVC encoder state after an unsent encoded frame');
   requireContains(workspace, 'wlvcBackpressurePauseUntilMs', 'WLVC send-buffer backpressure uses adaptive pacing instead of reconnect loops');
   requireContains(workspace, "eventType: 'sfu_video_backpressure'", 'WLVC send-buffer backpressure emits diagnostics');

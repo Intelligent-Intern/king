@@ -28,6 +28,7 @@ requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket
 requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_pressure'", 'sfu frame send pressure diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_aborted'", 'sfu frame send abort diagnostics hook');
+requireContains(workspace, "eventType: 'sfu_frame_send_failed'", 'workspace failed frame send diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_queue_pressure'", 'sfu frame send queue pressure diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_dropped'", 'sfu frame send queue drop diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'sfu keyframe queue blocking diagnostics hook');

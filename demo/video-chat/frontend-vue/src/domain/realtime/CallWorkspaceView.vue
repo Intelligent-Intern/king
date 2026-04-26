@@ -357,6 +357,7 @@ let wlvcBackpressureSkipCount = 0;
 let wlvcBackpressureFirstAtMs = 0;
 let wlvcBackpressureLastLogAtMs = 0;
 let wlvcBackpressurePauseUntilMs = 0;
+let wlvcFrameSendFailureLastLogAtMs = 0;
 let sfuAutoQualityDowngradeLastAtMs = 0;
 let sfuVideoRecoveryLastAtMs = 0;
 let mediaSecuritySyncInFlight = false;
@@ -557,6 +558,49 @@ function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
   })) {
     resetWlvcBackpressureCounters();
   }
+}
+
+function handleWlvcFrameSendFailure(bufferedAmount, trackId, reason = 'sfu_frame_send_failed') {
+  const normalizedBuffered = Math.max(0, Number(bufferedAmount || 0));
+  if (shouldDelayWlvcFrameForBackpressure(normalizedBuffered)) {
+    handleWlvcEncodeBackpressure(normalizedBuffered, trackId);
+    return;
+  }
+
+  const nowMs = Date.now();
+  resetWlvcEncoderAfterDroppedEncodedFrame(reason);
+  wlvcBackpressurePauseUntilMs = Math.max(
+    wlvcBackpressurePauseUntilMs,
+    nowMs + SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS
+  );
+
+  if ((nowMs - wlvcFrameSendFailureLastLogAtMs) < SFU_BACKPRESSURE_LOG_COOLDOWN_MS) {
+    return;
+  }
+  wlvcFrameSendFailureLastLogAtMs = nowMs;
+  console.warn(
+    '[KingRT] SFU frame send failed without websocket backpressure',
+    `reason=${String(reason || 'sfu_frame_send_failed')}`,
+    `buffered=${normalizedBuffered}`,
+    `track=${String(trackId || '')}`,
+    `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'sfu_frame_send_failed',
+    code: 'sfu_frame_send_failed',
+    message: 'Outgoing SFU video frame could not be sent even though the websocket send buffer is not above the backpressure threshold.',
+    payload: {
+      reason: String(reason || 'sfu_frame_send_failed'),
+      buffered_amount: normalizedBuffered,
+      forced_next_keyframe: true,
+      hd_baseline_no_auto_downgrade: true,
+      track_id: String(trackId || ''),
+      outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+      media_runtime_path: mediaRuntimePath.value,
+    },
+  });
 }
 
 function restartSfuAfterVideoStall(reason, payload = {}) {
@@ -8488,8 +8532,11 @@ async function startEncodingPipeline(videoTrack) {
 
       const frameSent = await sfuClientRef.value.sendEncodedFrame(outgoingFrame);
       if (frameSent === false) {
-        resetWlvcEncoderAfterDroppedEncodedFrame('sfu_chunk_backpressure_abort');
-        handleWlvcEncodeBackpressure(getSfuClientBufferedAmount(), videoTrack.id);
+        handleWlvcFrameSendFailure(
+          getSfuClientBufferedAmount(),
+          videoTrack.id,
+          'sfu_chunk_send_failed'
+        );
         return;
       }
       if (getSfuClientBufferedAmount() < SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES) {
