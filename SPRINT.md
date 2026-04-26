@@ -34,6 +34,19 @@ Non-negotiable contracts:
 - [ ] No client-created call, room, or admission authority.
 - [ ] SFU behavior must work across multiple King workers or explicitly pin/route room media to one worker.
 - [ ] Reconnect/retry logic must not create duplicate publishers, stale tracks, or bad-request leave/rejoin loops.
+- [ ] HD video must be stable before compression work starts: target 1280x720 at 30 fps, no tiled artifacts, no remote freeze, and no sustained sender backpressure for a 60 second two-participant call.
+
+HD-first video quality plan:
+- [ ] Treat the current pixelated/freezing stream as a transport correctness issue, not as a compression-quality issue.
+- [ ] Establish an HD baseline profile with camera capture at 1280x720, 30 fps, no forced low-resolution fallback, and no aggressive WLVC quality reduction while the transport is being debugged.
+- [ ] Move the realtime media hot path away from JSON/base64 frame carriage before tuning compression, because base64 chunking inflates payloads and amplifies websocket backpressure.
+- [ ] Prefer binary WebSocket/IIBIN or real WebRTC media transport for the HD baseline; only keep WLVC-over-JSON if instrumentation proves it can sustain HD without skipped frames.
+- [ ] Add a hard contract that any skipped, aborted, late, or missing frame sequence forces the next video frame to be a keyframe and resets stale decoder state.
+- [ ] Add bounded send queues with explicit drop policy: drop only obsolete delta frames, never silently drop keyframes, and surface all drops in diagnostics.
+- [ ] Add receiver-side frame continuity checks so out-of-order chunks, missing chunks, stale deltas, and decoder resets are visible instead of becoming tiled video.
+- [ ] Keep compression, quantizer tuning, lower FPS fallback, and adaptive downscale as phase-two optimizations after the HD baseline is stable.
+- [ ] Define an explicit quality gate: two real browser clients must show 720p remote video continuously for 60 seconds with zero `sfu_remote_video_stalled` events and no websocket buffer growth beyond the agreed high-water mark.
+- [ ] Record HD performance metrics in diagnostics: capture resolution, encode resolution, decoded resolution, fps, encode time, frame byte size, chunk count, send wait time, websocket bufferedAmount, broker latency, decode time, and rendered frame age.
 
 Investigation and hardening plan:
 - [ ] Instrument SFU sender and receiver diagnostics with frame byte size, encoded base64 size, chunk count, websocket bufferedAmount, dropped-frame reason, keyframe flag, publisher worker PID, subscriber worker PID, broker write latency, and broker poll lag.
