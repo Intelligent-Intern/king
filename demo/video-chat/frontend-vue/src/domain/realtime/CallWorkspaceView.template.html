@@ -1,0 +1,684 @@
+  <section class="view-card workspace-call-view">
+    <section v-if="workspaceError" class="workspace-call-banner error">
+      {{ workspaceError }}
+    </section>
+    <section v-if="nativeAudioSecurityBannerMessage" class="workspace-call-banner warning">
+      {{ nativeAudioSecurityBannerMessage }}
+    </section>
+    <section v-if="workspaceNotice" class="workspace-call-banner ok">
+      {{ workspaceNotice }}
+    </section>
+    <section v-if="aloneIdlePrompt.visible" class="workspace-idle-toast" role="alert">
+      <span class="workspace-idle-toast-text">
+        Are you still in the call? This call will close in {{ aloneIdleCountdownLabel }} unless you confirm.
+      </span>
+      <button class="workspace-idle-toast-btn" type="button" @click="confirmStillInCall">
+        Yes, I am in
+      </button>
+    </section>
+    <section class="workspace-call-body" :class="{ 'right-collapsed': rightSidebarCollapsed }">
+      <section
+        class="workspace-stage"
+        :class="{
+          compact: isCompactHeaderVisible,
+          'has-mini-strip': showMiniParticipantStrip,
+          'mini-strip-above': isCompactMiniStripAbove,
+          'layout-grid': currentLayoutMode === 'grid',
+          'layout-main-mini': currentLayoutMode === 'main_mini',
+          'layout-main-only': currentLayoutMode === 'main_only',
+        }"
+      >
+        <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
+          <button
+            class="workspace-compact-toggle workspace-compact-toggle-menu"
+            type="button"
+            title="Open left sidebar"
+            aria-label="Open left sidebar"
+            @click.stop="openLeftSidebarOverlay"
+          >
+            <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+          </button>
+          <img class="workspace-compact-logo" src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
+          <button
+            class="workspace-compact-toggle"
+            type="button"
+            title="Open right sidebar"
+            aria-label="Open right sidebar"
+            @click="showRightSidebar"
+          >
+            <img
+              class="arrow-icon-image workspace-compact-toggle-icon workspace-compact-toggle-icon-back"
+              src="/assets/orgas/kingrt/icons/forward.png"
+              alt=""
+            />
+          </button>
+        </header>
+
+        <article class="workspace-main-video">
+          <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
+            <article
+              v-for="participant in gridVideoParticipants"
+              :key="participant.userId"
+              class="workspace-grid-tile"
+            >
+              <div
+                :id="gridVideoSlotId(participant.userId)"
+                class="workspace-grid-video-slot"
+                :data-user-id="participant.userId"
+              ></div>
+              <span class="workspace-grid-title">{{ participant.displayName }}</span>
+            </article>
+          </section>
+          <template v-else>
+            <div id="local-video-container" class="video-container local"></div>
+            <div id="remote-video-container" class="video-container remote"></div>
+            <div id="decoded-video-container" class="video-container decoded"></div>
+          </template>
+
+          <div class="workspace-reaction-flight">
+            <span
+              v-for="burst in activeReactions"
+              :key="burst.id"
+              class="workspace-reaction-particle"
+              :style="{
+                '--start-x': `${burst.startXPx}px`,
+                '--delay': `${burst.delay}ms`,
+                '--duration': `${burst.duration}ms`,
+                '--travel-y': `${burst.travelY}px`,
+                '--wave': `${burst.wave}px`,
+                '--phase': `${burst.phase}deg`,
+                '--base-bottom': `${burst.baseBottom}px`,
+                '--scale': burst.scale,
+              }"
+            >
+              {{ burst.emoji }}
+            </span>
+          </div>
+        </article>
+
+        <button
+          v-if="showLeftSidebarRestoreButton"
+          class="show-sidebar-overlay show-left-sidebar-overlay workspace-show-left-btn"
+          type="button"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          @click.stop="openLeftSidebarOverlay"
+        >
+          <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+        </button>
+
+        <button
+          v-if="rightSidebarCollapsed && !isCompactHeaderVisible"
+          class="show-sidebar-overlay show-right-sidebar-overlay workspace-show-right-btn"
+          type="button"
+          title="Show sidebar"
+          aria-label="Show sidebar"
+          @click="showRightSidebar"
+        >
+          <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
+        </button>
+
+        <button
+          v-if="showChatUnreadToast"
+          class="workspace-chat-toast"
+          type="button"
+          title="Open chat"
+          aria-label="Open chat"
+          @click="openChatPanel"
+        >
+          <img class="workspace-chat-toast-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+        </button>
+
+        <button
+          v-if="showLobbyJoinToast"
+          class="workspace-lobby-toast"
+          type="button"
+          @click="openLobbyRequestsPanel"
+        >
+          <img class="workspace-lobby-toast-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+          <span class="workspace-lobby-toast-text">{{ lobbyJoinToastMessage }}</span>
+        </button>
+
+        <section v-if="showMiniParticipantStrip" class="workspace-mini-strip">
+          <button
+            v-if="showCompactMiniStripToggle"
+            class="workspace-mini-placement-toggle"
+            type="button"
+            :title="compactMiniStripToggleLabel"
+            :aria-label="compactMiniStripToggleLabel"
+            @click="toggleCompactMiniStripPlacement"
+          >
+            <img
+              class="workspace-mini-placement-icon"
+              :class="{ up: !isCompactMiniStripAbove, down: isCompactMiniStripAbove }"
+              src="/assets/orgas/kingrt/icons/forward.png"
+              alt=""
+            />
+          </button>
+          <article
+            v-for="participant in miniVideoParticipants"
+            :key="participant.userId"
+            class="workspace-mini-tile"
+          >
+            <div
+              :id="miniVideoSlotId(participant.userId)"
+              class="workspace-mini-video-slot"
+              :data-user-id="participant.userId"
+            ></div>
+            <div
+              v-if="!participantHasRenderableMedia(participant.userId)"
+              class="workspace-mini-video-placeholder"
+              aria-hidden="true"
+            >
+              <span class="workspace-mini-video-initials">{{ participantInitials(participant.displayName) }}</span>
+              <span class="workspace-mini-video-status">Connecting media</span>
+            </div>
+            <span class="workspace-mini-title">{{ participant.displayName }}</span>
+            <span class="workspace-mini-meta">{{ participant.role }}</span>
+          </article>
+          <article v-if="miniVideoParticipants.length === 0" class="workspace-mini-empty">
+            No users in this room yet.
+          </article>
+        </section>
+
+        <footer class="workspace-controls">
+          <div class="workspace-reactions-tray" :class="{ open: reactionTrayOpen }">
+            <button
+              v-for="emoji in reactionOptions"
+              :key="emoji"
+              class="workspace-reaction-btn"
+              type="button"
+              @click="emitReaction(emoji)"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: controlState.handRaised }"
+            title="Raise hand"
+            @click="toggleHandRaised"
+          >
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/hand.png" alt="" />
+          </button>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: reactionTrayOpen }"
+            title="Reactions"
+            @click="reactionTrayOpen = !reactionTrayOpen"
+          >
+            😀
+          </button>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: controlState.cameraEnabled }"
+            title="Toggle camera"
+            @click="toggleCamera"
+          >
+            <img
+              class="ctrl-icon-image"
+              :src="controlState.cameraEnabled
+                ? '/assets/orgas/kingrt/icons/camon.png'
+                : '/assets/orgas/kingrt/icons/cameraoff.png'"
+              alt=""
+            />
+          </button>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: controlState.micEnabled }"
+            title="Toggle microphone"
+            @click="toggleMicrophone"
+          >
+            <img
+              class="ctrl-icon-image"
+              :src="controlState.micEnabled
+                ? '/assets/orgas/kingrt/icons/micon.png'
+                : '/assets/orgas/kingrt/icons/micoff.png'"
+              alt=""
+            />
+          </button>
+
+          <button
+            class="call-control-btn"
+            type="button"
+            :class="{ active: controlState.screenEnabled }"
+            title="Share screen"
+            @click="toggleScreenShare"
+          >
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/share_screen.png" alt="" />
+          </button>
+
+          <button class="call-control-btn hangup" type="button" title="Hang up" @click="hangupCall">
+            <img class="ctrl-icon-image" src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
+          </button>
+        </footer>
+      </section>
+
+      <aside class="workspace-context" :class="{ collapsed: rightSidebarCollapsed }">
+        <nav class="tabs tabs-right" role="tablist" aria-label="Call workspace context tabs">
+          <button
+            class="tab"
+            :class="{ active: activeTab === 'users' }"
+            type="button"
+            role="tab"
+            aria-label="Users"
+            title="Users"
+            :aria-selected="activeTab === 'users'"
+            @click="setActiveTab('users')"
+          >
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/users.png" alt="" />
+          </button>
+          <button
+            v-if="showLobbyTab"
+            class="tab tab-lobby"
+            :class="{ active: activeTab === 'lobby' }"
+            type="button"
+            role="tab"
+            aria-label="Lobby"
+            title="Lobby"
+            :aria-selected="activeTab === 'lobby'"
+            @click="setActiveTab('lobby')"
+          >
+            <span class="tab-icon-wrap">
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
+              <span v-if="showLobbyRequestBadge" class="tab-notice-badge">{{ lobbyRequestBadgeText }}</span>
+            </span>
+          </button>
+          <button
+            class="tab"
+            :class="{ active: activeTab === 'chat' }"
+            type="button"
+            role="tab"
+            aria-label="Chat"
+            title="Chat"
+            :aria-selected="activeTab === 'chat'"
+            @click="setActiveTab('chat')"
+          >
+            <span class="tab-icon-wrap">
+              <img class="tab-icon" src="/assets/orgas/kingrt/icons/chat.png" alt="" />
+              <span v-if="showChatUnreadBadge" class="tab-chat-unread-badge" aria-label="Unread chat messages"></span>
+            </span>
+          </button>
+          <button
+            class="tab tab-toggle"
+            type="button"
+            title="Hide sidebar"
+            aria-label="Hide sidebar"
+            @click="hideRightSidebar"
+          >
+            <img class="tab-icon" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+          </button>
+        </nav>
+
+        <section class="tab-panel panel-users" :class="{ active: activeTab === 'users' }">
+          <div class="toolbar">
+            <input
+              v-model="usersSearch"
+              class="search"
+              type="search"
+              placeholder="Search users"
+              @input="onUsersSearchInput"
+            />
+          </div>
+          <p v-if="usersSourceMode === 'directory' && usersDirectoryLoading" class="workspace-tab-hint">
+            Loading server-backed user directory…
+          </p>
+          <p v-if="usersSourceMode === 'directory' && usersDirectoryPagination.error" class="workspace-tab-hint error">
+            {{ usersDirectoryPagination.error }}
+          </p>
+
+          <ul
+            ref="usersListRef"
+            class="user-list"
+            @scroll.passive="onUsersListScroll"
+          >
+            <li
+              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingTop > 0"
+              class="user-list-spacer"
+              :style="{ height: `${usersVirtualWindow.paddingTop}px` }"
+            ></li>
+            <li
+              v-for="row in usersVisibleRows"
+              :key="row.userId"
+              class="user-row"
+              :class="{ self: row.userId === currentUserId, pinned: pinnedUsers[row.userId] === true, pending: rowActionPending(row.userId) }"
+            >
+            <div class="user-preview">{{ initials(row.displayName) }}</div>
+              <div class="user-main">
+                <strong class="user-name">{{ row.displayName }}</strong>
+                <span class="user-role">{{ row.callRole }}</span>
+                <span class="user-status-line">
+                  <span v-if="activityLabelForUser(row.userId)" class="user-activity-pill">
+                    {{ activityLabelForUser(row.userId) }}
+                  </span>
+                  <span v-if="row.controlBadge" class="user-feedback">{{ row.controlBadge }}</span>
+                  <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
+                </span>
+              </div>
+            <div class="actions-inline">
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="mutedUsers[row.userId] ? 'Unmute peer' : 'Mute peer'"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
+                @click="toggleUserMuted(row.userId)"
+              >
+                <img
+                  :src="mutedUsers[row.userId]
+                      ? '/assets/orgas/kingrt/icons/micoff.png'
+                      : '/assets/orgas/kingrt/icons/micon.png'"
+                    alt=""
+                  />
+                </button>
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="pinnedUsers[row.userId] ? 'Unpin user' : 'Pin user'"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
+                @click="togglePinned(row.userId)"
+              >
+                  <img
+                    :src="pinnedUsers[row.userId]
+                      ? '/assets/orgas/kingrt/icons/adminon.png'
+                      : '/assets/orgas/kingrt/icons/adminoff.png'"
+                    alt=""
+                  />
+                </button>
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="row.callRole === 'moderator' ? 'Set participant role' : 'Set moderator role'"
+                :disabled="!canModerate || !activeCallId || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
+                @click="toggleModeratorRole(row)"
+              >
+                  <img
+                    :src="row.callRole === 'moderator'
+                      ? '/assets/orgas/kingrt/icons/adminon.png'
+                      : '/assets/orgas/kingrt/icons/adminoff.png'"
+                    alt=""
+                  />
+                </button>
+              <button
+                class="icon-mini-btn"
+                type="button"
+                title="Transfer owner role"
+                :disabled="!canManageOwnerRole || !activeCallId || rowActionPending(row.userId) || !row.isRoomMember || row.callRole === 'owner'"
+                @click="transferOwnerRole(row)"
+              >
+                <img src="/assets/orgas/kingrt/icons/forward.png" alt="" />
+              </button>
+              <button
+                class="icon-mini-btn danger"
+                type="button"
+                title="Remove from lobby"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveFromLobby"
+                @click="removeLobbyUser(row.userId)"
+              >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
+              </div>
+            </li>
+            <li
+              v-if="usersPageRows.length > 0 && usersVirtualWindow.paddingBottom > 0"
+              class="user-list-spacer"
+              :style="{ height: `${usersVirtualWindow.paddingBottom}px` }"
+            ></li>
+            <li v-if="usersPageRows.length === 0" class="user-list-empty">
+              No users match the current filter.
+            </li>
+          </ul>
+
+          <footer class="footer workspace-tab-footer">
+            <div class="pagination">
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="usersPage <= 1"
+                @click="goToUsersPage(usersPage - 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous users page" />
+              </button>
+              <div class="page-info">
+                Page {{ usersPage }} / {{ usersPageCount }}
+                · {{ usersSourceMode === 'directory' ? usersDirectoryPagination.total : filteredUsers.length }} users
+              </div>
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="usersPage >= usersPageCount"
+                @click="goToUsersPage(usersPage + 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next users page" />
+              </button>
+            </div>
+          </footer>
+        </section>
+
+        <section v-if="showLobbyTab" class="tab-panel panel-lobby" :class="{ active: activeTab === 'lobby' }">
+          <div class="lobby-toolbar">
+            <div class="actions-inline lobby-toolbar-actions">
+              <button
+                class="icon-mini-btn"
+                type="button"
+                title="Allow all queued users"
+                :disabled="!isSocketOnline || !canModerate || lobbyQueue.length === 0"
+                @click="allowAllLobbyUsers"
+              >
+                <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="Allow all queued users" />
+              </button>
+            </div>
+          </div>
+
+          <ul
+            ref="lobbyListRef"
+            class="lobby-list"
+            @scroll.passive="onLobbyListScroll"
+          >
+            <li
+              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingTop > 0"
+              class="user-list-spacer"
+              :style="{ height: `${lobbyVirtualWindow.paddingTop}px` }"
+            ></li>
+            <li v-for="row in lobbyVisibleRows" :key="`${row.status}-${row.user_id}`" class="user-row">
+              <div class="user-preview">{{ initials(row.display_name) }}</div>
+              <div class="user-main">
+                <strong class="user-name">{{ row.display_name }}</strong>
+                <span class="user-role">{{ row.status }}</span>
+                <span v-if="row.feedback" class="user-feedback">{{ row.feedback }}</span>
+              </div>
+              <div class="actions-inline">
+                <button
+                  class="icon-mini-btn"
+                  type="button"
+                  title="Allow user"
+                  :disabled="!canModerate || row.status !== 'queued' || lobbyActionPending(row.user_id)"
+                  @click="allowLobbyUser(row.user_id)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
+                </button>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Remove user"
+                  :disabled="!canModerate || lobbyActionPending(row.user_id)"
+                  @click="removeLobbyUser(row.user_id)"
+                >
+                  <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                </button>
+              </div>
+            </li>
+            <li
+              v-if="lobbyPageRows.length > 0 && lobbyVirtualWindow.paddingBottom > 0"
+              class="user-list-spacer"
+              :style="{ height: `${lobbyVirtualWindow.paddingBottom}px` }"
+            ></li>
+            <li v-if="lobbyPageRows.length === 0" class="user-list-empty">
+              Lobby queue is currently empty.
+            </li>
+          </ul>
+
+          <footer class="footer workspace-tab-footer">
+            <div class="pagination">
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="lobbyPage <= 1"
+                @click="goToLobbyPage(lobbyPage - 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous lobby page" />
+              </button>
+              <div class="page-info">Page {{ lobbyPage }} / {{ lobbyPageCount }} · {{ lobbyRows.length }} entries</div>
+              <button
+                class="pager-btn pager-icon-btn"
+                type="button"
+                :disabled="lobbyPage >= lobbyPageCount"
+                @click="goToLobbyPage(lobbyPage + 1)"
+              >
+                <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next lobby page" />
+              </button>
+            </div>
+          </footer>
+        </section>
+
+        <section class="tab-panel panel-chat" :class="{ active: activeTab === 'chat' }">
+          <div ref="chatListRef" class="workspace-chat-list">
+            <article
+              v-for="message in activeMessages"
+              :key="message.id"
+              class="workspace-chat-message"
+              :class="{ mine: message.sender.user_id === currentUserId }"
+            >
+              <header>
+                <strong>{{ message.sender.display_name }}</strong>
+                <time>{{ formatTimestamp(message.server_time) }}</time>
+              </header>
+              <p v-if="message.text !== ''">{{ message.text }}</p>
+              <div v-if="message.attachments.length > 0" class="workspace-chat-attachments">
+                <a
+                  v-for="attachment in message.attachments"
+                  :key="attachment.id"
+                  class="workspace-chat-attachment"
+                  :href="attachment.download_url"
+                  target="_blank"
+                  rel="noopener"
+                  download
+                >
+                  <span class="workspace-chat-attachment-kind">{{ attachment.kind }}</span>
+                  <span class="workspace-chat-attachment-name">{{ attachment.name }}</span>
+                  <span class="workspace-chat-attachment-size">{{ formatBytes(attachment.size_bytes) }}</span>
+                </a>
+              </div>
+            </article>
+            <article v-if="activeMessages.length === 0" class="workspace-chat-empty">
+              No chat messages yet.
+            </article>
+          </div>
+
+          <p v-if="typingUsers.length > 0" class="workspace-typing">
+            {{ typingUsers.join(', ') }} typing…
+          </p>
+
+          <form
+            class="workspace-chat-compose"
+            :class="{ dragging: chatAttachmentDragActive }"
+            @submit.prevent="sendChatMessage"
+            @dragenter.prevent="chatAttachmentDragActive = true"
+            @dragover.prevent="chatAttachmentDragActive = true"
+            @dragleave.prevent="chatAttachmentDragActive = false"
+            @drop.prevent="handleChatAttachmentDrop"
+          >
+            <div v-if="chatAttachmentError !== ''" class="workspace-chat-attachment-error">
+              {{ chatAttachmentError }}
+            </div>
+            <div v-if="chatAttachmentDrafts.length > 0" class="workspace-chat-drafts">
+              <article
+                v-for="draft in chatAttachmentDrafts"
+                :key="draft.localId"
+                class="workspace-chat-draft"
+              >
+                <div class="workspace-chat-draft-main">
+                  <input
+                    class="workspace-chat-draft-name"
+                    type="text"
+                    :value="draft.name"
+                    aria-label="Attachment filename"
+                    @input="updateChatAttachmentDraftName(draft.localId, $event.target.value)"
+                  />
+                  <span>{{ draft.kind }} · {{ formatBytes(draft.sizeBytes) }}</span>
+                </div>
+                <p v-if="draft.preview" class="workspace-chat-draft-preview">{{ draft.preview }}</p>
+                <button
+                  class="icon-mini-btn danger"
+                  type="button"
+                  title="Remove attachment"
+                  aria-label="Remove attachment"
+                  @click="removeChatAttachmentDraft(draft.localId)"
+                >
+                  ×
+                </button>
+              </article>
+            </div>
+            <div v-if="chatEmojiTrayOpen" class="workspace-chat-emoji-tray">
+              <button
+                v-for="emoji in chatEmojiOptions"
+                :key="emoji"
+                class="workspace-chat-emoji-btn"
+                type="button"
+                @click="insertChatEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+            <button
+              class="icon-mini-btn chat-emoji-toggle"
+              type="button"
+              :class="{ active: chatEmojiTrayOpen }"
+              title="Add emoji"
+              aria-label="Add emoji"
+              @click="toggleChatEmojiTray"
+            >
+              🙂
+            </button>
+            <button
+              class="icon-mini-btn"
+              type="button"
+              title="Add attachment"
+              aria-label="Add attachment"
+              @click="openChatAttachmentPicker"
+            >
+              +
+            </button>
+            <input
+              ref="chatAttachmentInputRef"
+              class="workspace-chat-file-input"
+              type="file"
+              multiple
+              accept=".jpg,.jpeg,.png,.webp,.gif,.txt,.csv,.md,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp"
+              @change="handleChatAttachmentPick"
+            />
+            <input
+              ref="chatInputRef"
+              v-model="chatDraft"
+              class="search"
+              type="text"
+              maxlength="2000"
+              placeholder="Write a message"
+              @input="handleChatInput"
+              @paste="handleChatPaste"
+            />
+            <button class="icon-mini-btn" type="submit" :disabled="!canSubmitChatMessage">
+              <img src="/assets/orgas/kingrt/icons/send.png" alt="Send" />
+            </button>
+          </form>
+        </section>
+      </aside>
+    </section>
+  </section>
