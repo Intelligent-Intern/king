@@ -290,8 +290,9 @@ try {
   assert.match(workspaceSource, /attachNativeReceiverTransform/, 'workspace must attach native receiver transform hooks');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
+  const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
   assert.match(sfuClientSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
-  assert.match(sfuClientSource, /payload\.protected_frame = frame\.protectedFrame/, 'SFU sender must relay protected transport envelope');
+  assert.match(sfuFramePayloadSource, /payload\.protected_frame = protectedFrame/, 'SFU sender must relay protected transport envelope');
   assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
 

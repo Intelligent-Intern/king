@@ -97,6 +97,8 @@ try {
   requireContains(workspace, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
   requireContains(workspace, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');
   requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
+  requireContains(workspace, "scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame'", 'malformed native protected frames rebuild the audio bridge instead of staying stalled');
+  requireContains(workspace, 'requireMissingTrack: false', 'malformed native frame recovery does not skip rebuild just because a muted remote track object exists');
   requireContains(workspace, "peerState === 'capability_ready'", 'handshake retry covers capability_ready sender-key deadlocks');
   requireContains(workspace, 'mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());', 'missing sender-key schedules handshake watchdog');
   requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted')", 'accepted sender-key resyncs native audio tracks');

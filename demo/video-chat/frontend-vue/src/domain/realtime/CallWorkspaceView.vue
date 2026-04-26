@@ -1542,9 +1542,18 @@ function handleNativeMediaSecurityFrameError(event = {}) {
     });
   }
 
-  if (direction !== 'receiver' || !shouldRecoverMediaSecurityFromFrameError(error)) return;
+  const shouldRecoverReceiver = shouldRecoverMediaSecurityFromFrameError(error) || transientFrameDrop;
+  if (direction !== 'receiver' || !shouldRecoverReceiver) return;
   if (!Number.isInteger(senderUserId) || senderUserId <= 0 || senderUserId === currentUserId.value) return;
   recoverMediaSecurityForPublisher(senderUserId);
+  if (transientFrameDrop) {
+    const peer = nativePeerConnectionsRef.value.get(senderUserId);
+    if (peer && scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame', {
+      requireMissingTrack: false,
+    })) {
+      return;
+    }
+  }
   resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error');
 }
 
@@ -6071,10 +6080,12 @@ function resetNativeAudioTrackRecovery(userId) {
   nativeAudioTrackRecoveryAttemptsByUserId.delete(normalizedUserId);
 }
 
-function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
+function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track', options = {}) {
   const normalizedUserId = Number(peer?.userId || 0);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
   if (!shouldUseNativeAudioBridge()) return false;
+  const requireMissingTrack = options?.requireMissingTrack !== false;
+  const recoveryKind = requireMissingTrack ? 'missing_track' : 'frame_transform';
 
   const currentAttempt = Number(nativeAudioTrackRecoveryAttemptsByUserId.get(normalizedUserId) || 0);
   if (currentAttempt >= NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS) {
@@ -6090,7 +6101,9 @@ function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
   const nextAttempt = currentAttempt + 1;
   nativeAudioTrackRecoveryAttemptsByUserId.set(normalizedUserId, nextAttempt);
   console.warn(
-    '[KingRT] native audio bridge missing track - rebuilding peer',
+    requireMissingTrack
+      ? '[KingRT] native audio bridge missing track - rebuilding peer'
+      : '[KingRT] native audio bridge media-security frame failed - rebuilding peer',
     `user=${normalizedUserId}`,
     `attempt=${nextAttempt}/${NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS}`,
     nativePeerConnectionTelemetry(peer),
@@ -6100,9 +6113,12 @@ function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
     level: 'warning',
     eventType: 'native_audio_track_recovery',
     code: 'native_audio_track_recovery',
-    message: 'Native protected audio bridge connected without a remote audio track; rebuilding peer connection.',
+    message: requireMissingTrack
+      ? 'Native protected audio bridge connected without a remote audio track; rebuilding peer connection.'
+      : 'Native protected audio bridge received an unprotected or malformed frame; rebuilding peer connection.',
     payload: {
       reason: String(reason || 'missing_track'),
+      recovery_kind: recoveryKind,
       attempt: nextAttempt,
       media_runtime_path: mediaRuntimePath.value,
       security: nativeAudioSecurityTelemetrySnapshot(),
@@ -6114,7 +6130,7 @@ function scheduleNativeAudioTrackRecovery(peer, reason = 'missing_track') {
   setTimeout(() => {
     if (!shouldUseNativeAudioBridge()) return;
     const currentPeer = nativePeerConnectionsRef.value.get(normalizedUserId);
-    if (currentPeer && streamHasLiveTrackKind(currentPeer.remoteStream, 'audio')) {
+    if (requireMissingTrack && currentPeer && streamHasLiveTrackKind(currentPeer.remoteStream, 'audio')) {
       resetNativeAudioTrackRecovery(normalizedUserId);
       return;
     }
