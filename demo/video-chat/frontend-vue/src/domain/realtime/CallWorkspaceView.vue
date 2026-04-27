@@ -511,9 +511,12 @@ let isNativeWebRtcRuntimePath = () => false;
 let isWlvcRuntimePath = () => false;
 let nativeAudioBridgeFailureMessage = () => defaultNativeAudioBridgeFailureMessage();
 let resetWlvcEncoderAfterDroppedEncodedFrame = () => {};
+let resetBackgroundRuntimeMetrics = () => {};
+let restartSfuAfterVideoStall = () => {};
 let shouldBlockNativeRuntimeSignaling = () => false;
 let shouldUseNativeAudioBridge = () => false;
 let startRemoteVideoStallTimer = () => {};
+let stopActivityMonitor = () => {};
 
 const routeCallRef = computed(() => String(route.params.callRef || '').trim());
 const desiredRoomId = computed(() => normalizeRoomId(routeCallResolve.roomId || routeCallRef.value || 'lobby'));
@@ -1093,6 +1096,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     evaluateBackgroundFilterGates,
     hasRenderableMediaForParticipant,
     hintMediaSecuritySync,
+    isWlvcRuntimePath: (...args) => isWlvcRuntimePath(...args),
     lookupMediaNodeForUserId,
     markParticipantActivity,
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
@@ -1114,13 +1118,17 @@ const mediaStack = createCallWorkspaceMediaStack({
     recoverMediaSecurityForPublisher,
     refreshCallMediaDevices,
     reconfigureLocalTracksFromSelectedDevices: (...args) => reconfigureLocalTracksFromSelectedDevices(...args),
+    remotePeerMediaNode,
+    resetBackgroundRuntimeMetrics: (...args) => resetBackgroundRuntimeMetrics(...args),
     resetCallBackgroundRuntimeState,
+    restartSfuAfterVideoStall: (...args) => restartSfuAfterVideoStall(...args),
     sendMediaSecurityHello,
     sendNativeOffer: (...args) => sendNativeOffer(...args),
     sendSocketFrame,
     shouldRecoverMediaSecurityFromFrameError,
     shouldSendTransportOnlySfuFrame,
     shouldSyncNativeLocalTracksBeforeOffer: (...args) => shouldSyncNativeLocalTracksBeforeOffer(...args),
+    stopActivityMonitor: (...args) => stopActivityMonitor(...args),
     stopSfuTrackAnnounceTimer,
     syncNativePeerConnectionsWithRoster: (...args) => syncNativePeerConnectionsWithRoster(...args),
     syncNativePeerLocalTracks: (...args) => syncNativePeerLocalTracks(...args),
@@ -1282,10 +1290,10 @@ const {
   remoteDecoderRuntimeName,
   renderCallVideoLayout: renderCallVideoLayoutHelper,
   renderNativeRemoteVideos,
-  resetBackgroundRuntimeMetrics,
+  resetBackgroundRuntimeMetrics: resetBackgroundRuntimeMetricsHelper,
   resetWlvcBackpressureCounters,
   resetWlvcFrameSendFailureCounters,
-  restartSfuAfterVideoStall,
+  restartSfuAfterVideoStall: restartSfuAfterVideoStallHelper,
   setSfuRemotePeer,
   sfuTrackListHasVideo,
   sfuTrackRows,
@@ -1295,7 +1303,7 @@ const {
   shouldThrottleWlvcEncodeLoop,
   startActivityMonitor,
   startEncodingPipeline,
-  stopActivityMonitor,
+  stopActivityMonitor: stopActivityMonitorHelper,
   stopLocalEncodingPipeline,
   stopRetiredLocalStreams,
   teardownLocalPublisher,
@@ -1307,6 +1315,9 @@ const {
 applyCallOutputPreferences = applyCallOutputPreferencesHelper;
 
 renderCallVideoLayout = renderCallVideoLayoutHelper;
+resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper;
+restartSfuAfterVideoStall = restartSfuAfterVideoStallHelper;
+stopActivityMonitor = stopActivityMonitorHelper;
 
 ({
   initSFU,
