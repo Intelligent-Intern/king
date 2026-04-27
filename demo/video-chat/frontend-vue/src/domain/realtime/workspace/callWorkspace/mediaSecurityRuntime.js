@@ -73,7 +73,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   async function checkMediaSecurityHandshakeTimeouts() {
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
-    const targetIds = mediaSecurityTargetIds();
+    const targetIds = mediaSecurityEligibleTargetIds();
     if (targetIds.length <= 0) return;
 
     const session = ensureMediaSecuritySession();
@@ -537,23 +537,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
       for (const targetUserId of marked.userIds) {
         await sendMediaSecurityHello(targetUserId);
         await sendMediaSecuritySenderKey(targetUserId);
-
-        const normalizedTargetId = Number(targetUserId || 0);
-        const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
-        const peerState = String(peer?.state || '').trim();
-        if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'capability_ready' || peerState === 'rekeying') {
-          const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
-          if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
-            console.warn(
-              '[KingRT] ⏳ Media-security handshake timeout for user',
-              normalizedTargetId,
-              `state=${peerState}`,
-              `elapsed=${Date.now() - helloSentAt}ms — force-retrying Hello`,
-            );
-            state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
-            await sendMediaSecurityHello(targetUserId, true);
-          }
-        }
       }
     } catch (error) {
       mediaDebugLog('[MediaSecurity] sync failed', error);
@@ -627,6 +610,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
     return state.nativeAudioBridgeQuarantineByUserId.has(normalizedUserId);
   }
 
+  function shouldReleaseNativeAudioBridgeQuarantineForReason(reason = 'security_ready') {
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    return normalizedReason === 'sender_key_accepted'
+      || normalizedReason === 'native_audio_track_recovery_rejoin';
+  }
+
   function shouldBypassNativeAudioProtectionForPeer(userId) {
     if (!shouldUseNativeAudioBridge()) return false;
     const normalizedUserId = Number(userId || 0);
@@ -677,6 +666,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
     if (!shouldMaintainNativePeerConnections()) return false;
     if (shouldUseNativeAudioBridge() && !ensureMediaSecuritySession().canProtectNativeForTargets([normalizedUserId])) return false;
+    if (
+      nativeAudioBridgeIsQuarantined(normalizedUserId)
+      && !shouldReleaseNativeAudioBridgeQuarantineForReason(reason)
+    ) {
+      return false;
+    }
+    if (nativeAudioBridgeIsQuarantined(normalizedUserId)) {
+      clearNativeAudioBridgeQuarantine(normalizedUserId);
+    }
 
     const peer = nativePeerConnectionsRef.value.get(normalizedUserId) || ensureNativePeerConnection(normalizedUserId);
     if (!peer?.pc || peer.pc.signalingState === 'closed') return false;

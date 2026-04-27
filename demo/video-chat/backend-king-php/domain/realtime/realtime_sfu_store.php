@@ -91,6 +91,24 @@ function videochat_sfu_binary_protection_mode_from_code(int $code): string
     };
 }
 
+function videochat_sfu_normalize_codec_id(string $codecId): string
+{
+    $normalized = strtolower(trim($codecId));
+    return match ($normalized) {
+        'wlvc_wasm', 'wlvc_ts' => $normalized,
+        default => 'wlvc_unknown',
+    };
+}
+
+function videochat_sfu_normalize_runtime_id(string $runtimeId): string
+{
+    $normalized = strtolower(trim($runtimeId));
+    return match ($normalized) {
+        'wlvc_sfu', 'webrtc_native' => $normalized,
+        default => 'unknown_runtime',
+    };
+}
+
 /**
  * @return array<int, array<string, mixed>>
  */
@@ -148,6 +166,8 @@ function videochat_sfu_chunk_outbound_frame_payload(
             'protection_mode' => (string) ($frame['protection_mode'] ?? 'transport_only'),
             'frame_sequence' => (int) ($transportMetadata['frame_sequence'] ?? 0),
             'sender_sent_at_ms' => (int) ($transportMetadata['sender_sent_at_ms'] ?? 0),
+            'codec_id' => (string) ($transportMetadata['codec_id'] ?? 'wlvc_unknown'),
+            'runtime_id' => (string) ($transportMetadata['runtime_id'] ?? 'unknown_runtime'),
             'payload_chars' => $payloadChars,
             'chunk_payload_chars' => strlen($chunkPayload),
             'chunk_index' => $chunkIndex,
@@ -624,11 +644,15 @@ function videochat_sfu_send_outbound_message(mixed $socket, array $payload): boo
 function videochat_sfu_extract_layout_metadata(array $frame): array
 {
     $layoutMode = strtolower(trim((string) ($frame['layout_mode'] ?? '')));
+    $metadata = [
+        'codec_id' => videochat_sfu_normalize_codec_id((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? ''))),
+        'runtime_id' => videochat_sfu_normalize_runtime_id((string) ($frame['runtime_id'] ?? ($frame['runtimeId'] ?? ''))),
+    ];
     if ($layoutMode === '') {
-        return [];
+        return $metadata;
     }
 
-    return [
+    return array_merge($metadata, [
         'layout_mode' => in_array($layoutMode, ['tile_foreground', 'background_snapshot'], true)
             ? $layoutMode
             : 'full_frame',
@@ -647,7 +671,7 @@ function videochat_sfu_extract_layout_metadata(array $frame): array
         'roi_norm_y' => max(0.0, min(1.0, (float) ($frame['roi_norm_y'] ?? 0))),
         'roi_norm_width' => max(0.0, min(1.0, (float) ($frame['roi_norm_width'] ?? 1))),
         'roi_norm_height' => max(0.0, min(1.0, (float) ($frame['roi_norm_height'] ?? 1))),
-    ];
+    ]);
 }
 
 function videochat_sfu_encode_layout_metadata_json(array $frame): string
@@ -696,6 +720,8 @@ function videochat_sfu_transport_metric_fields(array $payload, int $wirePayloadB
         'layout_mode' => $layoutMode,
         'layer_id' => $layerId,
         'transport_frame_kind' => $layoutMode . ':' . $layerId,
+        'codec_id' => videochat_sfu_normalize_codec_id((string) ($payload['codec_id'] ?? ($payload['codecId'] ?? ''))),
+        'runtime_id' => videochat_sfu_normalize_runtime_id((string) ($payload['runtime_id'] ?? ($payload['runtimeId'] ?? ''))),
         'cache_epoch' => max(0, (int) ($payload['cache_epoch'] ?? 0)),
         'tile_count' => count($tileIndices),
         'selection_tile_count' => max(0, (int) ($payload['selection_tile_count'] ?? 0)),
@@ -968,6 +994,8 @@ function videochat_sfu_normalize_frame_transport_metadata(array $source): array
     if ($frameId !== '' && preg_match('/^[A-Za-z0-9._:-]{1,160}$/', $frameId) === 1) {
         $metadata['frame_id'] = $frameId;
     }
+    $metadata['codec_id'] = videochat_sfu_normalize_codec_id((string) ($source['codec_id'] ?? ($source['codecId'] ?? '')));
+    $metadata['runtime_id'] = videochat_sfu_normalize_runtime_id((string) ($source['runtime_id'] ?? ($source['runtimeId'] ?? '')));
     $selectionTileCount = (int) ($source['selection_tile_count'] ?? ($source['selectionTileCount'] ?? 0));
     if ($selectionTileCount > 0) {
         $metadata['selection_tile_count'] = $selectionTileCount;
@@ -987,7 +1015,7 @@ function videochat_sfu_normalize_frame_transport_metadata(array $source): array
     if (in_array($protectionMode, ['transport_only', 'protected', 'required'], true)) {
         $metadata['protection_mode'] = $protectionMode;
     }
-    return $metadata;
+    return array_merge($metadata, videochat_sfu_extract_layout_metadata($source));
 }
 
 function videochat_sfu_insert_frame(
@@ -1018,6 +1046,22 @@ function videochat_sfu_insert_frame(
         'frame_sequence' => (int) ($frameMetadata['frame_sequence'] ?? 0),
         'sender_sent_at_ms' => (int) ($frameMetadata['sender_sent_at_ms'] ?? 0),
         'frame_id' => (string) ($frameMetadata['frame_id'] ?? ''),
+        'codec_id' => (string) ($frameMetadata['codec_id'] ?? ($frameMetadata['codecId'] ?? '')),
+        'runtime_id' => (string) ($frameMetadata['runtime_id'] ?? ($frameMetadata['runtimeId'] ?? '')),
+        'layout_mode' => (string) ($frameMetadata['layout_mode'] ?? ($frameMetadata['layoutMode'] ?? '')),
+        'layer_id' => (string) ($frameMetadata['layer_id'] ?? ($frameMetadata['layerId'] ?? '')),
+        'cache_epoch' => (int) ($frameMetadata['cache_epoch'] ?? ($frameMetadata['cacheEpoch'] ?? 0)),
+        'tile_columns' => (int) ($frameMetadata['tile_columns'] ?? ($frameMetadata['tileColumns'] ?? 0)),
+        'tile_rows' => (int) ($frameMetadata['tile_rows'] ?? ($frameMetadata['tileRows'] ?? 0)),
+        'tile_width' => (int) ($frameMetadata['tile_width'] ?? ($frameMetadata['tileWidth'] ?? 0)),
+        'tile_height' => (int) ($frameMetadata['tile_height'] ?? ($frameMetadata['tileHeight'] ?? 0)),
+        'tile_indices' => is_array($frameMetadata['tile_indices'] ?? ($frameMetadata['tileIndices'] ?? null))
+            ? array_values($frameMetadata['tile_indices'] ?? $frameMetadata['tileIndices'])
+            : [],
+        'roi_norm_x' => (float) ($frameMetadata['roi_norm_x'] ?? ($frameMetadata['roiNormX'] ?? 0)),
+        'roi_norm_y' => (float) ($frameMetadata['roi_norm_y'] ?? ($frameMetadata['roiNormY'] ?? 0)),
+        'roi_norm_width' => (float) ($frameMetadata['roi_norm_width'] ?? ($frameMetadata['roiNormWidth'] ?? 1)),
+        'roi_norm_height' => (float) ($frameMetadata['roi_norm_height'] ?? ($frameMetadata['roiNormHeight'] ?? 1)),
         'protection_mode' => (string) ($frameMetadata['protection_mode'] ?? ($protectedFrame !== '' ? 'protected' : 'transport_only')),
     ]);
     $encodedData = json_encode($storedPayload, JSON_UNESCAPED_SLASHES);
@@ -1513,6 +1557,22 @@ function videochat_sfu_poll_broker(
             'sender_sent_at_ms' => (int) ($storedMetadata['sender_sent_at_ms'] ?? 0),
             'payload_chars' => (int) ($storedMetadata['payload_chars'] ?? 0),
             'chunk_count' => (int) ($storedMetadata['chunk_count'] ?? 1),
+            'codec_id' => (string) ($storedMetadata['codec_id'] ?? 'wlvc_unknown'),
+            'runtime_id' => (string) ($storedMetadata['runtime_id'] ?? 'unknown_runtime'),
+            'layout_mode' => (string) ($storedMetadata['layout_mode'] ?? ''),
+            'layer_id' => (string) ($storedMetadata['layer_id'] ?? ''),
+            'cache_epoch' => (int) ($storedMetadata['cache_epoch'] ?? 0),
+            'tile_columns' => (int) ($storedMetadata['tile_columns'] ?? 0),
+            'tile_rows' => (int) ($storedMetadata['tile_rows'] ?? 0),
+            'tile_width' => (int) ($storedMetadata['tile_width'] ?? 0),
+            'tile_height' => (int) ($storedMetadata['tile_height'] ?? 0),
+            'tile_indices' => is_array($storedMetadata['tile_indices'] ?? null)
+                ? array_values($storedMetadata['tile_indices'])
+                : [],
+            'roi_norm_x' => (float) ($storedMetadata['roi_norm_x'] ?? 0),
+            'roi_norm_y' => (float) ($storedMetadata['roi_norm_y'] ?? 0),
+            'roi_norm_width' => (float) ($storedMetadata['roi_norm_width'] ?? 1),
+            'roi_norm_height' => (float) ($storedMetadata['roi_norm_height'] ?? 1),
         ];
         $storedFrameId = trim((string) ($storedMetadata['frame_id'] ?? ''));
         if ($storedFrameId !== '') {

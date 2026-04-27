@@ -1,4 +1,5 @@
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
+import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
 
 const SFU_FRAME_CHUNK_TTL_MS = 5000
 const SFU_FRAME_CHUNK_MAX_COUNT = 4096
@@ -17,6 +18,8 @@ interface PendingInboundFrameChunk {
   protocolVersion: number
   frameSequence: number
   senderSentAtMs: number
+  codecId: string
+  runtimeId: string
   layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
   layerId: 'full' | 'foreground' | 'background'
   cacheEpoch: number
@@ -86,22 +89,52 @@ export class SfuInboundFrameAssembler {
     const protocolVersion = integerField(1, msg.protocolVersion, msg.protocol_version)
     const frameSequence = Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence))
     const senderSentAtMs = Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms))
+    const codecId = stringField(msg.codecId, msg.codec_id) || 'wlvc_unknown'
+    const runtimeId = stringField(msg.runtimeId, msg.runtime_id) || 'unknown_runtime'
     const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
     const chunkPayloadChars = Math.max(0, integerField(chunkValue.length, msg.chunkPayloadChars, msg.chunk_payload_chars))
-    const layoutMode = normalizeLayoutMode(stringField(msg.layoutMode, msg.layout_mode))
-    const layerId = normalizeLayerId(stringField(msg.layerId, msg.layer_id))
-    const cacheEpoch = Math.max(0, integerField(0, msg.cacheEpoch, msg.cache_epoch))
-    const tileColumns = Math.max(0, integerField(0, msg.tileColumns, msg.tile_columns))
-    const tileRows = Math.max(0, integerField(0, msg.tileRows, msg.tile_rows))
-    const tileWidth = Math.max(0, integerField(0, msg.tileWidth, msg.tile_width))
-    const tileHeight = Math.max(0, integerField(0, msg.tileHeight, msg.tile_height))
-    const tileIndices = Array.isArray(msg.tileIndices ?? msg.tile_indices)
-      ? (msg.tileIndices ?? msg.tile_indices).map((entry: unknown) => Math.max(0, integerField(0, entry)))
-      : []
-    const roiNormX = normalizeUnitFloat(msg.roiNormX ?? msg.roi_norm_x, 0)
-    const roiNormY = normalizeUnitFloat(msg.roiNormY ?? msg.roi_norm_y, 0)
-    const roiNormWidth = normalizeUnitFloat(msg.roiNormWidth ?? msg.roi_norm_width, 1)
-    const roiNormHeight = normalizeUnitFloat(msg.roiNormHeight ?? msg.roi_norm_height, 1)
+    const tileMetadataInput = {
+      layoutMode: msg.layoutMode ?? msg.layout_mode,
+      layerId: msg.layerId ?? msg.layer_id,
+      cacheEpoch: msg.cacheEpoch ?? msg.cache_epoch,
+      tileColumns: msg.tileColumns ?? msg.tile_columns,
+      tileRows: msg.tileRows ?? msg.tile_rows,
+      tileWidth: msg.tileWidth ?? msg.tile_width,
+      tileHeight: msg.tileHeight ?? msg.tile_height,
+      tileIndices: msg.tileIndices ?? msg.tile_indices,
+      roiNormX: msg.roiNormX ?? msg.roi_norm_x,
+      roiNormY: msg.roiNormY ?? msg.roi_norm_y,
+      roiNormWidth: msg.roiNormWidth ?? msg.roi_norm_width,
+      roiNormHeight: msg.roiNormHeight ?? msg.roi_norm_height,
+    }
+    const normalizedTileMetadata = normalizeTilePatchMetadata(tileMetadataInput)
+    if (!normalizedTileMetadata && hasExplicitSfuTileMetadataFields(tileMetadataInput)) {
+      this.reportDiagnostic(
+        'sfu_frame_chunk_rejected',
+        'warning',
+        'SFU frame chunk used invalid tile/layer/cache metadata and was rejected.',
+        {
+          frame_id: frameId,
+          chunk_index: chunkIndex,
+          chunk_count: chunkCount,
+          reject_reason: 'invalid_tile_metadata',
+        },
+        true,
+      )
+      return null
+    }
+    const layoutMode = normalizedTileMetadata?.layoutMode || 'full_frame'
+    const layerId = normalizedTileMetadata?.layerId || 'full'
+    const cacheEpoch = Math.max(0, Number(normalizedTileMetadata?.cacheEpoch || 0))
+    const tileColumns = Math.max(0, Number(normalizedTileMetadata?.tileColumns || 0))
+    const tileRows = Math.max(0, Number(normalizedTileMetadata?.tileRows || 0))
+    const tileWidth = Math.max(0, Number(normalizedTileMetadata?.tileWidth || 0))
+    const tileHeight = Math.max(0, Number(normalizedTileMetadata?.tileHeight || 0))
+    const tileIndices = Array.isArray(normalizedTileMetadata?.tileIndices) ? normalizedTileMetadata.tileIndices : []
+    const roiNormX = Number(normalizedTileMetadata?.roiNormX ?? 0)
+    const roiNormY = Number(normalizedTileMetadata?.roiNormY ?? 0)
+    const roiNormWidth = Number(normalizedTileMetadata?.roiNormWidth ?? 1)
+    const roiNormHeight = Number(normalizedTileMetadata?.roiNormHeight ?? 1)
 
     if (
       frameId === ''
@@ -175,6 +208,8 @@ export class SfuInboundFrameAssembler {
         protocolVersion,
         frameSequence,
         senderSentAtMs,
+        codecId,
+        runtimeId,
         layoutMode,
         layerId,
         cacheEpoch,
@@ -202,6 +237,8 @@ export class SfuInboundFrameAssembler {
             senderSentAtMs,
             protocolVersion,
             protectionMode,
+            codecId,
+            runtimeId,
             layoutMode,
             layerId,
             cacheEpoch,
@@ -235,6 +272,8 @@ export class SfuInboundFrameAssembler {
       protocolVersion,
       frameSequence,
       senderSentAtMs,
+      codecId,
+      runtimeId,
       layoutMode,
       layerId,
       cacheEpoch,
@@ -355,6 +394,8 @@ export class SfuInboundFrameAssembler {
       senderSentAtMs: existing.senderSentAtMs,
       protocolVersion: existing.protocolVersion,
       protectionMode: existing.protectionMode,
+      codecId: existing.codecId,
+      runtimeId: existing.runtimeId,
       layoutMode: existing.layoutMode,
       layerId: existing.layerId,
       cacheEpoch: existing.cacheEpoch,
@@ -411,6 +452,8 @@ export class SfuInboundFrameAssembler {
       && existing.protocolVersion === next.protocolVersion
       && existing.frameSequence === next.frameSequence
       && existing.senderSentAtMs === next.senderSentAtMs
+      && existing.codecId === next.codecId
+      && existing.runtimeId === next.runtimeId
       && existing.layoutMode === next.layoutMode
       && existing.layerId === next.layerId
       && existing.cacheEpoch === next.cacheEpoch
@@ -463,6 +506,8 @@ function buildReassembledFrame(input: {
   frameType: 'keyframe' | 'delta'
   frameSequence: number
   senderSentAtMs: number
+  codecId: string
+  runtimeId: string
   protocolVersion: number
   protectionMode: 'transport_only' | 'protected' | 'required'
   layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
@@ -493,6 +538,8 @@ function buildReassembledFrame(input: {
     frame_type: input.frameType,
     frame_sequence: input.frameSequence,
     sender_sent_at_ms: input.senderSentAtMs,
+    codec_id: input.codecId,
+    runtime_id: input.runtimeId,
     protection_mode: input.protectionMode,
     layout_mode: input.layoutMode,
     layer_id: input.layerId,
@@ -528,16 +575,6 @@ function integerField(fallback: number, ...values: any[]): number {
     if (Number.isFinite(normalized)) return Math.floor(normalized)
   }
   return fallback
-}
-
-function normalizeLayoutMode(value: string): 'full_frame' | 'tile_foreground' | 'background_snapshot' {
-  if (value === 'tile_foreground' || value === 'background_snapshot') return value
-  return 'full_frame'
-}
-
-function normalizeLayerId(value: string): 'full' | 'foreground' | 'background' {
-  if (value === 'foreground' || value === 'background') return value
-  return 'full'
 }
 
 function normalizeUnitFloat(value: unknown, fallback: number): number {

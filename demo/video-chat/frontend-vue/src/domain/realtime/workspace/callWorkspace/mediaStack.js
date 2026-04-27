@@ -128,6 +128,7 @@ export function createCallWorkspaceMediaStack(options) {
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
     downgradeSfuVideoQualityAfterEncodePressure: callbacks.downgradeSfuVideoQualityAfterEncodePressure,
     getMediaRuntimePath: () => refs.mediaRuntimePath.value,
+    getSfuSendFailureDetails: () => refs.sfuClientRef.value?.getLastSendFailure?.() || null,
     getRemotePeerCount: () => refs.remotePeersRef.value.size,
     getShouldConnectSfu: () => refs.shouldConnectSfu.value,
     onRestartSfu: callbacks.onRestartSfu,

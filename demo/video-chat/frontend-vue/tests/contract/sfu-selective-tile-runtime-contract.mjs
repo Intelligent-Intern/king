@@ -30,23 +30,29 @@ try {
   requireContains(helper, 'matteMaskImageData?: ImageData | null', 'mask-aware planner options');
 
   const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-  requireContains(workspace, 'SFU_SELECTIVE_TILE_PATCH_ENABLED = true', 'workspace selective tile switch');
-  requireContains(workspace, 'SFU_BACKGROUND_SNAPSHOT_ENABLED = true', 'workspace background snapshot switch');
-  requireContains(workspace, 'planSelectiveTilePatch(imageData, previousFullFrameImageData', 'workspace selective patch send planning');
-  requireContains(workspace, 'planBackgroundSnapshotPatch(imageData, previousFullFrameImageData', 'workspace background snapshot send planning');
-  requireContains(workspace, 'backgroundFilterController.getCurrentMatteMaskSnapshot()', 'workspace sender reads current matte mask snapshot');
-  requireContains(workspace, 'ensureSelectivePatchEncoder', 'workspace selective patch encoder path');
-  requireContains(workspace, 'layoutMode: tilePatchMetadata.layoutMode', 'workspace outgoing frame carries tile patch metadata');
-  requireContains(workspace, "layoutMode: 'full_frame'", 'workspace full-frame sends carry explicit layout metadata');
-  requireContains(workspace, 'cacheEpoch: outgoingCacheEpoch', 'workspace full-frame sends carry cache epoch');
-  requireContains(workspace, 'ensureSfuRemotePatchDecoderForFrame', 'workspace remote patch decoder path');
-  requireContains(workspace, "layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot'", 'workspace remote selective patch render branch');
-  requireContains(workspace, 'function invalidateRemoteSfuTrackCache', 'workspace remote cache invalidation helper');
-  requireContains(workspace, 'function shouldDropRemoteSfuFrameForCacheEpoch', 'workspace remote cache epoch guard');
-  requireContains(workspace, "cache_epoch_mismatch", 'workspace logs cache epoch mismatch drops');
-  requireContains(workspace, 'function ensureRemoteSfuTrackRenderLayers', 'workspace remote layered render cache helper');
-  requireContains(workspace, 'function composeRemoteSfuTrackLayers', 'workspace remote layer compositing helper');
-  requireContains(workspace, 'trackRenderState.foregroundLayerActive = false', 'workspace clears stale foreground layer before recomposite');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+
+  requireContains(runtimeConfig, 'export const SFU_SELECTIVE_TILE_PATCH_ENABLED = true', 'workspace selective tile switch');
+  requireContains(runtimeConfig, 'export const SFU_BACKGROUND_SNAPSHOT_ENABLED = true', 'workspace background snapshot switch');
+  requireContains(workspace, 'SFU_SELECTIVE_TILE_PATCH_ENABLED', 'workspace imports selective tile runtime switch');
+  requireContains(workspace, 'SFU_BACKGROUND_SNAPSHOT_ENABLED', 'workspace imports background snapshot runtime switch');
+  requireContains(publisherPipeline, 'planSelectiveTilePatch(imageData, previousFullFrameImageData', 'workspace selective patch send planning');
+  requireContains(publisherPipeline, 'planBackgroundSnapshotPatch(imageData, previousFullFrameImageData', 'workspace background snapshot send planning');
+  requireContains(publisherPipeline, 'backgroundFilterController.getCurrentMatteMaskSnapshot()', 'workspace sender reads current matte mask snapshot');
+  requireContains(publisherPipeline, 'ensureSelectivePatchEncoder', 'workspace selective patch encoder path');
+  requireContains(publisherPipeline, 'layoutMode: tilePatchMetadata.layoutMode', 'workspace outgoing frame carries tile patch metadata');
+  requireContains(publisherPipeline, "layoutMode: 'full_frame'", 'workspace full-frame sends carry explicit layout metadata');
+  requireContains(publisherPipeline, 'cacheEpoch: outgoingCacheEpoch', 'workspace full-frame sends carry cache epoch');
+  requireContains(frameDecode, 'ensureSfuRemotePatchDecoderForFrame', 'workspace remote patch decoder path');
+  requireContains(frameDecode, "layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot'", 'workspace remote selective patch render branch');
+  requireContains(frameDecode, 'function invalidateRemoteSfuTrackCache', 'workspace remote cache invalidation helper');
+  requireContains(frameDecode, 'function shouldDropRemoteSfuFrameForCacheEpoch', 'workspace remote cache epoch guard');
+  requireContains(frameDecode, "cache_epoch_mismatch", 'workspace logs cache epoch mismatch drops');
+  requireContains(frameDecode, 'function ensureRemoteSfuTrackRenderLayers', 'workspace remote layered render cache helper');
+  requireContains(frameDecode, 'function composeRemoteSfuTrackLayers', 'workspace remote layer compositing helper');
+  requireContains(frameDecode, 'trackRenderState.foregroundLayerActive = false', 'workspace clears stale foreground layer before recomposite');
 
   const queue = read('src/lib/sfu/outboundFrameQueue.ts');
   requireContains(queue, 'SFU_FRAME_SEND_QUEUE_BACKGROUND_SNAPSHOT_MAX_AGE_MS', 'background snapshot queue max age');

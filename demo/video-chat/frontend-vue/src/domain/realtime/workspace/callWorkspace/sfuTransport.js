@@ -17,6 +17,7 @@ export function createSfuTransportController({
   captureClientDiagnostic,
   downgradeSfuVideoQualityAfterEncodePressure,
   getMediaRuntimePath,
+  getSfuSendFailureDetails,
   getRemotePeerCount,
   getShouldConnectSfu,
   onRestartSfu,
@@ -151,8 +152,15 @@ export function createSfuTransportController({
     }
   }
 
-  function handleWlvcFrameSendFailure(bufferedAmount, trackId, reason = 'sfu_frame_send_failed') {
-    const normalizedBuffered = Math.max(0, Number(bufferedAmount || 0));
+  function handleWlvcFrameSendFailure(bufferedAmount, trackId, reason = 'sfu_frame_send_failed', failureDetails = null) {
+    const details = failureDetails && typeof failureDetails === 'object'
+      ? failureDetails
+      : (typeof getSfuSendFailureDetails === 'function' ? getSfuSendFailureDetails() : null);
+    const normalizedBuffered = Math.max(
+      0,
+      Number(details?.bufferedAmount ?? bufferedAmount ?? 0),
+    );
+    const normalizedReason = String(details?.reason || reason || 'sfu_frame_send_failed');
     if (shouldDelayWlvcFrameForBackpressure(normalizedBuffered)) {
       handleWlvcEncodeBackpressure(normalizedBuffered, trackId);
       return;
@@ -168,13 +176,13 @@ export function createSfuTransportController({
     } else {
       state.wlvcFrameSendFailureCount += 1;
     }
-    resetWlvcEncoderAfterDroppedEncodedFrame(reason);
+    resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
     state.wlvcBackpressurePauseUntilMs = Math.max(
       state.wlvcBackpressurePauseUntilMs,
       nowMs + sfuWlvcBackpressureMinPauseMs
     );
     if (state.wlvcFrameSendFailureCount >= sfuAutoQualityDowngradeSendFailureThreshold) {
-      if (downgradeSfuVideoQualityAfterEncodePressure(String(reason || 'sfu_frame_send_failed'))) {
+      if (downgradeSfuVideoQualityAfterEncodePressure(normalizedReason)) {
         resetWlvcFrameSendFailureCounters();
         return;
       }
@@ -184,9 +192,16 @@ export function createSfuTransportController({
       return;
     }
     state.wlvcFrameSendFailureLastLogAtMs = nowMs;
+    const failureStage = String(details?.stage || 'unknown_stage');
+    const failureSource = String(details?.source || 'unknown_source');
+    const failureTransportPath = String(details?.transportPath || 'unknown_transport');
+    const failureMessage = String(details?.message || 'Outgoing SFU video frame send failed.');
     console.warn(
-      '[KingRT] SFU frame send failed without websocket backpressure',
-      `reason=${String(reason || 'sfu_frame_send_failed')}`,
+      '[KingRT] SFU frame send failed at exact transport stage',
+      `reason=${normalizedReason}`,
+      `stage=${failureStage}`,
+      `source=${failureSource}`,
+      `transport=${failureTransportPath}`,
       `buffered=${normalizedBuffered}`,
       `track=${String(trackId || '')}`,
       `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
@@ -196,15 +211,24 @@ export function createSfuTransportController({
       level: 'warning',
       eventType: 'sfu_frame_send_failed',
       code: 'sfu_frame_send_failed',
-      message: 'Outgoing SFU video frame could not be sent even though the websocket send buffer is not above the backpressure threshold.',
+      message: failureMessage,
       payload: {
-        reason: String(reason || 'sfu_frame_send_failed'),
+        reason: normalizedReason,
+        stage: failureStage,
+        source: failureSource,
+        transport_path: failureTransportPath,
         buffered_amount: normalizedBuffered,
         forced_next_keyframe: true,
         hd_baseline_no_auto_downgrade: true,
         track_id: String(trackId || ''),
         outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
         media_runtime_path: getMediaRuntimePath(),
+        queue_length: Math.max(0, Number(details?.queueLength || 0)),
+        queue_payload_chars: Math.max(0, Number(details?.queuePayloadChars || 0)),
+        active_payload_chars: Math.max(0, Number(details?.activePayloadChars || 0)),
+        chunk_count: Math.max(0, Number(details?.chunkCount || 0)),
+        payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
+        sender_timestamp: Math.max(0, Number(details?.timestamp || 0)),
       },
     });
   }

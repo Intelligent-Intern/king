@@ -37,6 +37,13 @@ export function createLocalPublisherPipelineHelpers({
     stopSfuTrackAnnounceTimer,
   } = callbacks;
 
+  function currentSfuCodecId(encoder) {
+    const constructorName = String(encoder?.constructor?.name || '').trim();
+    if (constructorName === 'WasmWaveletVideoEncoder') return 'wlvc_wasm';
+    if (constructorName === 'WaveletVideoEncoder') return 'wlvc_ts';
+    return 'wlvc_unknown';
+  }
+
   function uniqueLocalStreams(values) {
     const out = [];
     const seen = new Set();
@@ -487,6 +494,8 @@ export function createLocalPublisherPipelineHelpers({
           transportMetrics: tilePatchTransportMetrics,
           data: encoded.data,
           type: encodedFrameType,
+          codecId: currentSfuCodecId(tilePatchMetadata ? refs.videoPatchEncoderRef.value : refs.videoEncoderRef.value),
+          runtimeId: 'wlvc_sfu',
           protectionMode: 'transport_only',
           ...(tilePatchMetadata ? {
             layoutMode: tilePatchMetadata.layoutMode,
@@ -514,6 +523,7 @@ export function createLocalPublisherPipelineHelpers({
             const protectedFrame = await mediaSecurity.protectFrame({
               data: encoded.data,
               runtimePath: 'wlvc_sfu',
+              codecId: outgoingFrame.codecId,
               trackKind: 'video',
               frameKind: encodedFrameType,
               trackId: videoTrack.id,
@@ -546,7 +556,13 @@ export function createLocalPublisherPipelineHelpers({
 
         const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
         if (frameSent === false) {
-          handleWlvcFrameSendFailure(getSfuClientBufferedAmount(), videoTrack.id, 'sfu_chunk_send_failed');
+          const sfuSendFailureDetails = refs.sfuClientRef.value?.getLastSendFailure?.() || null;
+          handleWlvcFrameSendFailure(
+            getSfuClientBufferedAmount(),
+            videoTrack.id,
+            String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
+            sfuSendFailureDetails,
+          );
           return;
         }
         if (getSfuClientBufferedAmount() < constants.sendBufferHighWaterBytes) {

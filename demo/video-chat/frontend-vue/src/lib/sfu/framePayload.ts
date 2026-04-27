@@ -2,7 +2,6 @@ import {
   flattenTilePatchMetadata,
   normalizeTilePatchMetadata,
   parseTilePatchMetadataJson,
-  serializeTilePatchMetadata,
   type SfuTilePatchMetadata,
 } from './tilePatchMetadata'
 
@@ -15,6 +14,8 @@ export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2
 export type SfuFrameType = 'keyframe' | 'delta'
 export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
 export type SfuChunkField = 'data_base64_chunk' | 'protected_frame_chunk'
+export type SfuCodecId = 'wlvc_wasm' | 'wlvc_ts' | 'wlvc_unknown'
+export type SfuRuntimeId = 'wlvc_sfu' | 'webrtc_native' | 'unknown_runtime'
 
 export interface SfuOutboundFrameInput {
   publisherId: string
@@ -28,6 +29,8 @@ export interface SfuOutboundFrameInput {
   protectionMode?: SfuProtectionMode
   frameSequence?: number
   senderSentAtMs?: number
+  codecId?: SfuCodecId | string | null
+  runtimeId?: SfuRuntimeId | string | null
   tilePatch?: SfuTilePatchMetadata | null
   transportMetrics?: Record<string, unknown>
 }
@@ -36,6 +39,7 @@ export interface PreparedSfuOutboundFramePayload {
   payload: Record<string, unknown>
   chunkField: SfuChunkField | null
   chunkValue: string
+  payloadBytes: ArrayBuffer
   metrics: Record<string, unknown>
   rawByteLength: number
   projectedBinaryEnvelopeBytes: number
@@ -48,6 +52,8 @@ export interface PreparedSfuOutboundFramePayload {
   timestamp: number
   frameSequence: number
   senderSentAtMs: number
+  codecId: string
+  runtimeId: string
   tilePatch: SfuTilePatchMetadata | null
 }
 
@@ -57,6 +63,8 @@ export interface DecodedSfuBinaryFrameEnvelope {
   payloadByteLength: number
   protectedFrame: string | null
   dataBase64: string | null
+  codecId: string
+  runtimeId: string
   tilePatch: SfuTilePatchMetadata | null
 }
 
@@ -75,6 +83,10 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     frame_sequence: frameSequence,
     sender_sent_at_ms: senderSentAtMs,
   }
+  const codecId = normalizeCodecId(frame.codecId)
+  const runtimeId = normalizeRuntimeId(frame.runtimeId)
+  payload.codec_id = codecId
+  payload.runtime_id = runtimeId
   const transportMetrics = normalizeTransportMetrics(frame.transportMetrics)
   Object.assign(payload, transportMetrics)
   const tilePatch = normalizeTilePatchMetadata(frame.tilePatch || frame)
@@ -82,46 +94,49 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
 
   let chunkField: SfuChunkField | null = null
   let chunkValue = ''
+  let payloadBytes = frame.data instanceof ArrayBuffer ? frame.data : new ArrayBuffer(0)
 
   const protectedFrame = String(frame.protectedFrame || '').trim()
   if (protectedFrame !== '') {
     chunkField = 'protected_frame_chunk'
     chunkValue = protectedFrame
-    payload.protected_frame = protectedFrame
+    payloadBytes = base64UrlToArrayBuffer(protectedFrame)
     payload.protection_mode = normalizeProtectionMode(frame.protectionMode, 'protected')
   } else {
     chunkField = 'data_base64_chunk'
     chunkValue = String(frame.dataBase64 || '').trim()
-    if (chunkValue === '') {
-      chunkValue = arrayBufferToBase64Url(frame.data || new ArrayBuffer(0))
+    if (payloadBytes.byteLength <= 0 && chunkValue !== '') {
+      payloadBytes = base64UrlToArrayBuffer(chunkValue)
     }
-    payload.data_base64 = chunkValue
     payload.protection_mode = normalizeProtectionMode(frame.protectionMode, 'transport_only')
   }
 
-  const payloadChars = chunkValue.length
+  const payloadByteLength = Number(payloadBytes.byteLength || 0)
+  const payloadChars = chunkValue !== ''
+    ? chunkValue.length
+    : base64UrlEncodedLength(payloadByteLength)
   const chunkCount = frameChunkCount(payloadChars)
   const protectionMode = normalizeProtectionMode(payload.protection_mode, 'transport_only')
   payload.payload_chars = payloadChars
   payload.chunk_count = chunkCount
-  const payloadByteLength = protectedFrame !== '' || chunkValue !== ''
-    ? base64UrlToArrayBuffer(chunkValue).byteLength
-    : rawByteLength
   const roiAreaRatio = tilePatch
     ? Number((Math.max(0, Number(tilePatch.roiNormWidth || 0)) * Math.max(0, Number(tilePatch.roiNormHeight || 0))).toFixed(6))
     : 1
-  const projectedBinaryEnvelopeBytes = (tilePatch ? 46 : 40)
+  const metadataJson = serializeSfuEnvelopeMetadata({ tilePatch, codecId, runtimeId })
+  const metadataJsonBytes = encodeUtf8(metadataJson).byteLength
+  const projectedBinaryEnvelopeBytes = (metadataJsonBytes > 0 ? 46 : 40)
     + encodeUtf8(String(frame.publisherId || '')).byteLength
     + encodeUtf8(String(frame.publisherUserId || '')).byteLength
     + encodeUtf8(String(frame.trackId || '')).byteLength
     + encodeUtf8('').byteLength
-    + encodeUtf8(serializeTilePatchMetadata(tilePatch)).byteLength
+    + metadataJsonBytes
     + payloadByteLength
 
   return {
     payload,
     chunkField,
     chunkValue,
+    payloadBytes,
     rawByteLength,
     projectedBinaryEnvelopeBytes,
     payloadChars,
@@ -133,6 +148,8 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     timestamp: frame.timestamp,
     frameSequence,
     senderSentAtMs,
+    codecId,
+    runtimeId,
     tilePatch,
     metrics: {
       protocol_version: SFU_FRAME_PROTOCOL_VERSION,
@@ -141,6 +158,8 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       frame_type: frame.type,
       frame_sequence: frameSequence,
       sender_sent_at_ms: senderSentAtMs,
+      codec_id: codecId,
+      runtime_id: runtimeId,
       protection_mode: protectionMode,
       raw_byte_length: rawByteLength,
       payload_bytes: payloadByteLength,
@@ -188,7 +207,9 @@ export function frameChunkCount(payloadChars: number): number {
 }
 
 export function encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFramePayload): ArrayBuffer | null {
-  const payloadBytes = base64UrlToArrayBuffer(prepared.chunkValue)
+  const payloadBytes = prepared.payloadBytes instanceof ArrayBuffer
+    ? prepared.payloadBytes
+    : new ArrayBuffer(0)
   const payloadByteLength = Number(payloadBytes.byteLength || 0)
   if (payloadByteLength <= 0) return null
 
@@ -196,7 +217,7 @@ export function encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFrameP
   const publisherUserIdBytes = encodeUtf8(String(prepared.payload.publisher_user_id || ''))
   const trackIdBytes = encodeUtf8(prepared.trackId)
   const frameIdBytes = encodeUtf8(String(prepared.payload.frame_id || ''))
-  const metadataJsonBytes = encodeUtf8(serializeTilePatchMetadata(prepared.tilePatch))
+  const metadataJsonBytes = encodeUtf8(serializeSfuEnvelopeMetadata(prepared))
   const envelopeVersion = metadataJsonBytes.byteLength > 0
     ? SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION
     : SFU_BINARY_FRAME_ENVELOPE_VERSION
@@ -313,6 +334,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   offset += metadataJsonByteLength
   const payloadBytes = bytes.slice(offset, offset + payloadByteLength).buffer
   const tilePatch = parseTilePatchMetadataJson(metadataJson)
+  const { codecId, runtimeId } = parseSfuEnvelopeMetadata(metadataJson)
 
   const protectedFrame = protectionMode === 'transport_only' ? null : arrayBufferToBase64Url(payloadBytes)
   const dataBase64 = protectionMode === 'transport_only' ? arrayBufferToBase64Url(payloadBytes) : null
@@ -322,6 +344,8 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
     payloadByteLength,
     protectedFrame,
     dataBase64,
+    codecId,
+    runtimeId,
     tilePatch,
     payload: {
       type: 'sfu/frame',
@@ -334,6 +358,8 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
       protection_mode: protectionMode,
       frame_sequence: frameSequence,
       sender_sent_at_ms: senderSentAtMs,
+      codec_id: codecId,
+      runtime_id: runtimeId,
       payload_bytes: payloadByteLength,
       payload_chars: payloadByteLength,
       chunk_count: 1,
@@ -384,6 +410,59 @@ function normalizeProtectionMode(value: unknown, fallback: SfuProtectionMode): S
     return normalized
   }
   return fallback
+}
+
+function normalizeCodecId(value: unknown): string {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts') return normalized
+  return 'wlvc_unknown'
+}
+
+function normalizeRuntimeId(value: unknown): string {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'wlvc_sfu' || normalized === 'webrtc_native') return normalized
+  return 'unknown_runtime'
+}
+
+function serializeSfuEnvelopeMetadata(input: {
+  tilePatch?: SfuTilePatchMetadata | null
+  codecId?: string | null
+  runtimeId?: string | null
+}): string {
+  const tilePatch = normalizeTilePatchMetadata(input.tilePatch)
+  const metadata: Record<string, unknown> = {
+    codec_id: normalizeCodecId(input.codecId),
+    runtime_id: normalizeRuntimeId(input.runtimeId),
+  }
+  Object.assign(metadata, flattenTilePatchMetadata(tilePatch))
+  return JSON.stringify(metadata)
+}
+
+function parseSfuEnvelopeMetadata(value: string): {
+  codecId: string
+  runtimeId: string
+} {
+  try {
+    const parsed = JSON.parse(String(value || ''))
+    if (!parsed || typeof parsed !== 'object') {
+      return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime' }
+    }
+    const source = parsed as Record<string, unknown>
+    return {
+      codecId: normalizeCodecId(source.codecId ?? source.codec_id),
+      runtimeId: normalizeRuntimeId(source.runtimeId ?? source.runtime_id),
+    }
+  } catch {
+    return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime' }
+  }
+}
+
+function base64UrlEncodedLength(byteLength: number): number {
+  const normalized = Math.max(0, Math.floor(Number(byteLength || 0)))
+  if (normalized <= 0) return 0
+  const paddedLength = Math.ceil(normalized / 3) * 4
+  const paddingChars = normalized % 3 === 0 ? 0 : (normalized % 3 === 1 ? 2 : 1)
+  return paddedLength - paddingChars
 }
 
 export function arrayBufferToBase64Url(buffer: ArrayBuffer): string {

@@ -39,6 +39,14 @@ try {
   requireContains(sfuClient, 'wire_overhead_bytes', 'sfu client wire overhead metric');
   requireContains(sfuClient, "transport_path: 'legacy_chunked_json'", 'sfu client chunked legacy transport path metric');
   requireContains(sfuClient, "transport_path: 'binary_envelope'", 'sfu client binary transport path metric');
+  requireContains(sfuClient, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
+  requireContains(sfuClient, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
+
+  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  requireContains(sfuTransport, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
+  requireContains(sfuTransport, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
+  requireContains(sfuTransport, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
+  requireContains(sfuTransport, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   requireContains(backendStore, 'function videochat_sfu_transport_metric_fields', 'backend transport metric helper');

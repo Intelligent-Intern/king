@@ -50,6 +50,8 @@ try {
 
   const alice = createMediaSecuritySession({ callId: 'call-1', roomId: 'room-1', userId: 101 });
   const bob = createMediaSecuritySession({ callId: 'call-1', roomId: 'room-1', userId: 202 });
+  alice.markParticipantSet([202]);
+  bob.markParticipantSet([101]);
 
   const aliceHello = await alice.buildHelloSignal(202, 'wlvc_sfu');
   const bobHello = await bob.buildHelloSignal(101, 'wlvc_sfu');
@@ -84,6 +86,7 @@ try {
   const protectedFrame = await alice.protectFrame({
     data: plaintext,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackKind: 'video',
     frameKind: 'delta',
     trackId: 'camera-a',
@@ -92,6 +95,7 @@ try {
   assert.notDeepEqual(Array.from(new Uint8Array(protectedFrame.data).slice(0, plaintext.length)), Array.from(plaintext), 'protected frame must not carry plaintext bytes');
   assert.equal(protectedFrame.protected.contract_name, 'king-video-chat-protected-media-frame');
   assert.equal(protectedFrame.protected.runtime_path, 'wlvc_sfu');
+  assert.equal(protectedFrame.protected.codec_id, 'wlvc_ts');
   assert.equal(protectedFrame.protected.kex_suite, 'x25519_hkdf_sha256_v1');
   assert.ok(String(protectedFrame.protectedFrame || '').length > 40, 'protected frame must expose a transport envelope');
   assert.equal(protectedFrame.envelope instanceof ArrayBuffer, true, 'protected frame must expose typed binary envelope bytes');
@@ -104,6 +108,7 @@ try {
     protected: protectedFrame.protected,
     publisherUserId: 101,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackId: 'camera-a',
     timestamp: 1000,
   });
@@ -115,6 +120,7 @@ try {
       protected: protectedFrame.protected,
       publisherUserId: 101,
       runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
       trackId: 'camera-a',
       timestamp: 1000,
     }),
@@ -130,6 +136,7 @@ try {
       protected: { ...protectedFrame.protected, sequence: protectedFrame.protected.sequence + 1 },
       publisherUserId: 101,
       runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
       trackId: 'camera-a',
       timestamp: 1000,
     }),
@@ -150,6 +157,7 @@ try {
       protected: { ...protectedFrame.protected, kex_suite: 'hybrid_x25519_mlkem768_hkdf_sha256_v1', sequence: protectedFrame.protected.sequence + 2 },
       publisherUserId: 101,
       runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
       trackId: 'camera-a',
       timestamp: 1000,
     }),
@@ -162,10 +170,10 @@ try {
   bob.markParticipantSet([101, 303]);
   await alice.forceRekey('forced_rekey');
   assert.equal(alice.epoch, previousEpoch + 1, 'forced rekey must advance epoch after participant churn');
-  assert.equal(
-    await alice.buildSenderKeySignal(202),
-    null,
-    'sender-key must wait for a fresh hello when the participant set changes',
+  await assert.rejects(
+    () => alice.buildSenderKeySignal(202),
+    /participant_set_mismatch/,
+    'sender-key must fail closed until a fresh hello re-pins the participant set after churn',
   );
   const aliceRehello = await alice.buildHelloSignal(202, 'wlvc_sfu');
   const bobRehello = await bob.buildHelloSignal(101, 'wlvc_sfu');
@@ -177,6 +185,7 @@ try {
   const rekeyedFrame = await alice.protectFrame({
     data: plaintext,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackKind: 'video',
     frameKind: 'delta',
     trackId: 'camera-a',
@@ -187,6 +196,7 @@ try {
     protected: rekeyedFrame.protected,
     publisherUserId: 101,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackId: 'camera-a',
     timestamp: 2000,
   });
@@ -225,6 +235,8 @@ try {
     kexPolicy: 'hybrid_required',
     hybridKexProvider: createHybridProvider('b'),
   });
+  hybridAlice.markParticipantSet([302]);
+  hybridBob.markParticipantSet([301]);
   const hybridAliceHello = await hybridAlice.buildHelloSignal(302, 'wlvc_sfu');
   const hybridBobHello = await hybridBob.buildHelloSignal(301, 'wlvc_sfu');
   assert.equal(hybridAliceHello.payload.capability.supported_kex_suites[0], 'hybrid_x25519_mlkem768_hkdf_sha256_v1');
@@ -238,6 +250,7 @@ try {
   const hybridProtectedFrame = await hybridAlice.protectFrame({
     data: plaintext,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackKind: 'video',
     frameKind: 'delta',
     trackId: 'camera-h',
@@ -249,6 +262,7 @@ try {
     protected: hybridProtectedFrame.protected,
     publisherUserId: 301,
     runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
     trackId: 'camera-h',
     timestamp: 3000,
   });
@@ -268,6 +282,7 @@ try {
       protected: { ...protectedFrame.protected, sequence: protectedFrame.protected.sequence + 2 },
       publisherUserId: 101,
       runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
       trackId: 'camera-a',
       timestamp: 1000,
     }),
@@ -275,24 +290,48 @@ try {
     'receiver must reject material after participant removal',
   );
 
-  const workspaceSource = read('../../src/domain/realtime/CallWorkspaceView.vue');
-  assert.match(workspaceSource, /MEDIA_SECURITY_SIGNAL_TYPES/, 'workspace must handle media-security signaling');
-  assert.match(workspaceSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'workspace must expose a scheduled media-security participant sync helper');
-  assert.match(workspaceSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'workspace must resync media security after session context resets');
-  assert.match(workspaceSource, /watch\(\s*\(\) => \[\s*String\(activeSocketCallId\.value \|\| activeCallId\.value \|\| ''\),\s*activeRoomId\.value,\s*String\(currentUserId\.value \|\| 0\),[\s\S]*scheduleMediaSecurityParticipantSync\('context_watch'\);/m, 'workspace must resync media security when call or room context changes');
-  assert.match(workspaceSource, /const marked = session\.markParticipantSet\(\[[\s\S]*normalizedSenderUserId,[\s\S]*\]\);[\s\S]*if \(mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('hello_accepted'\);[\s\S]*\}/m, 'workspace must pin the hello sender into the participant set and only schedule a non-forced follow-up sync once the sender is part of the current target set');
-  assert.match(workspaceSource, /const accepted = await session\.handleSenderKeySignal\(normalizedSenderUserId, payloadBody \|\| \{\}\);[\s\S]*if \(!accepted && mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_pending'\);[\s\S]*\}/m, 'workspace must defer sender-key recovery sync until the sender is present in the current participant target set');
-  assert.match(workspaceSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*outgoingFrame\.protectedFrame = protectedFrame\.protectedFrame;[\s\S]*sendEncodedFrame\(outgoingFrame\);/, 'workspace must protect WLVC frames before SFU send');
-  assert.match(workspaceSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'/, 'workspace must decrypt WLVC transport envelopes before decode');
-  assert.match(workspaceSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(publisherUserId\);/, 'workspace must recover the media-security handshake when protected SFU frames arrive before keys');
-  assert.match(workspaceSource, /await sendMediaSecurityHello\(normalizedUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedUserId, true\);/, 'workspace recovery must retry hello and sender-key signals for the remote publisher');
-  assert.match(workspaceSource, /attachNativeSenderTransform/, 'workspace must attach native sender transform hooks');
-  assert.match(workspaceSource, /attachNativeReceiverTransform/, 'workspace must attach native receiver transform hooks');
+  await assert.rejects(
+    () => bob.decryptFrame({
+      data: protectedFrame.data,
+      protected: { ...protectedFrame.protected, sequence: protectedFrame.protected.sequence + 3 },
+      publisherUserId: 101,
+      runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_wasm',
+      trackId: 'camera-a',
+      timestamp: 1000,
+    }),
+    /unsupported_capability/,
+    'receiver must reject protected frames when codec identity mismatches the transport envelope',
+  );
+
+  const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
+  const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.js');
+  const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.js');
+  const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.js');
+  const securitySource = read('../../src/domain/realtime/media/security.js');
+  const securityCoreSource = read('../../src/domain/realtime/media/securityCore.js');
+  assert.match(mediaSecurityRuntimeSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'media-security runtime must expose a scheduled participant sync helper');
+  assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'media-security runtime must resync after session context resets');
+  assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');
+  assert.match(mediaSecurityRuntimeSource, /const targetIds = mediaSecurityEligibleTargetIds\(\);/, 'handshake timeout watchdog must only operate on settled publisher-discovered targets');
+  assert.match(mediaSecurityRuntimeSource, /const marked = session\.markParticipantSet\(\[[\s\S]*normalizedSenderUserId,[\s\S]*\]\);[\s\S]*if \(mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('hello_accepted'\);[\s\S]*\}/m, 'media-security runtime must pin the hello sender into the participant set and only schedule a non-forced follow-up sync once the sender is in the current target set');
+  assert.match(mediaSecurityRuntimeSource, /const accepted = await session\.handleSenderKeySignal\(normalizedSenderUserId, payloadBody \|\| \{\}\);[\s\S]*if \(!accepted && mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_pending'\);[\s\S]*\}/m, 'media-security runtime must defer sender-key recovery sync until the sender is present in the current participant target set');
+  assert.doesNotMatch(mediaSecurityRuntimeSource, /elapsed=\$\{Date\.now\(\) - helloSentAt\}ms — force-retrying Hello/, 'participant sync must not hide the join race behind a multi-second inline Hello retry loop');
+  assert.match(publisherPipelineSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: outgoingFrame\.codecId[\s\S]*outgoingFrame\.protectedFrame = protectedFrame\.protectedFrame;/m, 'publisher pipeline must protect WLVC frames with explicit codec identity before SFU send');
+  assert.match(frameDecodeSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: frame\.codecId/m, 'decode pipeline must decrypt WLVC transport envelopes with codec identity');
+  assert.match(frameDecodeSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(publisherUserId\);/m, 'decode pipeline must recover the media-security handshake when protected SFU frames arrive before keys');
+  assert.match(mediaSecurityRuntimeSource, /await sendMediaSecurityHello\(normalizedUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedUserId, true\);/m, 'media-security recovery must retry hello and sender-key signals for the remote publisher');
+  assert.match(securitySource, /attachNativeSenderTransform/, 'media-security library must attach native sender transform hooks');
+  assert.match(securitySource, /attachNativeReceiverTransform/, 'media-security library must attach native receiver transform hooks');
+  assert.match(securitySource, /codec_id: normalizeProtectedCodecId\(codecId, runtimePath\)/, 'protected frame header must carry normalized codec identity');
+  assert.match(securitySource, /if \(codecId && header\.codec_id !== normalizeProtectedCodecId\(codecId, runtimePath\)\) throw new Error\('unsupported_capability'\);/, 'frame decrypt must reject codec identity mismatches');
+  assert.match(securityCoreSource, /codec_id: asString\(header\?\.codec_id\)/, 'AAD must bind codec identity into the protected-frame contract');
+  assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
   const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
   assert.match(sfuClientSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
-  assert.match(sfuFramePayloadSource, /payload\.protected_frame = protectedFrame/, 'SFU sender must relay protected transport envelope');
+  assert.match(sfuFramePayloadSource, /chunkField = 'protected_frame_chunk'/, 'SFU sender must relay protected transport envelope through the binary-envelope chunk field');
   assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
 

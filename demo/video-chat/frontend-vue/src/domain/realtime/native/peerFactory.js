@@ -77,7 +77,7 @@ export function createNativePeerFactory({
       video,
       audio,
       remoteStream,
-      audioBridgeState: '',
+      audioBridgeState: 'new',
       audioBridgeErrorMessage: '',
       audioTrackDeadlineTimer: null,
       senderKinds: markRaw(new Map()),

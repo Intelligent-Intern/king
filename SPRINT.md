@@ -16,24 +16,24 @@ Sprint rule:
 
 ## Top 20 Active Issues
 
-1. [ ] Define the merge strategy for `origin/experiments/1.0.7-video-codec`: codec donor branch only, not wholesale runtime replacement.
-2. [ ] Port the experiment branch WLVC payload/header v2 semantics into the current codec path without regressing the current transport contract.
-3. [ ] Port the richer WASM/native codec configuration surface (`waveletType`, `entropyCoding`, `dwtLevels`, `colorSpace`, `motionEstimation`) into the current runtime.
-4. [ ] Decide which experiment blur/processor-pipeline pieces are worth porting and integrate only the parts that reduce duplication with the current background/media pipeline.
-5. [ ] Keep the current binary SFU transport as the production contract and remove the remaining legacy JSON/base64 fallback from the hot video path.
-6. [ ] Replace generic `sfu_chunk_send_failed` handling with exact-stage diagnostics and enforce sender backpressure at the real transport boundary.
-7. [ ] Finish a versioned binary media envelope contract that carries frame identity, timing, protection state, codec/runtime id, and tile/layer metadata without base64 expansion.
-8. [ ] Preserve and prove the current protected-media/media-security contract on the merged codec path; no hidden downgrade to transport-only media.
-9. [ ] Fix the realtime join race by gating media-security activation on publisher discovery plus a short settle window instead of multi-second retries.
-10. [ ] Stabilize native audio bridge negotiation and recovery with a strict state machine for capability, key exchange, SDP readiness, ICE, transform attach, remote track arrival, and playback.
-11. [ ] Prove whether selective tile/segmentation transport stays valuable with the improved codec and keep it only if it still reduces real wire bytes materially.
-12. [ ] Keep tile/layer/cache generation semantics explicit so stale or mixed-generation patches fail closed instead of rendering corruption.
-13. [ ] Preserve multi-worker SFU correctness: room affinity or broker fanout must remain explicit and bounded for realtime media.
-14. [ ] Audit the backend SFU store/gateway after codec merge so binary replay, protected-frame parsing, and cross-worker fanout remain contract-correct.
-15. [ ] Reconcile the test surface: keep the current stronger transport/runtime/media-security contracts and add only the useful new codec-focused tests from the experiment branch.
-16. [ ] Remove or rewrite contracts/tests that only prove superseded experimental paths once the merged codec/runtime path is in place.
-17. [ ] Keep `CallWorkspaceView` and its extracted runtime modules modular; do not re-monolithize the realtime workspace while merging codec work.
-18. [ ] Produce a keep/port/delete/superseded checklist for all branch-difference files so cleanup after the merge is deliberate instead of ad hoc.
+1. [x] Define the merge strategy for `origin/experiments/1.0.7-video-codec`: codec donor branch only, not wholesale runtime replacement.
+2. [x] Port the experiment branch WLVC payload/header v2 semantics into the current codec path without regressing the current transport contract.
+3. [x] Port the richer WASM/native codec configuration surface (`waveletType`, `entropyCoding`, `dwtLevels`, `colorSpace`, `motionEstimation`) into the current runtime.
+4. [x] Decide which experiment blur/processor-pipeline pieces are worth porting and integrate only the parts that reduce duplication with the current background/media pipeline.
+5. [x] Keep the current binary SFU transport as the production contract and remove the remaining legacy JSON/base64 fallback from the hot video path.
+6. [x] Replace generic `sfu_chunk_send_failed` handling with exact-stage diagnostics and enforce sender backpressure at the real transport boundary.
+7. [x] Finish a versioned binary media envelope contract that carries frame identity, timing, protection state, codec/runtime id, and tile/layer metadata without base64 expansion.
+8. [x] Preserve and prove the current protected-media/media-security contract on the merged codec path; no hidden downgrade to transport-only media.
+9. [x] Fix the realtime join race by gating media-security activation on publisher discovery plus a short settle window instead of multi-second retries.
+10. [x] Stabilize native audio bridge negotiation and recovery with a strict state machine for capability, key exchange, SDP readiness, ICE, transform attach, remote track arrival, and playback.
+11. [x] Prove whether selective tile/segmentation transport stays valuable with the improved codec and keep it only if it still reduces real wire bytes materially.
+12. [x] Keep tile/layer/cache generation semantics explicit so stale or mixed-generation patches fail closed instead of rendering corruption.
+13. [x] Preserve multi-worker SFU correctness: room affinity or broker fanout must remain explicit and bounded for realtime media.
+14. [x] Audit the backend SFU store/gateway after codec merge so binary replay, protected-frame parsing, and cross-worker fanout remain contract-correct.
+15. [x] Reconcile the test surface: keep the current stronger transport/runtime/media-security contracts and add only the useful new codec-focused tests from the experiment branch.
+16. [x] Remove or rewrite contracts/tests that only prove superseded experimental paths once the merged codec/runtime path is in place.
+17. [x] Keep `CallWorkspaceView` and its extracted runtime modules modular; do not re-monolithize the realtime workspace while merging codec work.
+18. [x] Produce a keep/port/delete/superseded checklist for all branch-difference files so cleanup after the merge is deliberate instead of ad hoc.
 19. [ ] Run the merged path against the HD acceptance gate: 1280x720 at 30 fps, 60-second two-browser call, no hidden degraded state, no remote stall, no unbounded sender queue.
 20. [ ] Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the merged codec + transport + media-security contract is proven by tests and live evidence.
 

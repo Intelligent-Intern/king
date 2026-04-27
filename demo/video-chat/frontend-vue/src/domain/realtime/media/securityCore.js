@@ -196,6 +196,7 @@ export function buildAadContext({ callId, roomId, senderUserId, receiverUserId, 
     sender_user_id: normalizeUserId(senderUserId),
     receiver_user_id: normalizeUserId(receiverUserId),
     runtime_path: asString(header?.runtime_path),
+    codec_id: asString(header?.codec_id),
     track_kind: asString(header?.track_kind),
     track_id: asString(trackId),
     frame_kind: asString(header?.frame_kind),
@@ -241,6 +242,7 @@ export function validateProtectedHeader(header) {
   if (header.contract_version !== CONTRACT_VERSION) throw new Error('malformed_protected_frame');
   if (header.magic !== FRAME_MAGIC || Number(header.version || 0) !== FRAME_VERSION) throw new Error('malformed_protected_frame');
   if (!['webrtc_native', 'wlvc_sfu'].includes(asString(header.runtime_path))) throw new Error('unsupported_capability');
+  if (!['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'].includes(asString(header.codec_id))) throw new Error('unsupported_capability');
   if (!['video', 'audio', 'data'].includes(asString(header.track_kind))) throw new Error('malformed_protected_frame');
   if (!['keyframe', 'delta', 'audio', 'control'].includes(asString(header.frame_kind))) throw new Error('malformed_protected_frame');
   if (!normalizeKexSuite(header.kex_suite) || header.media_suite !== MEDIA_SUITE) throw new Error('unsupported_capability');

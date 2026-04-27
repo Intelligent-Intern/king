@@ -16,23 +16,73 @@ export interface SfuTilePatchMetadata {
   roiNormHeight: number
 }
 
+export function hasExplicitSfuTileMetadataFields(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const source = value as Record<string, unknown>
+  return source.layoutMode !== undefined
+    || source.layout_mode !== undefined
+    || source.layerId !== undefined
+    || source.layer_id !== undefined
+    || source.cacheEpoch !== undefined
+    || source.cache_epoch !== undefined
+    || source.tileColumns !== undefined
+    || source.tile_columns !== undefined
+    || source.tileRows !== undefined
+    || source.tile_rows !== undefined
+    || source.tileWidth !== undefined
+    || source.tile_width !== undefined
+    || source.tileHeight !== undefined
+    || source.tile_height !== undefined
+    || source.tileIndices !== undefined
+    || source.tile_indices !== undefined
+    || source.roiNormX !== undefined
+    || source.roi_norm_x !== undefined
+    || source.roiNormY !== undefined
+    || source.roi_norm_y !== undefined
+    || source.roiNormWidth !== undefined
+    || source.roi_norm_width !== undefined
+    || source.roiNormHeight !== undefined
+    || source.roi_norm_height !== undefined
+}
+
 export function normalizeTilePatchMetadata(value: unknown): SfuTilePatchMetadata | null {
   if (!value || typeof value !== 'object') return null
   const source = value as Record<string, unknown>
-  const layoutMode = normalizeLayoutMode(source.layoutMode ?? source.layout_mode)
-  const layerId = normalizeLayerId(source.layerId ?? source.layer_id)
+  const layoutMode = parseLayoutMode(source.layoutMode ?? source.layout_mode)
+  const layerId = parseLayerId(source.layerId ?? source.layer_id)
   const cacheEpoch = normalizeInteger(source.cacheEpoch ?? source.cache_epoch, 0)
   const tileColumns = normalizeInteger(source.tileColumns ?? source.tile_columns, 0)
   const tileRows = normalizeInteger(source.tileRows ?? source.tile_rows, 0)
   const tileWidth = normalizeInteger(source.tileWidth ?? source.tile_width, 0)
   const tileHeight = normalizeInteger(source.tileHeight ?? source.tile_height, 0)
   const tileIndices = normalizeTileIndices(source.tileIndices ?? source.tile_indices)
-  const roiNormX = normalizeUnitInterval(source.roiNormX ?? source.roi_norm_x, 0)
-  const roiNormY = normalizeUnitInterval(source.roiNormY ?? source.roi_norm_y, 0)
-  const roiNormWidth = normalizeUnitInterval(source.roiNormWidth ?? source.roi_norm_width, 1)
-  const roiNormHeight = normalizeUnitInterval(source.roiNormHeight ?? source.roi_norm_height, 1)
+  const roiNormX = parseUnitInterval(source.roiNormX ?? source.roi_norm_x, 0)
+  const roiNormY = parseUnitInterval(source.roiNormY ?? source.roi_norm_y, 0)
+  const roiNormWidth = parseUnitInterval(source.roiNormWidth ?? source.roi_norm_width, 1)
+  const roiNormHeight = parseUnitInterval(source.roiNormHeight ?? source.roi_norm_height, 1)
+  const patchFieldsPresent = hasPatchFields(source)
+
+  if (layoutMode === null) {
+    if (patchFieldsPresent || layerId !== null) return null
+    return {
+      layoutMode: 'full_frame',
+      layerId: 'full',
+      cacheEpoch,
+      tileColumns: 0,
+      tileRows: 0,
+      tileWidth: 0,
+      tileHeight: 0,
+      tileIndices: [],
+      roiNormX: 0,
+      roiNormY: 0,
+      roiNormWidth: 1,
+      roiNormHeight: 1,
+    }
+  }
 
   if (layoutMode === 'full_frame') {
+    if (patchFieldsPresent) return null
+    if (layerId !== null && layerId !== 'full') return null
     return {
       layoutMode,
       layerId: 'full',
@@ -50,11 +100,18 @@ export function normalizeTilePatchMetadata(value: unknown): SfuTilePatchMetadata
   }
 
   if (
-    tileColumns < 1
+    layerId !== expectedLayerIdForLayout(layoutMode)
+    || roiNormX === null
+    || roiNormY === null
+    || roiNormWidth === null
+    || roiNormHeight === null
+    || tileColumns < 1
     || tileRows < 1
     || tileWidth < 1
     || tileHeight < 1
     || tileIndices.length < 1
+    || roiNormWidth <= 0
+    || roiNormHeight <= 0
   ) {
     return null
   }
@@ -109,20 +166,49 @@ export function parseTilePatchMetadataJson(value: string): SfuTilePatchMetadata 
   }
 }
 
-function normalizeLayoutMode(value: unknown): SfuLayoutMode {
+function hasPatchFields(source: Record<string, unknown>): boolean {
+  return source.tileColumns !== undefined
+    || source.tile_columns !== undefined
+    || source.tileRows !== undefined
+    || source.tile_rows !== undefined
+    || source.tileWidth !== undefined
+    || source.tile_width !== undefined
+    || source.tileHeight !== undefined
+    || source.tile_height !== undefined
+    || source.tileIndices !== undefined
+    || source.tile_indices !== undefined
+    || source.roiNormX !== undefined
+    || source.roi_norm_x !== undefined
+    || source.roiNormY !== undefined
+    || source.roi_norm_y !== undefined
+    || source.roiNormWidth !== undefined
+    || source.roi_norm_width !== undefined
+    || source.roiNormHeight !== undefined
+    || source.roi_norm_height !== undefined
+}
+
+function parseLayoutMode(value: unknown): SfuLayoutMode | null {
   const normalized = String(value || '').trim()
+  if (normalized === '') return null
   if (normalized === 'tile_foreground' || normalized === 'background_snapshot') {
     return normalized
   }
-  return 'full_frame'
+  if (normalized === 'full_frame') return 'full_frame'
+  return null
 }
 
-function normalizeLayerId(value: unknown): SfuLayerId {
+function parseLayerId(value: unknown): SfuLayerId | null {
   const normalized = String(value || '').trim()
+  if (normalized === '') return null
   if (normalized === 'foreground' || normalized === 'background') {
     return normalized
   }
-  return 'full'
+  if (normalized === 'full') return 'full'
+  return null
+}
+
+function expectedLayerIdForLayout(layoutMode: Exclude<SfuLayoutMode, 'full_frame'>): Exclude<SfuLayerId, 'full'> {
+  return layoutMode === 'tile_foreground' ? 'foreground' : 'background'
 }
 
 function normalizeInteger(value: unknown, fallback: number): number {
@@ -131,10 +217,11 @@ function normalizeInteger(value: unknown, fallback: number): number {
   return Math.floor(normalized)
 }
 
-function normalizeUnitInterval(value: unknown, fallback: number): number {
+function parseUnitInterval(value: unknown, fallback: number): number | null {
+  if (value === undefined || value === null || String(value).trim() === '') return fallback
   const normalized = Number(value)
-  if (!Number.isFinite(normalized)) return fallback
-  return Math.max(0, Math.min(1, normalized))
+  if (!Number.isFinite(normalized) || normalized < 0 || normalized > 1) return null
+  return normalized
 }
 
 function normalizeTileIndices(value: unknown): number[] {

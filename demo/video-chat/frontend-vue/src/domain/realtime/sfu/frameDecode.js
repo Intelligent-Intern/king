@@ -506,6 +506,7 @@ export function createSfuFrameDecodeHelpers({
           protectedFrame: frame.protectedFrame,
           publisherUserId,
           runtimePath: 'wlvc_sfu',
+          codecId: frame.codecId,
           trackId: frame.trackId,
           timestamp: frame.timestamp,
         });
@@ -544,6 +545,7 @@ export function createSfuFrameDecodeHelpers({
           protected: frame.protected,
           publisherUserId,
           runtimePath: 'wlvc_sfu',
+          codecId: frame.codecId,
           trackId: frame.trackId,
           timestamp: frame.timestamp,
         });
