@@ -25,7 +25,8 @@
     "test:e2e:matrix": "playwright test tests/e2e/chat-attachments.spec.js tests/e2e/chat-archive.spec.js tests/e2e/call-layout-strategies.spec.js tests/e2e/chat-activity-matrix.spec.js",
     "test:e2e:shared-surfaces": "playwright test tests/e2e/shared-ui-surfaces.spec.js",
     "test:e2e:headed": "playwright test --headed",
-    "test:e2e:login": "playwright test tests/e2e/login-backend-contract.spec.js"
+    "test:e2e:login": "playwright test tests/e2e/login-backend-contract.spec.js",
+    "test:contract:sfu-multi-participant-render": "node tests/contract/sfu-multi-participant-render-contract.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

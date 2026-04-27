@@ -671,6 +671,7 @@ run_step "frontend contract: WLVC wire envelope" bash -lc "
   set -euo pipefail
   cd '${FRONTEND_DIR}'
   npm run test:contract:wlvc
+  npm run test:contract:sfu-multi-participant-render
 "
 
 run_step "frontend scaffold boot check" bash -lc "

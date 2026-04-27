@@ -4851,18 +4851,20 @@ async function createOrUpdateSfuRemotePeer(options = {}) {
   const tracks = sfuTrackRows(options.tracks);
   const existingPeer = remotePeersRef.value.get(publisherId);
   if (existingPeer?.decoder) {
+    const needsUpdate = tracks.length > 0 || String(options.publisherName || '').trim() !== '';
+    if (!needsUpdate && Number(existingPeer.userId || 0) === publisherUserId) {
+      return Promise.resolve(existingPeer);
+    }
     const updatedPeer = {
       ...existingPeer,
       userId: Number.isInteger(publisherUserId) && publisherUserId > 0
         ? publisherUserId
         : Number(existingPeer.userId || 0),
       displayName: String(options.publisherName || existingPeer.displayName || '').trim(),
-      tracks,
+      tracks: tracks.length > 0 ? tracks : existingPeer.tracks,
     };
     setSfuRemotePeer(publisherId, updatedPeer);
-    await nextTick();
-    renderCallVideoLayout();
-    return updatedPeer;
+    return Promise.resolve(updatedPeer);
   }
 
   let decoder = null;
@@ -6785,28 +6787,43 @@ function handleSFUEncodedFrame(frame) {
   if (!isWlvcRuntimePath()) return;
   const publisherId = normalizeSfuPublisherId(frame?.publisherId);
   if (publisherId === '') return;
+
   let peer = remotePeersRef.value.get(publisherId);
-  peer = updateSfuRemotePeerUserId(publisherId, peer, frame?.publisherUserId);
-  const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
-  if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
-    markRemoteFrameActivity(publisherUserId);
+  const normalizedPublisherUserId = Number(frame?.publisherUserId || 0);
+  const updatedPeer = updateSfuRemotePeerUserId(publisherId, peer, frame?.publisherUserId);
+  if (updatedPeer !== peer) {
+    peer = updatedPeer;
   }
+
+  if (Number.isInteger(normalizedPublisherUserId) && normalizedPublisherUserId > 0) {
+    markRemoteFrameActivity(normalizedPublisherUserId);
+  }
+
   if (!peer || !peer.decoder) {
     const init = ensureSfuRemotePeerForFrame(frame);
     if (init) {
       void init.then((createdPeer) => {
+        if (!createdPeer) return;
         const nextPeer = updateSfuRemotePeerUserId(
           publisherId,
-          createdPeer || remotePeersRef.value.get(publisherId),
+          createdPeer,
           frame?.publisherUserId
         );
-        decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+        void nextTick().then(() => {
+          renderCallVideoLayout();
+          decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+        });
       });
     }
     return;
   }
 
   decodeSfuFrameForPeer(publisherId, peer, frame);
+
+  const canvas = peer?.decodedCanvas;
+  if (!(canvas?.parentElement instanceof HTMLElement)) {
+    void nextTick().then(() => renderCallVideoLayout());
+  }
 }
 
 onBeforeUnmount(() => {
