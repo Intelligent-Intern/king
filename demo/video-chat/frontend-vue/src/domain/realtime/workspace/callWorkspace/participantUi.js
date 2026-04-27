@@ -1699,6 +1699,7 @@ let pingTimer = null;
     clearCallLayoutSidebarControls,
     clearChatUnread,
     clearErrors,
+    clearLobbyToastTimer,
     clearLobbyActionText,
     clearModerationSyncTimer,
     clearReactionQueueTimer,

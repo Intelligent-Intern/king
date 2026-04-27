@@ -245,6 +245,7 @@ const connectionReason = ref('');
 const reconnectAttempt = ref(0);
 const socketRef = ref(null);
 const serverRoomId = ref('lobby');
+const connectedParticipantUsersRef = ref(computed(() => []));
 
 const participantsRaw = ref([]);
 let participantsRawSignature = '';
@@ -599,6 +600,110 @@ let shouldRecoverMediaSecurityFromFrameError = () => false;
 let shouldSendTransportOnlySfuFrame = () => false;
 let startMediaSecurityHandshakeWatchdog = () => {};
 let syncMediaSecurityWithParticipants = async () => {};
+let appendChatMessage = () => {};
+let applyActivitySnapshot = () => {};
+let applyCallLayoutPayload = () => {};
+let applyParticipantActivityPayload = () => {};
+let applyReactionEvent = () => {};
+let applyRemoteControlState = () => false;
+let applyTypingEvent = () => {};
+let clearAdmissionGate = () => {};
+let clearErrors = () => {};
+let clearLobbyActionText = () => {};
+let clearLobbyToastTimer = () => {};
+let clearTransientActivityPublishErrorNotice = () => {};
+let hangupCall = () => {};
+let hideLobbyJoinToast = () => {};
+let markParticipantActivity = () => {};
+let normalizeLobbyEntry = (entry) => entry;
+let notifyLobbyJoinRequests = () => {};
+let peerControlSnapshot = () => ({
+  handRaised: false,
+  cameraEnabled: true,
+  micEnabled: true,
+  screenEnabled: false,
+});
+let pruneParticipantActivity = () => {};
+let refreshUsersDirectory = async () => {};
+let refreshUsersDirectoryPresentation = () => {};
+let reportNativeAudioSdpRejected = () => {};
+let requestRoomSnapshot = () => {};
+let resetPeerControlState = () => {};
+let sendRoomJoin = () => false;
+let setAdmissionGate = () => {};
+let setActiveTab = () => {};
+let setNotice = () => {};
+let shouldSuppressCallAckNotice = () => false;
+let shouldSuppressExpectedSignalingError = () => false;
+let syncControlStateToPeers = async () => false;
+let syncModerationStateToPeers = async () => false;
+let tryDirectJoinWithModeratorBypass = () => false;
+const activeMessagesLimit = computed(() => 240);
+const currentUserStatusLabel = computed(() => '');
+let currentLayoutMode = computed(() => 'main_mini');
+let gridVideoParticipants = computed(() => []);
+let miniVideoParticipants = computed(() => []);
+let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
+let primaryVideoUserId = computed(() => currentUserId.value);
+const snapshotUsersLimit = computed(() => USERS_PAGE_SIZE);
+const userRowBase = (row) => row;
+const syncUsersDirectoryPresentationBase = () => {};
+const setShellLeftSidebarCollapsed = () => {};
+const setShellTabletSidebarOpen = () => {};
+const setSidebarTab = () => {};
+const showRightSidebarBase = () => {};
+
+function sendSocketFrame(payload) {
+  const socket = socketRef.value;
+  if (!(socket instanceof WebSocket)) return false;
+  if (socket.readyState !== WebSocket.OPEN) return false;
+  try {
+    socket.send(JSON.stringify(payload));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function requestRoomSnapshotLocal() {
+  if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
+    setNotice('Could not request room snapshot while websocket is offline.', 'error');
+  }
+}
+
+function sendRoomJoinLocal(roomId) {
+  const normalizedRoomId = normalizeRoomId(roomId);
+  if (!sendSocketFrame({ type: 'room/join', room_id: normalizedRoomId })) {
+    return false;
+  }
+  return true;
+}
+
+function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
+  const targetRoomId = normalizeRoomId(roomId || desiredRoomId.value || activeRoomId.value || 'lobby');
+  if (!canModerate.value || targetRoomId === '') {
+    return false;
+  }
+  clearAdmissionGate(targetRoomId);
+  return sendRoomJoinLocal(targetRoomId);
+}
+
+requestRoomSnapshot = requestRoomSnapshotLocal;
+sendRoomJoin = sendRoomJoinLocal;
+tryDirectJoinWithModeratorBypass = tryDirectJoinWithModeratorBypassLocal;
+
+function clearRemoteVideoContainer(container) {
+  const element = container instanceof HTMLElement ? container : null;
+  if (!element) return;
+  while (element.firstChild) {
+    element.removeChild(element.firstChild);
+  }
+}
+
+function nativePeerHasLocalLiveAudioSender(peer) {
+  const senders = Array.isArray(peer?.pc?.getSenders?.()) ? peer.pc.getSenders() : [];
+  return senders.some((sender) => sender?.track?.kind === 'audio' && sender.track.readyState === 'live');
+}
 
 const {
   applyRouteCallResolution,
@@ -677,6 +782,7 @@ const {
     activeRoomId,
     callParticipantRoles,
     chatByRoom,
+    connectedParticipantUsersRef,
     currentUserConnectedAt,
     currentUserId,
     desiredRoomId,
@@ -1393,10 +1499,327 @@ const {
   },
 });
 
+const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
+  activeCallId,
+  activeMessagesLimit,
+  activeReactions,
+  activeRoomId,
+  activeTab,
+  admissionGateState,
+  aloneIdlePrompt,
+  apiRequest,
+  callLayoutState,
+  callParticipantRoles,
+  canModerate,
+  chatAttachmentDrafts,
+  chatByRoom,
+  chatDraft,
+  chatEmojiTrayOpen,
+  chatSending,
+  chatUnreadByRoom,
+  connectedParticipantUsers,
+  controlState,
+  currentUserId,
+  currentUserStatusLabel,
+  desiredRoomId,
+  formatTimestamp,
+  gridVideoSlotId,
+  hangupCall: (...args) => hangupCall(...args),
+  initials,
+  isAloneInCall,
+  isCompactLayoutViewport,
+  isCompactMiniStripAbove,
+  isSocketOnline,
+  isShellMobileViewport,
+  layoutModeOptionsFor,
+  layoutStrategyOptionsFor,
+  lobbyActionState,
+  lobbyListRef,
+  lobbyListViewport,
+  lobbyNotificationState,
+  lobbyPage,
+  lobbyQueue,
+  localReactionEchoes,
+  mediaRuntimeCapabilities,
+  miniVideoSlotId,
+  mutedUsers,
+  nextTick,
+  normalizeCallLayoutMode,
+  normalizeCallLayoutState,
+  normalizeCallRole,
+  normalizeOptionalRoomId,
+  normalizeRole,
+  normalizeRoomId,
+  normalizeUsersDirectoryOrder,
+  normalizeUsersDirectoryStatus,
+  parseUsersDirectoryQuery,
+  participantActivityByUserId,
+  participantActivityWeight,
+  participantUsers,
+  peerControlStateByUserId,
+  pinnedUsers,
+  publishLocalActivitySample,
+  queuedReactionEmojis,
+  reconfigureLocalTracksFromSelectedDevices,
+  refreshCallMediaDevices,
+  renderCallVideoLayout,
+  replaceNumericArray,
+  requestRoomSnapshot: (...args) => requestRoomSnapshot(...args),
+  rightSidebarCollapsed,
+  sendSocketFrame,
+  selectCallLayoutParticipants,
+  setShellLeftSidebarCollapsed,
+  setShellTabletSidebarOpen,
+  setSidebarTab,
+  showLobbyTab,
+  showRightSidebar: showRightSidebarBase,
+  shouldShowLeftSidebarRestoreButton: showLeftSidebarRestoreButton,
+  snapshotUsersLimit,
+  syncUsersDirectoryPresentationBase,
+  typingByRoom,
+  userRowBase,
+  usersDirectoryLoading,
+  usersDirectoryPagination,
+  usersDirectoryRows,
+  usersListRef,
+  usersListViewport,
+  usersPage,
+  usersSearch,
+  usersSourceMode,
+  viewerEffectiveCallRole,
+  visibleParticipantsLimit: VISIBLE_PARTICIPANTS_LIMIT,
+  workspaceError,
+  workspaceNotice,
+  workspaceSidebarState,
+  CALL_LAYOUT_MODES,
+  CALL_LAYOUT_STRATEGIES,
+  CALL_STATE_SIGNAL_TYPES,
+  LOBBY_PAGE_SIZE,
+  LOCAL_REACTION_ECHO_TTL_MS,
+  MEDIA_SECURITY_SIGNAL_TYPES,
+  MODERATION_SYNC_FLUSH_INTERVAL_MS,
+  PARTICIPANT_ACTIVITY_WINDOW_MS,
+  REACTION_CLIENT_BATCH_SIZE,
+  REACTION_CLIENT_DIRECT_PER_WINDOW,
+  REACTION_CLIENT_FLUSH_INTERVAL_MS,
+  REACTION_CLIENT_MAX_QUEUE,
+  REACTION_CLIENT_WINDOW_MS,
+  ROSTER_VIRTUAL_OVERSCAN,
+  ROSTER_VIRTUAL_ROW_HEIGHT,
+  TYPING_SWEEP_MS,
+  USERS_PAGE_SIZE,
+  VISIBLE_PARTICIPANTS_LIMIT,
+  ALONE_IDLE_ACTIVITY_EVENTS,
+  ALONE_IDLE_COUNTDOWN_MS,
+  ALONE_IDLE_POLL_MS,
+  ALONE_IDLE_PROMPT_AFTER_MS,
+  ALONE_IDLE_TICK_MS,
+});
+
+({
+  applyActivitySnapshot,
+  applyCallLayoutPayload,
+  applyParticipantActivityPayload,
+  applyReactionEvent,
+  applyRemoteControlState,
+  clearAdmissionGate,
+  clearErrors,
+  clearLobbyActionText,
+  clearLobbyToastTimer,
+  clearTransientActivityPublishErrorNotice,
+  hideLobbyJoinToast,
+  markParticipantActivity,
+  notifyLobbyJoinRequests,
+  peerControlSnapshot,
+  pruneParticipantActivity,
+  refreshUsersDirectory,
+  refreshUsersDirectoryPresentation,
+  resetPeerControlState,
+  setActiveTab,
+  setAdmissionGate,
+  setNotice,
+  shouldSuppressCallAckNotice,
+  shouldSuppressExpectedSignalingError,
+  syncControlStateToPeers,
+  syncModerationStateToPeers,
+} = participantUiHelpers);
+
+({
+  currentLayoutMode,
+  gridVideoParticipants,
+  miniVideoParticipants,
+  normalizedCallLayout,
+  primaryVideoUserId,
+  renderCallVideoLayout,
+} = participantUiHelpers);
 
 const {
-  hangupCall,
-} = createCallWorkspaceOrchestrationHelpers({
+  activeMessages,
+  activityLabelForUser,
+  allowAllLobbyUsers,
+  allowLobbyUser,
+  aloneIdleCountdownLabel,
+  attachAloneIdleActivityListeners,
+  canSubmitChatMessage,
+  clearAloneIdleCountdownTimer,
+  clearAloneIdleWatchTimer,
+  clearCallLayoutSidebarControls,
+  clearChatUnread,
+  clearModerationSyncTimer,
+  clearReactionQueueTimer,
+  compactMiniStripToggleLabel,
+  confirmStillInCall,
+  currentCallLayoutSidebarControls,
+  currentPinnedUserIds,
+  describePeerControlState,
+  detachAloneIdleActivityListeners,
+  emitReaction,
+  ensureAloneIdleWatchTimer,
+  evaluateAloneIdlePrompt,
+  filteredUsers,
+  flushQueuedModerationSync,
+  flushQueuedReactions,
+  goToLobbyPage,
+  goToUsersPage,
+  handleCompactViewportChange,
+  hideAloneIdlePrompt,
+  hideRightSidebar,
+  isCallSignalType,
+  layoutModeOptions,
+  layoutSelection,
+  layoutStrategyOptions,
+  lobbyActionPending,
+  lobbyEntryByUserId,
+  lobbyJoinToastMessage,
+  lobbyPageCount,
+  lobbyPageRows,
+  lobbyRequestBadgeText,
+  lobbyRowSnapshot,
+  lobbyRows,
+  lobbyVisibleRows,
+  lobbyVirtualWindow,
+  markChatUnread,
+  onLobbyListScroll,
+  onUsersListScroll,
+  onUsersSearchInput,
+  openChatPanel,
+  openLeftSidebarOverlay,
+  openLobbyRequestsPanel,
+  participantActivityScore,
+  participantVisibilityScore,
+  participantsByUserId,
+  publishLayoutSelectionState,
+  resetLobbyListScroll,
+  resetUsersListScroll,
+  rowActionFeedback,
+  rowActionKey,
+  rowActionPending,
+  scheduleUsersRefresh,
+  setCallLayoutMode,
+  setCallLayoutStrategy,
+  shouldShowWorkspaceAdmissionNotice,
+  showChatUnreadBadge,
+  showChatUnreadToast,
+  showCompactMiniStripToggle,
+  showLobbyJoinToast,
+  showLobbyRequestBadge,
+  showMiniParticipantStrip,
+  showRightSidebar,
+  snapshotUsersRows,
+  stripParticipants,
+  syncCallLayoutSidebarControls,
+  syncLobbyListViewport,
+  syncModerationStateToPeersWithPayload,
+  syncUsersListViewport,
+  toggleCamera,
+  toggleCompactMiniStripPlacement,
+  toggleHandRaised,
+  toggleMicrophone,
+  togglePinned,
+  toggleScreenShare,
+  toggleUserMuted,
+  typingUsers,
+  updatePeerControlState,
+  userRowSnapshot,
+  usersPageCount,
+  usersPageRows,
+  usersVisibleRows,
+  usersVirtualWindow,
+} = participantUiHelpers;
+
+const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
+  activeCallId,
+  activeRoomId,
+  activeTab,
+  apiRequest,
+  buildFileAttachmentDraft,
+  buildTextAttachmentDraft,
+  captureClientDiagnosticError,
+  chatAttachmentDraftToBase64,
+  chatAttachmentDragActive,
+  chatAttachmentError,
+  chatAttachmentDrafts,
+  chatAttachmentInputRef,
+  chatByRoom,
+  chatDraft,
+  chatEmojiTrayOpen,
+  chatInputRef,
+  chatListRef,
+  chatSending,
+  chatUnreadByRoom,
+  chatUtf8ByteLength,
+  connectSocket,
+  connectionState,
+  currentUserId,
+  ensureRoomBuckets,
+  extractErrorMessage,
+  isChatTextInlineAllowed,
+  isSocketOnline,
+  markParticipantActivity,
+  nextTick,
+  normalizeRole,
+  normalizeRoomId,
+  reconnectAttempt,
+  rightSidebarCollapsed,
+  sanitizeChatAttachmentName,
+  sendSocketFrame,
+  sessionState,
+  setNotice,
+  typingByRoom,
+  validateChatAttachmentDraft,
+  CHAT_ATTACHMENT_MAX_COUNT,
+  CHAT_INLINE_MAX_BYTES,
+  CHAT_INLINE_MAX_CHARS,
+  TYPING_LOCAL_STOP_MS,
+});
+
+({
+  appendChatMessage,
+  applyTypingEvent,
+  normalizeLobbyEntry,
+} = chatRuntimeHelpers);
+
+const {
+  addChatAttachmentDraft,
+  clearTypingStopTimer,
+  focusChatInput,
+  formatBytes,
+  handleChatAttachmentDrop,
+  handleChatAttachmentPick,
+  handleChatInput,
+  handleChatPaste,
+  insertChatEmoji,
+  normalizeChatMessage,
+  openChatAttachmentPicker,
+  removeChatAttachmentDraft,
+  sendChatMessage,
+  setChatAttachmentError,
+  stopLocalTyping,
+  toggleChatEmojiTray,
+  updateChatAttachmentDraftName,
+} = chatRuntimeHelpers;
+
+({ hangupCall } = createCallWorkspaceOrchestrationHelpers({
   vue: { watch, nextTick },
   callbacks: {
     clearAloneIdleWatchTimer,
@@ -1468,7 +1891,7 @@ const {
     setAloneIdleLastActiveMs: (value) => { aloneIdleLastActiveMs = value; },
     setManualSocketClose: (value) => { manualSocketClose = value; },
   },
-});
+}));
 
 registerCallWorkspaceLifecycleHelpers({
   vue: { watch, onMounted, onBeforeUnmount, nextTick },
