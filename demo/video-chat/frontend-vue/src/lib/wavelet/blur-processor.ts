@@ -15,7 +15,7 @@
  *   blurMode: 'fast' | 'quality'
  */
 
-import { PreEncodeBlurCompositor } from '../../domain/realtime/preEncodeBlurCompositor'
+import { PreEncodeBlurCompositor } from '../../domain/realtime/PreEncodeBlurCompositor'
 
 export interface BlurOptions {
   blurRadius: number        // 1-10 strength, 0=off
