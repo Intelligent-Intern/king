@@ -1,0 +1,711 @@
+function currentMediaSecurityRuntimePath() {
+  if (isNativeWebRtcRuntimePath()) return 'webrtc_native';
+  return 'wlvc_sfu';
+}
+
+function clearMediaSecurityResyncTimer() {
+  if (mediaSecurityResyncTimer !== null) {
+    clearTimeout(mediaSecurityResyncTimer);
+    mediaSecurityResyncTimer = null;
+  }
+}
+
+function clearMediaSecurityHandshakeWatchdog() {
+  if (mediaSecurityHandshakeWatchdogTimer !== null) {
+    clearInterval(mediaSecurityHandshakeWatchdogTimer);
+    mediaSecurityHandshakeWatchdogTimer = null;
+  }
+  mediaSecurityHandshakeRetryingByUserId.clear();
+}
+
+function startMediaSecurityHandshakeWatchdog() {
+  if (mediaSecurityHandshakeWatchdogTimer !== null) return;
+  mediaSecurityHandshakeWatchdogTimer = setInterval(() => {
+    void checkMediaSecurityHandshakeTimeouts();
+  }, MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS);
+}
+
+function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
+  if (!isSocketOnline.value || currentUserId.value <= 0) return;
+  if (mediaSecurityEligibleTargetIds().length <= 0) return;
+
+  mediaSecurityResyncForceRekey = mediaSecurityResyncForceRekey || Boolean(forceRekey);
+  if (mediaSecurityResyncTimer !== null) return;
+
+  mediaSecurityResyncTimer = setTimeout(() => {
+    mediaSecurityResyncTimer = null;
+    const shouldForceRekey = mediaSecurityResyncForceRekey;
+    mediaSecurityResyncForceRekey = false;
+    if (!isSocketOnline.value || currentUserId.value <= 0) return;
+    if (mediaSecurityEligibleTargetIds().length <= 0) return;
+    mediaDebugLog('[MediaSecurity] scheduled participant sync', { reason, forceRekey: shouldForceRekey });
+    void syncMediaSecurityWithParticipants(shouldForceRekey);
+  }, 0);
+}
+
+function ensureMediaSecuritySession() {
+  const context = {
+    callId: activeSocketCallId.value || activeCallId.value,
+    roomId: activeRoomId.value,
+    userId: currentUserId.value,
+    policy: 'preferred',
+    logger: mediaDebugLog,
+    onNativeFrameError: handleNativeMediaSecurityFrameError,
+  };
+  const existing = mediaSecuritySessionRef.value;
+  const contextChanged = existing
+    && (
+      existing.callId !== context.callId
+      || existing.roomId !== context.roomId
+      || existing.userId !== context.userId
+    );
+  if (!existing || contextChanged) {
+    mediaSecurityHelloSignalsSent.clear();
+    mediaSecuritySenderKeySignalsSent.clear();
+    mediaSecurityRecoveryLastByUserId.clear();
+    mediaSecuritySessionRef.value = createMediaSecuritySession(context);
+    mediaSecurityStateVersion.value += 1;
+    scheduleMediaSecurityParticipantSync('context_changed');
+  } else {
+    mediaSecuritySessionRef.value.updateContext(context);
+  }
+  return mediaSecuritySessionRef.value;
+}
+
+const {
+  clearMediaSecuritySfuPublisherSeen,
+  mediaSecurityEligibleTargetIds,
+  mediaSecurityTargetIds,
+  nativeAudioBridgeBlockedReason,
+  nativeAudioBridgePeerStatusMessage,
+  noteMediaSecuritySfuPublisherSeen,
+} = createMediaSecurityTargetHelpers({
+  connectedParticipantUsers,
+  currentUserId,
+  isWlvcRuntimePath,
+  nativePeerConnectionsRef,
+  mediaRuntimeCapabilities,
+  mediaSecuritySfuPublisherFirstSeenAtByUserId,
+  mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
+  sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
+  supportsNativeTransforms: () => MediaSecuritySession.supportsNativeTransforms(),
+});
+
+const nativeAudioSecurityBannerMessage = computed(() => {
+  mediaSecurityStateVersion.value;
+  const targetUserIds = mediaSecurityTargetIds();
+  if (targetUserIds.length <= 0) return '';
+  const blockedReason = nativeAudioBridgeBlockedReason(targetUserIds);
+  if (blockedReason !== '') return blockedReason;
+  if (!shouldUseNativeAudioBridge()) return '';
+  const session = mediaSecuritySessionRef.value;
+  if (!session) {
+    return 'Audio is waiting for the media-security handshake to become ready.';
+  }
+  const sessionState = String(session?.state || '').trim().toLowerCase();
+  if (sessionState === 'blocked_capability') {
+    return 'Audio is unavailable because protected media could not be initialized on this device.';
+  }
+  if (!session?.canProtectForTargets(targetUserIds)) {
+    const blocked = targetUserIds.some((userId) => {
+      const peer = session?.peers instanceof Map ? session.peers.get(userId) : null;
+      return String(peer?.state || '').trim().toLowerCase() === 'blocked_capability';
+    });
+    if (blocked) {
+      return 'Audio is muted because protected media is unavailable for at least one participant.';
+    }
+    return 'Audio is waiting for the media-security handshake to become ready.';
+  }
+  nativeAudioBridgeStatusVersion.value;
+  const peerIssue = nativeAudioBridgePeerStatusMessage(targetUserIds, nativeAudioBridgeFailureMessage);
+  if (peerIssue !== '') return peerIssue;
+  return '';
+});
+
+function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
+  const nowMs = Date.now();
+  if ((nowMs - mediaSecuritySyncHintLastAtMs) < 1000) return;
+  mediaSecuritySyncHintLastAtMs = nowMs;
+
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'warning',
+    eventType: 'media_security_sync_hint',
+    code: 'media_security_sync_hint',
+    message: 'Media security sync was requested to recover SFU frame delivery.',
+    payload: {
+      reason: String(reason || 'unspecified'),
+      target_user_ids: mediaSecurityEligibleTargetIds(),
+      media_runtime_path: mediaRuntimePath.value,
+      ...extraPayload,
+    },
+  });
+  void syncMediaSecurityWithParticipants();
+}
+
+function canProtectCurrentSfuTargets() {
+  const targetUserIds = mediaSecurityEligibleTargetIds();
+  if (targetUserIds.length <= 0) return false;
+  return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+}
+
+function canProtectCurrentNativeTargets(targetUserIds) {
+  const normalizedTargetUserIds = Array.isArray(targetUserIds)
+    ? targetUserIds
+    : mediaSecurityTargetIds();
+  if (normalizedTargetUserIds.length <= 0) return false;
+  return ensureMediaSecuritySession().canProtectNativeForTargets(normalizedTargetUserIds);
+}
+
+function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
+  const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
+  setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
+  // M7 / M9: Log to console so audio failures are immediately visible in devtools,
+  // then schedule a forced media-security rekey to break any dead-lock in the handshake.
+  console.error(
+    '[KingRT] 🔇 AUDIO BRIDGE FAILED',
+    `code=${String(code || 'native_audio_bridge_failed')}`,
+    `user=${Number(peer?.userId || 0)}`,
+    normalizedMessage,
+  );
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: String(code || 'native_audio_bridge_failed'),
+    code: String(code || 'native_audio_bridge_failed'),
+    message: normalizedMessage,
+    payload: {
+      target_user_id: Number(peer?.userId || 0),
+      connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
+      media_runtime_path: mediaRuntimePath.value,
+      security: nativeAudioSecurityTelemetrySnapshot(),
+      ...extraPayload,
+    },
+    immediate: true,
+  });
+  // M9: Force a full media-security rekey 1.5s after a bridge failure to break any
+  // handshake dead-lock that may have caused the transform to fail.
+  setTimeout(() => {
+    if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
+    console.info('[KingRT] 🔑 Forcing media-security rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
+    void syncMediaSecurityWithParticipants(true);
+  }, 1500);
+}
+
+function mediaSecurityHelloSignalKey(targetUserId, session) {
+  return [
+    activeRoomId.value,
+    currentMediaSecurityRuntimePath(),
+    Number(targetUserId || 0),
+    Number(session?.epoch || 0),
+    'hello',
+  ].join(':');
+}
+
+function mediaSecuritySenderKeySignalKey(targetUserId, session) {
+  return [
+    activeRoomId.value,
+    currentMediaSecurityRuntimePath(),
+    Number(targetUserId || 0),
+    Number(session?.epoch || 0),
+    String(session?.senderKeyId || ''),
+    'sender-key',
+  ].join(':');
+}
+
+function clearMediaSecuritySignalCaches() {
+  mediaSecurityHelloSignalsSent.clear();
+  mediaSecuritySenderKeySignalsSent.clear();
+  mediaSecurityHelloSentAtByUserId.clear();
+  mediaSecurityHandshakeRetryingByUserId.clear();
+}
+
+async function checkMediaSecurityHandshakeTimeouts() {
+  if (!isSocketOnline.value || currentUserId.value <= 0) return;
+  const targetIds = mediaSecurityTargetIds();
+  if (targetIds.length <= 0) return;
+
+  const session = ensureMediaSecuritySession();
+  const nowMs = Date.now();
+  for (const targetUserId of targetIds) {
+    const normalizedTargetId = Number(targetUserId || 0);
+    if (!Number.isInteger(normalizedTargetId) || normalizedTargetId <= 0) continue;
+    if (mediaSecurityHandshakeRetryingByUserId.has(normalizedTargetId)) continue;
+
+    const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+    const peerState = String(peer?.state || '').trim().toLowerCase();
+    if (peerState === 'active') {
+      mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+      continue;
+    }
+
+    const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+    if (helloSentAt <= 0 || (nowMs - helloSentAt) <= MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS) continue;
+
+    mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
+    mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+    console.warn(
+      '[KingRT] Media-security handshake timeout - retrying media-security exchange',
+      `user=${normalizedTargetId}`,
+      `state=${peerState || 'missing'}`,
+      `elapsed=${nowMs - helloSentAt}ms`,
+    );
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_handshake_timeout',
+      code: 'media_security_handshake_timeout',
+      message: 'Media security handshake timed out and is being retried.',
+      payload: {
+        target_user_id: normalizedTargetId,
+        peer_state: peerState,
+        elapsed_ms: nowMs - helloSentAt,
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+
+    try {
+      await sendMediaSecurityHello(normalizedTargetId, true);
+      await sendMediaSecuritySenderKey(normalizedTargetId, true);
+    } finally {
+      mediaSecurityHandshakeRetryingByUserId.delete(normalizedTargetId);
+    }
+  }
+}
+
+async function sendMediaSecurityHello(targetUserId, force = false) {
+  if (!isSocketOnline.value) return false;
+  const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  if (!ready) {
+    mediaSecurityStateVersion.value += 1;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_hello_skipped',
+      code: 'media_security_hello_not_ready',
+      message: 'Media security hello could not be built because the local media-security session is not ready.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
+  const key = mediaSecurityHelloSignalKey(targetUserId, session);
+  if (!force && mediaSecurityHelloSignalsSent.has(key)) return true;
+  const signal = await session.buildHelloSignal(targetUserId, currentMediaSecurityRuntimePath());
+  if (!signal) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_hello_skipped',
+      code: 'media_security_hello_skipped',
+      message: 'Media security hello could not be built for the remote participant.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
+  if (sendSocketFrame(signal)) {
+    mediaSecurityHelloSignalsSent.add(key);
+    // M6: Record when Hello was last sent so handshake-timeout detection can
+    // identify peers that never reply with a SenderKey.
+    mediaSecurityHelloSentAtByUserId.set(Number(targetUserId || 0), Date.now());
+    startMediaSecurityHandshakeWatchdog();
+    return true;
+  }
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: 'media_security_hello_send_failed',
+    code: 'media_security_hello_send_failed',
+    message: 'Media security hello could not be sent over the realtime websocket.',
+    payload: {
+      target_user_id: Number(targetUserId || 0),
+      media_runtime_path: mediaRuntimePath.value,
+      security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+    },
+    immediate: true,
+  });
+  return false;
+}
+
+async function sendMediaSecuritySenderKey(targetUserId, force = false) {
+  if (!isSocketOnline.value) return false;
+  const normalizedTargetId = Number(targetUserId || 0);
+  const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  if (!ready) {
+    mediaSecurityStateVersion.value += 1;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_sender_key_skipped',
+      code: 'media_security_sender_key_skipped',
+      message: 'Media security sender key generation is not ready yet.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
+  const key = mediaSecuritySenderKeySignalKey(targetUserId, session);
+  if (!force && mediaSecuritySenderKeySignalsSent.has(key)) return true;
+  let signal = null;
+  try {
+    signal = await session.buildSenderKeySignal(targetUserId);
+  } catch (error) {
+    const errorCode = String(error?.message || '').trim().toLowerCase();
+    if (errorCode === 'participant_set_mismatch') {
+      const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      console.warn(
+        '[KingRT] Media-security sender-key deferred - retrying Hello',
+        `user=${normalizedTargetId}`,
+        `state=${String(peer?.state || 'missing')}`,
+        `runtime=${currentMediaSecurityRuntimePath()}`,
+      );
+      mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(targetUserId, session));
+      mediaSecuritySenderKeySignalsSent.delete(key);
+      mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
+      startMediaSecurityHandshakeWatchdog();
+      await sendMediaSecurityHello(targetUserId, true);
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'media_security_sender_key_participant_mismatch',
+        code: 'media_security_sender_key_participant_mismatch',
+        message: 'Media security sender key was deferred because the participant transcript changed before key wrap completed.',
+        payload: {
+          target_user_id: normalizedTargetId,
+          peer_state: String(peer?.state || ''),
+          media_runtime_path: mediaRuntimePath.value,
+          security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+        },
+      });
+      return false;
+    }
+    throw error;
+  }
+  if (!signal) {
+    if (
+      Number.isInteger(normalizedTargetId)
+      && normalizedTargetId > 0
+      && !mediaSecurityHelloSentAtByUserId.has(normalizedTargetId)
+    ) {
+      mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
+      startMediaSecurityHandshakeWatchdog();
+    }
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'media_security_sender_key_not_ready',
+      code: 'media_security_sender_key_not_ready',
+      message: 'Media security sender key could not be built for the remote participant.',
+      payload: {
+        target_user_id: Number(targetUserId || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+    return false;
+  }
+  if (sendSocketFrame(signal)) {
+    mediaSecuritySenderKeySignalsSent.add(key);
+    return true;
+  }
+  captureClientDiagnostic({
+    category: 'media',
+    level: 'error',
+    eventType: 'media_security_sender_key_send_failed',
+    code: 'media_security_sender_key_send_failed',
+    message: 'Media security sender key could not be sent over the realtime websocket.',
+    payload: {
+      target_user_id: Number(targetUserId || 0),
+      media_runtime_path: mediaRuntimePath.value,
+      security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+    },
+    immediate: true,
+  });
+  return false;
+}
+
+async function syncMediaSecurityWithParticipants(forceRekey = false) {
+  if (mediaSecuritySyncInFlight || !isSocketOnline.value || currentUserId.value <= 0) return;
+  mediaSecuritySyncInFlight = true;
+  try {
+    const session = ensureMediaSecuritySession();
+    const eligibleTargetUserIds = mediaSecurityEligibleTargetIds();
+    if (eligibleTargetUserIds.length <= 0) {
+      mediaSecurityStateVersion.value += 1;
+      return;
+    }
+    const marked = session.markParticipantSet(eligibleTargetUserIds);
+    mediaSecurityStateVersion.value += 1;
+    if (forceRekey || marked.changed) {
+      clearMediaSecuritySignalCaches();
+      const ready = await session.ensureReady();
+      if (!ready) {
+        mediaSecurityStateVersion.value += 1;
+        return;
+      }
+      await session.rotateSenderKey(forceRekey ? 'forced' : 'participant_change');
+      mediaSecurityStateVersion.value += 1;
+    }
+    for (const targetUserId of marked.userIds) {
+      await sendMediaSecurityHello(targetUserId);
+      await sendMediaSecuritySenderKey(targetUserId);
+
+      // M6: Detect peers that received our Hello but never replied with a SenderKey.
+      // After 5s without a response, force-resend the Hello to break the stall.
+      const normalizedTargetId = Number(targetUserId || 0);
+      const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      const peerState = String(peer?.state || '').trim();
+      if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'capability_ready' || peerState === 'rekeying') {
+        const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+        if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
+          console.warn(
+            '[KingRT] ⏳ Media-security handshake timeout for user',
+            normalizedTargetId,
+            `state=${peerState}`,
+            `elapsed=${Date.now() - helloSentAt}ms — force-retrying Hello`,
+          );
+          mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+          await sendMediaSecurityHello(targetUserId, true);
+        }
+      }
+    }
+  } catch (error) {
+    mediaDebugLog('[MediaSecurity] sync failed', error);
+    captureClientDiagnosticError('media_security_sync_failed', error, {
+      target_user_ids: mediaSecurityTargetIds(),
+      eligible_target_user_ids: mediaSecurityEligibleTargetIds(),
+      media_runtime_path: mediaRuntimePath.value,
+    }, {
+      code: 'media_security_sync_failed',
+      immediate: true,
+    });
+  } finally {
+    mediaSecuritySyncInFlight = false;
+  }
+}
+
+function shouldRecoverMediaSecurityFromFrameError(error) {
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return message.includes('wrong_key_id')
+    || message.includes('wrong_epoch')
+    || message.includes('downgrade_attempt');
+}
+
+function shouldTreatNativeFrameErrorAsTransient(direction, error) {
+  void direction;
+  void error;
+  return false;
+}
+
+function shouldSendTransportOnlySfuFrame(error) {
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return message.includes('unsupported_capability')
+    || message.includes('blocked_capability');
+}
+
+function recoverMediaSecurityForPublisher(publisherUserId) {
+  const normalizedUserId = Number(publisherUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  const nowMs = Date.now();
+  const lastRecoveryMs = Number(mediaSecurityRecoveryLastByUserId.get(normalizedUserId) || 0);
+  if ((nowMs - lastRecoveryMs) < 3000) return;
+  mediaSecurityRecoveryLastByUserId.set(normalizedUserId, nowMs);
+
+  requestRoomSnapshot();
+  void (async () => {
+    await sendMediaSecurityHello(normalizedUserId, true);
+    await sendMediaSecuritySenderKey(normalizedUserId, true);
+    await syncMediaSecurityWithParticipants();
+  })();
+}
+
+function setNativeAudioBridgeQuarantine(userId, reason = 'malformed_protected_frame') {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  nativeAudioBridgeQuarantineByUserId.set(normalizedUserId, {
+    reason: String(reason || 'malformed_protected_frame').trim().toLowerCase() || 'malformed_protected_frame',
+    sinceMs: Date.now(),
+  });
+  return true;
+}
+
+function clearNativeAudioBridgeQuarantine(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  return nativeAudioBridgeQuarantineByUserId.delete(normalizedUserId);
+}
+
+function nativeAudioBridgeIsQuarantined(userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  return nativeAudioBridgeQuarantineByUserId.has(normalizedUserId);
+}
+
+function shouldBypassNativeAudioProtectionForPeer(userId) {
+  if (!shouldUseNativeAudioBridge()) return false;
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) {
+    return false;
+  }
+  return nativeAudioBridgeIsQuarantined(normalizedUserId);
+}
+
+async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation') {
+  const targetUserId = Number(peer?.userId || 0);
+  if (!shouldUseNativeAudioBridge()) return true;
+  if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === currentUserId.value) return false;
+  if (!isSocketOnline.value) return false;
+
+  const session = ensureMediaSecuritySession();
+  const ready = await session.ensureReady();
+  mediaSecurityStateVersion.value += 1;
+  if (!ready) return false;
+  if (session.canProtectNativeForTargets([targetUserId])) return true;
+
+  await sendMediaSecurityHello(targetUserId, true);
+  await sendMediaSecuritySenderKey(targetUserId, true);
+  await syncMediaSecurityWithParticipants();
+
+  const secured = session.canProtectNativeForTargets([targetUserId]);
+  if (!secured) {
+    setNativePeerAudioBridgeState(peer, 'waiting_security', '');
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'native_audio_waiting_for_media_security',
+      code: 'native_audio_waiting_for_media_security',
+      message: 'Native protected audio negotiation is waiting for the media-security handshake.',
+      payload: {
+        target_user_id: targetUserId,
+        reason: String(reason || 'native_audio_negotiation'),
+        media_runtime_path: mediaRuntimePath.value,
+        security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
+      },
+    });
+  }
+  return secured;
+}
+
+function resyncNativeAudioBridgePeerAfterSecurityReady(userId, reason = 'security_ready', forceOffer = false) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
+  if (!shouldMaintainNativePeerConnections()) return false;
+  if (shouldUseNativeAudioBridge() && !ensureMediaSecuritySession().canProtectNativeForTargets([normalizedUserId])) return false;
+
+  const peer = nativePeerConnectionsRef.value.get(normalizedUserId) || ensureNativePeerConnection(normalizedUserId);
+  if (!peer?.pc || peer.pc.signalingState === 'closed') return false;
+  attachMediaSecurityNativeReceiversForPeer(peer);
+  if (!forceOffer && !shouldSyncNativeLocalTracksBeforeOffer(peer)) return true;
+
+  void syncNativePeerLocalTracks(peer)
+    .then(() => {
+      attachMediaSecurityNativeReceiversForPeer(peer);
+      synchronizeNativePeerMediaElements(peer);
+      scheduleNativePeerAudioTrackDeadline(peer);
+      if (peer.negotiating) {
+        peer.needsRenegotiate = true;
+        return;
+      }
+      if (peer.initiator || forceOffer) {
+        void sendNativeOffer(peer);
+      }
+    })
+    .catch((error) => mediaDebugLog('[WebRTC] native audio bridge resync failed', reason, error));
+  return true;
+}
+
+function handleNativeMediaSecurityFrameError(event = {}) {
+  const direction = String(event?.direction || '').trim().toLowerCase();
+  const error = event?.error;
+  const senderUserId = Number(event?.senderUserId || event?.sender_user_id || 0);
+  const trackId = String(event?.trackId || event?.track_id || '').trim();
+  const errorMessage = extractDiagnosticMessage(error, 'Native protected media frame could not be processed.');
+  const code = direction === 'receiver'
+    ? 'native_media_frame_decrypt_failed'
+    : 'native_media_frame_encrypt_failed';
+  const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error);
+  const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
+  const nowMs = Date.now();
+  const lastLogMs = Number(nativeFrameErrorLastLogByKey.get(logKey) || 0);
+  const shouldLog = (nowMs - lastLogMs) >= NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS;
+  if (shouldLog) {
+    nativeFrameErrorLastLogByKey.set(logKey, nowMs);
+  }
+
+  if (shouldLog) {
+    const logMethod = transientFrameDrop ? console.warn : console.error;
+    logMethod(
+      '[KingRT] SFU/native media-security frame transform failed',
+      `direction=${direction || 'unknown'}`,
+      `user=${senderUserId || 'n/a'}`,
+      `track=${trackId || 'n/a'}`,
+      `error=${errorMessage}`,
+    );
+  }
+  if (shouldLog) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: transientFrameDrop ? 'warning' : 'error',
+      eventType: code,
+      code,
+      message: errorMessage,
+      payload: {
+        direction,
+        sender_user_id: senderUserId,
+        track_id: trackId,
+        media_runtime_path: mediaRuntimePath.value,
+        security: nativeAudioSecurityTelemetrySnapshot(),
+      },
+      immediate: !transientFrameDrop,
+    });
+  }
+
+  if (
+    direction === 'receiver'
+    && shouldUseNativeAudioBridge()
+    && errorMessage === 'malformed_protected_frame'
+    && Number.isInteger(senderUserId)
+    && senderUserId > 0
+    && senderUserId !== currentUserId.value
+  ) {
+    setNativeAudioBridgeQuarantine(senderUserId, 'malformed_protected_frame');
+    const peer = nativePeerConnectionsRef.value.get(senderUserId) || null;
+    if (peer) {
+      setNativePeerAudioBridgeState(
+        peer,
+        'waiting_security',
+        'Protected audio bridge paused because the remote native stream is not yet wrapped.'
+      );
+    }
+    closeNativePeerConnection(senderUserId);
+    return;
+  }
+
+  const shouldRecoverReceiver = shouldRecoverMediaSecurityFromFrameError(error) || transientFrameDrop;
+  if (direction !== 'receiver' || !shouldRecoverReceiver) return;
+  if (!Number.isInteger(senderUserId) || senderUserId <= 0 || senderUserId === currentUserId.value) return;
+  recoverMediaSecurityForPublisher(senderUserId);
+  if (transientFrameDrop) {
+    const peer = nativePeerConnectionsRef.value.get(senderUserId);
+    if (peer && scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame', {
+      requireMissingTrack: false,
+    })) {
+      return;
+    }
+  }
+  resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error');
+}
+

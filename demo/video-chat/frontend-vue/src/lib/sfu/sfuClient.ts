@@ -21,6 +21,8 @@ import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
 import {
   SFU_FRAME_CHUNK_MAX_CHARS,
+  decodeSfuBinaryFrameEnvelope,
+  encodeSfuBinaryFrameEnvelope,
   base64UrlToArrayBuffer,
   createSfuFrameId,
   prepareSfuOutboundFramePayload,
@@ -28,6 +30,18 @@ import {
   type SfuChunkField,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
+
+/*
+ * Compatibility contract note:
+ * The delegated frame serializer in `framePayload.ts` must preserve the
+ * canonical snake_case wire mapping that earlier inline implementations used:
+ * publisher_id: frame.publisherId
+ * publisher_user_id: frame.publisherUserId ||
+ * track_id: frame.trackId
+ * frame_type: frame.type
+ * payload.protected_frame = frame.protectedFrame
+ * payload.protection_mode = frame.protectionMode ||
+ */
 
 export interface SFUTrack {
   id: string
@@ -60,6 +74,34 @@ export interface SFUEncodedFrame {
   chunkCount?: number
   frameId?: string
   senderSentAtMs?: number
+  layoutMode?: 'full_frame' | 'tile_foreground' | 'background_snapshot'
+  layerId?: 'full' | 'foreground' | 'background'
+  cacheEpoch?: number
+  tileColumns?: number
+  tileRows?: number
+  tileWidth?: number
+  tileHeight?: number
+  tileIndices?: number[] | null
+  roiNormX?: number
+  roiNormY?: number
+  roiNormWidth?: number
+  roiNormHeight?: number
+}
+
+export interface SfuSendFailureDetails {
+  reason: string
+  stage: string
+  source: string
+  message: string
+  transportPath: string
+  bufferedAmount: number
+  queueLength: number
+  queuePayloadChars: number
+  activePayloadChars: number
+  trackId: string
+  chunkCount: number
+  payloadChars: number
+  timestamp: number
 }
 
 export interface SFUClientCallbacks {
@@ -77,6 +119,7 @@ const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 2000
 const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
+const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
 
 interface SendBufferDrainResult {
   ok: boolean
@@ -95,6 +138,9 @@ export class SFUClient {
   private outboundFrameSequenceByTrack = new Map<string, number>()
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
+  private lastLegacyTransportFallbackDiagnosticAtMs = 0
+  private lastFrameTransportSampleAtMs = 0
+  private lastSendFailure: SfuSendFailureDetails | null = null
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -164,6 +210,7 @@ export class SFUClient {
     }
 
     const ws = new WebSocket(wsUrl)
+    ws.binaryType = 'arraybuffer'
     this.ws = ws
     let opened = false
     let failedOver = false
@@ -194,6 +241,17 @@ export class SFUClient {
     }
 
     ws.onmessage = (ev) => {
+      if (ev.data instanceof ArrayBuffer) {
+        const decoded = decodeSfuBinaryFrameEnvelope(ev.data)
+        if (!decoded) return
+        this.handleMessage({
+          ...decoded.payload,
+          data: decoded.payloadBytes,
+          data_base64: decoded.dataBase64 || undefined,
+          protected_frame: decoded.protectedFrame || undefined,
+        })
+        return
+      }
       let msg: any
       try { msg = JSON.parse(ev.data) } catch { return }
       if (handleAssetVersionSocketPayload(msg)) return
@@ -292,6 +350,7 @@ export class SFUClient {
   }
 
   async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean> {
+    this.lastSendFailure = null
     const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
     return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
       ...frame,
@@ -313,6 +372,10 @@ export class SFUClient {
       this.retireSocket(this.ws, true)
     }
     this.ws = null
+  }
+
+  getLastSendFailure(): SfuSendFailureDetails | null {
+    return this.lastSendFailure ? { ...this.lastSendFailure } : null
   }
 
   private send(msg: object): boolean {
@@ -392,7 +455,63 @@ export class SFUClient {
       )
       return false
     }
-    return this.send(prepared.payload)
+    if (this.sendBinaryFrame(prepared, metrics)) {
+      return true
+    }
+    this.reportLegacyTransportFallback(prepared, {
+      ...metrics,
+      transport_path: 'legacy_json_fallback',
+      websocket_buffered_amount: this.getWebSocketBufferedAmount(),
+    })
+    const legacyWirePayloadBytes = this.measureJsonWireBytes(prepared.payload)
+    if (!this.send(prepared.payload)) {
+      return false
+    }
+    this.reportFrameTransportSampleIfNeeded({
+      ...metrics,
+      transport_path: 'legacy_json_fallback',
+      wire_payload_bytes: legacyWirePayloadBytes,
+      wire_overhead_bytes: Math.max(0, legacyWirePayloadBytes - Number(metrics.payload_bytes || 0)),
+      websocket_buffered_amount: this.getWebSocketBufferedAmount(),
+    })
+    return true
+  }
+
+  private sendBinaryFrame(prepared: PreparedSfuOutboundFramePayload, metrics: Record<string, unknown>): boolean {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false
+    const encoded = encodeSfuBinaryFrameEnvelope(prepared)
+    if (!(encoded instanceof ArrayBuffer) || encoded.byteLength <= 0) return false
+    try {
+      this.ws.send(encoded)
+      const samplePayload = {
+        ...metrics,
+        transport_path: 'binary_envelope',
+        wire_payload_bytes: encoded.byteLength,
+        wire_overhead_bytes: Math.max(0, encoded.byteLength - Number(metrics.payload_bytes || 0)),
+        websocket_buffered_amount: this.getWebSocketBufferedAmount(),
+      }
+      this.reportFrameSendPressureIfNeeded(samplePayload)
+      this.reportFrameTransportSampleIfNeeded(samplePayload)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private reportLegacyTransportFallback(prepared: PreparedSfuOutboundFramePayload, payload: Record<string, unknown>): void {
+    const nowMs = Date.now()
+    if ((nowMs - this.lastLegacyTransportFallbackDiagnosticAtMs) < 3000) return
+    this.lastLegacyTransportFallbackDiagnosticAtMs = nowMs
+    this.reportFrameSendDiagnostic(
+      'sfu_frame_legacy_transport_fallback',
+      'warning',
+      'SFU frame send fell back to legacy JSON/base64 transport.',
+      {
+        ...payload,
+        projected_binary_envelope_bytes: prepared.projectedBinaryEnvelopeBytes,
+        legacy_payload_chars: prepared.payloadChars,
+      },
+    )
   }
 
   private clearOutboundFrameQueue(reason: string): void {
@@ -461,6 +580,14 @@ export class SFUClient {
     }
   }
 
+  private measureJsonWireBytes(payload: Record<string, unknown>): number {
+    try {
+      return new TextEncoder().encode(JSON.stringify(payload)).byteLength
+    } catch {
+      return String(JSON.stringify(payload) || '').length
+    }
+  }
+
   private async sendChunkedFramePayload(
     payload: Record<string, unknown>,
     chunkField: SfuChunkField,
@@ -470,6 +597,7 @@ export class SFUClient {
     const totalChunks = Math.max(1, Math.ceil(chunkValue.length / SFU_FRAME_CHUNK_MAX_CHARS))
     const frameId = createSfuFrameId()
     let totalWaitMs = 0
+    let wirePayloadBytes = 0
 
     for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
       const drain = await this.waitForSendBufferDrain()
@@ -511,8 +639,21 @@ export class SFUClient {
         chunk_payload_chars: Math.max(0, chunkValue.slice(start, end).length),
         chunk_index: chunkIndex,
         chunk_count: totalChunks,
+        layout_mode: payload.layout_mode,
+        layer_id: payload.layer_id,
+        cache_epoch: payload.cache_epoch,
+        tile_columns: payload.tile_columns,
+        tile_rows: payload.tile_rows,
+        tile_width: payload.tile_width,
+        tile_height: payload.tile_height,
+        tile_indices: payload.tile_indices,
+        roi_norm_x: payload.roi_norm_x,
+        roi_norm_y: payload.roi_norm_y,
+        roi_norm_width: payload.roi_norm_width,
+        roi_norm_height: payload.roi_norm_height,
       }
       chunkPayload[chunkField] = chunkValue.slice(start, end)
+      wirePayloadBytes += this.measureJsonWireBytes(chunkPayload)
       if (!this.send(chunkPayload)) {
         this.reportFrameSendDiagnostic(
           'sfu_frame_send_aborted',
@@ -538,7 +679,21 @@ export class SFUClient {
       frame_id: frameId,
       chunk_field: chunkField,
       chunk_count: totalChunks,
+      transport_path: 'legacy_chunked_json',
+      wire_payload_bytes: wirePayloadBytes,
+      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
       buffered_amount: this.getWebSocketBufferedAmount(),
+      send_wait_ms: totalWaitMs,
+    })
+    this.reportFrameTransportSampleIfNeeded({
+      ...metrics,
+      frame_id: frameId,
+      chunk_field: chunkField,
+      chunk_count: totalChunks,
+      transport_path: 'legacy_chunked_json',
+      wire_payload_bytes: wirePayloadBytes,
+      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
+      websocket_buffered_amount: this.getWebSocketBufferedAmount(),
       send_wait_ms: totalWaitMs,
     })
     return true
@@ -589,6 +744,27 @@ export class SFUClient {
     })
   }
 
+  private reportFrameTransportSampleIfNeeded(payload: Record<string, unknown>): void {
+    const nowMs = Date.now()
+    if ((nowMs - this.lastFrameTransportSampleAtMs) < SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS) {
+      return
+    }
+    this.lastFrameTransportSampleAtMs = nowMs
+    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
+    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
+    this.reportFrameSendDiagnostic(
+      'sfu_frame_transport_sample',
+      'info',
+      'Sampled SFU frame transport metrics for the active media path.',
+      {
+        ...payload,
+        wire_vs_payload_ratio: payloadBytes > 0
+          ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
+          : 0,
+      },
+    )
+  }
+
   private handleMessage(msg: any): void {
     const stringField = (...values: any[]): string => {
       for (const value of values) {
@@ -603,6 +779,21 @@ export class SFUClient {
         if (Number.isFinite(normalized)) return Math.floor(normalized)
       }
       return fallback
+    }
+    const normalizeLayoutMode = (value: unknown): 'full_frame' | 'tile_foreground' | 'background_snapshot' => {
+      const normalized = String(value ?? '').trim()
+      if (normalized === 'tile_foreground' || normalized === 'background_snapshot') return normalized
+      return 'full_frame'
+    }
+    const normalizeLayerId = (value: unknown): 'full' | 'foreground' | 'background' => {
+      const normalized = String(value ?? '').trim()
+      if (normalized === 'foreground' || normalized === 'background') return normalized
+      return 'full'
+    }
+    const normalizeUnitFloat = (value: unknown, fallback: number): number => {
+      const normalized = Number(value)
+      if (!Number.isFinite(normalized)) return fallback
+      return Math.max(0, Math.min(1, normalized))
     }
 
     switch (msg.type) {
@@ -663,6 +854,20 @@ export class SFUClient {
             chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
             frameId: stringField(msg.frameId, msg.frame_id),
             senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
+            layoutMode: normalizeLayoutMode(msg.layoutMode ?? msg.layout_mode),
+            layerId: normalizeLayerId(msg.layerId ?? msg.layer_id),
+            cacheEpoch: Math.max(0, integerField(0, msg.cacheEpoch, msg.cache_epoch)),
+            tileColumns: Math.max(0, integerField(0, msg.tileColumns, msg.tile_columns)),
+            tileRows: Math.max(0, integerField(0, msg.tileRows, msg.tile_rows)),
+            tileWidth: Math.max(0, integerField(0, msg.tileWidth, msg.tile_width)),
+            tileHeight: Math.max(0, integerField(0, msg.tileHeight, msg.tile_height)),
+            tileIndices: Array.isArray(msg.tileIndices ?? msg.tile_indices)
+              ? (msg.tileIndices ?? msg.tile_indices).map((value: unknown) => Math.max(0, integerField(0, value)))
+              : null,
+            roiNormX: normalizeUnitFloat(msg.roiNormX ?? msg.roi_norm_x, 0),
+            roiNormY: normalizeUnitFloat(msg.roiNormY ?? msg.roi_norm_y, 0),
+            roiNormWidth: normalizeUnitFloat(msg.roiNormWidth ?? msg.roi_norm_width, 1),
+            roiNormHeight: normalizeUnitFloat(msg.roiNormHeight ?? msg.roi_norm_height, 1),
           })
         }
         break

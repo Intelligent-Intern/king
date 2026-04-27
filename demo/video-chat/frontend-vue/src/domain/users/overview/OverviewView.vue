@@ -43,6 +43,13 @@ const operationsState = reactive({
     live_calls: 0,
     concurrent_participants: 0,
   },
+  transport: {
+    recent_frame_count: 0,
+    matte_guided_frame_count: 0,
+    avg_selection_tile_ratio: 0,
+    avg_roi_area_ratio: 0,
+    frame_kinds: [],
+  },
   runningCalls: [],
 });
 
@@ -191,9 +198,17 @@ async function loadInfrastructure() {
 
 function applyVideoOperationsPayload(payload) {
   const metrics = payload?.metrics && typeof payload.metrics === 'object' ? payload.metrics : {};
+  const transport = payload?.transport && typeof payload.transport === 'object' ? payload.transport : {};
   operationsState.metrics = {
     live_calls: normalizeNonNegativeInteger(metrics.live_calls),
     concurrent_participants: normalizeNonNegativeInteger(metrics.concurrent_participants),
+  };
+  operationsState.transport = {
+    recent_frame_count: normalizeNonNegativeInteger(transport.recent_frame_count),
+    matte_guided_frame_count: normalizeNonNegativeInteger(transport.matte_guided_frame_count),
+    avg_selection_tile_ratio: Number(transport.avg_selection_tile_ratio || 0),
+    avg_roi_area_ratio: Number(transport.avg_roi_area_ratio || 0),
+    frame_kinds: normalizeArray(transport.frame_kinds),
   };
   operationsState.runningCalls = normalizeArray(payload?.running_calls);
   operationsState.lastLoadedAt = String(payload?.time || new Date().toISOString());
@@ -260,6 +275,29 @@ const liveCallsMetric = computed(() => String(normalizeNonNegativeInteger(
 const participantsMetric = computed(() => String(normalizeNonNegativeInteger(
   operationsState.metrics.concurrent_participants,
 )));
+
+const transportRecentFramesMetric = computed(() => String(normalizeNonNegativeInteger(
+  operationsState.transport.recent_frame_count,
+)));
+
+const transportMatteGuidedMetric = computed(() => String(normalizeNonNegativeInteger(
+  operationsState.transport.matte_guided_frame_count,
+)));
+
+const transportAvgSelectionMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_selection_tile_ratio || 0)) * 100)}%`);
+
+const transportAvgRoiMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_roi_area_ratio || 0)) * 100)}%`);
+
+const transportFrameKindRows = computed(() => (
+  normalizeArray(operationsState.transport.frame_kinds).map((row, index) => ({
+    id: `${String(row?.kind || 'kind').trim()}:${index}`,
+    kind: String(row?.kind || 'unknown').trim() || 'unknown',
+    frames: normalizeNonNegativeInteger(row?.frames),
+    matteGuidedFrames: normalizeNonNegativeInteger(row?.matte_guided_frames),
+    avgSelectionTileRatio: `${Math.round(Math.max(0, Number(row?.avg_selection_tile_ratio || 0)) * 100)}%`,
+    avgRoiAreaRatio: `${Math.round(Math.max(0, Number(row?.avg_roi_area_ratio || 0)) * 100)}%`,
+  }))
+));
 
 const healthyNodesMetric = computed(() => {
   const total = clusterHealthRows.value.length;

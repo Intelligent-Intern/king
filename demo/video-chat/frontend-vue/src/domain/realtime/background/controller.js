@@ -66,4 +66,14 @@ export class BackgroundFilterController {
     this.revision += 1;
     this.disposeCurrentHandle();
   }
+
+  getCurrentMatteMaskSnapshot() {
+    const handle = this.currentHandle;
+    if (!handle || typeof handle.getMatteMaskSnapshot !== 'function') return null;
+    try {
+      return handle.getMatteMaskSnapshot();
+    } catch {
+      return null;
+    }
+  }
 }

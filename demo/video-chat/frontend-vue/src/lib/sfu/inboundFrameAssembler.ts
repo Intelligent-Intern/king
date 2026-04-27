@@ -17,6 +17,18 @@ interface PendingInboundFrameChunk {
   protocolVersion: number
   frameSequence: number
   senderSentAtMs: number
+  layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
+  layerId: 'full' | 'foreground' | 'background'
+  cacheEpoch: number
+  tileColumns: number
+  tileRows: number
+  tileWidth: number
+  tileHeight: number
+  tileIndices: number[]
+  roiNormX: number
+  roiNormY: number
+  roiNormWidth: number
+  roiNormHeight: number
   updatedAtMs: number
   chunks: Map<number, string>
 }
@@ -76,6 +88,20 @@ export class SfuInboundFrameAssembler {
     const senderSentAtMs = Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms))
     const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
     const chunkPayloadChars = Math.max(0, integerField(chunkValue.length, msg.chunkPayloadChars, msg.chunk_payload_chars))
+    const layoutMode = normalizeLayoutMode(stringField(msg.layoutMode, msg.layout_mode))
+    const layerId = normalizeLayerId(stringField(msg.layerId, msg.layer_id))
+    const cacheEpoch = Math.max(0, integerField(0, msg.cacheEpoch, msg.cache_epoch))
+    const tileColumns = Math.max(0, integerField(0, msg.tileColumns, msg.tile_columns))
+    const tileRows = Math.max(0, integerField(0, msg.tileRows, msg.tile_rows))
+    const tileWidth = Math.max(0, integerField(0, msg.tileWidth, msg.tile_width))
+    const tileHeight = Math.max(0, integerField(0, msg.tileHeight, msg.tile_height))
+    const tileIndices = Array.isArray(msg.tileIndices ?? msg.tile_indices)
+      ? (msg.tileIndices ?? msg.tile_indices).map((entry: unknown) => Math.max(0, integerField(0, entry)))
+      : []
+    const roiNormX = normalizeUnitFloat(msg.roiNormX ?? msg.roi_norm_x, 0)
+    const roiNormY = normalizeUnitFloat(msg.roiNormY ?? msg.roi_norm_y, 0)
+    const roiNormWidth = normalizeUnitFloat(msg.roiNormWidth ?? msg.roi_norm_width, 1)
+    const roiNormHeight = normalizeUnitFloat(msg.roiNormHeight ?? msg.roi_norm_height, 1)
 
     if (
       frameId === ''
@@ -149,6 +175,18 @@ export class SfuInboundFrameAssembler {
         protocolVersion,
         frameSequence,
         senderSentAtMs,
+        layoutMode,
+        layerId,
+        cacheEpoch,
+        tileColumns,
+        tileRows,
+        tileWidth,
+        tileHeight,
+        tileIndices,
+        roiNormX,
+        roiNormY,
+        roiNormWidth,
+        roiNormHeight,
         updatedAtMs: Date.now(),
         chunks: new Map([[chunkIndex, chunkValue]]),
       })
@@ -164,6 +202,18 @@ export class SfuInboundFrameAssembler {
             senderSentAtMs,
             protocolVersion,
             protectionMode,
+            layoutMode,
+            layerId,
+            cacheEpoch,
+            tileColumns,
+            tileRows,
+            tileWidth,
+            tileHeight,
+            tileIndices,
+            roiNormX,
+            roiNormY,
+            roiNormWidth,
+            roiNormHeight,
             payloadChars: payloadChars || chunkValue.length,
             chunkCount,
             chunkField,
@@ -185,6 +235,18 @@ export class SfuInboundFrameAssembler {
       protocolVersion,
       frameSequence,
       senderSentAtMs,
+      layoutMode,
+      layerId,
+      cacheEpoch,
+      tileColumns,
+      tileRows,
+      tileWidth,
+      tileHeight,
+      tileIndices,
+      roiNormX,
+      roiNormY,
+      roiNormWidth,
+      roiNormHeight,
     })) {
       this.pendingChunks.delete(frameId)
       this.reportDiagnostic(
@@ -293,6 +355,18 @@ export class SfuInboundFrameAssembler {
       senderSentAtMs: existing.senderSentAtMs,
       protocolVersion: existing.protocolVersion,
       protectionMode: existing.protectionMode,
+      layoutMode: existing.layoutMode,
+      layerId: existing.layerId,
+      cacheEpoch: existing.cacheEpoch,
+      tileColumns: existing.tileColumns,
+      tileRows: existing.tileRows,
+      tileWidth: existing.tileWidth,
+      tileHeight: existing.tileHeight,
+      tileIndices: existing.tileIndices,
+      roiNormX: existing.roiNormX,
+      roiNormY: existing.roiNormY,
+      roiNormWidth: existing.roiNormWidth,
+      roiNormHeight: existing.roiNormHeight,
       payloadChars: existing.payloadChars || assembled.length,
       chunkCount: existing.chunkCount,
       chunkField: existing.chunkField,
@@ -337,6 +411,18 @@ export class SfuInboundFrameAssembler {
       && existing.protocolVersion === next.protocolVersion
       && existing.frameSequence === next.frameSequence
       && existing.senderSentAtMs === next.senderSentAtMs
+      && existing.layoutMode === next.layoutMode
+      && existing.layerId === next.layerId
+      && existing.cacheEpoch === next.cacheEpoch
+      && existing.tileColumns === next.tileColumns
+      && existing.tileRows === next.tileRows
+      && existing.tileWidth === next.tileWidth
+      && existing.tileHeight === next.tileHeight
+      && existing.roiNormX === next.roiNormX
+      && existing.roiNormY === next.roiNormY
+      && existing.roiNormWidth === next.roiNormWidth
+      && existing.roiNormHeight === next.roiNormHeight
+      && JSON.stringify(existing.tileIndices) === JSON.stringify(next.tileIndices)
   }
 
   private reportDiagnostic(
@@ -379,6 +465,18 @@ function buildReassembledFrame(input: {
   senderSentAtMs: number
   protocolVersion: number
   protectionMode: 'transport_only' | 'protected' | 'required'
+  layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
+  layerId: 'full' | 'foreground' | 'background'
+  cacheEpoch: number
+  tileColumns: number
+  tileRows: number
+  tileWidth: number
+  tileHeight: number
+  tileIndices: number[]
+  roiNormX: number
+  roiNormY: number
+  roiNormWidth: number
+  roiNormHeight: number
   payloadChars: number
   chunkCount: number
   chunkField: 'data_base64_chunk' | 'protected_frame_chunk'
@@ -396,6 +494,18 @@ function buildReassembledFrame(input: {
     frame_sequence: input.frameSequence,
     sender_sent_at_ms: input.senderSentAtMs,
     protection_mode: input.protectionMode,
+    layout_mode: input.layoutMode,
+    layer_id: input.layerId,
+    cache_epoch: input.cacheEpoch,
+    tile_columns: input.tileColumns,
+    tile_rows: input.tileRows,
+    tile_width: input.tileWidth,
+    tile_height: input.tileHeight,
+    tile_indices: input.tileIndices,
+    roi_norm_x: input.roiNormX,
+    roi_norm_y: input.roiNormY,
+    roi_norm_width: input.roiNormWidth,
+    roi_norm_height: input.roiNormHeight,
     payload_chars: input.payloadChars,
     chunk_count: input.chunkCount,
     ...(input.chunkField === 'protected_frame_chunk'
@@ -418,4 +528,20 @@ function integerField(fallback: number, ...values: any[]): number {
     if (Number.isFinite(normalized)) return Math.floor(normalized)
   }
   return fallback
+}
+
+function normalizeLayoutMode(value: string): 'full_frame' | 'tile_foreground' | 'background_snapshot' {
+  if (value === 'tile_foreground' || value === 'background_snapshot') return value
+  return 'full_frame'
+}
+
+function normalizeLayerId(value: string): 'full' | 'foreground' | 'background' {
+  if (value === 'foreground' || value === 'background') return value
+  return 'full'
+}
+
+function normalizeUnitFloat(value: unknown, fallback: number): number {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized)) return fallback
+  return Math.max(0, Math.min(1, normalized))
 }

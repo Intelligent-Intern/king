@@ -81,8 +81,116 @@ function videochat_video_operations_snapshot(PDO $pdo, ?int $nowEpoch = null): a
             'live_calls' => count($runningCalls),
             'concurrent_participants' => $concurrentParticipants,
         ],
+        'transport' => videochat_video_operations_sfu_transport_snapshot($pdo, $nowMs),
         'running_calls' => $runningCalls,
         'time' => gmdate('c', $now),
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_video_operations_sfu_transport_snapshot(PDO $pdo, int $nowMs): array
+{
+    $cutoffMs = max(0, $nowMs - videochat_realtime_presence_db_ttl_ms());
+    $statement = $pdo->prepare(
+        <<<'SQL'
+SELECT data_json
+FROM sfu_frames
+WHERE created_at_ms >= :cutoff_ms
+ORDER BY id DESC
+LIMIT 240
+SQL
+    );
+    $statement->execute([
+        ':cutoff_ms' => $cutoffMs,
+    ]);
+
+    $rows = $statement instanceof PDOStatement ? $statement->fetchAll(PDO::FETCH_ASSOC) : [];
+    $kindStats = [];
+    $recentFrameCount = 0;
+    $matteGuidedFrameCount = 0;
+    $selectionRatioSum = 0.0;
+    $selectionRatioCount = 0;
+    $roiAreaRatioSum = 0.0;
+    $roiAreaRatioCount = 0;
+
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $decoded = json_decode((string) ($row['data_json'] ?? '[]'), true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        $storedPayload = videochat_sfu_decode_stored_frame_payload($decoded);
+        $metadata = is_array($storedPayload['metadata'] ?? null) ? $storedPayload['metadata'] : [];
+        $metricFields = videochat_sfu_transport_metric_fields($metadata, 0);
+        $kind = (string) ($metricFields['transport_frame_kind'] ?? 'full_frame:full');
+        if (!isset($kindStats[$kind]) || !is_array($kindStats[$kind])) {
+            $kindStats[$kind] = [
+                'kind' => $kind,
+                'frames' => 0,
+                'matte_guided_frames' => 0,
+                'selection_tile_ratio_sum' => 0.0,
+                'selection_tile_ratio_count' => 0,
+                'roi_area_ratio_sum' => 0.0,
+                'roi_area_ratio_count' => 0,
+            ];
+        }
+
+        $recentFrameCount += 1;
+        $selectionMaskGuided = (bool) ($metricFields['selection_mask_guided'] ?? false);
+        if ($selectionMaskGuided) {
+            $matteGuidedFrameCount += 1;
+            $kindStats[$kind]['matte_guided_frames'] += 1;
+        }
+
+        $selectionTileRatio = (float) ($metricFields['selection_tile_ratio'] ?? -1.0);
+        if ($selectionTileRatio >= 0.0) {
+            $selectionRatioSum += $selectionTileRatio;
+            $selectionRatioCount += 1;
+            $kindStats[$kind]['selection_tile_ratio_sum'] += $selectionTileRatio;
+            $kindStats[$kind]['selection_tile_ratio_count'] += 1;
+        }
+
+        $roiAreaRatio = (float) ($metricFields['roi_area_ratio'] ?? -1.0);
+        if ($roiAreaRatio >= 0.0) {
+            $roiAreaRatioSum += $roiAreaRatio;
+            $roiAreaRatioCount += 1;
+            $kindStats[$kind]['roi_area_ratio_sum'] += $roiAreaRatio;
+            $kindStats[$kind]['roi_area_ratio_count'] += 1;
+        }
+
+        $kindStats[$kind]['frames'] += 1;
+    }
+
+    $kindRows = array_values(array_map(static function (array $row): array {
+        $selectionRatioCount = max(0, (int) ($row['selection_tile_ratio_count'] ?? 0));
+        $roiAreaRatioCount = max(0, (int) ($row['roi_area_ratio_count'] ?? 0));
+        return [
+            'kind' => (string) ($row['kind'] ?? 'unknown'),
+            'frames' => max(0, (int) ($row['frames'] ?? 0)),
+            'matte_guided_frames' => max(0, (int) ($row['matte_guided_frames'] ?? 0)),
+            'avg_selection_tile_ratio' => $selectionRatioCount > 0
+                ? round(((float) ($row['selection_tile_ratio_sum'] ?? 0.0)) / $selectionRatioCount, 6)
+                : 0.0,
+            'avg_roi_area_ratio' => $roiAreaRatioCount > 0
+                ? round(((float) ($row['roi_area_ratio_sum'] ?? 0.0)) / $roiAreaRatioCount, 6)
+                : 0.0,
+        ];
+    }, $kindStats));
+
+    usort($kindRows, static function (array $left, array $right): int {
+        return ((int) ($right['frames'] ?? 0)) <=> ((int) ($left['frames'] ?? 0));
+    });
+
+    return [
+        'recent_frame_count' => $recentFrameCount,
+        'matte_guided_frame_count' => $matteGuidedFrameCount,
+        'avg_selection_tile_ratio' => $selectionRatioCount > 0 ? round($selectionRatioSum / $selectionRatioCount, 6) : 0.0,
+        'avg_roi_area_ratio' => $roiAreaRatioCount > 0 ? round($roiAreaRatioSum / $roiAreaRatioCount, 6) : 0.0,
+        'frame_kinds' => $kindRows,
     ];
 }
 

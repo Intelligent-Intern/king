@@ -24,6 +24,7 @@ export function createComposeController({
     startsLocal: '',
     endsLocal: '',
     replaceParticipants: false,
+    participantsReady: false,
     submitting: false,
     error: '',
   });
@@ -96,11 +97,60 @@ export function createComposeController({
     composeState.title = '';
     composeState.accessMode = 'invite_only';
     composeState.replaceParticipants = false;
+    composeState.participantsReady = false;
     composeState.submitting = false;
     composeState.error = '';
     composeParticipantStore.reset();
     composeSelectedUserIds.value = [];
     composeExternalRows.value = [];
+  }
+
+  function seedComposeParticipantsFromCall(call) {
+    const participants = call?.participants || {};
+    const hasDetailedParticipants = Array.isArray(participants.internal) || Array.isArray(participants.external);
+    if (!hasDetailedParticipants) return false;
+
+    const ownUserId = currentSessionUserId();
+    const internalRows = Array.isArray(participants.internal) ? participants.internal : [];
+    const externalRows = Array.isArray(participants.external) ? participants.external : [];
+    const selectedIds = [];
+    const seen = new Set();
+
+    for (const participant of internalRows) {
+      const id = Number(participant?.user_id ?? participant?.id ?? 0);
+      if (!Number.isInteger(id) || id <= 0 || id === ownUserId || seen.has(id)) continue;
+      seen.add(id);
+      selectedIds.push(id);
+    }
+
+    composeSelectedUserIds.value = selectedIds;
+    composeExternalRows.value = externalRows.map((participant) => ({
+      ...nextExternalRow(),
+      display_name: String(participant?.display_name || ''),
+      email: String(participant?.email || ''),
+    }));
+    composeState.participantsReady = true;
+    return true;
+  }
+
+  async function loadEditableCallParticipants(callId) {
+    const normalizedCallId = String(callId || '').trim();
+    if (normalizedCallId === '') return false;
+
+    try {
+      const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
+      if (
+        composeState.open
+        && composeState.mode === 'edit'
+        && composeState.callId === normalizedCallId
+        && payload?.call
+      ) {
+        return seedComposeParticipantsFromCall(payload.call);
+      }
+    } catch {
+      // Metadata edits still work; participant replacement is blocked until details load.
+    }
+    return false;
   }
 
   function openCompose(mode, call = null) {
@@ -116,16 +166,32 @@ export function createComposeController({
       composeState.accessMode = normalizeCallAccessMode(call.access_mode);
       composeState.startsLocal = isoToLocalInput(String(call.starts_at || ''));
       composeState.endsLocal = isoToLocalInput(String(call.ends_at || ''));
-      composeState.replaceParticipants = false;
+      composeState.replaceParticipants = true;
+      seedComposeParticipantsFromCall(call);
+      void loadEditableCallParticipants(composeState.callId);
     } else {
-      if (mode !== 'create') {
-        seedComposeWindow();
-      } else {
-        composeState.startsLocal = '';
-        composeState.endsLocal = '';
-      }
+      seedComposeWindow();
       composeState.replaceParticipants = true;
       composeExternalRows.value = [nextExternalRow()];
+    }
+
+    void loadComposeParticipants();
+  }
+
+  async function handleReplaceParticipantsToggle() {
+    if (!shouldSendParticipants.value) {
+      composeState.error = '';
+      return;
+    }
+
+    composeState.error = '';
+    if (composeState.mode === 'edit' && !composeState.participantsReady) {
+      const loaded = await loadEditableCallParticipants(composeState.callId);
+      if (!loaded) {
+        composeState.replaceParticipants = false;
+        composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+        return;
+      }
     }
 
     void loadComposeParticipants();
@@ -274,24 +340,16 @@ export function createComposeController({
       return;
     }
 
-    let startsAt = '';
-    let endsAt = '';
-    if (composeState.mode === 'create') {
-      const now = Date.now();
-      startsAt = new Date(now).toISOString();
-      endsAt = new Date(now + (60 * 60 * 1000)).toISOString();
-    } else {
-      startsAt = localInputToIso(composeState.startsLocal);
-      endsAt = localInputToIso(composeState.endsLocal);
-      if (startsAt === '' || endsAt === '') {
-        composeState.error = 'Start and end timestamps are required.';
-        return;
-      }
+    const startsAt = localInputToIso(composeState.startsLocal);
+    const endsAt = localInputToIso(composeState.endsLocal);
+    if (startsAt === '' || endsAt === '') {
+      composeState.error = 'Start and end timestamps are required.';
+      return;
+    }
 
-      if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-        composeState.error = 'End timestamp must be after start timestamp.';
-        return;
-      }
+    if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
+      composeState.error = 'End timestamp must be after start timestamp.';
+      return;
     }
 
     const payload = {
@@ -302,6 +360,11 @@ export function createComposeController({
     };
 
     if (shouldSendParticipants.value) {
+      if (composeState.mode === 'edit' && !composeState.participantsReady) {
+        composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+        return;
+      }
+
       const normalizedExternal = normalizeExternalRows();
       if (!normalizedExternal.ok) {
         composeState.error = normalizedExternal.error;
@@ -353,10 +416,12 @@ export function createComposeController({
     composeParticipants,
     composeSelectedUserIds,
     composeExternalRows,
+    shouldSendParticipants,
     composeHeadline,
     composeSubmitLabel,
     openCompose,
     closeCompose,
+    handleReplaceParticipantsToggle,
     loadComposeParticipants,
     applyParticipantSearch,
     goToParticipantPage,

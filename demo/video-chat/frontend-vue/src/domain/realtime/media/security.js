@@ -384,7 +384,7 @@ export class MediaSecuritySession {
       asString(peer.participantSetHash) !== participantSetHash
       || asString(peer.transcriptHash) !== transcriptHash
     ) {
-      return null;
+      throw new Error('participant_set_mismatch');
     }
     peer.participantSetHash = participantSetHash;
     peer.transcriptHash = transcriptHash;
@@ -523,6 +523,25 @@ export class MediaSecuritySession {
       if (!peer?.wrappingKey) return false;
       if (state !== 'active') return false;
       if (state === 'blocked_capability' || state === 'removed') return false;
+    }
+
+    return true;
+  }
+
+  canProtectNativeForTargets(userIds) {
+    if (!MediaSecuritySession.supportsNativeTransforms()) return false;
+    const normalized = Array.from(new Set((Array.isArray(userIds) ? userIds : [])
+      .map(normalizeUserId)
+      .filter((userId) => userId > 0 && userId !== this.userId)));
+    if (normalized.length <= 0) return false;
+    if (!this.canProtectForTargets(normalized)) return false;
+
+    for (const userId of normalized) {
+      const peer = this.peers.get(userId);
+      const capability = peer?.capability && typeof peer.capability === 'object' ? peer.capability : null;
+      if (!capability || capability.supports_insertable_streams !== true) {
+        return false;
+      }
     }
 
     return true;

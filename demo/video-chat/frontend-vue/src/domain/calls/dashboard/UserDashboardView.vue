@@ -448,6 +448,7 @@ const {
   composeState,
   composeParticipants,
   composeExternalRows,
+  shouldSendParticipants,
   composeHeadline,
   composeSubmitLabel,
   openCompose,

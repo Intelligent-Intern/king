@@ -24,6 +24,7 @@ interface PendingOutboundFrame {
 const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3
 const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 2 * 1024 * 1024
 const SFU_FRAME_SEND_QUEUE_DELTA_MAX_AGE_MS = 750
+const SFU_FRAME_SEND_QUEUE_BACKGROUND_SNAPSHOT_MAX_AGE_MS = 1500
 
 export class SfuOutboundFrameQueue {
   private readonly options: SfuOutboundFrameQueueOptions
@@ -66,24 +67,40 @@ export class SfuOutboundFrameQueue {
   enqueue(prepared: PreparedSfuOutboundFramePayload): Promise<boolean> {
     if (!this.options.canSend()) return Promise.resolve(false)
 
+    if (this.isBackgroundSnapshot(prepared)) {
+      this.dropQueuedBackgroundSnapshots('replaced_by_newer_background_snapshot', prepared.trackId)
+    } else {
+      this.dropQueuedBackgroundSnapshots('foreground_or_fullframe_priority', prepared.trackId)
+    }
+
     if (prepared.frameType === 'delta') {
       this.dropQueuedDeltaFrames('replaced_by_newer_delta', prepared.trackId)
     } else {
       this.dropQueuedDeltaFrames('keyframe_priority')
     }
 
-    const wouldExceedQueue = this.queue.length >= SFU_FRAME_SEND_QUEUE_MAX_FRAMES
+    let wouldExceedQueue = this.queue.length >= SFU_FRAME_SEND_QUEUE_MAX_FRAMES
       || (this.queuedPayloadChars + prepared.payloadChars) > SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS
+    if (wouldExceedQueue && !this.isBackgroundSnapshot(prepared)) {
+      this.dropQueuedBackgroundSnapshots('bounded_queue_background_preempted', prepared.trackId)
+      wouldExceedQueue = this.queue.length >= SFU_FRAME_SEND_QUEUE_MAX_FRAMES
+        || (this.queuedPayloadChars + prepared.payloadChars) > SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS
+    }
     if (wouldExceedQueue) {
-      const isKeyframe = prepared.frameType === 'keyframe'
+      const isBackgroundSnapshot = this.isBackgroundSnapshot(prepared)
+      const isKeyframe = prepared.frameType === 'keyframe' && !isBackgroundSnapshot
       this.options.reportFrameDiagnostic(
-        isKeyframe ? 'sfu_frame_send_queue_keyframe_blocked' : 'sfu_frame_send_queue_dropped',
+        isBackgroundSnapshot
+          ? 'sfu_frame_send_queue_background_snapshot_dropped'
+          : (isKeyframe ? 'sfu_frame_send_queue_keyframe_blocked' : 'sfu_frame_send_queue_dropped'),
         isKeyframe ? 'error' : 'warning',
-        isKeyframe
+        isBackgroundSnapshot
+          ? 'SFU background snapshot was dropped because the bounded send queue is full.'
+          : (isKeyframe
           ? 'SFU keyframe was not queued because the bounded send queue is still full.'
-          : 'SFU delta frame was dropped because the bounded send queue is full.',
+          : 'SFU delta frame was dropped because the bounded send queue is full.'),
         prepared,
-        { drop_reason: 'bounded_queue_full' },
+        { drop_reason: isBackgroundSnapshot ? 'background_snapshot_deprioritized' : 'bounded_queue_full' },
         true,
       )
       return Promise.resolve(false)
@@ -120,6 +137,17 @@ export class SfuOutboundFrameQueue {
             'SFU delta frame was dropped because it aged out before send.',
             next.prepared,
             { drop_reason: 'stale_delta', queued_age_ms: queuedAgeMs },
+          )
+          next.resolve(false)
+          continue
+        }
+        if (this.isBackgroundSnapshot(next.prepared) && queuedAgeMs > SFU_FRAME_SEND_QUEUE_BACKGROUND_SNAPSHOT_MAX_AGE_MS) {
+          this.options.reportFrameDiagnostic(
+            'sfu_frame_send_queue_background_snapshot_dropped',
+            'warning',
+            'SFU background snapshot was dropped because it aged out before send.',
+            next.prepared,
+            { drop_reason: 'stale_background_snapshot', queued_age_ms: queuedAgeMs },
           )
           next.resolve(false)
           continue
@@ -185,5 +213,56 @@ export class SfuOutboundFrameQueue {
       )
     }
     return droppedCount
+  }
+
+  private dropQueuedBackgroundSnapshots(reason: string, trackId = ''): number {
+    let droppedCount = 0
+    const kept: PendingOutboundFrame[] = []
+    for (const entry of this.queue) {
+      const sameTrack = trackId === '' || entry.prepared.trackId === trackId
+      if (sameTrack && this.isBackgroundSnapshot(entry.prepared)) {
+        droppedCount += 1
+        this.queuedPayloadChars = Math.max(0, this.queuedPayloadChars - entry.prepared.payloadChars)
+        entry.resolve(false)
+        continue
+      }
+      kept.push(entry)
+    }
+    if (droppedCount > 0) {
+      this.queue = kept
+      this.options.reportFrameDiagnostic(
+        'sfu_frame_send_queue_background_snapshot_dropped',
+        'warning',
+        'Queued SFU background snapshots were dropped by queue prioritization.',
+        {
+          publisherId: '',
+          trackId,
+          timestamp: Date.now(),
+          payload: {},
+          chunkField: null,
+          chunkValue: '',
+          rawByteLength: 0,
+          payloadChars: 0,
+          chunkCount: 0,
+          frameType: 'keyframe',
+          protectionMode: 'transport_only',
+          frameSequence: 0,
+          senderSentAtMs: Date.now(),
+          metrics: { layout_mode: 'background_snapshot', layer_id: 'background' },
+          projectedBinaryEnvelopeBytes: 0,
+          tilePatch: null,
+        },
+        {
+          drop_reason: reason,
+          dropped_background_snapshot_count: droppedCount,
+          track_id: trackId,
+        },
+      )
+    }
+    return droppedCount
+  }
+
+  private isBackgroundSnapshot(prepared: PreparedSfuOutboundFramePayload): boolean {
+    return String(prepared.metrics?.layout_mode || prepared.payload?.layout_mode || '') === 'background_snapshot'
   }
 }

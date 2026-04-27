@@ -184,6 +184,7 @@ try {
   requireContains(switchRuntime, "normalizedNextPath === 'webrtc_native' && !mediaRuntimeCapabilities.value.stageB", 'native runtime capability gate');
   requireContains(switchRuntime, "if (normalizedNextPath === 'webrtc_native')", 'native switch branch');
   requireContains(switchRuntime, 'teardownSfuRemotePeers();', 'native switch tears down SFU peers');
+  requireContains(switchRuntime, 'teardownNativePeerConnections();', 'WLVC switch tears down native peers');
   requireContains(switchRuntime, 'syncNativePeerConnectionsWithRoster();', 'native switch syncs roster');
   requireContains(switchRuntime, "else if (normalizedNextPath === 'wlvc_wasm')", 'WLVC switch branch');
   requireContains(switchRuntime, 'if (shouldUseNativeAudioBridge())', 'WLVC switch preserves native audio bridge when supported');
