@@ -20,6 +20,16 @@ Rules:
 4. [ ] If IIBIN is proven useful after the branch merge audit, plan a real runtime integration path instead of keeping package-only experiment code around.
 5. [ ] Do a second cleanup pass over superseded experiment artifacts only after the keep/port/delete matrix is complete and merged.
 
+### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
+
+- Compatibility anchor for existing smoke/deployment contracts.
+- Active release work lives in `SPRINT.md`.
+- Completion evidence and rollout history live in `READYNESS_TRACKER.md`.
+- If new production-readiness work becomes active again, move it into `SPRINT.md` instead of expanding this parked section.
+- Keep Hetzner-specific discovery behind provider abstractions.
+- Correct live call and participant counts.
+- Ensure a fresh production deploy is repeatable.
+
 ## AI / SLM / Fine-Tuning Platform (`#149`)
 
 1. [ ] Distributed model placement and inference execution.
