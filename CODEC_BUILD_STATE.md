@@ -12,6 +12,28 @@ The wavelet codec integrates with King's native infrastructure:
 | Real-time | `king_client_websocket_*` | Encoded frame transport via SFU gateway |
 | Storage | `king_object_store_put/get` | Archive/backup encoded frames |
 
+### Binary Protocol (IIBIN-style)
+
+All SFU traffic uses binary protocol via `king_websocket_send(..., true)`:
+
+| Message | Type ID | Payload |
+|---------|--------|--------|
+| JOIN | 0x01 | varint(roomId), varint(role) |
+| JOINED | 0x02 | varint(roomId), varint(publishers)... |
+| PUBLISH | 0x03 | varint(trackId), varint(kind), varint(label) |
+| PUBLISHED | 0x04 | varint(trackId), varint(serverTime) |
+| UNPUBLISH | 0x05 | varint(trackId) |
+| UNPUBLISHED | 0x06 | varint(publisherId), varint(trackId) |
+| SUBSCRIBE | 0x07 | varint(publisherId) |
+| TRACKS | 0x09 | varint(roomId), varint(publisherId), varint(userId), varint(name), tracks... |
+| FRAME | 0x0A | [binary: magic(4) + frameType(1) + timestamp(4) + length(4) + trackId(8) + data] |
+| PUBLISHER_LEFT | 0x0B | varint(publisherId) |
+| LEAVE | 0x0C | (empty) |
+| WELCOME | 0x0D | varint(userId), varint(name), varint(roomId) |
+| ERROR | 0xFF | varint(message) |
+
+**Efficiency**: ~3x smaller than JSON (varint strings + binary frames)
+
 ### TypeScript Fallback Implementation
 
 #### ✅ Complete
@@ -90,10 +112,12 @@ The wavelet codec integrates with King's native infrastructure:
 - **processor-pipeline.ts** - Video processing pipeline
 - **transform.ts** - WebRTC encoded transform (pass-through, for future use)
 - **sfuClient.ts** - SFU signalling for frame transport via King's websocket
+  - ✅ **Binary protocol** (IIBIN-style encoding)
+  - ✅ Varint + string encoding  
+  - ✅ Binary WebSocket frames (no JSON)
+  - ✅ Frame relay: binary → binary
 
----
-
-## Summary
+### WebRTC/SFU Integration
 
 | Feature | TypeScript Fallback | WASM (C++) | Match |
 |---------|---------------------|------------|-------|

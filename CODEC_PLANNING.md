@@ -15,6 +15,54 @@ The following is now implemented in both TypeScript and C++:
 | Quantizer class | separate | in C++ | ✅ |
 | Header format | 33 bytes v2 | 33 bytes v2 | ✅ |
 | **Pre-encode background blur** | `BackgroundBlurProcessor` | receives pre-blurred ImageData | ✅ |
+| **Binary SFU protocol** | `sfuClient.ts` | backend `realtime_sfu_gateway.php` | ✅ |
+
+## Binary Protocol (IIBIN-style) ✅ Done
+
+All SFU traffic now uses binary protocol via King's `king_websocket_send(..., true)`:
+
+| Message | Type ID | Payload |
+|---------|--------|--------|
+| JOIN | 0x01 | varint(roomId), varint(role) |
+| JOINED | 0x02 | varint(roomId), varint(publishers)... |
+| PUBLISH | 0x03 | varint(trackId), varint(kind), varint(label) |
+| PUBLISHED | 0x04 | varint(trackId), varint(serverTime) |
+| UNPUBLISH | 0x05 | varint(trackId) |
+| UNPUBLISHED | 0x06 | varint(publisherId), varint(trackId) |
+| SUBSCRIBE | 0x07 | varint(publisherId) |
+| TRACKS | 0x09 | varint(roomId), varint(publisherId), varint(userId), varint(name), tracks... |
+| FRAME | 0x0A | [binary: magic(4) + frameType(1) + timestamp(4) + length(4) + trackId(8) + data] |
+| PUBLISHER_LEFT | 0x0B | varint(publisherId) |
+| LEAVE | 0x0C | (empty) |
+| WELCOME | 0x0D | varint(userId), varint(name), varint(roomId) |
+| ERROR | 0xFF | varint(message) |
+
+**Efficiency**: ~3x smaller than JSON (varint strings + binary frames)
+
+### Implementation Details
+
+- **Frontend** (`sfuClient.ts`):
+  - `encodeVarint()` / `decodeVarint()` - LEB128 varint encoding
+  - `encodeString()` / `decodeString()` - varint(length) + UTF-8 bytes
+  - `encodeSFUFrame()` - binary frame format with WLVC magic
+  - `sendBinary()` - WebSocket binary frame (`buffer`)
+  - No JSON anywhere
+
+- **Backend** (`realtime_sfu_gateway.php`):
+  - `videochat_sfu_decode_varint()` / `videochat_sfu_encode_varint()` 
+  - `videochat_sfu_decode_string()` / `videochat_sfu_encode_string()`
+  - `videochat_sfu_parse_binary_frame()` - parse WLVC binary frames
+  - `king_websocket_send($ws, $payload, true)` - binary WebSocket
+
+### Before vs After
+
+| Aspect | Before | After |
+|--------|--------|-------|
+| Control messages | `JSON.stringify()` | Binary (varint + strings) |
+| Frame data | `Array.from(Uint8Array)` + JSON | Binary direct |
+| WebSocket | text frames | binary frames |
+| Size (roomId="room") | ~50 bytes | ~7 bytes |
+| Frame (1KB data) | ~3050 bytes | ~1024 bytes |
 
 ## What Has Been Built
 
