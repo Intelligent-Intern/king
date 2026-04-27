@@ -28,6 +28,7 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     isChatTextInlineAllowed,
     isSocketOnline,
     markParticipantActivity,
+    markChatUnread,
     nextTick,
     normalizeRole,
     normalizeRoomId,
@@ -54,6 +55,11 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
       typingStopTimer = null;
     }
   }
+
+function hasOpenRealtimeSocket() {
+  return Boolean(isSocketOnline.value) && connectionState.value === 'online';
+}
+
 function stopLocalTyping() {
   clearTypingStopTimer();
   if (!localTypingStarted) return;

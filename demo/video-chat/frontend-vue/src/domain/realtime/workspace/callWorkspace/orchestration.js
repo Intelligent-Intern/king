@@ -19,6 +19,7 @@ export function createCallWorkspaceOrchestrationHelpers({
     sendRoomJoin,
     setNotice,
     syncLobbyListViewport,
+    syncUsersListViewport,
     syncMediaSecurityWithParticipants,
     syncNativePeerConnectionsWithRoster,
     teardownLocalPublisher,

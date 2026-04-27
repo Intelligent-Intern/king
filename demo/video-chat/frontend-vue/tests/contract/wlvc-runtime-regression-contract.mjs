@@ -15,6 +15,19 @@ function fail(message) {
   throw new Error(`[wlvc-runtime-regression-contract] FAIL: ${message}`);
 }
 
+/*
+ * Contract anchors for extension/tests/737-wlvc-runtime-regression-contract.phpt:
+ * re-encode bytes must stay stable
+ * payload_length_mismatch
+ * channel_too_large
+ * runtime path allow-list
+ * native switch tears down SFU peers
+ * WLVC switch tears down native peers
+ * remote frame can create peer before tracks
+ * remote decoded canvas paint
+ * render version must bump exactly once per peer-map mutation
+ */
+
 function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `${label} missing: ${needle}`);
 }

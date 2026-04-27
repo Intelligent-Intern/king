@@ -4,6 +4,8 @@ import { buildWebSocketUrl } from '../../../support/backendOrigin';
 import { appendAssetVersionQuery } from '../../../support/assetVersion';
 import { normalizeRoomId, normalizeSocketCallId } from './utils';
 
+export { fetchBackend };
+
 export function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
   if (withBody) headers['content-type'] = 'application/json';

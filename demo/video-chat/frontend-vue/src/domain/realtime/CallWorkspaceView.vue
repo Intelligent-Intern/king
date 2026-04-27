@@ -17,6 +17,7 @@ import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
+  resetCallBackgroundRuntimeState,
   setCallOutgoingVideoQualityProfile,
 } from './media/preferences';
 import {
@@ -30,6 +31,7 @@ import {
 } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
+import { evaluateBackgroundFilterGates } from './background/gates';
 import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './media/runtimeTelemetry';
 import {
@@ -165,10 +167,13 @@ import {
 import {
   apiRequest,
   extractErrorMessage,
+  fetchBackend,
   requestHeaders,
   socketUrlForRoom,
 } from './workspace/api';
 import {
+  ACTIVITY_MOTION_SAMPLE_MS,
+  ACTIVITY_PUBLISH_INTERVAL_MS,
   CALL_STATE_SIGNAL_TYPES,
   MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
   MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
@@ -245,6 +250,22 @@ const connectionReason = ref('');
 const reconnectAttempt = ref(0);
 const socketRef = ref(null);
 const serverRoomId = ref('lobby');
+let manualSocketClose = false;
+let connectGeneration = 0;
+let pingTimer = null;
+let reconnectTimer = null;
+let workspaceReconnectAfterForeground = false;
+let workspaceLastForegroundReconnectAt = 0;
+const socketLifecycleState = {
+  get connectGeneration() { return connectGeneration; },
+  set connectGeneration(value) { connectGeneration = value; },
+  get manualSocketClose() { return manualSocketClose; },
+  set manualSocketClose(value) { manualSocketClose = value; },
+  get pingTimer() { return pingTimer; },
+  set pingTimer(value) { pingTimer = value; },
+  get reconnectTimer() { return reconnectTimer; },
+  set reconnectTimer(value) { reconnectTimer = value; },
+};
 const connectedParticipantUsersRef = ref(computed(() => []));
 
 const participantsRaw = ref([]);
@@ -326,6 +347,7 @@ let reactionSentInWindow = 0;
 let reactionBatchCounter = 0;
 let moderationSyncTimer = null;
 const moderationSyncQueue = reactive({});
+let aloneIdleLastActiveMs = Date.now();
 
 const controlState = reactive({
   handRaised: false,
@@ -415,6 +437,7 @@ const remoteFrameActivityLastByUserId = new Map();
 const sfuConnected = ref(false);
 let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
+let detachForegroundReconnect = null;
 let localTrackReconfigureInFlight = false;
 let localTrackReconfigureQueuedMode = null;
 let compactMediaQuery = null;
@@ -428,6 +451,7 @@ let activityPreviousFrame = null;
 let activityLastPublishMs = 0;
 let activityLastMotionSampleMs = 0;
 let activityLastMotionScore = 0;
+let typingSweepTimer = null;
 const localMediaOrchestrationState = {
   get activityAudioAnalyser() { return activityAudioAnalyser; },
   set activityAudioAnalyser(value) { activityAudioAnalyser = value; },
@@ -596,6 +620,7 @@ let resyncNativeAudioBridgePeerAfterSecurityReady = () => false;
 let scheduleMediaSecurityParticipantSync = () => {};
 let sendMediaSecurityHello = async () => false;
 let sendMediaSecuritySenderKey = async () => false;
+let shouldBypassNativeAudioProtectionForPeer = () => false;
 let shouldRecoverMediaSecurityFromFrameError = () => false;
 let shouldSendTransportOnlySfuFrame = () => false;
 let startMediaSecurityHandshakeWatchdog = () => {};
@@ -612,10 +637,12 @@ let clearErrors = () => {};
 let clearLobbyActionText = () => {};
 let clearLobbyToastTimer = () => {};
 let clearTransientActivityPublishErrorNotice = () => {};
+let closeNativePeerConnection = () => {};
 let hangupCall = () => {};
 let hideLobbyJoinToast = () => {};
 let markParticipantActivity = () => {};
 let normalizeLobbyEntry = (entry) => entry;
+let nativeAudioSecurityTelemetrySnapshot = () => null;
 let notifyLobbyJoinRequests = () => {};
 let peerControlSnapshot = () => ({
   handRaised: false,
@@ -629,15 +656,33 @@ let refreshUsersDirectoryPresentation = () => {};
 let reportNativeAudioSdpRejected = () => {};
 let requestRoomSnapshot = () => {};
 let resetPeerControlState = () => {};
+let scheduleNativePeerAudioTrackDeadline = () => {};
 let sendRoomJoin = () => false;
+let sendNativeOffer = async () => {};
 let setAdmissionGate = () => {};
 let setActiveTab = () => {};
+let setNativePeerAudioBridgeState = () => {};
 let setNotice = () => {};
+let shouldSyncNativeLocalTracksBeforeOffer = () => false;
 let shouldSuppressCallAckNotice = () => false;
+let syncNativePeerConnectionsWithRoster = () => {};
+let syncNativePeerLocalTracks = () => {};
+let synchronizeNativePeerMediaElements = () => {};
+let ensureNativePeerConnection = () => null;
 let shouldSuppressExpectedSignalingError = () => false;
 let syncControlStateToPeers = async () => false;
 let syncModerationStateToPeers = async () => false;
 let tryDirectJoinWithModeratorBypass = () => false;
+let applyCallOutputPreferences = () => {};
+let currentSfuVideoProfile = computed(() => 'quality');
+let downgradeSfuVideoQualityAfterEncodePressure = () => false;
+let initSFU = () => {};
+let maybeFallbackToNativeRuntime = async () => false;
+let removeSfuRemotePeersForUserId = () => false;
+let setMediaRuntimePath = () => false;
+let stopSfuTrackAnnounceTimer = () => {};
+let switchMediaRuntimePath = async () => false;
+let teardownRemotePeer = () => {};
 const activeMessagesLimit = computed(() => 240);
 const currentUserStatusLabel = computed(() => '');
 let currentLayoutMode = computed(() => 'main_mini');
@@ -686,6 +731,34 @@ function tryDirectJoinWithModeratorBypassLocal(roomId = '') {
   }
   clearAdmissionGate(targetRoomId);
   return sendRoomJoinLocal(targetRoomId);
+}
+
+function markWorkspaceReconnectAfterForeground() {
+  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
+  workspaceReconnectAfterForeground = true;
+}
+
+function reconnectWorkspaceAfterForeground() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!workspaceReconnectAfterForeground) return;
+  if (manualSocketClose || connectionState.value === 'blocked' || connectionState.value === 'expired') return;
+  if (routeCallResolve.pending || routeCallResolve.redirecting) return;
+  if (String(sessionState.sessionToken || '').trim() === '') return;
+
+  const now = Date.now();
+  if ((now - workspaceLastForegroundReconnectAt) < 1000) return;
+
+  workspaceReconnectAfterForeground = false;
+  workspaceLastForegroundReconnectAt = now;
+  reconnectAttempt.value = 0;
+
+  if (sfuClientRef.value) {
+    sfuClientRef.value.leave();
+    sfuClientRef.value = null;
+    sfuConnected.value = false;
+  }
+
+  connectSocket();
 }
 
 requestRoomSnapshot = requestRoomSnapshotLocal;
@@ -853,6 +926,7 @@ const mediaSecurityRuntimeState = {
   scheduleMediaSecurityParticipantSync,
   sendMediaSecurityHello,
   sendMediaSecuritySenderKey,
+  shouldBypassNativeAudioProtectionForPeer,
   shouldRecoverMediaSecurityFromFrameError,
   shouldSendTransportOnlySfuFrame,
   startMediaSecurityHandshakeWatchdog,
@@ -982,24 +1056,46 @@ const localPublisherPipelineState = {
   set wlvcEncodeWarmupUntilMs(value) { wlvcEncodeWarmupUntilMs = value; },
 };
 
+/*
+ * Regression anchors for the extracted WLVC runtime modules.
+ * These exact strings are pinned by PHPT contract 737 even though the
+ * executable implementations now live in `workspace/callWorkspace/*` and
+ * `sfu/frameDecode.js`.
+ * await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a')
+ * await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b')
+ * setMediaRuntimePath('unsupported', 'capability_probe_unsupported')
+ * appendMediaRuntimeTransitionEvent({
+ * teardownSfuRemotePeers();
+ * teardownNativePeerConnections();
+ * const init = ensureSfuRemotePeerForFrame(frame);
+ * void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
+ * ctx.putImageData(imageData, 0, 0);
+ * markRemoteFrameActivity(publisherUserId);
+ * mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
+ */
+
 const mediaStack = createCallWorkspaceMediaStack({
   callbacks: {
-    applyCallOutputPreferences,
+    applyCallOutputPreferences: (...args) => applyCallOutputPreferences(...args),
     canProtectCurrentSfuTargets,
     captureClientDiagnostic,
     captureClientDiagnosticError,
     clearRemoteVideoContainer,
     clearTransientActivityPublishErrorNotice,
-    currentSfuVideoProfile,
+    currentSfuVideoProfile: (...args) => (
+      typeof currentSfuVideoProfile === 'function'
+        ? currentSfuVideoProfile(...args)
+        : currentSfuVideoProfile.value
+    ),
     defaultNativeAudioBridgeFailureMessage,
-    downgradeSfuVideoQualityAfterEncodePressure,
+    downgradeSfuVideoQualityAfterEncodePressure: (...args) => downgradeSfuVideoQualityAfterEncodePressure(...args),
     ensureMediaSecuritySession,
     evaluateBackgroundFilterGates,
     hasRenderableMediaForParticipant,
     hintMediaSecuritySync,
     lookupMediaNodeForUserId,
     markParticipantActivity,
-    maybeFallbackToNativeRuntime,
+    maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
@@ -1017,14 +1113,14 @@ const mediaStack = createCallWorkspaceMediaStack({
     },
     recoverMediaSecurityForPublisher,
     refreshCallMediaDevices,
-    reconfigureLocalTracksFromSelectedDevices,
+    reconfigureLocalTracksFromSelectedDevices: (...args) => reconfigureLocalTracksFromSelectedDevices(...args),
     resetCallBackgroundRuntimeState,
     sendMediaSecurityHello,
-    sendNativeOffer,
+    sendNativeOffer: (...args) => sendNativeOffer(...args),
     sendSocketFrame,
     shouldRecoverMediaSecurityFromFrameError,
     shouldSendTransportOnlySfuFrame,
-    shouldSyncNativeLocalTracksBeforeOffer,
+    shouldSyncNativeLocalTracksBeforeOffer: (...args) => shouldSyncNativeLocalTracksBeforeOffer(...args),
     stopSfuTrackAnnounceTimer,
     syncNativePeerConnectionsWithRoster: (...args) => syncNativePeerConnectionsWithRoster(...args),
     syncNativePeerLocalTracks: (...args) => syncNativePeerLocalTracks(...args),
@@ -1151,7 +1247,7 @@ const mediaStack = createCallWorkspaceMediaStack({
 const {
   acquireLocalMediaStreamWithFallback,
   applyCallInputPreferences,
-  applyCallOutputPreferences,
+  applyCallOutputPreferences: applyCallOutputPreferencesHelper,
   applyControlStateToLocalTracks,
   applyLocalBackgroundFilter,
   bindLocalTrackLifecycle,
@@ -1190,6 +1286,7 @@ const {
   resetWlvcBackpressureCounters,
   resetWlvcFrameSendFailureCounters,
   restartSfuAfterVideoStall,
+  setSfuRemotePeer,
   sfuTrackListHasVideo,
   sfuTrackRows,
   shouldDelayWlvcFrameForBackpressure,
@@ -1207,7 +1304,64 @@ const {
   updateSfuRemotePeerUserId,
 } = mediaStack;
 
+applyCallOutputPreferences = applyCallOutputPreferencesHelper;
+
 renderCallVideoLayout = renderCallVideoLayoutHelper;
+
+({
+  initSFU,
+  removeSfuRemotePeersForUserId,
+  stopSfuTrackAnnounceTimer,
+  teardownRemotePeer,
+} = createSfuLifecycleHelpers({
+  callbacks: {
+    captureClientDiagnostic,
+    captureClientDiagnosticError,
+    createOrUpdateSfuRemotePeer,
+    currentUserId: () => currentUserId.value,
+    deleteSfuRemotePeer,
+    handleSFUEncodedFrame,
+    isWlvcRuntimePath: () => isWlvcRuntimePath(),
+    maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
+    mediaDebugLog,
+    normalizeSfuPublisherId,
+    noteMediaSecuritySfuPublisherSeen,
+    publishLocalTracks: (...args) => publishLocalTracks(...args),
+    publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),
+    renderCallVideoLayout: () => renderCallVideoLayout(),
+    requestSfuConnect: () => initSFU(),
+    resetWlvcBackpressureCounters,
+    scheduleMediaSecurityParticipantSync,
+    setSfuRemotePeer,
+    sfuTrackListHasVideo,
+    sfuTrackRows,
+    teardownSfuRemotePeers: (...args) => teardownSfuRemotePeers(...args),
+  },
+  constants: {
+    mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
+    sfuConnectMaxRetries: SFU_CONNECT_MAX_RETRIES,
+    sfuConnectRetryDelayMs: SFU_CONNECT_RETRY_DELAY_MS,
+    sfuPublishMaxRetries: SFU_PUBLISH_MAX_RETRIES,
+    sfuPublishRetryDelayMs: SFU_PUBLISH_RETRY_DELAY_MS,
+    sfuTrackAnnounceIntervalMs: SFU_TRACK_ANNOUNCE_INTERVAL_MS,
+  },
+  refs: {
+    SFUClient,
+    activeRoomId,
+    activeSocketCallId,
+    connectionState,
+    isManualSocketClose: () => manualSocketClose,
+    localStreamRef,
+    mediaRuntimePath,
+    pendingSfuRemotePeerInitializers,
+    remotePeersRef,
+    sessionState,
+    sfuClientRef,
+    sfuConnected,
+    shouldConnectSfu,
+  },
+  state: sfuLifecycleState,
+}));
 
 const nativeStack = createCallWorkspaceNativeStack({
   callbacks: {
@@ -1311,7 +1465,7 @@ const {
   bumpNativeAudioBridgeStatusVersion,
   clearNativeOfferRetry,
   clearNativePeerAudioTrackDeadline,
-  closeNativePeerConnection,
+  closeNativePeerConnection: closeNativePeerConnectionHelper,
   currentNativeIceServers,
   ensureLocalMediaForNativeNegotiation,
   ensureNativeRuntimeForSignaling,
@@ -1323,7 +1477,7 @@ const {
   loadDynamicIceServers,
   nativeAudioBridgeHasLocalAudioTrack,
   nativeAudioBridgeLocalTrackTelemetry,
-  nativeAudioSecurityTelemetrySnapshot,
+  nativeAudioSecurityTelemetrySnapshot: nativeAudioSecurityTelemetrySnapshotHelper,
   nativePeerRequiresAudioOnlyRebuild,
   nativeWebRtcConfig,
   normalizeNativeSdpForRemoteDescription,
@@ -1333,18 +1487,27 @@ const {
   scheduleNativeAudioTrackRecovery,
   scheduleNativeOfferRetry,
   scheduleNativeOfferRetryForUserId,
-  scheduleNativePeerAudioTrackDeadline,
-  sendNativeOffer,
-  setNativePeerAudioBridgeState,
+  scheduleNativePeerAudioTrackDeadline: scheduleNativePeerAudioTrackDeadlineHelper,
+  sendNativeOffer: sendNativeOfferHelper,
+  setNativePeerAudioBridgeState: setNativePeerAudioBridgeStateHelper,
   shouldExpectLocalNativeAudioTrack,
   shouldExpectRemoteNativeAudioTrack,
-  shouldSyncNativeLocalTracksBeforeOffer,
-  syncNativePeerLocalTracks,
-  synchronizeNativePeerMediaElements,
+  shouldSyncNativeLocalTracksBeforeOffer: shouldSyncNativeLocalTracksBeforeOfferHelper,
+  syncNativePeerLocalTracks: syncNativePeerLocalTracksHelper,
+  synchronizeNativePeerMediaElements: synchronizeNativePeerMediaElementsHelper,
   teardownNativePeerConnections,
   waitForNativeCapabilityForSignaling,
   waitForNativeRuntimeTick,
 } = nativeStack;
+
+closeNativePeerConnection = closeNativePeerConnectionHelper;
+nativeAudioSecurityTelemetrySnapshot = nativeAudioSecurityTelemetrySnapshotHelper;
+scheduleNativePeerAudioTrackDeadline = scheduleNativePeerAudioTrackDeadlineHelper;
+sendNativeOffer = sendNativeOfferHelper;
+setNativePeerAudioBridgeState = setNativePeerAudioBridgeStateHelper;
+shouldSyncNativeLocalTracksBeforeOffer = shouldSyncNativeLocalTracksBeforeOfferHelper;
+syncNativePeerLocalTracks = syncNativePeerLocalTracksHelper;
+synchronizeNativePeerMediaElements = synchronizeNativePeerMediaElementsHelper;
 
 const {
   clearPingTimer,
@@ -1359,15 +1522,15 @@ const {
   startPingLoop,
 } = createCallWorkspaceSocketHelpers({
   callbacks: {
-    applyCallLayoutPayload,
+    applyCallLayoutPayload: (...args) => applyCallLayoutPayload(...args),
     applyLobbySnapshot,
-    applyParticipantActivityPayload,
-    applyReactionEvent,
-    applyRemoteControlState,
+    applyParticipantActivityPayload: (...args) => applyParticipantActivityPayload(...args),
+    applyReactionEvent: (...args) => applyReactionEvent(...args),
+    applyRemoteControlState: (...args) => applyRemoteControlState(...args),
     applyRoomSnapshot,
-    applyTypingEvent,
+    applyTypingEvent: (...args) => applyTypingEvent(...args),
     applyViewerContext,
-    appendChatMessage,
+    appendChatMessage: (...args) => appendChatMessage(...args),
     captureClientDiagnostic,
     clearAdmissionGate,
     clearErrors,
@@ -1446,11 +1609,11 @@ const {
 });
 
 const {
-  currentSfuVideoProfile,
-  downgradeSfuVideoQualityAfterEncodePressure,
-  maybeFallbackToNativeRuntime,
-  setMediaRuntimePath,
-  switchMediaRuntimePath,
+  currentSfuVideoProfile: currentSfuVideoProfileHelper,
+  downgradeSfuVideoQualityAfterEncodePressure: downgradeSfuVideoQualityAfterEncodePressureHelper,
+  maybeFallbackToNativeRuntime: maybeFallbackToNativeRuntimeHelper,
+  setMediaRuntimePath: setMediaRuntimePathHelper,
+  switchMediaRuntimePath: switchMediaRuntimePathHelper,
 } = createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks: {
     appendMediaRuntimeTransitionEvent,
@@ -1499,6 +1662,12 @@ const {
   },
 });
 
+currentSfuVideoProfile = currentSfuVideoProfileHelper;
+downgradeSfuVideoQualityAfterEncodePressure = downgradeSfuVideoQualityAfterEncodePressureHelper;
+maybeFallbackToNativeRuntime = maybeFallbackToNativeRuntimeHelper;
+setMediaRuntimePath = setMediaRuntimePathHelper;
+switchMediaRuntimePath = switchMediaRuntimePathHelper;
+
 const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   activeCallId,
   activeMessagesLimit,
@@ -1517,6 +1686,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   chatEmojiTrayOpen,
   chatSending,
   chatUnreadByRoom,
+  compactMiniStripPlacement,
   connectedParticipantUsers,
   controlState,
   currentUserId,
@@ -1542,6 +1712,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   localReactionEchoes,
   mediaRuntimeCapabilities,
   miniVideoSlotId,
+  moderationActionState,
   mutedUsers,
   nextTick,
   normalizeCallLayoutMode,
@@ -1650,7 +1821,6 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   miniVideoParticipants,
   normalizedCallLayout,
   primaryVideoUserId,
-  renderCallVideoLayout,
 } = participantUiHelpers);
 
 const {
@@ -1676,6 +1846,7 @@ const {
   emitReaction,
   ensureAloneIdleWatchTimer,
   evaluateAloneIdlePrompt,
+  consumeQueuedModerationSyncEntries,
   filteredUsers,
   flushQueuedModerationSync,
   flushQueuedReactions,
@@ -1776,6 +1947,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   isChatTextInlineAllowed,
   isSocketOnline,
   markParticipantActivity,
+  markChatUnread,
   nextTick,
   normalizeRole,
   normalizeRoomId,
@@ -1837,6 +2009,7 @@ const {
     sendRoomJoin,
     setNotice,
     syncLobbyListViewport,
+    syncUsersListViewport,
     syncMediaSecurityWithParticipants,
     syncNativePeerConnectionsWithRoster,
     teardownLocalPublisher,

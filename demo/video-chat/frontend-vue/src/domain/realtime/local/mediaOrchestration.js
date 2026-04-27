@@ -12,6 +12,7 @@ export function createLocalMediaOrchestrationHelpers({
   const {
     clearTransientActivityPublishErrorNotice,
     currentSfuVideoProfile,
+    isWlvcRuntimePath,
     normalizeRoomId,
     refreshCallMediaDevices,
     sendSocketFrame,

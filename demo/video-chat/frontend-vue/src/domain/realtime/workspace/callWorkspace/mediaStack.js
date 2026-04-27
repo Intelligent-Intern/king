@@ -19,6 +19,7 @@ export function createCallWorkspaceMediaStack(options) {
   const { markRaw, nextTick } = vue;
 
   let renderCallVideoLayout = () => {};
+  let markRemotePeerRenderable = () => {};
 
   function bumpMediaRenderVersion() {
     refs.mediaRenderVersion.value = refs.mediaRenderVersion.value >= 1_000_000
@@ -237,6 +238,7 @@ export function createCallWorkspaceMediaStack(options) {
       currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
       evaluateBackgroundFilterGates: callbacks.evaluateBackgroundFilterGates,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
+      isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
       markParticipantActivity: callbacks.markParticipantActivity,
       mediaDebugLog: callbacks.mediaDebugLog,
       normalizeRoomId: callbacks.normalizeRoomId,
@@ -326,6 +328,7 @@ export function createCallWorkspaceMediaStack(options) {
   });
 
   renderCallVideoLayout = videoLayout.renderCallVideoLayout;
+  markRemotePeerRenderable = videoLayout.markRemotePeerRenderable;
 
   return {
     ...runtimeHealth,

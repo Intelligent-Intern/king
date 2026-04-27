@@ -44,3 +44,20 @@ Move an item to `BACKLOG.md` if any of the following is true:
 - it depends on unresolved work in one of the 20 issues above
 - it is exploratory rather than contract-critical
 - it is already completed and only needs archival evidence
+
+## Contract Compatibility Anchors
+
+- [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
+- [x] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.
+- [x] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.
+- [x] Explicitly decide whether transport-level DataChannel protection is sufficient for any intended payloads or whether app-level protected envelopes are required.
+- [x] Decide whether `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` should be ported, replaced, or folded into the current SFU client.
+- [x] Add contract tests for GossipMesh message routing, membership, IIBIN envelope use, duplicate suppression, TTL handling, relay fallback, and failure behavior.
+- [x] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
+- [x] Reject any experiment behavior that weakens current room/admission/security guarantees.
+- [x] Video-chat SFU remains compatible with current room/admission/security contracts.
+- [x] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.
+- [x] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.
+- [x] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.
+- [x] Port only verified codec correctness or performance improvements with targeted frontend tests.
+- [x] Add explicit regression checks for encode/decode parity, crash-free decode failure, runtime-path switching, and remote render continuity.

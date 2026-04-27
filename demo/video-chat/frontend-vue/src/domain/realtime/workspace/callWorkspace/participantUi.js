@@ -19,6 +19,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     chatEmojiTrayOpen,
     chatSending,
     chatUnreadByRoom,
+    compactMiniStripPlacement,
     connectedParticipantUsers,
     controlState,
     currentUserId,
@@ -43,6 +44,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     localReactionEchoes,
     mediaRuntimeCapabilities,
     miniVideoSlotId,
+    moderationActionState,
     mutedUsers,
     nextTick: nextTickOverride,
     normalizeCallLayoutMode,
@@ -1042,6 +1044,33 @@ function clearLobbyActionText(userId, action) {
   clearRowAction(lobbyActionState, action, userId);
 }
 
+function allowLobbyUser(userId) {
+  const normalizedUserId = Number(userId);
+  if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  markLobbyActionText(normalizedUserId, 'allow', 'Allowing user…', true);
+  if (!sendSocketFrame({ type: 'lobby/allow', target_user_id: normalizedUserId })) {
+    clearLobbyActionText(normalizedUserId, 'allow');
+    setNotice('Could not allow user while websocket is offline.', 'error');
+  }
+}
+
+function removeLobbyUser(userId) {
+  const normalizedUserId = Number(userId);
+  if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  markLobbyActionText(normalizedUserId, 'remove', 'Removing user…', true);
+  if (!sendSocketFrame({ type: 'lobby/remove', target_user_id: normalizedUserId })) {
+    clearLobbyActionText(normalizedUserId, 'remove');
+    setNotice('Could not remove user while websocket is offline.', 'error');
+  }
+}
+
+function allowAllLobbyUsers() {
+  if (!canModerate.value) return;
+  if (!sendSocketFrame({ type: 'lobby/allow_all' })) {
+    setNotice('Could not allow all while websocket is offline.', 'error');
+  }
+}
+
 function updatePeerControlState(userId, patch) {
   const normalizedUserId = Number(userId);
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
@@ -1758,6 +1787,7 @@ let pingTimer = null;
     publishLayoutSelectionState,
     refreshUsersDirectory,
     refreshUsersDirectoryPresentation,
+    removeLobbyUser,
     resetLobbyListScroll,
     resetPeerControlState,
     resetUsersListScroll,
