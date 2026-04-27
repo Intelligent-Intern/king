@@ -44,6 +44,22 @@
           <div class="metric-label">Nodes Under Load</div>
           <div class="metric-value">{{ nodesUnderLoadMetric }}</div>
         </article>
+        <article class="metric">
+          <div class="metric-label">Recent SFU Frames</div>
+          <div class="metric-value">{{ transportRecentFramesMetric }}</div>
+        </article>
+        <article class="metric">
+          <div class="metric-label">Matte-guided Frames</div>
+          <div class="metric-value">{{ transportMatteGuidedMetric }}</div>
+        </article>
+        <article class="metric">
+          <div class="metric-label">Avg Selected Tiles</div>
+          <div class="metric-value">{{ transportAvgSelectionMetric }}</div>
+        </article>
+        <article class="metric">
+          <div class="metric-label">Avg ROI Area</div>
+          <div class="metric-value">{{ transportAvgRoiMetric }}</div>
+        </article>
       </section>
 
       <section class="infra-overview-card">
@@ -128,6 +144,41 @@
                 </tr>
                 <tr v-if="clusterHealthRows.length === 0">
                   <td colspan="6">No infrastructure nodes reported.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="card grid-full">
+          <h2 class="table-title">SFU Transport Mix</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Frame Kind</th>
+                  <th>Frames</th>
+                  <th>Matte-guided</th>
+                  <th>Avg Selected Tiles</th>
+                  <th>Avg ROI Area</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="operationsState.loading">
+                  <td colspan="5">Loading SFU transport metrics…</td>
+                </tr>
+                <tr v-else-if="operationsState.error">
+                  <td colspan="5">{{ operationsState.error }}</td>
+                </tr>
+                <tr v-else-if="transportFrameKindRows.length === 0">
+                  <td colspan="5">No recent SFU transport samples yet.</td>
+                </tr>
+                <tr v-else v-for="row in transportFrameKindRows" :key="row.id">
+                  <td><span class="code">{{ row.kind }}</span></td>
+                  <td>{{ row.frames }}</td>
+                  <td>{{ row.matteGuidedFrames }}</td>
+                  <td>{{ row.avgSelectionTileRatio }}</td>
+                  <td>{{ row.avgRoiAreaRatio }}</td>
                 </tr>
               </tbody>
             </table>

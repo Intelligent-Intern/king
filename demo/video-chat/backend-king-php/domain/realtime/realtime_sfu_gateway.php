@@ -43,6 +43,27 @@ function videochat_sfu_log_runtime_event(string $code, array $context = [], int 
     error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : $code));
 }
 
+/**
+ * @param array<string, mixed> $roomState
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_room_subscriber_targets(array $roomState, string $excludeClientId = ''): array
+{
+    $targets = [];
+    foreach (($roomState['subscribers'] ?? []) as $subscriberClientId => $subscriber) {
+        if ((string) $subscriberClientId === $excludeClientId) {
+            continue;
+        }
+        if (!is_array($subscriber) || !array_key_exists('websocket', $subscriber)) {
+            continue;
+        }
+        $subscriber['client_id'] = (string) $subscriberClientId;
+        $targets[] = $subscriber;
+    }
+
+    return $targets;
+}
+
 function videochat_sfu_broker_database_path(): string
 {
     $configuredPath = trim((string) (getenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH') ?: ''));
@@ -291,10 +312,7 @@ function videochat_handle_sfu_routes(
 
     $joinedPublishers = $role === 'publisher' ? [(string) $clientId] : [];
     if ($joinedPublishers !== []) {
-        foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-            if ((string) $subClientId === (string) $clientId) {
-                continue;
-            }
+        foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
             king_websocket_send($subClient['websocket'], json_encode([
                 'type' => 'sfu/joined',
                 'room_id' => $roomId,
@@ -433,38 +451,38 @@ function videochat_handle_sfu_routes(
             }
         }
 
-        foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-            if ((string) $subClientId !== (string) $clientId) {
-                $outboundFrame = [
-                    'type' => 'sfu/frame',
-                    'publisher_id' => $clientId,
-                    'publisher_user_id' => $userIdString,
-                    'track_id' => $trackId,
-                    'timestamp' => $timestamp,
-                    'frame_type' => $frameType,
-                    'protection_mode' => $protectionMode,
-                    'protocol_version' => $frameProtocolVersion,
-                    'frame_sequence' => $frameSequence,
-                    'sender_sent_at_ms' => $senderSentAtMs,
-                    'payload_chars' => $payloadChars,
-                    'chunk_count' => $chunkCount,
-                ];
-                if ($frameId !== '') {
-                    $outboundFrame['frame_id'] = $frameId;
-                }
-                if ($protectedFrame !== '') {
-                    $outboundFrame['protected_frame'] = $protectedFrame;
-                } elseif ($dataBase64 !== '') {
-                    $outboundFrame['data_base64'] = $dataBase64;
-                } else {
-                    $outboundFrame['data'] = $frameData;
-                }
+        foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
+            $outboundFrame = [
+                'type' => 'sfu/frame',
+                'publisher_id' => $clientId,
+                'publisher_user_id' => $userIdString,
+                'track_id' => $trackId,
+                'timestamp' => $timestamp,
+                'frame_type' => $frameType,
+                'protection_mode' => $protectionMode,
+                'protocol_version' => $frameProtocolVersion,
+                'frame_sequence' => $frameSequence,
+                'sender_sent_at_ms' => $senderSentAtMs,
+                'payload_chars' => $payloadChars,
+                'chunk_count' => $chunkCount,
+            ];
+            if ($frameId !== '') {
+                $outboundFrame['frame_id'] = $frameId;
+            }
+            if ($protectedFrame !== '') {
+                $outboundFrame['protected_frame'] = $protectedFrame;
+            } elseif ($dataBase64 !== '') {
+                $outboundFrame['data_base64'] = $dataBase64;
+            } else {
+                $outboundFrame['data'] = $frameData;
+            }
+            if (!videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame)) {
                 $outboundMessages = videochat_sfu_expand_outbound_frame_payload($outboundFrame);
                 if (count($outboundMessages) >= 16) {
                     videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_pressure', [
                         'room_id' => $roomId,
                         'publisher_id' => (string) $clientId,
-                        'subscriber_id' => (string) $subClientId,
+                        'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
                         'track_id' => (string) $trackId,
                         'frame_type' => (string) $frameType,
                         'protection_mode' => (string) $protectionMode,
@@ -634,7 +652,27 @@ function videochat_handle_sfu_routes(
             continue;
         }
 
-        if (!is_string($frame) || trim($frame) === '') {
+        if (!is_string($frame) || $frame === '') {
+            continue;
+        }
+
+        if (videochat_sfu_binary_frame_has_magic($frame)) {
+            $command = videochat_sfu_decode_binary_client_frame($frame, $roomId);
+            if (!(bool) ($command['ok'] ?? false)) {
+                videochat_presence_send_frame($websocket, [
+                    'type' => 'sfu/error',
+                    'room_id' => $roomId,
+                    'error' => (string) ($command['error'] ?? 'invalid_binary_envelope'),
+                    'command_type' => 'sfu/frame',
+                ]);
+                continue;
+            }
+            $msg = is_array($command['payload'] ?? null) ? $command['payload'] : [];
+            $processFramePayload($msg);
+            continue;
+        }
+
+        if (trim($frame) === '') {
             continue;
         }
 
@@ -698,7 +736,7 @@ function videochat_handle_sfu_routes(
                                 $sfuDatabase = null;
                                 $nextBrokerOpenAttemptMs = videochat_sfu_now_ms() + 500;
                             }
-                            // best-effort cross-worker track advertisement
+                            // Cross-worker track advertisement is broker-backed; transient broker lock only delays it.
                         }
                     }
 
@@ -708,10 +746,7 @@ function videochat_handle_sfu_routes(
                         'server_time' => time(),
                     ]));
 
-                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-                        if ((string) $subClientId === (string) $clientId) {
-                            continue;
-                        }
+                    foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
                         king_websocket_send($subClient['websocket'], json_encode([
                             'type' => 'sfu/tracks',
                             'room_id' => $roomId,
@@ -758,7 +793,7 @@ function videochat_handle_sfu_routes(
                                 $sfuDatabase = null;
                                 $nextBrokerOpenAttemptMs = videochat_sfu_now_ms() + 500;
                             }
-                            // best-effort cross-worker subscribe
+                            // Cross-worker subscribe is broker-backed; transient broker lock only delays it.
                         }
                     }
                     break;
@@ -775,14 +810,11 @@ function videochat_handle_sfu_routes(
                                 $sfuDatabase = null;
                                 $nextBrokerOpenAttemptMs = videochat_sfu_now_ms() + 500;
                             }
-                            // best-effort cross-worker unpublish
+                            // Cross-worker unpublish is broker-backed; transient broker lock only delays it.
                         }
                     }
 
-                    foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-                        if ((string) $subClientId === (string) $clientId) {
-                            continue;
-                        }
+                    foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
                         king_websocket_send($subClient['websocket'], json_encode([
                             'type' => 'sfu/unpublished',
                             'publisher_id' => $clientId,
@@ -849,10 +881,7 @@ function videochat_handle_sfu_routes(
     }
     if (isset($sfuRooms[$roomId]['publishers'][$clientId])) {
         unset($sfuRooms[$roomId]['publishers'][$clientId]);
-        foreach ($sfuRooms[$roomId]['subscribers'] ?? [] as $subClientId => &$subClient) {
-            if ((string) $subClientId === (string) $clientId) {
-                continue;
-            }
+        foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
             king_websocket_send($subClient['websocket'], json_encode([
                 'type' => 'sfu/publisher_left',
                 'publisher_id' => $clientId,

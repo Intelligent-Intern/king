@@ -736,6 +736,13 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     reason: "ok",
     backend: segmentationBackend.kind,
     ready,
+    getMatteMaskSnapshot: () => {
+      try {
+        return maskLayer.getImageData(0, 0, canvas.width, canvas.height);
+      } catch {
+        return null;
+      }
+    },
     dispose
   };
 }

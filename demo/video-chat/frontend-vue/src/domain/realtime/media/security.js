@@ -64,6 +64,13 @@ function nativeEncodedFrameAadTrackId(trackKind = 'data') {
   return 'native_data';
 }
 
+function normalizeProtectedCodecId(value, runtimePath = '') {
+  const normalized = asString(value).toLowerCase();
+  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'wlvc_unknown') return normalized;
+  if (asString(runtimePath).toLowerCase() === 'webrtc_native') return 'webrtc_native';
+  return 'wlvc_unknown';
+}
+
 export class MediaSecuritySession {
   constructor(options = {}) {
     this.callId = asString(options.callId);
@@ -384,7 +391,7 @@ export class MediaSecuritySession {
       asString(peer.participantSetHash) !== participantSetHash
       || asString(peer.transcriptHash) !== transcriptHash
     ) {
-      return null;
+      throw new Error('participant_set_mismatch');
     }
     peer.participantSetHash = participantSetHash;
     peer.transcriptHash = transcriptHash;
@@ -528,6 +535,25 @@ export class MediaSecuritySession {
     return true;
   }
 
+  canProtectNativeForTargets(userIds) {
+    if (!MediaSecuritySession.supportsNativeTransforms()) return false;
+    const normalized = Array.from(new Set((Array.isArray(userIds) ? userIds : [])
+      .map(normalizeUserId)
+      .filter((userId) => userId > 0 && userId !== this.userId)));
+    if (normalized.length <= 0) return false;
+    if (!this.canProtectForTargets(normalized)) return false;
+
+    for (const userId of normalized) {
+      const peer = this.peers.get(userId);
+      const capability = peer?.capability && typeof peer.capability === 'object' ? peer.capability : null;
+      if (!capability || capability.supports_insertable_streams !== true) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   async forceRekey(reason = 'forced_rekey') {
     await this.rotateSenderKey(asString(reason) || 'forced_rekey');
     for (const peer of this.peers.values()) {
@@ -562,7 +588,7 @@ export class MediaSecuritySession {
     this.pendingSenderKeys.delete(normalized);
   }
 
-  async protectFrame({ data, runtimePath, trackKind = 'video', frameKind = 'delta', trackId = '', timestamp = 0 } = {}) {
+  async protectFrame({ data, runtimePath, codecId, trackKind = 'video', frameKind = 'delta', trackId = '', timestamp = 0 } = {}) {
     if (!(await this.ensureReady()) || !this.senderKey) throw new Error('unsupported_capability');
     const subtle = subtleCrypto();
     const plaintext = bytesFromData(data);
@@ -575,6 +601,7 @@ export class MediaSecuritySession {
       magic: FRAME_MAGIC,
       version: FRAME_VERSION,
       runtime_path: asString(runtimePath),
+      codec_id: normalizeProtectedCodecId(codecId, runtimePath),
       track_kind: asString(trackKind) || 'video',
       frame_kind: asString(frameKind) || 'delta',
       kex_suite: this.selectedKexSuite || KEX_SUITE,
@@ -608,12 +635,13 @@ export class MediaSecuritySession {
     };
   }
 
-  async decryptFrame({ data, protected: protectedHeader, publisherUserId, runtimePath, trackId = '', timestamp = 0 } = {}) {
+  async decryptFrame({ data, protected: protectedHeader, publisherUserId, runtimePath, codecId, trackId = '', timestamp = 0 } = {}) {
     const header = protectedHeader && typeof protectedHeader === 'object' ? protectedHeader : null;
     validateProtectedHeader(header);
     const sender = normalizeUserId(publisherUserId);
     if (sender <= 0) throw new Error('wrong_key_id');
     if (runtimePath && header.runtime_path !== runtimePath) throw new Error('unsupported_capability');
+    if (codecId && header.codec_id !== normalizeProtectedCodecId(codecId, runtimePath)) throw new Error('unsupported_capability');
     const peer = this.peers.get(sender);
     if (peer?.kexSuite && header.kex_suite !== peer.kexSuite) throw new Error('downgrade_attempt');
     const receiverKey = peer?.receiverKeys instanceof Map
@@ -662,6 +690,7 @@ export class MediaSecuritySession {
     const protectedFrame = await this.protectFrame({
       data: encodedFrame?.data,
       runtimePath: 'webrtc_native',
+      codecId: 'webrtc_native',
       trackKind,
       frameKind: nativeFrameKind(encodedFrame),
       trackId: aadTrackId || trackId,
@@ -678,12 +707,13 @@ export class MediaSecuritySession {
       protected: envelope.header,
       publisherUserId: senderUserId,
       runtimePath: 'webrtc_native',
+      codecId: 'webrtc_native',
       trackId: aadTrackId || trackId,
       timestamp: timestamp || Number(encodedFrame?.timestamp || Date.now()),
     });
   }
 
-  async decryptProtectedFrameEnvelope({ protectedFrame, envelope, publisherUserId, runtimePath, trackId = '', timestamp = 0 } = {}) {
+  async decryptProtectedFrameEnvelope({ protectedFrame, envelope, publisherUserId, runtimePath, codecId, trackId = '', timestamp = 0 } = {}) {
     const decodedEnvelope = protectedFrame
       ? decodeProtectedFrameEnvelopeBase64Url(protectedFrame)
       : decodeProtectedFrameEnvelope(envelope);
@@ -692,6 +722,7 @@ export class MediaSecuritySession {
       protected: decodedEnvelope.header,
       publisherUserId,
       runtimePath,
+      codecId,
       trackId,
       timestamp,
     });

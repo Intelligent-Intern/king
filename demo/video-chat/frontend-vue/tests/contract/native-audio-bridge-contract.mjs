@@ -10,6 +10,11 @@ import {
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
 } from '../../src/domain/realtime/native/audioBridgeHelpers.js';
+import {
+  canTransitionNativeAudioBridgeState,
+  createNativeAudioBridgeStateHelpers,
+  NATIVE_AUDIO_BRIDGE_STATES,
+} from '../../src/domain/realtime/native/audioBridgeState.js';
 
 function fail(message) {
   throw new Error(`[native-audio-bridge-contract] FAIL: ${message}`);
@@ -76,6 +81,18 @@ try {
 
   assert.equal(nativeAudioPlaybackBlocked(new DOMException('user gesture required', 'NotAllowedError')), true);
   assert.equal(nativeAudioPlaybackInterrupted(new DOMException('play() request was interrupted by a new load request', 'AbortError')), true);
+  assert.equal(canTransitionNativeAudioBridgeState('new', 'waiting_security'), true, 'audio bridge state machine allows security wait after peer bootstrap');
+  assert.equal(canTransitionNativeAudioBridgeState('waiting_security', 'playing'), false, 'audio bridge state machine rejects skipping track/playback readiness');
+  assert.equal(canTransitionNativeAudioBridgeState('track_received', 'playing'), true, 'audio bridge state machine allows playback after remote track arrival');
+  assert.equal(canTransitionNativeAudioBridgeState('playing', 'stalled_no_track'), false, 'audio bridge state machine rejects direct regressions to missing-track failure');
+  const audioBridgeStatusVersion = { value: 0 };
+  const audioBridgeStateHelpers = createNativeAudioBridgeStateHelpers(audioBridgeStatusVersion);
+  const peer = { audioBridgeState: '', audioBridgeErrorMessage: '', audioTrackDeadlineTimer: null };
+  assert.equal(audioBridgeStateHelpers.setNativePeerAudioBridgeState(peer, NATIVE_AUDIO_BRIDGE_STATES.WAITING_SECURITY, ''), true, 'audio bridge state helper accepts initial security wait');
+  assert.equal(audioBridgeStateHelpers.setNativePeerAudioBridgeState(peer, NATIVE_AUDIO_BRIDGE_STATES.PLAYING, ''), false, 'audio bridge state helper blocks illegal jumps');
+  assert.equal(audioBridgeStateHelpers.setNativePeerAudioBridgeState(peer, NATIVE_AUDIO_BRIDGE_STATES.TRACK_RECEIVED, ''), true, 'audio bridge state helper allows track arrival after security wait');
+  assert.equal(audioBridgeStateHelpers.setNativePeerAudioBridgeState(peer, NATIVE_AUDIO_BRIDGE_STATES.PLAYING, ''), true, 'audio bridge state helper allows playback after track arrival');
+  assert.equal(audioBridgeStatusVersion.value > 0, true, 'audio bridge state helper bumps reactive status version when state changes');
 
   const mediaSecurity = readFrontend('src/domain/realtime/media/security.js');
   requireContains(mediaSecurity, 'this.nativeFrameErrorHandler', 'media security session stores native frame error callback');
@@ -88,32 +105,52 @@ try {
   requireContains(mediaSecurity, 'handler({', 'native frame transform error callbacks receive structured diagnostics');
 
   const workspace = readFrontend('src/domain/realtime/CallWorkspaceView.vue');
-  requireContains(workspace, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
-  requireContains(workspace, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
-  requireContains(workspace, 'function ensureNativeAudioBridgeSecurityReady', 'native bridge gates negotiation on active media security');
-  requireContains(workspace, 'function handleNativeMediaSecurityFrameError(event = {})', 'workspace handles native frame errors');
-  requireContains(workspace, 'function shouldTreatNativeFrameErrorAsTransient', 'workspace separates transient native frame drops from hard media-security failures');
-  requireContains(workspace, "code = direction === 'receiver'", 'workspace separates decrypt and encrypt diagnostics');
-  requireContains(workspace, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
-  requireContains(workspace, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');
-  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
-  requireContains(workspace, "scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame'", 'malformed native protected frames rebuild the audio bridge instead of staying stalled');
-  requireContains(workspace, 'requireMissingTrack: false', 'malformed native frame recovery does not skip rebuild just because a muted remote track object exists');
-  requireContains(workspace, "peerState === 'capability_ready'", 'handshake retry covers capability_ready sender-key deadlocks');
-  requireContains(workspace, 'mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());', 'missing sender-key schedules handshake watchdog');
-  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted')", 'accepted sender-key resyncs native audio tracks');
-  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
-  requireContains(workspace, "resyncNativeAudioBridgePeerAfterSecurityReady(\n        normalizedUserId,\n        'native_audio_track_recovery_rejoin',\n        true", 'audio-track recovery may force a renegotiation offer');
-  requireContains(workspace, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
-  requireContains(workspace, 'SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS', 'sustained critical SFU websocket backpressure has a bounded hard-reset threshold');
-  requireContains(workspace, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
-  requireContains(workspace, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
-  requireContains(workspace, 'function nativePeerHasLocalLiveAudioSender', 'native bridge validates local audio sender before answering');
-  requireContains(workspace, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');
-  requireContains(workspace, 'native_audio_sender_replace_track_failed', 'native bridge reports replaceTrack failures');
-  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer')", 'native offers wait for active media security before SDP');
-  requireContains(workspace, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer_received')", 'native answers wait for active media security before SDP');
-  requireContains(workspace, 'sdp_audio_summaries: nativeSdpAudioSummaries', 'native SDP diagnostics include every audio m-section');
+  const mediaSecurityRuntime = readFrontend('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
+  const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.js');
+  const peerFactory = readFrontend('src/domain/realtime/native/peerFactory.js');
+  const peerLifecycle = readFrontend('src/domain/realtime/native/peerLifecycle.js');
+  const signaling = readFrontend('src/domain/realtime/native/signaling.js');
+  const audioBridgeRecovery = readFrontend('src/domain/realtime/native/audioBridgeRecovery.js');
+  const audioBridgeState = readFrontend('src/domain/realtime/native/audioBridgeState.js');
+  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const runtimeConfig = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  requireContains(mediaSecurityRuntime, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
+  requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
+  requireContains(mediaSecurityRuntime, "async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation')", 'native bridge gates negotiation on active media security');
+  requireContains(mediaSecurityRuntime, 'function handleNativeMediaSecurityFrameError(event = {})', 'native bridge handles native frame errors');
+  requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsTransient', 'native bridge separates transient native frame drops from hard media-security failures');
+  requireContains(mediaSecurityRuntime, "code = direction === 'receiver'", 'native bridge separates decrypt and encrypt diagnostics');
+  requireContains(mediaSecurityRuntime, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
+  requireContains(mediaSecurityRuntime, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');
+  requireContains(mediaSecurityRuntime, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
+  requireContains(mediaSecurityRuntime, "scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame'", 'malformed native protected frames rebuild the audio bridge instead of staying stalled');
+  requireContains(mediaSecurityRuntime, 'requireMissingTrack: false', 'malformed native frame recovery does not skip rebuild just because a muted remote track object exists');
+  requireContains(mediaSecurityRuntime, 'function checkMediaSecurityHandshakeTimeouts()', 'handshake watchdog exists for native audio bridge deadlocks');
+  requireContains(mediaSecurityRuntime, "eventType: 'media_security_handshake_timeout'", 'handshake watchdog emits diagnostics for native audio bridge deadlocks');
+  requireContains(mediaSecurityRuntime, 'await sendMediaSecurityHello(normalizedTargetId, true);', 'handshake watchdog force-retries hello for native audio bridge deadlocks');
+  requireContains(mediaSecurityRuntime, 'await sendMediaSecuritySenderKey(normalizedTargetId, true);', 'handshake watchdog force-retries sender-key for native audio bridge deadlocks');
+  requireContains(mediaSecurityRuntime, 'mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());', 'missing sender-key schedules handshake watchdog');
+  requireContains(mediaSecurityRuntime, "resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted')", 'accepted sender-key resyncs native audio tracks');
+  requireContains(mediaSecurityRuntime, "function shouldReleaseNativeAudioBridgeQuarantineForReason(reason = 'security_ready')", 'native audio quarantine release rules are centralized');
+  requireContains(mediaSecurityRuntime, "normalizedReason === 'sender_key_accepted'", 'native audio quarantine can be released after sender-key acceptance');
+  requireContains(mediaSecurityRuntime, "normalizedReason === 'native_audio_track_recovery_rejoin'", 'native audio quarantine can be released during explicit recovery rejoin');
+  requireContains(mediaSecurityRuntime, "nativeAudioBridgeIsQuarantined(normalizedUserId)\n      && !shouldReleaseNativeAudioBridgeQuarantineForReason(reason)", 'native audio resync blocks immediate reattach while a peer is still quarantined');
+  requireContains(mediaSecurityRuntime, 'clearNativeAudioBridgeQuarantine(normalizedUserId);', 'native audio resync clears quarantine only on allowed deterministic recovery reasons');
+  requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.js'), "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
+  requireContains(audioBridgeRecovery, "resyncNativeAudioBridgePeerAfterSecurityReady(\n          normalizedUserId,\n          'native_audio_track_recovery_rejoin',\n          true", 'audio-track recovery may force a renegotiation offer');
+  requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
+  requireContains(sfuTransport, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
+  requireContains(sfuTransport, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
+  requireContains(sfuTransport, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
+  requireContains(signaling, '!nativePeerHasLocalLiveAudioSender(peer)', 'native bridge validates local audio sender before answering');
+  requireContains(peerLifecycle, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');
+  requireContains(bridgeRuntime, 'native_audio_sender_replace_track_failed', 'native bridge reports replaceTrack failures');
+  requireContains(bridgeRuntime, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer')", 'native offers wait for active media security before SDP');
+  requireContains(signaling, "ensureNativeAudioBridgeSecurityReady(peer, 'native_offer_received')", 'native answers wait for active media security before SDP');
+  requireContains(signaling, 'sdp_audio_summaries: nativeSdpAudioSummaries', 'native SDP diagnostics include every audio m-section');
+  requireContains(audioBridgeState, 'NATIVE_AUDIO_BRIDGE_ALLOWED_TRANSITIONS', 'audio bridge state machine defines explicit allowed transitions');
+  requireContains(audioBridgeState, 'canTransitionNativeAudioBridgeState', 'audio bridge state machine exposes transition validation');
+  requireContains(audioBridgeState, 'NATIVE_AUDIO_BRIDGE_STATES', 'audio bridge state machine centralizes state ids');
 
   process.stdout.write('[native-audio-bridge-contract] PASS\n');
 } catch (error) {

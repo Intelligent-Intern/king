@@ -314,14 +314,14 @@
               <span>Title</span>
               <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
             </label>
-            <label v-if="composeState.mode === 'edit'" class="field">
+            <label class="field">
               <span>Access mode</span>
               <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
                 <option value="invite_only">Invite only</option>
                 <option value="free_for_all">Free for all</option>
               </AppSelect>
             </label>
-            <label v-if="composeState.mode !== 'create'" class="field">
+            <label class="field">
               <span>Starts at</span>
               <input
                 v-model="composeState.startsLocal"
@@ -330,7 +330,7 @@
                 aria-label="Call starts at"
               />
             </label>
-            <label v-if="composeState.mode !== 'create'" class="field">
+            <label class="field">
               <span>Ends at</span>
               <input
                 v-model="composeState.endsLocal"
@@ -343,7 +343,11 @@
 
           <section v-if="composeState.mode === 'edit'" class="calls-toggle-row">
             <label class="calls-checkbox-row">
-              <input v-model="composeState.replaceParticipants" type="checkbox" />
+              <input
+                v-model="composeState.replaceParticipants"
+                type="checkbox"
+                @change="handleReplaceParticipantsToggle"
+              />
               <span>Replace participant list during edit</span>
             </label>
           </section>
@@ -447,7 +451,7 @@
             </article>
           </section>
 
-          <section v-else class="calls-inline-hint">
+          <section v-else-if="composeState.mode === 'edit'" class="calls-inline-hint">
             Existing participants remain unchanged for this edit.
           </section>
 

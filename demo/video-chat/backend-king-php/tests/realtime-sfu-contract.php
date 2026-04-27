@@ -231,6 +231,41 @@ try {
         str_contains($sfuGatewaySource, 'sfu_frame_direct_fanout_pressure'),
         'SFU direct fanout pressure diagnostics should be wired'
     );
+    $sfuStoreSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
+    videochat_realtime_sfu_assert(
+        function_exists('videochat_sfu_room_subscriber_targets'),
+        'SFU room-scoped subscriber target helper must exist'
+    );
+    $fanoutTargets = videochat_sfu_room_subscriber_targets([
+        'subscribers' => [
+            'publisher-a' => ['websocket' => 'socket-a', 'room_id' => 'room-alpha'],
+            'subscriber-b' => ['websocket' => 'socket-b', 'room_id' => 'room-alpha'],
+            'subscriber-c' => ['websocket' => 'socket-c', 'room_id' => 'room-alpha'],
+            'broken-d' => ['room_id' => 'room-alpha'],
+        ],
+    ], 'publisher-a');
+    videochat_realtime_sfu_assert(count($fanoutTargets) === 2, 'SFU direct fanout targets must be room-scoped, self-excluding, and websocket-bound');
+    videochat_realtime_sfu_assert(
+        array_values(array_map(static fn(array $row): string => (string) ($row['client_id'] ?? ''), $fanoutTargets)) === ['subscriber-b', 'subscriber-c'],
+        'SFU direct fanout targets must preserve explicit subscriber ids'
+    );
+    videochat_realtime_sfu_assert(
+        !str_contains($sfuGatewaySource, 'best-effort cross-worker subscribe')
+        && !str_contains($sfuGatewaySource, 'best-effort cross-worker unpublish')
+        && !str_contains($sfuGatewaySource, 'best-effort cross-worker track advertisement'),
+        'SFU cross-worker broker paths must not be described as best-effort semantics'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($sfuStoreSource, "function videochat_sfu_normalize_codec_id")
+        && str_contains($sfuStoreSource, "function videochat_sfu_normalize_runtime_id"),
+        'SFU store must normalize codec/runtime ids centrally'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($sfuStoreSource, "'codec_id' => (string) (\$storedMetadata['codec_id'] ?? 'wlvc_unknown')")
+        && str_contains($sfuStoreSource, "'runtime_id' => (string) (\$storedMetadata['runtime_id'] ?? 'unknown_runtime')")
+        && str_contains($sfuStoreSource, "'layout_mode' => (string) (\$storedMetadata['layout_mode'] ?? '')"),
+        'SFU broker replay legacy frame path must carry codec/runtime/layout metadata from store'
+    );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),
         'room-alpha'
@@ -398,6 +433,20 @@ try {
         'protocol_version' => 2,
         'frame_sequence' => 99,
         'sender_sent_at_ms' => 1770000000200,
+        'codec_id' => 'wlvc_wasm',
+        'runtime_id' => 'wlvc_sfu',
+        'layout_mode' => 'tile_foreground',
+        'layer_id' => 'foreground',
+        'cache_epoch' => 7,
+        'tile_columns' => 4,
+        'tile_rows' => 3,
+        'tile_width' => 160,
+        'tile_height' => 120,
+        'tile_indices' => [0, 3, 5],
+        'roi_norm_x' => 0.1,
+        'roi_norm_y' => 0.2,
+        'roi_norm_width' => 0.3,
+        'roi_norm_height' => 0.4,
         'payload_chars' => strlen(str_repeat('QUJDREVGR0g', 1_200)),
         'data_base64' => str_repeat('QUJDREVGR0g', 1_200),
     ]);
@@ -421,6 +470,14 @@ try {
         && (int) ($chunkedOutboundTransport[0]['chunk_payload_chars'] ?? 0) === strlen((string) ($chunkedOutboundTransport[0]['data_base64_chunk'] ?? '')),
         'chunked outbound SFU transport frame must carry protocol, sequence, and chunk length metadata'
     );
+    videochat_realtime_sfu_assert(
+        (string) ($chunkedOutboundTransport[0]['codec_id'] ?? '') === 'wlvc_wasm'
+        && (string) ($chunkedOutboundTransport[0]['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($chunkedOutboundTransport[0]['layout_mode'] ?? '') === 'tile_foreground'
+        && (string) ($chunkedOutboundTransport[0]['layer_id'] ?? '') === 'foreground'
+        && (int) ($chunkedOutboundTransport[0]['cache_epoch'] ?? 0) === 7,
+        'chunked outbound SFU transport frame must preserve codec/runtime/layout metadata'
+    );
     $chunkedOutboundProtected = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -429,12 +486,59 @@ try {
         'timestamp' => 12349,
         'frame_type' => 'keyframe',
         'protection_mode' => 'required',
+        'codec_id' => 'wlvc_ts',
+        'runtime_id' => 'wlvc_sfu',
         'protected_frame' => str_repeat('QUJDREVGR0g', 1_200),
     ]);
     videochat_realtime_sfu_assert(count($chunkedOutboundProtected) > 1, 'large outbound protected SFU frame should chunk');
     videochat_realtime_sfu_assert(
         (string) ($chunkedOutboundProtected[0]['protected_frame_chunk'] ?? '') !== '',
         'chunked outbound protected SFU frame must use protected_frame_chunk'
+    );
+    videochat_realtime_sfu_assert(
+        (string) ($chunkedOutboundProtected[0]['codec_id'] ?? '') === 'wlvc_ts'
+        && (string) ($chunkedOutboundProtected[0]['runtime_id'] ?? '') === 'wlvc_sfu',
+        'chunked outbound protected SFU frame must preserve codec/runtime metadata'
+    );
+    $binaryEnvelope = videochat_sfu_encode_binary_frame_envelope([
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-a',
+        'publisher_user_id' => '100',
+        'track_id' => 'camera-a',
+        'timestamp' => 12350,
+        'frame_type' => 'delta',
+        'protection_mode' => 'transport_only',
+        'protocol_version' => 2,
+        'frame_sequence' => 100,
+        'sender_sent_at_ms' => 1770000000300,
+        'frame_id' => 'frame_binary_codec_layout',
+        'codec_id' => 'wlvc_wasm',
+        'runtime_id' => 'wlvc_sfu',
+        'layout_mode' => 'background_snapshot',
+        'layer_id' => 'background',
+        'cache_epoch' => 11,
+        'tile_columns' => 2,
+        'tile_rows' => 2,
+        'tile_width' => 320,
+        'tile_height' => 180,
+        'tile_indices' => [1],
+        'roi_norm_x' => 0.05,
+        'roi_norm_y' => 0.15,
+        'roi_norm_width' => 0.5,
+        'roi_norm_height' => 0.6,
+        'data_base64' => 'QUJD',
+    ]);
+    videochat_realtime_sfu_assert(is_string($binaryEnvelope) && $binaryEnvelope !== '', 'binary SFU frame envelope should encode with codec/runtime/layout metadata');
+    $decodedBinaryEnvelope = videochat_sfu_decode_binary_client_frame((string) $binaryEnvelope, 'room-alpha');
+    videochat_realtime_sfu_assert((bool) ($decodedBinaryEnvelope['ok'] ?? false), 'binary SFU frame envelope with codec/runtime/layout metadata should decode');
+    $decodedBinaryPayload = is_array($decodedBinaryEnvelope['payload'] ?? null) ? $decodedBinaryEnvelope['payload'] : [];
+    videochat_realtime_sfu_assert(
+        (string) ($decodedBinaryPayload['codec_id'] ?? '') === 'wlvc_wasm'
+        && (string) ($decodedBinaryPayload['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($decodedBinaryPayload['layout_mode'] ?? '') === 'background_snapshot'
+        && (string) ($decodedBinaryPayload['layer_id'] ?? '') === 'background'
+        && (int) ($decodedBinaryPayload['cache_epoch'] ?? 0) === 11,
+        'binary SFU frame envelope must preserve codec/runtime/layout metadata through decode'
     );
     $invalidChunkCommand = videochat_sfu_decode_client_frame(
         json_encode([
@@ -536,12 +640,57 @@ try {
 
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-a', '100', 'camera-a', 1000, 'keyframe', [1, 2, 3]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1001, 'delta', [4, 5, 6]);
+    videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1002, 'delta', [7, 8], '', '', true, [
+        'protocol_version' => 2,
+        'frame_sequence' => 101,
+        'sender_sent_at_ms' => 1770000000400,
+        'frame_id' => 'frame_store_codec_layout',
+        'codec_id' => 'wlvc_wasm',
+        'runtime_id' => 'wlvc_sfu',
+        'layout_mode' => 'tile_foreground',
+        'layer_id' => 'foreground',
+        'cache_epoch' => 13,
+        'tile_columns' => 3,
+        'tile_rows' => 3,
+        'tile_width' => 160,
+        'tile_height' => 90,
+        'tile_indices' => [0, 4],
+        'roi_norm_x' => 0.2,
+        'roi_norm_y' => 0.25,
+        'roi_norm_width' => 0.35,
+        'roi_norm_height' => 0.45,
+        'protection_mode' => 'transport_only',
+    ]);
     videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', '200', 'camera-b', 1003, 'delta', [], $protectedFrame);
     videochat_sfu_insert_frame($pdo, 'room-beta', 'publisher-c', '300', 'camera-c', 1002, 'delta', [7, 8, 9]);
     $framesForA = videochat_sfu_fetch_frames_since($pdo, 'room-alpha', 0, 'publisher-a');
-    videochat_realtime_sfu_assert(count($framesForA) === 2, 'SFU frame relay must exclude self and cross-room frames');
+    videochat_realtime_sfu_assert(count($framesForA) === 3, 'SFU frame relay must exclude self and cross-room frames');
     videochat_realtime_sfu_assert((string) ($framesForA[0]['publisher_id'] ?? '') === 'publisher-b', 'SFU frame relay should include only remote same-room publisher');
-    $storedProtectedPayload = json_decode((string) ($framesForA[1]['data_json'] ?? ''), true);
+    $storedCodecLayoutPayload = json_decode((string) ($framesForA[1]['data_json'] ?? ''), true);
+    videochat_realtime_sfu_assert(is_array($storedCodecLayoutPayload), 'stored SFU codec/layout payload must decode');
+    $decodedStoredCodecLayoutPayload = videochat_sfu_decode_stored_frame_payload($storedCodecLayoutPayload);
+    $storedCodecLayoutMetadata = is_array($decodedStoredCodecLayoutPayload['metadata'] ?? null) ? $decodedStoredCodecLayoutPayload['metadata'] : [];
+    videochat_realtime_sfu_assert(
+        (string) ($storedCodecLayoutMetadata['codec_id'] ?? '') === 'wlvc_wasm'
+        && (string) ($storedCodecLayoutMetadata['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($storedCodecLayoutMetadata['layout_mode'] ?? '') === 'tile_foreground'
+        && (string) ($storedCodecLayoutMetadata['layer_id'] ?? '') === 'foreground'
+        && (int) ($storedCodecLayoutMetadata['cache_epoch'] ?? 0) === 13,
+        'stored SFU payload metadata must preserve codec/runtime/layout fields'
+    );
+    $storedCodecLayoutBinary = is_string($framesForA[1]['data_blob'] ?? null) ? (string) $framesForA[1]['data_blob'] : '';
+    videochat_realtime_sfu_assert($storedCodecLayoutBinary !== '', 'stored SFU codec/layout payload must persist binary envelope');
+    $decodedStoredCodecLayoutBinary = videochat_sfu_decode_binary_client_frame($storedCodecLayoutBinary, 'room-alpha');
+    videochat_realtime_sfu_assert((bool) ($decodedStoredCodecLayoutBinary['ok'] ?? false), 'stored SFU binary replay payload must decode');
+    $storedBinaryPayload = is_array($decodedStoredCodecLayoutBinary['payload'] ?? null) ? $decodedStoredCodecLayoutBinary['payload'] : [];
+    videochat_realtime_sfu_assert(
+        (string) ($storedBinaryPayload['codec_id'] ?? '') === 'wlvc_wasm'
+        && (string) ($storedBinaryPayload['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($storedBinaryPayload['layout_mode'] ?? '') === 'tile_foreground'
+        && (string) ($storedBinaryPayload['layer_id'] ?? '') === 'foreground',
+        'stored SFU binary replay payload must preserve codec/runtime/layout metadata'
+    );
+    $storedProtectedPayload = json_decode((string) ($framesForA[2]['data_json'] ?? ''), true);
     videochat_realtime_sfu_assert(is_array($storedProtectedPayload), 'stored protected SFU payload must decode');
     $decodedStoredProtectedPayload = videochat_sfu_decode_stored_frame_payload($storedProtectedPayload);
     videochat_realtime_sfu_assert($decodedStoredProtectedPayload['data'] === [], 'stored protected SFU payload must not expose legacy data array');

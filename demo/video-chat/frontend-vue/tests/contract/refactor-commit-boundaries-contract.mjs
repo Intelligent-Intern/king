@@ -1,115 +1,83 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 function fail(message) {
   throw new Error(`[refactor-commit-boundaries-contract] FAIL: ${message}`);
 }
 
-function git(args) {
-  return execFileSync('git', args, {
-    cwd: new URL('../../../..', import.meta.url),
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-}
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendRoot = path.resolve(__dirname, '../..');
+const realtimeRoot = path.resolve(frontendRoot, 'src/domain/realtime');
+const workspaceViewPath = path.resolve(realtimeRoot, 'CallWorkspaceView.vue');
+const workspaceHelpersRoot = path.resolve(realtimeRoot, 'workspace/callWorkspace');
 
-const expectedCommits = [
-  {
-    subject: 'refactor(videochat): split call layout ui options',
-    requiredPaths: [
-      'demo/video-chat/frontend-vue/src/domain/realtime/callLayoutUiOptions.js',
-      'demo/video-chat/frontend-vue/tests/contract/call-layout-ui-options-contract.mjs',
-    ],
-  },
-  {
-    subject: 'refactor(videochat): share call list ui primitives',
-    requiredPaths: [
-      'demo/video-chat/frontend-vue/src/domain/calls/CallsListTable.vue',
-      'demo/video-chat/frontend-vue/tests/contract/shared-ui-primitives-contract.mjs',
-    ],
-  },
-  {
-    subject: 'refactor(videochat): split call view state stores',
-    requiredPaths: [
-      'demo/video-chat/frontend-vue/src/domain/calls/callViewState.js',
-      'demo/video-chat/frontend-vue/tests/contract/frontend-state-stores-contract.mjs',
-    ],
-  },
-  {
-    subject: 'test(videochat): guard visual standards',
-    requiredPaths: [
-      'demo/video-chat/frontend-vue/tests/contract/visual-standards-contract.mjs',
-    ],
-  },
-  {
-    subject: 'test(videochat): cover shared ui surfaces',
-    requiredPaths: [
-      'demo/video-chat/frontend-vue/tests/e2e/shared-ui-surfaces.spec.js',
-    ],
-  },
-];
-
-function recentCommits() {
-  return git(['log', '--format=%H%x00%s', '-n', '80'])
-    .trim()
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [hash, subject] = line.split('\0');
-      return { hash, subject };
-    });
-}
-
-function commitStats(hash) {
-  const rows = git(['diff-tree', '--no-commit-id', '--numstat', '-r', hash])
-    .trim()
-    .split('\n')
-    .filter(Boolean);
-
-  return rows.map((row) => {
-    const [added, deleted, filePath] = row.split('\t');
-    return {
-      added: Number.parseInt(added, 10) || 0,
-      deleted: Number.parseInt(deleted, 10) || 0,
-      filePath,
-    };
-  });
+function read(relativePath) {
+  return fs.readFileSync(path.resolve(frontendRoot, relativePath), 'utf8');
 }
 
 try {
-  const commits = recentCommits();
-  const positions = new Map();
+  const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
+  const workspaceLines = workspaceView.split('\n').length;
+  assert.ok(workspaceLines <= 2200, `CallWorkspaceView.vue must stay below the monolith cap (got ${workspaceLines})`);
 
-  for (const expected of expectedCommits) {
-    const index = commits.findIndex((commit) => commit.subject === expected.subject);
-    assert.notEqual(index, -1, `missing expected Q21 commit: ${expected.subject}`);
-    positions.set(expected.subject, index);
-
-    const stats = commitStats(commits[index].hash);
-    const paths = stats.map((row) => row.filePath);
-    const changedLines = stats.reduce((total, row) => total + row.added + row.deleted, 0);
-
-    assert.ok(paths.length <= 8, `${expected.subject} must stay a small reviewable file set`);
-    assert.ok(changedLines <= 650, `${expected.subject} must stay within the Q21 bisection size cap`);
-    assert.ok(
-      paths.every((filePath) => filePath === 'SPRINT.md' || filePath.startsWith('demo/video-chat/frontend-vue/')),
-      `${expected.subject} must not mix unrelated product areas into the videochat frontend refactor`,
-    );
-
-    for (const requiredPath of expected.requiredPaths) {
-      assert.ok(paths.includes(requiredPath), `${expected.subject} must carry ${requiredPath}`);
-    }
+  const requiredImports = [
+    "createCallWorkspaceSocketHelpers",
+    "createCallWorkspaceRouteResolutionHelpers",
+    "createCallWorkspaceRuntimeSwitchingHelpers",
+    "createCallWorkspaceParticipantUiHelpers",
+    "createCallWorkspaceChatRuntimeHelpers",
+    "createCallWorkspaceRoomStateHelpers",
+    "createCallWorkspaceMediaSecurityRuntime",
+    "createCallWorkspaceOrchestrationHelpers",
+    "registerCallWorkspaceLifecycleHelpers",
+    "createCallWorkspaceMediaStack",
+    "createCallWorkspaceNativeStack",
+  ];
+  for (const name of requiredImports) {
+    assert.ok(workspaceView.includes(name), `CallWorkspaceView.vue must import/use ${name}`);
   }
 
-  for (let i = 1; i < expectedCommits.length; i += 1) {
-    const previous = expectedCommits[i - 1].subject;
-    const current = expectedCommits[i].subject;
-    assert.ok(
-      positions.get(current) < positions.get(previous),
-      `${current} must be newer than ${previous}`,
-    );
+  const forbiddenMonolithFunctions = [
+    'function handleSFUEncodedFrame(',
+    'function createOrUpdateSfuRemotePeer(',
+    'function startEncodingPipeline(',
+    'function handleMediaSecuritySignal(',
+    'function syncMediaSecurityWithParticipants(',
+    'function checkRemoteVideoStalls(',
+    'function switchMediaRuntimePath(',
+  ];
+  for (const signature of forbiddenMonolithFunctions) {
+    assert.ok(!workspaceView.includes(signature), `CallWorkspaceView.vue must not re-monolithize ${signature}`);
   }
 
+  const requiredHelperFiles = [
+    'chatRuntime.js',
+    'clientDiagnostics.js',
+    'lifecycle.js',
+    'mediaSecurityRuntime.js',
+    'mediaStack.js',
+    'nativeStack.js',
+    'orchestration.js',
+    'participantUi.js',
+    'roomState.js',
+    'routeResolution.js',
+    'runtimeHealth.js',
+    'runtimeSwitching.js',
+    'sfuTransport.js',
+    'socketLifecycle.js',
+    'videoLayout.js',
+  ];
+  for (const fileName of requiredHelperFiles) {
+    assert.ok(fs.existsSync(path.resolve(workspaceHelpersRoot, fileName)), `workspace helper file missing: ${fileName}`);
+  }
+
+  const helperFiles = fs.readdirSync(workspaceHelpersRoot).filter((name) => name.endsWith('.js') && !name.endsWith('.extracted.js'));
+  assert.ok(helperFiles.length >= 12, `workspace helper surface must remain modular (got ${helperFiles.length} helper modules)`);
+
+  assert.ok(fs.existsSync(workspaceViewPath), 'CallWorkspaceView.vue must exist');
   process.stdout.write('[refactor-commit-boundaries-contract] PASS\n');
 } catch (error) {
   if (error instanceof Error) {

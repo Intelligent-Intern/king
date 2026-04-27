@@ -1,0 +1,649 @@
+import { markRaw } from 'vue';
+import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
+import { cloneImageData, planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
+import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
+
+export function createLocalPublisherPipelineHelpers({
+  backgroundBaselineCollector,
+  backgroundFilterController,
+  callbacks,
+  captureClientDiagnosticError,
+  constants,
+  refs,
+  state,
+}) {
+  const {
+    applyCallOutputPreferences,
+    canProtectCurrentSfuTargets,
+    currentSfuVideoProfile,
+    ensureMediaSecuritySession,
+    getSfuClientBufferedAmount,
+    handleWlvcEncodeBackpressure,
+    handleWlvcFrameSendFailure,
+    hintMediaSecuritySync,
+    isSfuClientOpen,
+    isWlvcRuntimePath,
+    maybeFallbackToNativeRuntime,
+    mediaDebugLog,
+    reconfigureLocalTracksFromSelectedDevices,
+    renderCallVideoLayout,
+    resetBackgroundRuntimeMetrics,
+    resetWlvcBackpressureCounters,
+    resetWlvcFrameSendFailureCounters,
+    shouldDelayWlvcFrameForBackpressure,
+    shouldSendTransportOnlySfuFrame,
+    shouldThrottleWlvcEncodeLoop,
+    stopActivityMonitor,
+    stopSfuTrackAnnounceTimer,
+  } = callbacks;
+
+  function currentSfuCodecId(encoder) {
+    const constructorName = String(encoder?.constructor?.name || '').trim();
+    if (constructorName === 'WasmWaveletVideoEncoder') return 'wlvc_wasm';
+    if (constructorName === 'WaveletVideoEncoder') return 'wlvc_ts';
+    return 'wlvc_unknown';
+  }
+
+  function uniqueLocalStreams(values) {
+    const out = [];
+    const seen = new Set();
+    for (const value of values) {
+      if (!(value instanceof MediaStream)) continue;
+      if (seen.has(value)) continue;
+      seen.add(value);
+      out.push(value);
+    }
+    return out;
+  }
+
+  function unpublishSfuTracks(tracks) {
+    if (!refs.sfuClientRef.value || !Array.isArray(tracks)) return;
+    for (const track of tracks) {
+      if (!track?.id) continue;
+      try {
+        refs.sfuClientRef.value.unpublishTrack(track.id);
+      } catch {
+        // best-effort cleanup for stale tracks
+      }
+    }
+  }
+
+  function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
+    const preserved = new Set();
+    const preservedTrackIds = new Set();
+    for (const stream of preservedStreams) {
+      if (stream instanceof MediaStream) {
+        preserved.add(stream);
+        for (const track of stream.getTracks()) {
+          if (track?.id) preservedTrackIds.add(track.id);
+        }
+      }
+    }
+
+    for (const stream of uniqueLocalStreams(retiredStreams)) {
+      if (!(stream instanceof MediaStream)) continue;
+      if (preserved.has(stream)) continue;
+      for (const track of stream.getTracks()) {
+        if (track?.id && preservedTrackIds.has(track.id)) continue;
+        try {
+          track.stop();
+        } catch {
+          // ignore stop failures during stream turnover
+        }
+      }
+    }
+  }
+
+  function clearLocalTrackRecoveryTimer() {
+    if (state.localTrackRecoveryTimer !== null) {
+      clearTimeout(state.localTrackRecoveryTimer);
+      state.localTrackRecoveryTimer = null;
+    }
+  }
+
+  function hasLiveLocalMedia() {
+    const stream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
+    if (!(stream instanceof MediaStream)) return false;
+    return stream.getTracks().some((track) => String(track?.readyState || '').trim().toLowerCase() === 'live');
+  }
+
+  function scheduleLocalTrackRecovery(reason = 'track_ended') {
+    if (state.localPublisherTeardownInProgress) return;
+    if (state.localTrackRecoveryTimer !== null) return;
+    if (state.localTrackRecoveryAttempts >= constants.localTrackRecoveryMaxAttempts) return;
+
+    const attempt = state.localTrackRecoveryAttempts;
+    const delayMs = Math.min(
+      constants.localTrackRecoveryBaseDelayMs * Math.max(1, 2 ** attempt),
+      constants.localTrackRecoveryMaxDelayMs,
+    );
+
+    state.localTrackRecoveryTimer = setTimeout(async () => {
+      state.localTrackRecoveryTimer = null;
+      state.localTrackRecoveryAttempts += 1;
+
+      const recovered = await reconfigureLocalTracksFromSelectedDevices();
+      if (recovered || hasLiveLocalMedia()) {
+        state.localTrackRecoveryAttempts = 0;
+        return;
+      }
+
+      scheduleLocalTrackRecovery(reason);
+    }, delayMs);
+  }
+
+  function bindLocalTrackLifecycle(stream) {
+    if (!(stream instanceof MediaStream)) return;
+    for (const track of stream.getTracks()) {
+      track.addEventListener('ended', () => {
+        if (state.localPublisherTeardownInProgress) return;
+        const currentStream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
+        if (!(currentStream instanceof MediaStream)) return;
+        const isCurrentTrack = currentStream.getTracks().some((row) => row.id === track.id);
+        if (!isCurrentTrack) return;
+        scheduleLocalTrackRecovery(`track_${String(track?.kind || 'media').toLowerCase()}_ended`);
+      });
+    }
+  }
+
+  function stopLocalEncodingPipeline() {
+    if (refs.encodeIntervalRef.value) {
+      clearTimeout(refs.encodeIntervalRef.value);
+      refs.encodeIntervalRef.value = null;
+    }
+    state.wlvcEncodeInFlight = false;
+    resetWlvcBackpressureCounters();
+    if (refs.videoEncoderRef.value) {
+      if (typeof refs.videoEncoderRef.value.destroy === 'function') {
+        refs.videoEncoderRef.value.destroy();
+      } else if (typeof refs.videoEncoderRef.value.reset === 'function') {
+        refs.videoEncoderRef.value.reset();
+      }
+      refs.videoEncoderRef.value = null;
+    }
+    if (refs.videoPatchEncoderRef.value) {
+      if (typeof refs.videoPatchEncoderRef.value.destroy === 'function') {
+        refs.videoPatchEncoderRef.value.destroy();
+      } else if (typeof refs.videoPatchEncoderRef.value.reset === 'function') {
+        refs.videoPatchEncoderRef.value.reset();
+      }
+      refs.videoPatchEncoderRef.value = null;
+    }
+    refs.videoPatchEncoderWidth.value = 0;
+    refs.videoPatchEncoderHeight.value = 0;
+    refs.videoPatchEncoderQuality.value = 0;
+    state.wlvcEncodeFailureCount = 0;
+    state.wlvcEncodeWarmupUntilMs = 0;
+    state.wlvcEncodeFirstFailureAtMs = 0;
+    state.wlvcEncodeLastErrorLogAtMs = 0;
+  }
+
+  function clearLocalPreviewElement() {
+    const node = refs.localVideoElement.value;
+    if (node instanceof HTMLVideoElement) {
+      try {
+        node.pause();
+      } catch {
+        // ignore
+      }
+      node.srcObject = null;
+      node.remove();
+    }
+    refs.localVideoElement.value = null;
+
+    const container = document.getElementById('local-video-container');
+    if (container) {
+      container.innerHTML = '';
+    }
+    renderCallVideoLayout();
+  }
+
+  function unpublishAndStopLocalTracks() {
+    state.localPublisherTeardownInProgress = true;
+    clearLocalTrackRecoveryTimer();
+    state.backgroundRuntimeToken += 1;
+    backgroundBaselineCollector.reset();
+    state.backgroundBaselineCaptured = false;
+    resetBackgroundRuntimeMetrics('idle');
+    backgroundFilterController.dispose();
+
+    try {
+      const tracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
+      if (refs.sfuClientRef.value) {
+        for (const track of tracks) {
+          if (track?.id) {
+            refs.sfuClientRef.value.unpublishTrack(track.id);
+          }
+        }
+      }
+
+      for (const track of tracks) {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+      }
+      refs.localTracksRef.value = [];
+      state.localTracksPublishedToSfu = false;
+
+      const streamsToStop = uniqueLocalStreams([
+        refs.localStreamRef.value,
+        refs.localRawStreamRef.value,
+        refs.localFilteredStreamRef.value,
+      ]);
+      for (const stream of streamsToStop) {
+        for (const track of stream.getTracks()) {
+          try {
+            track.stop();
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      refs.localRawStreamRef.value = null;
+      refs.localFilteredStreamRef.value = null;
+      refs.localStreamRef.value = null;
+    } finally {
+      state.localPublisherTeardownInProgress = false;
+    }
+  }
+
+  function teardownLocalPublisher() {
+    clearLocalTrackRecoveryTimer();
+    stopSfuTrackAnnounceTimer();
+    stopActivityMonitor();
+    stopLocalEncodingPipeline();
+    unpublishAndStopLocalTracks();
+    clearLocalPreviewElement();
+  }
+
+  async function startEncodingPipeline(videoTrack) {
+    stopLocalEncodingPipeline();
+    resetWlvcBackpressureCounters();
+
+    let video = refs.localVideoElement.value;
+    if (!(video instanceof HTMLVideoElement)) {
+      video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      refs.localVideoElement.value = video;
+    }
+    video.srcObject = new MediaStream([videoTrack]);
+    const container = document.getElementById('local-video-container');
+    if (container && video.parentElement !== container) {
+      container.replaceChildren(video);
+    }
+    try {
+      await video.play();
+    } catch {
+      // keep preview node mounted even when autoplay policy blocks playback.
+    }
+    renderCallVideoLayout();
+    applyCallOutputPreferences();
+
+    if (!isWlvcRuntimePath()) {
+      return;
+    }
+
+    const videoProfile = currentSfuVideoProfile();
+
+    try {
+      const nextEncoder = await createHybridEncoder({
+        width: videoProfile.frameWidth,
+        height: videoProfile.frameHeight,
+        quality: videoProfile.frameQuality,
+        keyFrameInterval: videoProfile.keyFrameInterval,
+      });
+      refs.videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
+      if (!refs.videoEncoderRef.value) {
+        mediaDebugLog('[SFU] WLVC encoder unavailable; falling back to native WebRTC path');
+        void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
+        return;
+      }
+      mediaDebugLog('[SFU] Local encoder initialized', refs.videoEncoderRef.value?.constructor?.name || 'unknown_encoder');
+      state.wlvcEncodeFailureCount = 0;
+      state.wlvcEncodeWarmupUntilMs = Date.now() + constants.wlvcEncodeWarmupMs;
+      state.wlvcEncodeFirstFailureAtMs = 0;
+      state.wlvcEncodeLastErrorLogAtMs = 0;
+    } catch (error) {
+      mediaDebugLog('[SFU] WLVC encoder init error; falling back to native WebRTC path:', error);
+      captureClientDiagnosticError('wlvc_encoder_init_failed', error, {
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+        stage_a: refs.mediaRuntimeCapabilitiesRef.value.stageA,
+        stage_b: refs.mediaRuntimeCapabilitiesRef.value.stageB,
+      }, {
+        code: 'wlvc_encoder_init_failed',
+        immediate: true,
+      });
+      void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = videoProfile.frameWidth;
+    canvas.height = videoProfile.frameHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let previousFullFrameImageData = null;
+    let lastFullFrameSentAtMs = 0;
+    let lastBackgroundSnapshotSentAtMs = 0;
+    let selectiveTileCacheEpoch = 0;
+
+    const ensureSelectivePatchEncoder = async (width, height, quality) => {
+      const nextWidth = Math.max(1, Math.floor(Number(width || 0)));
+      const nextHeight = Math.max(1, Math.floor(Number(height || 0)));
+      const nextQuality = Math.max(1, Math.floor(Number(quality || constants.sfuWlvcFrameQuality)));
+      if (
+        refs.videoPatchEncoderRef.value
+        && Number(refs.videoPatchEncoderWidth.value || 0) === nextWidth
+        && Number(refs.videoPatchEncoderHeight.value || 0) === nextHeight
+        && Number(refs.videoPatchEncoderQuality.value || 0) === nextQuality
+      ) {
+        return refs.videoPatchEncoderRef.value;
+      }
+      if (refs.videoPatchEncoderRef.value) {
+        try {
+          refs.videoPatchEncoderRef.value.destroy?.();
+        } catch {
+          // ignore stale patch encoder cleanup failures during size switches
+        }
+        refs.videoPatchEncoderRef.value = null;
+      }
+      const nextPatchEncoder = await createHybridEncoder({
+        width: nextWidth,
+        height: nextHeight,
+        quality: nextQuality,
+        keyFrameInterval: 1,
+      });
+      refs.videoPatchEncoderRef.value = nextPatchEncoder ? markRaw(nextPatchEncoder) : null;
+      refs.videoPatchEncoderWidth.value = nextWidth;
+      refs.videoPatchEncoderHeight.value = nextHeight;
+      refs.videoPatchEncoderQuality.value = nextQuality;
+      return refs.videoPatchEncoderRef.value;
+    };
+
+    const scheduleNextWlvcEncodeTick = (delayMs = videoProfile.encodeIntervalMs) => {
+      if (!refs.videoEncoderRef.value || !isWlvcRuntimePath()) {
+        refs.encodeIntervalRef.value = null;
+        return;
+      }
+      refs.encodeIntervalRef.value = setTimeout(runWlvcEncodeTick, Math.max(0, Math.round(delayMs)));
+    };
+
+    const runWlvcEncodeTick = async () => {
+      const startedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+      try {
+        if (!isWlvcRuntimePath()) return;
+        if (state.wlvcEncodeInFlight) return;
+        if (!refs.videoEncoderRef.value || !refs.sfuClientRef.value || !isSfuClientOpen()) return;
+        if (shouldThrottleWlvcEncodeLoop()) return;
+        const bufferedAmount = getSfuClientBufferedAmount();
+        if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
+          handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
+          return;
+        }
+        if (refs.sfuTransportState.wlvcBackpressureSkipCount > 0) {
+          resetWlvcBackpressureCounters();
+        }
+        if (video.readyState < 2 || !ctx) return;
+
+        state.wlvcEncodeInFlight = true;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const timestamp = Date.now();
+        let frameImageData = imageData;
+        let tilePatchMetadata = null;
+        let tilePatchTransportMetrics = null;
+        let encoded = null;
+        let encodedFrameType = 'keyframe';
+        let outgoingCacheEpoch = selectiveTileCacheEpoch;
+        const matteMaskImageData = backgroundFilterController.getCurrentMatteMaskSnapshot();
+        const canAttemptSelectivePatch = constants.selectiveTileEnabled
+          && previousFullFrameImageData instanceof ImageData
+          && (timestamp - lastFullFrameSentAtMs) <= constants.selectiveTileBaseRefreshMs
+          && refs.sfuTransportState.wlvcBackpressureSkipCount === 0
+          && refs.sfuTransportState.wlvcFrameSendFailureCount === 0;
+
+        if (canAttemptSelectivePatch) {
+          const selectivePatchPlan = planSelectiveTilePatch(imageData, previousFullFrameImageData, {
+            tileWidth: constants.selectiveTileWidth,
+            tileHeight: constants.selectiveTileHeight,
+            maxChangedTileRatio: constants.selectiveTileMaxChangedRatio,
+            maxPatchAreaRatio: constants.selectiveTileMaxPatchAreaRatio,
+            sampleStride: constants.selectiveTileSampleStride,
+            diffThreshold: constants.selectiveTileDiffThreshold,
+            cacheEpoch: selectiveTileCacheEpoch,
+            matteMaskImageData,
+          });
+          if (selectivePatchPlan) {
+            const patchEncoder = await ensureSelectivePatchEncoder(
+              selectivePatchPlan.patchImageData.width,
+              selectivePatchPlan.patchImageData.height,
+              videoProfile.frameQuality,
+            );
+            if (patchEncoder) {
+              frameImageData = selectivePatchPlan.patchImageData;
+              tilePatchMetadata = selectivePatchPlan.tilePatch;
+              tilePatchTransportMetrics = {
+                selection_tile_count: selectivePatchPlan.changedTileCount,
+                selection_total_tile_count: selectivePatchPlan.totalTileCount,
+                selection_tile_ratio: Number(selectivePatchPlan.selectedTileRatio.toFixed(6)),
+                selection_mask_guided: selectivePatchPlan.matteGuided,
+              };
+              encoded = patchEncoder.encodeFrame(frameImageData, timestamp);
+              encodedFrameType = 'keyframe';
+            }
+          }
+        }
+
+        if (
+          !encoded
+          && canAttemptSelectivePatch
+          && constants.backgroundSnapshotEnabled
+          && (timestamp - lastBackgroundSnapshotSentAtMs) >= constants.backgroundSnapshotMinIntervalMs
+        ) {
+          const backgroundSnapshotPlan = planBackgroundSnapshotPatch(imageData, previousFullFrameImageData, {
+            tileWidth: constants.backgroundSnapshotTileWidth,
+            tileHeight: constants.backgroundSnapshotTileHeight,
+            minChangedTileRatio: constants.backgroundSnapshotMinChangedRatio,
+            maxChangedTileRatio: constants.backgroundSnapshotMaxChangedRatio,
+            maxPatchAreaRatio: constants.backgroundSnapshotMaxPatchAreaRatio,
+            sampleStride: constants.backgroundSnapshotSampleStride,
+            diffThreshold: constants.backgroundSnapshotTileDiffThreshold,
+            cacheEpoch: selectiveTileCacheEpoch,
+            matteMaskImageData,
+          });
+          if (backgroundSnapshotPlan) {
+            const patchEncoder = await ensureSelectivePatchEncoder(
+              backgroundSnapshotPlan.patchImageData.width,
+              backgroundSnapshotPlan.patchImageData.height,
+              videoProfile.frameQuality,
+            );
+            if (patchEncoder) {
+              frameImageData = backgroundSnapshotPlan.patchImageData;
+              tilePatchMetadata = backgroundSnapshotPlan.tilePatch;
+              tilePatchTransportMetrics = {
+                selection_tile_count: backgroundSnapshotPlan.changedTileCount,
+                selection_total_tile_count: backgroundSnapshotPlan.totalTileCount,
+                selection_tile_ratio: Number(backgroundSnapshotPlan.selectedTileRatio.toFixed(6)),
+                selection_mask_guided: backgroundSnapshotPlan.matteGuided,
+              };
+              encoded = patchEncoder.encodeFrame(frameImageData, timestamp);
+              encodedFrameType = 'keyframe';
+            }
+          }
+        }
+
+        if (!encoded) {
+          encoded = refs.videoEncoderRef.value.encodeFrame(imageData, timestamp);
+          encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);
+          if (encodedFrameType === 'keyframe') {
+            outgoingCacheEpoch = selectiveTileCacheEpoch + 1;
+          }
+        }
+
+        const outgoingFrame = {
+          publisherId: String(refs.currentUserId()),
+          publisherUserId: String(refs.currentUserId()),
+          trackId: videoTrack.id,
+          timestamp: encoded.timestamp,
+          transportMetrics: tilePatchTransportMetrics,
+          data: encoded.data,
+          type: encodedFrameType,
+          codecId: currentSfuCodecId(tilePatchMetadata ? refs.videoPatchEncoderRef.value : refs.videoEncoderRef.value),
+          runtimeId: 'wlvc_sfu',
+          protectionMode: 'transport_only',
+          ...(tilePatchMetadata ? {
+            layoutMode: tilePatchMetadata.layoutMode,
+            layerId: tilePatchMetadata.layerId,
+            cacheEpoch: tilePatchMetadata.cacheEpoch,
+            tileColumns: tilePatchMetadata.tileColumns,
+            tileRows: tilePatchMetadata.tileRows,
+            tileWidth: tilePatchMetadata.tileWidth,
+            tileHeight: tilePatchMetadata.tileHeight,
+            tileIndices: tilePatchMetadata.tileIndices,
+            roiNormX: tilePatchMetadata.roiNormX,
+            roiNormY: tilePatchMetadata.roiNormY,
+            roiNormWidth: tilePatchMetadata.roiNormWidth,
+            roiNormHeight: tilePatchMetadata.roiNormHeight,
+          } : {
+            layoutMode: 'full_frame',
+            layerId: 'full',
+            cacheEpoch: outgoingCacheEpoch,
+          }),
+        };
+
+        if (constants.protectedMediaEnabled && canProtectCurrentSfuTargets()) {
+          try {
+            const mediaSecurity = ensureMediaSecuritySession();
+            const protectedFrame = await mediaSecurity.protectFrame({
+              data: encoded.data,
+              runtimePath: 'wlvc_sfu',
+              codecId: outgoingFrame.codecId,
+              trackKind: 'video',
+              frameKind: encodedFrameType,
+              trackId: videoTrack.id,
+              timestamp: encoded.timestamp,
+            });
+            outgoingFrame.data = new ArrayBuffer(0);
+            outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
+            outgoingFrame.protectionMode = 'protected';
+          } catch (securityError) {
+            if (!shouldSendTransportOnlySfuFrame(securityError)) {
+              throw securityError;
+            }
+            mediaDebugLog('[MediaSecurity] protected SFU frame unavailable; sending transport-only frame', securityError);
+            hintMediaSecuritySync('protect_frame_unavailable', {
+              track_id: videoTrack.id,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+            });
+          }
+        } else {
+          hintMediaSecuritySync(
+            constants.protectedMediaEnabled
+              ? 'peer_handshake_not_ready'
+              : 'protected_frames_temporarily_disabled',
+            {
+              track_id: videoTrack.id,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+            }
+          );
+        }
+
+        const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+        if (frameSent === false) {
+          const sfuSendFailureDetails = refs.sfuClientRef.value?.getLastSendFailure?.() || null;
+          handleWlvcFrameSendFailure(
+            getSfuClientBufferedAmount(),
+            videoTrack.id,
+            String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
+            sfuSendFailureDetails,
+          );
+          return;
+        }
+        if (getSfuClientBufferedAmount() < constants.sendBufferHighWaterBytes) {
+          resetWlvcBackpressureCounters();
+        }
+        resetWlvcFrameSendFailureCounters();
+        state.wlvcEncodeFailureCount = 0;
+        state.wlvcEncodeFirstFailureAtMs = 0;
+        previousFullFrameImageData = cloneImageData(imageData);
+        if (!tilePatchMetadata) {
+          if (encodedFrameType === 'keyframe') {
+            selectiveTileCacheEpoch = outgoingCacheEpoch;
+          }
+          lastFullFrameSentAtMs = timestamp;
+        } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {
+          lastBackgroundSnapshotSentAtMs = timestamp;
+        }
+      } catch (error) {
+        const nowMs = Date.now();
+        if (nowMs - state.wlvcEncodeLastErrorLogAtMs >= constants.wlvcEncodeErrorLogCooldownMs) {
+          state.wlvcEncodeLastErrorLogAtMs = nowMs;
+          mediaDebugLog('[SFU] WASM encode frame failed', error);
+          captureClientDiagnosticError('wlvc_encode_frame_failed', error, {
+            failure_count: state.wlvcEncodeFailureCount,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            track_id: videoTrack.id,
+          }, {
+            code: 'wlvc_encode_frame_failed',
+          });
+        }
+
+        if (nowMs < state.wlvcEncodeWarmupUntilMs) {
+          return;
+        }
+
+        if (
+          state.wlvcEncodeFirstFailureAtMs === 0
+          || nowMs - state.wlvcEncodeFirstFailureAtMs > constants.wlvcEncodeFailureWindowMs
+        ) {
+          state.wlvcEncodeFirstFailureAtMs = nowMs;
+          state.wlvcEncodeFailureCount = 1;
+          return;
+        }
+
+        state.wlvcEncodeFailureCount += 1;
+        if (state.wlvcEncodeFailureCount >= constants.wlvcEncodeFailureThreshold) {
+          if (refs.downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')) {
+            state.wlvcEncodeFailureCount = 0;
+            state.wlvcEncodeFirstFailureAtMs = 0;
+            return;
+          }
+          state.wlvcEncodeFailureCount = 0;
+          state.wlvcEncodeFirstFailureAtMs = 0;
+          void maybeFallbackToNativeRuntime('wlvc_encode_runtime_error');
+        }
+      } finally {
+        state.wlvcEncodeInFlight = false;
+        if (refs.encodeIntervalRef.value !== null) {
+          const finishedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+          const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
+          scheduleNextWlvcEncodeTick(videoProfile.encodeIntervalMs - elapsedMs);
+        }
+      }
+    };
+
+    scheduleNextWlvcEncodeTick(0);
+  }
+
+  return {
+    bindLocalTrackLifecycle,
+    clearLocalPreviewElement,
+    clearLocalTrackRecoveryTimer,
+    scheduleLocalTrackRecovery,
+    startEncodingPipeline,
+    stopLocalEncodingPipeline,
+    stopRetiredLocalStreams,
+    teardownLocalPublisher,
+    uniqueLocalStreams,
+    unpublishAndStopLocalTracks,
+    unpublishSfuTracks,
+  };
+}
