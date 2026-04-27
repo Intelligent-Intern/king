@@ -47,6 +47,15 @@ Move an item to `BACKLOG.md` if any of the following is true:
 
 ## Contract Compatibility Anchors
 
+- [x] Preserve contributor credit for the experiment work.
+- [x] Separate reusable topology/signaling ideas from experiment-only behavior.
+- [x] Port only compatible GossipMesh runtime pieces; do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks.
+- [x] Add `documentation/gossipmesh.md` only after the production contract matches the implementation.
+- [x] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
+- [x] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
+- [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
+- [x] Document the outcome in `READYNESS_TRACKER.md`.
+- [x] Remaining codec experiment diffs are either ported with tests or explicitly classified as superseded by current implementation.
 - [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
 - [x] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.
 - [x] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.
