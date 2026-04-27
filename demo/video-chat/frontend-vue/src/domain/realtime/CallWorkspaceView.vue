@@ -1392,6 +1392,7 @@ const nativeStack = createCallWorkspaceNativeStack({
     currentMediaSecurityRuntimePath,
     currentNativeAudioBridgeFailureMessage: nativeAudioBridgeFailureMessage,
     currentShouldUseNativeAudioBridge: shouldUseNativeAudioBridge,
+    shouldUseNativeAudioBridge,
     currentUserId: () => currentUserId.value,
     ensureLocalMediaForPublish: () => publishLocalTracks(),
     ensureMediaSecuritySession,
