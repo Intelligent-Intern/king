@@ -8,7 +8,17 @@
  *
  * JavaScript usage:
  *   const Module = await createWLVCModule();
- *   const enc = new Module.Encoder({ width: 640, height: 480, quality: 60 });
+ *   const enc = new Module.Encoder({
+ *     width: 640,
+ *     height: 480,
+ *     quality: 60,
+ *     keyFrameInterval: 30,
+ *     dwtLevels: 4,
+ *     waveletType: 0,  // 0=haar, 1=db4, 2=cdf97
+ *     colorSpace: 0,   // 0=yuv, 1=rgb
+ *     entropyMode: 0, // 0=rle, 1=arithmetic, 2=none
+ *     motionEstimation: true
+ *   });
  *   const rgba = new Uint8Array(...);
  *   const out = enc.encode(rgba, timestamp_us);
  *   // out is a Uint8Array view of the encoded frame
@@ -23,13 +33,49 @@ using namespace emscripten;
 using namespace wlvc;
 
 // ---------------------------------------------------------------------------
+// Helper: create EncoderConfig from JS object
+// ---------------------------------------------------------------------------
+
+static EncoderConfig make_encoder_config(int w, int h, int quality, int key_interval,
+                                         int levels, int wavelet, int color_space,
+                                         int entropy, bool motion_estimation) {
+    EncoderConfig cfg;
+    cfg.width = w;
+    cfg.height = h;
+    cfg.quality = quality;
+    cfg.key_frame_interval = key_interval;
+    cfg.levels = levels;
+    cfg.wavelet = static_cast<WaveletType>(wavelet);
+    cfg.color_space = static_cast<ColorSpace>(color_space);
+    cfg.entropy = static_cast<EntropyMode>(entropy);
+    cfg.motion_estimation = motion_estimation;
+    return cfg;
+}
+
+static DecoderConfig make_decoder_config(int w, int h, int quality, int levels,
+                                         int wavelet, int color_space, int entropy) {
+    DecoderConfig cfg;
+    cfg.width = w;
+    cfg.height = h;
+    cfg.quality = quality;
+    cfg.levels = levels;
+    cfg.wavelet = static_cast<WaveletType>(wavelet);
+    cfg.color_space = static_cast<ColorSpace>(color_space);
+    cfg.entropy = static_cast<EntropyMode>(entropy);
+    return cfg;
+}
+
+// ---------------------------------------------------------------------------
 // Encoder wrapper
 // ---------------------------------------------------------------------------
 
 class EncoderJS {
 public:
-    EncoderJS(int w, int h, int quality, int key_interval)
-        : enc_({ w, h, quality, key_interval, kDefaultLevels })
+    EncoderJS(int w, int h, int quality, int key_interval,
+              int levels = kDefaultLevels, int wavelet = 0, int color_space = 0,
+              int entropy = 0, bool motion_estimation = true)
+        : enc_(make_encoder_config(w, h, quality, key_interval,
+                                    levels, wavelet, color_space, entropy, motion_estimation))
         , out_buf_(enc_.max_encoded_bytes())
     {}
 
@@ -73,8 +119,10 @@ private:
 
 class DecoderJS {
 public:
-    DecoderJS(int w, int h, int quality)
-        : dec_({ w, h, quality, kDefaultLevels })
+    DecoderJS(int w, int h, int quality,
+              int levels = kDefaultLevels, int wavelet = 0, int color_space = 0,
+              int entropy = 0)
+        : dec_(make_decoder_config(w, h, quality, levels, wavelet, color_space, entropy))
         , rgba_out_(w * h * 4)
     {}
 
@@ -161,12 +209,12 @@ private:
 
 EMSCRIPTEN_BINDINGS(wlvc_module) {
     class_<EncoderJS>("Encoder")
-        .constructor<int, int, int, int>()
+        .constructor<int, int, int, int, int, int, int, int, bool>()
         .function("encode", &EncoderJS::encode)
         .function("reset",  &EncoderJS::reset);
 
     class_<DecoderJS>("Decoder")
-        .constructor<int, int, int>()
+        .constructor<int, int, int, int, int, int, int>()
         .function("decode", &DecoderJS::decode)
         .function("reset",  &DecoderJS::reset);
 

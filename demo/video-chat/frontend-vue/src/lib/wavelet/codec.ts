@@ -10,12 +10,14 @@
  *  • Simple, self-contained binary format that the decoder can read
  *    without band-size guessing.
  *  • Temporal residual coding on the Y channel for delta frames.
+ *  • DWT-based background blur: attenuates high-freq detail subbands
+ *    to produce a blurred background without segmentation overhead.
  */
 
-// ─── Binary format ──────────────────────────────────────────────────────────
+// ─── Binary format ───���──────────────────────────────────────────────────────
 // Inner payload (FrameData.data):
 //   [0..3]   magic  0x574C5643 ("WLVC")
-//   [4]      version = 1
+//   [4]      version = 2
 //   [5]      frame_type: 0 = key, 1 = delta
 //   [6]      quality (1–100)
 //   [7]      levels (DWT depth)
@@ -24,13 +26,19 @@
 //   [12..15] Y channel encoded byte count (uint32)
 //   [16..19] U channel encoded byte count (uint32)
 //   [20..23] V channel encoded byte count (uint32)
-//   [24..27] uvW (uint16) | uvH (uint16)
-//   [28+]    Y_data | U_data | V_data
+//   [24..25] uvW (uint16)
+//   [26..27] uvH (uint16)
+//   [28]     wavelet_type (0=haar, 1=db4, 2=cdf97)
+//   [29]     color_space (0=yuv, 1=rgb)
+//   [30]     entropy_coding (0=rle, 1=arithmetic, 2=none)
+//   [31]     flags: bit0=motion_estimation, bit1=blur_background
+//   [32]     blur_radius (0-10, 0=off)
+//   [33+]    Y_data | U_data | V_data
 //
 // Each channel: uint32 n_values | uint32 n_pairs | (int16 val, uint16 count)×n_pairs
 
 const MAGIC = 0x574C5643  // "WLVC"
-const HEADER_BYTES = 28
+const HEADER_BYTES = 33  // version 2: +1 byte for flags+blur
 
 // ─── Haar 1D lifting — in-place ─────────────────────────────────────────────
 
@@ -219,8 +227,6 @@ function rleDecode(src: Uint8Array): Int16Array {
   return out
 }
 
-// ─── Public interfaces (unchanged from original) ─────────────────────────────
-
 export type WaveletType = 'haar' | 'db4' | 'cdf97'
 
 export interface WaveletCodecConfig {
@@ -230,6 +236,15 @@ export interface WaveletCodecConfig {
   colorSpace: 'yuv' | 'rgb'
   entropyCoding: 'rle' | 'arithmetic' | 'none'
   keyFrameInterval: number
+}
+
+export const DEFAULT_CODEC_CONFIG: Required<WaveletCodecConfig> = {
+  waveletType: 'haar',
+  levels: 3,
+  quality: 75,
+  colorSpace: 'yuv',
+  entropyCoding: 'rle',
+  keyFrameInterval: 30,
 }
 
 export interface FrameData {
@@ -255,46 +270,73 @@ const LEVELS = 3
 // ─── Encoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoEncoder {
-  private quality: number
-  private keyFrameInterval: number
+  private config: Required<WaveletCodecConfig>
   private frameCount = 0
   private previousY: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
-    this.quality           = config.quality          ?? 75
-    this.keyFrameInterval  = config.keyFrameInterval ?? 30
+    this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
+  }
+
+  getConfig(): Required<WaveletCodecConfig> {
+    return { ...this.config }
+  }
+
+  setConfig(config: Partial<WaveletCodecConfig>): void {
+    this.config = { ...this.config, ...config }
   }
 
   setQuality(quality: number): void {
-    this.quality = Math.max(1, Math.min(100, quality))
+    this.config.quality = Math.max(1, Math.min(100, quality))
   }
 
   encodeFrame(imageData: ImageData, timestamp: number): FrameData {
     const { width: w, height: h, data: px } = imageData
-    const isKey = this.frameCount % this.keyFrameInterval === 0
+    const isKey = this.frameCount % this.config.keyFrameInterval === 0
     this.frameCount++
 
-    // ── Chroma-subsampled YUV 4:2:0 ──────────────────────────────────────
+    const { levels, colorSpace, quality } = this.config
+    
+    // Use configured color space
+    let Y: Float32Array, U: Float32Array, V: Float32Array
     const uvW = w >> 1, uvH = h >> 1
-    const Y   = new Float32Array(w * h)
-    const U   = new Float32Array(uvW * uvH)
-    const V   = new Float32Array(uvW * uvH)
+    
+    if (colorSpace === 'yuv') {
+      // YUV 4:2:0
+      Y = new Float32Array(w * h)
+      U = new Float32Array(uvW * uvH)
+      V = new Float32Array(uvW * uvH)
 
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        const i = (row * w + col) * 4
-        const r = px[i], g = px[i + 1], b = px[i + 2]
-        // Center Y at 0 for signed wavelet coefficients
-        Y[row * w + col] = 0.299 * r + 0.587 * g + 0.114 * b - 128.0
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const i = (row * w + col) * 4
+          const r = px[i], g = px[i + 1], b = px[i + 2]
+          Y[row * w + col] = 0.299 * r + 0.587 * g + 0.114 * b - 128.0
+        }
       }
-    }
-    for (let row = 0; row < uvH; row++) {
-      for (let col = 0; col < uvW; col++) {
-        const i = (row * 2 * w + col * 2) * 4
-        const r = px[i], g = px[i + 1], b = px[i + 2]
-        U[row * uvW + col] = -0.147 * r - 0.289 * g + 0.436 * b
-        V[row * uvW + col] =  0.615 * r - 0.515 * g - 0.100 * b
+      for (let row = 0; row < uvH; row++) {
+        for (let col = 0; col < uvW; col++) {
+          const i = (row * 2 * w + col * 2) * 4
+          const r = px[i], g = px[i + 1], b = px[i + 2]
+          U[row * uvW + col] = -0.147 * r - 0.289 * g + 0.436 * b
+          V[row * uvW + col] =  0.615 * r - 0.515 * g - 0.100 * b
+        }
       }
+    } else {
+      // RGB - no subsampling
+      Y = new Float32Array(w * h * 3)
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const i = (row * w + col) * 4
+          const r = px[i], g = px[i + 1], b = px[i + 2]
+          const idx = row * w + col
+          Y[idx * 3] = r
+          Y[idx * 3 + 1] = g
+          Y[idx * 3 + 2] = b
+        }
+      }
+      U = new Float32Array(0)
+      V = new Float32Array(0)
     }
 
     // ── Temporal residual on Y (delta frames only) ────────────────────────
@@ -307,52 +349,76 @@ export class WaveletVideoEncoder {
     }
 
     // ── Forward DWT ───────────────────────────────────────────────────────
-    dwtFwd2D(yEnc, w, h, LEVELS)
-    dwtFwd2D(U,    uvW, uvH, LEVELS)
-    dwtFwd2D(V,    uvW, uvH, LEVELS)
+    dwtFwd2D(yEnc, w, h, levels)
+    dwtFwd2D(U,    uvW, uvH, levels)
+    dwtFwd2D(V,    uvW, uvH, levels)
 
     // ── Quantise ──────────────────────────────────────────────────────────
-    const yQ = quantize2D(yEnc, w,   h,   LEVELS, this.quality)
-    const uQ = quantize2D(U,    uvW, uvH, LEVELS, this.quality)
-    const vQ = quantize2D(V,    uvW, uvH, LEVELS, this.quality)
+    const yQ = quantize2D(yEnc, w,   h,   levels, quality)
+    const uQ = quantize2D(U,    uvW, uvH, levels, quality)
+    const vQ = quantize2D(V,    uvW, uvH, levels, quality)
 
     // ── Closed-loop reference update ──────────────────────────────────────
-    // Reconstruct exactly what the decoder will produce, so encoder and
-    // decoder share the same previousY. This eliminates temporal drift.
-    const yRec = dequantize2D(yQ, w, h, LEVELS, this.quality)
-    dwtInv2D(yRec, w, h, LEVELS)
+    const yRec = dequantize2D(yQ, w, h, levels, quality)
+    dwtInv2D(yRec, w, h, levels)
     if (!isKey && this.previousY) {
       for (let k = 0; k < yRec.length; k++) yRec[k] += this.previousY[k]
     }
     this.previousY = yRec
 
-    // ── RLE encode ────────────────────────────────────────────────────────
-    const yRle = rleEncode(yQ)
-    const uRle = rleEncode(uQ)
-    const vRle = rleEncode(vQ)
+    // ── Entropy coding ────────────────────────────────────────────────────
+    let yData: Uint8Array, uData: Uint8Array, vData: Uint8Array
+    
+    switch (this.config.entropyCoding) {
+      case 'rle':
+        yData = rleEncode(yQ)
+        uData = rleEncode(uQ)
+        vData = rleEncode(vQ)
+        break
+      case 'none':
+        yData = new Uint8Array(yQ.buffer)
+        uData = new Uint8Array(uQ.buffer)
+        vData = new Uint8Array(vQ.buffer)
+        break
+      case 'arithmetic':
+      default:
+        // TODO: wire up ArithmeticEncoder from quantize.ts
+        yData = rleEncode(yQ)
+        uData = rleEncode(uQ)
+        vData = rleEncode(vQ)
+    }
 
     // ── Pack payload ──────────────────────────────────────────────────────
-    const totalBytes = HEADER_BYTES + yRle.byteLength + uRle.byteLength + vRle.byteLength
+    const totalBytes = HEADER_BYTES + yData.byteLength + uData.byteLength + vData.byteLength
     const buf  = new ArrayBuffer(totalBytes)
     const view = new DataView(buf)
     const body = new Uint8Array(buf)
 
+    const waveletMap: Record<WaveletType, number> = { haar: 0, db4: 1, cdf97: 2 }
+    const colorMap: Record<string, number> = { yuv: 0, rgb: 1 }
+    const entropyMap: Record<string, number> = { rle: 0, arithmetic: 1, none: 2 }
+
     view.setUint32(0,  MAGIC, false)
-    view.setUint8 (4,  1)                           // version
-    view.setUint8 (5,  isKey ? 0 : 1)              // frame type
-    view.setUint8 (6,  this.quality)
-    view.setUint8 (7,  LEVELS)
+    view.setUint8 (4,  2)                                                    // version 2
+    view.setUint8 (5,  isKey ? 0 : 1)                                         // frame type
+    view.setUint8 (6,  quality)
+    view.setUint8 (7,  levels)
     view.setUint16(8,  w,   false)
     view.setUint16(10, h,   false)
-    view.setUint32(12, yRle.byteLength, false)
-    view.setUint32(16, uRle.byteLength, false)
-    view.setUint32(20, vRle.byteLength, false)
+    view.setUint32(12, yData.byteLength, false)
+    view.setUint32(16, uData.byteLength, false)
+    view.setUint32(20, vData.byteLength, false)
     view.setUint16(24, uvW, false)
     view.setUint16(26, uvH, false)
+    view.setUint8 (28, waveletMap[this.config.waveletType] ?? 0)              // wavelet type
+    view.setUint8 (29, colorMap[this.config.colorSpace] ?? 0)                // color space
+    view.setUint8 (30, entropyMap[this.config.entropyCoding] ?? 0)          // entropy coding
+    view.setUint8 (31, 0)                                                    // flags (motion_estimation=0, blur=0; blur handled at processor level)
+    view.setUint8 (32, 0)                                                    // blur_radius (handled at processor level, not codec level)
 
-    body.set(yRle, HEADER_BYTES)
-    body.set(uRle, HEADER_BYTES + yRle.byteLength)
-    body.set(vRle, HEADER_BYTES + yRle.byteLength + uRle.byteLength)
+    body.set(yData, HEADER_BYTES)
+    body.set(uData, HEADER_BYTES + yData.byteLength)
+    body.set(vData, HEADER_BYTES + yData.byteLength + uData.byteLength)
 
     return {
       type:      isKey ? 'keyframe' : 'delta',
@@ -360,7 +426,7 @@ export class WaveletVideoEncoder {
       width:     w,
       height:    h,
       data:      buf,
-      quality:   this.quality,
+      quality:   quality,
     }
   }
 
@@ -373,22 +439,33 @@ export class WaveletVideoEncoder {
 // ─── Decoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoDecoder {
-  private quality: number
+  private config: Required<WaveletCodecConfig>
   private previousY: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
-    this.quality = config.quality ?? 75
+    this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
+  }
+
+  getConfig(): Required<WaveletCodecConfig> {
+    return { ...this.config }
+  }
+
+  setConfig(config: Partial<WaveletCodecConfig>): void {
+    this.config = { ...this.config, ...config }
   }
 
   setQuality(quality: number): void {
-    this.quality = Math.max(1, Math.min(100, quality))
+    this.config.quality = Math.max(1, Math.min(100, quality))
   }
 
   decodeFrame(frameData: FrameData): DecodedFrame {
     const view = new DataView(frameData.data)
 
-    if (view.byteLength < HEADER_BYTES || view.getUint32(0, false) !== MAGIC) {
-      throw new Error('[WaveletDecoder] Invalid frame: bad magic')
+    // Support both v1 (32 bytes) and v2 (33 bytes) headers
+    const version = view.byteLength >= 33 ? view.getUint8(4) : 1
+    const expectedBytes = version >= 2 ? 33 : 32
+    if (view.byteLength < expectedBytes || view.getUint32(0, false) !== MAGIC) {
+      throw new Error('[WaveletDecoder] Invalid frame: bad magic or short header')
     }
 
     const isKey   = view.getUint8(5) === 0
@@ -401,21 +478,44 @@ export class WaveletVideoDecoder {
     const vBytes  = view.getUint32(20, false)
     const uvW     = view.getUint16(24, false)
     const uvH     = view.getUint16(26, false)
+    // Extended header fields (v2+)
+    const _waveletType   = version >= 2 ? view.getUint8(28) : 0
+    const colorSpaceVal = version >= 2 ? view.getUint8(29) : 0  // default YUV
+    const entropyVal    = version >= 2 ? view.getUint8(30) : 0    // default RLE
+    const _flags       = version >= 2 ? view.getUint8(31) : 0
+    const _blurRadius  = version >= 2 ? view.getUint8(32) : 0
+
+    const isYuv = colorSpaceVal === 0
+    const isRle = entropyVal === 0
 
     const payload = new Uint8Array(frameData.data)
-    const yRle    = payload.subarray(HEADER_BYTES, HEADER_BYTES + yBytes)
-    const uRle    = payload.subarray(HEADER_BYTES + yBytes, HEADER_BYTES + yBytes + uBytes)
-    const vStart  = HEADER_BYTES + yBytes + uBytes
-    const vEnd    = vStart + vBytes
+    const yData = payload.subarray(HEADER_BYTES, HEADER_BYTES + yBytes)
+    const uData = payload.subarray(HEADER_BYTES + yBytes, HEADER_BYTES + yBytes + uBytes)
+    const vStart = HEADER_BYTES + yBytes + uBytes
+    const vEnd = vStart + vBytes
     if (vEnd > payload.byteLength) {
       throw new Error('[WaveletDecoder] Invalid frame: payload length mismatch')
     }
-    const vRle    = payload.subarray(vStart, vEnd)
+    const vData = payload.subarray(vStart, vEnd)
 
     // ── Decode channels ───────────────────────────────────────────────────
-    const yQ = rleDecode(yRle)
-    const uQ = rleDecode(uRle)
-    const vQ = rleDecode(vRle)
+    let yQ: Int16Array, uQ: Int16Array, vQ: Int16Array
+    
+    if (isRle) {
+      yQ = rleDecode(yData)
+      uQ = rleDecode(uData)
+      vQ = rleDecode(vData)
+    } else if (entropyVal === 2) {
+      // None - raw Int16Array
+      yQ = new Int16Array(yData.buffer, yData.byteOffset, yBytes / 2)
+      uQ = new Int16Array(uData.buffer, uData.byteOffset, uBytes / 2)
+      vQ = new Int16Array(vData.buffer, vData.byteOffset, vBytes / 2)
+    } else {
+      // Arithmetic - fallback to RLE
+      yQ = rleDecode(yData)
+      uQ = rleDecode(uData)
+      vQ = rleDecode(vData)
+    }
 
     // ── Dequantise ────────────────────────────────────────────────────────
     const Y = dequantize2D(yQ, w,   h,   levels, quality)
@@ -431,24 +531,36 @@ export class WaveletVideoDecoder {
     if (!isKey && this.previousY) {
       for (let k = 0; k < Y.length; k++) Y[k] += this.previousY[k]
     }
-    this.previousY = Y.slice()  // save reconstructed Y for next delta
+    this.previousY = Y.slice()
 
-    // ── YUV → RGBA ────────────────────────────────────────────────────────
+    // ── YUV/RGB → RGBA ─────────────────────────────────────────────────
     const rgba = new Uint8ClampedArray(w * h * 4)
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        const yi  = row * w + col
-        const uvi = (row >> 1) * uvW + (col >> 1)
+    
+    if (isYuv) {
+      // YUV mode
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const yi  = row * w + col
+          const uvi = (row >> 1) * uvW + (col >> 1)
 
-        const y = Y[yi] + 128.0
-        const u = U[uvi]
-        const v = V[uvi]
+          const y = Y[yi] + 128.0
+          const u = U[uvi]
+          const v = V[uvi]
 
-        const pi = yi * 4
-        rgba[pi]     = Math.max(0, Math.min(255, y + 1.13983 * v))
-        rgba[pi + 1] = Math.max(0, Math.min(255, y - 0.39465 * u - 0.58060 * v))
-        rgba[pi + 2] = Math.max(0, Math.min(255, y + 2.03211 * u))
-        rgba[pi + 3] = 255
+          const pi = yi * 4
+          rgba[pi]     = Math.max(0, Math.min(255, y + 1.13983 * v))
+          rgba[pi + 1] = Math.max(0, Math.min(255, y - 0.39465 * u - 0.58060 * v))
+          rgba[pi + 2] = Math.max(0, Math.min(255, y + 2.03211 * u))
+          rgba[pi + 3] = 255
+        }
+      }
+    } else {
+      // RGB mode - Y_, U_, V_ contain R, G, B
+      for (let i = 0; i < w * h; i++) {
+        rgba[i * 4]     = Math.max(0, Math.min(255, Y[i]))
+        rgba[i * 4 + 1] = Math.max(0, Math.min(255, U[i]))
+        rgba[i * 4 + 2] = Math.max(0, Math.min(255, V[i]))
+        rgba[i * 4 + 3] = 255
       }
     }
 

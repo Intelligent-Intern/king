@@ -672,6 +672,9 @@ run_step "frontend contract: WLVC wire envelope" bash -lc "
   cd '${FRONTEND_DIR}'
   npm run test:contract:wlvc
   npm run test:contract:sfu-multi-participant-render
+  npm run test:contract:blur-processor
+  npm run test:contract:wavelet-codec
+  npm run test:contract:wavelet-pipeline
 "
 
 run_step "frontend scaffold boot check" bash -lc "

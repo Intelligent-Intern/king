@@ -26,7 +26,10 @@
     "test:e2e:shared-surfaces": "playwright test tests/e2e/shared-ui-surfaces.spec.js",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:login": "playwright test tests/e2e/login-backend-contract.spec.js",
-    "test:contract:sfu-multi-participant-render": "node tests/contract/sfu-multi-participant-render-contract.mjs"
+    "test:contract:sfu-multi-participant-render": "node tests/contract/sfu-multi-participant-render-contract.mjs",
+    "test:contract:blur-processor": "node tests/contract/blur-processor-contract.mjs",
+    "test:contract:wavelet-codec": "node tests/contract/wavelet-codec-contract.mjs",
+    "test:contract:wavelet-pipeline": "node tests/contract/wavelet-pipeline-contract.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.20",

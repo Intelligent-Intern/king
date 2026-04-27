@@ -708,6 +708,7 @@ import { detectMediaRuntimeCapabilities } from './mediaRuntimeCapabilities';
 import { appendMediaRuntimeTransitionEvent } from './mediaRuntimeTelemetry';
 import { SFUClient } from '../../lib/sfu/sfuClient';
 import { createWasmEncoder, createWasmDecoder } from '../../lib/wasm/wasm-codec';
+import { BackgroundBlurProcessor } from '../../lib/wavelet/blur-processor';
 import {
   ALONE_IDLE_ACTIVITY_EVENTS,
   ALONE_IDLE_COUNTDOWN_MS,
@@ -4996,6 +4997,7 @@ function handleSFUPublisherLeft(publisherId) {
 }
 
 let videoEncoderRef = ref(null);
+let blurProcessorRef = ref(null);
 let localVideoElement = ref(null);
 let localRawStreamRef = ref(null);
 let localFilteredStreamRef = ref(null);
@@ -6314,6 +6316,10 @@ function stopLocalEncodingPipeline() {
     clearInterval(encodeIntervalRef.value);
     encodeIntervalRef.value = null;
   }
+  if (blurProcessorRef.value) {
+    blurProcessorRef.value.dispose();
+    blurProcessorRef.value = null;
+  }
   if (videoEncoderRef.value) {
     videoEncoderRef.value.destroy();
     videoEncoderRef.value = null;
@@ -6513,6 +6519,12 @@ async function startEncodingPipeline(videoTrack) {
   canvas.height = 480;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
+  blurProcessorRef.value = new BackgroundBlurProcessor();
+  blurProcessorRef.value.init(video, {
+    blurRadius: callMediaPrefs.backgroundBlurStrength > 0 ? callMediaPrefs.backgroundBlurStrength * 2 : 0,
+    blurMode: 'quality',
+  });
+
   encodeIntervalRef.value = setInterval(async () => {
     if (!isWlvcRuntimePath()) return;
     if (!videoEncoderRef.value || !sfuClientRef.value || sfuClientRef.value.ws?.readyState !== WebSocket.OPEN) {
@@ -6523,7 +6535,16 @@ async function startEncodingPipeline(videoTrack) {
     if (video.readyState < 2) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    if (blurProcessorRef.value) {
+      const blurred = blurProcessorRef.value.process(ctx, canvas.width, canvas.height);
+      if (blurred) {
+        ctx.putImageData(blurred, 0, 0);
+      }
+    }
+
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
     const timestamp = Date.now();
 
     try {

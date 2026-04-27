@@ -12,7 +12,7 @@
  *
  * Wire format (FrameData.data / inner payload):
  *   Bytes  0–3   magic   0x574C5643 ("WLVC")
- *   Byte   4     version = 1
+ *   Byte   4     version = 2
  *   Byte   5     frame_type: 0 = keyframe, 1 = delta
  *   Byte   6     quality (1–100)
  *   Byte   7     levels  (DWT depth, currently 4)
@@ -23,7 +23,12 @@
  *   Bytes 20–23  V encoded byte count (uint32 LE)
  *   Bytes 24–25  uvW (uint16 LE)
  *   Bytes 26–27  uvH (uint16 LE)
- *   [28+]        Y_data | U_data | V_data
+ *   Byte  28     wavelet_type (0=haar, 1=db4, 2=cdf97)
+ *   Byte  29     color_space (0=yuv, 1=rgb)
+ *   Byte  30     entropy_coding (0=rle, 1=arithmetic, 2=none)
+ *   Byte  31     flags: bit0=motion_estimation, bit1=blur_background
+ *   Byte  32     blur_radius (0=off, 1-10 strength)
+ *   [33+]        Y_data | U_data | V_data
  *
  * This format is byte-compatible with the TypeScript codec in codec.ts.
  */
@@ -40,19 +45,43 @@
 namespace wlvc {
 
 static const uint32_t kMagic        = 0x574C5643u;
-static const int      kHeaderBytes  = 28;
+static const int      kHeaderBytes  = 32;  // expanded to include wavelet, color, entropy, motion
 static const int      kDefaultLevels = 4;
+
+// Wavelet types
+enum WaveletType {
+    kHaar  = 0,
+    kDB4   = 1,
+    kCDF97 = 2
+};
+
+// Color space modes
+enum ColorSpace {
+    kYUV = 0,  // YUV 4:2:0 with chroma subsampling
+    kRGB = 1   // No subsampling, 3 channels
+};
+
+// Entropy modes
+enum EntropyMode {
+    kRLE = 0,
+    kArithmetic = 1,
+    kNone = 2
+};
 
 // ---------------------------------------------------------------------------
 // Encoder
 // ---------------------------------------------------------------------------
 
 struct EncoderConfig {
-    int width            = 640;
-    int height           = 480;
-    int quality          = 60;    // 1–100
+    int width              = 640;
+    int height             = 480;
+    int quality            = 60;    // 1–100
     int key_frame_interval = 30;
-    int levels           = kDefaultLevels;
+    int levels             = kDefaultLevels;  // DWT decomposition levels (1-8)
+    WaveletType wavelet    = kHaar;           // wavelet type
+    ColorSpace color_space = kYUV;            // color space mode
+    EntropyMode entropy    = kRLE;            // entropy coding
+    bool motion_estimation = true;            // motion estimation (no Kalman)
 };
 
 class Encoder {
@@ -100,6 +129,9 @@ struct DecoderConfig {
     int height  = 480;
     int quality = 60;
     int levels  = kDefaultLevels;
+    WaveletType wavelet    = kHaar;
+    ColorSpace color_space = kYUV;
+    EntropyMode entropy    = kRLE;
 };
 
 class Decoder {
@@ -127,9 +159,11 @@ private:
     std::vector<int16_t> Yq_, Uq_, Vq_;
     std::vector<float>   tmp_;
 
-    void yuv_to_rgba(uint8_t* rgba, int w, int h,
-                     const float* Y, const float* U, const float* V,
-                     int uvW, int uvH);
+void yuv_to_rgba(uint8_t* rgba, int w, int h,
+                 const float* Y, const float* U, const float* V,
+                 int uvW, int uvH);
+    void rgb_to_rgba(uint8_t* rgba, int w, int h,
+                     const float* R, const float* G, const float* B);
 };
 
 } // namespace wlvc
