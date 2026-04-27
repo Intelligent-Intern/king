@@ -4,6 +4,9 @@
   "version": "0.1.0-v1-shell",
   "type": "module",
   "scripts": {
+    "test:contract:wasm-codec-delta": "node tests/contract/wasm-codec-delta.mjs",
+    "test:contract:wavelet-codec-binary-only": "node tests/contract/wavelet-codec-binary-only.mjs",
+    "test:contract:sfu-client-binary-only": "node tests/contract/sfu-client-binary-only.mjs",
     "dev": "vite --config ./vite.config.js",
     "build": "vite build",
     "test:contract:wlvc": "node tests/contract/wlvc-wire-contract.mjs",
