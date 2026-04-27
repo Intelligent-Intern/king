@@ -141,6 +141,7 @@ export function createCallWorkspaceNativeStack(options) {
     setNativePeerConnection: nativePeerLifecycle.setNativePeerConnection,
     shouldBypassNativeAudioProtectionForPeer: callbacks.shouldBypassNativeAudioProtectionForPeer,
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     shouldSyncNativeLocalTracksBeforeOffer: nativePeerLifecycle.shouldSyncNativeLocalTracksBeforeOffer,
     syncNativePeerConnectionsWithRosterRef: () => syncNativePeerConnectionsWithRoster,
     syncNativePeerLocalTracks: nativeBridgeRuntime.syncNativePeerLocalTracks,
