@@ -135,11 +135,19 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure') {
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
-    const nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
+    const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
+    const immediateMotionPressure = normalizedReason === 'sfu_high_motion_payload_pressure';
+    let nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
+    if (immediateMotionPressure && currentProfile === 'quality') {
+      nextProfile = sfuAutoQualityDowngradeNext[nextProfile] || nextProfile;
+    }
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();
-    if ((nowMs - refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs) < sfuAutoQualityDowngradeCooldownMs) {
+    if (
+      !immediateMotionPressure
+      && (nowMs - refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs) < sfuAutoQualityDowngradeCooldownMs
+    ) {
       return false;
     }
     refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs = nowMs;
@@ -148,7 +156,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       '[KingRT] SFU encode pressure - lowering outgoing video quality',
       `from=${currentProfile || 'default'}`,
       `to=${nextProfile}`,
-      `reason=${String(reason || 'encode_pressure')}`,
+      `reason=${normalizedReason}`,
     );
     captureClientDiagnostic({
       category: 'media',
@@ -159,6 +167,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       payload: {
         from_profile: currentProfile,
         to_profile: nextProfile,
+        reason: normalizedReason,
         failure_count: state.getWlvcEncodeFailureCount(),
         media_runtime_path: refs.mediaRuntimePath.value,
       },

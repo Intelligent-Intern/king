@@ -4,6 +4,9 @@ export function createSfuTransportState() {
     wlvcBackpressureFirstAtMs: 0,
     wlvcBackpressureLastLogAtMs: 0,
     wlvcBackpressurePauseUntilMs: 0,
+    wlvcPayloadPressureCount: 0,
+    wlvcPayloadPressureFirstAtMs: 0,
+    wlvcPayloadPressureLastLogAtMs: 0,
     wlvcFrameSendFailureLastLogAtMs: 0,
     wlvcFrameSendFailureCount: 0,
     wlvcFrameSendFailureFirstAtMs: 0,
@@ -58,11 +61,17 @@ export function createSfuTransportController({
     state.wlvcBackpressureSkipCount = 0;
     state.wlvcBackpressureFirstAtMs = 0;
     state.wlvcBackpressurePauseUntilMs = 0;
+    resetWlvcPayloadPressureCounters();
   }
 
   function resetWlvcFrameSendFailureCounters() {
     state.wlvcFrameSendFailureCount = 0;
     state.wlvcFrameSendFailureFirstAtMs = 0;
+  }
+
+  function resetWlvcPayloadPressureCounters() {
+    state.wlvcPayloadPressureCount = 0;
+    state.wlvcPayloadPressureFirstAtMs = 0;
   }
 
   function wlvcBackpressurePauseMs(bufferedAmount) {
@@ -236,6 +245,62 @@ export function createSfuTransportController({
     });
   }
 
+  function handleWlvcFramePayloadPressure(payloadBytes, trackId, frameType = 'delta', details = {}) {
+    const nowMs = Date.now();
+    const normalizedPayloadBytes = Math.max(0, Number(payloadBytes || 0));
+    const normalizedFrameType = String(frameType || 'delta').trim().toLowerCase() === 'keyframe'
+      ? 'keyframe'
+      : 'delta';
+    if (
+      state.wlvcPayloadPressureFirstAtMs <= 0
+      || (nowMs - state.wlvcPayloadPressureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
+    ) {
+      state.wlvcPayloadPressureFirstAtMs = nowMs;
+      state.wlvcPayloadPressureCount = 1;
+    } else {
+      state.wlvcPayloadPressureCount += 1;
+    }
+
+    resetWlvcEncoderAfterDroppedEncodedFrame('sfu_high_motion_payload_pressure');
+    state.wlvcBackpressurePauseUntilMs = Math.max(
+      state.wlvcBackpressurePauseUntilMs,
+      nowMs + wlvcBackpressurePauseMs(Math.max(normalizedPayloadBytes, sfuWlvcSendBufferHighWaterBytes))
+    );
+
+    if ((nowMs - state.wlvcPayloadPressureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
+      state.wlvcPayloadPressureLastLogAtMs = nowMs;
+      console.warn(
+        '[KingRT] SFU video payload pressure - dropping oversized WLVC frame',
+        `payload=${normalizedPayloadBytes}`,
+        `frame=${normalizedFrameType}`,
+        `count=${state.wlvcPayloadPressureCount}`,
+        `track=${String(trackId || '')}`,
+        `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
+      );
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_video_payload_pressure',
+        code: 'sfu_video_payload_pressure',
+        message: 'Outgoing SFU video frame was dropped before send because high motion made the WLVC payload too large.',
+        payload: {
+          payload_bytes: normalizedPayloadBytes,
+          max_payload_bytes: Math.max(0, Number(details?.max_payload_bytes || details?.maxPayloadBytes || 0)),
+          frame_type: normalizedFrameType,
+          layout_mode: String(details?.layout_mode || details?.layoutMode || 'full_frame'),
+          payload_pressure_count: state.wlvcPayloadPressureCount,
+          forced_next_keyframe: true,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: true,
+      });
+    }
+
+    downgradeSfuVideoQualityAfterEncodePressure('sfu_high_motion_payload_pressure');
+  }
+
   function restartSfuAfterVideoStall(reason, payload = {}) {
     const nowMs = Date.now();
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {
@@ -272,6 +337,7 @@ export function createSfuTransportController({
     getSfuClientBufferedAmount,
     handleWlvcEncodeBackpressure,
     handleWlvcFrameSendFailure,
+    handleWlvcFramePayloadPressure,
     isSfuClientOpen,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,

@@ -20,6 +20,7 @@ export function createLocalPublisherPipelineHelpers({
     getSfuClientBufferedAmount,
     handleWlvcEncodeBackpressure,
     handleWlvcFrameSendFailure,
+    handleWlvcFramePayloadPressure,
     hintMediaSecuritySync,
     isSfuClientOpen,
     isWlvcRuntimePath,
@@ -484,6 +485,19 @@ export function createLocalPublisherPipelineHelpers({
           if (encodedFrameType === 'keyframe') {
             outgoingCacheEpoch = selectiveTileCacheEpoch + 1;
           }
+        }
+        const encodedPayloadBytes = encoded?.data instanceof ArrayBuffer
+          ? Number(encoded.data.byteLength || 0)
+          : 0;
+        const maxEncodedPayloadBytes = encodedFrameType === 'delta' || tilePatchMetadata
+          ? Math.max(1, Number(constants.sfuWlvcMaxDeltaFrameBytes || 0))
+          : Math.max(1, Number(constants.sfuWlvcMaxKeyframeFrameBytes || 0));
+        if (encodedPayloadBytes > maxEncodedPayloadBytes) {
+          handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
+            layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
+            max_payload_bytes: maxEncodedPayloadBytes,
+          });
+          return;
         }
 
         const outgoingFrame = {
