@@ -450,6 +450,11 @@ try {
         && (int) ($decodedBinaryPayload['cache_epoch'] ?? 0) === 11,
         'binary SFU frame envelope must preserve codec/runtime/layout metadata through decode'
     );
+    videochat_realtime_sfu_assert(
+        (int) ($decodedBinaryPayload['payload_bytes'] ?? 0) === strlen('ABC')
+        && (int) ($decodedBinaryPayload['payload_chars'] ?? 0) === strlen('QUJD'),
+        'binary SFU frame envelope must distinguish wire bytes from advertised base64 payload chars'
+    );
     $protectedBinaryEnvelope = videochat_sfu_encode_binary_frame_envelope([
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -471,6 +476,10 @@ try {
         (string) ($decodedProtectedBinaryPayload['protected_frame'] ?? '') === $protectedFrame
         && (string) ($decodedProtectedBinaryPayload['protection_mode'] ?? '') === 'required',
         'protected binary SFU frame envelope must preserve protected payload and required mode'
+    );
+    videochat_realtime_sfu_assert(
+        (int) ($decodedProtectedBinaryPayload['payload_chars'] ?? 0) === strlen($protectedFrame),
+        'protected binary SFU frame envelope must advertise protected-frame payload chars'
     );
     $invalidChunkCommand = videochat_sfu_decode_client_frame(
         json_encode([
