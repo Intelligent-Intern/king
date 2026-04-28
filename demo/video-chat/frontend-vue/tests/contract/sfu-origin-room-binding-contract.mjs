@@ -75,6 +75,11 @@ try {
     !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
     'outbound media hot path must not send legacy JSON/base64 chunks',
   );
+  assert.ok(
+    !sfuClient.includes('this.inboundFrameAssembler.acceptChunk(msg)'),
+    'inbound media hot path must not accept legacy JSON/base64 chunks',
+  );
+  requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunks are diagnostically rejected');
   requireContains(sfuClient, "ws.binaryType = 'arraybuffer'", 'SFU websocket receives binary media envelopes');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'inbound media uses binary envelope decode');
   requireContains(framePayload, "export const SFU_BINARY_FRAME_MAGIC = 'KSFB'", 'binary frame magic');

@@ -878,10 +878,26 @@ export class SFUClient {
         break
 
       case 'sfu/frame-chunk': {
-        const reassembledFrame = this.inboundFrameAssembler.acceptChunk(msg)
-        if (reassembledFrame) {
-          this.handleMessage(reassembledFrame)
-        }
+        reportClientDiagnostic({
+          category: 'media',
+          level: 'error',
+          eventType: 'sfu_legacy_frame_chunk_rejected',
+          code: 'binary_media_required',
+          message: 'SFU media chunks must use binary media envelopes.',
+          roomId: this.roomId,
+          payload: {
+            room_id: this.roomId,
+            command_type: 'sfu/frame-chunk',
+            publisher_id: stringField(msg.publisherId, msg.publisher_id),
+            publisher_user_id: stringField(msg.publisherUserId, msg.publisher_user_id),
+            track_id: stringField(msg.trackId, msg.track_id),
+            frame_id: stringField(msg.frameId, msg.frame_id),
+            frame_sequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
+            reject_reason: 'binary_media_required',
+            transport_path: 'legacy_json_media_chunk',
+          },
+          immediate: true,
+        })
         break
       }
 

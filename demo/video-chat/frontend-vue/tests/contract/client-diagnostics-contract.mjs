@@ -37,6 +37,7 @@ requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote 
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics hook');
+requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_pressure'", 'sfu frame send pressure diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_aborted'", 'sfu frame send abort diagnostics hook');
 requireContains(sfuTransport, "eventType: 'sfu_frame_send_failed'", 'workspace failed frame send diagnostics hook');
