@@ -1,5 +1,6 @@
 export const WLVC_MAGIC_U32_BE = 0x574c5643;
 export const WLVC_HEADER_BYTES = 28;
+export const WLVC_HEADER_BYTES_V2 = 33;
 
 const WLVC_FRAME_TYPE_KEYFRAME = 0;
 const WLVC_FRAME_TYPE_DELTA = 1;
@@ -185,8 +186,12 @@ export function wlvcDecodeFrame(input) {
   }
 
   const version = view.getUint8(4);
-  if (version !== 1) {
+  if (version !== 1 && version !== 2) {
     return { ok: false, error_code: 'version_unsupported' };
+  }
+  const headerBytes = version >= 2 ? WLVC_HEADER_BYTES_V2 : WLVC_HEADER_BYTES;
+  if (bytes.byteLength < headerBytes) {
+    return { ok: false, error_code: 'frame_too_short' };
   }
 
   const frameType = view.getUint8(5);
@@ -232,11 +237,11 @@ export function wlvcDecodeFrame(input) {
     return { ok: false, error_code: 'payload_too_large' };
   }
 
-  if (bytes.byteLength !== WLVC_HEADER_BYTES + payloadLength) {
+  if (bytes.byteLength !== headerBytes + payloadLength) {
     return { ok: false, error_code: 'payload_length_mismatch' };
   }
 
-  let cursor = WLVC_HEADER_BYTES;
+  let cursor = headerBytes;
   const yData = bytes.slice(cursor, cursor + yLength);
   cursor += yLength;
   const uData = bytes.slice(cursor, cursor + uLength);
@@ -258,6 +263,7 @@ export function wlvcDecodeFrame(input) {
       u_length: uLength,
       v_length: vLength,
       payload_length: payloadLength,
+      header_length: headerBytes,
       total_length: bytes.byteLength,
       y_data: yData,
       u_data: uData,

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   WLVC_HEADER_BYTES,
+  WLVC_HEADER_BYTES_V2,
   WLVC_MAGIC_U32_BE,
   wlvcDecodeFrame,
   wlvcEncodeFrame,
@@ -41,12 +42,20 @@ function assertDecodeFailure(label, decode, expectedCode) {
   assert.equal(result?.error_code, expectedCode, `${label} error code`);
 }
 
-function buildHeaderOnlyFrame({ yLength = 0, uLength = 0, vLength = 0, quality = 70 } = {}) {
-  const bytes = new Uint8Array(WLVC_HEADER_BYTES);
+function buildHeaderOnlyFrame({
+  yLength = 0,
+  uLength = 0,
+  vLength = 0,
+  quality = 70,
+  version = 1,
+  frameType = 0,
+} = {}) {
+  const headerBytes = version >= 2 ? WLVC_HEADER_BYTES_V2 : WLVC_HEADER_BYTES;
+  const bytes = new Uint8Array(headerBytes);
   const view = new DataView(bytes.buffer);
   view.setUint32(0, WLVC_MAGIC_U32_BE, false);
-  view.setUint8(4, 1);
-  view.setUint8(5, 0);
+  view.setUint8(4, version);
+  view.setUint8(5, frameType);
   view.setUint8(6, quality);
   view.setUint8(7, 3);
   view.setUint16(8, 64, false);
@@ -56,6 +65,13 @@ function buildHeaderOnlyFrame({ yLength = 0, uLength = 0, vLength = 0, quality =
   view.setUint32(20, vLength, false);
   view.setUint16(24, 32, false);
   view.setUint16(26, 24, false);
+  if (version >= 2) {
+    view.setUint8(28, 0);
+    view.setUint8(29, 0);
+    view.setUint8(30, 0);
+    view.setUint8(31, 0);
+    view.setUint8(32, 0);
+  }
   return bytes;
 }
 
@@ -99,6 +115,12 @@ try {
   assertDecodeFailure('payload mismatch', () => wlvcDecodeFrame(encoded.bytes.slice(0, encoded.bytes.length - 1)), 'payload_length_mismatch');
   assertDecodeFailure('oversized channel', () => wlvcDecodeFrame(buildHeaderOnlyFrame({ yLength: 16 * 1024 * 1024 + 1 })), 'channel_too_large');
   assertDecodeFailure('invalid quality', () => wlvcDecodeFrame(buildHeaderOnlyFrame({ quality: 0 })), 'quality_invalid');
+
+  const v2Delta = wlvcDecodeFrame(buildHeaderOnlyFrame({ version: 2, frameType: 1 }));
+  assert.equal(v2Delta.ok, true, `decode v2 delta failed: ${v2Delta.error_code ?? 'unknown'}`);
+  assert.equal(v2Delta.frame.version, 2);
+  assert.equal(v2Delta.frame.frame_type, 1);
+  assert.equal(v2Delta.frame.header_length, WLVC_HEADER_BYTES_V2);
 
   const capabilities = readFromFrontend('src/domain/realtime/media/runtimeCapabilities.js');
   requireContains(capabilities, "preferredPath = 'wlvc_wasm'", 'WLVC preferred runtime');
