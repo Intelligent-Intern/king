@@ -140,6 +140,9 @@ try {
   requireContains(mediaSecurityRuntime, 'clearNativeAudioBridgeQuarantine(normalizedUserId);', 'native audio resync clears quarantine only on allowed deterministic recovery reasons');
   requireContains(nativeStack, 'shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n    streamHasLiveTrackKind', 'native audio recovery receives shouldUseNativeAudioBridge callback');
   requireContains(nativeStack, 'shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n  });', 'native peer lifecycle receives shouldUseNativeAudioBridge callback');
+  requireContains(nativeStack, 'playNativePeerAudio: (...args) => nativeAudioBridgeRecovery?.playNativePeerAudio?.(...args)', 'native bridge runtime uses native-stack audio playback proxy');
+  requireContains(nativeStack, 'scheduleNativeOfferRetry: (...args) => nativePeerLifecycle?.scheduleNativeOfferRetry?.(...args)', 'native bridge runtime uses native-stack offer retry proxy');
+  requireContains(nativeStack, 'sendNativeOffer: (peer) => sendNativeOfferProxy(peer)', 'native peer lifecycle retries call the bridge-runtime offer helper through a proxy');
   requireContains(nativeStack, 'const shouldBlockNativeRuntimeSignaling = () => {', 'native stack owns native runtime signaling guard fallback');
   requireContains(nativeStack, "return Boolean(sfuEnabled) && refs.mediaRuntimePath.value === 'pending';", 'native runtime signaling guard is derived from existing native stack refs');
   requireContains(nativeStack, 'shouldBlockNativeRuntimeSignaling,\n    shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,', 'native signaling receives runtime guard callbacks without CallWorkspace expansion');
