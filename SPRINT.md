@@ -14,28 +14,35 @@ Sprint rule:
 - Do not keep completed work in this file.
 - Do not weaken King v1 contracts to make a merge easier.
 
+## Sprint: Online SFU Media Closure
+
+Observed online failure:
+- `TypeError: p is not a function` in the minified `CallWorkspaceView` bundle maps to native peer roster sync calling `nativeAudioBridgeIsQuarantined(userId)` without the callback being wired into `createCallWorkspaceNativeStack`.
+- SFU control messages are still JSON by design today, but large media frames still have active `legacy_chunked_json` paths through `sfu/frame-chunk`; that contradicts the intended binary/IIBIN media transport contract.
+- Available experiment refs in this checkout are `origin/experiments/1.0.7-video-codec` and `origin/experiments/1.0.7-gossip-mesh`; no local or remote-tracking `voltron` ref is currently present.
+
 ## Top 20 Active Issues
 
-1. [x] Define the merge strategy for `origin/experiments/1.0.7-video-codec`: codec donor branch only, not wholesale runtime replacement.
-2. [x] Port the experiment branch WLVC payload/header v2 semantics into the current codec path without regressing the current transport contract.
-3. [x] Port the richer WASM/native codec configuration surface (`waveletType`, `entropyCoding`, `dwtLevels`, `colorSpace`, `motionEstimation`) into the current runtime.
-4. [x] Decide which experiment blur/processor-pipeline pieces are worth porting and integrate only the parts that reduce duplication with the current background/media pipeline.
-5. [x] Keep the current binary SFU transport as the production contract and remove the remaining legacy JSON/base64 fallback from the hot video path.
-6. [x] Replace generic `sfu_chunk_send_failed` handling with exact-stage diagnostics and enforce sender backpressure at the real transport boundary.
-7. [x] Finish a versioned binary media envelope contract that carries frame identity, timing, protection state, codec/runtime id, and tile/layer metadata without base64 expansion.
-8. [x] Preserve and prove the current protected-media/media-security contract on the merged codec path; no hidden downgrade to transport-only media.
-9. [x] Fix the realtime join race by gating media-security activation on publisher discovery plus a short settle window instead of multi-second retries.
-10. [x] Stabilize native audio bridge negotiation and recovery with a strict state machine for capability, key exchange, SDP readiness, ICE, transform attach, remote track arrival, and playback.
-11. [x] Prove whether selective tile/segmentation transport stays valuable with the improved codec and keep it only if it still reduces real wire bytes materially.
-12. [x] Keep tile/layer/cache generation semantics explicit so stale or mixed-generation patches fail closed instead of rendering corruption.
-13. [x] Preserve multi-worker SFU correctness: room affinity or broker fanout must remain explicit and bounded for realtime media.
-14. [x] Audit the backend SFU store/gateway after codec merge so binary replay, protected-frame parsing, and cross-worker fanout remain contract-correct.
-15. [x] Reconcile the test surface: keep the current stronger transport/runtime/media-security contracts and add only the useful new codec-focused tests from the experiment branch.
-16. [x] Remove or rewrite contracts/tests that only prove superseded experimental paths once the merged codec/runtime path is in place.
-17. [x] Keep `CallWorkspaceView` and its extracted runtime modules modular; do not re-monolithize the realtime workspace while merging codec work.
-18. [x] Produce a keep/port/delete/superseded checklist for all branch-difference files so cleanup after the merge is deliberate instead of ad hoc.
-19. [ ] Run the merged path against the HD acceptance gate: 1280x720 at 30 fps, 60-second two-browser call, no hidden degraded state, no remote stall, no unbounded sender queue.
-20. [ ] Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the merged codec + transport + media-security contract is proven by tests and live evidence.
+1. [ ] Deploy and verify the native audio quarantine callback wiring fix so online `syncNativePeerConnectionsWithRoster()` cannot call an undefined callback.
+2. [ ] Add a production crash capture contract for minified Call Workspace errors, including asset version, route, media runtime path, native bridge state, and last SFU transport sample.
+3. [ ] Enable or publish production sourcemaps for internal deployments, or add a deterministic bundle-position mapping artifact, so online `CallWorkspaceView-*.js:line:column` reports resolve to source without guesswork.
+4. [x] Remove the frontend SFU media hot-path branch that sends oversized frames through `sendChunkedFramePayload()` and `transport_path: 'legacy_chunked_json'`.
+5. [ ] Replace JSON/base64 media chunking with a binary continuation envelope for oversized SFU frames if the King WebSocket boundary needs chunking.
+6. [ ] Keep JSON only for explicit SFU control-plane commands until the IIBIN control envelope lands; media payloads must not use JSON/base64 as the active production path.
+7. [ ] Update frontend contracts that currently require `sfu/frame-chunk`, `data_base64_chunk`, `protected_frame_chunk`, or `legacy_chunked_json` so they prove the binary media contract instead of preserving the fallback.
+8. [ ] Update backend SFU store/gateway tests that currently assert outbound JSON chunk expansion so replay/fanout proves binary media envelopes or binary continuation frames.
+9. [ ] Make backend SFU gateway reject JSON media frame sends in required binary mode while preserving authenticated JSON control commands and clear compatibility diagnostics.
+10. [ ] Define the IIBIN schema boundary for SFU control and metadata: room binding, publisher lifecycle, track lifecycle, diagnostics, and binary media-envelope metadata.
+11. [ ] Implement the IIBIN control/metadata path on native King PHP APIs instead of introducing a Node or browser-only transport shim.
+12. [ ] Audit `origin/experiments/1.0.7-video-codec` residual diffs after the codec port and document any remaining keep/port/reject decisions.
+13. [ ] Audit `origin/experiments/1.0.7-gossip-mesh` for reusable membership/routing ideas without weakening current backend-authoritative room binding, call admission, or protected-media guarantees.
+14. [ ] Do not import any Voltron work into this sprint unless a real branch/ref and contract delta are identified; keep this sprint scoped to proven refs and live blockers.
+15. [ ] Prove that selective tile/background snapshot transport still reduces real wire bytes after binary media transport, or simplify it only after equivalent HD evidence exists.
+16. [ ] Verify SFU broker fanout and replay across worker boundaries with binary envelopes, including protected-frame parsing and codec/runtime/layout metadata preservation.
+17. [ ] Run the HD acceptance gate online: 1280x720 at 30 fps, two-browser call for 60 seconds, no remote stall, no hidden degraded state, no unbounded sender queue.
+18. [ ] Add live diagnostics for every SFU frame send path with exact `transport_path`, wire bytes, payload bytes, queue pressure, and binary continuation state.
+19. [ ] Confirm deploy asset invalidation so online clients cannot keep a stale `CallWorkspaceView-*.js` bundle after the callback or transport changes ship.
+20. [ ] Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the online crash, JSON media fallback, experiment audit, and HD acceptance gate are proven.
 
 ## Parking Rule
 
