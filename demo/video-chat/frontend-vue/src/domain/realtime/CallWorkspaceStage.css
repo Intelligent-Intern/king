@@ -24,9 +24,9 @@
   --text-secondary: var(--color-c0d1ef);
   --text-muted: var(--color-94add3);
   --text-dim: var(--color-7f9cc8);
-  --mini-strip-height: 156px;
-  --mini-story-width: 92px;
-  --mini-story-height: 136px;
+  --mini-strip-height: 170px;
+  --mini-story-width: 150px;
+  --mini-story-height: 150px;
   --mini-strip-gap: 8px;
   position: relative;
   height: 100%;
@@ -449,7 +449,7 @@
   min-height: 0;
   background: var(--bg-mini-video);
   border: 1px solid var(--color-rgba-255-255-255-0-18);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 8px;
   display: grid;
   align-content: center;
@@ -461,7 +461,7 @@
 }
 
 .workspace-mini-tile {
-  aspect-ratio: 9 / 13;
+  aspect-ratio: 1 / 1;
 }
 
 .workspace-mini-video-slot {
