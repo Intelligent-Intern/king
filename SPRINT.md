@@ -19,6 +19,7 @@ Sprint rule:
 Observed online failure:
 - `TypeError: p is not a function` in the minified `CallWorkspaceView` bundle maps to native peer roster sync calling `nativeAudioBridgeIsQuarantined(userId)` without the callback being wired into `createCallWorkspaceNativeStack`.
 - SFU control messages are still JSON by design today, but large media frames still have active `legacy_chunked_json` paths through `sfu/frame-chunk`; that contradicts the intended binary/IIBIN media transport contract.
+- Online `send_buffer_drain_timeout` reports around `buffered=528600` expose the old 512 KiB SFU sender abort threshold racing ahead of the Call Workspace encoder high-water mark; hotfix work must keep binary sends aligned to the encoder backpressure budget.
 - Available experiment refs in this checkout are `origin/experiments/1.0.7-video-codec` and `origin/experiments/1.0.7-gossip-mesh`; no local or remote-tracking `voltron` ref is currently present.
 
 ## Top 20 Active Issues

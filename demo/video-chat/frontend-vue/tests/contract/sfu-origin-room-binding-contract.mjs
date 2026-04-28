@@ -61,7 +61,7 @@ try {
   requireContains(framePayload, 'payload.payload_chars = payloadChars', 'SFU frame advertised payload length');
   requireContains(framePayload, 'payload.protection_mode = normalizeProtectionMode(frame.protectionMode,', 'snake_case protection mode');
   requireContains(framePayload, 'export const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
-  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024', 'chunk send backpressure guard');
+  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024', 'binary send backpressure guard aligns with encoder high-water mark');
   requireContains(sfuClient, 'private async waitForSendBufferDrain()', 'chunk sender waits for websocket drain');
   requireContains(sfuClient, 'private outboundFrameSequenceByTrack = new Map<string, number>()', 'per-track outgoing frame sequence');
   requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
