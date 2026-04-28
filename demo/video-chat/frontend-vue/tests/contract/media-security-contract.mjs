@@ -331,7 +331,8 @@ try {
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
   const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
   assert.match(sfuClientSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
-  assert.match(sfuFramePayloadSource, /chunkField = 'protected_frame_chunk'/, 'SFU sender must relay protected transport envelope through the binary-envelope chunk field');
+  assert.match(sfuFramePayloadSource, /const protectedFrame = protectionMode === 'transport_only' \? null : arrayBufferToBase64Url\(payloadBytes\)/, 'binary SFU envelope decode must reconstruct protected transport envelopes');
+  assert.match(sfuFramePayloadSource, /\.\.\.\(protectedFrame \? \{ protected_frame: protectedFrame \} : \{\}\)/, 'decoded binary SFU frame must surface protected_frame without JSON chunk transport');
   assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
 

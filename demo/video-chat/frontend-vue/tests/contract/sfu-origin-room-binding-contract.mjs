@@ -75,16 +75,12 @@ try {
     !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
     'outbound media hot path must not send legacy JSON/base64 chunks',
   );
-  requireContains(sfuClient, 'new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })', 'inbound chunk assembler wiring');
-  requireContains(inboundFrameAssembler, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
-  requireContains(inboundFrameAssembler, 'private pendingChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');
-  requireContains(inboundFrameAssembler, 'acceptChunk(msg: any): Record<string, unknown> | null {', 'inbound chunk assembler');
-  requireContains(inboundFrameAssembler, 'chunkPayloadChars !== chunkValue.length', 'inbound chunk advertised length validation');
-  requireContains(inboundFrameAssembler, 'assembled.length !== existing.payloadChars', 'inbound assembled payload length validation');
-  requireContains(inboundFrameAssembler, "'duplicate_chunk_mismatch'", 'inbound duplicate chunk fail-fast');
-  requireContains(inboundFrameAssembler, "'out_of_order_chunk'", 'inbound out-of-order chunk fail-fast');
-  requireContains(sfuClient, "case 'sfu/frame-chunk': {", 'inbound chunk message handler');
-  requireContains(sfuClient, 'const reassembledFrame = this.inboundFrameAssembler.acceptChunk(msg)', 'inbound chunk reassembly dispatch');
+  requireContains(sfuClient, "ws.binaryType = 'arraybuffer'", 'SFU websocket receives binary media envelopes');
+  requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'inbound media uses binary envelope decode');
+  requireContains(framePayload, "export const SFU_BINARY_FRAME_MAGIC = 'KSFB'", 'binary frame magic');
+  requireContains(framePayload, 'export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2', 'binary frame layout envelope version');
+  requireContains(framePayload, 'encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFramePayload)', 'binary frame envelope encoder');
+  requireContains(framePayload, 'decodeSfuBinaryFrameEnvelope(input: ArrayBuffer)', 'binary frame envelope decoder');
   requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
   requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');

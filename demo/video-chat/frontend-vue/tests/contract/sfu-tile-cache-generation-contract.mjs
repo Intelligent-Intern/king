@@ -15,14 +15,18 @@ async function main() {
   const server = await createServer({
     root: frontendRoot,
     logLevel: 'error',
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false },
   });
 
   try {
     const tileMetadataModule = await server.ssrLoadModule('/src/lib/sfu/tilePatchMetadata.ts');
-    const assemblerModule = await server.ssrLoadModule('/src/lib/sfu/inboundFrameAssembler.ts');
+    const framePayloadModule = await server.ssrLoadModule('/src/lib/sfu/framePayload.ts');
     const { normalizeTilePatchMetadata, hasExplicitSfuTileMetadataFields } = tileMetadataModule;
-    const { SfuInboundFrameAssembler } = assemblerModule;
+    const {
+      prepareSfuOutboundFramePayload,
+      encodeSfuBinaryFrameEnvelope,
+      decodeSfuBinaryFrameEnvelope,
+    } = framePayloadModule;
 
     const validForegroundMetadata = normalizeTilePatchMetadata({
       layoutMode: 'tile_foreground',
@@ -98,78 +102,55 @@ async function main() {
       'explicit tile metadata fields must be detectable for inbound validation',
     );
 
-    const assembler = new SfuInboundFrameAssembler({
-      getRoomId: () => 'room-test',
+    const rejectedTilePatch = normalizeTilePatchMetadata({
+      layoutMode: 'tile_foreground',
+      layerId: 'background',
+      cacheEpoch: 4,
+      tileColumns: 2,
+      tileRows: 2,
+      tileWidth: 96,
+      tileHeight: 96,
+      tileIndices: [0],
+      roiNormX: 0,
+      roiNormY: 0,
+      roiNormWidth: 0.5,
+      roiNormHeight: 0.5,
     });
+    assert.equal(rejectedTilePatch, null, 'binary envelope metadata must reject invalid mixed-generation tile metadata');
 
-    const rejectedFrame = assembler.acceptChunk({
-      type: 'sfu/frame-chunk',
-      frame_id: 'frame-invalid',
-      publisher_id: 'publisher-1',
-      publisher_user_id: '12',
-      track_id: 'track-1',
-      timestamp: 100,
-      frame_type: 'keyframe',
-      protocol_version: 2,
-      frame_sequence: 2,
-      sender_sent_at_ms: 100,
-      codec_id: 'wlvc_ts',
-      runtime_id: 'wlvc_sfu',
-      chunk_count: 1,
-      chunk_index: 0,
-      payload_chars: 4,
-      chunk_payload_chars: 4,
-      data_base64_chunk: 'AAAA',
-      layout_mode: 'tile_foreground',
-      layer_id: 'background',
-      cache_epoch: 4,
-      tile_columns: 2,
-      tile_rows: 2,
-      tile_width: 96,
-      tile_height: 96,
-      tile_indices: [0],
-      roi_norm_x: 0,
-      roi_norm_y: 0,
-      roi_norm_width: 0.5,
-      roi_norm_height: 0.5,
-    });
-    assert.equal(rejectedFrame, null, 'chunk assembler must reject invalid mixed-generation tile metadata');
-
-    const acceptedFrame = assembler.acceptChunk({
-      type: 'sfu/frame-chunk',
-      frame_id: 'frame-valid',
-      publisher_id: 'publisher-1',
-      publisher_user_id: '12',
-      track_id: 'track-1',
+    const acceptedPrepared = prepareSfuOutboundFramePayload({
+      publisherId: 'publisher-1',
+      publisherUserId: '12',
+      trackId: 'track-1',
       timestamp: 101,
-      frame_type: 'keyframe',
-      protocol_version: 2,
-      frame_sequence: 3,
-      sender_sent_at_ms: 101,
-      codec_id: 'wlvc_ts',
-      runtime_id: 'wlvc_sfu',
-      chunk_count: 1,
-      chunk_index: 0,
-      payload_chars: 4,
-      chunk_payload_chars: 4,
-      data_base64_chunk: 'AAAA',
-      layout_mode: 'background_snapshot',
-      layer_id: 'background',
-      cache_epoch: 5,
-      tile_columns: 2,
-      tile_rows: 2,
-      tile_width: 96,
-      tile_height: 96,
-      tile_indices: [1],
-      roi_norm_x: 0.5,
-      roi_norm_y: 0.5,
-      roi_norm_width: 0.5,
-      roi_norm_height: 0.5,
+      dataBase64: 'AAAA',
+      type: 'keyframe',
+      frameSequence: 3,
+      senderSentAtMs: 101,
+      codecId: 'wlvc_ts',
+      runtimeId: 'wlvc_sfu',
+      tilePatch: {
+        layoutMode: 'background_snapshot',
+        layerId: 'background',
+        cacheEpoch: 5,
+        tileColumns: 2,
+        tileRows: 2,
+        tileWidth: 96,
+        tileHeight: 96,
+        tileIndices: [1],
+        roiNormX: 0.5,
+        roiNormY: 0.5,
+        roiNormWidth: 0.5,
+        roiNormHeight: 0.5,
+      },
     });
-    assert.ok(acceptedFrame, 'chunk assembler must accept valid tile metadata');
-    assert.equal(acceptedFrame.layout_mode, 'background_snapshot', 'reassembled frame must preserve the validated layout mode');
-    assert.equal(acceptedFrame.layer_id, 'background', 'reassembled frame must preserve the validated layer id');
-    assert.equal(acceptedFrame.cache_epoch, 5, 'reassembled frame must preserve the validated cache epoch');
+    const acceptedEnvelope = encodeSfuBinaryFrameEnvelope(acceptedPrepared);
+    assert.ok(acceptedEnvelope instanceof ArrayBuffer, 'binary envelope must encode valid tile metadata');
+    const acceptedFrame = decodeSfuBinaryFrameEnvelope(acceptedEnvelope);
+    assert.ok(acceptedFrame, 'binary envelope must decode valid tile metadata');
+    assert.equal(acceptedFrame.payload.layout_mode, 'background_snapshot', 'decoded binary frame must preserve the validated layout mode');
+    assert.equal(acceptedFrame.payload.layer_id, 'background', 'decoded binary frame must preserve the validated layer id');
+    assert.equal(acceptedFrame.payload.cache_epoch, 5, 'decoded binary frame must preserve the validated cache epoch');
 
     process.stdout.write('[sfu-tile-cache-generation-contract] PASS\n');
   } finally {
