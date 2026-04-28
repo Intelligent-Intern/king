@@ -23,16 +23,45 @@ export function createLocalMediaOrchestrationHelpers({
     sendNativeOffer,
   } = callbacks;
 
-  const {
-    applyControlStateToLocalTracks,
-    bindLocalTrackLifecycle,
-    clearLocalPreviewElement,
-    scheduleLocalTrackRecovery,
-    startEncodingPipeline,
-    stopLocalEncodingPipeline,
-    stopRetiredLocalStreams,
-    unpublishSfuTracks,
-  } = callbacks.localPublisher;
+  const localPublisherCallbacks = callbacks.localPublisher && typeof callbacks.localPublisher === 'object'
+    ? callbacks.localPublisher
+    : {};
+
+  function defaultApplyControlStateToLocalTracks(tracks = []) {
+    for (const track of Array.isArray(tracks) ? tracks : []) {
+      const kind = String(track?.kind || '').trim().toLowerCase();
+      if (kind === 'audio') {
+        track.enabled = controlState.micEnabled !== false;
+      } else if (kind === 'video') {
+        track.enabled = controlState.cameraEnabled !== false;
+      }
+    }
+  }
+
+  const applyControlStateToLocalTracks = typeof localPublisherCallbacks.applyControlStateToLocalTracks === 'function'
+    ? localPublisherCallbacks.applyControlStateToLocalTracks
+    : defaultApplyControlStateToLocalTracks;
+  const bindLocalTrackLifecycle = typeof localPublisherCallbacks.bindLocalTrackLifecycle === 'function'
+    ? localPublisherCallbacks.bindLocalTrackLifecycle
+    : () => {};
+  const clearLocalPreviewElement = typeof localPublisherCallbacks.clearLocalPreviewElement === 'function'
+    ? localPublisherCallbacks.clearLocalPreviewElement
+    : () => {};
+  const scheduleLocalTrackRecovery = typeof localPublisherCallbacks.scheduleLocalTrackRecovery === 'function'
+    ? localPublisherCallbacks.scheduleLocalTrackRecovery
+    : () => {};
+  const startEncodingPipeline = typeof localPublisherCallbacks.startEncodingPipeline === 'function'
+    ? localPublisherCallbacks.startEncodingPipeline
+    : async () => false;
+  const stopLocalEncodingPipeline = typeof localPublisherCallbacks.stopLocalEncodingPipeline === 'function'
+    ? localPublisherCallbacks.stopLocalEncodingPipeline
+    : () => {};
+  const stopRetiredLocalStreams = typeof localPublisherCallbacks.stopRetiredLocalStreams === 'function'
+    ? localPublisherCallbacks.stopRetiredLocalStreams
+    : () => {};
+  const unpublishSfuTracks = typeof localPublisherCallbacks.unpublishSfuTracks === 'function'
+    ? localPublisherCallbacks.unpublishSfuTracks
+    : () => {};
 
   function buildLocalMediaConstraints() {
     const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
