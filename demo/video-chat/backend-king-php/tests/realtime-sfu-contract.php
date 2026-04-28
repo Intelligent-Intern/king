@@ -244,6 +244,7 @@ try {
         'SFU direct fanout binary-required diagnostics should be wired'
     );
     $sfuStoreSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
+    $sfuBrokerReplaySource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_broker_replay.php');
     videochat_realtime_sfu_assert(
         function_exists('videochat_sfu_room_subscriber_targets'),
         'SFU room-scoped subscriber target helper must exist'
@@ -273,10 +274,25 @@ try {
         'SFU store must normalize codec/runtime ids centrally'
     );
     videochat_realtime_sfu_assert(
-        str_contains($sfuStoreSource, "'codec_id' => (string) (\$storedMetadata['codec_id'] ?? 'wlvc_unknown')")
-        && str_contains($sfuStoreSource, "'runtime_id' => (string) (\$storedMetadata['runtime_id'] ?? 'unknown_runtime')")
-        && str_contains($sfuStoreSource, "'layout_mode' => (string) (\$storedMetadata['layout_mode'] ?? '')"),
+        str_contains($sfuBrokerReplaySource, "'codec_id' => (string) (\$storedMetadata['codec_id'] ?? 'wlvc_unknown')")
+        && str_contains($sfuBrokerReplaySource, "'runtime_id' => (string) (\$storedMetadata['runtime_id'] ?? 'unknown_runtime')")
+        && str_contains($sfuBrokerReplaySource, "'layout_mode' => (string) (\$storedMetadata['layout_mode'] ?? '')"),
         'SFU broker replay legacy frame path must carry codec/runtime/layout metadata from store'
+    );
+    videochat_realtime_sfu_assert(
+        function_exists('videochat_sfu_select_live_broker_replay_frames'),
+        'SFU broker replay must select live frames instead of draining stale video backlog'
+    );
+    $lastBrokerFrameId = 40;
+    $selectedBrokerFrames = videochat_sfu_select_live_broker_replay_frames([
+        ['id' => 41, 'created_at_ms' => videochat_sfu_now_ms() - 60_000],
+        ['id' => 42, 'created_at_ms' => videochat_sfu_now_ms() - 100],
+    ], 'room-alpha', $lastBrokerFrameId);
+    videochat_realtime_sfu_assert(
+        $lastBrokerFrameId === 42
+        && count($selectedBrokerFrames) === 1
+        && (int) ($selectedBrokerFrames[0]['id'] ?? 0) === 42,
+        'SFU broker replay must advance over stale frames and keep only live media'
     );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),

@@ -366,6 +366,22 @@ function videochat_handle_sfu_routes(
             'payload_chars' => $payloadChars,
             'chunk_count' => $chunkCount,
             'protection_mode' => $protectionMode,
+            'codec_id' => (string) ($msg['codec_id'] ?? ($msg['codecId'] ?? '')),
+            'runtime_id' => (string) ($msg['runtime_id'] ?? ($msg['runtimeId'] ?? '')),
+            'layout_mode' => (string) ($msg['layout_mode'] ?? ($msg['layoutMode'] ?? '')),
+            'layer_id' => (string) ($msg['layer_id'] ?? ($msg['layerId'] ?? '')),
+            'cache_epoch' => (int) ($msg['cache_epoch'] ?? ($msg['cacheEpoch'] ?? 0)),
+            'tile_columns' => (int) ($msg['tile_columns'] ?? ($msg['tileColumns'] ?? 0)),
+            'tile_rows' => (int) ($msg['tile_rows'] ?? ($msg['tileRows'] ?? 0)),
+            'tile_width' => (int) ($msg['tile_width'] ?? ($msg['tileWidth'] ?? 0)),
+            'tile_height' => (int) ($msg['tile_height'] ?? ($msg['tileHeight'] ?? 0)),
+            'tile_indices' => is_array($msg['tile_indices'] ?? ($msg['tileIndices'] ?? null))
+                ? array_values($msg['tile_indices'] ?? $msg['tileIndices'])
+                : [],
+            'roi_norm_x' => (float) ($msg['roi_norm_x'] ?? ($msg['roiNormX'] ?? 0)),
+            'roi_norm_y' => (float) ($msg['roi_norm_y'] ?? ($msg['roiNormY'] ?? 0)),
+            'roi_norm_width' => (float) ($msg['roi_norm_width'] ?? ($msg['roiNormWidth'] ?? 1)),
+            'roi_norm_height' => (float) ($msg['roi_norm_height'] ?? ($msg['roiNormHeight'] ?? 1)),
         ];
         if ($frameId !== '') {
             $frameTransportMetadata['frame_id'] = $frameId;
