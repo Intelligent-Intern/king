@@ -173,6 +173,7 @@ try {
   const videoLayout = readFromFrontend('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
   requireContains(workspace, "import { createCallWorkspaceRuntimeSwitchingHelpers }", 'workspace must use extracted runtime switching helper');
   requireContains(layoutStrategies, "const remoteMainUserId = mode === 'main_mini'", 'main+mini layout must prefer remote participant as main video');
+  requireContains(layoutStrategies, "mainUserId === Number(currentUserId)", 'main+mini layout must not keep unpinned local self as main video');
   requireContains(mediaStack, "import { createCallWorkspaceRuntimeHealthHelpers }", 'media stack must use extracted runtime health helper');
   requireContains(mediaStack, 'markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer)', 'media stack must lazily route remote render callback after video layout is initialized');
   requireContains(videoLayout, 'function scheduleDeferredVideoLayout()', 'video layout must retry after Vue has materialized remote participant slots');

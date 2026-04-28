@@ -142,6 +142,9 @@ export function selectCallLayoutParticipants({
       : 0;
     mainUserId = remoteMainUserId || clippedVisibleIds.find((id) => id === localUserId) || clippedVisibleIds[0] || localUserId || 0;
   }
+  if (mode === 'main_mini' && pinnedUserIds.length <= 0 && mainUserId === Number(currentUserId)) {
+    mainUserId = clippedVisibleIds.find((id) => id !== Number(currentUserId)) || mainUserId;
+  }
 
   const visibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);
   const miniParticipants = mode === 'main_mini'
