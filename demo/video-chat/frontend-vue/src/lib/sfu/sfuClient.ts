@@ -290,6 +290,10 @@ export class SFUClient {
     this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
   }
 
+  requestKeyframe(publisherId: string): void {
+    this.send({ type: 'sfu/request_keyframe', publisher_id: publisherId })
+  }
+
   unpublishTrack(trackId: string): void {
     this.send({ type: 'sfu/unpublish', track_id: trackId })
   }

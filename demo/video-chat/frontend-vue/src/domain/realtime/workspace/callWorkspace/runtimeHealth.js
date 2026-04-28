@@ -105,6 +105,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
       if (frameCount > 0) {
         if (lastFrameAtMs <= 0 || (nowMs - lastFrameAtMs) < remoteVideoFreezeThresholdMs) {
+          peer.freezeRecoveryCount = 0;
           continue;
         }
         if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < remoteVideoFreezeThresholdMs) {
@@ -160,7 +161,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         if (sfuClientRef.value) {
           sfuClientRef.value.subscribe(publisherId);
         }
-        if (Number(peer.freezeRecoveryCount || 0) >= 2 || receiveGapMs >= remoteVideoFreezeThresholdMs * 2) {
+        if (Number(peer.freezeRecoveryCount || 0) >= 6 || receiveGapMs >= remoteVideoFreezeThresholdMs * 4) {
           restartSfuAfterVideoStall('remote_video_frozen', {
             publisher_id: publisherId,
             publisher_user_id: Number(peer.userId || 0),
@@ -168,6 +169,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
           });
+        } else if (Number(peer.freezeRecoveryCount || 0) >= 3) {
+          if (sfuClientRef.value && typeof sfuClientRef.value.requestKeyframe === 'function') {
+            sfuClientRef.value.requestKeyframe(publisherId);
+          }
         }
         continue;
       }
@@ -223,12 +228,16 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         }
         sfuClientRef.value.subscribe(publisherId);
       }
-      if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+      if (stalledAgeMs > remoteVideoStallThresholdMs * 5) {
         restartSfuAfterVideoStall('remote_video_never_started', {
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),
           age_ms: stalledAgeMs,
         });
+      } else if (stalledAgeMs > remoteVideoStallThresholdMs * 4) {
+        if (sfuClientRef.value && typeof sfuClientRef.value.requestKeyframe === 'function') {
+          sfuClientRef.value.requestKeyframe(publisherId);
+        }
       }
     }
   }
