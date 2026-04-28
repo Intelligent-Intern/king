@@ -345,8 +345,6 @@ let reactionQueueTimer = null;
 let reactionWindowStartedMs = 0;
 let reactionSentInWindow = 0;
 let reactionBatchCounter = 0;
-let moderationSyncTimer = null;
-const moderationSyncQueue = reactive({});
 let aloneIdleLastActiveMs = Date.now();
 
 const controlState = reactive({
