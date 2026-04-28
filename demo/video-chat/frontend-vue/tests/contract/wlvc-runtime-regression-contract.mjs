@@ -188,6 +188,11 @@ try {
   requireContains(videoLayout, 'function mountRemotePeerFallback(peer, assignedNodes)', 'video layout must retain remote peer media nodes when primary selection misses the node lookup');
   requireContains(videoLayout, "document.getElementById('decoded-video-container')", 'video layout must visibly mount decoded SFU peers even before roster slots exist');
   requireContains(videoLayout, 'mountRemotePeerFallback(peer, assignedNodes);', 'video layout must mount remote peer fallback before removing unassigned nodes');
+  requireContains(workspace, 'const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);', 'media stack must read the live layout mode after participant UI replaces placeholders');
+  requireContains(workspace, 'currentLayoutMode: liveCurrentLayoutMode,', 'media stack current layout ref must not capture the initial placeholder');
+  requireContains(workspace, 'gridVideoParticipants: liveGridVideoParticipants,', 'media stack grid participants ref must not capture the initial placeholder');
+  requireContains(workspaceStage, '.workspace-grid-video-slot :deep(canvas)', 'grid layout must style decoded canvas nodes inside grid slots');
+  requireContains(workspaceStage, 'object-fit: contain !important;', 'grid video must fit inside its tile instead of cropping oversized frames');
   requireContains(workspaceStage, 'z-index: 15;', 'decoded fallback layer must sit above local preview when used');
 
   process.stdout.write('[wlvc-runtime-regression-contract] PASS\n');

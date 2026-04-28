@@ -689,6 +689,11 @@ let gridVideoParticipants = computed(() => []);
 let miniVideoParticipants = computed(() => []);
 let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 let primaryVideoUserId = computed(() => currentUserId.value);
+const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);
+const liveGridVideoParticipants = computed(() => gridVideoParticipants.value);
+const liveMiniVideoParticipants = computed(() => miniVideoParticipants.value);
+const liveNormalizedCallLayout = computed(() => normalizedCallLayout.value);
+const livePrimaryVideoUserId = computed(() => primaryVideoUserId.value);
 
 function sendSocketFrame(payload) {
   const socket = socketRef.value;
@@ -1208,11 +1213,11 @@ const mediaStack = createCallWorkspaceMediaStack({
     connectedParticipantUsers,
     connectionState,
     controlState,
-    currentLayoutMode,
+    currentLayoutMode: liveCurrentLayoutMode,
     currentUserId,
     desiredRoomId,
     encodeIntervalRef,
-    gridVideoParticipants,
+    gridVideoParticipants: liveGridVideoParticipants,
     isSocketOnline,
     localFilteredStreamRef,
     localMediaOrchestrationState,
@@ -1224,11 +1229,11 @@ const mediaStack = createCallWorkspaceMediaStack({
     mediaRenderVersion,
     mediaRuntimeCapabilities,
     mediaRuntimePath,
-    miniVideoParticipants,
+    miniVideoParticipants: liveMiniVideoParticipants,
     nativePeerConnectionsRef,
-    normalizedCallLayout,
+    normalizedCallLayout: liveNormalizedCallLayout,
     pendingSfuRemotePeerInitializers,
-    primaryVideoUserId,
+    primaryVideoUserId: livePrimaryVideoUserId,
     remoteFrameActivityLastByUserId,
     remotePeersRef,
     sfuClientRef,

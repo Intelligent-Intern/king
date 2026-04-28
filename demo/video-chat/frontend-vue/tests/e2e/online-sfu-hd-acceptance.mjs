@@ -175,6 +175,12 @@ async function remoteVideoCanvases(page) {
           height: Number(canvas.height || 0),
           publisherId: String(canvas.dataset.publisherId || ''),
           userId: String(canvas.dataset.userId || ''),
+          gridSlotId: String(canvas.closest('.workspace-grid-video-slot')?.id || ''),
+          miniSlotId: String(canvas.closest('.workspace-mini-video-slot')?.id || ''),
+          inGridSlot: Boolean(canvas.closest('.workspace-grid-video-slot')),
+          inMiniSlot: Boolean(canvas.closest('.workspace-mini-video-slot')),
+          inRemoteMain: Boolean(canvas.closest('#remote-video-container')),
+          inDecodedFallback: Boolean(canvas.closest('#decoded-video-container')),
           rendered: canvas.width > 0 && canvas.height > 0 && canvas.isConnected,
           hash: hash.hash,
           readable: hash.readable,
@@ -209,6 +215,29 @@ async function waitForSfuBinaryFlow(sfuSocketStats, page, label) {
   });
 }
 
+async function switchCallLayoutMode(page, mode, label) {
+  await waitUntil(`${label} layout control`, 30_000, async () => (
+    page.locator('#call-left-layout-mode').count()
+  ));
+  await page.locator('#call-left-layout-mode').selectOption(mode);
+  await waitUntil(`${label} layout ${mode}`, 30_000, async () => page.evaluate((nextMode) => {
+    const stage = document.querySelector('.workspace-stage');
+    return Boolean(stage?.classList.contains(`layout-${String(nextMode || '').replace('_', '-')}`));
+  }, mode));
+}
+
+async function waitForGridRemote(page, label) {
+  return waitUntil(`${label} grid HD remote video`, 90_000, async () => {
+    const snapshot = await remoteVideoCanvases(page);
+    return snapshot.some((canvas) => (
+      canvas.rendered
+      && canvas.width >= HD_WIDTH
+      && canvas.height >= HD_HEIGHT
+      && canvas.inGridSlot
+    )) ? snapshot : null;
+  });
+}
+
 function assertStableSamples(samples) {
   for (const side of ['admin', 'user']) {
     const hashes = [];
@@ -216,6 +245,12 @@ function assertStableSamples(samples) {
       const canvas = firstHdCanvas(sample[side].remote);
       if (!canvas) {
         throw new Error(`${side} lost the HD remote canvas during the stable window.`);
+      }
+      if (!canvas.inGridSlot) {
+        throw new Error(`${side} HD remote canvas left the grid slot during the stable window.`);
+      }
+      if (canvas.inDecodedFallback) {
+        throw new Error(`${side} HD remote canvas fell back to the decoded overlay during the grid stable window.`);
       }
       if (canvas.readable) hashes.push(String(canvas.hash));
     }
@@ -337,6 +372,9 @@ async function main() {
     await waitForHdRemote(user.page, 'user');
     await waitForSfuBinaryFlow(sfuSocketStats, admin.page, 'admin');
     await waitForSfuBinaryFlow(sfuSocketStats, user.page, 'user');
+    await switchCallLayoutMode(admin.page, 'grid', 'admin');
+    await waitForGridRemote(admin.page, 'admin');
+    await waitForGridRemote(user.page, 'user');
 
     summary.assets.admin = await activeCallWorkspaceAssets(admin.page);
     summary.assets.user = await activeCallWorkspaceAssets(user.page);

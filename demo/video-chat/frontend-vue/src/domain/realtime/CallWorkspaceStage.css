@@ -265,14 +265,22 @@
 .workspace-grid-video-slot {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  contain: strict;
 }
 
 .workspace-grid-video-slot :deep(video),
 .workspace-grid-video-slot :deep(canvas) {
+  position: absolute;
+  inset: 0;
   width: 100% !important;
   height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   display: block !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 .workspace-grid-title {

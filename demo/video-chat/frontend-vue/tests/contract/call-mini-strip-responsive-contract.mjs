@@ -21,20 +21,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 const view = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
+const template = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.template.html'), 'utf8');
+const participantUi = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.js'), 'utf8');
+const viewSurface = `${view}\n${template}\n${participantUi}`;
 const stageCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceStage.css'), 'utf8');
 const panelsCss = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspacePanels.css'), 'utf8');
 
 try {
-  assert.match(view, /'mini-strip-above': isCompactMiniStripAbove/, 'mini strip placement class must use compact viewport state');
-  assert.match(view, /v-if="showCompactMiniStripToggle"/, 'compact mini strip toggle must render in compact layouts');
-  assert.match(view, /@click="toggleCompactMiniStripPlacement"/, 'compact mini strip toggle must switch placement');
+  assert.match(viewSurface, /'mini-strip-above': isCompactMiniStripAbove/, 'mini strip placement class must use compact viewport state');
+  assert.match(viewSurface, /v-if="showCompactMiniStripToggle"/, 'compact mini strip toggle must render in compact layouts');
+  assert.match(viewSurface, /@click="toggleCompactMiniStripPlacement"/, 'compact mini strip toggle must switch placement');
   assert.match(
-    view,
+    viewSurface,
     /const isCompactMiniStripAbove = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& compactMiniStripPlacement\.value === 'above'\s*\)\);/,
     'above placement must apply to tablet and mobile compact layouts'
   );
   assert.match(
-    view,
+    viewSurface,
     /const showCompactMiniStripToggle = computed\(\(\) => \(\s*isCompactLayoutViewport\.value\s*&& showMiniParticipantStrip\.value\s*\)\);/,
     'placement toggle must be available on tablet and mobile compact layouts'
   );
