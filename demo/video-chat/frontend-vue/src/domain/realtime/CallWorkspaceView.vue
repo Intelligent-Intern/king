@@ -1405,6 +1405,7 @@ const nativeStack = createCallWorkspaceNativeStack({
     markParticipantActivity,
     mediaDebugLog,
     nativeAudioBridgeFailureMessage,
+    nativeAudioBridgeIsQuarantined,
     nativePeerHasLocalLiveAudioSender,
     renderCallVideoLayout: () => renderCallVideoLayout(),
     renderNativeRemoteVideos,

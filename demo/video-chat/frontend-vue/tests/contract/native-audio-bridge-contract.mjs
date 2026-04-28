@@ -125,6 +125,7 @@ try {
   requireContains(mediaSecurityRuntime, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
   requireContains(mediaSecurityRuntime, "scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame'", 'malformed native protected frames rebuild the audio bridge instead of staying stalled');
   requireContains(mediaSecurityRuntime, 'requireMissingTrack: false', 'malformed native frame recovery does not skip rebuild just because a muted remote track object exists');
+  requireContains(workspace, "nativeAudioBridgeFailureMessage,\n    nativeAudioBridgeIsQuarantined,\n    nativePeerHasLocalLiveAudioSender", 'workspace wires native audio quarantine callback into native peer stack');
   requireContains(mediaSecurityRuntime, 'function checkMediaSecurityHandshakeTimeouts()', 'handshake watchdog exists for native audio bridge deadlocks');
   requireContains(mediaSecurityRuntime, "eventType: 'media_security_handshake_timeout'", 'handshake watchdog emits diagnostics for native audio bridge deadlocks');
   requireContains(mediaSecurityRuntime, 'await sendMediaSecurityHello(normalizedTargetId, true);', 'handshake watchdog force-retries hello for native audio bridge deadlocks');
