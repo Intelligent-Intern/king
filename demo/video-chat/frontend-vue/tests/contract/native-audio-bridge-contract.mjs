@@ -140,8 +140,14 @@ try {
   requireContains(mediaSecurityRuntime, 'clearNativeAudioBridgeQuarantine(normalizedUserId);', 'native audio resync clears quarantine only on allowed deterministic recovery reasons');
   requireContains(nativeStack, 'shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n    streamHasLiveTrackKind', 'native audio recovery receives shouldUseNativeAudioBridge callback');
   requireContains(nativeStack, 'shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n  });', 'native peer lifecycle receives shouldUseNativeAudioBridge callback');
-  requireContains(nativeStack, 'shouldBlockNativeRuntimeSignaling: callbacks.shouldBlockNativeRuntimeSignaling,\n    shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,', 'native signaling receives runtime guard callbacks');
-  requireContains(workspace, "shouldBypassNativeAudioProtectionForPeer,\n    shouldBlockNativeRuntimeSignaling,\n    shouldMaintainNativePeerConnections", 'workspace wires native runtime signaling guard into native peer stack');
+  requireContains(nativeStack, 'const shouldBlockNativeRuntimeSignaling = () => {', 'native stack owns native runtime signaling guard fallback');
+  requireContains(nativeStack, "return Boolean(sfuEnabled) && refs.mediaRuntimePath.value === 'pending';", 'native runtime signaling guard is derived from existing native stack refs');
+  requireContains(nativeStack, 'shouldBlockNativeRuntimeSignaling,\n    shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,', 'native signaling receives runtime guard callbacks without CallWorkspace expansion');
+  assert.equal(
+    workspace.includes("shouldBypassNativeAudioProtectionForPeer,\n    shouldBlockNativeRuntimeSignaling,\n    shouldMaintainNativePeerConnections"),
+    false,
+    'workspace must not grow native-stack callback lists for runtime guard wiring',
+  );
   requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.js'), "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
   requireContains(audioBridgeRecovery, "resyncNativeAudioBridgePeerAfterSecurityReady(\n          normalizedUserId,\n          'native_audio_track_recovery_rejoin',\n          true", 'audio-track recovery may force a renegotiation offer');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');

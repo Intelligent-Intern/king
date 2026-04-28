@@ -71,6 +71,15 @@ export function createCallWorkspaceNativeStack(options) {
   });
 
   const audioBridgeState = createNativeAudioBridgeStateHelpers(refs.nativeAudioBridgeStatusVersion);
+  const shouldBlockNativeRuntimeSignaling = () => {
+    if (typeof callbacks.shouldBlockNativeRuntimeSignaling === 'function') {
+      return callbacks.shouldBlockNativeRuntimeSignaling();
+    }
+    const sfuEnabled = typeof callbacks.sfuRuntimeEnabled === 'function'
+      ? callbacks.sfuRuntimeEnabled()
+      : false;
+    return Boolean(sfuEnabled) && refs.mediaRuntimePath.value === 'pending';
+  };
 
   const nativeAudioBridgeRecovery = createNativeAudioBridgeRecovery({
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
@@ -183,7 +192,7 @@ export function createCallWorkspaceNativeStack(options) {
     sendSocketFrame: callbacks.sendSocketFrame,
     shouldExpectLocalNativeAudioTrack: nativeBridgeRuntime.shouldExpectLocalNativeAudioTrack,
     shouldExpectRemoteNativeAudioTrack: nativeBridgeRuntime.shouldExpectRemoteNativeAudioTrack,
-    shouldBlockNativeRuntimeSignaling: callbacks.shouldBlockNativeRuntimeSignaling,
+    shouldBlockNativeRuntimeSignaling,
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
     shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     sfuRuntimeEnabled: callbacks.sfuRuntimeEnabled,
