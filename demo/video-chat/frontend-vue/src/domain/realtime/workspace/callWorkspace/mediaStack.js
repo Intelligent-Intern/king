@@ -71,7 +71,7 @@ export function createCallWorkspaceMediaStack(options) {
     getSfuRemotePeerByFrameIdentity,
     isWlvcRuntimePath: callbacks.isWlvcRuntimePath,
     markParticipantActivity: callbacks.markParticipantActivity,
-    markRemotePeerRenderable,
+    markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer),
     mediaDebugLog: callbacks.mediaDebugLog,
     mediaRuntimePathRef: refs.mediaRuntimePath,
     normalizeSfuPublisherId,

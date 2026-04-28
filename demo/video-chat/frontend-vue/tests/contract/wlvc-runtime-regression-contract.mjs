@@ -169,8 +169,12 @@ try {
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
   const mediaStack = readFromFrontend('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+  const videoLayout = readFromFrontend('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
   requireContains(workspace, "import { createCallWorkspaceRuntimeSwitchingHelpers }", 'workspace must use extracted runtime switching helper');
   requireContains(mediaStack, "import { createCallWorkspaceRuntimeHealthHelpers }", 'media stack must use extracted runtime health helper');
+  requireContains(mediaStack, 'markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer)', 'media stack must lazily route remote render callback after video layout is initialized');
+  requireContains(videoLayout, 'function mountRemotePeerFallback(peer, assignedNodes)', 'video layout must retain remote peer media nodes when primary selection misses the node lookup');
+  requireContains(videoLayout, 'mountRemotePeerFallback(peer, assignedNodes);', 'video layout must mount remote peer fallback before removing unassigned nodes');
 
   process.stdout.write('[wlvc-runtime-regression-contract] PASS\n');
 } catch (error) {

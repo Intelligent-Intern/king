@@ -73,6 +73,28 @@ export function createCallWorkspaceVideoLayoutHelpers({
     }
   }
 
+  function mountRemotePeerFallback(peer, assignedNodes) {
+    if (!peer || typeof peer !== 'object') return;
+    const node = remotePeerMediaNode(peer);
+    if (!(node instanceof HTMLElement) || assignedNodes.has(node)) return;
+    const userId = Number(peer.userId || 0);
+    if (!Number.isInteger(userId) || userId <= 0) return;
+
+    const primaryUserId = primaryVideoUserId();
+    if (userId === primaryUserId) {
+      const primaryTarget = userId === refs.currentUserId.value
+        ? document.getElementById('local-video-container')
+        : document.getElementById('remote-video-container');
+      if (mountVideoNode(primaryTarget, node, assignedNodes)) return;
+    }
+
+    const miniSlot = document.getElementById(miniVideoSlotId(userId));
+    if (mountVideoNode(miniSlot, node, assignedNodes)) return;
+
+    const gridSlot = document.getElementById(gridVideoSlotId(userId));
+    mountVideoNode(gridSlot, node, assignedNodes);
+  }
+
   function renderCallVideoLayout() {
     if (typeof document === 'undefined') return;
     const assignedNodes = new Set();
@@ -116,6 +138,9 @@ export function createCallWorkspaceVideoLayoutHelpers({
       ...refs.remotePeersRef.value.values(),
       ...refs.nativePeerConnectionsRef.value.values(),
     ];
+    for (const peer of allRemotePeers) {
+      mountRemotePeerFallback(peer, assignedNodes);
+    }
     for (const peer of allRemotePeers) {
       const node = remotePeerMediaNode(peer);
       if (node instanceof HTMLElement && !assignedNodes.has(node)) {
