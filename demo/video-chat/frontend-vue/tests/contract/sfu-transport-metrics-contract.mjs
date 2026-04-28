@@ -37,8 +37,11 @@ try {
   requireContains(sfuClient, 'SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS', 'sfu client transport sample cooldown');
   requireContains(sfuClient, "'sfu_frame_transport_sample'", 'sfu client sampled transport diagnostic');
   requireContains(sfuClient, 'wire_overhead_bytes', 'sfu client wire overhead metric');
-  requireContains(sfuClient, "transport_path: 'legacy_chunked_json'", 'sfu client chunked legacy transport path metric');
   requireContains(sfuClient, "transport_path: 'binary_envelope'", 'sfu client binary transport path metric');
+  assert.ok(
+    !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
+    'sfu client must not route outbound media through legacy chunked JSON before binary envelope send',
+  );
   requireContains(sfuClient, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
   requireContains(sfuClient, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
 

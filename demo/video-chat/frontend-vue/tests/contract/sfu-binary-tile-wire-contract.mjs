@@ -42,10 +42,8 @@ try {
   requireContains(publisherPipeline, 'codecId: currentSfuCodecId', 'publisher sends explicit codec id');
   requireContains(sfuClient, 'normalizeTilePatchMetadata(tileMetadataInput)', 'inbound frame path uses centralized tile metadata normalization');
   requireContains(sfuClient, 'invalid_tile_metadata', 'inbound frame path rejects invalid tile metadata');
-  requireContains(sfuClient, 'codec_id: payload.codec_id', 'legacy chunk fallback preserves codec id');
-  requireContains(sfuClient, 'runtime_id: payload.runtime_id', 'legacy chunk fallback preserves runtime id');
-  requireContains(sfuClient, 'layout_mode: payload.layout_mode', 'legacy chunk fallback preserves layout mode');
-  requireContains(sfuClient, 'tile_indices: payload.tile_indices', 'legacy chunk fallback preserves tile indices');
+  assert.ok(!sfuClient.includes('legacy_chunked_json'), 'outbound SFU sender must not preserve a legacy JSON media transport path');
+  assert.ok(!sfuClient.includes('private async sendChunkedFramePayload'), 'outbound SFU sender must not expose a JSON/base64 media chunk sender');
   requireContains(sfuClient, 'codecId: stringField(msg.codecId, msg.codec_id)', 'decoded frame exposes codec id');
   requireContains(sfuClient, 'runtimeId: stringField(msg.runtimeId, msg.runtime_id)', 'decoded frame exposes runtime id');
   requireContains(sfuClient, "layoutMode: tileMetadata?.layoutMode || 'full_frame'", 'decoded frame exposes validated layout mode');

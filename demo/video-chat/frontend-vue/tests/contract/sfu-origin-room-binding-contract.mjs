@@ -70,17 +70,11 @@ try {
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 2 * 1024 * 1024', 'bounded queue byte cap');
   requireContains(outboundFrameQueue, "this.dropQueuedDeltaFrames('replaced_by_newer_delta', prepared.trackId)", 'queued delta replacement');
   requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'keyframe queue reject diagnostic');
-  requireContains(sfuClient, "type: 'sfu/frame-chunk'", 'chunked frame command');
-  requireContains(sfuClient, "frame_id: frameId", 'chunked frame id');
-  requireContains(sfuClient, "protocol_version: payload.protocol_version", 'chunked frame protocol version');
-  requireContains(sfuClient, "frame_sequence: payload.frame_sequence", 'chunked frame sequence');
-  requireContains(sfuClient, "codec_id: payload.codec_id", 'chunked frame codec id');
-  requireContains(sfuClient, "runtime_id: payload.runtime_id", 'chunked frame runtime id');
-  requireContains(sfuClient, "payload_chars: chunkValue.length", 'chunked frame payload length');
-  requireContains(sfuClient, "chunk_payload_chars:", 'chunked frame chunk length');
-  requireContains(sfuClient, "chunk_index: chunkIndex", 'chunk index');
-  requireContains(sfuClient, "chunk_count: totalChunks", 'chunk count');
-  requireContains(sfuClient, 'this.sendChunkedFramePayload(prepared.payload, prepared.chunkField, legacyChunkValue, metrics)', 'chunked frame sender');
+  requireContains(sfuClient, 'this.sendBinaryFrame(prepared, metrics)', 'outbound media sends binary envelopes before any compatibility path');
+  assert.ok(
+    !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
+    'outbound media hot path must not send legacy JSON/base64 chunks',
+  );
   requireContains(sfuClient, 'new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })', 'inbound chunk assembler wiring');
   requireContains(inboundFrameAssembler, 'const SFU_FRAME_CHUNK_TTL_MS = 5000', 'inbound chunk TTL guard');
   requireContains(inboundFrameAssembler, 'private pendingChunks = new Map<string, PendingInboundFrameChunk>()', 'inbound chunk cache');

@@ -20,15 +20,11 @@ import {
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
 import {
-  SFU_FRAME_CHUNK_MAX_CHARS,
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
-  arrayBufferToBase64Url,
   base64UrlToArrayBuffer,
-  createSfuFrameId,
   prepareSfuOutboundFramePayload,
   type PreparedSfuOutboundFramePayload,
-  type SfuChunkField,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
 import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
@@ -438,11 +434,6 @@ export class SFUClient {
       buffered_amount: this.getWebSocketBufferedAmount(),
     })
 
-    const legacyChunkValue = this.resolveLegacyChunkValue(prepared)
-    if (prepared.chunkField && legacyChunkValue.length > SFU_FRAME_CHUNK_MAX_CHARS) {
-      return this.sendChunkedFramePayload(prepared.payload, prepared.chunkField, legacyChunkValue, metrics)
-    }
-
     const drain = await this.waitForSendBufferDrain()
     if (!drain.ok) {
       this.reportFrameSendDiagnostic(
@@ -479,7 +470,7 @@ export class SFUClient {
         buffered_amount: this.getWebSocketBufferedAmount(),
         abort_reason: 'binary_envelope_send_failed',
         transport_path: 'binary_envelope',
-        legacy_chunk_compatibility_available: Boolean(prepared.chunkField && legacyChunkValue.length > 0),
+        binary_media_required: true,
       },
       true,
     )
@@ -611,20 +602,6 @@ export class SFUClient {
     }
   }
 
-  private measureJsonWireBytes(payload: Record<string, unknown>): number {
-    try {
-      return new TextEncoder().encode(JSON.stringify(payload)).byteLength
-    } catch {
-      return String(JSON.stringify(payload) || '').length
-    }
-  }
-
-  private resolveLegacyChunkValue(prepared: PreparedSfuOutboundFramePayload): string {
-    if (prepared.chunkValue !== '') return prepared.chunkValue
-    if (!(prepared.payloadBytes instanceof ArrayBuffer) || prepared.payloadBytes.byteLength <= 0) return ''
-    return arrayBufferToBase64Url(prepared.payloadBytes)
-  }
-
   private recordSendFailure(
     prepared: PreparedSfuOutboundFramePayload,
     details: {
@@ -651,175 +628,6 @@ export class SFUClient {
       payloadChars: Math.max(0, Number(prepared.payloadChars || 0)),
       timestamp: Math.max(0, Number(prepared.timestamp || 0)),
     }
-  }
-
-  private async sendChunkedFramePayload(
-    payload: Record<string, unknown>,
-    chunkField: SfuChunkField,
-    chunkValue: string,
-    metrics: Record<string, unknown> = {},
-  ): Promise<boolean> {
-    const totalChunks = Math.max(1, Math.ceil(chunkValue.length / SFU_FRAME_CHUNK_MAX_CHARS))
-    const frameId = createSfuFrameId()
-    let totalWaitMs = 0
-    let wirePayloadBytes = 0
-
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-      const drain = await this.waitForSendBufferDrain()
-      totalWaitMs += drain.waitedMs
-      if (!drain.ok) {
-        this.reportFrameSendDiagnostic(
-          'sfu_frame_send_aborted',
-          'error',
-          'SFU frame send aborted while waiting for websocket backpressure to drain.',
-          {
-            ...metrics,
-            frame_id: frameId,
-            chunk_index: chunkIndex,
-            chunk_count: totalChunks,
-            chunk_field: chunkField,
-            buffered_amount: drain.bufferedAmount,
-            send_wait_ms: totalWaitMs,
-            abort_reason: 'send_buffer_drain_timeout',
-          },
-          true,
-        )
-        this.recordSendFailure({
-          payload,
-          chunkField,
-          chunkValue,
-          payloadBytes: base64UrlToArrayBuffer(chunkValue),
-          metrics,
-          rawByteLength: 0,
-          projectedBinaryEnvelopeBytes: 0,
-          payloadChars: chunkValue.length,
-          chunkCount: totalChunks,
-          frameType: String(payload.frame_type || 'delta') === 'keyframe' ? 'keyframe' : 'delta',
-          protectionMode: String(payload.protection_mode || 'transport_only') === 'required'
-            ? 'required'
-            : (String(payload.protection_mode || 'transport_only') === 'protected' ? 'protected' : 'transport_only'),
-          publisherId: String(payload.publisher_id || ''),
-          trackId: String(payload.track_id || ''),
-          timestamp: Number(payload.timestamp || 0),
-          frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
-          senderSentAtMs: Math.max(0, Number(payload.sender_sent_at_ms || 0)),
-          tilePatch: null,
-        }, {
-          reason: 'send_buffer_drain_timeout',
-          stage: 'wait_for_chunk_send_buffer_drain',
-          source: 'legacy_chunked_json',
-          message: 'Legacy chunked JSON send timed out while waiting for websocket bufferedAmount to drain.',
-          transportPath: 'legacy_chunked_json',
-          bufferedAmount: drain.bufferedAmount,
-        })
-        return false
-      }
-      const start = chunkIndex * SFU_FRAME_CHUNK_MAX_CHARS
-      const end = start + SFU_FRAME_CHUNK_MAX_CHARS
-      const chunkPayload: Record<string, unknown> = {
-        type: 'sfu/frame-chunk',
-        protocol_version: payload.protocol_version,
-        frame_id: frameId,
-        publisher_id: payload.publisher_id,
-        publisher_user_id: payload.publisher_user_id,
-        track_id: payload.track_id,
-        timestamp: payload.timestamp,
-        frame_type: payload.frame_type,
-        frame_sequence: payload.frame_sequence,
-        sender_sent_at_ms: payload.sender_sent_at_ms,
-        protection_mode: payload.protection_mode,
-        codec_id: payload.codec_id,
-        runtime_id: payload.runtime_id,
-        payload_chars: chunkValue.length,
-        chunk_payload_chars: Math.max(0, chunkValue.slice(start, end).length),
-        chunk_index: chunkIndex,
-        chunk_count: totalChunks,
-        layout_mode: payload.layout_mode,
-        layer_id: payload.layer_id,
-        cache_epoch: payload.cache_epoch,
-        tile_columns: payload.tile_columns,
-        tile_rows: payload.tile_rows,
-        tile_width: payload.tile_width,
-        tile_height: payload.tile_height,
-        tile_indices: payload.tile_indices,
-        roi_norm_x: payload.roi_norm_x,
-        roi_norm_y: payload.roi_norm_y,
-        roi_norm_width: payload.roi_norm_width,
-        roi_norm_height: payload.roi_norm_height,
-      }
-      chunkPayload[chunkField] = chunkValue.slice(start, end)
-      wirePayloadBytes += this.measureJsonWireBytes(chunkPayload)
-      if (!this.send(chunkPayload)) {
-        this.reportFrameSendDiagnostic(
-          'sfu_frame_send_aborted',
-          'error',
-          'SFU frame send aborted because the websocket was not open for a chunk.',
-          {
-            ...metrics,
-            frame_id: frameId,
-            chunk_index: chunkIndex,
-            chunk_count: totalChunks,
-            chunk_field: chunkField,
-            buffered_amount: this.getWebSocketBufferedAmount(),
-            send_wait_ms: totalWaitMs,
-            abort_reason: 'socket_not_open',
-          },
-          true,
-        )
-        this.recordSendFailure({
-          payload,
-          chunkField,
-          chunkValue,
-          payloadBytes: base64UrlToArrayBuffer(chunkValue),
-          metrics,
-          rawByteLength: 0,
-          projectedBinaryEnvelopeBytes: 0,
-          payloadChars: chunkValue.length,
-          chunkCount: totalChunks,
-          frameType: String(payload.frame_type || 'delta') === 'keyframe' ? 'keyframe' : 'delta',
-          protectionMode: String(payload.protection_mode || 'transport_only') === 'required'
-            ? 'required'
-            : (String(payload.protection_mode || 'transport_only') === 'protected' ? 'protected' : 'transport_only'),
-          publisherId: String(payload.publisher_id || ''),
-          trackId: String(payload.track_id || ''),
-          timestamp: Number(payload.timestamp || 0),
-          frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
-          senderSentAtMs: Math.max(0, Number(payload.sender_sent_at_ms || 0)),
-          tilePatch: null,
-        }, {
-          reason: 'socket_not_open',
-          stage: 'send_legacy_chunk',
-          source: 'legacy_chunked_json',
-          message: 'Legacy chunked JSON send found the websocket closed before the current chunk could be sent.',
-          transportPath: 'legacy_chunked_json',
-          bufferedAmount: this.getWebSocketBufferedAmount(),
-        })
-        return false
-      }
-    }
-    this.reportFrameSendPressureIfNeeded({
-      ...metrics,
-      frame_id: frameId,
-      chunk_field: chunkField,
-      chunk_count: totalChunks,
-      transport_path: 'legacy_chunked_json',
-      wire_payload_bytes: wirePayloadBytes,
-      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
-      buffered_amount: this.getWebSocketBufferedAmount(),
-      send_wait_ms: totalWaitMs,
-    })
-    this.reportFrameTransportSampleIfNeeded({
-      ...metrics,
-      frame_id: frameId,
-      chunk_field: chunkField,
-      chunk_count: totalChunks,
-      transport_path: 'legacy_chunked_json',
-      wire_payload_bytes: wirePayloadBytes,
-      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
-      websocket_buffered_amount: this.getWebSocketBufferedAmount(),
-      send_wait_ms: totalWaitMs,
-    })
-    return true
   }
 
   private reportFrameSendPressureIfNeeded(payload: Record<string, unknown>): void {
