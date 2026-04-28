@@ -403,6 +403,7 @@ try {
   );
 
   const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
+  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.js');
   const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.js');
   const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.js');
@@ -414,6 +415,10 @@ try {
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'media-security runtime must resync after session context resets');
   assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');
   assert.match(mediaSecurityRuntimeSource, /const targetIds = mediaSecurityEligibleTargetIds\(\);/, 'handshake timeout watchdog must only operate on settled publisher-discovered targets');
+  assert.match(runtimeConfigSource, /MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS = Object\.freeze\(\[1000, 3000, 6000\]\)/, 'handshake retry watchdog must retry after 1s, then 3s, then 6s');
+  assert.match(mediaSecurityRuntimeSource, /function mediaSecurityHandshakeRetryTimeoutMsForAttempt\(retryAttempt\)/, 'handshake retry watchdog must derive timeout from retry attempt');
+  assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.set\(normalizedTargetId, retryAttempt \+ 1\);/, 'handshake retry watchdog must advance retry attempt after each timeout');
+  assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.delete\(normalizedSenderUserId\);/, 'handshake retry watchdog must reset retry attempts when sender-key is accepted');
   assert.match(mediaSecurityRuntimeSource, /message\.includes\('participant_set_mismatch'\)/, 'media-security recovery must treat participant-set churn as a reconnectable key path');
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('signal_failed_reconnect'\);/, 'media-security signal failures must trigger a reconnect-style participant sync');
   assert.match(mediaSecurityRuntimeSource, /const marked = session\.markParticipantSet\(\[[\s\S]*normalizedSenderUserId,[\s\S]*\]\);[\s\S]*if \(mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('hello_accepted'\);[\s\S]*\}/m, 'media-security runtime must pin the hello sender into the participant set and only schedule a non-forced follow-up sync once the sender is in the current target set');

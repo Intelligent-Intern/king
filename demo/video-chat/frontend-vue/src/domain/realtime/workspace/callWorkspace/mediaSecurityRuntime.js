@@ -29,6 +29,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
   } = callbacks;
   const {
     mediaSecurityHandshakeTimeoutMs,
+    mediaSecurityHandshakeRetryTimeoutsMs,
     mediaSecuritySfuTargetSettleMs,
     nativeFrameErrorLogCooldownMs,
     sfuRuntimeEnabled,
@@ -69,6 +70,18 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHandshakeWatchdogTimer = null;
     }
     state.mediaSecurityHandshakeRetryingByUserId.clear();
+    state.mediaSecurityHandshakeRetryCountByUserId.clear();
+  }
+
+  function mediaSecurityHandshakeRetryTimeoutMsForAttempt(retryAttempt) {
+    const normalizedAttempt = Math.max(0, Number(retryAttempt || 0));
+    const configuredTimeouts = Array.isArray(mediaSecurityHandshakeRetryTimeoutsMs)
+      ? mediaSecurityHandshakeRetryTimeoutsMs
+      : [];
+    const timeoutIndex = Math.min(normalizedAttempt, Math.max(0, configuredTimeouts.length - 1));
+    const configuredTimeout = Number(configuredTimeouts[timeoutIndex] || 0);
+    if (Number.isFinite(configuredTimeout) && configuredTimeout > 0) return configuredTimeout;
+    return Number(mediaSecurityHandshakeTimeoutMs || 6000);
   }
 
   async function checkMediaSecurityHandshakeTimeouts() {
@@ -87,18 +100,24 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const peerState = String(peer?.state || '').trim().toLowerCase();
       if (peerState === 'active') {
         state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+        state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedTargetId);
         continue;
       }
 
       const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
-      if (helloSentAt <= 0 || (nowMs - helloSentAt) <= mediaSecurityHandshakeTimeoutMs) continue;
+      const retryAttempt = Number(state.mediaSecurityHandshakeRetryCountByUserId.get(normalizedTargetId) || 0);
+      const retryTimeoutMs = mediaSecurityHandshakeRetryTimeoutMsForAttempt(retryAttempt);
+      if (helloSentAt <= 0 || (nowMs - helloSentAt) < retryTimeoutMs) continue;
 
       state.mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
+      state.mediaSecurityHandshakeRetryCountByUserId.set(normalizedTargetId, retryAttempt + 1);
       state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
       console.warn(
         '[KingRT] Media-security handshake timeout - retrying media-security exchange',
         `user=${normalizedTargetId}`,
         `state=${peerState || 'missing'}`,
+        `attempt=${retryAttempt + 1}`,
+        `timeout=${retryTimeoutMs}ms`,
         `elapsed=${nowMs - helloSentAt}ms`,
       );
       captureClientDiagnostic({
@@ -110,6 +129,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
         payload: {
           target_user_id: normalizedTargetId,
           peer_state: peerState,
+          retry_attempt: retryAttempt + 1,
+          retry_timeout_ms: retryTimeoutMs,
           elapsed_ms: nowMs - helloSentAt,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
@@ -170,6 +191,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHelloSignalsSent.clear();
       state.mediaSecuritySenderKeySignalsSent.clear();
       state.mediaSecurityRecoveryLastByUserId.clear();
+      state.mediaSecurityHandshakeRetryCountByUserId.clear();
       mediaSecuritySessionRef.value = createMediaSecuritySession(context);
       mediaSecurityStateVersion.value += 1;
       scheduleMediaSecurityParticipantSync('context_changed');
@@ -335,6 +357,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecuritySenderKeySignalsSent.clear();
     state.mediaSecurityHelloSentAtByUserId.clear();
     state.mediaSecurityHandshakeRetryingByUserId.clear();
+    state.mediaSecurityHandshakeRetryCountByUserId.clear();
   }
 
   async function sendMediaSecurityHello(targetUserId, force = false) {
@@ -841,6 +864,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         if (accepted) {
           state.mediaSecurityHelloSentAtByUserId.delete(normalizedSenderUserId);
           state.mediaSecurityHandshakeRetryingByUserId.delete(normalizedSenderUserId);
+          state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedSenderUserId);
           resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted');
         }
         if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {

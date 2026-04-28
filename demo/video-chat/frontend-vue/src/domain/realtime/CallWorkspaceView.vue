@@ -176,6 +176,7 @@ import {
   ACTIVITY_PUBLISH_INTERVAL_MS,
   CALL_STATE_SIGNAL_TYPES,
   MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
+  MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
   MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
   MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
   NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS,
@@ -424,6 +425,7 @@ const mediaSecurityRecoveryLastByUserId = new Map();
 // Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
 const mediaSecurityHelloSentAtByUserId = new Map();
 const mediaSecurityHandshakeRetryingByUserId = new Set();
+const mediaSecurityHandshakeRetryCountByUserId = new Map();
 const mediaSecuritySfuPublisherFirstSeenAtByUserId = new Map();
 const nativeFrameErrorLastLogByKey = new Map();
 const nativeAudioBridgeBlockDiagnosticsSent = new Set();
@@ -895,6 +897,7 @@ const mediaSecurityRuntimeState = {
   mediaSecurityRecoveryLastByUserId,
   mediaSecurityHelloSentAtByUserId,
   mediaSecurityHandshakeRetryingByUserId,
+  mediaSecurityHandshakeRetryCountByUserId,
   mediaSecuritySfuPublisherFirstSeenAtByUserId,
   nativeFrameErrorLastLogByKey,
   nativeAudioBridgeQuarantineByUserId,
@@ -954,6 +957,7 @@ const mediaSecurityRuntimeState = {
   },
   constants: {
     mediaSecurityHandshakeTimeoutMs: MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
+    mediaSecurityHandshakeRetryTimeoutsMs: MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
     mediaSecurityHandshakeWatchdogIntervalMs: MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
     mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
     nativeFrameErrorLogCooldownMs: NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS,
