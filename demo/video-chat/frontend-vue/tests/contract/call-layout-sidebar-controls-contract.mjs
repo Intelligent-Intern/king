@@ -32,7 +32,11 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 const shell = fs.readFileSync(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
+const participantUi = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.js'), 'utf8');
 const settingsCss = fs.readFileSync(path.join(root, 'src/styles/call-settings.css'), 'utf8');
+const responsiveCss = fs.readFileSync(path.join(root, 'src/styles/responsive.css'), 'utf8');
+const adminCallsResponsiveCss = fs.readFileSync(path.join(root, 'src/domain/calls/admin/CallsViewResponsive.css'), 'utf8');
+const userDashboardCss = fs.readFileSync(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.css'), 'utf8');
 
 try {
   const callSettingsStart = shell.indexOf('class="call-left-settings-block call-left-owner-edit-block"');
@@ -57,13 +61,45 @@ try {
   assert.match(controlsState, /setStrategy:\s*null/, 'sidebar controls must delegate strategy changes through injected callbacks');
 
   assert.match(shell, /callLayoutControls:\s*callLayoutSidebarState/, 'workspace shell must provide layout controls to call workspace');
-  assert.match(workspace, /const controls = workspaceSidebarState\?\.callLayoutControls;/, 'call workspace must write layout controls through sidebar state');
-  assert.match(workspace, /controls\.setMode = setCallLayoutMode;/, 'call workspace must route mode changes through sidebar callbacks');
-  assert.match(workspace, /controls\.setStrategy = setCallLayoutStrategy;/, 'call workspace must route strategy changes through sidebar callbacks');
+  assert.match(workspace, /workspaceSidebarState,/, 'call workspace must pass sidebar state into participant UI helpers');
+  assert.match(participantUi, /const controls = workspaceSidebarState\?\.callLayoutControls;/, 'call workspace must write layout controls through sidebar state');
+  assert.match(participantUi, /controls\.setMode = setCallLayoutMode;/, 'call workspace must route mode changes through sidebar callbacks');
+  assert.match(participantUi, /controls\.setStrategy = setCallLayoutStrategy;/, 'call workspace must route strategy changes through sidebar callbacks');
   assert.doesNotMatch(workspace, /Activity strategy/, 'activity strategy UI must not render inside the workspace stage overlay');
   assert.doesNotMatch(workspace, /call-layout-controls/, 'workspace stage must not own layout control markup');
   assert.doesNotMatch(shell, /call-left-layout-controls/, 'sidebar layout controls must not use bespoke CSS hooks');
   assert.doesNotMatch(settingsCss, /\.call-left-layout-controls\b/, 'sidebar layout controls must not add ad-hoc CSS');
+  assert.match(
+    responsiveCss,
+    /\.shell\.call-workspace-mode\.mobile-mode \.sidebar\s*\{[\s\S]*?z-index:\s*75;/,
+    'mobile call sidebars must layer above the bottom action controls',
+  );
+
+  for (const [label, source] of [
+    ['admin calls', adminCallsResponsiveCss],
+    ['user dashboard', userDashboardCss],
+  ]) {
+    assert.match(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overflow-y:\s*auto;/,
+      `${label} mobile enter-call settings must scroll to background blur controls`,
+    );
+    assert.match(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overscroll-behavior:\s*contain;/,
+      `${label} mobile enter-call settings must contain touch scroll`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overflow-y:\s*hidden;/,
+      `${label} mobile enter-call settings must not clip lower controls`,
+    );
+    assert.match(
+      source,
+      /grid-template-rows:\s*minmax\(112px,\s*34%\) minmax\(0,\s*1fr\);/,
+      `${label} mobile enter-call layout must leave more space for settings controls`,
+    );
+  }
 
   process.stdout.write('[call-layout-sidebar-controls-contract] PASS\n');
 } catch (error) {
