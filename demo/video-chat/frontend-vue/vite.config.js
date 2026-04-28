@@ -39,7 +39,19 @@ const resolveAssetVersion = () => {
   ].join('');
 };
 
+const resolveProductionSourcemap = () => {
+  const value = String(process.env.VIDEOCHAT_PRODUCTION_SOURCEMAPS || '').trim().toLowerCase();
+  if (value === 'inline') {
+    return 'inline';
+  }
+  if (value === 'hidden' || value === '1' || value === 'true' || value === 'yes') {
+    return 'hidden';
+  }
+  return false;
+};
+
 const buildAssetVersion = resolveAssetVersion();
+const productionSourcemap = resolveProductionSourcemap();
 
 const appendAssetVersion = (source) => source.replace(
   /(['"`])(\/(?:assets|cdn)\/[^'"`?#]+)(\?[^'"`#]*)?(#[^'"`]*)?\1/g,
@@ -91,6 +103,9 @@ const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
 
 export default defineConfig({
   plugins: [assetVersionPlugin(), vue()],
+  build: {
+    sourcemap: productionSourcemap,
+  },
   server: {
     host: process.env.VIDEOCHAT_VUE_HOST || '127.0.0.1',
     port: Number.parseInt(process.env.VIDEOCHAT_VUE_PORT || '5176', 10),
