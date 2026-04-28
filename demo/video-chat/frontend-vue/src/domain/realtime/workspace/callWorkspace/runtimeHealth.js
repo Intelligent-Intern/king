@@ -12,9 +12,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   const {
     bumpMediaRenderVersion,
     captureClientDiagnostic,
-    downgradeSfuVideoQualityAfterEncodePressure,
     mediaDebugLog,
     restartSfuAfterVideoStall,
+    sendSocketFrame,
   } = callbacks;
   const {
     mediaSecuritySessionClass,
@@ -118,10 +118,38 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return true;
   }
 
-  function maybeDowngradeSfuVideoQualityAfterRemoteFreeze(peer, reason) {
-    const attempt = Number(peer?.freezeRecoveryCount || 0);
-    if (attempt < 2 || typeof downgradeSfuVideoQualityAfterEncodePressure !== 'function') return false;
-    return downgradeSfuVideoQualityAfterEncodePressure(reason);
+  function remoteVideoReconnectThresholdMs() {
+    return Math.max(remoteVideoFreezeThresholdMs * 3, remoteVideoStallThresholdMs * 2);
+  }
+
+  function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
+    if (typeof sendSocketFrame !== 'function') return false;
+    const targetUserId = Number(peer?.userId || 0);
+    const localUserId = Number(currentUserId.value || 0);
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
+
+    const lastSentAtMs = Number(peer.lastQualityPressureSentAtMs || 0);
+    const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
+    if (lastSentAtMs > 0 && (nowMs - lastSentAtMs) < minIntervalMs) return false;
+
+    const sent = sendSocketFrame({
+      type: 'call/media-quality-pressure',
+      target_user_id: targetUserId,
+      payload: {
+        kind: 'sfu-video-quality-pressure',
+        requested_action: 'downgrade_outgoing_video',
+        reason: String(reason || 'sfu_remote_video_frozen'),
+        publisher_id: String(publisherId || ''),
+        requester_user_id: localUserId,
+        media_runtime_path: mediaRuntimePath.value,
+        ...payload,
+      },
+    });
+    if (sent) {
+      peer.lastQualityPressureSentAtMs = nowMs;
+      peer.lastQualityPressureReason = String(reason || '').trim();
+    }
+    return sent;
   }
 
   function checkRemoteVideoStalls() {
@@ -151,16 +179,28 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
         const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
+        const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
         setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
         const freezeQualityDowngradeReason = receivingFreshFrames
           ? 'sfu_remote_video_decoder_waiting_keyframe'
           : 'sfu_remote_video_frozen';
-        const qualityDowngradedAfterFreeze = maybeDowngradeSfuVideoQualityAfterRemoteFreeze(
-          peer,
-          freezeQualityDowngradeReason
-        );
+        const remoteQualityPressureSent = peer.freezeRecoveryCount >= 2
+          ? sendRemoteSfuVideoQualityPressure(
+            peer,
+            publisherId,
+            freezeQualityDowngradeReason,
+            nowMs,
+            {
+              frozen_age_ms: frozenAgeMs,
+              receive_gap_ms: receiveGapMs,
+              freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+            }
+          )
+          : false;
         if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
           logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
             ageMs: frozenAgeMs,
@@ -197,7 +237,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               frozen_age_ms: frozenAgeMs,
               receive_gap_ms: receiveGapMs,
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-              quality_downgraded_after_freeze: qualityDowngradedAfterFreeze,
+              remote_quality_pressure_sent: remoteQualityPressureSent,
               remote_peer_count: remotePeersRef.value.size,
               sfu_connected: sfuConnected.value,
               connection_state: connectionState.value,
@@ -224,7 +264,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             frozen_age_ms: frozenAgeMs,
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-            quality_downgraded_after_freeze: qualityDowngradedAfterFreeze,
+            remote_quality_pressure_sent: remoteQualityPressureSent,
+            socket_restart_deferred: !shouldRestartFrozenVideo,
+            remote_video_reconnect_threshold_ms: remoteVideoReconnectThresholdMs(),
             remote_peer_count: remotePeersRef.value.size,
             sfu_connected: sfuConnected.value,
             connection_state: connectionState.value,
@@ -233,13 +275,15 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           immediate: true,
         });
         retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
-        restartSfuAfterVideoStall('remote_video_frozen', {
-          publisher_id: publisherId,
-          publisher_user_id: Number(peer.userId || 0),
-          frozen_age_ms: frozenAgeMs,
-          receive_gap_ms: receiveGapMs,
-          freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-        });
+        if (shouldRestartFrozenVideo) {
+          restartSfuAfterVideoStall('remote_video_frozen', {
+            publisher_id: publisherId,
+            publisher_user_id: Number(peer.userId || 0),
+            frozen_age_ms: frozenAgeMs,
+            receive_gap_ms: receiveGapMs,
+            freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+          });
+        }
         continue;
       }
 
@@ -252,6 +296,13 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
       peer.stallRecoveryCount = Number(peer.stallRecoveryCount || 0) + 1;
       setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+      const remoteQualityPressureSent = peer.stallRecoveryCount >= 2
+        ? sendRemoteSfuVideoQualityPressure(peer, publisherId, 'sfu_remote_video_never_started', nowMs, {
+          age_ms: stalledAgeMs,
+          stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+          received_frame_count: Number(peer.receivedFrameCount || 0),
+        })
+        : false;
       if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
         logSfuVideoRecoveryStatus(sfuNoVideoSignalConsoleLabel, {
           ageMs: stalledAgeMs,
@@ -279,6 +330,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           frame_count: frameCount,
           received_frame_count: Number(peer.receivedFrameCount || 0),
           age_ms: stalledAgeMs,
+          remote_quality_pressure_sent: remoteQualityPressureSent,
           remote_peer_count: remotePeersRef.value.size,
           connected_participant_count: connectedParticipantUsers.value.length,
           sfu_connected: sfuConnected.value,

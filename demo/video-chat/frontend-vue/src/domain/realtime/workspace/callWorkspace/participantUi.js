@@ -329,7 +329,7 @@ function participantMediaStatus(userId) {
   }
 
   const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
-  if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
+  if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= Math.max(REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 3, REMOTE_VIDEO_STALL_THRESHOLD_MS * 2)) {
     return { show: true, state: 'recovering', label: 'Reconnecting video' };
   }
 
@@ -784,6 +784,7 @@ function shouldSuppressCallAckNotice(signalType) {
     || normalized === 'ice'
     || normalized === 'hangup'
     || normalized === 'control-state'
+    || normalized === 'media-quality-pressure'
     || normalized === 'moderation-state';
 }
 

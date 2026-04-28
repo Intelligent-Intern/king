@@ -1,5 +1,6 @@
 export const CALL_STATE_SIGNAL_TYPES = Object.freeze([
   'call/control-state',
+  'call/media-quality-pressure',
   'call/moderation-state',
 ]);
 

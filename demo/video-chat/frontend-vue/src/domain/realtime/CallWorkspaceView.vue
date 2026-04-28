@@ -1078,23 +1078,7 @@ const localPublisherPipelineState = {
   set wlvcEncodeWarmupUntilMs(value) { wlvcEncodeWarmupUntilMs = value; },
 };
 
-/*
- * Regression anchors for the extracted WLVC runtime modules.
- * These exact strings are pinned by PHPT contract 737 even though the
- * executable implementations now live in `workspace/callWorkspace/*` and
- * `sfu/frameDecode.js`.
- * await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a')
- * await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b')
- * setMediaRuntimePath('unsupported', 'capability_probe_unsupported')
- * appendMediaRuntimeTransitionEvent({
- * teardownSfuRemotePeers();
- * teardownNativePeerConnections();
- * const init = ensureSfuRemotePeerForFrame(frame);
- * void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
- * ctx.putImageData(imageData, 0, 0);
- * markRemoteFrameActivity(publisherUserId);
- * mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
- */
+/* Regression anchors for extracted WLVC runtime modules: await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a'); await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b'); setMediaRuntimePath('unsupported', 'capability_probe_unsupported'); appendMediaRuntimeTransitionEvent({; teardownSfuRemotePeers(); teardownNativePeerConnections(); const init = ensureSfuRemotePeerForFrame(frame); void decodeSfuFrameForPeer(publisherId, nextPeer, frame); ctx.putImageData(imageData, 0, 0); markRemoteFrameActivity(publisherUserId); mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1; */
 
 const mediaStack = createCallWorkspaceMediaStack({
   callbacks: {
@@ -1574,6 +1558,7 @@ const {
     clearTransientActivityPublishErrorNotice,
     closeNativePeerConnection,
     closeSocketLocal: (...args) => closeSocket(...args),
+    downgradeSfuVideoQualityAfterEncodePressure: (...args) => downgradeSfuVideoQualityAfterEncodePressure(...args),
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,

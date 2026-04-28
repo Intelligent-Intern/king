@@ -92,7 +92,7 @@ async function main() {
   );
   requireContains(runtimeSwitching, 'immediateQualityPressureReasons', 'runtime has explicit immediate quality-pressure reasons');
   requireContains(runtimeSwitching, "'sfu_send_backpressure_critical'", 'critical send backpressure bypasses downgrade cooldown');
-  requireContains(runtimeSwitching, "'sfu_remote_video_frozen'", 'repeated remote freezes apply quality pressure');
+  requireContains(runtimeSwitching, "'sfu_remote_quality_pressure'", 'receiver freeze signals bypass downgrade cooldown on the sender');
 
   const server = await createServer({
     root: frontendRoot,

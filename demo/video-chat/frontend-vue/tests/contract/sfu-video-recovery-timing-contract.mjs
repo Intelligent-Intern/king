@@ -22,6 +22,7 @@ const root = path.resolve(__dirname, '../..');
 try {
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
@@ -33,17 +34,22 @@ try {
   requireContains(runtimeConfig, 'export const REMOTE_VIDEO_STALL_THRESHOLD_MS = 3000;', 'short initial no-frame stall threshold');
   requireContains(runtimeConfig, 'export const REMOTE_VIDEO_STALL_CHECK_INTERVAL_MS = 1000;', 'one second remote video health cadence');
   requireContains(runtimeConfig, 'export const SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS = 5000;', 'bounded SFU reconnect cooldown');
+  requireContains(runtimeConfig, "'call/media-quality-pressure'", 'targeted remote quality-pressure signaling type');
 
   requireContains(runtimeHealth, "setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);", 'remote recovery status update');
   requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);", 'frozen video resubscribe retry');
   requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);", 'fresh receive/keyframe-wait resubscribe retry');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
-  requireContains(runtimeHealth, "restartSfuAfterVideoStall('remote_video_frozen'", 'frozen video reconnect trigger');
-  requireContains(runtimeHealth, 'maybeDowngradeSfuVideoQualityAfterRemoteFreeze', 'repeated remote freezes can lower outgoing quality');
-  requireContains(runtimeHealth, 'attempt < 2', 'remote freeze quality downgrade waits for two recovery hits');
-  requireContains(runtimeHealth, "'sfu_remote_video_frozen'", 'remote freeze quality-pressure reason');
-  requireContains(runtimeHealth, 'quality_downgraded_after_freeze', 'remote freeze diagnostics include quality downgrade result');
+  requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
+  requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
+  requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
+  requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();', 'frozen video restart waits for sustained receive loss');
+  requireContains(runtimeHealth, 'if (shouldRestartFrozenVideo) {', 'frozen video reconnect is gated after staged recovery');
+  requireContains(runtimeHealth, 'remote_quality_pressure_sent', 'remote freeze diagnostics include remote quality-pressure result');
+  requireContains(runtimeHealth, 'socket_restart_deferred', 'remote freeze diagnostics expose deferred socket restart');
   requireContains(runtimeHealth, 'stalledAgeMs >= remoteVideoStallThresholdMs * 2', 'never-started video reconnect timing');
+  requireContains(socketLifecycle, "type === 'call/media-quality-pressure'", 'socket lifecycle consumes remote quality-pressure signal');
+  requireContains(socketLifecycle, "downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')", 'remote quality pressure lowers sender outgoing quality');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');

@@ -56,6 +56,7 @@ function videochat_signaling_decode_client_frame(string $frame): array
         'call/ice',
         'call/hangup',
         'call/control-state',
+        'call/media-quality-pressure',
         'call/moderation-state',
         'media-security/hello',
         'media-security/sender-key',
