@@ -12,6 +12,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   const {
     bumpMediaRenderVersion,
     captureClientDiagnostic,
+    downgradeSfuVideoQualityAfterEncodePressure,
     mediaDebugLog,
     restartSfuAfterVideoStall,
   } = callbacks;
@@ -117,6 +118,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return true;
   }
 
+  function maybeDowngradeSfuVideoQualityAfterRemoteFreeze(peer, reason) {
+    const attempt = Number(peer?.freezeRecoveryCount || 0);
+    if (attempt < 2 || typeof downgradeSfuVideoQualityAfterEncodePressure !== 'function') return false;
+    return downgradeSfuVideoQualityAfterEncodePressure(reason);
+  }
+
   function checkRemoteVideoStalls() {
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
@@ -147,6 +154,13 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
         setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+        const freezeQualityDowngradeReason = receivingFreshFrames
+          ? 'sfu_remote_video_decoder_waiting_keyframe'
+          : 'sfu_remote_video_frozen';
+        const qualityDowngradedAfterFreeze = maybeDowngradeSfuVideoQualityAfterRemoteFreeze(
+          peer,
+          freezeQualityDowngradeReason
+        );
         if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
           logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
             ageMs: frozenAgeMs,
@@ -183,6 +197,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               frozen_age_ms: frozenAgeMs,
               receive_gap_ms: receiveGapMs,
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              quality_downgraded_after_freeze: qualityDowngradedAfterFreeze,
               remote_peer_count: remotePeersRef.value.size,
               sfu_connected: sfuConnected.value,
               connection_state: connectionState.value,
@@ -209,6 +224,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             frozen_age_ms: frozenAgeMs,
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+            quality_downgraded_after_freeze: qualityDowngradedAfterFreeze,
             remote_peer_count: remotePeersRef.value.size,
             sfu_connected: sfuConnected.value,
             connection_state: connectionState.value,

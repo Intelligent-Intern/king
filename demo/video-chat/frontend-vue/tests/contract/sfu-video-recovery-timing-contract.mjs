@@ -39,11 +39,10 @@ try {
   requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);", 'fresh receive/keyframe-wait resubscribe retry');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, "restartSfuAfterVideoStall('remote_video_frozen'", 'frozen video reconnect trigger');
-  assert.equal(
-    runtimeHealth.includes('freezeRecoveryCount || 0) >= 2'),
-    false,
-    'frozen video reconnect must not wait for a second health cycle'
-  );
+  requireContains(runtimeHealth, 'maybeDowngradeSfuVideoQualityAfterRemoteFreeze', 'repeated remote freezes can lower outgoing quality');
+  requireContains(runtimeHealth, 'attempt < 2', 'remote freeze quality downgrade waits for two recovery hits');
+  requireContains(runtimeHealth, "'sfu_remote_video_frozen'", 'remote freeze quality-pressure reason');
+  requireContains(runtimeHealth, 'quality_downgraded_after_freeze', 'remote freeze diagnostics include quality downgrade result');
   requireContains(runtimeHealth, 'stalledAgeMs >= remoteVideoStallThresholdMs * 2', 'never-started video reconnect timing');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');

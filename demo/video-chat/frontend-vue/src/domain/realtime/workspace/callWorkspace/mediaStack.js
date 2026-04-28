@@ -99,6 +99,7 @@ export function createCallWorkspaceMediaStack(options) {
     callbacks: {
       bumpMediaRenderVersion,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
+      downgradeSfuVideoQualityAfterEncodePressure: callbacks.downgradeSfuVideoQualityAfterEncodePressure,
       mediaDebugLog: callbacks.mediaDebugLog,
       restartSfuAfterVideoStall: callbacks.restartSfuAfterVideoStall,
     },

@@ -27,6 +27,15 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     sfuAutoQualityDowngradeNext,
     sfuRuntimeEnabled,
   } = constants;
+  const immediateQualityPressureReasons = Object.freeze([
+    'sfu_frame_send_failed',
+    'sfu_high_motion_payload_pressure',
+    'sfu_remote_video_decoder_waiting_keyframe',
+    'sfu_remote_video_frozen',
+    'sfu_send_backpressure',
+    'sfu_send_backpressure_critical',
+    'send_buffer_drain_timeout',
+  ]);
 
   function setMediaRuntimePath(nextPath, reason) {
     const previousPath = refs.mediaRuntimePath.value;
@@ -136,13 +145,13 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure') {
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
-    const immediateMotionPressure = normalizedReason === 'sfu_high_motion_payload_pressure';
+    const bypassQualityDowngradeCooldown = immediateQualityPressureReasons.includes(normalizedReason);
     let nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();
     if (
-      !immediateMotionPressure
+      !bypassQualityDowngradeCooldown
       && (nowMs - refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs) < sfuAutoQualityDowngradeCooldownMs
     ) {
       return false;

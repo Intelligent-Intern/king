@@ -71,16 +71,28 @@ async function main() {
 
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_DELTA_FRAME_BYTES', 'motion payload delta cap');
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES', 'motion payload keyframe cap');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS = 1000;', 'one second send-pressure downgrade window');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD = 2;', 'two skipped frames trigger quality downgrade');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 2;', 'two send failures trigger quality downgrade');
   requireContains(publisherPipeline, 'handleWlvcFramePayloadPressure(encodedPayloadBytes', 'publisher drops oversized frames before send');
   requireContains(publisherPipeline, 'encodedPayloadBytes > maxEncodedPayloadBytes', 'publisher compares encoded WLVC payload with cap');
   requireContains(sfuTransport, 'sfu_high_motion_payload_pressure', 'transport high-motion pressure reason');
+  requireContains(sfuTransport, 'sfu_send_backpressure_critical', 'transport uses critical send backpressure as an immediate quality-pressure reason');
+  requireContains(sfuTransport, 'adaptive_quality_downgrade_enabled: true', 'transport diagnostics expose adaptive quality downgrade');
   requireContains(sfuTransport, '[KingRT] SFU video payload pressure - dropping oversized WLVC frame', 'transport payload pressure log');
+  assert.equal(
+    sfuTransport.includes('hd_baseline_no_auto_downgrade'),
+    false,
+    'transport diagnostics must not claim HD is pinned while adaptive downgrade is active',
+  );
   assert.equal(
     runtimeSwitching.includes("immediateMotionPressure && currentProfile === 'quality'"),
     false,
     'runtime must not skip balanced during high-motion pressure',
   );
-  requireContains(runtimeSwitching, '!immediateMotionPressure', 'runtime bypasses cooldown for immediate high-motion pressure');
+  requireContains(runtimeSwitching, 'immediateQualityPressureReasons', 'runtime has explicit immediate quality-pressure reasons');
+  requireContains(runtimeSwitching, "'sfu_send_backpressure_critical'", 'critical send backpressure bypasses downgrade cooldown');
+  requireContains(runtimeSwitching, "'sfu_remote_video_frozen'", 'repeated remote freezes apply quality pressure');
 
   const server = await createServer({
     root: frontendRoot,
@@ -113,6 +125,14 @@ async function main() {
     assert.ok(
       realtimeDelta.data.byteLength <= maxDeltaBytes,
       `realtime high-motion delta must fit the payload cap; bytes=${realtimeDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+    );
+    assert.ok(
+      profiles.realtime.frameWidth < profiles.balanced.frameWidth,
+      'realtime profile must be a real downscale below balanced after pressure',
+    );
+    assert.ok(
+      profiles.rescue.encodeIntervalMs > profiles.realtime.encodeIntervalMs,
+      'rescue profile must slow encoding below realtime to drain sender pressure',
     );
 
     process.stdout.write('[sfu-motion-backpressure-contract] PASS\n');

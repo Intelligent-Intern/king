@@ -129,7 +129,8 @@ export function createSfuTransportController({
           buffered_amount: bufferedAmount,
           skipped_frame_count: state.wlvcBackpressureSkipCount,
           forced_next_keyframe: true,
-          hd_baseline_no_auto_downgrade: true,
+          adaptive_quality_downgrade_enabled: true,
+          auto_quality_downgrade_skip_threshold: sfuAutoQualityDowngradeSkipThreshold,
           track_id: String(trackId || ''),
           outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
           media_runtime_path: getMediaRuntimePath(),
@@ -144,7 +145,10 @@ export function createSfuTransportController({
       sustainedBackpressureMs >= sfuAutoQualityDowngradeBackpressureWindowMs
       || state.wlvcBackpressureSkipCount >= sfuAutoQualityDowngradeSkipThreshold
     ) {
-      if (downgradeSfuVideoQualityAfterEncodePressure('sfu_send_backpressure')) {
+      const downgradeReason = bufferedAmount >= sfuWlvcSendBufferHighWaterBytes
+        ? 'sfu_send_backpressure_critical'
+        : 'sfu_send_backpressure';
+      if (downgradeSfuVideoQualityAfterEncodePressure(downgradeReason)) {
         resetWlvcBackpressureCounters();
         return;
       }
@@ -228,7 +232,8 @@ export function createSfuTransportController({
         transport_path: failureTransportPath,
         buffered_amount: normalizedBuffered,
         forced_next_keyframe: true,
-        hd_baseline_no_auto_downgrade: true,
+        adaptive_quality_downgrade_enabled: true,
+        auto_quality_downgrade_send_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
         track_id: String(trackId || ''),
         outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
         media_runtime_path: getMediaRuntimePath(),
