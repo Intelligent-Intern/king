@@ -171,7 +171,7 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       projected_binary_envelope_overhead_bytes: Math.max(0, projectedBinaryEnvelopeBytes - payloadByteLength),
       legacy_base64_overhead_bytes: Math.max(0, payloadChars - payloadByteLength),
       projected_binary_delta_vs_legacy_bytes: projectedBinaryEnvelopeBytes - payloadChars,
-      binary_envelope_version: metadataJsonBytes.byteLength > 0
+      binary_envelope_version: metadataJsonBytes > 0
         ? SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION
         : SFU_BINARY_FRAME_ENVELOPE_VERSION,
       binary_continuation_state: binaryContinuationRequired

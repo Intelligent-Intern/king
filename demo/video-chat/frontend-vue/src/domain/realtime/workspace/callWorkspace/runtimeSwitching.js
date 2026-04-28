@@ -138,9 +138,6 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
     const immediateMotionPressure = normalizedReason === 'sfu_high_motion_payload_pressure';
     let nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
-    if (immediateMotionPressure && currentProfile === 'quality') {
-      nextProfile = sfuAutoQualityDowngradeNext[nextProfile] || nextProfile;
-    }
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();

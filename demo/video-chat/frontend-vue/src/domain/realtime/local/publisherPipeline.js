@@ -1,6 +1,6 @@
 import { markRaw } from 'vue';
 import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
-import { cloneImageData, planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
+import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
 
 export function createLocalPublisherPipelineHelpers({
@@ -585,7 +585,7 @@ export function createLocalPublisherPipelineHelpers({
         resetWlvcFrameSendFailureCounters();
         state.wlvcEncodeFailureCount = 0;
         state.wlvcEncodeFirstFailureAtMs = 0;
-        previousFullFrameImageData = cloneImageData(imageData);
+        previousFullFrameImageData = imageData;
         if (!tilePatchMetadata) {
           if (encodedFrameType === 'keyframe') {
             selectiveTileCacheEpoch = outgoingCacheEpoch;

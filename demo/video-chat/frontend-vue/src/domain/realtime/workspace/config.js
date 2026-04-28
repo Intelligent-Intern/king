@@ -32,9 +32,9 @@ export const SFU_WLVC_FRAME_HEIGHT = 720;
 export const SFU_WLVC_FRAME_QUALITY = 42;
 export const SFU_WLVC_KEYFRAME_INTERVAL = 8;
 export const SFU_WLVC_ENCODE_INTERVAL_MS = 83;
-export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 1024 * 1024;
-export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 256 * 1024;
-export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 4 * 1024 * 1024;
+export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
+export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 512 * 1024;
+export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 5 * 1024 * 1024;
 export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 350;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2500;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
@@ -56,9 +56,9 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     captureWidth: 640,
     captureHeight: 360,
     captureFrameRate: 12,
-    frameWidth: 480,
-    frameHeight: 270,
-    frameQuality: 28,
+    frameWidth: 640,
+    frameHeight: 360,
+    frameQuality: 30,
     keyFrameInterval: 12,
     encodeIntervalMs: 125,
   }),
@@ -66,12 +66,12 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     label: 'Balanced',
     captureWidth: 960,
     captureHeight: 540,
-    captureFrameRate: 18,
-    frameWidth: 960,
-    frameHeight: 540,
-    frameQuality: 36,
+    captureFrameRate: 20,
+    frameWidth: 720,
+    frameHeight: 405,
+    frameQuality: 32,
     keyFrameInterval: 10,
-    encodeIntervalMs: 100,
+    encodeIntervalMs: 66,
   }),
   quality: Object.freeze({
     label: 'Sharp',

@@ -40,6 +40,12 @@ try {
   requireContains(workspace, 'SFU_BACKGROUND_SNAPSHOT_ENABLED', 'workspace imports background snapshot runtime switch');
   requireContains(publisherPipeline, 'planSelectiveTilePatch(imageData, previousFullFrameImageData', 'workspace selective patch send planning');
   requireContains(publisherPipeline, 'planBackgroundSnapshotPatch(imageData, previousFullFrameImageData', 'workspace background snapshot send planning');
+  requireContains(publisherPipeline, 'previousFullFrameImageData = imageData', 'workspace keeps the sent full-frame buffer without a second hot-path clone');
+  assert.equal(
+    publisherPipeline.includes('previousFullFrameImageData = cloneImageData(imageData);'),
+    false,
+    'publisher hot path must not clone the full frame after every successful send',
+  );
   requireContains(publisherPipeline, 'backgroundFilterController.getCurrentMatteMaskSnapshot()', 'workspace sender reads current matte mask snapshot');
   requireContains(publisherPipeline, 'ensureSelectivePatchEncoder', 'workspace selective patch encoder path');
   requireContains(publisherPipeline, 'layoutMode: tilePatchMetadata.layoutMode', 'workspace outgoing frame carries tile patch metadata');

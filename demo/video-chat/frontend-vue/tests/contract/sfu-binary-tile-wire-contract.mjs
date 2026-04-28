@@ -31,6 +31,7 @@ try {
   requireContains(framePayload, 'parseSfuEnvelopeMetadata', 'binary envelope must decode generic frame metadata');
   requireContains(framePayload, "const payloadChars = protectedFrame ? protectedFrame.length : String(dataBase64 || '').length", 'binary envelope decode advertises base64/protected payload chars');
   requireContains(framePayload, 'payload_bytes: payloadByteLength', 'binary envelope decode keeps raw byte length separately');
+  requireContains(framePayload, 'binary_envelope_version: metadataJsonBytes > 0', 'binary envelope metrics use the numeric metadata byte count');
 
   const tileMetadata = read('src/lib/sfu/tilePatchMetadata.ts');
   requireContains(tileMetadata, "export type SfuLayoutMode = 'full_frame' | 'tile_foreground' | 'background_snapshot'", 'tile metadata layout modes');

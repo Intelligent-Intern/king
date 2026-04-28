@@ -75,7 +75,11 @@ async function main() {
   requireContains(publisherPipeline, 'encodedPayloadBytes > maxEncodedPayloadBytes', 'publisher compares encoded WLVC payload with cap');
   requireContains(sfuTransport, 'sfu_high_motion_payload_pressure', 'transport high-motion pressure reason');
   requireContains(sfuTransport, '[KingRT] SFU video payload pressure - dropping oversized WLVC frame', 'transport payload pressure log');
-  requireContains(runtimeSwitching, "immediateMotionPressure && currentProfile === 'quality'", 'runtime skips balanced during high-motion pressure');
+  assert.equal(
+    runtimeSwitching.includes("immediateMotionPressure && currentProfile === 'quality'"),
+    false,
+    'runtime must not skip balanced during high-motion pressure',
+  );
   requireContains(runtimeSwitching, '!immediateMotionPressure', 'runtime bypasses cooldown for immediate high-motion pressure');
 
   const server = await createServer({
@@ -92,13 +96,19 @@ async function main() {
     const maxDeltaBytes = motionConfig.SFU_WLVC_MAX_DELTA_FRAME_BYTES;
 
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);
+    const balancedDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.balanced);
     const realtimeDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.realtime);
 
     assert.equal(qualityDelta.type, 'delta', 'quality high-motion second frame must be a delta');
+    assert.equal(balancedDelta.type, 'delta', 'balanced high-motion second frame must be a delta');
     assert.equal(realtimeDelta.type, 'delta', 'realtime high-motion second frame must be a delta');
     assert.ok(
       qualityDelta.data.byteLength > maxDeltaBytes,
       `quality high-motion delta must trip the payload cap; bytes=${qualityDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+    );
+    assert.ok(
+      balancedDelta.data.byteLength <= maxDeltaBytes,
+      `balanced high-motion delta must fit the payload cap; bytes=${balancedDelta.data.byteLength}, cap=${maxDeltaBytes}`,
     );
     assert.ok(
       realtimeDelta.data.byteLength <= maxDeltaBytes,
