@@ -143,6 +143,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
+        const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
         setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
@@ -158,12 +159,39 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             state: 'frozen',
           });
         }
-        if (typeof peer.decoder?.reset === 'function' && receiveGapMs < remoteVideoFreezeThresholdMs) {
+        if (typeof peer.decoder?.reset === 'function' && receivingFreshFrames) {
           try {
             peer.decoder.reset();
             peer.needsKeyframe = true;
           } catch {
           }
+        }
+        if (receivingFreshFrames) {
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'warning',
+            eventType: 'sfu_remote_video_decoder_waiting_keyframe',
+            code: 'sfu_remote_video_decoder_waiting_keyframe',
+            message: 'Remote SFU video is receiving frames but waiting for a renderable keyframe before restarting transport.',
+            payload: {
+              publisher_id: publisherId,
+              publisher_user_id: Number(peer.userId || 0),
+              publisher_name: String(peer.displayName || '').trim(),
+              track_count: trackCount,
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+              frozen_age_ms: frozenAgeMs,
+              receive_gap_ms: receiveGapMs,
+              freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              remote_peer_count: remotePeersRef.value.size,
+              sfu_connected: sfuConnected.value,
+              connection_state: connectionState.value,
+              media_runtime_path: mediaRuntimePath.value,
+            },
+            immediate: true,
+          });
+          retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);
+          continue;
         }
         captureClientDiagnostic({
           category: 'media',

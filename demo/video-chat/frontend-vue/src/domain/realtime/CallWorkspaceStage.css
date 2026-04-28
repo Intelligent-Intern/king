@@ -228,6 +228,11 @@
   transform: scaleX(-1);
 }
 
+.video-container :deep(canvas.remote-video) {
+  object-fit: contain !important;
+  background: var(--bg-video);
+}
+
 .video-container.remote {
   z-index: 5;
 }
@@ -581,6 +586,11 @@
   height: 100% !important;
   display: block !important;
   object-fit: cover !important;
+}
+
+.workspace-mini-video-slot :deep(canvas.remote-video) {
+  object-fit: contain !important;
+  background: var(--bg-video);
 }
 
 .workspace-mini-title {

@@ -36,6 +36,8 @@ try {
 
   requireContains(runtimeHealth, "setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);", 'remote recovery status update');
   requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);", 'frozen video resubscribe retry');
+  requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);", 'fresh receive/keyframe-wait resubscribe retry');
+  requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, "restartSfuAfterVideoStall('remote_video_frozen'", 'frozen video reconnect trigger');
   assert.equal(
     runtimeHealth.includes('freezeRecoveryCount || 0) >= 2'),

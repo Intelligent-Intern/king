@@ -259,14 +259,6 @@ export function createSfuFrameDecodeHelpers({
     const renderedAtMs = Date.now();
     const previousConnectionState = String(peer.mediaConnectionState || '');
     const previousConnectionMessage = String(peer.mediaConnectionMessage || '');
-    peer.frameCount = Number(peer.frameCount || 0) + 1;
-    peer.lastFrameAtMs = renderedAtMs;
-    peer.stalledLoggedAtMs = 0;
-    peer.freezeRecoveryCount = 0;
-    peer.stallRecoveryCount = 0;
-    peer.mediaConnectionState = 'live';
-    peer.mediaConnectionMessage = '';
-    peer.mediaConnectionUpdatedAtMs = renderedAtMs;
     const canvas = peer.decodedCanvas;
     if (!(canvas instanceof HTMLCanvasElement)) return false;
     const ctx = canvas.getContext('2d');
@@ -275,15 +267,31 @@ export function createSfuFrameDecodeHelpers({
     const trackKey = sfuFrameTrackStateKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
     const layoutMode = String(frame?.layoutMode || 'full_frame').trim().toLowerCase();
-    const targetWidth = layoutMode === 'full_frame' ? decoded.width : canvas.width;
-    const targetHeight = layoutMode === 'full_frame' ? decoded.height : canvas.height;
+    const existingTrackRenderState = peer.sfuTrackRenderStateByTrack[trackKey] || null;
+    const targetWidth = layoutMode === 'full_frame'
+      ? decoded.width
+      : Number(existingTrackRenderState?.width || canvas.width || peer.frameWidth || sfuFrameWidth);
+    const targetHeight = layoutMode === 'full_frame'
+      ? decoded.height
+      : Number(existingTrackRenderState?.height || canvas.height || peer.frameHeight || sfuFrameHeight);
     const trackRenderState = ensureRemoteSfuTrackRenderLayers(peer, trackKey, targetWidth, targetHeight);
+    let rendered = false;
     if (layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot') {
-      if (canvas.width < 1 || canvas.height < 1 || !peer.hasFullFrameBaseByTrack[trackKey]) {
+      if (
+        trackRenderState.width < 1
+        || trackRenderState.height < 1
+        || !peer.hasFullFrameBaseByTrack[trackKey]
+      ) {
         return false;
       }
-      const offsetX = Math.max(0, Math.min(canvas.width - decoded.width, Math.round(Number(frame?.roiNormX || 0) * canvas.width)));
-      const offsetY = Math.max(0, Math.min(canvas.height - decoded.height, Math.round(Number(frame?.roiNormY || 0) * canvas.height)));
+      const offsetX = Math.max(0, Math.min(
+        trackRenderState.width - decoded.width,
+        Math.round(Number(frame?.roiNormX || 0) * trackRenderState.width)
+      ));
+      const offsetY = Math.max(0, Math.min(
+        trackRenderState.height - decoded.height,
+        Math.round(Number(frame?.roiNormY || 0) * trackRenderState.height)
+      ));
       if (layoutMode === 'background_snapshot') {
         trackRenderState.foregroundLayerActive = false;
         putImageDataOntoCanvas(trackRenderState.backgroundCanvas, imageData, offsetX, offsetY);
@@ -292,7 +300,7 @@ export function createSfuFrameDecodeHelpers({
         putImageDataOntoCanvas(trackRenderState.foregroundCanvas, imageData, offsetX, offsetY);
         trackRenderState.foregroundLayerActive = true;
       }
-      composeRemoteSfuTrackLayers(peer, trackKey);
+      rendered = composeRemoteSfuTrackLayers(peer, trackKey);
     } else {
       resizeCanvas(canvas, decoded.width, decoded.height);
       ctx.putImageData(imageData, 0, 0);
@@ -304,7 +312,17 @@ export function createSfuFrameDecodeHelpers({
       peer.acceptedSfuCacheEpochByTrack[trackKey] = Math.max(0, normalizeSfuFrameNumber(frame?.cacheEpoch));
       syncRemoteSfuPeerBaseFlag(peer);
       composeRemoteSfuTrackLayers(peer, trackKey);
+      rendered = true;
     }
+    if (!rendered) return false;
+    peer.frameCount = Number(peer.frameCount || 0) + 1;
+    peer.lastFrameAtMs = renderedAtMs;
+    peer.stalledLoggedAtMs = 0;
+    peer.freezeRecoveryCount = 0;
+    peer.stallRecoveryCount = 0;
+    peer.mediaConnectionState = 'live';
+    peer.mediaConnectionMessage = '';
+    peer.mediaConnectionUpdatedAtMs = renderedAtMs;
     if (!(canvas.parentElement instanceof HTMLElement)) {
       renderCallVideoLayout();
     }
@@ -386,6 +404,26 @@ export function createSfuFrameDecodeHelpers({
       clearCanvas(peer.decodedCanvas);
     }
     mediaDebugLog('[SFU] Remote tile/layer cache invalidated', trackKey, reason);
+  }
+
+  function resetRemoteSfuDecoderAfterSequenceGap(peer, frame, reason = 'sequence_gap') {
+    if (!peer || typeof peer !== 'object') return;
+    const layoutMode = String(frame?.layoutMode || 'full_frame').trim().toLowerCase();
+    peer.needsKeyframe = true;
+    if (layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot') {
+      try {
+        peer.patchDecoder?.reset?.();
+      } catch {
+        // the next clean patch keyframe can rebuild patch-decoder state
+      }
+    } else {
+      try {
+        peer.decoder?.reset?.();
+      } catch {
+        // the next full-frame keyframe can rebuild full-frame decoder state
+      }
+    }
+    mediaDebugLog('[SFU] Remote decoder reset after sequence gap without clearing render cache', reason);
   }
 
   function invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, reason = 'unknown') {
@@ -478,12 +516,16 @@ export function createSfuFrameDecodeHelpers({
         return true;
       }
       if (lastSequence > 0 && frameSequence > (lastSequence + 1)) {
-        invalidateRemoteSfuTrackCache(peer, trackKey, 'sequence_gap');
         if (frameType !== 'keyframe') {
+          resetRemoteSfuDecoderAfterSequenceGap(peer, frame, 'sequence_gap_delta');
           logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_delta', {
             last_frame_sequence: lastSequence,
             missing_frame_count: frameSequence - lastSequence - 1,
           }, true);
+          peer.lastSfuFrameSequenceByTrack[trackKey] = frameSequence;
+          if (frameTimestamp > 0) {
+            peer.lastSfuFrameTimestampByTrack[trackKey] = frameTimestamp;
+          }
           return true;
         }
         logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_keyframe', {
@@ -495,7 +537,7 @@ export function createSfuFrameDecodeHelpers({
       if (frameTimestamp > 0) {
         peer.lastSfuFrameTimestampByTrack[trackKey] = frameTimestamp;
       }
-      return false;
+      return shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame);
     }
 
     if (frameTimestamp > 0) {
@@ -673,7 +715,7 @@ export function createSfuFrameDecodeHelpers({
       }
 
       if (decoded && decoded.data) {
-        if (renderDecodedSfuFrame(peer, decoded, frame) && frameMetadata.type === 'keyframe') {
+        if (renderDecodedSfuFrame(peer, decoded, frame) && frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
           peer.needsKeyframe = false;
         }
       } else {
@@ -711,7 +753,7 @@ export function createSfuFrameDecodeHelpers({
         try {
           const decoded = peer.decoder.decodeFrame(frameDescriptor);
           if (decoded && decoded.data && renderDecodedSfuFrame(peer, decoded, frame)) {
-            if (frameMetadata.type === 'keyframe') {
+            if (frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
               peer.needsKeyframe = false;
             }
             return;
