@@ -1,24 +1,34 @@
+import { reportClientDiagnostic } from '../../../support/clientDiagnostics';
+
+function captureNativeAudioBridgeDiagnostic(event = {}) {
+  try {
+    reportClientDiagnostic(event);
+  } catch {
+    // Diagnostics must not create secondary media recovery failures.
+  }
+}
+
 export function createNativeAudioBridgeRecovery({
-  captureClientDiagnostic,
-  closeNativePeerConnection,
-  currentMediaSecurityRuntimePath,
-  extractDiagnosticMessage,
-  getMediaRuntimePath,
-  getPeerByUserId,
-  nativeAudioPlaybackBlocked,
-  nativeAudioPlaybackInterrupted,
-  nativeAudioTrackRecoveryAttemptsByUserId,
-  nativePeerConnectionTelemetry,
-  nativeAudioTrackRecoveryDelayMs,
-  nativeAudioTrackRecoveryMaxAttempts,
-  nativeAudioTrackRecoveryRejoinDelayMs,
-  resyncNativeAudioBridgePeerAfterSecurityReady,
-  setNativePeerAudioBridgeState,
-  shouldUseNativeAudioBridge,
-  streamHasLiveTrackKind,
-  syncMediaSecurityWithParticipants,
-  syncNativePeerConnectionsWithRoster,
-  telemetrySnapshotProvider,
+  captureClientDiagnostic = captureNativeAudioBridgeDiagnostic,
+  closeNativePeerConnection = () => {},
+  currentMediaSecurityRuntimePath = () => '',
+  extractDiagnosticMessage = (value, fallback = '') => String(value?.message || value || fallback).trim() || fallback,
+  getMediaRuntimePath = () => '',
+  getPeerByUserId = () => null,
+  nativeAudioPlaybackBlocked = () => false,
+  nativeAudioPlaybackInterrupted = () => false,
+  nativeAudioTrackRecoveryAttemptsByUserId = new Map(),
+  nativePeerConnectionTelemetry = () => '',
+  nativeAudioTrackRecoveryDelayMs = 1000,
+  nativeAudioTrackRecoveryMaxAttempts = 2,
+  nativeAudioTrackRecoveryRejoinDelayMs = 250,
+  resyncNativeAudioBridgePeerAfterSecurityReady = () => {},
+  setNativePeerAudioBridgeState = () => false,
+  shouldUseNativeAudioBridge = () => false,
+  streamHasLiveTrackKind = () => false,
+  syncMediaSecurityWithParticipants = () => {},
+  syncNativePeerConnectionsWithRoster = () => {},
+  telemetrySnapshotProvider = () => null,
 }) {
   function nativeAudioSecurityTelemetrySnapshot() {
     return telemetrySnapshotProvider(currentMediaSecurityRuntimePath());

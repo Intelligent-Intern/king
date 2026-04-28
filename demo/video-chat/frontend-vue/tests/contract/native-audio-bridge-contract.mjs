@@ -149,6 +149,9 @@ try {
     'workspace must not grow native-stack callback lists for runtime guard wiring',
   );
   requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.js'), "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
+  requireContains(audioBridgeRecovery, "import { reportClientDiagnostic } from '../../../support/clientDiagnostics';", 'native audio recovery can report diagnostics without CallWorkspace callback growth');
+  requireContains(audioBridgeRecovery, 'captureClientDiagnostic = captureNativeAudioBridgeDiagnostic', 'native audio recovery defaults missing diagnostics callback');
+  requireContains(audioBridgeRecovery, 'Diagnostics must not create secondary media recovery failures.', 'native audio diagnostic fallback is fail-closed');
   requireContains(audioBridgeRecovery, "resyncNativeAudioBridgePeerAfterSecurityReady(\n          normalizedUserId,\n          'native_audio_track_recovery_rejoin',\n          true", 'audio-track recovery may force a renegotiation offer');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
   requireContains(sfuTransport, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
