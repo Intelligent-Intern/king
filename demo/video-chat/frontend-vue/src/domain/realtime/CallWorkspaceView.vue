@@ -686,20 +686,11 @@ let setMediaRuntimePath = () => false;
 let stopSfuTrackAnnounceTimer = () => {};
 let switchMediaRuntimePath = async () => false;
 let teardownRemotePeer = () => {};
-const activeMessagesLimit = computed(() => 240);
-const currentUserStatusLabel = computed(() => '');
 let currentLayoutMode = computed(() => 'main_mini');
 let gridVideoParticipants = computed(() => []);
 let miniVideoParticipants = computed(() => []);
 let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 let primaryVideoUserId = computed(() => currentUserId.value);
-const snapshotUsersLimit = computed(() => USERS_PAGE_SIZE);
-const userRowBase = (row) => row;
-const syncUsersDirectoryPresentationBase = () => {};
-const setShellLeftSidebarCollapsed = () => {};
-const setShellTabletSidebarOpen = () => {};
-const setSidebarTab = () => {};
-const showRightSidebarBase = () => {};
 
 function sendSocketFrame(payload) {
   const socket = socketRef.value;
@@ -1702,8 +1693,6 @@ setMediaRuntimePath = setMediaRuntimePathHelper;
 switchMediaRuntimePath = switchMediaRuntimePathHelper;
 
 const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
-  activeCallId,
-  activeMessagesLimit,
   activeReactions,
   activeRoomId,
   activeTab,
@@ -1723,7 +1712,6 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   connectedParticipantUsers,
   controlState,
   currentUserId,
-  currentUserStatusLabel,
   desiredRoomId,
   formatTimestamp,
   gridVideoSlotId,
@@ -1772,16 +1760,8 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   rightSidebarCollapsed,
   sendSocketFrame,
   selectCallLayoutParticipants,
-  setShellLeftSidebarCollapsed,
-  setShellTabletSidebarOpen,
-  setSidebarTab,
   showLobbyTab,
-  showRightSidebar: showRightSidebarBase,
-  shouldShowLeftSidebarRestoreButton: showLeftSidebarRestoreButton,
-  snapshotUsersLimit,
-  syncUsersDirectoryPresentationBase,
   typingByRoom,
-  userRowBase,
   usersDirectoryLoading,
   usersDirectoryPagination,
   usersDirectoryRows,
@@ -1810,7 +1790,6 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   REACTION_CLIENT_WINDOW_MS,
   ROSTER_VIRTUAL_OVERSCAN,
   ROSTER_VIRTUAL_ROW_HEIGHT,
-  TYPING_SWEEP_MS,
   USERS_PAGE_SIZE,
   VISIBLE_PARTICIPANTS_LIMIT,
   ALONE_IDLE_ACTIVITY_EVENTS,
@@ -1885,7 +1864,6 @@ const {
   flushQueuedReactions,
   goToLobbyPage,
   goToUsersPage,
-  handleCompactViewportChange,
   hideAloneIdlePrompt,
   hideRightSidebar,
   isCallSignalType,
@@ -2122,7 +2100,6 @@ registerCallWorkspaceLifecycleHelpers({
     detectMediaRuntimeCapabilities,
     detachAloneIdleActivityListeners,
     flushQueuedReactions,
-    handleCompactViewportChange,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
     initSFU,

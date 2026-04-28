@@ -26,7 +26,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     consumeQueuedModerationSyncEntries,
     detectMediaRuntimeCapabilities,
     flushQueuedReactions,
-    handleCompactViewportChange,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
     initSFU,
@@ -111,6 +110,10 @@ export function registerCallWorkspaceLifecycleHelpers({
 
   function isNativeAudioSecurityWaitingMessage(message) {
     return /waiting for the media-security handshake/i.test(String(message || ''));
+  }
+
+  function handleCompactViewportChange(event) {
+    isCompactViewport.value = Boolean(event?.matches);
   }
 
   watch(

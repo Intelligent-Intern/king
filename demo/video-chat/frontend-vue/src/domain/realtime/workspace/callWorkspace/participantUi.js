@@ -2,8 +2,6 @@ import { computed, nextTick, onBeforeUnmount, watch } from 'vue';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
-    activeCallId,
-    activeMessagesLimit,
     activeReactions,
     activeRoomId,
     activeTab,
@@ -23,7 +21,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     connectedParticipantUsers,
     controlState,
     currentUserId,
-    currentUserStatusLabel,
     desiredRoomId,
     formatTimestamp,
     gridVideoSlotId,
@@ -71,16 +68,8 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     rightSidebarCollapsed,
     sendSocketFrame,
     selectCallLayoutParticipants,
-    setShellLeftSidebarCollapsed,
-    setShellTabletSidebarOpen,
-    setSidebarTab,
     showLobbyTab,
-    showRightSidebar: showRightSidebarBase,
-    shouldShowLeftSidebarRestoreButton,
-    snapshotUsersLimit,
-    syncUsersDirectoryPresentationBase,
     typingByRoom,
-    userRowBase,
     usersDirectoryLoading,
     usersDirectoryPagination,
     usersDirectoryRows,
@@ -109,7 +98,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     REACTION_CLIENT_WINDOW_MS,
     ROSTER_VIRTUAL_OVERSCAN,
     ROSTER_VIRTUAL_ROW_HEIGHT,
-    TYPING_SWEEP_MS,
     USERS_PAGE_SIZE,
     VISIBLE_PARTICIPANTS_LIMIT,
     ALONE_IDLE_ACTIVITY_EVENTS,
@@ -120,19 +108,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     layoutModeOptionsFor,
   } = context;
 
-  void activeCallId;
-  void activeMessagesLimit;
-  void currentUserStatusLabel;
   void nextTickOverride;
-  void setShellLeftSidebarCollapsed;
-  void setShellTabletSidebarOpen;
-  void setSidebarTab;
-  void shouldShowLeftSidebarRestoreButton;
-  void showRightSidebarBase;
-  void snapshotUsersLimit;
-  void syncUsersDirectoryPresentationBase;
-  void userRowBase;
-  void TYPING_SWEEP_MS;
 
   let reactionId = 0;
   let reactionQueueTimer = null;
@@ -1702,10 +1678,6 @@ function openLeftSidebarOverlay(event) {
   openFn();
 }
 
-function handleCompactViewportChange(event) {
-  isCompactViewport.value = Boolean(event?.matches);
-}
-
 let reconnectTimer = null;
 let pingTimer = null;
 
@@ -1749,7 +1721,6 @@ let pingTimer = null;
     goToLobbyPage,
     goToUsersPage,
     gridVideoParticipants,
-    handleCompactViewportChange,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
     hideRightSidebar,
