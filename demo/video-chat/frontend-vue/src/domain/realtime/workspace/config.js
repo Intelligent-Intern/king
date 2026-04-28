@@ -26,12 +26,12 @@ export const WLVC_ENCODE_WARMUP_MS = 2500;
 export const WLVC_ENCODE_ERROR_LOG_COOLDOWN_MS = 3000;
 export const LOCAL_CAMERA_CAPTURE_WIDTH = 1280;
 export const LOCAL_CAMERA_CAPTURE_HEIGHT = 720;
-export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;
+export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 27;
 export const SFU_WLVC_FRAME_WIDTH = 1280;
 export const SFU_WLVC_FRAME_HEIGHT = 720;
-export const SFU_WLVC_FRAME_QUALITY = 42;
+export const SFU_WLVC_FRAME_QUALITY = 43;
 export const SFU_WLVC_KEYFRAME_INTERVAL = 8;
-export const SFU_WLVC_ENCODE_INTERVAL_MS = 83;
+export const SFU_WLVC_ENCODE_INTERVAL_MS = 92;
 export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
 export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 512 * 1024;
 export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 5 * 1024 * 1024;
@@ -44,37 +44,37 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     label: 'Low',
     captureWidth: 640,
     captureHeight: 360,
-    captureFrameRate: 8,
+    captureFrameRate: 7,
     frameWidth: 320,
     frameHeight: 180,
-    frameQuality: 18,
+    frameQuality: 20,
     keyFrameInterval: 16,
-    encodeIntervalMs: 220,
+    encodeIntervalMs: 244,
   }),
   realtime: Object.freeze({
     label: 'Fast',
     captureWidth: 640,
     captureHeight: 360,
-    captureFrameRate: 12,
+    captureFrameRate: 11,
     frameWidth: 512,
     frameHeight: 288,
-    frameQuality: 26,
+    frameQuality: 29,
     keyFrameInterval: 12,
-    encodeIntervalMs: 150,
+    encodeIntervalMs: 167,
   }),
   balanced: Object.freeze({
     label: 'Balanced',
     captureWidth: 960,
     captureHeight: 540,
-    captureFrameRate: 15,
+    captureFrameRate: 14,
     frameWidth: 640,
     frameHeight: 360,
-    frameQuality: 30,
+    frameQuality: 33,
     keyFrameInterval: 12,
-    encodeIntervalMs: 100,
+    encodeIntervalMs: 111,
   }),
   quality: Object.freeze({
-    label: 'Sharp',
+    label: 'Quality',
     captureWidth: LOCAL_CAMERA_CAPTURE_WIDTH,
     captureHeight: LOCAL_CAMERA_CAPTURE_HEIGHT,
     captureFrameRate: LOCAL_CAMERA_CAPTURE_FRAME_RATE,

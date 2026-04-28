@@ -107,6 +107,38 @@ async function main() {
     const profiles = workspaceConfig.SFU_VIDEO_QUALITY_PROFILES;
     const maxDeltaBytes = motionConfig.SFU_WLVC_MAX_DELTA_FRAME_BYTES;
 
+    assert.deepEqual(
+      {
+        rescue: {
+          captureFrameRate: profiles.rescue.captureFrameRate,
+          encodeIntervalMs: profiles.rescue.encodeIntervalMs,
+          frameQuality: profiles.rescue.frameQuality,
+        },
+        realtime: {
+          captureFrameRate: profiles.realtime.captureFrameRate,
+          encodeIntervalMs: profiles.realtime.encodeIntervalMs,
+          frameQuality: profiles.realtime.frameQuality,
+        },
+        balanced: {
+          captureFrameRate: profiles.balanced.captureFrameRate,
+          encodeIntervalMs: profiles.balanced.encodeIntervalMs,
+          frameQuality: profiles.balanced.frameQuality,
+        },
+        quality: {
+          captureFrameRate: profiles.quality.captureFrameRate,
+          encodeIntervalMs: profiles.quality.encodeIntervalMs,
+          frameQuality: profiles.quality.frameQuality,
+        },
+      },
+      {
+        rescue: { captureFrameRate: 7, encodeIntervalMs: 244, frameQuality: 20 },
+        realtime: { captureFrameRate: 11, encodeIntervalMs: 167, frameQuality: 29 },
+        balanced: { captureFrameRate: 14, encodeIntervalMs: 111, frameQuality: 33 },
+        quality: { captureFrameRate: 27, encodeIntervalMs: 92, frameQuality: 43 },
+      },
+      'SFU profiles must trade about 10% less framerate for higher per-frame quality',
+    );
+
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);
     const balancedDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.balanced);
     const realtimeDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.realtime);
