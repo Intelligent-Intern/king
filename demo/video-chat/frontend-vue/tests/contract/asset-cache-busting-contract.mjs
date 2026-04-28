@@ -18,6 +18,7 @@ try {
   assert.ok(viteConfig.includes('kingrt-asset-version'), 'vite config must register the asset version plugin');
   assert.ok(viteConfig.includes('(?:assets|cdn)'), 'vite config must rewrite /assets and /cdn paths');
   assert.ok(viteConfig.includes('VIDEOCHAT_ASSET_VERSION'), 'vite config must accept deploy-time asset versions');
+  assert.ok(viteConfig.includes("'import.meta.env.VIDEOCHAT_ASSET_VERSION': JSON.stringify(buildAssetVersion)"), 'vite config must inject the build asset version into browser code');
   assert.ok(viteConfig.includes('VIDEOCHAT_PRODUCTION_SOURCEMAPS'), 'vite config must accept deploy-time sourcemap mode');
   assert.ok(viteConfig.includes("return 'hidden';"), 'vite config must support hidden production sourcemaps for internal stacktrace mapping');
   assert.ok(viteConfig.includes('sourcemap: productionSourcemap'), 'vite build must wire the resolved sourcemap mode');

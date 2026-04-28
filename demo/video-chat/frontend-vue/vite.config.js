@@ -103,6 +103,9 @@ const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
 
 export default defineConfig({
   plugins: [assetVersionPlugin(), vue()],
+  define: {
+    'import.meta.env.VIDEOCHAT_ASSET_VERSION': JSON.stringify(buildAssetVersion),
+  },
   build: {
     sourcemap: productionSourcemap,
   },
