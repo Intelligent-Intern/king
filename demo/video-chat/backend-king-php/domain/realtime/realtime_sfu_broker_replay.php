@@ -12,6 +12,94 @@ function videochat_sfu_broker_replay_max_frames_per_poll(): int
     return 16;
 }
 
+function videochat_sfu_broker_publisher_leave_grace_ms(): int
+{
+    return 3000;
+}
+
+/**
+ * @param array<string, int|bool> $knownPublishers
+ * @param array<string, bool> $activePublishers
+ */
+function videochat_sfu_broker_mark_active_publisher(
+    mixed $websocket,
+    string $roomId,
+    string $publisherId,
+    array &$knownPublishers,
+    array &$activePublishers,
+    int $nowMs
+): void {
+    if ($publisherId === '') {
+        return;
+    }
+    $activePublishers[$publisherId] = true;
+    if (!isset($knownPublishers[$publisherId])) {
+        videochat_presence_send_frame($websocket, [
+            'type' => 'sfu/joined',
+            'room_id' => $roomId,
+            'publishers' => [$publisherId],
+        ]);
+    }
+    $knownPublishers[$publisherId] = $nowMs;
+}
+
+/**
+ * @param array<string, string> $trackSignatures
+ * @param array<int, array{id: string, kind: string, label: string}> $tracks
+ */
+function videochat_sfu_broker_send_tracks_if_changed(
+    mixed $websocket,
+    string $roomId,
+    string $publisherId,
+    string $publisherUserId,
+    string $publisherName,
+    array $tracks,
+    array &$trackSignatures
+): void {
+    $trackSignature = hash('sha256', json_encode($tracks, JSON_UNESCAPED_SLASHES) ?: '');
+    if ($tracks === [] || ($trackSignatures[$publisherId] ?? '') === $trackSignature) {
+        return;
+    }
+    $trackSignatures[$publisherId] = $trackSignature;
+    videochat_presence_send_frame($websocket, [
+        'type' => 'sfu/tracks',
+        'room_id' => $roomId,
+        'publisher_id' => $publisherId,
+        'publisher_user_id' => $publisherUserId,
+        'publisher_name' => $publisherName,
+        'tracks' => $tracks,
+    ]);
+}
+
+/**
+ * @param array<int, array<string, mixed>> $frames
+ * @return array<string, array{publisher_user_id: string, tracks: array<string, array{id: string, kind: string, label: string}>}>
+ */
+function videochat_sfu_broker_frame_track_announcements(array $frames): array
+{
+    $announcements = [];
+    foreach ($frames as $frame) {
+        $publisherId = (string) ($frame['publisher_id'] ?? '');
+        $trackId = (string) ($frame['track_id'] ?? '');
+        if ($publisherId === '' || $trackId === '') {
+            continue;
+        }
+        if (!isset($announcements[$publisherId])) {
+            $announcements[$publisherId] = [
+                'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
+                'tracks' => [],
+            ];
+        }
+        $announcements[$publisherId]['tracks'][$trackId] = [
+            'id' => $trackId,
+            'kind' => 'video',
+            'label' => 'Remote video',
+        ];
+    }
+
+    return $announcements;
+}
+
 /**
  * @param array<int, array<string, mixed>> $frames
  * @return array<int, array<string, mixed>>
@@ -70,38 +158,71 @@ function videochat_sfu_poll_broker(
     int &$lastFrameId
 ): void {
     $activePublishers = [];
+    $publishersWithBrokerTracks = [];
+    $nowMs = videochat_sfu_now_ms();
     foreach (videochat_sfu_fetch_publishers($pdo, $roomId) as $publisher) {
         $publisherId = (string) ($publisher['publisher_id'] ?? '');
         if ($publisherId === '' || $publisherId === $clientId) {
             continue;
         }
-        $activePublishers[$publisherId] = true;
-        if (!isset($knownPublishers[$publisherId])) {
-            $knownPublishers[$publisherId] = true;
-            videochat_presence_send_frame($websocket, [
-                'type' => 'sfu/joined',
-                'room_id' => $roomId,
-                'publishers' => [$publisherId],
-            ]);
-        }
+        videochat_sfu_broker_mark_active_publisher(
+            $websocket,
+            $roomId,
+            $publisherId,
+            $knownPublishers,
+            $activePublishers,
+            $nowMs
+        );
 
         $tracks = videochat_sfu_fetch_tracks($pdo, $roomId, $publisherId);
-        $trackSignature = hash('sha256', json_encode($tracks, JSON_UNESCAPED_SLASHES) ?: '');
-        if ($tracks !== [] && ($trackSignatures[$publisherId] ?? '') !== $trackSignature) {
-            $trackSignatures[$publisherId] = $trackSignature;
-            videochat_presence_send_frame($websocket, [
-                'type' => 'sfu/tracks',
-                'room_id' => $roomId,
-                'publisher_id' => $publisherId,
-                'publisher_user_id' => (string) ($publisher['user_id'] ?? ''),
-                'publisher_name' => (string) ($publisher['user_name'] ?? ''),
-                'tracks' => $tracks,
-            ]);
+        if ($tracks !== []) {
+            $publishersWithBrokerTracks[$publisherId] = true;
         }
+        videochat_sfu_broker_send_tracks_if_changed(
+            $websocket,
+            $roomId,
+            $publisherId,
+            (string) ($publisher['user_id'] ?? ''),
+            (string) ($publisher['user_name'] ?? ''),
+            $tracks,
+            $trackSignatures
+        );
+    }
+
+    $frames = videochat_sfu_select_live_broker_replay_frames(
+        videochat_sfu_fetch_frames_since($pdo, $roomId, $lastFrameId, $clientId, 200),
+        $roomId,
+        $lastFrameId
+    );
+    foreach (videochat_sfu_broker_frame_track_announcements($frames) as $publisherId => $announcement) {
+        videochat_sfu_broker_mark_active_publisher(
+            $websocket,
+            $roomId,
+            $publisherId,
+            $knownPublishers,
+            $activePublishers,
+            $nowMs
+        );
+        if (isset($publishersWithBrokerTracks[$publisherId])) {
+            continue;
+        }
+        videochat_sfu_broker_send_tracks_if_changed(
+            $websocket,
+            $roomId,
+            $publisherId,
+            (string) ($announcement['publisher_user_id'] ?? ''),
+            '',
+            array_values($announcement['tracks'] ?? []),
+            $trackSignatures
+        );
     }
 
     foreach (array_keys($knownPublishers) as $publisherId) {
         if (isset($activePublishers[$publisherId])) {
+            continue;
+        }
+        $lastSeenMs = max(0, (int) ($knownPublishers[$publisherId] ?? 0));
+        if ($lastSeenMs > 0 && ($nowMs - $lastSeenMs) < videochat_sfu_broker_publisher_leave_grace_ms()) {
             continue;
         }
         unset($knownPublishers[$publisherId], $trackSignatures[$publisherId]);
@@ -111,11 +232,6 @@ function videochat_sfu_poll_broker(
         ]);
     }
 
-    $frames = videochat_sfu_select_live_broker_replay_frames(
-        videochat_sfu_fetch_frames_since($pdo, $roomId, $lastFrameId, $clientId, 200),
-        $roomId,
-        $lastFrameId
-    );
     foreach ($frames as $frame) {
         $decodedData = json_decode((string) ($frame['data_json'] ?? '[]'), true);
         $storedPayload = is_array($decodedData) ? videochat_sfu_decode_stored_frame_payload($decodedData) : [];
