@@ -206,7 +206,6 @@ export function createNativeBridgeRuntimeHelpers({
       const trackKind = String(track?.kind || '').trim().toLowerCase();
       if (trackKind !== 'audio' && trackKind !== 'video') continue;
       if (trackKind === 'audio') {
-        if (currentShouldUseNativeAudioBridge()) continue;
         if (shouldBypassNativeAudioProtectionForPeer(senderUserId)) continue;
       }
       if (!attachMediaSecurityNativeReceiver(receiver, senderUserId, track)) continue;

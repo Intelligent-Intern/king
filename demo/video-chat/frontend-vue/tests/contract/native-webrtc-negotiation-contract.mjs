@@ -30,21 +30,30 @@ function functionBody(source, name) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const workspacePath = path.resolve(__dirname, '../../src/domain/realtime/CallWorkspaceView.vue');
-const source = fs.readFileSync(workspacePath, 'utf8');
+function readFrontend(relativePath) {
+  return fs.readFileSync(path.resolve(__dirname, '../../', relativePath), 'utf8');
+}
+
+const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.js');
+const signaling = readFrontend('src/domain/realtime/native/signaling.js');
+const mediaOrchestration = readFrontend('src/domain/realtime/local/mediaOrchestration.js');
 
 try {
-  const ensureLocalMediaBody = functionBody(source, 'ensureLocalMediaForNativeNegotiation');
-  assert.match(ensureLocalMediaBody, /publishLocalTracks\(\)/, 'native negotiation must acquire local media when missing');
+  const ensureLocalMediaBody = functionBody(bridgeRuntime, 'ensureLocalMediaForNativeNegotiation');
+  assert.match(
+    ensureLocalMediaBody,
+    /return ensureLocalMediaForPublish\(\);/,
+    'native negotiation must acquire local media when missing',
+  );
 
-  const offerBody = functionBody(source, 'sendNativeOffer');
+  const offerBody = functionBody(bridgeRuntime, 'sendNativeOffer');
   assert.match(
     offerBody,
     /await ensureLocalMediaForNativeNegotiation\(\);[\s\S]*await syncNativePeerLocalTracks\(peer\);[\s\S]*createOffer\(\)/,
     'native offers must include current local tracks before createOffer'
   );
 
-  const answerBody = functionBody(source, 'handleNativeOfferSignal');
+  const answerBody = functionBody(signaling, 'handleNativeOfferSignal');
   assert.match(
     answerBody,
     /await ensureLocalMediaForNativeNegotiation\(\);[\s\S]*setRemoteDescription[\s\S]*await syncNativePeerLocalTracks\(peer\);[\s\S]*createAnswer\(\)/,
@@ -52,7 +61,7 @@ try {
   );
 
   assert.match(
-    source,
+    mediaOrchestration,
     /if \(peer\.initiator && !peer\.negotiating\) \{\s*void sendNativeOffer\(peer\);/m,
     'native initiator must renegotiate after local track changes'
   );
