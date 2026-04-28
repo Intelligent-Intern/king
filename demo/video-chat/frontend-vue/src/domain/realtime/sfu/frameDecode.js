@@ -17,6 +17,7 @@ export function createSfuFrameDecodeHelpers({
   isWlvcRuntimePath,
   markParticipantActivity,
   markRemotePeerRenderable,
+  bumpMediaRenderVersion,
   mediaDebugLog,
   mediaRuntimePathRef,
   normalizeSfuPublisherId,
@@ -255,10 +256,17 @@ export function createSfuFrameDecodeHelpers({
 
   function renderDecodedSfuFrame(peer, decoded, frame = null) {
     if (!peer || !decoded?.data) return false;
+    const renderedAtMs = Date.now();
+    const previousConnectionState = String(peer.mediaConnectionState || '');
+    const previousConnectionMessage = String(peer.mediaConnectionMessage || '');
     peer.frameCount = Number(peer.frameCount || 0) + 1;
-    peer.lastFrameAtMs = Date.now();
+    peer.lastFrameAtMs = renderedAtMs;
     peer.stalledLoggedAtMs = 0;
     peer.freezeRecoveryCount = 0;
+    peer.stallRecoveryCount = 0;
+    peer.mediaConnectionState = 'live';
+    peer.mediaConnectionMessage = '';
+    peer.mediaConnectionUpdatedAtMs = renderedAtMs;
     const canvas = peer.decodedCanvas;
     if (!(canvas instanceof HTMLCanvasElement)) return false;
     const ctx = canvas.getContext('2d');
@@ -301,6 +309,12 @@ export function createSfuFrameDecodeHelpers({
       renderCallVideoLayout();
     }
     markRemotePeerRenderable(peer);
+    if (
+      (previousConnectionState !== 'live' || previousConnectionMessage !== '')
+      && typeof bumpMediaRenderVersion === 'function'
+    ) {
+      bumpMediaRenderVersion();
+    }
     noteSfuRemoteVideoFrameStable(peer, frame, {
       currentUserId: currentUserId(),
       mediaRuntimePath: mediaRuntimePathRef.value,

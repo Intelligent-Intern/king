@@ -10,6 +10,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   state,
 }) {
   const {
+    bumpMediaRenderVersion,
     captureClientDiagnostic,
     mediaDebugLog,
     restartSfuAfterVideoStall,
@@ -87,6 +88,35 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return sfuRuntimeEnabled && mediaRuntimePath.value === 'pending';
   }
 
+  function setRemoteVideoStatus(peer, stateName, message, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    const normalizedState = String(stateName || '').trim().toLowerCase();
+    const normalizedMessage = String(message || '').trim();
+    if (
+      String(peer.mediaConnectionState || '') === normalizedState
+      && String(peer.mediaConnectionMessage || '') === normalizedMessage
+    ) {
+      return false;
+    }
+    peer.mediaConnectionState = normalizedState;
+    peer.mediaConnectionMessage = normalizedMessage;
+    peer.mediaConnectionUpdatedAtMs = nowMs;
+    if (typeof bumpMediaRenderVersion === 'function') {
+      bumpMediaRenderVersion();
+    }
+    return true;
+  }
+
+  function retrySfuSubscription(publisherId, peer, reason, nowMs = Date.now()) {
+    if (!sfuClientRef.value) return false;
+    sfuClientRef.value.subscribe(publisherId);
+    if (peer && typeof peer === 'object') {
+      peer.lastSubscribeRetryAtMs = nowMs;
+      peer.lastSubscribeRetryReason = String(reason || '').trim();
+    }
+    return true;
+  }
+
   function checkRemoteVideoStalls() {
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
@@ -115,6 +145,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
+        setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
         if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
           logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
             ageMs: frozenAgeMs,
@@ -157,29 +188,30 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           },
           immediate: true,
         });
-        if (sfuClientRef.value) {
-          sfuClientRef.value.subscribe(publisherId);
-        }
-        if (Number(peer.freezeRecoveryCount || 0) >= 2 || receiveGapMs >= remoteVideoFreezeThresholdMs * 2) {
-          restartSfuAfterVideoStall('remote_video_frozen', {
-            publisher_id: publisherId,
-            publisher_user_id: Number(peer.userId || 0),
-            frozen_age_ms: frozenAgeMs,
-            receive_gap_ms: receiveGapMs,
-            freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-          });
-        }
+        retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
+        restartSfuAfterVideoStall('remote_video_frozen', {
+          publisher_id: publisherId,
+          publisher_user_id: Number(peer.userId || 0),
+          frozen_age_ms: frozenAgeMs,
+          receive_gap_ms: receiveGapMs,
+          freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+        });
         continue;
       }
 
-      if ((nowMs - createdAtMs) < remoteVideoStallThresholdMs) continue;
+      if ((nowMs - createdAtMs) < remoteVideoStallThresholdMs) {
+        setRemoteVideoStatus(peer, 'connecting', 'Connecting media', nowMs);
+        continue;
+      }
       if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < remoteVideoStallThresholdMs) continue;
 
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
+      peer.stallRecoveryCount = Number(peer.stallRecoveryCount || 0) + 1;
+      setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
       if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
         logSfuVideoRecoveryStatus(sfuNoVideoSignalConsoleLabel, {
           ageMs: stalledAgeMs,
-          attempt: 3,
+          attempt: Math.max(3, Number(peer.stallRecoveryCount || 0)),
           localUserId: currentUserId.value,
           peer,
           publisherId,
@@ -212,8 +244,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         immediate: true,
       });
 
-      if (sfuClientRef.value && stalledAgeMs > remoteVideoStallThresholdMs * 2) {
-        if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+      if (retrySfuSubscription(publisherId, peer, 'remote_video_never_started', nowMs)) {
+        if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
           console.info(
             '[KingRT] Auto-resubscribe for stalled SFU publisher',
             `local_user=${currentUserId.value}`,
@@ -221,9 +253,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             `publisher=${publisherId}`,
           );
         }
-        sfuClientRef.value.subscribe(publisherId);
       }
-      if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+      if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
         restartSfuAfterVideoStall('remote_video_never_started', {
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),

@@ -73,6 +73,7 @@ export function createCallWorkspaceMediaStack(options) {
     isWlvcRuntimePath: callbacks.isWlvcRuntimePath,
     markParticipantActivity: callbacks.markParticipantActivity,
     markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer),
+    bumpMediaRenderVersion,
     mediaDebugLog: callbacks.mediaDebugLog,
     mediaRuntimePathRef: refs.mediaRuntimePath,
     normalizeSfuPublisherId,
@@ -96,6 +97,7 @@ export function createCallWorkspaceMediaStack(options) {
 
   const runtimeHealth = createCallWorkspaceRuntimeHealthHelpers({
     callbacks: {
+      bumpMediaRenderVersion,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
       mediaDebugLog: callbacks.mediaDebugLog,
       restartSfuAfterVideoStall: callbacks.restartSfuAfterVideoStall,

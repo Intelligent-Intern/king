@@ -41,6 +41,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     lobbyPage,
     lobbyQueue,
     localReactionEchoes,
+    mediaRenderVersion,
     mediaRuntimeCapabilities,
     miniVideoSlotId,
     moderationActionState,
@@ -57,6 +58,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     parseUsersDirectoryQuery,
     participantActivityByUserId,
     participantActivityWeight,
+    participantHasRenderableMedia,
     participantUsers,
     peerControlStateByUserId,
     pinnedUsers,
@@ -67,6 +69,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     renderCallVideoLayout,
     replaceNumericArray,
     requestRoomSnapshot,
+    remotePeersRef,
     rightSidebarCollapsed,
     sendSocketFrame,
     selectCallLayoutParticipants,
@@ -108,6 +111,8 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     ALONE_IDLE_PROMPT_AFTER_MS,
     ALONE_IDLE_TICK_MS,
     layoutModeOptionsFor,
+    REMOTE_VIDEO_FREEZE_THRESHOLD_MS,
+    REMOTE_VIDEO_STALL_THRESHOLD_MS,
   } = context;
 
   void nextTickOverride;
@@ -274,6 +279,75 @@ const showMiniParticipantStrip = computed(() => (
   currentLayoutMode.value === 'main_mini'
   && connectedParticipantUsers.value.length > 1
 ));
+
+function remotePeerForParticipant(userId) {
+  if (mediaRenderVersion && typeof mediaRenderVersion === 'object') {
+    mediaRenderVersion.value;
+  }
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
+  const peers = remotePeersRef?.value instanceof Map ? remotePeersRef.value : new Map();
+  for (const peer of peers.values()) {
+    if (!peer || typeof peer !== 'object') continue;
+    if (Number(peer.userId || 0) === normalizedUserId) return peer;
+  }
+  return null;
+}
+
+function participantMediaStatus(userId) {
+  if (mediaRenderVersion && typeof mediaRenderVersion === 'object') {
+    mediaRenderVersion.value;
+  }
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) {
+    return { show: false, state: 'local', label: '' };
+  }
+
+  const hasRenderable = typeof participantHasRenderableMedia === 'function'
+    ? participantHasRenderableMedia(normalizedUserId)
+    : false;
+  const peer = remotePeerForParticipant(normalizedUserId);
+  if (!peer) {
+    return { show: true, state: 'connecting', label: 'Connecting media' };
+  }
+
+  const nowMs = Date.now();
+  const state = String(peer.mediaConnectionState || '').trim().toLowerCase();
+  const message = String(peer.mediaConnectionMessage || '').trim();
+  if (state === 'recovering') {
+    return { show: true, state: 'recovering', label: message || 'Reconnecting video' };
+  }
+
+  const frameCount = Number(peer.frameCount || 0);
+  if (!hasRenderable || frameCount <= 0) {
+    const createdAtMs = Number(peer.createdAtMs || 0);
+    const ageMs = createdAtMs > 0 ? Math.max(0, nowMs - createdAtMs) : 0;
+    if (ageMs >= REMOTE_VIDEO_STALL_THRESHOLD_MS) {
+      return { show: true, state: 'recovering', label: 'Reconnecting video' };
+    }
+    return { show: true, state: 'connecting', label: message || 'Connecting media' };
+  }
+
+  const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
+  if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= REMOTE_VIDEO_FREEZE_THRESHOLD_MS) {
+    return { show: true, state: 'recovering', label: 'Reconnecting video' };
+  }
+
+  return { show: false, state: 'live', label: '' };
+}
+
+function showParticipantMediaOverlay(userId) {
+  return participantMediaStatus(userId).show;
+}
+
+function participantMediaStatusLabel(userId) {
+  return participantMediaStatus(userId).label;
+}
+
+function participantMediaStatusState(userId) {
+  return participantMediaStatus(userId).state;
+}
+
 const layoutModeOptions = computed(() => layoutModeOptionsFor(CALL_LAYOUT_MODES));
 const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
 const showCompactMiniStripToggle = computed(() => (
@@ -1640,6 +1714,9 @@ let pingTimer = null;
     openLeftSidebarOverlay,
     openLobbyRequestsPanel,
     participantActivityScore,
+    participantMediaStatus,
+    participantMediaStatusLabel,
+    participantMediaStatusState,
     participantVisibilityScore,
     participantsByUserId,
     peerControlSnapshot,
@@ -1667,6 +1744,7 @@ let pingTimer = null;
     showChatUnreadBadge,
     showChatUnreadToast,
     showCompactMiniStripToggle,
+    showParticipantMediaOverlay,
     showLobbyJoinToast,
     showLobbyRequestBadge,
     showMiniParticipantStrip,
