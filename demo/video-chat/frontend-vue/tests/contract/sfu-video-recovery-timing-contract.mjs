@@ -49,6 +49,14 @@ try {
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');
   requireContains(remotePeers, "mediaConnectionState: 'connecting'", 'new SFU peers start in connecting media state');
+  requireContains(remotePeers, 'function findSfuRemotePeerEntryByPeer', 'remote peer owner lookup for publisher rollover');
+  requireContains(remotePeers, 'publisherId: normalizedPublisherId', 'publisher alias lookup adopts the current frame publisher id');
+  requireContains(remotePeers, 'function resetSfuRemotePeerMediaContinuity', 'remote peer continuity reset helper');
+  requireContains(remotePeers, "'publisher_id_rollover'", 'publisher id rollover resets remote continuity');
+  requireContains(remotePeers, "'track_set_rollover'", 'track rollover resets remote continuity');
+  requireContains(remotePeers, 'lastSfuFrameSequenceByTrack: {}', 'rollover clears stale SFU frame sequence continuity');
+  requireContains(remotePeers, 'acceptedSfuCacheEpochByTrack: {}', 'rollover clears stale tile cache epoch continuity');
+  requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
 
   requireContains(participantUi, 'function participantMediaStatus(userId)', 'participant media status helper');

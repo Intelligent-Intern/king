@@ -47,6 +47,79 @@ export function createSfuRemotePeerHelpers({
     return null;
   }
 
+  function findSfuRemotePeerEntryByPeer(peer, excludePublisherId = '') {
+    if (!peer || typeof peer !== 'object') return null;
+    const normalizedExcludePublisherId = normalizeSfuPublisherId(excludePublisherId);
+    for (const [publisherId, existingPeer] of remotePeersRef.value.entries()) {
+      const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+      if (normalizedPublisherId === normalizedExcludePublisherId) continue;
+      if (existingPeer !== peer) continue;
+      return {
+        publisherId: normalizedPublisherId,
+        peer,
+      };
+    }
+    return null;
+  }
+
+  function sfuTrackSignature(tracks) {
+    return sfuTrackRows(tracks)
+      .map((track) => [
+        String(track?.id || '').trim(),
+        String(track?.kind || '').trim().toLowerCase(),
+      ].join(':'))
+      .filter((entry) => entry !== ':')
+      .sort()
+      .join('|');
+  }
+
+  function clearDecodedCanvas(peer) {
+    if (typeof HTMLCanvasElement === 'undefined') return;
+    const canvas = peer?.decodedCanvas;
+    if (!(canvas instanceof HTMLCanvasElement)) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function resetSfuRemotePeerMediaContinuity(peer, reason = 'remote_peer_rollover', nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return null;
+    try {
+      peer.decoder?.reset?.();
+    } catch {
+      // the next full-frame keyframe recreates decoder state
+    }
+    try {
+      peer.patchDecoder?.reset?.();
+    } catch {
+      // patch state is rebuilt after the next full-frame base
+    }
+    clearDecodedCanvas(peer);
+    mediaDebugLog('[SFU] Remote peer media continuity reset', reason);
+    return {
+      createdAtMs: nowMs,
+      frameCount: 0,
+      receivedFrameCount: 0,
+      lastFrameAtMs: 0,
+      lastReceivedFrameAtMs: 0,
+      stalledLoggedAtMs: 0,
+      freezeRecoveryCount: 0,
+      stallRecoveryCount: 0,
+      mediaConnectionState: 'connecting',
+      mediaConnectionMessage: 'Connecting media',
+      mediaConnectionUpdatedAtMs: nowMs,
+      hasFullFrameBase: false,
+      hasFullFrameBaseByTrack: {},
+      acceptedSfuCacheEpochByTrack: {},
+      sfuTrackRenderStateByTrack: {},
+      needsKeyframe: true,
+      lastDeltaBeforeKeyframeLoggedAtMs: 0,
+      lastSfuFrameSequenceByTrack: {},
+      lastSfuFrameTimestampByTrack: {},
+      lastSfuFrameDropLoggedAtMs: 0,
+    };
+  }
+
   function getSfuRemotePeerByFrameIdentity(publisherId, publisherUserId) {
     const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
     const exactPeer = normalizedPublisherId !== ''
@@ -79,7 +152,7 @@ export function createSfuRemotePeerHelpers({
     }
 
     return {
-      publisherId: fallback.publisherId,
+      publisherId: normalizedPublisherId,
       peer: fallback.peer,
       matchedBy: 'publisher_user_id',
     };
@@ -172,6 +245,19 @@ export function createSfuRemotePeerHelpers({
       return null;
     }
     if (existingPeer?.decoder) {
+      const publisherRollover = Boolean(existingPeerEntry?.publisherId)
+        && existingPeerEntry.publisherId !== publisherId;
+      const existingTrackSignature = sfuTrackSignature(existingPeer.tracks);
+      const nextTrackSignature = sfuTrackSignature(tracks);
+      const trackRollover = existingTrackSignature !== ''
+        && nextTrackSignature !== ''
+        && existingTrackSignature !== nextTrackSignature;
+      const continuityReset = publisherRollover || trackRollover
+        ? resetSfuRemotePeerMediaContinuity(
+            existingPeer,
+            publisherRollover ? 'publisher_id_rollover' : 'track_set_rollover',
+          )
+        : null;
       const updatedPeer = {
         ...existingPeer,
         userId: Number.isInteger(publisherUserId) && publisherUserId > 0
@@ -179,19 +265,19 @@ export function createSfuRemotePeerHelpers({
           : Number(existingPeer.userId || 0),
         displayName: String(options.publisherName || existingPeer.displayName || '').trim(),
         tracks,
-        createdAtMs: Number(existingPeer.createdAtMs || Date.now()),
-        frameCount: Number(existingPeer.frameCount || 0),
-        receivedFrameCount: Number(existingPeer.receivedFrameCount || 0),
-        lastFrameAtMs: Number(existingPeer.lastFrameAtMs || 0),
-        lastReceivedFrameAtMs: Number(existingPeer.lastReceivedFrameAtMs || 0),
-        stalledLoggedAtMs: Number(existingPeer.stalledLoggedAtMs || 0),
-        freezeRecoveryCount: Number(existingPeer.freezeRecoveryCount || 0),
-        stallRecoveryCount: Number(existingPeer.stallRecoveryCount || 0),
+        createdAtMs: continuityReset ? continuityReset.createdAtMs : Number(existingPeer.createdAtMs || Date.now()),
+        frameCount: continuityReset ? continuityReset.frameCount : Number(existingPeer.frameCount || 0),
+        receivedFrameCount: continuityReset ? continuityReset.receivedFrameCount : Number(existingPeer.receivedFrameCount || 0),
+        lastFrameAtMs: continuityReset ? continuityReset.lastFrameAtMs : Number(existingPeer.lastFrameAtMs || 0),
+        lastReceivedFrameAtMs: continuityReset ? continuityReset.lastReceivedFrameAtMs : Number(existingPeer.lastReceivedFrameAtMs || 0),
+        stalledLoggedAtMs: continuityReset ? continuityReset.stalledLoggedAtMs : Number(existingPeer.stalledLoggedAtMs || 0),
+        freezeRecoveryCount: continuityReset ? continuityReset.freezeRecoveryCount : Number(existingPeer.freezeRecoveryCount || 0),
+        stallRecoveryCount: continuityReset ? continuityReset.stallRecoveryCount : Number(existingPeer.stallRecoveryCount || 0),
         lastSubscribeRetryAtMs: Number(existingPeer.lastSubscribeRetryAtMs || 0),
         lastSubscribeRetryReason: String(existingPeer.lastSubscribeRetryReason || ''),
-        mediaConnectionState: String(existingPeer.mediaConnectionState || '').trim() || (Number(existingPeer.frameCount || 0) > 0 ? 'live' : 'connecting'),
-        mediaConnectionMessage: String(existingPeer.mediaConnectionMessage || ''),
-        mediaConnectionUpdatedAtMs: Number(existingPeer.mediaConnectionUpdatedAtMs || 0),
+        mediaConnectionState: continuityReset ? continuityReset.mediaConnectionState : (String(existingPeer.mediaConnectionState || '').trim() || (Number(existingPeer.frameCount || 0) > 0 ? 'live' : 'connecting')),
+        mediaConnectionMessage: continuityReset ? continuityReset.mediaConnectionMessage : String(existingPeer.mediaConnectionMessage || ''),
+        mediaConnectionUpdatedAtMs: continuityReset ? continuityReset.mediaConnectionUpdatedAtMs : Number(existingPeer.mediaConnectionUpdatedAtMs || 0),
         frameWidth: Number(existingPeer.frameWidth || sfuFrameWidth),
         frameHeight: Number(existingPeer.frameHeight || sfuFrameHeight),
         frameQuality: Number(existingPeer.frameQuality || sfuFrameQuality),
@@ -202,26 +288,32 @@ export function createSfuRemotePeerHelpers({
         patchDecoderWidth: Number(existingPeer.patchDecoderWidth || 0),
         patchDecoderHeight: Number(existingPeer.patchDecoderHeight || 0),
         patchDecoderQuality: Number(existingPeer.patchDecoderQuality || 0),
-        hasFullFrameBase: Boolean(existingPeer.hasFullFrameBase),
-        hasFullFrameBaseByTrack: existingPeer.hasFullFrameBaseByTrack && typeof existingPeer.hasFullFrameBaseByTrack === 'object'
+        hasFullFrameBase: continuityReset ? continuityReset.hasFullFrameBase : Boolean(existingPeer.hasFullFrameBase),
+        hasFullFrameBaseByTrack: continuityReset ? continuityReset.hasFullFrameBaseByTrack : (existingPeer.hasFullFrameBaseByTrack && typeof existingPeer.hasFullFrameBaseByTrack === 'object'
           ? { ...existingPeer.hasFullFrameBaseByTrack }
-          : {},
-        acceptedSfuCacheEpochByTrack: existingPeer.acceptedSfuCacheEpochByTrack && typeof existingPeer.acceptedSfuCacheEpochByTrack === 'object'
+          : {}),
+        acceptedSfuCacheEpochByTrack: continuityReset ? continuityReset.acceptedSfuCacheEpochByTrack : (existingPeer.acceptedSfuCacheEpochByTrack && typeof existingPeer.acceptedSfuCacheEpochByTrack === 'object'
           ? { ...existingPeer.acceptedSfuCacheEpochByTrack }
-          : {},
-        sfuTrackRenderStateByTrack: existingPeer.sfuTrackRenderStateByTrack && typeof existingPeer.sfuTrackRenderStateByTrack === 'object'
+          : {}),
+        sfuTrackRenderStateByTrack: continuityReset ? continuityReset.sfuTrackRenderStateByTrack : (existingPeer.sfuTrackRenderStateByTrack && typeof existingPeer.sfuTrackRenderStateByTrack === 'object'
           ? { ...existingPeer.sfuTrackRenderStateByTrack }
-          : {},
-        needsKeyframe: Boolean(existingPeer.needsKeyframe),
-        lastDeltaBeforeKeyframeLoggedAtMs: Number(existingPeer.lastDeltaBeforeKeyframeLoggedAtMs || 0),
-        lastSfuFrameSequenceByTrack: existingPeer.lastSfuFrameSequenceByTrack && typeof existingPeer.lastSfuFrameSequenceByTrack === 'object'
+          : {}),
+        needsKeyframe: continuityReset ? continuityReset.needsKeyframe : Boolean(existingPeer.needsKeyframe),
+        lastDeltaBeforeKeyframeLoggedAtMs: continuityReset ? continuityReset.lastDeltaBeforeKeyframeLoggedAtMs : Number(existingPeer.lastDeltaBeforeKeyframeLoggedAtMs || 0),
+        lastSfuFrameSequenceByTrack: continuityReset ? continuityReset.lastSfuFrameSequenceByTrack : (existingPeer.lastSfuFrameSequenceByTrack && typeof existingPeer.lastSfuFrameSequenceByTrack === 'object'
           ? { ...existingPeer.lastSfuFrameSequenceByTrack }
-          : {},
-        lastSfuFrameTimestampByTrack: existingPeer.lastSfuFrameTimestampByTrack && typeof existingPeer.lastSfuFrameTimestampByTrack === 'object'
+          : {}),
+        lastSfuFrameTimestampByTrack: continuityReset ? continuityReset.lastSfuFrameTimestampByTrack : (existingPeer.lastSfuFrameTimestampByTrack && typeof existingPeer.lastSfuFrameTimestampByTrack === 'object'
           ? { ...existingPeer.lastSfuFrameTimestampByTrack }
-          : {},
-        lastSfuFrameDropLoggedAtMs: Number(existingPeer.lastSfuFrameDropLoggedAtMs || 0),
+          : {}),
+        lastSfuFrameDropLoggedAtMs: continuityReset ? continuityReset.lastSfuFrameDropLoggedAtMs : Number(existingPeer.lastSfuFrameDropLoggedAtMs || 0),
       };
+      if (updatedPeer.decodedCanvas instanceof HTMLElement) {
+        updatedPeer.decodedCanvas.dataset.publisherId = publisherId;
+        if (Number.isInteger(updatedPeer.userId) && updatedPeer.userId > 0) {
+          updatedPeer.decodedCanvas.dataset.userId = String(updatedPeer.userId);
+        }
+      }
       setSfuRemotePeer(publisherId, updatedPeer, existingPeerEntry?.publisherId || '');
       await nextTick();
       renderCallVideoLayout();
@@ -356,19 +448,34 @@ export function createSfuRemotePeerHelpers({
     return init;
   }
 
-  function updateSfuRemotePeerUserId(publisherId, peer, publisherUserId) {
+  function updateSfuRemotePeerUserId(publisherId, peer, publisherUserId, options = {}) {
     if (!peer || typeof peer !== 'object') return peer;
+    const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+    const resolvedPreviousPublisherId = normalizeSfuPublisherId(options.previousPublisherId)
+      || findSfuRemotePeerEntryByPeer(peer, normalizedPublisherId)?.publisherId
+      || '';
+    const publisherRollover = resolvedPreviousPublisherId !== '' && resolvedPreviousPublisherId !== normalizedPublisherId;
+    const shouldResetContinuity = publisherRollover || options.resetContinuity === true;
     const normalizedUserId = Number(publisherUserId || 0);
-    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return peer;
-    if (Number(peer?.userId || 0) === normalizedUserId) return peer;
+    if (!shouldResetContinuity && (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0)) return peer;
+    if (!shouldResetContinuity && Number(peer?.userId || 0) === normalizedUserId) return peer;
+    const continuityReset = shouldResetContinuity
+      ? resetSfuRemotePeerMediaContinuity(peer, 'publisher_id_rollover_from_frame')
+      : null;
     const updatedPeer = {
       ...peer,
-      userId: normalizedUserId,
+      userId: Number.isInteger(normalizedUserId) && normalizedUserId > 0
+        ? normalizedUserId
+        : Number(peer?.userId || 0),
+      ...(continuityReset || {}),
     };
     if (updatedPeer.decodedCanvas instanceof HTMLElement) {
-      updatedPeer.decodedCanvas.dataset.userId = String(normalizedUserId);
+      updatedPeer.decodedCanvas.dataset.publisherId = normalizedPublisherId;
+      if (Number.isInteger(updatedPeer.userId) && updatedPeer.userId > 0) {
+        updatedPeer.decodedCanvas.dataset.userId = String(updatedPeer.userId);
+      }
     }
-    setSfuRemotePeer(publisherId, updatedPeer);
+    setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId);
     return updatedPeer;
   }
 
