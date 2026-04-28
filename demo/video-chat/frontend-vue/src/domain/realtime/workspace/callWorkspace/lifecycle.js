@@ -230,11 +230,6 @@ export function registerCallWorkspaceLifecycleHelpers({
       ? 'native_audio_bridge_waiting'
       : 'native_audio_bridge_blocked';
     const diagnosticLevel = waitingForSecurity ? 'warning' : 'error';
-    const logMethod = waitingForSecurity ? console.warn : console.error;
-    logMethod(
-      waitingForSecurity ? '[KingRT] 🔇 AUDIO BRIDGE WAITING:' : '[KingRT] 🔇 AUDIO BRIDGE BLOCKED:',
-      message
-    );
     const diagnosticKey = `${refs.activeRoomId.value}:${diagnosticEventType}:${message}`;
     if (nativeAudioBridgeBlockDiagnosticsSent.has(diagnosticKey)) return;
     nativeAudioBridgeBlockDiagnosticsSent.add(diagnosticKey);

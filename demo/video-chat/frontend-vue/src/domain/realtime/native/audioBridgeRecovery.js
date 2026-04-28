@@ -60,14 +60,6 @@ export function createNativeAudioBridgeRecovery({
 
     const nextAttempt = currentAttempt + 1;
     nativeAudioTrackRecoveryAttemptsByUserId.set(normalizedUserId, nextAttempt);
-    console.warn(
-      requireMissingTrack
-        ? '[KingRT] native audio bridge missing track - rebuilding peer'
-        : '[KingRT] native audio bridge media-security frame failed - rebuilding peer',
-      `user=${normalizedUserId}`,
-      `attempt=${nextAttempt}/${nativeAudioTrackRecoveryMaxAttempts}`,
-      nativePeerConnectionTelemetry(peer),
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',

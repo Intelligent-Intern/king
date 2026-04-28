@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -293,34 +294,20 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
-    const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
-    setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
-    console.error(
-      '[KingRT] 🔇 AUDIO BRIDGE FAILED',
-      `code=${String(code || 'native_audio_bridge_failed')}`,
-      `user=${Number(peer?.userId || 0)}`,
-      normalizedMessage,
-    );
-    captureClientDiagnostic({
-      category: 'media',
-      level: 'error',
-      eventType: String(code || 'native_audio_bridge_failed'),
-      code: String(code || 'native_audio_bridge_failed'),
-      message: normalizedMessage,
-      payload: {
-        target_user_id: Number(peer?.userId || 0),
-        connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
-        media_runtime_path: mediaRuntimePath.value,
-        security: nativeAudioSecurityTelemetrySnapshot(),
-        ...extraPayload,
-      },
-      immediate: true,
+    reportNativeAudioBridgeFailureEvent({
+      captureClientDiagnostic,
+      code,
+      defaultMessage: nativeAudioBridgeFailureMessage(),
+      extraPayload,
+      isSocketOnline,
+      mediaRuntimePath,
+      message,
+      nativeAudioSecurityTelemetrySnapshot,
+      peer,
+      setNativePeerAudioBridgeState,
+      shouldUseNativeAudioBridge,
+      syncMediaSecurityWithParticipants,
     });
-    setTimeout(() => {
-      if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
-      console.info('[KingRT] 🔑 Forcing media-security rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
-      void syncMediaSecurityWithParticipants(true);
-    }, 1500);
   }
 
   function mediaSecurityHelloSignalKey(targetUserId, session) {

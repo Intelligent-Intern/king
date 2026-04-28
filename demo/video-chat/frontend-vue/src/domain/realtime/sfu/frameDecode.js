@@ -5,10 +5,12 @@ import {
   normalizePositiveInteger,
   readWlvcFrameMetadata,
 } from './wlvcFrameMetadata';
+import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
   captureClientDiagnosticError,
+  currentUserId,
   ensureMediaSecuritySession,
   ensureSfuRemotePeerForFrame,
   getSfuRemotePeerByFrameIdentity,
@@ -299,6 +301,10 @@ export function createSfuFrameDecodeHelpers({
       renderCallVideoLayout();
     }
     markRemotePeerRenderable(peer);
+    noteSfuRemoteVideoFrameStable(peer, frame, {
+      currentUserId: currentUserId(),
+      mediaRuntimePath: mediaRuntimePathRef.value,
+    });
     return true;
   }
 

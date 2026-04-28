@@ -111,6 +111,7 @@ try {
   const peerLifecycle = readFrontend('src/domain/realtime/native/peerLifecycle.js');
   const signaling = readFrontend('src/domain/realtime/native/signaling.js');
   const audioBridgeRecovery = readFrontend('src/domain/realtime/native/audioBridgeRecovery.js');
+  const audioBridgeFailureReporter = readFrontend('src/domain/realtime/native/audioBridgeFailureReporter.js');
   const audioBridgeState = readFrontend('src/domain/realtime/native/audioBridgeState.js');
   const nativeStack = readFrontend('src/domain/realtime/workspace/callWorkspace/nativeStack.js');
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
@@ -156,6 +157,9 @@ try {
   requireContains(audioBridgeRecovery, 'captureClientDiagnostic = captureNativeAudioBridgeDiagnostic', 'native audio recovery defaults missing diagnostics callback');
   requireContains(audioBridgeRecovery, 'Diagnostics must not create secondary media recovery failures.', 'native audio diagnostic fallback is fail-closed');
   requireContains(audioBridgeRecovery, "resyncNativeAudioBridgePeerAfterSecurityReady(\n          normalizedUserId,\n          'native_audio_track_recovery_rejoin',\n          true", 'audio-track recovery may force a renegotiation offer');
+  assert.equal(mediaSecurityRuntime.includes('[KingRT] 🔇 AUDIO BRIDGE FAILED'), false, 'native audio bridge failures must not spam console before recovery escalation');
+  requireContains(audioBridgeFailureReporter, 'const AUDIO_BRIDGE_CONSOLE_ESCALATION_COUNT = 3;', 'native audio bridge console output waits for repeated failure');
+  requireContains(audioBridgeFailureReporter, 'failure_count: failureCount', 'native audio bridge diagnostics retain repeated failure counts');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
   requireContains(sfuTransport, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
   requireContains(sfuTransport, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');

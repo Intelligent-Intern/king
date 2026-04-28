@@ -160,14 +160,20 @@ function canProtectCurrentNativeTargets(targetUserIds) {
 function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
   const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
   setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
-  // M7 / M9: Log to console so audio failures are immediately visible in devtools,
-  // then schedule a forced media-security rekey to break any dead-lock in the handshake.
-  console.error(
-    '[KingRT] 🔇 AUDIO BRIDGE FAILED',
-    `code=${String(code || 'native_audio_bridge_failed')}`,
-    `user=${Number(peer?.userId || 0)}`,
-    normalizedMessage,
-  );
+  const failureCount = Number(peer?.audioBridgeFailureCount || 0) + 1;
+  if (peer && typeof peer === 'object') {
+    peer.audioBridgeFailureCount = failureCount;
+  }
+  const shouldExposeFailure = failureCount >= 3 && (failureCount === 3 || failureCount % 3 === 0);
+  if (shouldExposeFailure) {
+    console.warn(
+      '[KingRT] native audio bridge still failing after recovery attempts',
+      `attempts=${failureCount}`,
+      `code=${String(code || 'native_audio_bridge_failed')}`,
+      `user=${Number(peer?.userId || 0)}`,
+      normalizedMessage,
+    );
+  }
   captureClientDiagnostic({
     category: 'media',
     level: 'error',
@@ -177,6 +183,7 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
     payload: {
       target_user_id: Number(peer?.userId || 0),
       connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
+      failure_count: failureCount,
       media_runtime_path: mediaRuntimePath.value,
       security: nativeAudioSecurityTelemetrySnapshot(),
       ...extraPayload,
@@ -187,7 +194,12 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
   // handshake dead-lock that may have caused the transform to fail.
   setTimeout(() => {
     if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
-    console.info('[KingRT] 🔑 Forcing media-security rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
+    if (shouldExposeFailure) {
+      console.info(
+        '[KingRT] forcing media-security rekey after repeated audio bridge failure',
+        `user=${Number(peer?.userId || 0)}`,
+      );
+    }
     void syncMediaSecurityWithParticipants(true);
   }, 1500);
 }
@@ -708,4 +720,3 @@ function handleNativeMediaSecurityFrameError(event = {}) {
   }
   resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error');
 }
-

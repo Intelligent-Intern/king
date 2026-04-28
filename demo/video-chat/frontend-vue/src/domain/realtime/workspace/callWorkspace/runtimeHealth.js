@@ -1,3 +1,8 @@
+import {
+  logSfuVideoRecoveryStatus,
+  shouldExposeSfuVideoRecoveryAttempt,
+} from '../../sfu/videoConnectionStatus';
+
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
   constants,
@@ -20,6 +25,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   const {
     connectedParticipantUsers,
     connectionState,
+    currentUserId,
     mediaRuntimeCapabilities,
     mediaRuntimePath,
     remotePeersRef,
@@ -28,6 +34,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     shouldConnectSfu,
     videoEncoderRef,
   } = refs;
+  const sfuRemoteVideoFrozenConsoleLabel = '[KingRT] SFU remote video frozen';
+  const sfuNoVideoSignalConsoleLabel = '[KingRT] 📵 No video signal from SFU publisher';
   const {
     getRemoteVideoStallTimer,
     setRemoteVideoStallTimer,
@@ -105,17 +113,20 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
-        console.warn(
-          '[KingRT] SFU remote video frozen',
-          `id=${publisherId}`,
-          `user=${Number(peer.userId || 0)}`,
-          `last_frame=${frozenAgeMs}ms`,
-          `last_received=${receiveGapMs}ms`,
-          `frames=${frameCount}`,
-          `runtime=${mediaRuntimePath.value}`,
-        );
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
+        if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
+          logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
+            ageMs: frozenAgeMs,
+            attempt: peer.freezeRecoveryCount,
+            localUserId: currentUserId.value,
+            peer,
+            publisherId,
+            receiveGapMs,
+            runtime: mediaRuntimePath.value,
+            state: 'frozen',
+          });
+        }
         if (typeof peer.decoder?.reset === 'function' && receiveGapMs < remoteVideoFreezeThresholdMs) {
           try {
             peer.decoder.reset();
@@ -165,14 +176,17 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < remoteVideoStallThresholdMs) continue;
 
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
-      console.warn(
-        '[KingRT] 📵 No video signal from SFU publisher',
-        `id=${publisherId}`,
-        `user=${Number(peer.userId || 0)}`,
-        `stalled=${stalledAgeMs}ms`,
-        `tracks=${trackCount}`,
-        `runtime=${mediaRuntimePath.value}`,
-      );
+      if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+        logSfuVideoRecoveryStatus(sfuNoVideoSignalConsoleLabel, {
+          ageMs: stalledAgeMs,
+          attempt: 3,
+          localUserId: currentUserId.value,
+          peer,
+          publisherId,
+          runtime: mediaRuntimePath.value,
+          state: 'never_started',
+        });
+      }
 
       peer.stalledLoggedAtMs = nowMs;
       captureClientDiagnostic({
@@ -199,11 +213,14 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       });
 
       if (sfuClientRef.value && stalledAgeMs > remoteVideoStallThresholdMs * 2) {
-        console.info(
-          '[KingRT] 🔄 Auto-resubscribe for stalled SFU publisher',
-          `id=${publisherId}`,
-          `user=${Number(peer.userId || 0)}`,
-        );
+        if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+          console.info(
+            '[KingRT] Auto-resubscribe for stalled SFU publisher',
+            `local_user=${currentUserId.value}`,
+            `remote_user=${Number(peer.userId || 0)}`,
+            `publisher=${publisherId}`,
+          );
+        }
         sfuClientRef.value.subscribe(publisherId);
       }
       if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {

@@ -66,6 +66,7 @@ export function createCallWorkspaceMediaStack(options) {
   } = createSfuFrameDecodeHelpers({
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
     captureClientDiagnosticError: callbacks.captureClientDiagnosticError,
+    currentUserId: () => refs.currentUserId.value,
     ensureMediaSecuritySession: callbacks.ensureMediaSecuritySession,
     ensureSfuRemotePeerForFrame,
     getSfuRemotePeerByFrameIdentity,
@@ -110,6 +111,7 @@ export function createCallWorkspaceMediaStack(options) {
     refs: {
       connectedParticipantUsers: refs.connectedParticipantUsers,
       connectionState: refs.connectionState,
+      currentUserId: refs.currentUserId,
       mediaRuntimeCapabilities: refs.mediaRuntimeCapabilities,
       mediaRuntimePath: refs.mediaRuntimePath,
       remotePeersRef: refs.remotePeersRef,
