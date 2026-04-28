@@ -114,17 +114,7 @@ function videochat_sfu_normalize_runtime_id(string $runtimeId): string
  */
 function videochat_sfu_expand_outbound_frame_payload(array $frame): array
 {
-    $chunkMaxChars = videochat_sfu_frame_chunk_max_chars();
-    $protectedFrame = is_string($frame['protected_frame'] ?? null) ? trim((string) $frame['protected_frame']) : '';
-    if ($protectedFrame !== '' && strlen($protectedFrame) > $chunkMaxChars) {
-        return videochat_sfu_chunk_outbound_frame_payload($frame, 'protected_frame_chunk', $protectedFrame, $chunkMaxChars);
-    }
-
-    $dataBase64 = is_string($frame['data_base64'] ?? null) ? trim((string) $frame['data_base64']) : '';
-    if ($dataBase64 !== '' && strlen($dataBase64) > $chunkMaxChars) {
-        return videochat_sfu_chunk_outbound_frame_payload($frame, 'data_base64_chunk', $dataBase64, $chunkMaxChars);
-    }
-
+    unset($frame['data_base64_chunk'], $frame['protected_frame_chunk']);
     return [$frame];
 }
 
@@ -615,24 +605,24 @@ function videochat_sfu_send_outbound_message(mixed $socket, array $payload): boo
         $binaryPayload = videochat_sfu_encode_binary_frame_envelope($payload);
         if (is_string($binaryPayload) && $binaryPayload !== '') {
             try {
-                return king_websocket_send($socket, $binaryPayload, true) === true;
-            } catch (Throwable) {
-                return false;
-            }
+                if (king_websocket_send($socket, $binaryPayload, true) === true) {
+                    return true;
+                }
+            } catch (Throwable) {}
         }
-        videochat_sfu_log_runtime_event('sfu_frame_binary_fallback', [
-            'transport_path' => 'legacy_json_fallback',
+        videochat_sfu_log_runtime_event('sfu_frame_binary_required_send_failed', [
+            'transport_path' => 'binary_required',
             'publisher_id' => (string) ($payload['publisher_id'] ?? ''),
             'track_id' => (string) ($payload['track_id'] ?? ''),
             'frame_type' => (string) ($payload['frame_type'] ?? 'delta'),
             'protection_mode' => (string) ($payload['protection_mode'] ?? 'transport_only'),
             'payload_chars' => (int) ($payload['payload_chars'] ?? 0),
-            'legacy_wire_payload_bytes' => strlen((string) json_encode($payload, JSON_UNESCAPED_SLASHES)),
             ...videochat_sfu_transport_metric_fields(
                 $payload,
-                strlen((string) json_encode($payload, JSON_UNESCAPED_SLASHES))
+                is_string($binaryPayload) ? strlen($binaryPayload) : 0
             ),
         ], 3000);
+        return false;
     }
 
     return videochat_presence_send_frame($socket, $payload);
@@ -1228,6 +1218,15 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
             'error' => $type === '' ? 'missing_type' : 'unsupported_type',
         ];
     }
+    if ($type === 'sfu/frame' || $type === 'sfu/frame-chunk') {
+        return [
+            'ok' => false,
+            'type' => $type,
+            'room_id' => videochat_presence_normalize_room_id($boundRoomId, ''),
+            'payload' => [],
+            'error' => 'binary_media_required',
+        ];
+    }
 
     $normalizedBoundRoomId = videochat_presence_normalize_room_id($boundRoomId, '');
     $rawCommandRoom = $decoded['room_id'] ?? ($decoded['roomId'] ?? ($decoded['room'] ?? null));
@@ -1530,10 +1529,10 @@ function videochat_sfu_poll_broker(
                     continue;
                 }
             } catch (Throwable) {
-                // fall back to legacy JSON decode/send below
+                // Re-decode stored metadata below, but keep media replay on binary only.
             }
         }
-        videochat_sfu_log_runtime_event('sfu_frame_broker_replay_legacy', [
+        videochat_sfu_log_runtime_event('sfu_frame_broker_replay_binary_required_retry', [
             'room_id' => $roomId,
             'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
             'track_id' => (string) ($frame['track_id'] ?? ''),
@@ -1586,9 +1585,13 @@ function videochat_sfu_poll_broker(
             $outboundFrame['data'] = $storedPayload['data'];
         }
         if (!videochat_sfu_send_outbound_message($websocket, $outboundFrame)) {
-            foreach (videochat_sfu_expand_outbound_frame_payload($outboundFrame) as $outboundMessage) {
-                videochat_presence_send_frame($websocket, $outboundMessage);
-            }
+            videochat_sfu_log_runtime_event('sfu_frame_broker_replay_binary_required_failed', [
+                'room_id' => $roomId,
+                'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
+                'track_id' => (string) ($frame['track_id'] ?? ''),
+                'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+                ...$transportMetricFields,
+            ], 3000);
         }
     }
 }

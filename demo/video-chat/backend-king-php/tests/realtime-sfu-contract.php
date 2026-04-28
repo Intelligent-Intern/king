@@ -228,8 +228,8 @@ try {
         'SFU broker pressure diagnostics should be wired'
     );
     videochat_realtime_sfu_assert(
-        str_contains($sfuGatewaySource, 'sfu_frame_direct_fanout_pressure'),
-        'SFU direct fanout pressure diagnostics should be wired'
+        str_contains($sfuGatewaySource, 'sfu_frame_direct_fanout_binary_required_failed'),
+        'SFU direct fanout binary-required diagnostics should be wired'
     );
     $sfuStoreSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
     videochat_realtime_sfu_assert(
@@ -290,7 +290,7 @@ try {
         'tag_length' => 16,
     ];
     $protectedFrame = videochat_realtime_sfu_protected_frame($protectedHeader, "\x0b\x0c\x0d");
-    $protectedFrameCommand = videochat_sfu_decode_client_frame(
+    $jsonMediaCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame',
             'room_id' => 'room-alpha',
@@ -300,50 +300,8 @@ try {
         ], JSON_UNESCAPED_SLASHES),
         'room-alpha'
     );
-    videochat_realtime_sfu_assert((bool) ($protectedFrameCommand['ok'] ?? false), 'protected SFU frame envelope should decode');
-    videochat_realtime_sfu_assert(
-        (($protectedFrameCommand['payload'] ?? [])['protected_frame'] ?? '') === $protectedFrame,
-        'protected SFU frame envelope must survive decode unchanged'
-    );
-    videochat_realtime_sfu_assert(
-        (($protectedFrameCommand['payload'] ?? [])['protection_mode'] ?? '') === 'required',
-        'required protection mode must survive decode'
-    );
-    $protectedDataConflictCommand = videochat_sfu_decode_client_frame(
-        json_encode([
-            'type' => 'sfu/frame',
-            'room_id' => 'room-alpha',
-            'track_id' => 'camera-a',
-            'data' => [11, 12, 13],
-            'protected_frame' => $protectedFrame,
-        ], JSON_UNESCAPED_SLASHES),
-        'room-alpha'
-    );
-    videochat_realtime_sfu_assert(!(bool) ($protectedDataConflictCommand['ok'] ?? true), 'SFU must reject protected frame plus plaintext data');
-    videochat_realtime_sfu_assert((string) ($protectedDataConflictCommand['error'] ?? '') === 'protected_frame_data_conflict', 'protected frame data conflict reason mismatch');
-    $requiredPlaintextFallbackCommand = videochat_sfu_decode_client_frame(
-        json_encode([
-            'type' => 'sfu/frame',
-            'room_id' => 'room-alpha',
-            'track_id' => 'camera-a',
-            'data' => [11, 12, 13],
-            'protection_mode' => 'required',
-        ], JSON_UNESCAPED_SLASHES),
-        'room-alpha'
-    );
-    videochat_realtime_sfu_assert(!(bool) ($requiredPlaintextFallbackCommand['ok'] ?? true), 'SFU must reject plaintext fallback in required mode');
-    videochat_realtime_sfu_assert((string) ($requiredPlaintextFallbackCommand['error'] ?? '') === 'protected_frame_required', 'required plaintext fallback reason mismatch');
-    $legacyProtectedMetadataCommand = videochat_sfu_decode_client_frame(
-        json_encode([
-            'type' => 'sfu/frame',
-            'room_id' => 'room-alpha',
-            'track_id' => 'camera-a',
-            'data' => [11, 12, 13],
-            'protected' => ['plaintext_frame' => 'nope'],
-        ], JSON_UNESCAPED_SLASHES),
-        'room-alpha'
-    );
-    videochat_realtime_sfu_assert(!(bool) ($legacyProtectedMetadataCommand['ok'] ?? true), 'SFU must reject legacy protected metadata');
+    videochat_realtime_sfu_assert(!(bool) ($jsonMediaCommand['ok'] ?? true), 'JSON SFU media frame must be rejected in binary-required mode');
+    videochat_realtime_sfu_assert((string) ($jsonMediaCommand['error'] ?? '') === 'binary_media_required', 'JSON SFU media rejection reason mismatch');
     $chunkedTransportCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame-chunk',
@@ -364,64 +322,8 @@ try {
         ], JSON_UNESCAPED_SLASHES),
         'room-alpha'
     );
-    videochat_realtime_sfu_assert((bool) ($chunkedTransportCommand['ok'] ?? false), 'chunked SFU transport frame should decode');
-    videochat_realtime_sfu_assert(
-        (($chunkedTransportCommand['payload'] ?? [])['data_base64_chunk'] ?? '') === 'QUJDREVGRw',
-        'chunked SFU transport payload must preserve the chunk'
-    );
-    videochat_realtime_sfu_assert(
-        (int) (($chunkedTransportCommand['payload'] ?? [])['frame_sequence'] ?? 0) === 41,
-        'chunked SFU transport payload must preserve frame sequence'
-    );
-    videochat_realtime_sfu_assert(
-        (int) (($chunkedTransportCommand['payload'] ?? [])['payload_chars'] ?? 0) === 10,
-        'chunked SFU transport payload must preserve advertised payload length'
-    );
-    $chunkedProtectedCommand = videochat_sfu_decode_client_frame(
-        json_encode([
-            'type' => 'sfu/frame-chunk',
-            'room_id' => 'room-alpha',
-            'frame_id' => 'frame_alpha_02',
-            'track_id' => 'camera-a',
-            'timestamp' => 12346,
-            'frame_type' => 'delta',
-            'protocol_version' => 2,
-            'frame_sequence' => 42,
-            'sender_sent_at_ms' => 1770000000100,
-            'payload_chars' => 11,
-            'chunk_payload_chars' => 11,
-            'chunk_index' => 1,
-            'chunk_count' => 3,
-            'protected_frame_chunk' => 'QUJDREVGR0g',
-            'protection_mode' => 'required',
-        ], JSON_UNESCAPED_SLASHES),
-        'room-alpha'
-    );
-    videochat_realtime_sfu_assert((bool) ($chunkedProtectedCommand['ok'] ?? false), 'chunked protected SFU frame should decode');
-    videochat_realtime_sfu_assert(
-        (($chunkedProtectedCommand['payload'] ?? [])['protection_mode'] ?? '') === 'required',
-        'chunked protected SFU frame must preserve required mode'
-    );
-    $invalidChunkLengthCommand = videochat_sfu_decode_client_frame(
-        json_encode([
-            'type' => 'sfu/frame-chunk',
-            'room_id' => 'room-alpha',
-            'frame_id' => 'frame_alpha_bad_length',
-            'track_id' => 'camera-a',
-            'timestamp' => 12347,
-            'frame_type' => 'delta',
-            'protocol_version' => 2,
-            'frame_sequence' => 43,
-            'payload_chars' => 4,
-            'chunk_payload_chars' => 99,
-            'chunk_index' => 0,
-            'chunk_count' => 1,
-            'data_base64_chunk' => 'QUJD',
-            'protection_mode' => 'transport_only',
-        ], JSON_UNESCAPED_SLASHES),
-        'room-alpha'
-    );
-    videochat_realtime_sfu_assert(!(bool) ($invalidChunkLengthCommand['ok'] ?? true), 'invalid SFU chunk payload length must fail closed');
+    videochat_realtime_sfu_assert(!(bool) ($chunkedTransportCommand['ok'] ?? true), 'JSON SFU media chunks must be rejected in binary-required mode');
+    videochat_realtime_sfu_assert((string) ($chunkedTransportCommand['error'] ?? '') === 'binary_media_required', 'JSON SFU media chunk rejection reason mismatch');
     $chunkedOutboundTransport = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -450,25 +352,21 @@ try {
         'payload_chars' => strlen(str_repeat('QUJDREVGR0g', 1_200)),
         'data_base64' => str_repeat('QUJDREVGR0g', 1_200),
     ]);
-    videochat_realtime_sfu_assert(count($chunkedOutboundTransport) > 1, 'large outbound SFU transport frame should chunk');
+    videochat_realtime_sfu_assert(count($chunkedOutboundTransport) === 1, 'large outbound SFU transport frame must not expand to JSON chunks');
     videochat_realtime_sfu_assert(
-        (string) ($chunkedOutboundTransport[0]['type'] ?? '') === 'sfu/frame-chunk',
-        'chunked outbound SFU transport frame must switch message type'
+        (string) ($chunkedOutboundTransport[0]['type'] ?? '') === 'sfu/frame',
+        'outbound SFU transport frame must keep binary-envelope message type'
     );
-    $reassembledOutboundTransport = '';
-    foreach ($chunkedOutboundTransport as $chunk) {
-        $reassembledOutboundTransport .= (string) ($chunk['data_base64_chunk'] ?? '');
-    }
     videochat_realtime_sfu_assert(
-        $reassembledOutboundTransport === str_repeat('QUJDREVGR0g', 1_200),
-        'chunked outbound SFU transport frame must preserve payload bytes'
+        !array_key_exists('data_base64_chunk', $chunkedOutboundTransport[0])
+        && !array_key_exists('protected_frame_chunk', $chunkedOutboundTransport[0]),
+        'outbound SFU transport frame must not expose JSON chunk fields'
     );
     videochat_realtime_sfu_assert(
         (int) ($chunkedOutboundTransport[0]['protocol_version'] ?? 0) === 2
         && (int) ($chunkedOutboundTransport[0]['frame_sequence'] ?? 0) === 99
-        && (int) ($chunkedOutboundTransport[0]['payload_chars'] ?? 0) === strlen(str_repeat('QUJDREVGR0g', 1_200))
-        && (int) ($chunkedOutboundTransport[0]['chunk_payload_chars'] ?? 0) === strlen((string) ($chunkedOutboundTransport[0]['data_base64_chunk'] ?? '')),
-        'chunked outbound SFU transport frame must carry protocol, sequence, and chunk length metadata'
+        && (int) ($chunkedOutboundTransport[0]['payload_chars'] ?? 0) === strlen(str_repeat('QUJDREVGR0g', 1_200)),
+        'outbound SFU transport frame must preserve protocol, sequence, and payload length metadata'
     );
     videochat_realtime_sfu_assert(
         (string) ($chunkedOutboundTransport[0]['codec_id'] ?? '') === 'wlvc_wasm'
@@ -476,7 +374,7 @@ try {
         && (string) ($chunkedOutboundTransport[0]['layout_mode'] ?? '') === 'tile_foreground'
         && (string) ($chunkedOutboundTransport[0]['layer_id'] ?? '') === 'foreground'
         && (int) ($chunkedOutboundTransport[0]['cache_epoch'] ?? 0) === 7,
-        'chunked outbound SFU transport frame must preserve codec/runtime/layout metadata'
+        'outbound SFU transport frame must preserve codec/runtime/layout metadata'
     );
     $chunkedOutboundProtected = videochat_sfu_expand_outbound_frame_payload([
         'type' => 'sfu/frame',
@@ -490,15 +388,15 @@ try {
         'runtime_id' => 'wlvc_sfu',
         'protected_frame' => str_repeat('QUJDREVGR0g', 1_200),
     ]);
-    videochat_realtime_sfu_assert(count($chunkedOutboundProtected) > 1, 'large outbound protected SFU frame should chunk');
+    videochat_realtime_sfu_assert(count($chunkedOutboundProtected) === 1, 'large outbound protected SFU frame must not expand to JSON chunks');
     videochat_realtime_sfu_assert(
-        (string) ($chunkedOutboundProtected[0]['protected_frame_chunk'] ?? '') !== '',
-        'chunked outbound protected SFU frame must use protected_frame_chunk'
+        !array_key_exists('protected_frame_chunk', $chunkedOutboundProtected[0]),
+        'outbound protected SFU frame must not expose protected_frame_chunk'
     );
     videochat_realtime_sfu_assert(
         (string) ($chunkedOutboundProtected[0]['codec_id'] ?? '') === 'wlvc_ts'
         && (string) ($chunkedOutboundProtected[0]['runtime_id'] ?? '') === 'wlvc_sfu',
-        'chunked outbound protected SFU frame must preserve codec/runtime metadata'
+        'outbound protected SFU frame must preserve codec/runtime metadata'
     );
     $binaryEnvelope = videochat_sfu_encode_binary_frame_envelope([
         'type' => 'sfu/frame',
@@ -540,6 +438,28 @@ try {
         && (int) ($decodedBinaryPayload['cache_epoch'] ?? 0) === 11,
         'binary SFU frame envelope must preserve codec/runtime/layout metadata through decode'
     );
+    $protectedBinaryEnvelope = videochat_sfu_encode_binary_frame_envelope([
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-a',
+        'publisher_user_id' => '100',
+        'track_id' => 'camera-a',
+        'timestamp' => 12351,
+        'frame_type' => 'delta',
+        'protection_mode' => 'required',
+        'protocol_version' => 2,
+        'frame_sequence' => 101,
+        'sender_sent_at_ms' => 1770000000400,
+        'protected_frame' => $protectedFrame,
+    ]);
+    videochat_realtime_sfu_assert(is_string($protectedBinaryEnvelope) && $protectedBinaryEnvelope !== '', 'protected binary SFU frame envelope should encode');
+    $decodedProtectedBinaryEnvelope = videochat_sfu_decode_binary_client_frame((string) $protectedBinaryEnvelope, 'room-alpha');
+    videochat_realtime_sfu_assert((bool) ($decodedProtectedBinaryEnvelope['ok'] ?? false), 'protected binary SFU frame envelope should decode');
+    $decodedProtectedBinaryPayload = is_array($decodedProtectedBinaryEnvelope['payload'] ?? null) ? $decodedProtectedBinaryEnvelope['payload'] : [];
+    videochat_realtime_sfu_assert(
+        (string) ($decodedProtectedBinaryPayload['protected_frame'] ?? '') === $protectedFrame
+        && (string) ($decodedProtectedBinaryPayload['protection_mode'] ?? '') === 'required',
+        'protected binary SFU frame envelope must preserve protected payload and required mode'
+    );
     $invalidChunkCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame-chunk',
@@ -555,7 +475,8 @@ try {
         ], JSON_UNESCAPED_SLASHES),
         'room-alpha'
     );
-    videochat_realtime_sfu_assert(!(bool) ($invalidChunkCommand['ok'] ?? true), 'invalid SFU chunk frame id must fail closed');
+    videochat_realtime_sfu_assert(!(bool) ($invalidChunkCommand['ok'] ?? true), 'JSON SFU chunk command must fail closed');
+    videochat_realtime_sfu_assert((string) ($invalidChunkCommand['error'] ?? '') === 'binary_media_required', 'JSON SFU chunk command rejection reason mismatch');
 
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[realtime-sfu-contract] SKIP: pdo_sqlite is not available for persistence relay checks\n");

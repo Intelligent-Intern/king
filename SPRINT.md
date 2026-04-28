@@ -28,10 +28,10 @@ Observed online failure:
 3. [ ] `[build-deploy]` Enable or publish production sourcemaps for internal deployments, or add a deterministic bundle-position mapping artifact, so online `CallWorkspaceView-*.js:line:column` reports resolve to source without guesswork.
 4. [x] `[frontend-sfu]` Remove the frontend SFU media hot-path branch that sends oversized frames through `sendChunkedFramePayload()` and `transport_path: 'legacy_chunked_json'`.
 5. [ ] `[binary-contract]` Replace JSON/base64 media chunking with a binary continuation envelope for oversized SFU frames if the King WebSocket boundary needs chunking.
-6. [ ] `[gateway-policy]` Keep JSON only for explicit SFU control-plane commands until the IIBIN control envelope lands; media payloads must not use JSON/base64 as the active production path.
+6. [x] `[gateway-policy]` Keep JSON only for explicit SFU control-plane commands until the IIBIN control envelope lands; media payloads must not use JSON/base64 as the active production path.
 7. [ ] `[frontend-sfu]` Update frontend contracts that currently require `sfu/frame-chunk`, `data_base64_chunk`, `protected_frame_chunk`, or `legacy_chunked_json` so they prove the binary media contract instead of preserving the fallback.
-8. [ ] `[backend-store]` Update backend SFU store/gateway tests that currently assert outbound JSON chunk expansion so replay/fanout proves binary media envelopes or binary continuation frames.
-9. [ ] `[gateway-policy]` Make backend SFU gateway reject JSON media frame sends in required binary mode while preserving authenticated JSON control commands and clear compatibility diagnostics.
+8. [x] `[backend-store]` Update backend SFU store/gateway tests that currently assert outbound JSON chunk expansion so replay/fanout proves binary media envelopes or binary continuation frames.
+9. [x] `[gateway-policy]` Make backend SFU gateway reject JSON media frame sends in required binary mode while preserving authenticated JSON control commands and clear compatibility diagnostics.
 10. [ ] `[iibin-schema]` Define the IIBIN schema boundary for SFU control and metadata: room binding, publisher lifecycle, track lifecycle, diagnostics, and binary media-envelope metadata.
 11. [ ] `[iibin-schema]` Implement the IIBIN control/metadata path on native King PHP APIs instead of introducing a Node or browser-only transport shim.
 12. [ ] `[experiment-audit]` Audit `origin/experiments/1.0.7-video-codec` residual diffs after the codec port and document any remaining keep/port/reject decisions.

@@ -477,22 +477,15 @@ function videochat_handle_sfu_routes(
                 $outboundFrame['data'] = $frameData;
             }
             if (!videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame)) {
-                $outboundMessages = videochat_sfu_expand_outbound_frame_payload($outboundFrame);
-                if (count($outboundMessages) >= 16) {
-                    videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_pressure', [
-                        'room_id' => $roomId,
-                        'publisher_id' => (string) $clientId,
-                        'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
-                        'track_id' => (string) $trackId,
-                        'frame_type' => (string) $frameType,
-                        'protection_mode' => (string) $protectionMode,
-                        'message_count' => count($outboundMessages),
-                        'worker_pid' => getmypid(),
-                    ]);
-                }
-                foreach ($outboundMessages as $outboundMessage) {
-                    videochat_presence_send_frame($subClient['websocket'], $outboundMessage);
-                }
+                videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_binary_required_failed', [
+                    'room_id' => $roomId,
+                    'publisher_id' => (string) $clientId,
+                    'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
+                    'track_id' => (string) $trackId,
+                    'frame_type' => (string) $frameType,
+                    'protection_mode' => (string) $protectionMode,
+                    'worker_pid' => getmypid(),
+                ]);
             }
         }
     };
