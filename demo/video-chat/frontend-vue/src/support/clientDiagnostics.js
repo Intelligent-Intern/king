@@ -14,6 +14,7 @@ let diagnosticsFlushTimer = null;
 let diagnosticsFlushPromise = null;
 let diagnosticsLifecycleBound = false;
 let diagnosticsRetryDelayMs = 2500;
+let diagnosticsGlobalErrorBound = false;
 
 function normalizeString(value, fallback = '', maxLength = 240) {
   const normalized = String(value ?? '').trim();
@@ -164,9 +165,69 @@ function bindDiagnosticsLifecycleHooks() {
   });
 }
 
+function diagnosticErrorName(value) {
+  if (value instanceof Error) return normalizeString(value.name, 'Error', 120);
+  if (value && typeof value === 'object' && typeof value.name === 'string') {
+    return normalizeString(value.name, 'Error', 120);
+  }
+  return '';
+}
+
+function diagnosticErrorMessage(value, fallback = 'Client runtime error captured.') {
+  if (value instanceof Error) return normalizeString(value.message, fallback, 500);
+  if (typeof value === 'string') return normalizeString(value, fallback, 500);
+  if (value && typeof value === 'object' && typeof value.message === 'string') {
+    return normalizeString(value.message, fallback, 500);
+  }
+  return fallback;
+}
+
+function reportGlobalClientRuntimeError(eventType, error, payload = {}) {
+  try {
+    reportClientDiagnostic({
+      category: 'runtime',
+      level: 'error',
+      eventType,
+      code: diagnosticErrorName(error) || eventType,
+      message: diagnosticErrorMessage(error),
+      payload: {
+        ...payload,
+        error,
+      },
+      immediate: true,
+    });
+  } catch {
+    // Never let diagnostics create a secondary global error.
+  }
+}
+
+function bindGlobalClientErrorDiagnostics() {
+  if (diagnosticsGlobalErrorBound || typeof window === 'undefined') return;
+  diagnosticsGlobalErrorBound = true;
+
+  window.addEventListener('error', (event) => {
+    const error = event?.error || event?.message || 'Client runtime error captured.';
+    reportGlobalClientRuntimeError('call_workspace_runtime_error', error, {
+      source_file: normalizeString(event?.filename, '', 500),
+      source_line: Math.max(0, Number(event?.lineno || 0)),
+      source_column: Math.max(0, Number(event?.colno || 0)),
+      message: normalizeString(event?.message, '', 500),
+      global_event_type: 'error',
+    });
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason || 'Client promise rejection captured.';
+    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', reason, {
+      global_event_type: 'unhandledrejection',
+    });
+  });
+}
+
 export function configureClientDiagnostics(contextProvider) {
   diagnosticsContextProvider = typeof contextProvider === 'function' ? contextProvider : null;
   bindDiagnosticsLifecycleHooks();
+  bindGlobalClientErrorDiagnostics();
   if (diagnosticsQueue.length > 0) {
     scheduleDiagnosticsFlush(250);
   }

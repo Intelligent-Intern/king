@@ -26,7 +26,13 @@ const diagnostics = read('src/support/clientDiagnostics.js');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
 requireContains(diagnostics, 'const DIAGNOSTICS_MAX_BATCH = 12;', 'diagnostics batch limit');
+requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_runtime_error'", 'global runtime error diagnostics hook');
+requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_unhandled_rejection'", 'global promise rejection diagnostics hook');
+requireContains(diagnostics, 'source_file: normalizeString(event?.filename', 'minified bundle source position capture');
 requireContains(workspace, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
+requireContains(workspace, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
+requireContains(workspace, 'last_sfu_transport_sample: callWorkspaceLastSfuTransportSample()', 'last sfu transport sample context');
+requireContains(sfuClient, 'getLastFrameTransportSample()', 'sfu client exposes last transport sample');
 requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote stall diagnostics hook');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');

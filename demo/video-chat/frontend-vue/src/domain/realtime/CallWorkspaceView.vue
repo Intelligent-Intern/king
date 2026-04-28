@@ -984,7 +984,24 @@ const mediaSecurityRuntimeState = {
   state: mediaSecurityRuntimeState,
 }));
 
+function callWorkspaceNativeBridgeDiagnosticsSnapshot() {
+  const nativePeerConnections = nativePeerConnectionsRef.value instanceof Map
+    ? nativePeerConnectionsRef.value
+    : new Map();
+  return {
+    status_version: nativeAudioBridgeStatusVersion.value,
+    quarantine_count: nativeAudioBridgeQuarantineByUserId.size,
+    native_peer_count: nativePeerConnections.size,
+    security: nativeAudioSecurityTelemetrySnapshot() || null,
+  };
+}
 
+function callWorkspaceLastSfuTransportSample() {
+  const client = sfuClientRef.value;
+  return client && typeof client.getLastFrameTransportSample === 'function'
+    ? client.getLastFrameTransportSample()
+    : null;
+}
 
 configureClientDiagnostics(() => ({
   call_id: activeSocketCallId.value || activeCallId.value,
@@ -1000,6 +1017,9 @@ configureClientDiagnostics(() => ({
   media_preferred_path: mediaRuntimeCapabilities.value.preferredPath,
   connected_participant_count: connectedParticipantUsers.value.length,
   remote_peer_count: remotePeersRef.value.size,
+  native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot(),
+  last_sfu_transport_sample: callWorkspaceLastSfuTransportSample(),
+  last_sfu_send_failure: sfuClientRef.value?.getLastSendFailure?.() || null,
 }));
 
 let renderCallVideoLayout = () => {};

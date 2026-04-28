@@ -104,6 +104,23 @@ export interface SfuSendFailureDetails {
   timestamp: number
 }
 
+export interface SfuFrameTransportSample {
+  transportPath: string
+  payloadBytes: number
+  wirePayloadBytes: number
+  wireOverheadBytes: number
+  wireVsPayloadRatio: number
+  websocketBufferedAmount: number
+  queueLength: number
+  queuePayloadChars: number
+  activePayloadChars: number
+  trackId: string
+  frameType: string
+  frameSequence: number
+  chunkCount: number
+  timestampUnixMs: number
+}
+
 export interface SFUClientCallbacks {
   onTracks:        (e: SFUTracksEvent) => void
   onUnpublished:   (publisherId: string, trackId: string) => void
@@ -140,6 +157,7 @@ export class SFUClient {
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
+  private lastFrameTransportSample: SfuFrameTransportSample | null = null
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -375,6 +393,10 @@ export class SFUClient {
 
   getLastSendFailure(): SfuSendFailureDetails | null {
     return this.lastSendFailure ? { ...this.lastSendFailure } : null
+  }
+
+  getLastFrameTransportSample(): SfuFrameTransportSample | null {
+    return this.lastFrameTransportSample ? { ...this.lastFrameTransportSample } : null
   }
 
   private send(msg: object): boolean {
@@ -677,23 +699,49 @@ export class SFUClient {
 
   private reportFrameTransportSampleIfNeeded(payload: Record<string, unknown>): void {
     const nowMs = Date.now()
+    const sample = this.recordFrameTransportSample(payload, nowMs)
     if ((nowMs - this.lastFrameTransportSampleAtMs) < SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS) {
       return
     }
     this.lastFrameTransportSampleAtMs = nowMs
-    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
-    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
     this.reportFrameSendDiagnostic(
       'sfu_frame_transport_sample',
       'info',
       'Sampled SFU frame transport metrics for the active media path.',
       {
         ...payload,
-        wire_vs_payload_ratio: payloadBytes > 0
-          ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
-          : 0,
+        wire_vs_payload_ratio: sample.wireVsPayloadRatio,
       },
     )
+  }
+
+  private recordFrameTransportSample(
+    payload: Record<string, unknown>,
+    nowMs = Date.now(),
+  ): SfuFrameTransportSample {
+    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
+    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
+    const wireVsPayloadRatio = payloadBytes > 0
+      ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
+      : 0
+    const sample = {
+      transportPath: String(payload.transport_path || 'unknown_transport'),
+      payloadBytes,
+      wirePayloadBytes,
+      wireOverheadBytes: Math.max(0, Number(payload.wire_overhead_bytes || 0)),
+      wireVsPayloadRatio,
+      websocketBufferedAmount: Math.max(0, Number(payload.websocket_buffered_amount || payload.buffered_amount || 0)),
+      queueLength: Math.max(0, Number(payload.queue_length || 0)),
+      queuePayloadChars: Math.max(0, Number(payload.queue_payload_chars || 0)),
+      activePayloadChars: Math.max(0, Number(payload.active_payload_chars || 0)),
+      trackId: String(payload.track_id || ''),
+      frameType: String(payload.frame_type || ''),
+      frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
+      chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
+      timestampUnixMs: nowMs,
+    }
+    this.lastFrameTransportSample = sample
+    return sample
   }
 
   private handleMessage(msg: any): void {
