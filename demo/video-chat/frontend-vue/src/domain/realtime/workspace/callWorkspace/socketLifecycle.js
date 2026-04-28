@@ -279,7 +279,14 @@ export function createCallWorkspaceSocketHelpers({
         return;
       }
       if (refs.shouldSuppressExpectedSignalingError(payload)) {
-        scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
+        if (mediaSecuritySignalTypes.includes(failedCommandType)) {
+          requestRoomSnapshot();
+          setTimeout(() => {
+            void sendMediaSecuritySync(false);
+          }, 500);
+        } else {
+          scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
+        }
         return;
       }
       if (code === 'activity_publish_failed') {

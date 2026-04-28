@@ -588,6 +588,12 @@ ON call_apps(lower(name), lower(manufacturer))
 SQL,
             ],
         ],
+        20 => [
+            'name' => '0020_drop_legacy_sfu_frame_persistence',
+            'statements' => [
+                'DROP TABLE IF EXISTS sfu_frames',
+            ],
+        ],
     ];
 }
 

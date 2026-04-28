@@ -7,6 +7,16 @@ const VERSION_SIGNAL_TYPES = new Set([
   'sfu/welcome',
   'sfu/runtime',
 ]);
+const ASSET_LOAD_FAILURE_RELOAD_STORAGE_KEY = 'ii.videocall.asset_load_failure_reload.v1';
+const ASSET_LOAD_FAILURE_PATTERNS = [
+  'failed to fetch dynamically imported module',
+  'error loading dynamically imported module',
+  'importing a module script failed',
+  'loading chunk',
+  'chunkloaderror',
+  'css chunk load failed',
+  'unable to preload css',
+];
 
 let assetReloadPending = false;
 
@@ -25,6 +35,48 @@ function hardReload() {
   assetReloadPending = true;
   window.location.reload();
   return true;
+}
+
+function assetLoadFailureText(error, payload = {}) {
+  const parts = [];
+  const append = (value) => {
+    const normalized = String(value ?? '').trim();
+    if (normalized !== '') parts.push(normalized);
+  };
+  append(error?.message);
+  append(error?.stack);
+  append(error?.name);
+  append(error);
+  append(payload?.message);
+  append(payload?.source_file);
+  append(payload?.source_url);
+  append(payload?.href);
+  return parts.join(' ').toLowerCase();
+}
+
+function isAssetLoadFailure(error, payload = {}) {
+  const text = assetLoadFailureText(error, payload);
+  if (text === '') return false;
+  if (ASSET_LOAD_FAILURE_PATTERNS.some((pattern) => text.includes(pattern))) return true;
+  return text.includes('/assets/')
+    && (text.includes('.js') || text.includes('.css'))
+    && (text.includes('failed') || text.includes('error'));
+}
+
+function claimAssetLoadFailureReload() {
+  if (typeof window === 'undefined') return false;
+  const key = [
+    ASSET_LOAD_FAILURE_RELOAD_STORAGE_KEY,
+    BUILD_VERSION || 'unknown',
+    String(window.location?.pathname || ''),
+  ].join(':');
+  try {
+    if (window.sessionStorage?.getItem(key) === '1') return false;
+    window.sessionStorage?.setItem(key, '1');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function appendAssetVersionQuery(query) {
@@ -65,5 +117,11 @@ export function handleAssetVersionSocketClose(event) {
     return false;
   }
 
+  return hardReload();
+}
+
+export function handleAssetLoadFailure(error, payload = {}) {
+  if (import.meta.env.DEV || !isAssetLoadFailure(error, payload)) return false;
+  if (!claimAssetLoadFailureReload()) return false;
   return hardReload();
 }

@@ -486,6 +486,7 @@ sync_checkout() {
     --exclude 'demo/video-chat/frontend-vue/node_modules/' \
     --exclude 'demo/video-chat/frontend-vue/.vite/' \
     --exclude 'demo/video-chat/frontend-vue/dist/' \
+    --exclude 'demo/video-chat/frontend-vue/test-results*/' \
     --exclude 'demo/video-chat/backend-king-php/.local/' \
     --exclude 'target/' \
     --exclude '.pytest_cache/' \
@@ -701,8 +702,10 @@ VIDEOCHAT_V1_BACKEND_PORT=18080
 VIDEOCHAT_V1_BACKEND_BIND=127.0.0.1
 VIDEOCHAT_V1_BACKEND_WS_PORT=18081
 VIDEOCHAT_V1_BACKEND_WS_BIND=127.0.0.1
+VIDEOCHAT_V1_WS_WORKERS=8
 VIDEOCHAT_V1_BACKEND_SFU_PORT=18082
 VIDEOCHAT_V1_BACKEND_SFU_BIND=127.0.0.1
+VIDEOCHAT_V1_SFU_WORKERS=8
 VIDEOCHAT_V1_EDGE_HTTP_PORT=80
 VIDEOCHAT_V1_EDGE_HTTPS_PORT=443
 
@@ -950,8 +953,10 @@ set_env_value VIDEOCHAT_V1_BACKEND_PORT 18080
 set_env_value VIDEOCHAT_V1_BACKEND_BIND 127.0.0.1
 set_env_value VIDEOCHAT_V1_BACKEND_WS_PORT 18081
 set_env_value VIDEOCHAT_V1_BACKEND_WS_BIND 127.0.0.1
+set_env_value VIDEOCHAT_V1_WS_WORKERS 8
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_PORT 18082
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_BIND 127.0.0.1
+set_env_value VIDEOCHAT_V1_SFU_WORKERS 8
 set_env_value VIDEOCHAT_V1_EDGE_HTTP_PORT 80
 set_env_value VIDEOCHAT_V1_EDGE_HTTPS_PORT 443
 set_env_value VIDEOCHAT_DEPLOY_API_DOMAIN "\${API_DOMAIN}"

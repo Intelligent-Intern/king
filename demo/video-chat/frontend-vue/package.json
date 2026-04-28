@@ -30,6 +30,7 @@
     "test:contract:mediapipe-cdn": "node tests/contract/mediapipe-cdn-contract.mjs",
     "test:contract:realtime-leave-rejoin": "node tests/contract/realtime-leave-rejoin-contract.mjs",
     "test:e2e:release-gate": "node tests/contract/e2e-release-gate-contract.mjs",
+    "test:e2e:online-sfu-hd": "node tests/e2e/online-sfu-hd-acceptance.mjs",
     "preview": "vite preview",
     "test:unit:native-audio-bridge": "node tests/unit/native-audio-bridge.test.mjs",
     "test:e2e": "playwright test",

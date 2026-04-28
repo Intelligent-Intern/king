@@ -228,6 +228,9 @@ export function createSfuTransportController({
         active_payload_chars: Math.max(0, Number(details?.activePayloadChars || 0)),
         chunk_count: Math.max(0, Number(details?.chunkCount || 0)),
         payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
+        payload_bytes: Math.max(0, Number(details?.payloadBytes || 0)),
+        wire_payload_bytes: Math.max(0, Number(details?.wirePayloadBytes || 0)),
+        binary_continuation_state: String(details?.binaryContinuationState || 'unknown_binary_continuation_state'),
         sender_timestamp: Math.max(0, Number(details?.timestamp || 0)),
       },
     });

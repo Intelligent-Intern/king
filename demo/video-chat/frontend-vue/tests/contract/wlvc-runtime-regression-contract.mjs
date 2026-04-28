@@ -136,8 +136,10 @@ try {
 
   const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
+  requireContains(workspaceConfig, 'rescue: Object.freeze({', 'WLVC backpressure has a low-bitrate rescue profile');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
-  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'quality';", 'quality profile stays default');
+  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';", 'balanced profile starts production calls below the HD stress profile');
+  requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
   requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;', 'HD baseline captures 30fps camera video');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p width');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_HEIGHT = 720;', 'HD baseline encodes 720p height');
@@ -145,6 +147,8 @@ try {
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES', 'WLVC encode loop has backpressure critical mark');
 
   const runtimeSwitching = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const runtimeConfig = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  requireContains(runtimeConfig, "realtime: 'rescue'", 'WLVC auto-downgrade can leave realtime when websocket pressure persists');
   requireContains(runtimeSwitching, "if (!['wlvc_wasm', 'webrtc_native', 'unsupported'].includes(normalizedNextPath))", 'runtime path allow-list');
   requireContains(runtimeSwitching, "if (normalizedNextPath === 'wlvc_wasm' && !refs.mediaRuntimeCapabilities.value.stageA)", 'WLVC runtime capability gate');
   requireContains(runtimeSwitching, "if (normalizedNextPath === 'webrtc_native' && !refs.mediaRuntimeCapabilities.value.stageB)", 'native runtime capability gate');

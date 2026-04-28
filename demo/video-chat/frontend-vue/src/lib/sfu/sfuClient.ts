@@ -24,10 +24,27 @@ import {
   encodeSfuBinaryFrameEnvelope,
   base64UrlToArrayBuffer,
   prepareSfuOutboundFramePayload,
+  SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
   type PreparedSfuOutboundFramePayload,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
 import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
+import type {
+  SFUClientCallbacks,
+  SFUEncodedFrame,
+  SFUTrack,
+  SfuFrameTransportSample,
+  SfuSendFailureDetails,
+} from './sfuTypes'
+
+export type {
+  SFUClientCallbacks,
+  SFUEncodedFrame,
+  SFUTrack,
+  SFUTracksEvent,
+  SfuFrameTransportSample,
+  SfuSendFailureDetails,
+} from './sfuTypes'
 
 /*
  * Compatibility contract note:
@@ -40,95 +57,6 @@ import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './
  * payload.protected_frame = frame.protectedFrame
  * payload.protection_mode = frame.protectionMode ||
  */
-
-export interface SFUTrack {
-  id: string
-  kind: 'audio' | 'video'
-  label: string
-}
-
-export interface SFUTracksEvent {
-  roomId: string
-  publisherId: string
-  publisherUserId: string
-  publisherName: string
-  tracks: SFUTrack[]
-}
-
-export interface SFUEncodedFrame {
-  publisherId: string
-  publisherUserId?: string
-  trackId: string
-  timestamp: number
-  data?: ArrayBuffer
-  dataBase64?: string | null
-  type: 'keyframe' | 'delta'
-  protected?: Record<string, unknown> | null
-  protectedFrame?: string | null
-  protectionMode?: 'transport_only' | 'protected' | 'required'
-  protocolVersion?: number
-  frameSequence?: number
-  payloadChars?: number
-  chunkCount?: number
-  frameId?: string
-  senderSentAtMs?: number
-  codecId?: string
-  runtimeId?: string
-  layoutMode?: 'full_frame' | 'tile_foreground' | 'background_snapshot'
-  layerId?: 'full' | 'foreground' | 'background'
-  cacheEpoch?: number
-  tileColumns?: number
-  tileRows?: number
-  tileWidth?: number
-  tileHeight?: number
-  tileIndices?: number[] | null
-  roiNormX?: number
-  roiNormY?: number
-  roiNormWidth?: number
-  roiNormHeight?: number
-}
-
-export interface SfuSendFailureDetails {
-  reason: string
-  stage: string
-  source: string
-  message: string
-  transportPath: string
-  bufferedAmount: number
-  queueLength: number
-  queuePayloadChars: number
-  activePayloadChars: number
-  trackId: string
-  chunkCount: number
-  payloadChars: number
-  timestamp: number
-}
-
-export interface SfuFrameTransportSample {
-  transportPath: string
-  payloadBytes: number
-  wirePayloadBytes: number
-  wireOverheadBytes: number
-  wireVsPayloadRatio: number
-  websocketBufferedAmount: number
-  queueLength: number
-  queuePayloadChars: number
-  activePayloadChars: number
-  trackId: string
-  frameType: string
-  frameSequence: number
-  chunkCount: number
-  timestampUnixMs: number
-}
-
-export interface SFUClientCallbacks {
-  onTracks:        (e: SFUTracksEvent) => void
-  onUnpublished:   (publisherId: string, trackId: string) => void
-  onPublisherLeft: (publisherId: string) => void
-  onConnected?:    () => void
-  onDisconnect:    () => void
-  onEncodedFrame?: (frame: SFUEncodedFrame) => void
-}
 
 const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024
 const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
@@ -535,11 +463,18 @@ export class SFUClient {
     }
     try {
       this.ws.send(encoded)
+      const binaryContinuationRequired = encoded.byteLength > SFU_BINARY_CONTINUATION_THRESHOLD_BYTES
       const samplePayload = {
         ...metrics,
         transport_path: 'binary_envelope',
         wire_payload_bytes: encoded.byteLength,
         wire_overhead_bytes: Math.max(0, encoded.byteLength - Number(metrics.payload_bytes || 0)),
+        binary_continuation_state: binaryContinuationRequired
+          ? 'receiver_reassembles_rfc_continuation_frames'
+          : 'single_binary_message_no_continuation_expected',
+        binary_continuation_required: binaryContinuationRequired,
+        binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
+        application_media_chunking: false,
         websocket_buffered_amount: this.getWebSocketBufferedAmount(),
       }
       this.reportFrameSendPressureIfNeeded(samplePayload)
@@ -648,6 +583,9 @@ export class SFUClient {
       trackId: String(prepared.trackId || ''),
       chunkCount: Math.max(1, Number(prepared.chunkCount || 1)),
       payloadChars: Math.max(0, Number(prepared.payloadChars || 0)),
+      payloadBytes: Math.max(0, Number(prepared.metrics?.payload_bytes || 0)),
+      wirePayloadBytes: Math.max(0, Number(prepared.metrics?.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0)),
+      binaryContinuationState: String(prepared.metrics?.binary_continuation_state || 'unknown_binary_continuation_state'),
       timestamp: Math.max(0, Number(prepared.timestamp || 0)),
     }
   }
@@ -738,6 +676,8 @@ export class SFUClient {
       frameType: String(payload.frame_type || ''),
       frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
       chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
+      binaryContinuationState: String(payload.binary_continuation_state || 'unknown_binary_continuation_state'),
+      binaryContinuationRequired: Boolean(payload.binary_continuation_required),
       timestampUnixMs: nowMs,
     }
     this.lastFrameTransportSample = sample

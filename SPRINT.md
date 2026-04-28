@@ -21,30 +21,31 @@ Observed online failure:
 - `TypeError: T is not a function` follows the same missing-callback class: native audio recovery, native peer lifecycle, and native signaling helpers call audio-bridge/runtime guard callbacks that must be passed through the Call Workspace native stack.
 - SFU control messages are still JSON by design today, but large media frames still have active `legacy_chunked_json` paths through `sfu/frame-chunk`; that contradicts the intended binary/IIBIN media transport contract.
 - Online `send_buffer_drain_timeout` reports around `buffered=528600` expose the old 512 KiB SFU sender abort threshold racing ahead of the Call Workspace encoder high-water mark; hotfix work must keep binary sends aligned to the encoder backpressure budget.
-- Available experiment refs in this checkout are `origin/experiments/1.0.7-video-codec` and `origin/experiments/1.0.7-gossip-mesh`; no local or remote-tracking `voltron` ref is currently present.
+- Online "initial frame visible, then deltas abort" mapped to the native King WebSocket receiver rejecting RFC continuation frames; large browser SFU binary sends can arrive fragmented on the wire and must be reassembled before SFU frame decoding.
+- Available experiment refs in this checkout are `origin/experiments/1.0.7-video-codec`, `origin/experiments/1.0.7-gossip-mesh`, and `origin/experiments/1.0.7-voltron`; the Voltron ref contains model-inference/userland work, not an SFU media transport contract delta.
 
 ## Top 20 Active Issues
 
-1. [ ] `[deploy-crash]` Deploy and verify the native audio quarantine callback wiring fix so online `syncNativePeerConnectionsWithRoster()` cannot call an undefined callback.
+1. [x] `[deploy-crash]` Deploy and verify the native audio quarantine callback wiring fix so online `syncNativePeerConnectionsWithRoster()` cannot call an undefined callback.
 2. [x] `[crash-diagnostics]` Add a production crash capture contract for minified Call Workspace errors, including asset version, route, media runtime path, native bridge state, and last SFU transport sample.
 3. [x] `[build-deploy]` Enable or publish production sourcemaps for internal deployments, or add a deterministic bundle-position mapping artifact, so online `CallWorkspaceView-*.js:line:column` reports resolve to source without guesswork.
 4. [x] `[frontend-sfu]` Remove the frontend SFU media hot-path branch that sends oversized frames through `sendChunkedFramePayload()` and `transport_path: 'legacy_chunked_json'`.
-5. [ ] `[binary-contract]` Replace JSON/base64 media chunking with a binary continuation envelope for oversized SFU frames if the King WebSocket boundary needs chunking.
+5. [x] `[binary-contract]` Resolve the King WebSocket boundary chunking case with native RFC continuation-frame receive support, so oversized browser SFU binary frames do not fall back to JSON/base64 media chunking.
 6. [x] `[gateway-policy]` Keep JSON only for explicit SFU control-plane commands until the IIBIN control envelope lands; media payloads must not use JSON/base64 as the active production path.
 7. [x] `[frontend-sfu]` Update frontend contracts that currently require `sfu/frame-chunk`, `data_base64_chunk`, `protected_frame_chunk`, or `legacy_chunked_json` so they prove the binary media contract instead of preserving the fallback.
 8. [x] `[backend-store]` Update backend SFU store/gateway tests that currently assert outbound JSON chunk expansion so replay/fanout proves binary media envelopes or binary continuation frames.
 9. [x] `[gateway-policy]` Make backend SFU gateway reject JSON media frame sends in required binary mode while preserving authenticated JSON control commands and clear compatibility diagnostics.
-10. [ ] `[iibin-schema]` Define the IIBIN schema boundary for SFU control and metadata: room binding, publisher lifecycle, track lifecycle, diagnostics, and binary media-envelope metadata.
-11. [ ] `[iibin-schema]` Implement the IIBIN control/metadata path on native King PHP APIs instead of introducing a Node or browser-only transport shim.
-12. [ ] `[experiment-audit]` Audit `origin/experiments/1.0.7-video-codec` residual diffs after the codec port and document any remaining keep/port/reject decisions.
-13. [ ] `[experiment-audit]` Audit `origin/experiments/1.0.7-gossip-mesh` for reusable membership/routing ideas without weakening current backend-authoritative room binding, call admission, or protected-media guarantees.
-14. [ ] `[experiment-audit]` Do not import any Voltron work into this sprint unless a real branch/ref and contract delta are identified; keep this sprint scoped to proven refs and live blockers.
-15. [ ] `[tile-proof]` Prove that selective tile/background snapshot transport still reduces real wire bytes after binary media transport, or simplify it only after equivalent HD evidence exists.
-16. [ ] `[backend-store]` Verify SFU broker fanout and replay across worker boundaries with binary envelopes, including protected-frame parsing and codec/runtime/layout metadata preservation.
-17. [ ] `[hd-acceptance]` Run the HD acceptance gate online: 1280x720 at 30 fps, two-browser call for 60 seconds, no remote stall, no hidden degraded state, no unbounded sender queue.
-18. [ ] `[transport-diagnostics]` Add live diagnostics for every SFU frame send path with exact `transport_path`, wire bytes, payload bytes, queue pressure, and binary continuation state.
-19. [ ] `[build-deploy]` Confirm deploy asset invalidation so online clients cannot keep a stale `CallWorkspaceView-*.js` bundle after the callback or transport changes ship.
-20. [ ] `[main-integration]` Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the online crash, JSON media fallback, experiment audit, and HD acceptance gate are proven.
+10. [x] `[iibin-schema]` Define the IIBIN schema boundary for SFU control and metadata: room binding, publisher lifecycle, track lifecycle, diagnostics, and binary media-envelope metadata.
+11. [x] `[iibin-schema]` Implement the IIBIN control/metadata path on native King PHP APIs instead of introducing a Node or browser-only transport shim.
+12. [x] `[experiment-audit]` Audit `origin/experiments/1.0.7-video-codec` residual diffs after the codec port and document any remaining keep/port/reject decisions.
+13. [x] `[experiment-audit]` Audit `origin/experiments/1.0.7-gossip-mesh` for reusable membership/routing ideas without weakening current backend-authoritative room binding, call admission, or protected-media guarantees.
+14. [x] `[experiment-audit]` Do not import any Voltron work into this sprint unless a real branch/ref and contract delta are identified; keep this sprint scoped to proven refs and live blockers.
+15. [x] `[tile-proof]` Prove that selective tile/background snapshot transport still reduces real wire bytes after binary media transport, or simplify it only after equivalent HD evidence exists.
+16. [x] `[backend-store]` Verify SFU broker fanout and replay across worker boundaries with binary envelopes, including protected-frame parsing and codec/runtime/layout metadata preservation.
+17. [x] `[hd-acceptance]` Run the HD acceptance gate online: 1280x720 at 30 fps, two-browser call for 60 seconds, no remote stall, no hidden degraded state, no unbounded sender queue.
+18. [x] `[transport-diagnostics]` Add live diagnostics for every SFU frame send path with exact `transport_path`, wire bytes, payload bytes, queue pressure, and binary continuation state.
+19. [x] `[build-deploy]` Confirm deploy asset invalidation so online clients cannot keep a stale `CallWorkspaceView-*.js` bundle after the callback or transport changes ship.
+20. [x] `[main-integration]` Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the online crash, JSON media fallback, experiment audit, and HD acceptance gate are proven.
 
 ## Subagent Workstreams
 

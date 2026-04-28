@@ -13,6 +13,7 @@ require_once __DIR__ . '/../domain/realtime/realtime_asset_version.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../domain/realtime/realtime_gossipmesh.php';
+require_once __DIR__ . '/../domain/realtime/realtime_sfu_iibin.php';
 require_once __DIR__ . '/../domain/realtime/realtime_sfu_store.php';
 require_once __DIR__ . '/../domain/realtime/realtime_sfu_gateway.php';
 require_once __DIR__ . '/module_realtime_attachments.php';

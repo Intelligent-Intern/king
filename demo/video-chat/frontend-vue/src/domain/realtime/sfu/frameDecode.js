@@ -374,6 +374,11 @@ export function createSfuFrameDecodeHelpers({
     mediaDebugLog('[SFU] Remote tile/layer cache invalidated', trackKey, reason);
   }
 
+  function invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, reason = 'unknown') {
+    const trackKey = sfuFrameTrackStateKey(frame);
+    invalidateRemoteSfuTrackCache(peer, trackKey, `protected_frame_decrypt_failed:${reason}`);
+  }
+
   function shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame) {
     if (!peer || typeof peer !== 'object') return false;
     ensureRemoteSfuTrackCacheState(peer);
@@ -535,10 +540,12 @@ export function createSfuFrameDecodeHelpers({
           track_id: frame?.trackId,
           frame_type: frame?.type,
           frame_timestamp: frame?.timestamp,
+          keyframe_required_after_recovery: true,
           media_runtime_path: mediaRuntimePathRef.value,
         }, {
           code: 'sfu_protected_frame_decrypt_failed',
         });
+        invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, errorCode);
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
           recoverMediaSecurityForPublisher(publisherUserId);
         }
@@ -573,10 +580,12 @@ export function createSfuFrameDecodeHelpers({
           track_id: frame?.trackId,
           frame_type: frame?.type,
           frame_timestamp: frame?.timestamp,
+          keyframe_required_after_recovery: true,
           media_runtime_path: mediaRuntimePathRef.value,
         }, {
           code: 'sfu_protected_frame_decrypt_failed',
         });
+        invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, errorCode);
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
           recoverMediaSecurityForPublisher(publisherUserId);
         }

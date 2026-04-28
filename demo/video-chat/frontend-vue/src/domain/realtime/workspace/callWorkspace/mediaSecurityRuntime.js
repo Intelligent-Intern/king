@@ -11,7 +11,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
     attachMediaSecurityNativeReceiversForPeer,
     captureClientDiagnostic,
     captureClientDiagnosticError,
-    closeNativePeerConnection,
     createMediaSecuritySession,
     createMediaSecurityTargetHelpers,
     ensureNativePeerConnection,
@@ -547,10 +546,48 @@ export function createCallWorkspaceMediaSecurityRuntime({
       || message.includes('downgrade_attempt');
   }
 
-  function shouldTreatNativeFrameErrorAsTransient(direction, error) {
-    void direction;
-    void error;
-    return false;
+  function isRemoteNativeFrameError(direction, senderUserId = 0) {
+    const normalizedDirection = String(direction || '').trim().toLowerCase();
+    const normalizedSenderUserId = Number(senderUserId || 0);
+    return normalizedDirection === 'receiver'
+      && Number.isInteger(normalizedSenderUserId)
+      && normalizedSenderUserId > 0
+      && normalizedSenderUserId !== currentUserId.value;
+  }
+
+  function nativeSenderKeyAvailable(senderUserId = 0) {
+    const normalizedSenderUserId = Number(senderUserId || 0);
+    if (
+      !Number.isInteger(normalizedSenderUserId)
+      || normalizedSenderUserId <= 0
+      || normalizedSenderUserId === currentUserId.value
+    ) {
+      return false;
+    }
+    return ensureMediaSecuritySession().canProtectNativeForTargets([normalizedSenderUserId]);
+  }
+
+  function shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId = 0) {
+    if (!isRemoteNativeFrameError(direction, senderUserId)) return false;
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    if (message === 'malformed_protected_frame') {
+      return !shouldMaintainNativePeerConnections() || !nativeSenderKeyAvailable(senderUserId);
+    }
+    return shouldRecoverMediaSecurityFromFrameError(error)
+      && !nativeSenderKeyAvailable(senderUserId);
+  }
+
+  function shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId = 0) {
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    return isRemoteNativeFrameError(direction, senderUserId)
+      && shouldMaintainNativePeerConnections()
+      && nativeSenderKeyAvailable(senderUserId)
+      && message === 'malformed_protected_frame';
+  }
+
+  function shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId = 0) {
+    return isRemoteNativeFrameError(direction, senderUserId)
+      && shouldRecoverMediaSecurityFromFrameError(error);
   }
 
   function shouldSendTransportOnlySfuFrame(error) {
@@ -694,7 +731,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const code = direction === 'receiver'
       ? 'native_media_frame_decrypt_failed'
       : 'native_media_frame_encrypt_failed';
-    const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error);
+    const bootstrapFrameDrop = shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId);
+    const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId);
+    const recoverableFrameDrop = transientFrameDrop
+      || shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId);
     const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
     const nowMs = Date.now();
     const lastLogMs = Number(state.nativeFrameErrorLastLogByKey.get(logKey) || 0);
@@ -703,8 +743,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.nativeFrameErrorLastLogByKey.set(logKey, nowMs);
     }
 
-    if (shouldLog) {
-      const logMethod = transientFrameDrop ? console.warn : console.error;
+    if (shouldLog && !bootstrapFrameDrop) {
+      const logMethod = recoverableFrameDrop ? console.warn : console.error;
       logMethod(
         '[KingRT] SFU/native media-security frame transform failed',
         `direction=${direction || 'unknown'}`,
@@ -713,10 +753,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
         `error=${errorMessage}`,
       );
     }
-    if (shouldLog) {
+    if (shouldLog && !bootstrapFrameDrop) {
       captureClientDiagnostic({
         category: 'media',
-        level: transientFrameDrop ? 'warning' : 'error',
+        level: recoverableFrameDrop ? 'warning' : 'error',
         eventType: code,
         code,
         message: errorMessage,
@@ -726,8 +766,9 @@ export function createCallWorkspaceMediaSecurityRuntime({
           track_id: trackId,
           media_runtime_path: mediaRuntimePath.value,
           security: nativeAudioSecurityTelemetrySnapshot(),
+          recoverable_frame_drop: recoverableFrameDrop,
         },
-        immediate: !transientFrameDrop,
+        immediate: !recoverableFrameDrop,
       });
     }
 
@@ -748,8 +789,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
           'Protected audio bridge paused because the remote native stream is not yet wrapped.'
         );
       }
-      closeNativePeerConnection(senderUserId);
-      return;
     }
 
     const shouldRecoverReceiver = shouldRecoverMediaSecurityFromFrameError(error) || transientFrameDrop;

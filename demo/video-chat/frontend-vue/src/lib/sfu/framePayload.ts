@@ -10,6 +10,7 @@ export const SFU_FRAME_PROTOCOL_VERSION = 2
 export const SFU_BINARY_FRAME_MAGIC = 'KSFB'
 export const SFU_BINARY_FRAME_ENVELOPE_VERSION = 1
 export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2
+export const SFU_BINARY_CONTINUATION_THRESHOLD_BYTES = 65535
 
 export type SfuFrameType = 'keyframe' | 'delta'
 export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
@@ -124,13 +125,14 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     : 1
   const metadataJson = serializeSfuEnvelopeMetadata({ tilePatch, codecId, runtimeId })
   const metadataJsonBytes = encodeUtf8(metadataJson).byteLength
-  const projectedBinaryEnvelopeBytes = (metadataJsonBytes > 0 ? 46 : 40)
+  const projectedBinaryEnvelopeBytes = (metadataJsonBytes > 0 ? 46 : 42)
     + encodeUtf8(String(frame.publisherId || '')).byteLength
     + encodeUtf8(String(frame.publisherUserId || '')).byteLength
     + encodeUtf8(String(frame.trackId || '')).byteLength
     + encodeUtf8('').byteLength
     + metadataJsonBytes
     + payloadByteLength
+  const binaryContinuationRequired = projectedBinaryEnvelopeBytes > SFU_BINARY_CONTINUATION_THRESHOLD_BYTES
 
   return {
     payload,
@@ -169,6 +171,15 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       projected_binary_envelope_overhead_bytes: Math.max(0, projectedBinaryEnvelopeBytes - payloadByteLength),
       legacy_base64_overhead_bytes: Math.max(0, payloadChars - payloadByteLength),
       projected_binary_delta_vs_legacy_bytes: projectedBinaryEnvelopeBytes - payloadChars,
+      binary_envelope_version: metadataJsonBytes.byteLength > 0
+        ? SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION
+        : SFU_BINARY_FRAME_ENVELOPE_VERSION,
+      binary_continuation_state: binaryContinuationRequired
+        ? 'receiver_reassembles_rfc_continuation_frames'
+        : 'single_binary_message_no_continuation_expected',
+      binary_continuation_required: binaryContinuationRequired,
+      binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
+      application_media_chunking: false,
       layout_mode: String(tilePatch?.layoutMode || 'full_frame'),
       layer_id: String(tilePatch?.layerId || 'full'),
       transport_frame_kind: `${String(tilePatch?.layoutMode || 'full_frame')}:${String(tilePatch?.layerId || 'full')}`,
@@ -222,7 +233,7 @@ export function encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFrameP
     ? SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION
     : SFU_BINARY_FRAME_ENVELOPE_VERSION
 
-  const headerByteLength = envelopeVersion === SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 40
+  const headerByteLength = envelopeVersion === SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 42
   const totalByteLength = headerByteLength
     + publisherIdBytes.byteLength
     + publisherUserIdBytes.byteLength
@@ -297,7 +308,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   const publisherUserIdLength = view.getUint16(12, true)
   const trackIdLength = view.getUint16(14, true)
   const frameIdLength = view.getUint16(16, true)
-  const headerByteLength = envelopeVersion === SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 40
+  const headerByteLength = envelopeVersion === SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 42
   const metadataJsonByteLength = envelopeVersion === SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION
     ? view.getUint32(18, true)
     : 0

@@ -111,7 +111,17 @@ function videochat_realtime_db_room_has_joined_user(
             return true;
         }
 
-        return false;
+        $context = videochat_realtime_call_role_context_for_room_user($pdo, $normalizedRoomId, $targetUserId, $callId);
+        if ((bool) ($context['can_moderate'] ?? false)) {
+            return true;
+        }
+
+        $inviteState = videochat_realtime_normalize_call_invite_state($context['invite_state'] ?? 'invited');
+        $joinedAt = trim((string) ($context['joined_at'] ?? ''));
+        $leftAt = trim((string) ($context['left_at'] ?? ''));
+        return in_array($inviteState, ['allowed', 'accepted'], true)
+            && $joinedAt !== ''
+            && $leftAt === '';
     } catch (Throwable) {
         return false;
     }

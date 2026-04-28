@@ -1,6 +1,6 @@
 import { sessionState } from '../domain/auth/session';
 import { fetchBackend } from './backendFetch';
-import { currentAssetVersion } from './assetVersion';
+import { currentAssetVersion, handleAssetLoadFailure } from './assetVersion';
 
 const DIAGNOSTICS_STORAGE_KEY = 'ii.videocall.client_diagnostics.pending.v1';
 const DIAGNOSTICS_MAX_QUEUE = 60;
@@ -208,20 +208,37 @@ function bindGlobalClientErrorDiagnostics() {
 
   window.addEventListener('error', (event) => {
     const error = event?.error || event?.message || 'Client runtime error captured.';
-    reportGlobalClientRuntimeError('call_workspace_runtime_error', error, {
+    const payload = {
       source_file: normalizeString(event?.filename, '', 500),
       source_line: Math.max(0, Number(event?.lineno || 0)),
       source_column: Math.max(0, Number(event?.colno || 0)),
       message: normalizeString(event?.message, '', 500),
       global_event_type: 'error',
-    });
+    };
+    reportGlobalClientRuntimeError('call_workspace_runtime_error', error, payload);
+    handleAssetLoadFailure(error, payload);
   });
 
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event?.reason || 'Client promise rejection captured.';
-    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', reason, {
+    const payload = {
       global_event_type: 'unhandledrejection',
-    });
+    };
+    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', reason, payload);
+    if (handleAssetLoadFailure(reason, payload)) {
+      event?.preventDefault?.();
+    }
+  });
+
+  window.addEventListener('vite:preloadError', (event) => {
+    const error = event?.payload || event?.error || event || 'Client preload error captured.';
+    const payload = {
+      global_event_type: 'vite:preloadError',
+    };
+    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', error, payload);
+    if (handleAssetLoadFailure(error, payload)) {
+      event?.preventDefault?.();
+    }
   });
 }
 

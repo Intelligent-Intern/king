@@ -41,6 +41,7 @@ export const SFU_BACKPRESSURE_LOG_COOLDOWN_MS = 3000;
 export const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
+  realtime: 'rescue',
 });
 export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;

@@ -120,7 +120,20 @@ try {
   requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
   requireContains(mediaSecurityRuntime, "async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation')", 'native bridge gates negotiation on active media security');
   requireContains(mediaSecurityRuntime, 'function handleNativeMediaSecurityFrameError(event = {})', 'native bridge handles native frame errors');
-  requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsTransient', 'native bridge separates transient native frame drops from hard media-security failures');
+  requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId = 0)', 'native bridge separates startup native frame drops from hard media-security failures');
+  requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId = 0)', 'native bridge separates transient native frame drops from hard media-security failures');
+  requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId = 0)', 'native bridge treats remote wrong-key frame drops as recoverable rekey input');
+  assert.match(
+    mediaSecurityRuntime,
+    /function shouldTreatNativeFrameErrorAsRecoverableDrop\(direction, error, senderUserId = 0\) \{[\s\S]*return isRemoteNativeFrameError\(direction, senderUserId\)[\s\S]*&& shouldRecoverMediaSecurityFromFrameError\(error\);[\s\S]*\}/m,
+    'native wrong-key recovery must not depend on transient native peer maintenance state',
+  );
+  requireContains(mediaSecurityRuntime, "message === 'malformed_protected_frame'", 'native bridge treats unwrapped receiver frames as transient recovery input');
+  requireContains(mediaSecurityRuntime, 'normalizedSenderUserId === currentUserId.value', 'native transient frame handling rejects self-originated frame errors');
+  requireContains(mediaSecurityRuntime, 'function nativeSenderKeyAvailable(senderUserId = 0)', 'native bridge checks receiver key availability before classifying frame drops');
+  requireContains(mediaSecurityRuntime, '!nativeSenderKeyAvailable(senderUserId)', 'native wrong-key bootstrap errors stay quiet until the sender key is available');
+  requireContains(mediaSecurityRuntime, '&& nativeSenderKeyAvailable(senderUserId)', 'native malformed-frame recovery is only active once receiver keys are available');
+  requireContains(mediaSecurityRuntime, 'recoverable_frame_drop: recoverableFrameDrop', 'native wrong-key recovery diagnostics are warning-classified instead of hard failures');
   requireContains(mediaSecurityRuntime, "code = direction === 'receiver'", 'native bridge separates decrypt and encrypt diagnostics');
   requireContains(mediaSecurityRuntime, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
   requireContains(mediaSecurityRuntime, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');

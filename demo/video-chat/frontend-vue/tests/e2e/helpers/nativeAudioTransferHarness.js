@@ -106,15 +106,20 @@ async function installSocketInstrumentation(context) {
   });
 }
 
-async function installMediaDeviceShim(context, { audioFrequency = 440 } = {}) {
-  await context.addInitScript(({ frequency }) => {
+async function installMediaDeviceShim(context, {
+  audioFrequency = 440,
+  videoWidth = 320,
+  videoHeight = 240,
+  videoFrameRate = 12,
+} = {}) {
+  await context.addInitScript(({ frequency, width, height, frameRate }) => {
     const resources = [];
     window.__kingNativeAudioMediaResources = resources;
 
     const createVideoTrack = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = 320;
-      canvas.height = 240;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       let frame = 0;
       const draw = () => {
@@ -124,11 +129,12 @@ async function installMediaDeviceShim(context, { audioFrequency = 440 } = {}) {
         ctx.fillStyle = '#f8fafc';
         ctx.font = '22px sans-serif';
         ctx.fillText(`audio ${frequency}Hz`, 34, 122);
+        ctx.fillText(`frame ${frame}`, 34, 154);
         frame += 1;
       };
       draw();
-      const intervalId = window.setInterval(draw, 200);
-      const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(12) : null;
+      const intervalId = window.setInterval(draw, Math.max(16, Math.round(1000 / Math.max(1, frameRate))));
+      const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(frameRate) : null;
       resources.push({ canvas, intervalId, stream });
       return stream?.getVideoTracks?.()[0] || null;
     };
@@ -174,16 +180,46 @@ async function installMediaDeviceShim(context, { audioFrequency = 440 } = {}) {
           { deviceId: 'king-video', kind: 'videoinput', label: 'KingRT test camera', groupId: 'king-e2e' },
           { deviceId: 'king-audio', kind: 'audioinput', label: 'KingRT test microphone', groupId: 'king-e2e' },
         ],
-        getSupportedConstraints: () => ({ audio: true, video: true, deviceId: true }),
+        getSupportedConstraints: () => ({ audio: true, video: true, deviceId: true, width: true, height: true, frameRate: true }),
       },
     });
-  }, { frequency: audioFrequency });
+  }, {
+    frequency: audioFrequency,
+    width: videoWidth,
+    height: videoHeight,
+    frameRate: videoFrameRate,
+  });
+}
+
+export async function installOutgoingVideoQualityPreference(context, profile = 'quality') {
+  await context.addInitScript(({ key, qualityProfile }) => {
+    const previousRaw = localStorage.getItem(key);
+    let previous = {};
+    try {
+      previous = previousRaw ? JSON.parse(previousRaw) : {};
+    } catch {
+      previous = {};
+    }
+    localStorage.setItem(key, JSON.stringify({
+      ...previous,
+      video_id: 'king-video',
+      audio_id: 'king-audio',
+      outgoing_video_quality_profile: qualityProfile,
+      outgoing_video_quality_profile_version: 3,
+    }));
+  }, {
+    key: 'ii.videocall.preview_prefs.v1',
+    qualityProfile: String(profile || 'quality').trim().toLowerCase() || 'quality',
+  });
 }
 
 export async function createAuthenticatedPage(browser, baseURL, credentials, options = {}) {
   const storedSession = await fetchStoredSession(credentials.email, credentials.password);
   const context = await browser.newContext({ baseURL, permissions: ['camera', 'microphone'] });
   await installMediaDeviceShim(context, options);
+  if (options.outgoingVideoQualityProfile) {
+    await installOutgoingVideoQualityPreference(context, options.outgoingVideoQualityProfile);
+  }
   await installSocketInstrumentation(context);
   await context.addInitScript(({ key, value }) => {
     localStorage.setItem(key, value);
@@ -297,6 +333,36 @@ export async function nativeAudioBridgeSnapshot(page) {
       audioTrackCount: audioTracks.length,
       liveAudioTrackCount: audioTracks.filter((track) => track.readyState === 'live').length,
       hasLiveTrack: audioTracks.some((track) => track.readyState === 'live' && track.enabled),
+    };
+  });
+}
+
+export async function sfuRemoteVideoSnapshot(page) {
+  return page.evaluate(() => {
+    const canvases = Array.from(document.querySelectorAll('#decoded-video-container canvas.remote-video, canvas.remote-video'));
+    return canvases.map((canvas) => ({
+      width: Number(canvas.width || 0),
+      height: Number(canvas.height || 0),
+      publisherId: String(canvas.dataset.publisherId || ''),
+      userId: String(canvas.dataset.userId || ''),
+      rendered: canvas.width > 0 && canvas.height > 0 && canvas.isConnected,
+    }));
+  });
+}
+
+export async function sfuSocketStats(page) {
+  return page.evaluate(() => {
+    const events = Array.isArray(window.__kingNativeAudioSocketEvents) ? window.__kingNativeAudioSocketEvents : [];
+    const sfuEvents = events.filter((event) => String(event?.url || '').includes('/sfu'));
+    const binaryIn = sfuEvents.filter((event) => event?.direction === 'in' && event?.frame?.type === '__binary__');
+    const binaryOut = sfuEvents.filter((event) => event?.direction === 'out' && event?.frame?.type === '__binary__');
+    const maxBinaryOutBytes = binaryOut.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
+    const maxBinaryInBytes = binaryIn.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
+    return {
+      binaryInCount: binaryIn.length,
+      binaryOutCount: binaryOut.length,
+      maxBinaryInBytes,
+      maxBinaryOutBytes,
     };
   });
 }

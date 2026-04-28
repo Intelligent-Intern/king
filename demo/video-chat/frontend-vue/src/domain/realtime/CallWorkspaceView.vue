@@ -928,7 +928,6 @@ const mediaSecurityRuntimeState = {
     attachMediaSecurityNativeReceiversForPeer: (peer) => attachMediaSecurityNativeReceiversForPeer(peer),
     captureClientDiagnostic,
     captureClientDiagnosticError,
-    closeNativePeerConnection: (userId) => closeNativePeerConnection(userId),
     createMediaSecuritySession,
     createMediaSecurityTargetHelpers,
     defaultNativeAudioBridgeFailureMessage,

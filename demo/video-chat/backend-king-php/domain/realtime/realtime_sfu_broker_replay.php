@@ -2,19 +2,265 @@
 
 declare(strict_types=1);
 
-function videochat_sfu_broker_replay_max_frame_age_ms(): int
+function videochat_sfu_broker_publisher_leave_grace_ms(): int
+{
+    return 3000;
+}
+
+function videochat_sfu_live_frame_relay_ttl_ms(): int
 {
     return 2500;
 }
 
-function videochat_sfu_broker_replay_max_frames_per_poll(): int
+function videochat_sfu_live_frame_relay_max_files_per_room(): int
 {
-    return 16;
+    return 300;
 }
 
-function videochat_sfu_broker_publisher_leave_grace_ms(): int
+function videochat_sfu_live_frame_relay_poll_interval_ms(): int
 {
-    return 3000;
+    return 50;
+}
+
+function videochat_sfu_live_frame_relay_root(): string
+{
+    $configured = trim((string) (getenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH') ?: ''));
+    if ($configured !== '') {
+        return rtrim($configured, '/');
+    }
+
+    if (is_dir('/dev/shm') && is_writable('/dev/shm')) {
+        return '/dev/shm/king-videochat-sfu-live-relay';
+    }
+
+    return rtrim(sys_get_temp_dir(), '/') . '/king-videochat-sfu-live-relay';
+}
+
+function videochat_sfu_live_frame_relay_room_dir(string $roomId): string
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '') {
+        return '';
+    }
+
+    return videochat_sfu_live_frame_relay_root() . '/' . hash('sha256', $normalizedRoomId);
+}
+
+function videochat_sfu_live_frame_relay_ensure_room_dir(string $roomId): string
+{
+    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
+    if ($roomDir === '') {
+        return '';
+    }
+
+    if (!is_dir($roomDir)) {
+        @mkdir($roomDir, 0770, true);
+    }
+
+    return is_dir($roomDir) && is_writable($roomDir) ? $roomDir : '';
+}
+
+function videochat_sfu_live_frame_relay_filename(int $nowMs): string
+{
+    static $sequence = 0;
+
+    $sequence = ($sequence + 1) % 1_000_000;
+    return sprintf(
+        '%013d_%05d_%06d.json',
+        max(0, $nowMs),
+        max(0, (int) getmypid()) % 100000,
+        $sequence
+    );
+}
+
+function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs = null): void
+{
+    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
+    if ($roomDir === '' || !is_dir($roomDir)) {
+        return;
+    }
+
+    $effectiveNowMs = $nowMs ?? videochat_sfu_now_ms();
+    $files = glob($roomDir . '/*.json') ?: [];
+    sort($files, SORT_STRING);
+    $keptFiles = [];
+    foreach ($files as $file) {
+        if (!is_string($file) || !is_file($file)) {
+            continue;
+        }
+        $basename = basename($file);
+        $createdAtMs = (int) substr($basename, 0, 13);
+        if ($createdAtMs <= 0 || ($effectiveNowMs - $createdAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
+            @unlink($file);
+            continue;
+        }
+        $keptFiles[] = $file;
+    }
+
+    $overflow = count($keptFiles) - videochat_sfu_live_frame_relay_max_files_per_room();
+    if ($overflow > 0) {
+        for ($index = 0; $index < $overflow; $index++) {
+            @unlink($keptFiles[$index]);
+        }
+    }
+
+    if ((glob($roomDir . '/*.json') ?: []) === []) {
+        @rmdir($roomDir);
+    }
+}
+
+function videochat_sfu_live_frame_relay_publish(string $roomId, string $publisherId, array $frame): bool
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedPublisherId = trim($publisherId);
+    if ($normalizedRoomId === '' || $normalizedPublisherId === '') {
+        return false;
+    }
+
+    $roomDir = videochat_sfu_live_frame_relay_ensure_room_dir($normalizedRoomId);
+    if ($roomDir === '') {
+        return false;
+    }
+
+    $frame['type'] = 'sfu/frame';
+    $frame['publisher_id'] = (string) ($frame['publisher_id'] ?? $normalizedPublisherId);
+    $nowMs = videochat_sfu_now_ms();
+    $record = [
+        'created_at_ms' => $nowMs,
+        'room_id' => $normalizedRoomId,
+        'publisher_id' => $normalizedPublisherId,
+        'frame' => $frame,
+    ];
+    $encoded = json_encode($record, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    if (!is_string($encoded) || $encoded === '') {
+        return false;
+    }
+
+    $filename = videochat_sfu_live_frame_relay_filename($nowMs);
+    $temporaryPath = $roomDir . '/.' . $filename . '.tmp';
+    $targetPath = $roomDir . '/' . $filename;
+    $written = @file_put_contents($temporaryPath, $encoded, LOCK_EX);
+    if (!is_int($written) || $written <= 0) {
+        @unlink($temporaryPath);
+        return false;
+    }
+
+    if (!@rename($temporaryPath, $targetPath)) {
+        @unlink($temporaryPath);
+        return false;
+    }
+
+    if (($nowMs % 10) === 0) {
+        videochat_sfu_live_frame_relay_cleanup_room($normalizedRoomId, $nowMs);
+    }
+
+    return true;
+}
+
+/**
+ * @param array<int|string, string|bool> $localPublisherIds
+ * @param array<string, int> $seenFrameFiles
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_live_frame_relay_read(
+    string $roomId,
+    string $clientId,
+    array $localPublisherIds,
+    string &$cursor,
+    array &$seenFrameFiles,
+    int $limit = 80
+): array {
+    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
+    if ($roomDir === '' || !is_dir($roomDir)) {
+        return [];
+    }
+
+    $normalizedClientId = trim($clientId);
+    $localPublisherLookup = [];
+    foreach ($localPublisherIds as $key => $value) {
+        $publisherId = is_string($key) && is_bool($value) ? $key : (string) $value;
+        $publisherId = trim($publisherId);
+        if ($publisherId !== '') {
+            $localPublisherLookup[$publisherId] = true;
+        }
+    }
+
+    $nowMs = videochat_sfu_now_ms();
+    foreach ($seenFrameFiles as $file => $seenAtMs) {
+        if (($nowMs - (int) $seenAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
+            unset($seenFrameFiles[$file]);
+        }
+    }
+
+    $files = glob($roomDir . '/*.json') ?: [];
+    sort($files, SORT_STRING);
+    $frames = [];
+    foreach ($files as $file) {
+        if (count($frames) >= $limit) {
+            break;
+        }
+        if (!is_string($file) || !is_file($file)) {
+            continue;
+        }
+        $basename = basename($file);
+        // Every SFU subscriber is also usually a publisher. A single filename
+        // watermark must not advance over self/local frames, otherwise a remote
+        // frame that becomes visible slightly later can be skipped forever.
+        if (isset($seenFrameFiles[$basename])) {
+            continue;
+        }
+        $seenFrameFiles[$basename] = $nowMs;
+        $createdAtMs = (int) substr($basename, 0, 13);
+        if ($createdAtMs <= 0 || ($nowMs - $createdAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
+            continue;
+        }
+        $decoded = json_decode((string) @file_get_contents($file), true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        $publisherId = trim((string) ($decoded['publisher_id'] ?? ''));
+        if ($publisherId === '' || $publisherId === $normalizedClientId || isset($localPublisherLookup[$publisherId])) {
+            continue;
+        }
+        $frame = $decoded['frame'] ?? null;
+        if (!is_array($frame) || strtolower(trim((string) ($frame['type'] ?? ''))) !== 'sfu/frame') {
+            continue;
+        }
+        $frame['publisher_id'] = (string) ($frame['publisher_id'] ?? $publisherId);
+        if ($cursor === '' || strcmp($basename, $cursor) > 0) {
+            $cursor = $basename;
+        }
+        $frames[] = $frame;
+    }
+
+    return $frames;
+}
+
+/**
+ * @param array<int|string, string|bool> $localPublisherIds
+ * @param array<string, int> $seenFrameFiles
+ */
+function videochat_sfu_live_frame_relay_poll(
+    mixed $websocket,
+    string $roomId,
+    string $clientId,
+    array $localPublisherIds,
+    string &$cursor,
+    array &$seenFrameFiles
+): int {
+    $sentCount = 0;
+    foreach (videochat_sfu_live_frame_relay_read($roomId, $clientId, $localPublisherIds, $cursor, $seenFrameFiles) as $frame) {
+        if (videochat_sfu_send_outbound_message($websocket, $frame, [
+            'sfu_send_path' => 'live_relay_poll',
+            'room_id' => $roomId,
+            'subscriber_id' => $clientId,
+            'worker_pid' => getmypid(),
+        ])) {
+            $sentCount++;
+        }
+    }
+
+    return $sentCount;
 }
 
 /**
@@ -71,91 +317,13 @@ function videochat_sfu_broker_send_tracks_if_changed(
     ]);
 }
 
-/**
- * @param array<int, array<string, mixed>> $frames
- * @return array<string, array{publisher_user_id: string, tracks: array<string, array{id: string, kind: string, label: string}>}>
- */
-function videochat_sfu_broker_frame_track_announcements(array $frames): array
-{
-    $announcements = [];
-    foreach ($frames as $frame) {
-        $publisherId = (string) ($frame['publisher_id'] ?? '');
-        $trackId = (string) ($frame['track_id'] ?? '');
-        if ($publisherId === '' || $trackId === '') {
-            continue;
-        }
-        if (!isset($announcements[$publisherId])) {
-            $announcements[$publisherId] = [
-                'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
-                'tracks' => [],
-            ];
-        }
-        $announcements[$publisherId]['tracks'][$trackId] = [
-            'id' => $trackId,
-            'kind' => 'video',
-            'label' => 'Remote video',
-        ];
-    }
-
-    return $announcements;
-}
-
-/**
- * @param array<int, array<string, mixed>> $frames
- * @return array<int, array<string, mixed>>
- */
-function videochat_sfu_select_live_broker_replay_frames(array $frames, string $roomId, int &$lastFrameId): array
-{
-    if ($frames === []) {
-        return [];
-    }
-
-    $maxFrameId = $lastFrameId;
-    foreach ($frames as $frame) {
-        $maxFrameId = max($maxFrameId, (int) ($frame['id'] ?? 0));
-    }
-
-    $maxAgeMs = videochat_sfu_broker_replay_max_frame_age_ms();
-    $cutoffMs = videochat_sfu_now_ms() - $maxAgeMs;
-    $freshFrames = [];
-    $droppedFrames = 0;
-    foreach ($frames as $frame) {
-        $createdAtMs = (int) ($frame['created_at_ms'] ?? 0);
-        if ($createdAtMs > 0 && $createdAtMs < $cutoffMs) {
-            $droppedFrames += 1;
-            continue;
-        }
-        $freshFrames[] = $frame;
-    }
-
-    $maxFrames = videochat_sfu_broker_replay_max_frames_per_poll();
-    if (count($freshFrames) > $maxFrames) {
-        $droppedFrames += count($freshFrames) - $maxFrames;
-        $freshFrames = array_slice($freshFrames, -$maxFrames);
-    }
-
-    $lastFrameId = max($lastFrameId, $maxFrameId);
-    if ($droppedFrames > 0) {
-        videochat_sfu_log_runtime_event('sfu_frame_broker_replay_stale_dropped', [
-            'room_id' => $roomId,
-            'dropped_frame_count' => $droppedFrames,
-            'selected_frame_count' => count($freshFrames),
-            'max_frame_age_ms' => $maxAgeMs,
-            'last_frame_id' => $lastFrameId,
-        ], 3000);
-    }
-
-    return $freshFrames;
-}
-
 function videochat_sfu_poll_broker(
     PDO $pdo,
     mixed $websocket,
     string $roomId,
     string $clientId,
     array &$knownPublishers,
-    array &$trackSignatures,
-    int &$lastFrameId
+    array &$trackSignatures
 ): void {
     $activePublishers = [];
     $publishersWithBrokerTracks = [];
@@ -189,34 +357,6 @@ function videochat_sfu_poll_broker(
         );
     }
 
-    $frames = videochat_sfu_select_live_broker_replay_frames(
-        videochat_sfu_fetch_frames_since($pdo, $roomId, $lastFrameId, $clientId, 200),
-        $roomId,
-        $lastFrameId
-    );
-    foreach (videochat_sfu_broker_frame_track_announcements($frames) as $publisherId => $announcement) {
-        videochat_sfu_broker_mark_active_publisher(
-            $websocket,
-            $roomId,
-            $publisherId,
-            $knownPublishers,
-            $activePublishers,
-            $nowMs
-        );
-        if (isset($publishersWithBrokerTracks[$publisherId])) {
-            continue;
-        }
-        videochat_sfu_broker_send_tracks_if_changed(
-            $websocket,
-            $roomId,
-            $publisherId,
-            (string) ($announcement['publisher_user_id'] ?? ''),
-            '',
-            array_values($announcement['tracks'] ?? []),
-            $trackSignatures
-        );
-    }
-
     foreach (array_keys($knownPublishers) as $publisherId) {
         if (isset($activePublishers[$publisherId])) {
             continue;
@@ -230,91 +370,5 @@ function videochat_sfu_poll_broker(
             'type' => 'sfu/publisher_left',
             'publisher_id' => $publisherId,
         ]);
-    }
-
-    foreach ($frames as $frame) {
-        $decodedData = json_decode((string) ($frame['data_json'] ?? '[]'), true);
-        $storedPayload = is_array($decodedData) ? videochat_sfu_decode_stored_frame_payload($decodedData) : [];
-        $storedMetadata = is_array($storedPayload['metadata'] ?? null) ? $storedPayload['metadata'] : [];
-        $transportMetricFields = videochat_sfu_transport_metric_fields($storedMetadata, 0);
-        $binaryPayload = is_string($frame['data_blob'] ?? null) ? (string) $frame['data_blob'] : '';
-        if ($binaryPayload !== '' && videochat_sfu_binary_frame_has_magic($binaryPayload)) {
-            try {
-                if (king_websocket_send($websocket, $binaryPayload, true) === true) {
-                    videochat_sfu_log_runtime_event('sfu_frame_broker_replay_binary', [
-                        'room_id' => $roomId,
-                        'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
-                        'track_id' => (string) ($frame['track_id'] ?? ''),
-                        'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
-                        'wire_payload_bytes' => strlen($binaryPayload),
-                        ...videochat_sfu_transport_metric_fields($storedMetadata, strlen($binaryPayload)),
-                    ], 3000);
-                    continue;
-                }
-            } catch (Throwable) {
-                // Re-decode stored metadata below, but keep media replay on binary only.
-            }
-        }
-        videochat_sfu_log_runtime_event('sfu_frame_broker_replay_binary_required_retry', [
-            'room_id' => $roomId,
-            'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
-            'track_id' => (string) ($frame['track_id'] ?? ''),
-            'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
-            'has_data_blob' => $binaryPayload !== '',
-            ...$transportMetricFields,
-        ], 3000);
-        if (!is_array($decodedData)) {
-            continue;
-        }
-        $outboundFrame = [
-            'type' => 'sfu/frame',
-            'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
-            'publisher_user_id' => (string) ($frame['publisher_user_id'] ?? ''),
-            'track_id' => (string) ($frame['track_id'] ?? ''),
-            'timestamp' => (int) ($frame['timestamp'] ?? 0),
-            'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
-            'protection_mode' => (string) ($storedPayload['protection_mode'] ?? 'transport_only'),
-            'protocol_version' => (int) ($storedMetadata['protocol_version'] ?? 1),
-            'frame_sequence' => (int) ($storedMetadata['frame_sequence'] ?? 0),
-            'sender_sent_at_ms' => (int) ($storedMetadata['sender_sent_at_ms'] ?? 0),
-            'payload_chars' => (int) ($storedMetadata['payload_chars'] ?? 0),
-            'chunk_count' => (int) ($storedMetadata['chunk_count'] ?? 1),
-            'codec_id' => (string) ($storedMetadata['codec_id'] ?? 'wlvc_unknown'),
-            'runtime_id' => (string) ($storedMetadata['runtime_id'] ?? 'unknown_runtime'),
-            'layout_mode' => (string) ($storedMetadata['layout_mode'] ?? ''),
-            'layer_id' => (string) ($storedMetadata['layer_id'] ?? ''),
-            'cache_epoch' => (int) ($storedMetadata['cache_epoch'] ?? 0),
-            'tile_columns' => (int) ($storedMetadata['tile_columns'] ?? 0),
-            'tile_rows' => (int) ($storedMetadata['tile_rows'] ?? 0),
-            'tile_width' => (int) ($storedMetadata['tile_width'] ?? 0),
-            'tile_height' => (int) ($storedMetadata['tile_height'] ?? 0),
-            'tile_indices' => is_array($storedMetadata['tile_indices'] ?? null)
-                ? array_values($storedMetadata['tile_indices'])
-                : [],
-            'roi_norm_x' => (float) ($storedMetadata['roi_norm_x'] ?? 0),
-            'roi_norm_y' => (float) ($storedMetadata['roi_norm_y'] ?? 0),
-            'roi_norm_width' => (float) ($storedMetadata['roi_norm_width'] ?? 1),
-            'roi_norm_height' => (float) ($storedMetadata['roi_norm_height'] ?? 1),
-        ];
-        $storedFrameId = trim((string) ($storedMetadata['frame_id'] ?? ''));
-        if ($storedFrameId !== '') {
-            $outboundFrame['frame_id'] = $storedFrameId;
-        }
-        if (($storedPayload['protected_frame'] ?? '') !== '') {
-            $outboundFrame['protected_frame'] = $storedPayload['protected_frame'];
-        } elseif (($storedPayload['data_base64'] ?? '') !== '') {
-            $outboundFrame['data_base64'] = $storedPayload['data_base64'];
-        } else {
-            $outboundFrame['data'] = $storedPayload['data'];
-        }
-        if (!videochat_sfu_send_outbound_message($websocket, $outboundFrame)) {
-            videochat_sfu_log_runtime_event('sfu_frame_broker_replay_binary_required_failed', [
-                'room_id' => $roomId,
-                'publisher_id' => (string) ($frame['publisher_id'] ?? ''),
-                'track_id' => (string) ($frame['track_id'] ?? ''),
-                'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
-                ...$transportMetricFields,
-            ], 3000);
-        }
     }
 }

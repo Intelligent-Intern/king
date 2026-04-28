@@ -59,7 +59,7 @@ async function main() {
   try {
     const { WaveletVideoEncoder } = await server.ssrLoadModule('/src/lib/wavelet/codec.ts');
     const { planSelectiveTilePatch, planBackgroundSnapshotPatch } = await server.ssrLoadModule('/src/lib/sfu/selectiveTileTransport.ts');
-    const { prepareSfuOutboundFramePayload } = await server.ssrLoadModule('/src/lib/sfu/framePayload.ts');
+    const { prepareSfuOutboundFramePayload, encodeSfuBinaryFrameEnvelope } = await server.ssrLoadModule('/src/lib/sfu/framePayload.ts');
 
     const frameWidth = 640;
     const frameHeight = 360;
@@ -174,16 +174,20 @@ async function main() {
     const foregroundPatch = measurePatch(foregroundPlan, 'track-foreground');
     const backgroundFull = measureFullFrame(sparseBackgroundFrame);
     const backgroundPatch = measurePatch(backgroundPlan, 'track-background');
+    const foregroundFullWireBytes = encodeSfuBinaryFrameEnvelope(foregroundFull).byteLength;
+    const foregroundPatchWireBytes = encodeSfuBinaryFrameEnvelope(foregroundPatch).byteLength;
+    const backgroundFullWireBytes = encodeSfuBinaryFrameEnvelope(backgroundFull).byteLength;
+    const backgroundPatchWireBytes = encodeSfuBinaryFrameEnvelope(backgroundPatch).byteLength;
 
     assert.equal(foregroundPatch.metrics.layout_mode, 'tile_foreground', 'foreground patch must keep explicit tile layout mode');
     assert.equal(backgroundPatch.metrics.layout_mode, 'background_snapshot', 'background patch must keep explicit background layout mode');
     assert.ok(
-      foregroundPatch.projectedBinaryEnvelopeBytes < (foregroundFull.projectedBinaryEnvelopeBytes * 0.75),
-      `foreground patch must save at least 25% wire bytes; full=${foregroundFull.projectedBinaryEnvelopeBytes}, patch=${foregroundPatch.projectedBinaryEnvelopeBytes}`,
+      foregroundPatchWireBytes < (foregroundFullWireBytes * 0.75),
+      `foreground patch must save at least 25% actual binary envelope wire bytes; full=${foregroundFullWireBytes}, patch=${foregroundPatchWireBytes}`,
     );
     assert.ok(
-      backgroundPatch.projectedBinaryEnvelopeBytes < (backgroundFull.projectedBinaryEnvelopeBytes * 0.5),
-      `background snapshot patch must save at least 50% wire bytes; full=${backgroundFull.projectedBinaryEnvelopeBytes}, patch=${backgroundPatch.projectedBinaryEnvelopeBytes}`,
+      backgroundPatchWireBytes < (backgroundFullWireBytes * 0.5),
+      `background snapshot patch must save at least 50% actual binary envelope wire bytes; full=${backgroundFullWireBytes}, patch=${backgroundPatchWireBytes}`,
     );
     assert.ok(
       foregroundPatch.metrics.roi_area_ratio < 0.5 && backgroundPatch.metrics.roi_area_ratio < 0.25,

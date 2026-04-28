@@ -86,6 +86,8 @@ try {
   requireContains(framePayload, 'export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2', 'binary frame layout envelope version');
   requireContains(framePayload, 'encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFramePayload)', 'binary frame envelope encoder');
   requireContains(framePayload, 'decodeSfuBinaryFrameEnvelope(input: ArrayBuffer)', 'binary frame envelope decoder');
+  requireContains(framePayload, 'metadataJsonBytes > 0 ? 46 : 42', 'binary frame v1 header projection must match the timestamp/sequence/payload-length layout');
+  requireContains(framePayload, 'SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 42', 'binary frame v1 header length must match the timestamp/sequence/payload-length layout');
   requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
   requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');

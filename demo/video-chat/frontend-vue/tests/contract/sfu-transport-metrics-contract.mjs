@@ -28,6 +28,9 @@ try {
   const framePayload = readFrontend('src/lib/sfu/framePayload.ts');
   requireContains(framePayload, 'projected_binary_envelope_overhead_bytes', 'frame payload binary overhead metric');
   requireContains(framePayload, 'legacy_base64_overhead_bytes', 'frame payload legacy base64 overhead metric');
+  requireContains(framePayload, 'binary_continuation_state', 'frame payload binary continuation state metric');
+  requireContains(framePayload, 'SFU_BINARY_CONTINUATION_THRESHOLD_BYTES', 'frame payload binary continuation threshold');
+  requireContains(framePayload, 'application_media_chunking: false', 'frame payload active media path disables application chunking');
   requireContains(framePayload, 'transport_frame_kind', 'frame payload transport frame kind metric');
   requireContains(framePayload, 'roi_area_ratio', 'frame payload ROI area metric');
   requireContains(framePayload, 'selection_tile_ratio', 'frame payload selected tile ratio metric');
@@ -38,6 +41,8 @@ try {
   requireContains(sfuClient, "'sfu_frame_transport_sample'", 'sfu client sampled transport diagnostic');
   requireContains(sfuClient, 'wire_overhead_bytes', 'sfu client wire overhead metric');
   requireContains(sfuClient, "transport_path: 'binary_envelope'", 'sfu client binary transport path metric');
+  requireContains(sfuClient, 'binaryContinuationRequired', 'sfu client records binary continuation state');
+  requireContains(sfuClient, 'binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES', 'sfu client exact binary continuation threshold metric');
   assert.ok(
     !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
     'sfu client must not route outbound media through legacy chunked JSON before binary envelope send',
@@ -48,6 +53,7 @@ try {
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   requireContains(sfuTransport, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
   requireContains(sfuTransport, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
+  requireContains(sfuTransport, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
   requireContains(sfuTransport, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
   requireContains(sfuTransport, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
@@ -55,9 +61,12 @@ try {
   requireContains(backendStore, 'function videochat_sfu_transport_metric_fields', 'backend transport metric helper');
   requireContains(backendStore, 'transport_frame_kind', 'backend transport frame kind metric');
   requireContains(backendStore, 'legacy_base64_overhead_bytes', 'backend legacy base64 overhead metric');
+  requireContains(backendStore, 'binary_continuation_state', 'backend binary continuation state metric');
+  requireContains(backendStore, 'sfu_frame_binary_send_sample', 'backend sampled binary send diagnostic');
   requireContains(backendStore, 'selection_tile_ratio', 'backend selected tile ratio metric');
   requireContains(backendStore, 'selection_mask_guided', 'backend matte-guided metric');
-  requireContains(backendStore, 'sfu_frame_broker_replay_binary', 'backend binary replay log remains instrumented');
+  assert.ok(!backendStore.includes('CREATE TABLE IF NOT EXISTS sfu_frames'), 'backend must not persist SFU media frames in SQLite');
+  assert.ok(!backendStore.includes('INSERT INTO sfu_frames'), 'backend must not insert SFU media frames into SQLite');
 
   process.stdout.write('[sfu-transport-metrics-contract] PASS\n');
 } catch (error) {

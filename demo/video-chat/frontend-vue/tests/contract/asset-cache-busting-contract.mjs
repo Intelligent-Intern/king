@@ -46,6 +46,13 @@ try {
   assert.ok(assetVersionSupport.includes("const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);"), 'asset version helper must understand websocket invalidation frames');
   assert.ok(assetVersionSupport.includes("query.set('asset_version', BUILD_VERSION);"), 'asset version helper must append the frontend build version to websocket queries');
   assert.ok(assetVersionSupport.includes("closeReason !== 'asset_version_mismatch'"), 'asset version helper must react to websocket close reasons from stale builds');
+  assert.ok(assetVersionSupport.includes('handleAssetLoadFailure'), 'asset version helper must expose dynamic import asset failure recovery');
+  assert.ok(assetVersionSupport.includes('failed to fetch dynamically imported module'), 'asset version helper must detect stale dynamic import failures');
+  assert.ok(assetVersionSupport.includes('ASSET_LOAD_FAILURE_RELOAD_STORAGE_KEY'), 'asset version helper must prevent stale chunk reload loops');
+
+  const clientDiagnostics = readUtf8(path.join(frontendRoot, 'src/support/clientDiagnostics.js'));
+  assert.ok(clientDiagnostics.includes('handleAssetLoadFailure'), 'global client diagnostics must invoke asset-load recovery for stale chunks');
+  assert.ok(clientDiagnostics.includes("'vite:preloadError'"), 'global client diagnostics must handle Vite preload errors from stale chunks');
 
   const adminSync = readUtf8(path.join(frontendRoot, 'src/support/adminSyncSocket.js'));
   assert.ok(adminSync.includes('appendAssetVersionQuery'), 'admin sync websocket must advertise the current asset version');
