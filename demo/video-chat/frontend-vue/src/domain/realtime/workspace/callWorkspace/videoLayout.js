@@ -109,7 +109,10 @@ export function createCallWorkspaceVideoLayoutHelpers({
     if (mountVideoNode(miniSlot, node, assignedNodes)) return;
 
     const gridSlot = document.getElementById(gridVideoSlotId(userId));
-    mountVideoNode(gridSlot, node, assignedNodes);
+    if (mountVideoNode(gridSlot, node, assignedNodes)) return;
+
+    const decodedFallback = document.getElementById('decoded-video-container');
+    mountVideoNode(decodedFallback, node, assignedNodes);
   }
 
   function renderCallVideoLayout() {

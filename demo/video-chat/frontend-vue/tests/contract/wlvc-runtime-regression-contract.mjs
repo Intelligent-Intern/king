@@ -171,6 +171,7 @@ try {
   requireContains(nativeSignaling, "if (sfuRuntimeEnabled() && String(mediaRuntimePath.value || '').trim() !== 'webrtc_native') {", 'native signaling will not hijack WLVC runtime');
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
+  const workspaceStage = readFromFrontend('src/domain/realtime/CallWorkspaceStage.css');
   const layoutStrategies = readFromFrontend('src/domain/realtime/layout/strategies.js');
   const mediaStack = readFromFrontend('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const videoLayout = readFromFrontend('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
@@ -181,7 +182,9 @@ try {
   requireContains(mediaStack, 'markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer)', 'media stack must lazily route remote render callback after video layout is initialized');
   requireContains(videoLayout, 'function scheduleDeferredVideoLayout()', 'video layout must retry after Vue has materialized remote participant slots');
   requireContains(videoLayout, 'function mountRemotePeerFallback(peer, assignedNodes)', 'video layout must retain remote peer media nodes when primary selection misses the node lookup');
+  requireContains(videoLayout, "document.getElementById('decoded-video-container')", 'video layout must visibly mount decoded SFU peers even before roster slots exist');
   requireContains(videoLayout, 'mountRemotePeerFallback(peer, assignedNodes);', 'video layout must mount remote peer fallback before removing unassigned nodes');
+  requireContains(workspaceStage, 'z-index: 15;', 'decoded fallback layer must sit above local preview when used');
 
   process.stdout.write('[wlvc-runtime-regression-contract] PASS\n');
 } catch (error) {
