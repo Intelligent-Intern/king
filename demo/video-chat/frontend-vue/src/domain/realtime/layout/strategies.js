@@ -136,7 +136,11 @@ export function selectCallLayoutParticipants({
     mainUserId = rankedByActivity.find((id) => clippedVisibleIds.includes(id)) || mainUserId;
   }
   if (!Number.isInteger(mainUserId) || mainUserId <= 0 || !byUserId.has(mainUserId)) {
-    mainUserId = clippedVisibleIds.find((id) => id === Number(currentUserId)) || clippedVisibleIds[0] || Number(currentUserId) || 0;
+    const localUserId = Number(currentUserId);
+    const remoteMainUserId = mode === 'main_mini'
+      ? clippedVisibleIds.find((id) => id !== localUserId)
+      : 0;
+    mainUserId = remoteMainUserId || clippedVisibleIds.find((id) => id === localUserId) || clippedVisibleIds[0] || localUserId || 0;
   }
 
   const visibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);

@@ -16,11 +16,28 @@ export function createCallWorkspaceVideoLayoutHelpers({
     remotePeerMediaNode,
   } = callbacks;
 
+  let deferredVideoLayoutQueued = false;
+
+  function scheduleDeferredVideoLayout() {
+    if (deferredVideoLayoutQueued) return;
+    deferredVideoLayoutQueued = true;
+    const run = () => {
+      deferredVideoLayoutQueued = false;
+      renderCallVideoLayout();
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run);
+      return;
+    }
+    setTimeout(run, 0);
+  }
+
   function markRemotePeerRenderable(peer) {
     if (!peer || typeof peer !== 'object') return;
     if (Number(peer.frameCount || 0) !== 1) return;
     bumpMediaRenderVersion();
     renderCallVideoLayout();
+    scheduleDeferredVideoLayout();
   }
 
   function participantHasRenderableMedia(userId) {
@@ -143,7 +160,7 @@ export function createCallWorkspaceVideoLayoutHelpers({
     }
     for (const peer of allRemotePeers) {
       const node = remotePeerMediaNode(peer);
-      if (node instanceof HTMLElement && !assignedNodes.has(node)) {
+      if (node instanceof HTMLElement && node.parentElement instanceof HTMLElement && !assignedNodes.has(node)) {
         node.remove();
       }
     }
