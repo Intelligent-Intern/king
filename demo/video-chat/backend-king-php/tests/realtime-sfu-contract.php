@@ -42,6 +42,18 @@ function videochat_realtime_sfu_protected_frame(array $header, string $ciphertex
 try {
     putenv('VIDEOCHAT_KING_DB_PATH=/tmp/video-chat-main.sqlite');
     putenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH');
+    $gatewaySource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
+    videochat_realtime_sfu_assert(is_string($gatewaySource), 'SFU gateway source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(
+        strpos($gatewaySource, '$acceptFrameChunk') === false
+        && strpos($gatewaySource, '$pendingFrameChunks') === false,
+        'SFU gateway must not buffer or assemble legacy JSON media chunks'
+    );
+    videochat_realtime_sfu_assert(
+        strpos($gatewaySource, "case 'sfu/frame-chunk':\n                    videochat_presence_send_frame(\$websocket") !== false
+        && strpos($gatewaySource, "'error' => 'binary_media_required',\n                        'command_type' => 'sfu/frame-chunk'") !== false,
+        'SFU gateway must reject JSON media chunks immediately in binary-required mode'
+    );
     videochat_realtime_sfu_assert(
         videochat_sfu_broker_database_path() === '/tmp/video-chat-sfu-broker.sqlite',
         'SFU broker path should default to a sibling sqlite file'
