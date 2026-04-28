@@ -93,6 +93,23 @@ async function main() {
       'full-frame metadata must reject stray patch tile fields',
     );
 
+    const brokerFullFrameMetadata = normalizeTilePatchMetadata({
+      layoutMode: 'full_frame',
+      layerId: 'full',
+      cacheEpoch: 7,
+      tileColumns: 0,
+      tileRows: 0,
+      tileWidth: 0,
+      tileHeight: 0,
+      tileIndices: [],
+      roiNormX: 0,
+      roiNormY: 0,
+      roiNormWidth: 1,
+      roiNormHeight: 1,
+    });
+    assert.ok(brokerFullFrameMetadata, 'broker replay full-frame defaults must normalize');
+    assert.equal(brokerFullFrameMetadata.layoutMode, 'full_frame', 'broker replay full-frame layout must be preserved');
+
     assert.equal(
       hasExplicitSfuTileMetadataFields({
         layoutMode: 'background_snapshot',

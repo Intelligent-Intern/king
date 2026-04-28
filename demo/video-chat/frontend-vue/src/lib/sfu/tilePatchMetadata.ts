@@ -81,7 +81,17 @@ export function normalizeTilePatchMetadata(value: unknown): SfuTilePatchMetadata
   }
 
   if (layoutMode === 'full_frame') {
-    if (patchFieldsPresent) return null
+    if (patchFieldsPresent && !hasOnlyFullFrameDefaultPatchFields({
+      tileColumns,
+      tileRows,
+      tileWidth,
+      tileHeight,
+      tileIndices,
+      roiNormX,
+      roiNormY,
+      roiNormWidth,
+      roiNormHeight,
+    })) return null
     if (layerId !== null && layerId !== 'full') return null
     return {
       layoutMode,
@@ -185,6 +195,38 @@ function hasPatchFields(source: Record<string, unknown>): boolean {
     || source.roi_norm_width !== undefined
     || source.roiNormHeight !== undefined
     || source.roi_norm_height !== undefined
+}
+
+function hasOnlyFullFrameDefaultPatchFields({
+  tileColumns,
+  tileRows,
+  tileWidth,
+  tileHeight,
+  tileIndices,
+  roiNormX,
+  roiNormY,
+  roiNormWidth,
+  roiNormHeight,
+}: {
+  tileColumns: number
+  tileRows: number
+  tileWidth: number
+  tileHeight: number
+  tileIndices: number[]
+  roiNormX: number | null
+  roiNormY: number | null
+  roiNormWidth: number | null
+  roiNormHeight: number | null
+}): boolean {
+  return tileColumns === 0
+    && tileRows === 0
+    && tileWidth === 0
+    && tileHeight === 0
+    && tileIndices.length === 0
+    && roiNormX === 0
+    && roiNormY === 0
+    && roiNormWidth === 1
+    && roiNormHeight === 1
 }
 
 function parseLayoutMode(value: unknown): SfuLayoutMode | null {
