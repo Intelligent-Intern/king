@@ -1436,6 +1436,7 @@ const nativeStack = createCallWorkspaceNativeStack({
     sendSocketFrame,
     sessionToken: () => sessionState.sessionToken,
     shouldBypassNativeAudioProtectionForPeer,
+    shouldBlockNativeRuntimeSignaling,
     shouldMaintainNativePeerConnections,
     shouldSendNativeTrackKind,
     streamHasLiveTrackKind,

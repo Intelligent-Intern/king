@@ -88,6 +88,7 @@ export function createCallWorkspaceNativeStack(options) {
     nativeAudioTrackRecoveryRejoinDelayMs: constants.nativeAudioTrackRecoveryRejoinDelayMs,
     resyncNativeAudioBridgePeerAfterSecurityReady: callbacks.resyncNativeAudioBridgePeerAfterSecurityReady,
     setNativePeerAudioBridgeState: audioBridgeState.setNativePeerAudioBridgeState,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     streamHasLiveTrackKind: callbacks.streamHasLiveTrackKind,
     syncMediaSecurityWithParticipants: callbacks.syncMediaSecurityWithParticipants,
     syncNativePeerConnectionsWithRoster: callbacks.syncNativePeerConnectionsWithRoster,
@@ -107,6 +108,7 @@ export function createCallWorkspaceNativeStack(options) {
     renderNativeRemoteVideos: callbacks.renderNativeRemoteVideos,
     sendNativeOffer: callbacks.sendNativeOffer,
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
   });
 
   let ensureNativePeerConnection = () => null;
@@ -181,7 +183,9 @@ export function createCallWorkspaceNativeStack(options) {
     sendSocketFrame: callbacks.sendSocketFrame,
     shouldExpectLocalNativeAudioTrack: nativeBridgeRuntime.shouldExpectLocalNativeAudioTrack,
     shouldExpectRemoteNativeAudioTrack: nativeBridgeRuntime.shouldExpectRemoteNativeAudioTrack,
+    shouldBlockNativeRuntimeSignaling: callbacks.shouldBlockNativeRuntimeSignaling,
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     sfuRuntimeEnabled: callbacks.sfuRuntimeEnabled,
     switchMediaRuntimePath: callbacks.switchMediaRuntimePath,
     syncNativePeerLocalTracks: nativeBridgeRuntime.syncNativePeerLocalTracks,
