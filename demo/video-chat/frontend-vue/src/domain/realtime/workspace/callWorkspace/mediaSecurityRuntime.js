@@ -543,6 +543,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const message = String(error?.message || error || '').trim().toLowerCase();
     return message.includes('wrong_key_id')
       || message.includes('wrong_epoch')
+      || message.includes('participant_set_mismatch')
       || message.includes('downgrade_attempt');
   }
 
@@ -848,6 +849,17 @@ export function createCallWorkspaceMediaSecurityRuntime({
       }
     } catch (error) {
       mediaDebugLog('[MediaSecurity] signaling failed', error);
+      const errorCode = String(error?.message || error || '').trim().toLowerCase();
+      if (
+        (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
+        && mediaSecurityTargetIds().includes(normalizedSenderUserId)
+      ) {
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
+        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
+        scheduleMediaSecurityParticipantSync('signal_failed_reconnect');
+        startMediaSecurityHandshakeWatchdog();
+      }
       captureClientDiagnosticError('media_security_signal_failed', error, {
         signal_type: type,
         sender_user_id: normalizedSenderUserId,

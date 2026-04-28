@@ -298,6 +298,10 @@ export function createCallWorkspaceMediaStack(options) {
 
   function teardownSfuRemotePeers() {
     for (const [, peer] of refs.remotePeersRef.value) {
+      const peerUserId = Number(peer?.userId || 0);
+      if (Number.isInteger(peerUserId) && peerUserId > 0) {
+        callbacks.clearMediaSecuritySfuPublisherSeen?.(peerUserId);
+      }
       callbacks.teardownRemotePeer(peer);
     }
     refs.remotePeersRef.value = new Map();

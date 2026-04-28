@@ -15,6 +15,7 @@ export function createSfuLifecycleHelpers({
     maybeFallbackToNativeRuntime,
     mediaDebugLog,
     normalizeSfuPublisherId,
+    clearMediaSecuritySfuPublisherSeen,
     noteMediaSecuritySfuPublisherSeen,
     publishLocalTracks,
     publishLocalTracksToSfuIfReady,
@@ -176,6 +177,9 @@ export function createSfuLifecycleHelpers({
       removedAny = deleteSfuRemotePeer(publisherId) || removedAny;
     }
     if (removedAny) {
+      if (clearMediaSecuritySfuPublisherSeen(normalizedUserId)) {
+        scheduleMediaSecurityParticipantSync('sfu_publisher_removed');
+      }
       renderCallVideoLayout();
     }
     return removedAny;
@@ -238,6 +242,10 @@ export function createSfuLifecycleHelpers({
 
     teardownRemotePeer(peer);
     deleteSfuRemotePeer(normalizedPublisherId);
+    const peerUserId = Number(peer?.userId || 0);
+    if (Number.isInteger(peerUserId) && peerUserId > 0 && clearMediaSecuritySfuPublisherSeen(peerUserId)) {
+      scheduleMediaSecurityParticipantSync('sfu_publisher_unpublished');
+    }
     renderCallVideoLayout();
   }
 
@@ -247,6 +255,10 @@ export function createSfuLifecycleHelpers({
     if (peer) {
       teardownRemotePeer(peer);
       deleteSfuRemotePeer(normalizedPublisherId);
+      const peerUserId = Number(peer?.userId || 0);
+      if (Number.isInteger(peerUserId) && peerUserId > 0 && clearMediaSecuritySfuPublisherSeen(peerUserId)) {
+        scheduleMediaSecurityParticipantSync('sfu_publisher_left');
+      }
       renderCallVideoLayout();
     }
   }

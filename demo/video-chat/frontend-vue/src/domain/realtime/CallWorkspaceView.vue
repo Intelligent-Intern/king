@@ -1117,6 +1117,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
+    clearMediaSecuritySfuPublisherSeen,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
       if (sfuClientRef.value) {
         sfuClientRef.value.leave();
@@ -1353,6 +1354,7 @@ stopActivityMonitor = stopActivityMonitorHelper;
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeSfuPublisherId,
+    clearMediaSecuritySfuPublisherSeen,
     noteMediaSecuritySfuPublisherSeen,
     publishLocalTracks: (...args) => publishLocalTracks(...args),
     publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),

@@ -42,6 +42,9 @@ requireContains(workspace, 'last_sfu_transport_sample: callWorkspaceLastSfuTrans
 requireContains(sfuClient, 'getLastFrameTransportSample()', 'sfu client exposes last transport sample');
 requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote stall diagnostics hook');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
+requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'expected signaling failures enter recovery path');
+requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId);', 'target_not_in_room prunes unreachable peer locally');
+requireContains(socketLifecycle, 'void sendMediaSecuritySync(true);', 'media-security target_not_in_room forces reconnect rekey');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');

@@ -72,6 +72,32 @@ export function createCallWorkspaceSocketHelpers({
     return participantsChanged;
   }
 
+  function recoverExpectedSignalingPublishFailure({
+    failedCommandType,
+    failedTargetUserId,
+    signalingError,
+  }) {
+    const normalizedTargetUserId = Number(failedTargetUserId || 0);
+    const normalizedError = String(signalingError || '').trim().toLowerCase();
+    const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
+
+    if (targetIsKnown && normalizedError === 'target_not_in_room') {
+      removeParticipantLocallyAfterHangup(normalizedTargetUserId);
+    }
+
+    requestRoomSnapshot();
+    if (mediaSecuritySignalTypes.includes(failedCommandType)) {
+      setTimeout(() => {
+        void sendMediaSecuritySync(true);
+      }, 500);
+      return;
+    }
+
+    if (targetIsKnown && normalizedError !== 'target_not_in_room') {
+      scheduleNativeOfferRetryForUserId(normalizedTargetUserId, 'signaling_publish_retry');
+    }
+  }
+
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
     if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
@@ -279,14 +305,11 @@ export function createCallWorkspaceSocketHelpers({
         return;
       }
       if (refs.shouldSuppressExpectedSignalingError(payload)) {
-        if (mediaSecuritySignalTypes.includes(failedCommandType)) {
-          requestRoomSnapshot();
-          setTimeout(() => {
-            void sendMediaSecuritySync(false);
-          }, 500);
-        } else {
-          scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
-        }
+        recoverExpectedSignalingPublishFailure({
+          failedCommandType,
+          failedTargetUserId,
+          signalingError: payload?.details?.error,
+        });
         return;
       }
       if (code === 'activity_publish_failed') {
