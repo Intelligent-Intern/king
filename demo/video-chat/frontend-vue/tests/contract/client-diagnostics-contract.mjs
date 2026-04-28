@@ -26,6 +26,13 @@ const diagnostics = read('src/support/clientDiagnostics.js');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
 requireContains(diagnostics, 'const DIAGNOSTICS_MAX_BATCH = 12;', 'diagnostics batch limit');
+requireContains(diagnostics, 'const DIAGNOSTICS_FLUSH_INTERVAL_MS = 30000;', 'diagnostics batches errors before sending');
+requireContains(diagnostics, 'const DIAGNOSTICS_MAX_REPEAT_COUNT = 9999;', 'diagnostics duplicate counter cap');
+requireContains(diagnostics, 'diagnosticsSentFingerprints = new Set()', 'diagnostics remembers sent fingerprints per page session');
+requireContains(diagnostics, "if (normalizedLevel !== 'warning' && normalizedLevel !== 'error')", 'diagnostics ignores non-error health chatter');
+requireContains(diagnostics, 'queued.repeat_count = Math.min(DIAGNOSTICS_MAX_REPEAT_COUNT', 'diagnostics coalesces duplicate pending errors');
+requireContains(diagnostics, 'diagnosticsSentFingerprints.has(fingerprint)', 'diagnostics suppresses already sent duplicate errors');
+requireContains(diagnostics, 'diagnosticsSentFingerprints.add(diagnosticsFingerprint(entry))', 'diagnostics marks successfully sent errors');
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_runtime_error'", 'global runtime error diagnostics hook');
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_unhandled_rejection'", 'global promise rejection diagnostics hook');
 requireContains(diagnostics, 'source_file: normalizeString(event?.filename', 'minified bundle source position capture');

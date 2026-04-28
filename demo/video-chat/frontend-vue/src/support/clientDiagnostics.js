@@ -5,16 +5,17 @@ import { currentAssetVersion } from './assetVersion';
 const DIAGNOSTICS_STORAGE_KEY = 'ii.videocall.client_diagnostics.pending.v1';
 const DIAGNOSTICS_MAX_QUEUE = 60;
 const DIAGNOSTICS_MAX_BATCH = 12;
-const DIAGNOSTICS_FLUSH_INTERVAL_MS = 4000;
-const DIAGNOSTICS_DEDUPE_WINDOW_MS = 15000;
+const DIAGNOSTICS_FLUSH_INTERVAL_MS = 30000;
+const DIAGNOSTICS_MAX_REPEAT_COUNT = 9999;
 
 let diagnosticsContextProvider = null;
 let diagnosticsQueue = loadPersistedDiagnosticsQueue();
 let diagnosticsFlushTimer = null;
 let diagnosticsFlushPromise = null;
 let diagnosticsLifecycleBound = false;
-let diagnosticsRetryDelayMs = 2500;
+let diagnosticsRetryDelayMs = DIAGNOSTICS_FLUSH_INTERVAL_MS;
 let diagnosticsGlobalErrorBound = false;
+let diagnosticsSentFingerprints = new Set();
 
 function normalizeString(value, fallback = '', maxLength = 240) {
   const normalized = String(value ?? '').trim();
@@ -229,7 +230,7 @@ export function configureClientDiagnostics(contextProvider) {
   bindDiagnosticsLifecycleHooks();
   bindGlobalClientErrorDiagnostics();
   if (diagnosticsQueue.length > 0) {
-    scheduleDiagnosticsFlush(250);
+    scheduleDiagnosticsFlush();
   }
 }
 
@@ -248,11 +249,15 @@ export function reportClientDiagnostic({
 
   const normalizedEventType = normalizeIdentifier(eventType, '');
   if (normalizedEventType === '') return null;
+  const normalizedLevel = normalizeLevel(level);
+  if (normalizedLevel !== 'warning' && normalizedLevel !== 'error') {
+    return null;
+  }
 
   const context = resolveDiagnosticsContext();
   const entry = {
     category: normalizeIdentifier(category, 'media'),
-    level: normalizeLevel(level),
+    level: normalizedLevel,
     event_type: normalizedEventType,
     code: normalizeIdentifier(code, ''),
     message: normalizeString(message, '', 500),
@@ -271,15 +276,17 @@ export function reportClientDiagnostic({
   for (let index = diagnosticsQueue.length - 1; index >= 0; index -= 1) {
     const queued = diagnosticsQueue[index];
     if (!queued || diagnosticsFingerprint(queued) !== fingerprint) continue;
-    const ageMs = Math.abs(entry.timestamp_unix_ms - Number(queued.timestamp_unix_ms || 0));
-    if (ageMs > DIAGNOSTICS_DEDUPE_WINDOW_MS) break;
-    queued.repeat_count = Math.min(99, Number(queued.repeat_count || 1) + 1);
+    queued.repeat_count = Math.min(DIAGNOSTICS_MAX_REPEAT_COUNT, Number(queued.repeat_count || 1) + 1);
     queued.client_time = entry.client_time;
     queued.timestamp_unix_ms = entry.timestamp_unix_ms;
     queued.payload = entry.payload;
     persistDiagnosticsQueue();
-    scheduleDiagnosticsFlush(immediate ? 50 : DIAGNOSTICS_FLUSH_INTERVAL_MS);
+    scheduleDiagnosticsFlush();
     return queued;
+  }
+
+  if (diagnosticsSentFingerprints.has(fingerprint)) {
+    return null;
   }
 
   diagnosticsQueue.push(entry);
@@ -288,11 +295,7 @@ export function reportClientDiagnostic({
   }
   persistDiagnosticsQueue();
 
-  if (immediate || diagnosticsQueue.length >= DIAGNOSTICS_MAX_BATCH) {
-    scheduleDiagnosticsFlush(50);
-  } else {
-    scheduleDiagnosticsFlush();
-  }
+  scheduleDiagnosticsFlush();
 
   return entry;
 }
@@ -334,17 +337,20 @@ export async function flushClientDiagnostics({ keepalive = false, reason = 'manu
         throw new Error(`client_diagnostics_http_${response.status}`);
       }
 
+      for (const entry of batch) {
+        diagnosticsSentFingerprints.add(diagnosticsFingerprint(entry));
+      }
       diagnosticsQueue.splice(0, batch.length);
       persistDiagnosticsQueue();
-      diagnosticsRetryDelayMs = 2500;
+      diagnosticsRetryDelayMs = DIAGNOSTICS_FLUSH_INTERVAL_MS;
 
       if (diagnosticsQueue.length > 0) {
-        scheduleDiagnosticsFlush(250);
+        scheduleDiagnosticsFlush();
       }
 
       return true;
     } catch {
-      diagnosticsRetryDelayMs = Math.min(20000, diagnosticsRetryDelayMs * 2);
+      diagnosticsRetryDelayMs = Math.min(120000, diagnosticsRetryDelayMs * 2);
       scheduleDiagnosticsFlush(diagnosticsRetryDelayMs);
       return false;
     } finally {
