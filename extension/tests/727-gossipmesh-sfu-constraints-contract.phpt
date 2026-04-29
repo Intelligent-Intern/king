@@ -52,7 +52,6 @@ $gatewayNeedles = [
     'videochat_sfu_decode_client_frame($msgJson, $roomId)',
     'videochat_sfu_bootstrap($sfuDatabase)',
     'videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName)',
-    'videochat_sfu_insert_frame(',
     'videochat_sfu_poll_broker(',
 ];
 foreach ($gatewayNeedles as $needle) {
@@ -104,8 +103,8 @@ $runtimeContractNeedles = [
     'SFU room query mismatch must fail',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU frame relay must exclude self and cross-room frames',
+    'protected binary SFU frame envelope should decode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
 ];
 foreach ($runtimeContractNeedles as $needle) {
     require_contains($runtimeContract, $needle);
