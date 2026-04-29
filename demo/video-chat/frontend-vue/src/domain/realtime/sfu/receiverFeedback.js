@@ -1,3 +1,11 @@
+import {
+  buildSfuLayerPreferencePayload,
+  markSfuLayerPreferenceSent,
+  sfuLayerPreferenceForRemoteSurfaceRole,
+  shouldSendSfuLayerPreference,
+  visibleParticipantCountForPeer,
+} from './adaptiveQualityLayers';
+
 const RECEIVER_FEEDBACK_MIN_INTERVAL_MS = 4000;
 const RECEIVER_RENDER_LAG_PRESSURE_MS = 900;
 
@@ -61,7 +69,46 @@ export function createSfuReceiverFeedback({
     });
   }
 
+  function maybeSendReceiverLayerPreference(peer, publisherId, frame, renderSurfaceRole, extraPayload = {}) {
+    if (!peer || typeof peer !== 'object') return false;
+    if (typeof sendRemoteSfuVideoQualityPressure !== 'function') return false;
+
+    const localUserId = normalizePositiveNumber(typeof currentUserId === 'function' ? currentUserId() : 0);
+    const targetUserId = normalizePositiveNumber(peer.userId || 0);
+    if (targetUserId <= 0 || targetUserId === localUserId) return false;
+
+    const nowMs = Date.now();
+    const visibleParticipantCount = visibleParticipantCountForPeer(peer);
+    const layerPreference = sfuLayerPreferenceForRemoteSurfaceRole(renderSurfaceRole, {
+      visibleParticipantCount,
+    });
+    if (!shouldSendSfuLayerPreference(peer, publisherId, frame, layerPreference, nowMs)) return false;
+
+    const sent = sendRemoteSfuVideoQualityPressure(
+      peer,
+      publisherId,
+      `sfu_receiver_${layerPreference}_layer_preference`,
+      nowMs,
+      {
+        requester_user_id: localUserId,
+        media_runtime_path: String(mediaRuntimePathRef?.value || ''),
+        ...buildSfuLayerPreferencePayload({
+          frame,
+          layerPreference,
+          renderSurfaceRole,
+          visibleParticipantCount,
+        }),
+        ...extraPayload,
+      },
+    );
+    if (sent) {
+      markSfuLayerPreferenceSent(peer, publisherId, frame, layerPreference, nowMs);
+    }
+    return sent;
+  }
+
   return {
+    maybeSendReceiverLayerPreference,
     maybeSendReceiverRenderLagFeedback,
     maybeSendReceiverSequenceGapFeedback,
   };

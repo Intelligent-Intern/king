@@ -32,6 +32,9 @@ export function createSfuTransportState() {
     sfuAutomaticQualityTransitionLastAtMs: 0,
     sfuAutoQualityDowngradeLastAtMs: 0,
     sfuAutoQualityRecoveryLastAtMs: 0,
+    sfuRemotePrimaryLayerRequestedUntilMs: 0,
+    sfuRemoteLayerPreferenceLastAtMs: 0,
+    sfuRemoteLayerPreferenceLastAction: '',
     sfuVideoRecoveryLastAtMs: 0,
   };
 }

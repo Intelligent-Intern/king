@@ -76,7 +76,7 @@ Technical target:
    - Verification: `node tests/contract/sfu-fullscreen-render-scheduler-contract.mjs`, `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `npm run build`, `git diff --check`.
    - Production deploy: `demo/video-chat/scripts/deploy.sh deploy` succeeded and `demo/video-chat/scripts/deploy-smoke.sh` passed for HTTPS, API, lobby WS, SFU WS, certbot hook/SANs, admin infrastructure, and video operations.
 
-3. [ ] `[adaptive-sfu-quality-layers]` Add automatic high/low quality layers for fullscreen and grid.
+3. [x] `[adaptive-sfu-quality-layers]` Add automatic high/low quality layers for fullscreen and grid.
 
    Scope:
    - Introduce an automatic primary layer for selected/fullscreen participants and a cheaper thumbnail layer for grid/mini surfaces.
@@ -90,7 +90,11 @@ Technical target:
    - Tests prove layer negotiation, pressure isolation, backend diagnostics, and no manual quality selector.
 
    Report:
-   - Pending.
+   - Added automatic receiver-side SFU layer preferences driven by remote render surface roles: fullscreen/main and two-person grid request the primary layer, larger grid/mini/fallback request thumbnail delivery.
+   - Layer preference signals now travel through the existing backend-routed `call/media-quality-pressure` channel with explicit `prefer_primary_video_layer` and `prefer_thumbnail_video_layer` actions, requested target profiles, surface role, visible participant count, and frame evidence.
+   - Publisher-side handling now aggregates remote layer requests with a primary-layer TTL, bypasses slow recovery cooldown for primary requests, ignores thumbnail downshifts while a primary request is active, and can jump directly to the requested automatic profile instead of stepping one tier at a time.
+   - Both WLVC and protected browser-decoder receivers send layer preference after accepted renders; explicit requested actions are preserved by the media stack and runtime health pressure senders.
+   - Verification: `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `npm run build`, `git diff --check`.
 
 ## Execution Order
 

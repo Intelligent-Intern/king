@@ -104,6 +104,7 @@ export function createRemoteBrowserEncodedVideoRenderer({
   markRemotePeerRenderable,
   bumpMediaRenderVersion,
   mediaRuntimePathRef,
+  requestRemoteSfuLayerPreference,
   renderCallVideoLayout,
   globalScope = typeof globalThis !== 'undefined' ? globalThis : {},
 }) {
@@ -128,6 +129,11 @@ export function createRemoteBrowserEncodedVideoRenderer({
     const previousConnectionMessage = String(peer.mediaConnectionMessage || '');
     ctx.drawImage(videoFrame, 0, 0, width, height);
     markRemoteFrameRendered(peer, frame, renderedAtMs);
+    if (typeof requestRemoteSfuLayerPreference === 'function') {
+      requestRemoteSfuLayerPreference(peer, frame?.publisherId, frame, renderDecision.role, {
+        codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      });
+    }
     peer.frameWidth = width;
     peer.frameHeight = height;
     peer.frameCount = Number(peer.frameCount || 0) + 1;

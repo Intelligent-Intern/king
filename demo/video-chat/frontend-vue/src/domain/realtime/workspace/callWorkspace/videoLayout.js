@@ -81,12 +81,14 @@ export function createCallWorkspaceVideoLayoutHelpers({
   function mountVideoNode(target, node, assignedNodes, {
     role = REMOTE_RENDER_SURFACE_ROLES.FALLBACK,
     userId = 0,
+    visibleParticipantCount = 0,
   } = {}) {
     if (!(target instanceof HTMLElement) || !(node instanceof HTMLElement)) return false;
     applyRemoteVideoSurfaceRole(node, {
       layoutMode: currentLayoutMode(),
       role,
       userId,
+      visibleParticipantCount,
     });
     assignedNodes.add(node);
     if (node.parentElement !== target || target.children.length !== 1 || target.firstElementChild !== node) {
@@ -137,11 +139,13 @@ export function createCallWorkspaceVideoLayoutHelpers({
     const localContainer = document.getElementById('local-video-container');
     const remoteContainer = document.getElementById('remote-video-container');
     if (currentLayoutMode() === 'grid') {
-      for (const participant of gridVideoParticipants()) {
+      const participants = gridVideoParticipants();
+      const visibleParticipantCount = participants.length;
+      for (const participant of participants) {
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(gridVideoSlotId(userId));
         const node = mediaNodeForUserId(userId);
-        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId })) {
+        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId, visibleParticipantCount })) {
           clearUnassignedChildren(slot, assignedNodes);
         }
       }
@@ -150,24 +154,28 @@ export function createCallWorkspaceVideoLayoutHelpers({
     } else {
       const primaryUserId = primaryVideoUserId();
       const primaryNode = mediaNodeForUserId(primaryUserId);
+      const miniParticipants = miniVideoParticipants();
+      const visibleParticipantCount = 1 + miniParticipants.length;
 
       if (primaryUserId === refs.currentUserId.value) {
         mountVideoNode(localContainer, primaryNode, assignedNodes, {
           role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
           userId: primaryUserId,
+          visibleParticipantCount,
         });
       } else {
         mountVideoNode(remoteContainer, primaryNode, assignedNodes, {
           role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
           userId: primaryUserId,
+          visibleParticipantCount,
         });
       }
 
-      for (const participant of miniVideoParticipants()) {
+      for (const participant of miniParticipants) {
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(miniVideoSlotId(userId));
         const node = mediaNodeForUserId(userId);
-        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.MINI, userId })) {
+        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.MINI, userId, visibleParticipantCount })) {
           clearUnassignedChildren(slot, assignedNodes);
         }
       }

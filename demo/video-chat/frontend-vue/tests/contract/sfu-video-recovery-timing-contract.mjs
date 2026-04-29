@@ -49,7 +49,8 @@ try {
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
-  requireContains(runtimeHealth, "requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'", 'fresh receive/keyframe-wait asks publisher for full-frame keyframe');
+  requireContains(runtimeHealth, 'const requestedAction = String(', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
+  requireContains(runtimeHealth, "payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video')", 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
   requireContains(runtimeHealth, 'const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;', 'fresh receive/keyframe-wait bypasses the second-freeze delay');
   requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();', 'frozen video restart waits for sustained receive loss');
   requireContains(runtimeHealth, 'if (shouldRestartFrozenVideo) {', 'frozen video reconnect is gated after staged recovery');

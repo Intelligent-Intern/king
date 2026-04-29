@@ -45,12 +45,19 @@ export function applyRemoteVideoSurfaceRole(node, {
   layoutMode = '',
   role = REMOTE_RENDER_SURFACE_ROLES.FALLBACK,
   userId = 0,
+  visibleParticipantCount = 0,
 } = {}) {
   if (!node || typeof node !== 'object' || !node.dataset || typeof node.dataset !== 'object') return false;
   const normalizedRole = normalizeRemoteRenderSurfaceRole(role);
   node.dataset.callVideoSurfaceRole = normalizedRole;
   node.dataset.callVideoRenderPriority = String(remoteRenderPriorityForRole(normalizedRole));
   node.dataset.callVideoLayoutMode = String(layoutMode || '');
+  const normalizedVisibleParticipantCount = Number(visibleParticipantCount || 0);
+  if (Number.isInteger(normalizedVisibleParticipantCount) && normalizedVisibleParticipantCount > 0) {
+    node.dataset.callVideoVisibleParticipantCount = String(normalizedVisibleParticipantCount);
+  } else {
+    delete node.dataset.callVideoVisibleParticipantCount;
+  }
   const normalizedUserId = Number(userId || 0);
   if (Number.isInteger(normalizedUserId) && normalizedUserId > 0) {
     node.dataset.callVideoSurfaceUserId = String(normalizedUserId);
@@ -174,4 +181,3 @@ export function markRemoteFrameRendered(peer, frame, nowMs = Date.now()) {
   peer.lastRemoteRenderSurfaceRole = role;
   return true;
 }
-

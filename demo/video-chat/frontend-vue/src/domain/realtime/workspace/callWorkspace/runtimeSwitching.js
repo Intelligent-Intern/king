@@ -49,7 +49,14 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     'sfu_wire_rate_budget_exceeded',
     'send_buffer_drain_timeout',
     'sfu_source_readback_budget_exceeded',
+    'sfu_remote_thumbnail_layer_requested',
   ]);
+  const sfuQualityProfileRank = Object.freeze({
+    rescue: 0,
+    realtime: 1,
+    balanced: 2,
+    quality: 3,
+  });
 
   function setMediaRuntimePath(nextPath, reason) {
     const previousPath = refs.mediaRuntimePath.value;
@@ -156,6 +163,26 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     return resolveSfuVideoQualityProfile(refs.callMediaPrefs.outgoingVideoQualityProfile);
   }
 
+  function normalizeRequestedSfuVideoQualityProfile(value) {
+    const requestedProfileId = String(value || '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(sfuQualityProfileRank, requestedProfileId)) return '';
+    const requestedProfile = resolveSfuVideoQualityProfile(requestedProfileId);
+    const resolvedProfileId = String(requestedProfile?.id || '').trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(sfuQualityProfileRank, requestedProfileId)
+      && resolvedProfileId === requestedProfileId
+      ? resolvedProfileId
+      : '';
+  }
+
+  function requestedProfileForDirection(currentProfile, requestedProfile, direction, fallbackProfile) {
+    const currentRank = sfuQualityProfileRank[currentProfile];
+    const requestedRank = sfuQualityProfileRank[requestedProfile];
+    if (!Number.isFinite(currentRank) || !Number.isFinite(requestedRank)) return fallbackProfile;
+    if (direction === 'up' && requestedRank > currentRank) return requestedProfile;
+    if (direction === 'down' && requestedRank < currentRank) return requestedProfile;
+    return fallbackProfile;
+  }
+
   function applySfuVideoQualityProfileSwitch({
     currentProfile,
     nextProfile,
@@ -205,15 +232,28 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   function probeSfuVideoQualityAfterStableReadback(reason = 'sfu_source_readback_recovered', details = {}) {
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const normalizedReason = String(reason || 'sfu_source_readback_recovered').trim().toLowerCase();
-    const nextProfile = SFU_AUTO_QUALITY_RECOVERY_NEXT[currentProfile] || '';
+    const requestedProfile = normalizeRequestedSfuVideoQualityProfile(
+      details?.requestedVideoQualityProfile || details?.requested_video_quality_profile,
+    );
+    const nextProfile = requestedProfileForDirection(
+      currentProfile,
+      requestedProfile,
+      'up',
+      SFU_AUTO_QUALITY_RECOVERY_NEXT[currentProfile] || '',
+    );
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();
+    const bypassQualityRecoveryCooldown = Boolean(
+      details?.bypassQualityRecoveryCooldown
+        || details?.bypass_quality_recovery_cooldown
+        || String(details?.requested_video_layer || details?.requestedVideoLayer || '').trim().toLowerCase() === 'primary',
+    );
     const lastQualityChangeAtMs = Math.max(
       Number(refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs || 0),
       Number(refs.sfuTransportState.sfuAutoQualityRecoveryLastAtMs || 0),
     );
-    if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) {
+    if (!bypassQualityRecoveryCooldown && (nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) {
       return false;
     }
     refs.sfuTransportState.sfuAutoQualityRecoveryLastAtMs = nowMs;
@@ -240,7 +280,15 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
     const bypassQualityDowngradeCooldown = immediateQualityPressureReasons.includes(normalizedReason);
-    let nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
+    const requestedProfile = normalizeRequestedSfuVideoQualityProfile(
+      options?.requestedVideoQualityProfile || options?.requested_video_quality_profile,
+    );
+    let nextProfile = requestedProfileForDirection(
+      currentProfile,
+      requestedProfile,
+      'down',
+      sfuAutoQualityDowngradeNext[currentProfile] || '',
+    );
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();
