@@ -228,6 +228,7 @@
   transform: scaleX(-1);
 }
 
+.video-container :deep(video.remote-video),
 .video-container :deep(canvas.remote-video) {
   object-fit: contain !important;
   background: var(--bg-video);
@@ -588,6 +589,7 @@
   object-fit: cover !important;
 }
 
+.workspace-mini-video-slot :deep(video.remote-video),
 .workspace-mini-video-slot :deep(canvas.remote-video) {
   object-fit: contain !important;
   background: var(--bg-video);

@@ -33,8 +33,11 @@ async function main() {
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(rawStream, 'publish')", 'initial publish reports track settings');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(nextRawStream, 'reconfigure')", 'profile/device reconfigure reports track settings');
   requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'quality profile change reconfigures local tracks');
-  requireContains(publisherPipeline, 'frame_width: videoProfile.frameWidth', 'publisher telemetry reports active WLVC frame width');
-  requireContains(publisherPipeline, 'frame_height: videoProfile.frameHeight', 'publisher telemetry reports active WLVC frame height');
+  requireContains(publisherPipeline, "import { resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
+  requireContains(publisherPipeline, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
+  requireContains(publisherPipeline, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
+  requireContains(publisherPipeline, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');
+  requireContains(publisherPipeline, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher telemetry reports source aspect ratio');
 
   const server = await createServer({
     root: frontendRoot,
@@ -44,6 +47,7 @@ async function main() {
 
   try {
     const { SFU_VIDEO_QUALITY_PROFILES } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
+    const { resolveContainFrameSizeFromDimensions } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.js');
     const quality = SFU_VIDEO_QUALITY_PROFILES.quality;
     const realtime = SFU_VIDEO_QUALITY_PROFILES.realtime;
     const rescue = SFU_VIDEO_QUALITY_PROFILES.rescue;
@@ -56,6 +60,15 @@ async function main() {
     assert.ok(rescue.captureFrameRate < realtime.captureFrameRate, 'rescue capture fps must downscale below realtime');
     assert.ok(realtime.frameWidth < quality.frameWidth, 'realtime publisher frame width must downscale below quality');
     assert.ok(rescue.frameWidth < realtime.frameWidth, 'rescue publisher frame width must downscale below realtime');
+
+    const portrait = resolveContainFrameSizeFromDimensions(720, 1280, quality.frameWidth, quality.frameHeight);
+    assert.equal(portrait.frameWidth, 404, 'portrait sources must preserve aspect ratio inside the quality frame budget');
+    assert.equal(portrait.frameHeight, 720, 'portrait sources must use the quality profile height budget');
+    assert.equal(portrait.aspectMode, 'source_contain', 'portrait sources must not be stretched into the profile aspect ratio');
+
+    const landscape = resolveContainFrameSizeFromDimensions(1280, 720, quality.frameWidth, quality.frameHeight);
+    assert.equal(landscape.frameWidth, 1280, 'landscape sources keep the full quality width');
+    assert.equal(landscape.frameHeight, 720, 'landscape sources keep the full quality height');
 
     process.stdout.write('[sfu-capture-constraints-contract] PASS\n');
   } finally {

@@ -3,6 +3,7 @@ import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
 import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
+import { resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
   backgroundBaselineCollector,
@@ -305,23 +306,105 @@ export function createLocalPublisherPipelineHelpers({
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
 
-    try {
-      const nextEncoder = await createHybridEncoder({
-        width: videoProfile.frameWidth, height: videoProfile.frameHeight,
-        quality: videoProfile.frameQuality, keyFrameInterval: videoProfile.keyFrameInterval,
-      });
-      if (stopIfPipelineProfileChanged()) return;
-      refs.videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
-      if (!refs.videoEncoderRef.value) {
-        mediaDebugLog('[SFU] WLVC encoder unavailable; falling back to native WebRTC path');
-        void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
-        return;
+    const canvas = document.createElement('canvas');
+    const initialFrameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
+    canvas.width = initialFrameSize.frameWidth; canvas.height = initialFrameSize.frameHeight;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    let previousFullFrameImageData = null;
+    let lastFullFrameSentAtMs = 0;
+    let lastBackgroundSnapshotSentAtMs = 0;
+    let selectiveTileCacheEpoch = 0;
+    let forcedKeyframeRecoveryPending = false;
+    let keyframeRetryBlockedUntilMs = 0;
+    let fullFrameEncoderWidth = 0;
+    let fullFrameEncoderHeight = 0;
+    let fullFrameEncoderQuality = 0;
+    let fullFrameEncoderKeyFrameInterval = 0;
+
+    const resetFullFrameContinuity = () => {
+      previousFullFrameImageData = null;
+      lastFullFrameSentAtMs = 0;
+      lastBackgroundSnapshotSentAtMs = 0;
+      selectiveTileCacheEpoch += 1;
+      forcedKeyframeRecoveryPending = false;
+      keyframeRetryBlockedUntilMs = 0;
+      if (refs.videoPatchEncoderRef.value) {
+        try {
+          refs.videoPatchEncoderRef.value.destroy?.();
+        } catch {
+          // patch state is rebuilt after the next full-frame base
+        }
+        refs.videoPatchEncoderRef.value = null;
       }
-      mediaDebugLog('[SFU] Local encoder initialized', refs.videoEncoderRef.value?.constructor?.name || 'unknown_encoder');
+      refs.videoPatchEncoderWidth.value = 0;
+      refs.videoPatchEncoderHeight.value = 0;
+      refs.videoPatchEncoderQuality.value = 0;
+    };
+
+    const destroyFullFrameEncoder = () => {
+      if (!refs.videoEncoderRef.value) return;
+      try {
+        refs.videoEncoderRef.value.destroy?.();
+      } catch {
+        // ignore stale encoder cleanup failures during source aspect switches
+      }
+      refs.videoEncoderRef.value = null;
+    };
+
+    const markFullFrameEncoderReady = (width, height, quality, keyFrameInterval) => {
+      fullFrameEncoderWidth = width;
+      fullFrameEncoderHeight = height;
+      fullFrameEncoderQuality = quality;
+      fullFrameEncoderKeyFrameInterval = keyFrameInterval;
       state.wlvcEncodeFailureCount = 0;
       state.wlvcEncodeWarmupUntilMs = Date.now() + constants.wlvcEncodeWarmupMs;
       state.wlvcEncodeFirstFailureAtMs = 0;
       state.wlvcEncodeLastErrorLogAtMs = 0;
+    };
+
+    const ensureFullFrameEncoder = async (frameSize) => {
+      const nextWidth = Math.max(1, Math.floor(Number(frameSize?.frameWidth || videoProfile.frameWidth || 0)));
+      const nextHeight = Math.max(1, Math.floor(Number(frameSize?.frameHeight || videoProfile.frameHeight || 0)));
+      const nextQuality = Math.max(1, Math.floor(Number(videoProfile.frameQuality || constants.sfuWlvcFrameQuality)));
+      const nextKeyFrameInterval = Math.max(1, Math.floor(Number(videoProfile.keyFrameInterval || 1)));
+      if (
+        refs.videoEncoderRef.value
+        && fullFrameEncoderWidth === nextWidth
+        && fullFrameEncoderHeight === nextHeight
+        && fullFrameEncoderQuality === nextQuality
+        && fullFrameEncoderKeyFrameInterval === nextKeyFrameInterval
+      ) {
+        return refs.videoEncoderRef.value;
+      }
+
+      destroyFullFrameEncoder();
+      resetFullFrameContinuity();
+      const nextEncoder = await createHybridEncoder({
+        width: nextWidth,
+        height: nextHeight,
+        quality: nextQuality,
+        keyFrameInterval: nextKeyFrameInterval,
+      });
+      if (stopIfPipelineProfileChanged()) return null;
+      refs.videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
+      if (!refs.videoEncoderRef.value) return null;
+      markFullFrameEncoderReady(nextWidth, nextHeight, nextQuality, nextKeyFrameInterval);
+      mediaDebugLog(
+        '[SFU] Local encoder initialized',
+        refs.videoEncoderRef.value?.constructor?.name || 'unknown_encoder',
+        `${nextWidth}x${nextHeight}`,
+      );
+      return refs.videoEncoderRef.value;
+    };
+
+    try {
+      const nextEncoder = await ensureFullFrameEncoder(initialFrameSize);
+      if (stopIfPipelineProfileChanged()) return;
+      if (!nextEncoder) {
+        mediaDebugLog('[SFU] WLVC encoder unavailable; falling back to native WebRTC path');
+        void maybeFallbackToNativeRuntime('wlvc_encoder_unavailable');
+        return;
+      }
     } catch (error) {
       mediaDebugLog('[SFU] WLVC encoder init error; falling back to native WebRTC path:', error);
       captureClientDiagnosticError('wlvc_encoder_init_failed', error, {
@@ -335,16 +418,6 @@ export function createLocalPublisherPipelineHelpers({
       void maybeFallbackToNativeRuntime('wlvc_encoder_init_error');
       return;
     }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = videoProfile.frameWidth; canvas.height = videoProfile.frameHeight;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    let previousFullFrameImageData = null;
-    let lastFullFrameSentAtMs = 0;
-    let lastBackgroundSnapshotSentAtMs = 0;
-    let selectiveTileCacheEpoch = 0;
-    let forcedKeyframeRecoveryPending = false;
-    let keyframeRetryBlockedUntilMs = 0;
 
     const ensureSelectivePatchEncoder = async (width, height, quality) => {
       const nextWidth = Math.max(1, Math.floor(Number(width || 0)));
@@ -417,6 +490,16 @@ export function createLocalPublisherPipelineHelpers({
         if (video.readyState < 2 || !ctx) return;
 
         state.wlvcEncodeInFlight = true;
+        const frameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
+        const fullFrameEncoder = await ensureFullFrameEncoder(frameSize);
+        if (!fullFrameEncoder) {
+          mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
+          return;
+        }
+        if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
+          canvas.width = frameSize.frameWidth;
+          canvas.height = frameSize.frameHeight;
+        }
         const drawStartedAtMs = highResolutionNowMs();
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
@@ -534,7 +617,7 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (!encoded) {
-          encoded = refs.videoEncoderRef.value.encodeFrame(imageData, timestamp);
+          encoded = fullFrameEncoder.encodeFrame(imageData, timestamp);
           encodedFrameType = sfuFrameTypeFromWlvcData(encoded.data, encoded.type);
           if (encodedFrameType === 'keyframe') {
             outgoingCacheEpoch = selectiveTileCacheEpoch + 1;
@@ -590,8 +673,14 @@ export function createLocalPublisherPipelineHelpers({
           capture_width: videoProfile.captureWidth,
           capture_height: videoProfile.captureHeight,
           capture_frame_rate: videoProfile.captureFrameRate,
-          frame_width: videoProfile.frameWidth,
-          frame_height: videoProfile.frameHeight,
+          frame_width: frameSize.frameWidth,
+          frame_height: frameSize.frameHeight,
+          profile_frame_width: frameSize.profileFrameWidth,
+          profile_frame_height: frameSize.profileFrameHeight,
+          source_frame_width: frameSize.sourceWidth,
+          source_frame_height: frameSize.sourceHeight,
+          source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6)),
+          publisher_aspect_mode: frameSize.aspectMode,
           draw_image_ms: drawImageMs,
           readback_ms: readbackMs,
           encode_ms: encodeMs,
