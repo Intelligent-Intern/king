@@ -262,3 +262,45 @@ function videochat_realtime_send_room_snapshot_if_changed(
     $lastSignature = $signature;
     videochat_presence_send_frame($connection['socket'] ?? null, $payload);
 }
+
+function videochat_realtime_broadcast_room_snapshot(
+    array $presenceState,
+    string $roomId,
+    callable $openDatabase,
+    string $reason,
+    string $excludeConnectionId = '',
+    ?callable $sender = null
+): int {
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '') {
+        return 0;
+    }
+
+    $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
+    if (!is_array($roomConnections) || $roomConnections === []) {
+        return 0;
+    }
+
+    $sentCount = 0;
+    $excludedId = trim($excludeConnectionId);
+    foreach ($roomConnections as $connectionId => $_socket) {
+        if (!is_string($connectionId) || $connectionId === '') {
+            continue;
+        }
+        if ($excludedId !== '' && $connectionId === $excludedId) {
+            continue;
+        }
+
+        $connection = $presenceState['connections'][$connectionId] ?? null;
+        if (!is_array($connection)) {
+            continue;
+        }
+
+        $payload = videochat_realtime_room_snapshot_payload($presenceState, $connection, $openDatabase, $reason);
+        if (videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender)) {
+            $sentCount++;
+        }
+    }
+
+    return $sentCount;
+}

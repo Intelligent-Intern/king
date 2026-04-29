@@ -165,6 +165,23 @@ Technical target:
    - Kept high-quality full frames untouched unless they are selective tile composites.
    - Verification: `node tests/contract/sfu-selective-tile-runtime-contract.mjs`.
 
+8. [x] `[room-leave-roster-video-prune]` Remove departed participants from roster and video layout immediately.
+
+   Scope:
+   - Treat `room/left` as an authoritative local prune signal, not only as a reason to poll a snapshot.
+   - Remove the departed participant from roster state, SFU remote peers, native peer connection state, pinned/muted/control state, and activity state.
+   - After backend leave/disconnect cleanup, broadcast a fresh per-viewer room snapshot so stale DB presence cannot re-add the departed participant.
+
+   Done when:
+   - Clicking leave removes that user from other clients' participant list and video tiles immediately.
+   - The grid recomputes from the remaining connected participants so another participant can move into the freed visible slot.
+   - Room snapshots after leave/disconnect are emitted only after call-presence DB cleanup.
+
+   Report:
+   - `room/left` now calls the same local cleanup path as `call/hangup` before requesting a snapshot backfill.
+   - Backend leave/disconnect paths remember the previous room, remove DB presence, mark `left_at`, then broadcast an authoritative room snapshot to remaining participants.
+   - Verification: `node tests/contract/call-room-leave-cleanup-contract.mjs`, `php demo/video-chat/backend-king-php/tests/realtime-room-leave-snapshot-contract.php`.
+
 ## Execution Order
 
 1. Finish `[socket-layer-state-wiring-hotfix]`.

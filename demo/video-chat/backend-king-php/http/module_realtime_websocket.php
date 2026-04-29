@@ -183,6 +183,7 @@ function videochat_handle_realtime_websocket_route(
             }
             $presenceDetached = true;
             $disconnectedConnection = (array) $presenceConnection;
+            $disconnectedRoomId = videochat_presence_normalize_room_id((string) ($disconnectedConnection['room_id'] ?? ''), '');
 
             $lobbyClear = videochat_lobby_clear_for_connection(
                 $lobbyState,
@@ -212,6 +213,13 @@ function videochat_handle_realtime_websocket_route(
             videochat_presence_remove_connection($presenceState, $connectionId);
             videochat_realtime_remove_call_presence($openDatabase, $disconnectedConnection);
             videochat_realtime_mark_call_participant_left($openDatabase, $disconnectedConnection, $presenceState);
+            videochat_realtime_broadcast_room_snapshot(
+                $presenceState,
+                $disconnectedRoomId,
+                $openDatabase,
+                'participant_disconnected',
+                $connectionId
+            );
         };
 
         if ($session !== null && $streamId > 0 && $authSessionId !== '' && $connectionId !== '') {
@@ -557,6 +565,7 @@ function videochat_handle_realtime_websocket_route(
 
                 if ($commandType === 'room/leave') {
                     $leavingConnection = (array) $presenceConnection;
+                    $leavingRoomId = videochat_presence_normalize_room_id((string) ($leavingConnection['room_id'] ?? ''), '');
                     $lobbyClear = videochat_lobby_clear_for_connection(
                         $lobbyState,
                         $presenceState,
@@ -595,6 +604,13 @@ function videochat_handle_realtime_websocket_route(
                     $presenceState['connections'][$connectionId] = $presenceConnection;
                     videochat_realtime_remove_call_presence($openDatabase, $leavingConnection);
                     videochat_realtime_mark_call_participant_left($openDatabase, $leavingConnection, $presenceState);
+                    videochat_realtime_broadcast_room_snapshot(
+                        $presenceState,
+                        $leavingRoomId,
+                        $openDatabase,
+                        'participant_left',
+                        $connectionId
+                    );
                     continue;
                 }
 
