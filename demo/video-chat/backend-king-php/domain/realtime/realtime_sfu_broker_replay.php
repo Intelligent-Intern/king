@@ -17,9 +17,46 @@ function videochat_sfu_live_frame_relay_max_files_per_room(): int
     return 300;
 }
 
+function videochat_sfu_live_frame_relay_max_room_bytes(): int
+{
+    return 32 * 1024 * 1024;
+}
+
+function videochat_sfu_live_frame_relay_cleanup_interval_ms(): int
+{
+    return 250;
+}
+
 function videochat_sfu_live_frame_relay_poll_interval_ms(): int
 {
     return 50;
+}
+
+function videochat_sfu_live_frame_relay_max_record_bytes(array $frame): int
+{
+    $payloadBudgetBytes = max(
+        (int) ($frame['budget_max_keyframe_bytes_per_frame'] ?? 0),
+        (int) ($frame['budget_max_encoded_bytes_per_frame'] ?? 0),
+        (int) ($frame['max_payload_bytes'] ?? 0),
+        (int) ($frame['payload_bytes'] ?? 0)
+    );
+    if ($payloadBudgetBytes <= 0) {
+        return 2 * 1024 * 1024;
+    }
+
+    return min(3 * 1024 * 1024, max(128 * 1024, (int) ceil($payloadBudgetBytes * 1.5) + 64 * 1024));
+}
+
+function videochat_sfu_live_frame_relay_should_cleanup(string $roomId, int $nowMs): bool
+{
+    static $nextCleanupAtByRoom = [];
+
+    $nextCleanupAtMs = (int) ($nextCleanupAtByRoom[$roomId] ?? 0);
+    if ($nowMs < $nextCleanupAtMs) {
+        return false;
+    }
+    $nextCleanupAtByRoom[$roomId] = $nowMs + videochat_sfu_live_frame_relay_cleanup_interval_ms();
+    return true;
 }
 
 function videochat_sfu_live_frame_relay_root(): string
@@ -84,6 +121,7 @@ function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs
     $files = glob($roomDir . '/*.json') ?: [];
     sort($files, SORT_STRING);
     $keptFiles = [];
+    $keptBytes = 0;
     foreach ($files as $file) {
         if (!is_string($file) || !is_file($file)) {
             continue;
@@ -94,14 +132,24 @@ function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs
             @unlink($file);
             continue;
         }
-        $keptFiles[] = $file;
+        $fileBytes = max(0, (int) @filesize($file));
+        $keptBytes += $fileBytes;
+        $keptFiles[] = ['path' => $file, 'bytes' => $fileBytes];
     }
 
-    $overflow = count($keptFiles) - videochat_sfu_live_frame_relay_max_files_per_room();
-    if ($overflow > 0) {
-        for ($index = 0; $index < $overflow; $index++) {
-            @unlink($keptFiles[$index]);
+    while (
+        $keptFiles !== []
+        && (
+            count($keptFiles) > videochat_sfu_live_frame_relay_max_files_per_room()
+            || $keptBytes > videochat_sfu_live_frame_relay_max_room_bytes()
+        )
+    ) {
+        $oldest = array_shift($keptFiles);
+        if (!is_array($oldest)) {
+            continue;
         }
+        @unlink((string) ($oldest['path'] ?? ''));
+        $keptBytes -= max(0, (int) ($oldest['bytes'] ?? 0));
     }
 
     if ((glob($roomDir . '/*.json') ?: []) === []) {
@@ -135,6 +183,9 @@ function videochat_sfu_live_frame_relay_publish(string $roomId, string $publishe
     if (!is_string($encoded) || $encoded === '') {
         return false;
     }
+    if (strlen($encoded) > videochat_sfu_live_frame_relay_max_record_bytes($frame)) {
+        return false;
+    }
 
     $filename = videochat_sfu_live_frame_relay_filename($nowMs);
     $temporaryPath = $roomDir . '/.' . $filename . '.tmp';
@@ -150,7 +201,7 @@ function videochat_sfu_live_frame_relay_publish(string $roomId, string $publishe
         return false;
     }
 
-    if (($nowMs % 10) === 0) {
+    if (videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)) {
         videochat_sfu_live_frame_relay_cleanup_room($normalizedRoomId, $nowMs);
     }
 
