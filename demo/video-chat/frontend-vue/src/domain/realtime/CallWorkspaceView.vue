@@ -749,17 +749,19 @@ function reconnectWorkspaceAfterForeground() {
   const now = Date.now();
   if ((now - workspaceLastForegroundReconnectAt) < 1000) return;
 
-  workspaceReconnectAfterForeground = false;
-  workspaceLastForegroundReconnectAt = now;
+  workspaceReconnectAfterForeground = false; workspaceLastForegroundReconnectAt = now;
   reconnectAttempt.value = 0;
 
   if (sfuClientRef.value) {
     sfuClientRef.value.leave();
-    sfuClientRef.value = null;
-    sfuConnected.value = false;
+    sfuClientRef.value = null; sfuConnected.value = false;
   }
 
-  connectSocket();
+  if (!hasLiveLocalMedia() && (controlState.cameraEnabled !== false || controlState.micEnabled !== false)) {
+    void publishLocalTracks();
+  }
+  void connectSocket();
+  if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) initSFU();
 }
 
 requestRoomSnapshot = requestRoomSnapshotLocal;
@@ -1277,7 +1279,7 @@ const {
   getSfuRemotePeerByFrameIdentity,
   handleSFUEncodedFrame,
   handleWlvcEncodeBackpressure,
-  handleWlvcFrameSendFailure,
+  handleWlvcFrameSendFailure, hasLiveLocalMedia,
   isBackgroundFilterEnabledForOutgoing,
   isSfuClientOpen,
   markRemotePeerRenderable,
@@ -1318,12 +1320,8 @@ const {
   updateSfuRemotePeerUserId,
 } = mediaStack;
 
-applyCallOutputPreferences = applyCallOutputPreferencesHelper;
-
-renderCallVideoLayout = renderCallVideoLayoutHelper;
-resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper;
-restartSfuAfterVideoStall = restartSfuAfterVideoStallHelper;
-stopActivityMonitor = stopActivityMonitorHelper;
+applyCallOutputPreferences = applyCallOutputPreferencesHelper; renderCallVideoLayout = renderCallVideoLayoutHelper;
+resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuAfterVideoStall = restartSfuAfterVideoStallHelper; stopActivityMonitor = stopActivityMonitorHelper;
 
 ({
   initSFU,

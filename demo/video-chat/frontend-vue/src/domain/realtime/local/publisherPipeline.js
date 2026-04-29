@@ -787,6 +787,7 @@ export function createLocalPublisherPipelineHelpers({
     bindLocalTrackLifecycle,
     clearLocalPreviewElement,
     clearLocalTrackRecoveryTimer,
+    hasLiveLocalMedia,
     scheduleLocalTrackRecovery,
     startEncodingPipeline,
     stopLocalEncodingPipeline,
