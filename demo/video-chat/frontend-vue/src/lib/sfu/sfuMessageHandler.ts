@@ -1,6 +1,6 @@
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { normalizeSfuIdentifier } from './identifiers'
-import type { SfuInboundFrameAssembler } from './inboundFrameAssembler'
+import { stringField, type SfuInboundFrameAssembler } from './inboundFrameAssembler'
 import { base64UrlToArrayBuffer } from './framePayload'
 import type { SFUClientCallbacks } from './sfuTypes'
 import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
@@ -10,14 +10,6 @@ interface SfuClientMessageHandlerContext {
   inboundFrameAssembler: SfuInboundFrameAssembler
   roomId: string
   subscribe: (publisherId: string) => void
-}
-
-function stringField(...values: any[]): string {
-  for (const value of values) {
-    const normalized = String(value ?? '').trim()
-    if (normalized !== '') return normalized
-  }
-  return ''
 }
 
 function integerField(fallback: number, ...values: any[]): number {

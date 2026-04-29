@@ -32,6 +32,8 @@ function require_order(string $path, string $before, string $after): void
 }
 
 $sfuClient = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts';
+$sfuMessageHandler = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts';
+$inboundFrameAssembler = 'demo/video-chat/frontend-vue/src/lib/sfu/inboundFrameAssembler.ts';
 $backendOrigin = 'demo/video-chat/frontend-vue/src/support/backendOrigin.js';
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
 $store = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php';
@@ -52,7 +54,10 @@ $clientNeedles = [
     "query.set('call_id', normalizedCallId)",
     "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })",
     "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })",
-    "this.send({ type: 'sfu/subscribe', publisher_id: publisherId })",
+    'const normalizedPublisherId = stringField(publisherId)',
+    'this.trackSubscribedPublisher(normalizedPublisherId)',
+    "this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })",
+    "this.send({ type: 'sfu/subscribe', publisher_id: publisherId, reason: 'publisher_frame_stall_recovery' })",
     "this.send({ type: 'sfu/unpublish', track_id: trackId })",
     'publisher_id: frame.publisherId',
     'publisher_user_id: frame.publisherUserId ||',
@@ -60,7 +65,15 @@ $clientNeedles = [
     'frame_type: frame.type',
     'payload.protected_frame = frame.protectedFrame',
     'payload.protection_mode = frame.protectionMode ||',
-    'const stringField = (...values: any[]): string => {',
+    "import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'",
+    'decodeSfuBinaryFrameEnvelope(ev.data)',
+    'this.markPublisherFrameReceived(msg)',
+];
+foreach ($clientNeedles as $needle) {
+    require_contains($sfuClient, $needle);
+}
+
+$messageHandlerNeedles = [
     'roomId:          stringField(msg.roomId, msg.room_id)',
     'publisherId:     stringField(msg.publisherId, msg.publisher_id)',
     'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)',
@@ -70,9 +83,11 @@ $clientNeedles = [
     'stringField(msg.protectionMode, msg.protection_mode)',
     'stringField(msg.frameType, msg.frame_type)',
 ];
-foreach ($clientNeedles as $needle) {
-    require_contains($sfuClient, $needle);
+foreach ($messageHandlerNeedles as $needle) {
+    require_contains($sfuMessageHandler, $needle);
 }
+
+require_contains($inboundFrameAssembler, 'export function stringField(...values: any[]): string');
 
 $originNeedles = [
     'export function resolveBackendSfuOriginCandidates()',

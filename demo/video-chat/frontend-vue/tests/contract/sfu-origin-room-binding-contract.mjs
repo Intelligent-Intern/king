@@ -49,7 +49,9 @@ try {
   requireContains(sfuClient, "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })", 'snake_case publish command');
   requireContains(sfuClient, 'isOpen(): boolean {', 'SFU client exposes socket open state without leaking private ws access');
   requireContains(sfuClient, 'getBufferedAmount(): number {', 'SFU client exposes websocket send-buffer size for encoder backpressure');
-  requireContains(sfuClient, "this.send({ type: 'sfu/subscribe', publisher_id: publisherId })", 'snake_case subscribe command');
+  requireContains(sfuClient, 'const normalizedPublisherId = stringField(publisherId)', 'subscribe command normalizes publisher id');
+  requireContains(sfuClient, 'this.trackSubscribedPublisher(normalizedPublisherId)', 'subscribe command tracks publisher frame health');
+  requireContains(sfuClient, "this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })", 'snake_case subscribe command');
   requireContains(sfuClient, "this.send({ type: 'sfu/unpublish', track_id: trackId })", 'snake_case unpublish command');
   requireContains(framePayload, "publisher_id: frame.publisherId", 'snake_case frame publisher');
   requireContains(framePayload, "publisher_user_id: frame.publisherUserId || ''", 'snake_case frame publisher user');
@@ -93,7 +95,8 @@ try {
   requireContains(framePayload, 'SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 42', 'binary frame v1 header length must match the timestamp/sequence/payload-length layout');
   requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
-  requireContains(sfuMessageHandler, 'function stringField(...values: any[]): string {', 'camel/snake inbound helper');
+  requireContains(sfuMessageHandler, "import { stringField, type SfuInboundFrameAssembler } from './inboundFrameAssembler'", 'camel/snake inbound helper import');
+  requireContains(inboundFrameAssembler, 'export function stringField(...values: any[]): string {', 'shared camel/snake inbound helper');
   requireContains(sfuMessageHandler, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');
   requireContains(sfuMessageHandler, 'publisherId:     stringField(msg.publisherId, msg.publisher_id)', 'publisher event camel/snake compatibility');
   requireContains(sfuMessageHandler, 'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)', 'publisher user event camel/snake compatibility');

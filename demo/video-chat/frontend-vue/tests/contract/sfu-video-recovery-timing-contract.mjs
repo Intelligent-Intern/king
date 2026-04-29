@@ -28,6 +28,7 @@ try {
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+  const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const template = read('src/domain/realtime/CallWorkspaceView.template.html');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');
 
@@ -72,6 +73,12 @@ try {
   requireContains(remotePeers, 'acceptedSfuCacheEpochByTrack: {}', 'rollover clears stale tile cache epoch continuity');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
+  requireContains(sfuClient, 'private markPublisherFrameReceived(msg: any', 'SFU client tracks publisher frame freshness');
+  requireContains(sfuClient, "if (stringField(msg?.type) !== 'sfu/frame') return", 'publisher frame tracker keys off normalized SFU frame messages');
+  requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'binary frame envelopes flow through the same SFU message handler');
+  requireContains(sfuClient, 'this.markPublisherFrameReceived(msg)', 'publisher frame tracker runs for binary-decoded and JSON SFU frames');
+  requireContains(sfuClient, 'eventType: \'sfu_publisher_frame_stall\'', 'transport-local publisher stall diagnostic');
+  requireContains(sfuClient, "reason: 'publisher_frame_stall_recovery'", 'transport-local publisher stall recovery resubscribes before UI restart');
 
   requireContains(participantUi, 'function participantMediaStatus(userId)', 'participant media status helper');
   requireContains(participantUi, 'remotePeerForParticipant', 'status helper reads SFU remote peers');

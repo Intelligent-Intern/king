@@ -46,6 +46,12 @@ Rejected or superseded:
 - `e6e8d04`: reject reconnect test simplification; keep only helper behavior if it proves real app reconnect.
 - Merge commits are not cherry-pick targets.
 
+## Accepted Local Ports
+
+- Layout/roster/harness deltas from `694c2d9`, `376426f`, `fd0d4a5`, `2a505fc`, and `cbc40e5` were manually ported into the current extracted layout/workspace modules and E2E harness without duplicating main/mini tiles or weakening reconnect assertions.
+- SFU recovery deltas from `4ff8e1b`, `1147f44`, and `76c356b` were manually ported as a shared `stringField` export, existing keyframe-first recovery proof, and a binary-frame-aware SFU-client tracker that resubscribes a stalled publisher before UI-level restart recovery.
+- Contract-pattern deltas from `da90906` were limited to stale-path corrections in PHPT/frontend contracts so current extracted SFU modules are checked directly; throughput, binary media, protected-frame, live-relay, and online-pressure gates remain intact.
+
 ## Guard
 
 The local frontend contract `tests/contract/more-payload-intake-contract.mjs` pins this intake decision by checking that the current hardening files and acceptance gates still exist, the risky `runtimeHealth.ts` replacement is absent, and the intake document records the direct-merge rejection and source commit classifications.

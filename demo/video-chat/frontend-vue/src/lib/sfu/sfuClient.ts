@@ -18,7 +18,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion'
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
-import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
+import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'
 import { normalizeSfuIdentifier } from './identifiers'
 import { handleSfuClientMessage } from './sfuMessageHandler'
 import {
@@ -71,6 +71,9 @@ const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
+const SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS = 1000
+const SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS = 6000
+const SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS = 5000
 
 interface SendBufferDrainResult {
   ok: boolean
@@ -78,6 +81,13 @@ interface SendBufferDrainResult {
   bufferedAmount: number
   targetBufferedBytes: number
   maxWaitMs: number
+}
+
+interface PublisherFrameHealth {
+  subscribedAtMs: number
+  lastFrameAtMs: number
+  lastRecoveryAtMs: number
+  recoveryCount: number
 }
 
 export class SFUClient {
@@ -96,6 +106,8 @@ export class SFUClient {
   private lastFrameTransportSampleAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
+  private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
+  private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -190,6 +202,7 @@ export class SFUClient {
       this.disconnectNotified = false
       setBackendSfuOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
+      this.startPublisherFrameStallTimer()
       if (this.cb.onConnected) {
         this.cb.onConnected()
       }
@@ -223,6 +236,7 @@ export class SFUClient {
       if (this.ws === ws) {
         this.ws = null
       }
+      this.stopPublisherFrameStallTimer()
       reportClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -258,6 +272,8 @@ export class SFUClient {
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.publisherFrameHealthById.clear()
+    this.stopPublisherFrameStallTimer()
     this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('socket_reconnect')
     this.roomId = roomId
@@ -299,7 +315,10 @@ export class SFUClient {
   }
 
   subscribe(publisherId: string): void {
-    this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    this.trackSubscribedPublisher(normalizedPublisherId)
+    this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })
   }
 
   unpublishTrack(trackId: string): void {
@@ -326,6 +345,8 @@ export class SFUClient {
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.publisherFrameHealthById.clear()
+    this.stopPublisherFrameStallTimer()
     this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('leave')
     this.send({ type: 'sfu/leave' })
@@ -372,6 +393,93 @@ export class SFUClient {
       return true
     }
     return false
+  }
+
+  private trackSubscribedPublisher(publisherId: string, nowMs = Date.now()): void {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    const existing = this.publisherFrameHealthById.get(normalizedPublisherId)
+    if (existing) {
+      existing.subscribedAtMs = nowMs
+      return
+    }
+    this.publisherFrameHealthById.set(normalizedPublisherId, {
+      subscribedAtMs: nowMs,
+      lastFrameAtMs: 0,
+      lastRecoveryAtMs: 0,
+      recoveryCount: 0,
+    })
+  }
+
+  private untrackPublisher(publisherId: string): void {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    this.publisherFrameHealthById.delete(normalizedPublisherId)
+  }
+
+  private markPublisherFrameReceived(msg: any, nowMs = Date.now()): void {
+    if (stringField(msg?.type) !== 'sfu/frame') return
+    const publisherId = stringField(msg?.publisherId, msg?.publisher_id)
+    if (publisherId === '') return
+    const health = this.publisherFrameHealthById.get(publisherId)
+    if (health) {
+      health.lastFrameAtMs = nowMs
+      health.recoveryCount = 0
+      return
+    }
+    this.publisherFrameHealthById.set(publisherId, {
+      subscribedAtMs: nowMs,
+      lastFrameAtMs: nowMs,
+      lastRecoveryAtMs: 0,
+      recoveryCount: 0,
+    })
+  }
+
+  private startPublisherFrameStallTimer(): void {
+    this.stopPublisherFrameStallTimer()
+    this.publisherFrameStallTimer = setInterval(() => {
+      this.checkPublisherFrameStalls()
+    }, SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS)
+  }
+
+  private stopPublisherFrameStallTimer(): void {
+    if (this.publisherFrameStallTimer === null) return
+    clearInterval(this.publisherFrameStallTimer)
+    this.publisherFrameStallTimer = null
+  }
+
+  private checkPublisherFrameStalls(nowMs = Date.now()): void {
+    if (!this.isOpen()) return
+    for (const [publisherId, health] of this.publisherFrameHealthById.entries()) {
+      const referenceAtMs = health.lastFrameAtMs > 0 ? health.lastFrameAtMs : health.subscribedAtMs
+      if (referenceAtMs <= 0) continue
+      const ageMs = Math.max(0, nowMs - referenceAtMs)
+      if (ageMs < SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS) continue
+      if ((nowMs - health.lastRecoveryAtMs) < SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS) continue
+
+      health.lastRecoveryAtMs = nowMs
+      health.recoveryCount += 1
+      reportClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_publisher_frame_stall',
+        code: 'sfu_publisher_frame_stall',
+        message: 'SFU publisher subscription is open but no fresh binary media frame has arrived; resubscribing before UI-level recovery restarts the transport.',
+        roomId: this.roomId,
+        payload: {
+          room_id: this.roomId,
+          publisher_id: publisherId,
+          stall_age_ms: ageMs,
+          last_frame_at_ms: health.lastFrameAtMs,
+          subscribed_at_ms: health.subscribedAtMs,
+          recovery_count: health.recoveryCount,
+          recovery_action: 'resubscribe',
+          frame_path: 'binary_or_json_sfu_frame',
+        },
+        immediate: health.recoveryCount <= 2,
+      })
+      this.send({ type: 'sfu/subscribe', publisher_id: publisherId, reason: 'publisher_frame_stall_recovery' })
+    }
   }
 
   private wait(ms: number): Promise<void> {
@@ -878,6 +986,10 @@ export class SFUClient {
   }
 
   private handleMessage(msg: any): void {
+    this.markPublisherFrameReceived(msg)
+    if (stringField(msg?.type) === 'sfu/publisher_left') {
+      this.untrackPublisher(stringField(msg?.publisherId, msg?.publisher_id))
+    }
     handleSfuClientMessage({
       callbacks: this.cb,
       inboundFrameAssembler: this.inboundFrameAssembler,

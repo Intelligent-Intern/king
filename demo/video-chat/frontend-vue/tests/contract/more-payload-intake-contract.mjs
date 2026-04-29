@@ -39,6 +39,7 @@ try {
   requireContains(intakeDoc, '`76c356b`', 'publisher stall source commit');
   requireContains(intakeDoc, 'reject runtimeHealth TypeScript conversion', 'runtimeHealth TS rejection');
   requireContains(intakeDoc, 'reject buffer increases and looser thresholds', 'buffer regression rejection');
+  requireContains(intakeDoc, 'binary-frame-aware SFU-client tracker', 'binary-aware stall tracker decision');
 
   const requiredCurrentFiles = [
     'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js',

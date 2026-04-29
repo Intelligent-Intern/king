@@ -63,14 +63,14 @@ Rejected or superseded candidate commits:
 10. [x] `[harness-realtime-room-sync]` Port explicit realtime room sync and main-user selection setup only where tests otherwise depend on incidental defaults.
 11. [x] `[reconnect-snapshot-assertion]` Compare `cbc40e5` against the current reconnect E2E; add missing snapshot-after-reconnect assertions only if they strengthen the existing media-security/control-state test.
 12. [x] `[reject-reconnect-weakening]` Ensure no cherry-pick from `2a505fc` or `e6e8d04` removes sidebar, grid, mini-strip, media-security, control-state, or snapshot assertions.
-13. [ ] `[shared-string-field-helper]` Evaluate `4ff8e1b`; export/reuse `stringField` only if it reduces duplicate parsing without undoing `sfuMessageHandler.ts` or binary frame validation.
-14. [ ] `[keyframe-before-restart-review]` Compare `1147f44` with current receiver feedback; port only missing keyframe-first recovery behavior and keep current profile byte budgets and downgrade thresholds.
-15. [ ] `[reject-buffer-threshold-regression]` Explicitly reject `1147f44` buffer increases and looser downgrade windows unless measurements prove they improve throughput without reintroducing critical backpressure.
-16. [ ] `[publisher-stall-tracker]` Adapt the useful idea from `76c356b` into the current SFU client only if publisher last-frame tracking is updated from the binary envelope path, not only JSON `sfu/frame` messages.
-17. [ ] `[stall-recovery-layering]` Ensure any publisher-scoped stall tracker complements, not replaces, current `runtimeHealth.js` diagnostics, targeted quality-pressure signaling, auto-resubscribe, and bounded SFU restart logic.
-18. [ ] `[runtime-health-ts-reject]` Document and enforce rejection of `c8621be`/`c2cf73d`/`bc19f56` unless a later change preserves every current runtimeHealth behavior and contract.
-19. [ ] `[contract-pattern-audit]` Compare `da90906` against current PHPT/frontend contracts; port only stale-path corrections and never delete tests that protect SFU throughput, binary media, or online pressure acceptance.
-20. [ ] `[cherry-pick-provenance-gate]` After each accepted port, commit locally with source SHA provenance, run the focused contract/E2E tests for the touched area, update this sprint checkbox, and do not push to GitHub.
+13. [x] `[shared-string-field-helper]` Evaluate `4ff8e1b`; export/reuse `stringField` only if it reduces duplicate parsing without undoing `sfuMessageHandler.ts` or binary frame validation.
+14. [x] `[keyframe-before-restart-review]` Compare `1147f44` with current receiver feedback; port only missing keyframe-first recovery behavior and keep current profile byte budgets and downgrade thresholds.
+15. [x] `[reject-buffer-threshold-regression]` Explicitly reject `1147f44` buffer increases and looser downgrade windows unless measurements prove they improve throughput without reintroducing critical backpressure.
+16. [x] `[publisher-stall-tracker]` Adapt the useful idea from `76c356b` into the current SFU client only if publisher last-frame tracking is updated from the binary envelope path, not only JSON `sfu/frame` messages.
+17. [x] `[stall-recovery-layering]` Ensure any publisher-scoped stall tracker complements, not replaces, current `runtimeHealth.js` diagnostics, targeted quality-pressure signaling, auto-resubscribe, and bounded SFU restart logic.
+18. [x] `[runtime-health-ts-reject]` Document and enforce rejection of `c8621be`/`c2cf73d`/`bc19f56` unless a later change preserves every current runtimeHealth behavior and contract.
+19. [x] `[contract-pattern-audit]` Compare `da90906` against current PHPT/frontend contracts; port only stale-path corrections and never delete tests that protect SFU throughput, binary media, or online pressure acceptance.
+20. [x] `[cherry-pick-provenance-gate]` After each accepted port, commit locally with source SHA provenance, run the focused contract/E2E tests for the touched area, update this sprint checkbox, and do not push to GitHub.
 
 ## Execution Order
 
