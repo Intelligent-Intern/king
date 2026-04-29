@@ -59,8 +59,9 @@ export type {
  */
 
 const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024
+const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024
 const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
-const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 500
+const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 160
 const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
@@ -70,6 +71,8 @@ interface SendBufferDrainResult {
   ok: boolean
   waitedMs: number
   bufferedAmount: number
+  targetBufferedBytes: number
+  maxWaitMs: number
 }
 
 export class SFUClient {
@@ -368,14 +371,18 @@ export class SFUClient {
     })
   }
 
-  private async waitForSendBufferDrain(): Promise<SendBufferDrainResult> {
+  private async waitForSendBufferDrain(targetBufferedBytes: number, maxWaitMs = SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS): Promise<SendBufferDrainResult> {
     const startMs = Date.now()
-    while (this.ws?.readyState === WebSocket.OPEN && this.getWebSocketBufferedAmount() > SFU_FRAME_CHUNK_BACKPRESSURE_BYTES) {
-      if ((Date.now() - startMs) >= SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS) {
+    const normalizedTarget = Math.max(0, Math.floor(Number(targetBufferedBytes || 0)))
+    const normalizedMaxWaitMs = Math.max(1, Math.floor(Number(maxWaitMs || 0)))
+    while (this.ws?.readyState === WebSocket.OPEN && this.getWebSocketBufferedAmount() > normalizedTarget) {
+      if ((Date.now() - startMs) >= normalizedMaxWaitMs) {
         return {
           ok: false,
           waitedMs: Date.now() - startMs,
           bufferedAmount: this.getWebSocketBufferedAmount(),
+          targetBufferedBytes: normalizedTarget,
+          maxWaitMs: normalizedMaxWaitMs,
         }
       }
       await this.wait(SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS)
@@ -384,11 +391,22 @@ export class SFUClient {
       ok: this.ws?.readyState === WebSocket.OPEN,
       waitedMs: Date.now() - startMs,
       bufferedAmount: this.getWebSocketBufferedAmount(),
+      targetBufferedBytes: normalizedTarget,
+      maxWaitMs: normalizedMaxWaitMs,
     }
   }
 
   private getWebSocketBufferedAmount(): number {
     return Math.max(0, Number(this.ws?.bufferedAmount || 0))
+  }
+
+  private resolveSendDrainTargetBytes(metrics: Record<string, unknown>): number {
+    const bufferedBudgetBytes = Math.max(0, Number(metrics.budget_max_buffered_bytes || 0))
+    if (bufferedBudgetBytes <= 0) return SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES
+    return Math.max(
+      SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES,
+      Math.floor(bufferedBudgetBytes * 0.5),
+    )
   }
 
   private nextOutboundFrameSequence(trackId: string): number {
@@ -477,14 +495,45 @@ export class SFUClient {
       })
       return false
     }
+    const projectedWirePayloadBytes = Math.max(0, Number(metrics.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0))
+    if (
+      bufferedBudgetBytes > 0
+      && projectedWirePayloadBytes > 0
+      && (bufferedBeforeSend + projectedWirePayloadBytes) > Math.max(bufferedBudgetBytes, projectedWirePayloadBytes)
+    ) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame because sending it would refill the websocket buffer above the profile budget.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          projected_buffered_after_send_bytes: bufferedBeforeSend + projectedWirePayloadBytes,
+          abort_reason: 'sfu_projected_buffer_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_projected_buffer_budget_exceeded',
+        stage: 'browser_websocket_projected_buffer_budget',
+        source: 'websocket_buffered_amount',
+        message: 'Encoded SFU frame would exceed its profile websocket buffer budget after send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
 
     this.reportFrameSendPressureIfNeeded({
       ...metrics,
       buffered_amount: bufferedBeforeSend,
     })
 
-    const drain = await this.waitForSendBufferDrain()
+    const drainTargetBufferedBytes = this.resolveSendDrainTargetBytes(metrics)
+    const drain = await this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)
     metrics.send_drain_ms = drain.waitedMs
+    metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
+    metrics.send_drain_max_wait_ms = drain.maxWaitMs
     if (!drain.ok) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -494,6 +543,8 @@ export class SFUClient {
           ...metrics,
           buffered_amount: drain.bufferedAmount,
           send_wait_ms: drain.waitedMs,
+          send_drain_target_buffered_bytes: drain.targetBufferedBytes,
+          send_drain_max_wait_ms: drain.maxWaitMs,
           abort_reason: 'send_buffer_drain_timeout',
         },
         true,
@@ -797,6 +848,8 @@ export class SFUClient {
       encodeMs: Math.max(0, Number(payload.encode_ms || 0)),
       queuedAgeMs: Math.max(0, Number(payload.queued_age_ms || 0)),
       sendDrainMs: Math.max(0, Number(payload.send_drain_ms || 0)),
+      sendDrainTargetBytes: Math.max(0, Number(payload.send_drain_target_buffered_bytes || 0)),
+      sendDrainMaxWaitMs: Math.max(0, Number(payload.send_drain_max_wait_ms || 0)),
       budgetMaxEncodedBytesPerFrame: Math.max(0, Number(payload.budget_max_encoded_bytes_per_frame || 0)),
       budgetMaxWireBytesPerSecond: Math.max(0, Number(payload.budget_max_wire_bytes_per_second || 0)),
       budgetMaxQueueAgeMs: Math.max(0, Number(payload.budget_max_queue_age_ms || 0)),

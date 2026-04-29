@@ -87,6 +87,8 @@ export interface SfuFrameTransportSample {
   encodeMs: number
   queuedAgeMs: number
   sendDrainMs: number
+  sendDrainTargetBytes: number
+  sendDrainMaxWaitMs: number
   budgetMaxEncodedBytesPerFrame: number
   budgetMaxWireBytesPerSecond: number
   budgetMaxQueueAgeMs: number
