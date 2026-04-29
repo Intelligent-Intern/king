@@ -29,6 +29,7 @@ try {
   requireContains(sfuClient, 'this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)', 'client waits only to the budgeted low-water target');
   requireContains(sfuClient, 'sfu_projected_buffer_budget_exceeded', 'client drops frames that would refill bufferedAmount above budget');
   requireContains(sfuClient, 'projected_buffered_after_send_bytes', 'client reports projected websocket buffer pressure before send');
+  requireContains(sfuClient, '(bufferedBeforeSend + projectedWirePayloadBytes) > bufferedBudgetBytes', 'client applies a strict projected websocket buffer budget');
   requireContains(sfuClient, 'send_drain_target_buffered_bytes', 'client records low-water drain target');
   requireContains(sfuClient, 'send_drain_max_wait_ms', 'client records bounded drain wait budget');
   requireContains(sfuClient, 'private send(msg: object): boolean', 'control messages keep a direct send path');
@@ -39,6 +40,11 @@ try {
     sfuClient.includes('SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 500'),
     false,
     'browser drain pacing must not retain the old 500ms wait',
+  );
+  assert.equal(
+    sfuClient.includes('Math.max(bufferedBudgetBytes, projectedWirePayloadBytes)'),
+    false,
+    'projected websocket buffer guard must not allow one oversized media frame above the active budget',
   );
 
   process.stdout.write('[sfu-browser-ws-send-drain-contract] PASS\n');

@@ -19,6 +19,7 @@ import {
 } from '../../support/assetVersion'
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
+import { normalizeSfuIdentifier } from './identifiers'
 import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
@@ -221,7 +222,7 @@ export class SFUClient {
         category: 'media',
         level: 'warning',
         eventType: 'sfu_socket_closed',
-        code: normalizeIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
+        code: normalizeSfuIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
         message: String(event?.reason || 'SFU websocket closed unexpectedly.').trim() || 'SFU websocket closed unexpectedly.',
         roomId,
         payload: {
@@ -499,7 +500,7 @@ export class SFUClient {
     if (
       bufferedBudgetBytes > 0
       && projectedWirePayloadBytes > 0
-      && (bufferedBeforeSend + projectedWirePayloadBytes) > Math.max(bufferedBudgetBytes, projectedWirePayloadBytes)
+      && (bufferedBeforeSend + projectedWirePayloadBytes) > bufferedBudgetBytes
     ) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -1033,7 +1034,7 @@ export class SFUClient {
           category: 'media',
           level: 'error',
           eventType: 'sfu_command_error',
-          code: normalizeIdentifier(stringField(msg.error), 'sfu_command_error'),
+          code: normalizeSfuIdentifier(stringField(msg.error), 'sfu_command_error'),
           message: 'SFU command failed.',
           roomId: stringField(msg.roomId, msg.room_id),
           payload: {
@@ -1046,14 +1047,4 @@ export class SFUClient {
         break
     }
   }
-}
-
-function normalizeIdentifier(value: string, fallback = ''): string {
-  const normalized = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._:-]+/g, '_')
-    .replace(/^[_:.-]+|[_:.-]+$/g, '')
-
-  return normalized || fallback
 }

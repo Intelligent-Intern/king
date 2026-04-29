@@ -69,6 +69,16 @@ profile payload budget, then fails on websocket close/error, SFU error frames,
 critical `bufferedAmount`, missing subscriber binary delivery, or post-drain
 buffering above the active quality budget.
 
+## Online Pressure Gate
+
+`demo/video-chat/frontend-vue/tests/e2e/online-sfu-pressure-acceptance.mjs`
+drives the production two-browser call path with high-motion fake cameras,
+protected SFU media enabled, live quality-select profile changes, and one
+network-throttled subscriber. It fails on `sfu_send_backpressure_critical`,
+remote freeze diagnostics, SFU socket restart/close/error during media flow,
+black remote video, stopped binary flow, or buffered send pressure above the
+active quality profile budget.
+
 ## Failure Interpretation
 
 `sfu_send_backpressure_critical` means at least one earlier stage produced,

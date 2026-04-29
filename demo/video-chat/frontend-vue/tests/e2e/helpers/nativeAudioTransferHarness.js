@@ -90,11 +90,37 @@ async function installSocketInstrumentation(context) {
         this.addEventListener('message', (event) => {
           events.push({ direction: 'in', url: this.__kingNativeAudioUrl, frame: snapshotFrame(event.data), at: Date.now() });
         });
+        this.addEventListener('close', (event) => {
+          events.push({
+            direction: 'state',
+            url: this.__kingNativeAudioUrl,
+            frame: { type: '__socket_close__', code: Number(event.code || 0), reason: String(event.reason || '') },
+            at: Date.now(),
+          });
+        });
+        this.addEventListener('error', () => {
+          events.push({
+            direction: 'state',
+            url: this.__kingNativeAudioUrl,
+            frame: { type: '__socket_error__' },
+            at: Date.now(),
+          });
+        });
       }
 
       send(data) {
-        events.push({ direction: 'out', url: this.__kingNativeAudioUrl || this.url, frame: snapshotFrame(data), at: Date.now() });
-        return super.send(data);
+        const frame = snapshotFrame(data);
+        const bufferedAmountBefore = Number(this.bufferedAmount || 0);
+        const result = super.send(data);
+        events.push({
+          direction: 'out',
+          url: this.__kingNativeAudioUrl || this.url,
+          frame,
+          bufferedAmountBefore,
+          bufferedAmountAfter: Number(this.bufferedAmount || 0),
+          at: Date.now(),
+        });
+        return result;
       }
     }
 
@@ -111,30 +137,71 @@ async function installMediaDeviceShim(context, {
   videoWidth = 320,
   videoHeight = 240,
   videoFrameRate = 12,
+  highMotionVideo = false,
 } = {}) {
-  await context.addInitScript(({ frequency, width, height, frameRate }) => {
+  await context.addInitScript(({ frequency, width, height, frameRate, highMotion }) => {
     const resources = [];
     window.__kingNativeAudioMediaResources = resources;
 
-    const createVideoTrack = () => {
+    const coerceConstraintNumber = (constraint, fallback) => {
+      if (typeof constraint === 'number' && Number.isFinite(constraint)) return constraint;
+      if (constraint && typeof constraint === 'object') {
+        for (const key of ['exact', 'ideal', 'max', 'min']) {
+          const value = Number(constraint[key]);
+          if (Number.isFinite(value) && value > 0) return value;
+        }
+      }
+      return fallback;
+    };
+
+    const resolveVideoSettings = (constraints) => {
+      const video = constraints && typeof constraints === 'object' ? constraints : {};
+      const nextWidth = Math.max(64, Math.round(coerceConstraintNumber(video.width, width)));
+      const nextHeight = Math.max(64, Math.round(coerceConstraintNumber(video.height, height)));
+      const nextFrameRate = Math.max(1, Math.round(coerceConstraintNumber(video.frameRate, frameRate)));
+      return { width: nextWidth, height: nextHeight, frameRate: nextFrameRate };
+    };
+
+    const createVideoTrack = (constraints = {}) => {
+      const settings = resolveVideoSettings(constraints);
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = settings.width;
+      canvas.height = settings.height;
       const ctx = canvas.getContext('2d');
       let frame = 0;
       const draw = () => {
         if (!ctx) return;
-        ctx.fillStyle = frame % 2 === 0 ? '#123c55' : '#1a5f72';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (highMotion) {
+          const cell = Math.max(12, Math.floor(Math.min(canvas.width, canvas.height) / 9));
+          const offset = (frame * 17) % cell;
+          for (let y = -cell; y < canvas.height + cell; y += cell) {
+            for (let x = -cell; x < canvas.width + cell; x += cell) {
+              const toneSeed = Math.floor((x + offset) / cell) + Math.floor((y - offset) / cell) + frame;
+              const tone = ((toneSeed % 6) + 6) % 6;
+              ctx.fillStyle = ['#0f172a', '#0e7490', '#22c55e', '#f59e0b', '#ef4444', '#f8fafc'][tone];
+              ctx.fillRect(x + offset, y - offset, cell, cell);
+            }
+          }
+          ctx.fillStyle = '#ffffff';
+          ctx.globalAlpha = 0.82;
+          ctx.fillRect((frame * 31) % (canvas.width + cell) - cell, 0, Math.max(cell * 2, canvas.width / 8), canvas.height);
+          ctx.fillStyle = '#111827';
+          ctx.globalAlpha = 0.7;
+          ctx.fillRect(0, (frame * 23) % (canvas.height + cell) - cell, canvas.width, Math.max(cell, canvas.height / 10));
+          ctx.globalAlpha = 1;
+        } else {
+          ctx.fillStyle = frame % 2 === 0 ? '#123c55' : '#1a5f72';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
         ctx.fillStyle = '#f8fafc';
-        ctx.font = '22px sans-serif';
-        ctx.fillText(`audio ${frequency}Hz`, 34, 122);
-        ctx.fillText(`frame ${frame}`, 34, 154);
+        ctx.font = `${Math.max(14, Math.round(canvas.height / 16))}px sans-serif`;
+        ctx.fillText(`audio ${frequency}Hz`, Math.max(12, Math.round(canvas.width / 24)), Math.max(32, Math.round(canvas.height * 0.48)));
+        ctx.fillText(`frame ${frame}`, Math.max(12, Math.round(canvas.width / 24)), Math.max(54, Math.round(canvas.height * 0.6)));
         frame += 1;
       };
       draw();
-      const intervalId = window.setInterval(draw, Math.max(16, Math.round(1000 / Math.max(1, frameRate))));
-      const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(frameRate) : null;
+      const intervalId = window.setInterval(draw, Math.max(16, Math.round(1000 / Math.max(1, settings.frameRate))));
+      const stream = typeof canvas.captureStream === 'function' ? canvas.captureStream(settings.frameRate) : null;
       resources.push({ canvas, intervalId, stream });
       return stream?.getVideoTracks?.()[0] || null;
     };
@@ -167,7 +234,7 @@ async function installMediaDeviceShim(context, {
         getUserMedia: async (constraints = {}) => {
           const tracks = [];
           if (constraints.video !== false) {
-            const videoTrack = createVideoTrack();
+            const videoTrack = createVideoTrack(constraints.video);
             if (videoTrack) tracks.push(videoTrack);
           }
           if (constraints.audio !== false) {
@@ -188,6 +255,7 @@ async function installMediaDeviceShim(context, {
     width: videoWidth,
     height: videoHeight,
     frameRate: videoFrameRate,
+    highMotion: Boolean(highMotionVideo),
   });
 }
 
@@ -358,11 +426,20 @@ export async function sfuSocketStats(page) {
     const binaryOut = sfuEvents.filter((event) => event?.direction === 'out' && event?.frame?.type === '__binary__');
     const maxBinaryOutBytes = binaryOut.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
     const maxBinaryInBytes = binaryIn.reduce((max, event) => Math.max(max, Number(event?.frame?.bytes || 0)), 0);
+    const sfuSockets = Array.from(window.__kingNativeAudioSockets || [])
+      .filter((socket) => String(socket?.url || socket?.__kingNativeAudioUrl || '').includes('/sfu'));
+    const socketFailures = sfuEvents.filter((event) => event?.direction === 'state'
+      && (event?.frame?.type === '__socket_error__' || event?.frame?.type === '__socket_close__'));
+    const maxBufferedAmountAfterSend = sfuEvents.reduce((max, event) => Math.max(max, Number(event?.bufferedAmountAfter || 0)), 0);
+    const currentBufferedAmount = sfuSockets.reduce((max, socket) => Math.max(max, Number(socket?.bufferedAmount || 0)), 0);
     return {
       binaryInCount: binaryIn.length,
       binaryOutCount: binaryOut.length,
       maxBinaryInBytes,
       maxBinaryOutBytes,
+      maxBufferedAmountAfterSend,
+      currentBufferedAmount,
+      socketFailureCount: socketFailures.length,
     };
   });
 }
