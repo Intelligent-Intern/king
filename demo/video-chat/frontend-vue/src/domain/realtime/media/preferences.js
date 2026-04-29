@@ -3,6 +3,7 @@ import {
   DEFAULT_SFU_VIDEO_QUALITY_PROFILE,
   normalizeSfuVideoQualityProfile,
 } from '../workspace/config';
+import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstraints';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 3;
@@ -218,7 +219,10 @@ async function maybeRequestDeviceLabels() {
 
   let stream = null;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: buildOptionalCallAudioCaptureConstraints(true),
+      video: true,
+    });
   } finally {
     if (stream instanceof MediaStream) {
       for (const track of stream.getTracks()) {

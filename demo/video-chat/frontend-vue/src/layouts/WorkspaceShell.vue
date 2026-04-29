@@ -912,6 +912,7 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
+import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/media/audioCaptureConstraints';
 
 const router = useRouter();
 const route = useRoute();
@@ -2025,9 +2026,7 @@ async function startMicLevelMonitor() {
   if (!AudioContextCtor) return;
 
   const selectedMicId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  const audioConstraints = selectedMicId !== ''
-    ? { deviceId: { exact: selectedMicId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  const audioConstraints = buildOptionalCallAudioCaptureConstraints(true, selectedMicId);
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });

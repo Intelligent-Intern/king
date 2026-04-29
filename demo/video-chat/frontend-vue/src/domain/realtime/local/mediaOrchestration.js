@@ -2,7 +2,7 @@ import {
   detectPublisherCapturePipelineCapabilities,
   publisherCaptureCapabilityDiagnosticPayload,
 } from './capturePipelineCapabilities';
-
+import { buildOptionalCallAudioCaptureConstraints, callAudioSettingsDiagnosticPayload } from '../media/audioCaptureConstraints';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -97,11 +97,7 @@ export function createLocalMediaOrchestrationHelpers({
             height: { ideal: videoProfile.captureHeight },
             frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           };
-    const audio = !wantsAudio
-      ? false
-      : microphoneDeviceId !== ''
-        ? { deviceId: { exact: microphoneDeviceId } }
-        : true;
+    const audio = buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId);
 
     return { video, audio };
   }
@@ -118,7 +114,7 @@ export function createLocalMediaOrchestrationHelpers({
             frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           }
         : false,
-      audio: wantsAudio ? true : false,
+      audio: buildOptionalCallAudioCaptureConstraints(wantsAudio),
     };
   }
 
@@ -129,10 +125,11 @@ export function createLocalMediaOrchestrationHelpers({
 
   function reportLocalCaptureSettings(stream, reason) {
     const videoTrack = stream instanceof MediaStream ? stream.getVideoTracks?.()[0] || null : null;
-    if (!videoTrack || typeof videoTrack.getSettings !== 'function') return;
+    const audioTrack = stream instanceof MediaStream ? stream.getAudioTracks?.()[0] || null : null;
+    if (!audioTrack && (!videoTrack || typeof videoTrack.getSettings !== 'function')) return;
     const videoProfile = currentSfuVideoProfile();
     const profileId = String(videoProfile.id || '').trim() || 'balanced';
-    const settings = videoTrack.getSettings() || {};
+    const settings = videoTrack && typeof videoTrack.getSettings === 'function' ? videoTrack.getSettings() || {} : {};
     const settingsWidth = finiteTrackSetting(settings.width);
     const settingsHeight = finiteTrackSetting(settings.height);
     const settingsFrameRate = finiteTrackSetting(settings.frameRate);
@@ -163,6 +160,7 @@ export function createLocalMediaOrchestrationHelpers({
         track_settings_width: settingsWidth,
         track_settings_height: settingsHeight,
         track_settings_frame_rate: settingsFrameRate,
+        ...callAudioSettingsDiagnosticPayload(audioTrack),
         ...publisherCaptureCapabilityDiagnosticPayload(captureCapabilities),
         stale_hd_capture_after_downgrade: staleAfterDowngrade,
       },
@@ -197,7 +195,7 @@ export function createLocalMediaOrchestrationHelpers({
     } catch {
       const fallbackConstraints = {
         video: controlState.cameraEnabled !== false,
-        audio: controlState.micEnabled !== false,
+        audio: buildOptionalCallAudioCaptureConstraints(controlState.micEnabled !== false),
       };
       if (fallbackConstraints.video !== true && fallbackConstraints.audio !== true) {
         return new MediaStream();

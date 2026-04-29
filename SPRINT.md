@@ -345,11 +345,13 @@ Implementation:
 - Removed the stale `exposeToConsole` gate from native-audio bridge failure recovery so repeated bridge failures still trigger the forced media-security sync/rekey timer instead of throwing before recovery.
 - Tightened native protected audio/video transform attachment so `canProtectNativeForTargets()` returns false unless the media-security session is `active`; receiver transforms no longer attach while the session is still `rekeying`.
 - Routed native frame-transform failures and native-audio recovery exhaustion to backend client diagnostics only; no direct browser-console error path remains for these recovery loops.
+- Added shared call audio capture constraints for publish, previews, mic-level monitoring, and device-label permission probing so browser acoustic echo cancellation, noise suppression, automatic gain control, and mono voice input are consistently requested instead of disabling echo cancellation on side capture paths.
 
 Verification:
 - `npm run test:contract:media-security` in `demo/video-chat/frontend-vue`
 - `npm run test:contract:native-audio-bridge` in `demo/video-chat/frontend-vue`
 - `npm run test:unit:native-audio-bridge` in `demo/video-chat/frontend-vue`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-capture-constraints-contract.mjs`
 - `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
 - `npm run build` in `demo/video-chat/frontend-vue`
 - `git diff --check`
@@ -362,6 +364,7 @@ Deploy proof:
 - Production diagnostics after this deploy no longer showed the old `native_audio_receiver_transform_failed` race in the queried recent window; remaining `media_security_handshake_timeout` and `media_security_sender_key_not_ready` events are tracked separately because they are handshake churn, not a protected-frame contract regression.
 - Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` with `native_audio_receiver_track`, `receiver_track_after_security_ready`, `media_security_handshake_started_after_ws_open`, and `native_audio_track_recovery_exhausted`, and without `exposeToConsole` or the old native frame console error string.
 - Production diagnostics for asset `20260429065130` showed `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `media_security_handshake_timeout`, and `media_security_sender_key_not_ready`; no fresh `native_audio_receiver_transform_failed` was present in the current-asset query.
+- Production asset version `20260429065839` served `CallWorkspaceView-DVqCK1Kb.js`, `WorkspaceShell-GtWA0igW.js`, `JoinView-gtNUpyFT.js`, and `preferences-geDd2h5r.js` with `echoCancellation`, `noiseSuppression`, `autoGainControl`, `channelCount`, `audio_echo_cancellation`, `audio_noise_suppression`, and `audio_auto_gain_control`; no deployed bundle contained disabled `echoCancellation:false`/`noiseSuppression:false`/`autoGainControl:false` markers.
 
 ## Parking Rule
 
