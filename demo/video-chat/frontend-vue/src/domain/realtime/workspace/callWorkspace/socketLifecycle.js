@@ -285,10 +285,13 @@ export function createCallWorkspaceSocketHelpers({
       return;
     }
 
-    if (type === 'room/joined' || type === 'room/left') {
+    if (type === 'room/left') {
+      const leftUserId = Number(payload?.participant?.user?.id || 0);
+      if (Number.isInteger(leftUserId) && leftUserId > 0) removeParticipantLocallyAfterHangup(leftUserId);
       requestRoomSnapshot();
       return;
     }
+    if (type === 'room/joined') { requestRoomSnapshot(); return; }
 
     if (type === 'lobby/snapshot') {
       applyLobbySnapshot(payload);
