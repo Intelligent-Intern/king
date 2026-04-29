@@ -27,6 +27,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const subscriberSendLatencyMs = normalizedNumber(stageTelemetry.subscriberSendLatencyMs);
   const skipCount = normalizedNumber(stageTelemetry.skipCount);
   const sendFailureCount = normalizedNumber(stageTelemetry.sendFailureCount);
+  const sourceReadbackFailureCount = normalizedNumber(stageTelemetry.sourceReadbackFailureCount);
   const payloadPressureCount = normalizedNumber(stageTelemetry.payloadPressureCount);
   const encodeFailureCount = normalizedNumber(stageTelemetry.encodeFailureCount);
   const sustainedBackpressureMs = normalizedNumber(stageTelemetry.sustainedBackpressureMs);
@@ -88,6 +89,13 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     if (socketCritical) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
     }
+  } else if (kind === 'source_readback_failure') {
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
+    if (sourceReadbackFailureCount >= sendFailureThreshold) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    }
   } else if (kind === 'payload_pressure') {
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
@@ -121,6 +129,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
       subscriber_send_latency_ms: subscriberSendLatencyMs,
       skip_count: skipCount,
       send_failure_count: sendFailureCount,
+      source_readback_failure_count: sourceReadbackFailureCount,
       payload_pressure_count: payloadPressureCount,
       encode_failure_count: encodeFailureCount,
       sustained_backpressure_ms: sustainedBackpressureMs,
@@ -167,11 +176,17 @@ export function createPublisherBackpressureController({
   function resetWlvcFrameSendFailureCounters() {
     state.wlvcFrameSendFailureCount = 0;
     state.wlvcFrameSendFailureFirstAtMs = 0;
+    resetWlvcSourceReadbackFailureCounters();
   }
 
   function resetWlvcPayloadPressureCounters() {
     state.wlvcPayloadPressureCount = 0;
     state.wlvcPayloadPressureFirstAtMs = 0;
+  }
+
+  function resetWlvcSourceReadbackFailureCounters() {
+    state.wlvcSourceReadbackFailureCount = 0;
+    state.wlvcSourceReadbackFailureFirstAtMs = 0;
   }
 
   function wlvcBackpressurePauseMs(bufferedAmount) {
@@ -228,13 +243,6 @@ export function createPublisherBackpressureController({
 
     if ((nowMs - state.wlvcBackpressureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
       state.wlvcBackpressureLastLogAtMs = nowMs;
-      console.warn(
-        '[KingRT] SFU video backpressure - skipping outgoing WLVC frame',
-        `buffered=${bufferedAmount}`,
-        `skipped=${state.wlvcBackpressureSkipCount}`,
-        `track=${String(trackId || '')}`,
-        `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
-      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -284,6 +292,98 @@ export function createPublisherBackpressureController({
     }
   }
 
+  function isSourceReadbackBudgetFailure(reason, details) {
+    const normalizedReason = String(details?.reason || reason || '').trim().toLowerCase();
+    if (normalizedReason === 'sfu_source_readback_budget_exceeded') return true;
+    return String(details?.transportPath || details?.transport_path || '').trim().toLowerCase() === 'publisher_source_readback';
+  }
+
+  function handleSourceReadbackBudgetFailure(normalizedBuffered, trackId, normalizedReason, details, nowMs, retryAfterMs, sendFailurePauseMs) {
+    if (
+      state.wlvcSourceReadbackFailureFirstAtMs <= 0
+      || (nowMs - state.wlvcSourceReadbackFailureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
+    ) {
+      state.wlvcSourceReadbackFailureFirstAtMs = nowMs;
+      state.wlvcSourceReadbackFailureCount = 1;
+    } else {
+      state.wlvcSourceReadbackFailureCount += 1;
+    }
+
+    resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
+    state.wlvcBackpressurePauseUntilMs = Math.max(
+      state.wlvcBackpressurePauseUntilMs,
+      nowMs + sendFailurePauseMs
+    );
+
+    const sustainedBackpressureMs = state.wlvcSourceReadbackFailureFirstAtMs > 0
+      ? Math.max(0, nowMs - state.wlvcSourceReadbackFailureFirstAtMs)
+      : 0;
+    const decision = decide({
+      kind: 'source_readback_failure',
+      reason: normalizedReason,
+      bufferedAmount: normalizedBuffered,
+      sourceReadbackFailureCount: state.wlvcSourceReadbackFailureCount,
+      sustainedBackpressureMs,
+      queueAgeMs: details?.queueAgeMs,
+      payloadBytes: details?.payloadBytes,
+    });
+    const failureStage = String(details?.stage || 'unknown_stage');
+    const failureSource = String(details?.source || 'unknown_source');
+    const publisherFrameTraceId = String(details?.publisherFrameTraceId || details?.publisher_frame_trace_id || '');
+
+    if ((nowMs - state.wlvcSourceReadbackFailureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
+      state.wlvcSourceReadbackFailureLastLogAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_source_readback_budget_pressure',
+        code: 'sfu_source_readback_budget_pressure',
+        message: 'Publisher source readback exceeded the active profile budget before WLVC encode.',
+        payload: {
+          reason: normalizedReason,
+          stage: failureStage,
+          source: failureSource,
+          transport_path: 'publisher_source_readback',
+          source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
+          requested_action: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)
+            ? PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT
+            : PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE,
+          buffered_amount: normalizedBuffered,
+          retry_after_ms: retryAfterMs,
+          send_failure_pause_ms: sendFailurePauseMs,
+          publisher_frame_trace_id: publisherFrameTraceId,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+      });
+    }
+
+    if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_source_readback_profile_downshift',
+        code: 'sfu_source_readback_profile_downshift',
+        message: 'Outgoing SFU video quality is being lowered after consecutive source-readback budget failures.',
+        payload: {
+          reason: normalizedReason,
+          source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: true,
+      });
+      if (downgradeSfuVideoQualityAfterEncodePressure(normalizedReason)) {
+        resetWlvcSourceReadbackFailureCounters();
+      }
+    }
+  }
+
   function handleWlvcFrameSendFailure(bufferedAmount, trackId, reason = 'sfu_frame_send_failed', failureDetails = null) {
     const details = failureDetails && typeof failureDetails === 'object' ? failureDetails : null;
     const normalizedBuffered = Math.max(
@@ -307,6 +407,11 @@ export function createPublisherBackpressureController({
         Math.max(sfuWlvcBackpressureMinPauseMs, retryAfterMs),
       )
       : sfuWlvcBackpressureMinPauseMs;
+    if (isSourceReadbackBudgetFailure(normalizedReason, details)) {
+      handleSourceReadbackBudgetFailure(normalizedBuffered, trackId, normalizedReason, details || {}, nowMs, retryAfterMs, sendFailurePauseMs);
+      return;
+    }
+    resetWlvcSourceReadbackFailureCounters();
     if (
       state.wlvcFrameSendFailureFirstAtMs <= 0
       || (nowMs - state.wlvcFrameSendFailureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
@@ -374,16 +479,6 @@ export function createPublisherBackpressureController({
       0,
       Number(details?.encodeMs || details?.encode_ms || details?.trace_wlvc_encode_ms || 0),
     );
-    console.warn(
-      '[KingRT] SFU frame send failed at exact transport stage',
-      `reason=${normalizedReason}`,
-      `stage=${failureStage}`,
-      `source=${failureSource}`,
-      `transport=${failureTransportPath}`,
-      `buffered=${normalizedBuffered}`,
-      `track=${String(trackId || '')}`,
-      `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -448,14 +543,6 @@ export function createPublisherBackpressureController({
 
     if ((nowMs - state.wlvcPayloadPressureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
       state.wlvcPayloadPressureLastLogAtMs = nowMs;
-      console.warn(
-        '[KingRT] SFU video payload pressure - dropping oversized WLVC frame',
-        `payload=${normalizedPayloadBytes}`,
-        `frame=${normalizedFrameType}`,
-        `count=${state.wlvcPayloadPressureCount}`,
-        `track=${String(trackId || '')}`,
-        `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
-      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -565,11 +652,6 @@ export function createPublisherBackpressureController({
     }
     state.sfuVideoRecoveryLastAtMs = nowMs;
 
-    console.warn(
-      '[KingRT] restarting SFU socket after video stall',
-      `reason=${String(reason || 'video_stall')}`,
-      `runtime=${getMediaRuntimePath()}`,
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',

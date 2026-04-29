@@ -67,7 +67,7 @@ try {
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  requireContains(sfuPublisherControl, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_frame_send_failed'", 'workspace exact-stage send failure backend diagnostic');
   requireContains(sfuPublisherControl, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
   requireContains(sfuPublisherControl, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
   requireContains(sfuPublisherControl, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');

@@ -49,7 +49,7 @@ Technical target:
 7. [x] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
 8. [x] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
-10. [ ] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
+10. [x] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
 11. [ ] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
 12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
 13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
@@ -274,6 +274,33 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429045418` served `WorkspaceShell-bFusnFa4.js` without `call-left-video-quality`, `SFU_VIDEO_QUALITY_PROFILE_OPTIONS`, or `callVideoQualityOptions`.
+
+### 10. `[auto-readback-downgrade]`
+
+Status: Done.
+
+Implementation:
+- Added dedicated source-readback failure state so `sfu_source_readback_budget_exceeded` is counted separately from generic send-buffer failures.
+- The first source-readback budget failure now pauses/drops and requests a clean frame; the second consecutive failure triggers automatic profile downshift before another expensive readback cycle continues.
+- Added backend diagnostics for `sfu_source_readback_budget_pressure` and `sfu_source_readback_profile_downshift`, including failure stage/source, track, active profile, retry pause, and source-readback failure count.
+- Routed app `console.warn` calls through the existing `/api/user/client-diagnostics` backend queue and suppresses browser-console warning output by default; explicit debug mode remains the only console passthrough.
+- Removed the SFU publisher backpressure `console.warn` hotpath strings so pressure/reconnect warnings are available in backend diagnostics instead of the user browser console.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-auto-readback-downgrade-contract.mjs`
+- `npm run test:contract:client-diagnostics` in `demo/video-chat/frontend-vue`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `php -l demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php`
+- `php -l demo/video-chat/backend-king-php/http/module_users.php`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429060123` served `CallWorkspaceView-BEW46nwM.js` with `client_console_warning`, `console_warn`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `source_readback_failure_count`, `sfu_video_backpressure`, `sfu_frame_send_failed`, and `sfu_video_reconnect_after_stall`.
+- The same production asset no longer contains the old browser-console warning strings `SFU video payload pressure`, `SFU frame send failed at exact transport stage`, `SFU video backpressure - skipping`, `SFU source readback budget pressure`, or `restarting SFU socket after video stall`.
 
 ## Parking Rule
 

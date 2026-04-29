@@ -16,6 +16,8 @@ let diagnosticsLifecycleBound = false;
 let diagnosticsRetryDelayMs = DIAGNOSTICS_FLUSH_INTERVAL_MS;
 let diagnosticsGlobalErrorBound = false;
 let diagnosticsSentFingerprints = new Set();
+let consoleWarningDiagnosticsBound = false;
+let originalConsoleWarn = null;
 
 function normalizeString(value, fallback = '', maxLength = 240) {
   const normalized = String(value ?? '').trim();
@@ -37,6 +39,12 @@ function normalizeLevel(value) {
   if (normalized === 'warn') return 'warning';
   if (['debug', 'info', 'warning', 'error'].includes(normalized)) return normalized;
   return 'error';
+}
+
+function envFlagEnabled(value) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === '') return false;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
 }
 
 function utf8Length(value) {
@@ -89,6 +97,47 @@ function normalizePayloadObject(value) {
     truncated: true,
     preview: normalizeString(encoded, '', 2000),
   };
+}
+
+function formatConsoleDiagnosticArg(value) {
+  if (value instanceof Error) {
+    return normalizeString(`${value.name || 'Error'}: ${value.message || ''}`, 'Error', 240);
+  }
+  if (typeof value === 'string') return normalizeString(value, '', 240);
+  if (typeof value === 'number' || typeof value === 'boolean') return normalizeString(value, '', 120);
+  if (value === null || typeof value === 'undefined') return String(value);
+
+  try {
+    return normalizeString(JSON.stringify(sanitizePayload(value)), '', 240);
+  } catch {
+    return normalizeString(value, '', 240);
+  }
+}
+
+function formatConsoleDiagnosticMessage(args) {
+  const message = args.map((entry) => formatConsoleDiagnosticArg(entry)).join(' ').trim();
+  return normalizeString(message, 'Client console warning captured.', 500);
+}
+
+function clientConsoleWarningPassthroughEnabled() {
+  return envFlagEnabled(import.meta.env.VITE_VIDEOCHAT_DEBUG_LOGS)
+    || Boolean(globalThis?.__KING_VIDEOCHAT_DEBUG_LOGS__);
+}
+
+function consoleWarningStack() {
+  try {
+    const stack = new Error('client_console_warning').stack || '';
+    return normalizeString(
+      stack
+        .split('\n')
+        .slice(2, 8)
+        .join('\n'),
+      '',
+      1200,
+    );
+  } catch {
+    return '';
+  }
 }
 
 function persistDiagnosticsQueue() {
@@ -242,8 +291,41 @@ function bindGlobalClientErrorDiagnostics() {
   });
 }
 
+export function bindClientConsoleWarningDiagnostics() {
+  if (consoleWarningDiagnosticsBound || typeof console === 'undefined') return;
+  if (typeof console.warn !== 'function') return;
+
+  consoleWarningDiagnosticsBound = true;
+  originalConsoleWarn = console.warn.bind(console);
+
+  console.warn = (...args) => {
+    try {
+      reportClientDiagnostic({
+        category: 'runtime',
+        level: 'warning',
+        eventType: 'client_console_warning',
+        code: 'console_warn',
+        message: formatConsoleDiagnosticMessage(args),
+        payload: {
+          console_method: 'warn',
+          console_args: sanitizePayload(args),
+          console_stack: consoleWarningStack(),
+        },
+        immediate: true,
+      });
+    } catch {
+      // Diagnostics must never create a secondary console warning.
+    }
+
+    if (clientConsoleWarningPassthroughEnabled()) {
+      originalConsoleWarn(...args);
+    }
+  };
+}
+
 export function configureClientDiagnostics(contextProvider) {
   diagnosticsContextProvider = typeof contextProvider === 'function' ? contextProvider : null;
+  bindClientConsoleWarningDiagnostics();
   bindDiagnosticsLifecycleHooks();
   bindGlobalClientErrorDiagnostics();
   if (diagnosticsQueue.length > 0) {
@@ -298,7 +380,11 @@ export function reportClientDiagnostic({
     queued.timestamp_unix_ms = entry.timestamp_unix_ms;
     queued.payload = entry.payload;
     persistDiagnosticsQueue();
-    scheduleDiagnosticsFlush();
+    if (immediate) {
+      scheduleDiagnosticsFlush(100);
+    } else {
+      scheduleDiagnosticsFlush();
+    }
     return queued;
   }
 
@@ -312,7 +398,11 @@ export function reportClientDiagnostic({
   }
   persistDiagnosticsQueue();
 
-  scheduleDiagnosticsFlush();
+  if (immediate) {
+    scheduleDiagnosticsFlush(100);
+  } else {
+    scheduleDiagnosticsFlush();
+  }
 
   return entry;
 }
