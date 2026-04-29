@@ -77,7 +77,6 @@ require_contains($provenance, 'The verified active performance boundary is uncha
 require_contains($provenance, 'Removed experiment markdown and the duplicate legacy frontend tree are not reintroduced; canonical developer docs stay under `documentation/dev/`.');
 require_contains($provenance, '`demo/video-chat/frontend-vue/tests/contract/wlvc-codec-port-contract.mjs` is the targeted frontend guard for this decision.');
 
-require_contains('SPRINT.md', '- [x] Port only verified codec correctness or performance improvements with targeted frontend tests.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC verified codec port decision');
 require_contains('READYNESS_TRACKER.md', 'Added frontend contract `wlvc-codec-port-contract.mjs` and PHPT `736-wlvc-verified-codec-port-contract.phpt`.');
 

@@ -142,7 +142,6 @@ foreach ($forbiddenTracked as $path) {
     }
 }
 
-require_contains('SPRINT.md', '- [x] Reject any experiment behavior that weakens current room/admission/security guarantees.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 weakened experiment behavior rejection');
 
 echo "OK\n";

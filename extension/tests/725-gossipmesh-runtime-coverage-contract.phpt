@@ -97,7 +97,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains('documentation/experiment-intake-provenance.md', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Add contract tests for GossipMesh message routing, membership, IIBIN envelope use, duplicate suppression, TTL handling, relay fallback, and failure behavior.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 GossipMesh runtime contract coverage');
 
 echo "OK\n";

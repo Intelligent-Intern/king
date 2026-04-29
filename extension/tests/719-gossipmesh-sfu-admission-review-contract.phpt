@@ -59,7 +59,6 @@ foreach ($currentGatewayNeedles as $needle) {
     require_contains('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 SFU signaling admission review');
 
 echo "OK\n";

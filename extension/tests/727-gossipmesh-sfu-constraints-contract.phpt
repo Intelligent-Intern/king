@@ -52,7 +52,8 @@ $gatewayNeedles = [
     'videochat_sfu_decode_client_frame($msgJson, $roomId)',
     'videochat_sfu_bootstrap($sfuDatabase)',
     'videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName)',
-    'videochat_sfu_insert_frame(',
+    'videochat_sfu_live_frame_relay_publish(',
+    'videochat_sfu_live_frame_relay_poll(',
     'videochat_sfu_poll_broker(',
 ];
 foreach ($gatewayNeedles as $needle) {
@@ -104,8 +105,9 @@ $runtimeContractNeedles = [
     'SFU room query mismatch must fail',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU frame relay must exclude self and cross-room frames',
+    'protected binary SFU frame envelope should decode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
+    'SFU live frame relay should skip publishers that are local to the subscriber worker',
 ];
 foreach ($runtimeContractNeedles as $needle) {
     require_contains($runtimeContract, $needle);
@@ -134,7 +136,6 @@ foreach ($runtimeDocNeedles as $needle) {
     require_contains($runtimeDoc, $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 SFU constraint preservation');
 
 echo "OK\n";

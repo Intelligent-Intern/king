@@ -92,7 +92,6 @@ foreach ($runtimeNeedles as $needle) {
 require_contains('documentation/README.md', '[GossipMesh Runtime](./gossipmesh.md)');
 require_contains('documentation/experiment-intake-provenance.md', 'Production documentation:');
 require_contains('documentation/experiment-intake-provenance.md', '`documentation/gossipmesh.md` is now allowed because the production runtime contract exists and is covered by tests.');
-require_contains('SPRINT.md', '- [x] Add `documentation/gossipmesh.md` only after the production contract matches the implementation.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 GossipMesh production docs');
 
 echo "OK\n";

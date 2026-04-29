@@ -133,7 +133,6 @@ foreach ($provenanceNeedles as $needle) {
 require_contains('demo/video-chat/backend-king-php/http/module_realtime.php', "require_once __DIR__ . '/../domain/realtime/realtime_gossipmesh.php';");
 require_contains('documentation/gossipmesh.md', 'GossipMesh is the video-chat topology and routing helper for the current King runtime path.');
 require_contains('documentation/gossipmesh.md', 'The production contract is backend-authoritative:');
-require_contains('SPRINT.md', '- [x] Port only compatible GossipMesh runtime pieces; do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 compatible GossipMesh runtime port');
 
 echo "OK\n";

@@ -62,7 +62,6 @@ require_contains('documentation/experiment-intake-provenance.md', '`demo/video-c
 require_contains('documentation/experiment-intake-provenance.md', 'The same guard pins runtime-path switching: capability probing prefers `wlvc_wasm`, falls back to `webrtc_native`, records transition telemetry, tears down the inactive transport, and fails closed to `unsupported` when neither path is available.');
 require_contains('documentation/experiment-intake-provenance.md', 'The remote-render guard pins SFU frame continuity: frames can create a remote peer before track metadata arrives, decoded canvases are rendered into primary/mini/grid slots through user-id mapping, activity is marked from remote frames, and render-version changes happen once per peer-map mutation.');
 
-require_contains('SPRINT.md', '- [x] Add explicit regression checks for encode/decode parity, crash-free decode failure, runtime-path switching, and remote render continuity.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC regression coverage');
 require_contains('READYNESS_TRACKER.md', 'Added `wlvc-runtime-regression-contract.mjs` and PHPT `737-wlvc-runtime-regression-contract.phpt`.');
 

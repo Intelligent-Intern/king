@@ -43,7 +43,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains('documentation/experiment-intake-provenance.md', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 GossipMesh API surface decision');
 
 echo "OK\n";

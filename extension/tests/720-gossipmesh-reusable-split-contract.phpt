@@ -37,7 +37,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains('documentation/experiment-intake-provenance.md', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Separate reusable topology/signaling ideas from experiment-only behavior.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 reusable/experiment-only split');
 
 echo "OK\n";

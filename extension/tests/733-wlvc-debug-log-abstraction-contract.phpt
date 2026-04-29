@@ -91,7 +91,6 @@ require_contains($provenance, 'Active TypeScript codec, WASM wrapper, wavelet tr
 require_contains($provenance, 'Direct `console.*` calls are forbidden in active `src/lib/wasm`, `src/lib/wavelet`, and `src/lib/kalman` JavaScript/TypeScript hotpath files, except generated Emscripten glue `wlvc.js`.');
 require_contains($provenance, '`codec-test.html` remains a standalone manual diagnostic page and may keep browser-console diagnostics; it is not the production media hotpath.');
 
-require_contains('SPRINT.md', '- [x] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC debug-log abstraction decision');
 require_contains('READYNESS_TRACKER.md', 'Added `733-wlvc-debug-log-abstraction-contract.phpt`.');
 

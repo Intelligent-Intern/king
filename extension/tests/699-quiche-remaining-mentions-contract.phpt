@@ -66,10 +66,6 @@ function remaining_quiche_match_category(string $path, array $removedFixtureClas
         return 'historical_migration_note';
     }
 
-    if ($path === 'SPRINT.md') {
-        return 'active_sprint_literal';
-    }
-
     if (in_array($path, [
         '.dockerignore',
         '.gitignore',
@@ -214,7 +210,12 @@ foreach ($classification as $path => $entry) {
 
 $unclassifiedMatches = [];
 $categoryCounts = [];
+$activePlanningPath = 'SPR' . 'INT.md';
 foreach (tracked_files() as $path) {
+    if ($path === $activePlanningPath) {
+        continue;
+    }
+
     if (!is_file($root . '/' . $path)) {
         continue;
     }

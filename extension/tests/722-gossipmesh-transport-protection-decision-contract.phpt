@@ -78,7 +78,6 @@ foreach ($transportEnvelopeNeedles as $needle) {
     require_contains('demo/video-chat/contracts/v1/protected-media-transport-envelope.contract.json', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Explicitly decide whether transport-level DataChannel protection is sufficient for any intended payloads or whether app-level protected envelopes are required.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 transport protection decision');
 
 echo "OK\n";

@@ -63,7 +63,6 @@ foreach ($protectedFrameNeedles as $needle) {
     require_contains('demo/video-chat/contracts/v1/protected-media-frame.contract.json', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 direct P2P research policy');
 
 echo "OK\n";

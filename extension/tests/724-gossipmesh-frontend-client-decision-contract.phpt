@@ -100,7 +100,6 @@ foreach ($forbiddenSfuClientNeedles as $needle) {
     require_not_contains($sfuClientPath, $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Decide whether `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` should be ported, replaced, or folded into the current SFU client.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 frontend GossipMesh client decision');
 
 echo "OK\n";

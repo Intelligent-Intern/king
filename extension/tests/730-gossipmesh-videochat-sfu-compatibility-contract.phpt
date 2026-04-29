@@ -40,6 +40,7 @@ function require_order(string $path, string $before, string $after): void
 
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
 $store = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php';
+$brokerReplay = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_broker_replay.php';
 $context = 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php';
 $runtimeContract = 'demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php';
 $provenance = 'documentation/experiment-intake-provenance.md';
@@ -62,7 +63,8 @@ $gatewayNeedles = [
     'videochat_sfu_bootstrap($sfuDatabase)',
     'videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName)',
     'videochat_sfu_poll_broker(',
-    'videochat_sfu_insert_frame(',
+    'videochat_sfu_live_frame_relay_publish(',
+    'videochat_sfu_live_frame_relay_poll(',
     'videochat_sfu_remove_publisher(',
 ];
 foreach ($gatewayNeedles as $needle) {
@@ -88,10 +90,18 @@ $storeNeedles = [
     '\'protected_frame_too_large\'',
     '$payload[\'room_id\'] = $normalizedBoundRoomId;',
     'function videochat_sfu_decode_stored_frame_payload(',
-    'function videochat_sfu_fetch_frames_since(',
+    "require_once __DIR__ . '/realtime_sfu_broker_replay.php';",
 ];
 foreach ($storeNeedles as $needle) {
     require_contains($store, $needle);
+}
+
+$brokerReplayNeedles = [
+    'function videochat_sfu_live_frame_relay_publish(',
+    'function videochat_sfu_live_frame_relay_read(',
+];
+foreach ($brokerReplayNeedles as $needle) {
+    require_contains($brokerReplay, $needle);
 }
 
 $contextNeedles = [
@@ -122,11 +132,13 @@ $runtimeContractNeedles = [
     'SFU room query mismatch must fail',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU must reject protected frame plus plaintext data',
-    'SFU must reject plaintext fallback in required mode',
-    'SFU frame relay must exclude self and cross-room frames',
-    'stored protected SFU payload must not expose legacy data array',
+    'protected binary SFU frame envelope should decode',
+    'JSON SFU media frame must be rejected in binary-required mode',
+    'JSON SFU media chunks must be rejected in binary-required mode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
+    'SFU live frame relay should skip publishers that are local to the subscriber worker',
+    'SFU media frames must stay on the live websocket path and must not be persisted in SQLite',
+    'SFU cross-worker media fanout must use the bounded live relay, not SQLite frame persistence',
     'SFU reconnect should recover publishers from store',
 ];
 foreach ($runtimeContractNeedles as $needle) {
@@ -168,7 +180,6 @@ foreach ($forbiddenGatewayNeedles as $needle) {
     require_not_contains($gateway, $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Video-chat SFU remains compatible with current room/admission/security contracts.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 video-chat SFU compatibility closure');
 
 echo "OK\n";

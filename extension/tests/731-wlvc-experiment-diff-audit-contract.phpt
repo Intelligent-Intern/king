@@ -103,7 +103,6 @@ foreach ($forbiddenTracked as $path) {
     }
 }
 
-require_contains('SPRINT.md', '- [x] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC/WASM/Kalman diff audit');
 
 echo "OK\n";

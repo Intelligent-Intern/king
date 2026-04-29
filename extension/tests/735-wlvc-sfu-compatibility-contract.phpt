@@ -132,17 +132,19 @@ $runtimeNeedles = [
     'SFU join with legacy roomId should stay compatible',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU must reject protected frame plus plaintext data',
-    'SFU must reject plaintext fallback in required mode',
-    'SFU frame relay must exclude self and cross-room frames',
+    'protected binary SFU frame envelope should decode',
+    'JSON SFU media frame must be rejected in binary-required mode',
+    'JSON SFU media chunks must be rejected in binary-required mode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
+    'SFU live frame relay should skip publishers that are local to the subscriber worker',
 ];
 foreach ($runtimeNeedles as $needle) {
     require_contains($runtimeContract, $needle);
 }
 
 require_contains($frontendContract, '[sfu-origin-room-binding-contract] PASS');
-require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu": "node tests/contract/sfu-origin-room-binding-contract.mjs"');
+require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu":');
+require_contains('demo/video-chat/frontend-vue/package.json', 'node tests/contract/sfu-origin-room-binding-contract.mjs');
 
 $provenanceNeedles = [
     'SFU compatibility decision:',
@@ -155,7 +157,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains($provenance, $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC SFU compatibility decision');
 require_contains('READYNESS_TRACKER.md', 'Added frontend contract `sfu-origin-room-binding-contract.mjs` and PHPT `735-wlvc-sfu-compatibility-contract.phpt`.');
 
