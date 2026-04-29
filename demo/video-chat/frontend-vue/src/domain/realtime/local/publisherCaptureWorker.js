@@ -103,13 +103,15 @@ async function handleReadback(payload = {}) {
   const source = payload.source || payload.bitmap || payload.videoFrame || null;
   if (!source) throw new Error('publisher_capture_worker_source_missing');
   const startedAtMs = highResolutionNowMs();
-  const frameSize = resolveWorkerFrameSize(source, payload);
-  const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);
 
   let drawImageMs = 0;
   let readbackMs = 0;
   let imageData = null;
+  let frameSize = null;
   try {
+    frameSize = resolveWorkerFrameSize(source, payload);
+    const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);
+
     const drawStartedAtMs = highResolutionNowMs();
     context.drawImage(source, 0, 0, frameSize.frameWidth, frameSize.frameHeight);
     drawImageMs = roundedMs(highResolutionNowMs() - drawStartedAtMs);

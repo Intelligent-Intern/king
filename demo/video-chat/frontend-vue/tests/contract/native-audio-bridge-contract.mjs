@@ -119,7 +119,7 @@ try {
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const runtimeConfig = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   requireContains(mediaSecurityRuntime, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
-  requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
+  requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform diagnostics are throttled');
   requireContains(mediaSecurityRuntime, "async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation')", 'native bridge gates negotiation on active media security');
   requireContains(mediaSecurityRuntime, 'function handleNativeMediaSecurityFrameError(event = {})', 'native bridge handles native frame errors');
   requireContains(mediaSecurityRuntime, 'function shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId = 0)', 'native bridge separates startup native frame drops from hard media-security failures');
@@ -137,7 +137,13 @@ try {
   requireContains(mediaSecurityRuntime, '&& nativeSenderKeyAvailable(senderUserId)', 'native malformed-frame recovery is only active once receiver keys are available');
   requireContains(mediaSecurityRuntime, 'recoverable_frame_drop: recoverableFrameDrop', 'native wrong-key recovery diagnostics are warning-classified instead of hard failures');
   requireContains(mediaSecurityRuntime, "code = direction === 'receiver'", 'native bridge separates decrypt and encrypt diagnostics');
-  requireContains(mediaSecurityRuntime, "'[KingRT] SFU/native media-security frame transform failed'", 'native frame errors are visible in devtools');
+  requireContains(mediaSecurityRuntime, "eventType: code", 'native frame errors are visible in backend diagnostics');
+  requireContains(mediaSecurityRuntime, 'message: errorMessage', 'native frame diagnostics carry the transform failure message');
+  assert.equal(
+    mediaSecurityRuntime.includes('[KingRT] SFU/native media-security frame transform failed'),
+    false,
+    'native frame transform errors must not spam browser console',
+  );
   requireContains(mediaSecurityRuntime, 'recoverMediaSecurityForPublisher(senderUserId);', 'wrong-key native frame errors trigger media-security recovery');
   requireContains(mediaSecurityRuntime, "resyncNativeAudioBridgePeerAfterSecurityReady(senderUserId, 'native_media_frame_error')", 'native frame recovery resyncs audio bridge');
   requireContains(mediaSecurityRuntime, "scheduleNativeAudioTrackRecovery(peer, 'native_media_security_malformed_frame'", 'malformed native protected frames rebuild the audio bridge instead of staying stalled');
@@ -184,7 +190,16 @@ try {
   );
   requireContains(bridgeRuntime, "if (currentShouldUseNativeAudioBridge() && trackKind === 'audio')", 'security-ready native receiver resync still binds protected audio tracks');
   assert.equal(mediaSecurityRuntime.includes('[KingRT] 🔇 AUDIO BRIDGE FAILED'), false, 'native audio bridge failures must not spam console before recovery escalation');
-  requireContains(audioBridgeFailureReporter, 'const AUDIO_BRIDGE_CONSOLE_ESCALATION_COUNT = 3;', 'native audio bridge console output waits for repeated failure');
+  assert.equal(
+    audioBridgeFailureReporter.includes('exposeToConsole'),
+    false,
+    'native audio bridge failure rekey must not reference a removed console gate',
+  );
+  assert.equal(
+    audioBridgeFailureReporter.includes('console.info('),
+    false,
+    'native audio bridge failure rekey must stay in backend diagnostics and not console-info',
+  );
   requireContains(audioBridgeFailureReporter, 'failure_count: failureCount', 'native audio bridge diagnostics retain repeated failure counts');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
   requireContains(sfuPublisherControl, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');

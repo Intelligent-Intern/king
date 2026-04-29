@@ -285,6 +285,7 @@ Implementation:
 - Added backend diagnostics for `sfu_source_readback_budget_pressure` and `sfu_source_readback_profile_downshift`, including failure stage/source, track, active profile, retry pause, and source-readback failure count.
 - Routed app `console.warn` calls through the existing `/api/user/client-diagnostics` backend queue and suppresses browser-console warning output by default; explicit debug mode remains the only console passthrough.
 - Removed the SFU publisher backpressure `console.warn` hotpath strings so pressure/reconnect warnings are available in backend diagnostics instead of the user browser console.
+- Removed the remaining direct realtime `console.info`/`console.error` call hotpaths for websocket-open, SFU stable-video, SFU retry exhaustion, native frame transform failure, stalled-publisher resubscribe, and native-audio recovery exhaustion; these now emit backend client diagnostics only.
 
 Verification:
 - `node demo/video-chat/frontend-vue/tests/contract/sfu-auto-readback-downgrade-contract.mjs`
@@ -301,6 +302,7 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429060123` served `CallWorkspaceView-BEW46nwM.js` with `client_console_warning`, `console_warn`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `source_readback_failure_count`, `sfu_video_backpressure`, `sfu_frame_send_failed`, and `sfu_video_reconnect_after_stall`.
 - The same production asset no longer contains the old browser-console warning strings `SFU video payload pressure`, `SFU frame send failed at exact transport stage`, `SFU video backpressure - skipping`, `SFU source readback budget pressure`, or `restarting SFU socket after video stall`.
+- Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` with backend-only markers `media_security_handshake_started_after_ws_open`, `sfu_remote_video_stable`, and `native_audio_track_recovery_exhausted`, and without the old direct console strings `SFU/native media-security frame transform failed`, `WS open - media-security signal caches cleared`, or `SFU video stable`.
 
 ### 15. `[processor-error-recovery]`
 
@@ -310,6 +312,7 @@ Implementation:
 - Closed late `MediaStreamTrackProcessor` `VideoFrame` results that arrive after a source-read timeout, preventing browser `VideoFrame was garbage collected without being closed` stalls.
 - Converted source-reader failures into a fatal capture-pipeline reset reason instead of letting broken reads poison the publisher loop.
 - Closed worker-transferred `VideoFrame` sources in a `finally` block so `drawImage` and `getImageData` exceptions cannot leak frames.
+- Moved worker setup and canvas/readback allocation under the same guarded `try/finally`, so transferred `VideoFrame` sources are closed even if worker initialization fails before the first `drawImage`.
 - Stopped the worker-fatal path from falling through to DOM `drawImage` with a transferred/closed `VideoFrame`; the current tick is dropped and the next tick restarts capture with a fresh frame.
 - Rechecked the current SFU client immediately before `sendEncodedFrame` so a reconnect between readback/protect/encode and send drops the frame as `sfu_client_unavailable_after_encode` instead of crashing the WLVC encode loop.
 - Kept the SFU websocket alive for these failures; recovery is scoped to source/readback pipeline state first.
@@ -328,6 +331,7 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429063247` served `CallWorkspaceView-LD4f_v8x.js` with `publisher_video_frame_read_failed`, `OffscreenCanvas capture worker failed`, worker-side `closeFrameSource(source)` cleanup, and `sfu_client_unavailable_after_encode`.
 - Production diagnostics for the prior asset exposed `wlvc_encode_frame_failed: Cannot read properties of null (reading 'sendEncodedFrame')`; the new asset turns that reconnect race into a send-path recovery diagnostic before another encoded frame is sent.
+- Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` and `publisherCaptureWorker-Bt7fTAET.js` with the guarded worker `VideoFrame` close path still present. `demo/video-chat/scripts/deploy-smoke.sh` passed and `/api/runtime` returned `video-chat-backend-king-php` `ok`.
 
 ### 16. `[media-security-unchanged]`
 
@@ -338,6 +342,9 @@ Implementation:
 - Kept WLVC/SFU publisher protection on the existing protected-frame envelope path; no frame persistence or plaintext fallback was added.
 - Passed media-security readiness into the native peer factory so native audio receiver tracks that arrive during rekeying enter `waiting_security` instead of immediately failing playback.
 - Retried native audio receiver transform attachment after `ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')`; `native_audio_receiver_transform_failed` is now emitted only after a security-ready retry fails.
+- Removed the stale `exposeToConsole` gate from native-audio bridge failure recovery so repeated bridge failures still trigger the forced media-security sync/rekey timer instead of throwing before recovery.
+- Tightened native protected audio/video transform attachment so `canProtectNativeForTargets()` returns false unless the media-security session is `active`; receiver transforms no longer attach while the session is still `rekeying`.
+- Routed native frame-transform failures and native-audio recovery exhaustion to backend client diagnostics only; no direct browser-console error path remains for these recovery loops.
 
 Verification:
 - `npm run test:contract:media-security` in `demo/video-chat/frontend-vue`
@@ -353,6 +360,8 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429063247` served `CallWorkspaceView-LD4f_v8x.js` with `native_audio_receiver_track`, `receiver_track_after_security_ready`, and `protectedFrame:e||null`.
 - Production diagnostics after this deploy no longer showed the old `native_audio_receiver_transform_failed` race in the queried recent window; remaining `media_security_handshake_timeout` and `media_security_sender_key_not_ready` events are tracked separately because they are handshake churn, not a protected-frame contract regression.
+- Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` with `native_audio_receiver_track`, `receiver_track_after_security_ready`, `media_security_handshake_started_after_ws_open`, and `native_audio_track_recovery_exhausted`, and without `exposeToConsole` or the old native frame console error string.
+- Production diagnostics for asset `20260429065130` showed `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `media_security_handshake_timeout`, and `media_security_sender_key_not_ready`; no fresh `native_audio_receiver_transform_failed` was present in the current-asset query.
 
 ## Parking Rule
 

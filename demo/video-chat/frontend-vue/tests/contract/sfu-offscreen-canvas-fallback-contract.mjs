@@ -55,7 +55,12 @@ try {
     false,
     'VideoFrame source must remain available for copyless OffscreenCanvas worker fallback',
   );
-  requireContains(captureWorkerSource, 'finally {\n    closeFrameSource(source);\n  }', 'worker closes transferred VideoFrame sources after draw/readback failures');
+  requireContains(captureWorkerSource, 'let frameSize = null;', 'worker keeps frame size available after guarded source cleanup');
+  assert.ok(
+    captureWorkerSource.indexOf('try {\n    frameSize = resolveWorkerFrameSize(source, payload);') < captureWorkerSource.indexOf('context.drawImage(source'),
+    'worker must enter the guarded close path before resolving canvas/readback setup',
+  );
+  requireContains(captureWorkerSource, 'finally {\n    closeFrameSource(source);\n  }', 'worker closes transferred VideoFrame sources after setup/draw/readback failures');
   requireContains(sourceReadback, "mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);\n          return null;", 'worker-fatal VideoFrame transfer must not fall through to DOM drawImage with a closed transferred frame');
 
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_draw_image_ms', 'trace exposes worker draw timing');

@@ -112,14 +112,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
       state.mediaSecurityHandshakeRetryCountByUserId.set(normalizedTargetId, retryAttempt + 1);
       state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
-      console.warn(
-        '[KingRT] Media-security handshake timeout - retrying media-security exchange',
-        `user=${normalizedTargetId}`,
-        `state=${peerState || 'missing'}`,
-        `attempt=${retryAttempt + 1}`,
-        `timeout=${retryTimeoutMs}ms`,
-        `elapsed=${nowMs - helloSentAt}ms`,
-      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -450,12 +442,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const errorCode = String(error?.message || '').trim().toLowerCase();
       if (errorCode === 'participant_set_mismatch') {
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
-        console.warn(
-          '[KingRT] Media-security sender-key deferred - retrying Hello',
-          `user=${normalizedTargetId}`,
-          `state=${String(peer?.state || 'missing')}`,
-          `runtime=${currentMediaSecurityRuntimePath()}`,
-        );
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(targetUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
@@ -767,16 +753,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.nativeFrameErrorLastLogByKey.set(logKey, nowMs);
     }
 
-    if (shouldLog && !bootstrapFrameDrop) {
-      const logMethod = recoverableFrameDrop ? console.warn : console.error;
-      logMethod(
-        '[KingRT] SFU/native media-security frame transform failed',
-        `direction=${direction || 'unknown'}`,
-        `user=${senderUserId || 'n/a'}`,
-        `track=${trackId || 'n/a'}`,
-        `error=${errorMessage}`,
-      );
-    }
     if (shouldLog && !bootstrapFrameDrop) {
       captureClientDiagnostic({
         category: 'media',

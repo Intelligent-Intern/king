@@ -166,12 +166,6 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     }
     refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs = nowMs;
 
-    console.warn(
-      '[KingRT] SFU encode pressure - lowering outgoing video quality',
-      `from=${currentProfile || 'default'}`,
-      `to=${nextProfile}`,
-      `reason=${normalizedReason}`,
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',

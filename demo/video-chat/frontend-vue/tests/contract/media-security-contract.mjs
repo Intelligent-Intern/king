@@ -434,6 +434,7 @@ try {
   assert.match(mediaStackSource, /callbacks\.clearMediaSecuritySfuPublisherSeen\?\.\(peerUserId\);/, 'bulk SFU teardown must clear stale media-security publisher targets');
   assert.match(securitySource, /attachNativeSenderTransform/, 'media-security library must attach native sender transform hooks');
   assert.match(securitySource, /attachNativeReceiverTransform/, 'media-security library must attach native receiver transform hooks');
+  assert.match(securitySource, /canProtectNativeForTargets\(userIds\) \{[\s\S]*if \(this\.state !== ACTIVE_STATE\) return false;[\s\S]*this\.canProtectForTargets\(normalized\)/m, 'native audio/video transforms must wait for an active media-security session instead of attaching during rekeying');
   assert.match(securitySource, /codec_id: normalizeProtectedCodecId\(codecId, runtimePath\)/, 'protected frame header must carry normalized codec identity');
   assert.match(securitySource, /if \(codecId && header\.codec_id !== normalizeProtectedCodecId\(codecId, runtimePath\)\) throw new Error\('unsupported_capability'\);/, 'frame decrypt must reject codec identity mismatches');
   assert.match(securityCoreSource, /codec_id: asString\(header\?\.codec_id\)/, 'AAD must bind codec identity into the protected-frame contract');

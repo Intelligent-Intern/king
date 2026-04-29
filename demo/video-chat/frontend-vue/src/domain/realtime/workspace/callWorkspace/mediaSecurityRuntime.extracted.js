@@ -164,16 +164,6 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
   if (peer && typeof peer === 'object') {
     peer.audioBridgeFailureCount = failureCount;
   }
-  const shouldExposeFailure = failureCount >= 3 && (failureCount === 3 || failureCount % 3 === 0);
-  if (shouldExposeFailure) {
-    console.warn(
-      '[KingRT] native audio bridge still failing after recovery attempts',
-      `attempts=${failureCount}`,
-      `code=${String(code || 'native_audio_bridge_failed')}`,
-      `user=${Number(peer?.userId || 0)}`,
-      normalizedMessage,
-    );
-  }
   captureClientDiagnostic({
     category: 'media',
     level: 'error',
@@ -194,12 +184,6 @@ function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) 
   // handshake dead-lock that may have caused the transform to fail.
   setTimeout(() => {
     if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
-    if (shouldExposeFailure) {
-      console.info(
-        '[KingRT] forcing media-security rekey after repeated audio bridge failure',
-        `user=${Number(peer?.userId || 0)}`,
-      );
-    }
     void syncMediaSecurityWithParticipants(true);
   }, 1500);
 }
@@ -256,12 +240,6 @@ async function checkMediaSecurityHandshakeTimeouts() {
 
     mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
     mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
-    console.warn(
-      '[KingRT] Media-security handshake timeout - retrying media-security exchange',
-      `user=${normalizedTargetId}`,
-      `state=${peerState || 'missing'}`,
-      `elapsed=${nowMs - helloSentAt}ms`,
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -378,12 +356,6 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
     const errorCode = String(error?.message || '').trim().toLowerCase();
     if (errorCode === 'participant_set_mismatch') {
       const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
-      console.warn(
-        '[KingRT] Media-security sender-key deferred - retrying Hello',
-        `user=${normalizedTargetId}`,
-        `state=${String(peer?.state || 'missing')}`,
-        `runtime=${currentMediaSecurityRuntimePath()}`,
-      );
       mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(targetUserId, session));
       mediaSecuritySenderKeySignalsSent.delete(key);
       mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
@@ -483,12 +455,6 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
       if (peerState === '' || peerState === 'protected_not_ready' || peerState === 'capability_ready' || peerState === 'rekeying') {
         const helloSentAt = Number(mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
         if (helloSentAt > 0 && (Date.now() - helloSentAt) > 5000) {
-          console.warn(
-            '[KingRT] ⏳ Media-security handshake timeout for user',
-            normalizedTargetId,
-            `state=${peerState}`,
-            `elapsed=${Date.now() - helloSentAt}ms — force-retrying Hello`,
-          );
           mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
           await sendMediaSecurityHello(targetUserId, true);
         }
@@ -657,16 +623,6 @@ function handleNativeMediaSecurityFrameError(event = {}) {
     nativeFrameErrorLastLogByKey.set(logKey, nowMs);
   }
 
-  if (shouldLog) {
-    const logMethod = transientFrameDrop ? console.warn : console.error;
-    logMethod(
-      '[KingRT] SFU/native media-security frame transform failed',
-      `direction=${direction || 'unknown'}`,
-      `user=${senderUserId || 'n/a'}`,
-      `track=${trackId || 'n/a'}`,
-      `error=${errorMessage}`,
-    );
-  }
   if (shouldLog) {
     captureClientDiagnostic({
       category: 'media',
