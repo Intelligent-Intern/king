@@ -148,7 +148,12 @@ export function selectCallLayoutParticipants({
   }
 
   const visibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);
-  const miniUserIds = mode === 'main_mini' ? (layout.selection.mini_user_ids || []).filter((id) => byUserId.has(id)) : [];
+  const explicitMiniIds = layout.selection?.mini_user_ids || layout.selection?.miniUserIds || [];
+  const miniUserIds = mode === 'main_mini'
+    ? (explicitMiniIds.length > 0 
+        ? explicitMiniIds.filter((id) => byUserId.has(id)) 
+        : clippedVisibleIds.filter((id) => id !== mainUserId))
+    : [];
   const miniParticipants = mode === 'main_mini'
     ? miniUserIds.map((id) => byUserId.get(id)).filter(Boolean)
     : [];

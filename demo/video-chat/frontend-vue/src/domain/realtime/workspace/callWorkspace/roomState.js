@@ -189,7 +189,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
   });
 
   const connectedParticipantUsers = computed(() => (
-    participantUsers.value.filter((row) => Number(row?.connections || 0) > 0)
+    participantUsers.value.filter((row) => row?.connectedAt != null || row?.connections > 0)
   ));
   connectedParticipantUsersRef.value = connectedParticipantUsers;
 
