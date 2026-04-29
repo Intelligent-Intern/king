@@ -74,9 +74,11 @@ try {
   requireContains(sfuPublisherControl, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
   const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
-  requireContains(publisherPipeline, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
-  requireContains(publisherPipeline, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
-  requireContains(publisherPipeline, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
+  const publisherFrameTrace = readFrontend('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherPathMetrics = `${publisherPipeline}\n${publisherFrameTrace}`;
+  requireContains(publisherPathMetrics, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
+  requireContains(publisherPathMetrics, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
+  requireContains(publisherPathMetrics, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
   requireContains(publisherPipeline, 'videoProfile.maxEncodedBytesPerFrame', 'publisher enforces profile encoded byte budget');
 
   const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');

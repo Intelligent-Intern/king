@@ -23,13 +23,15 @@ function read(relativePath) {
 async function main() {
   const workspaceConfigSource = read('src/domain/realtime/workspace/config.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherBudgetSource = `${publisherPipeline}\n${publisherFrameTrace}`;
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
 
   requireContains(workspaceConfigSource, 'SFU_VIDEO_QUALITY_PROFILE_BUDGETS', 'profile budget export');
   requireContains(workspaceConfigSource, 'resolveSfuVideoQualityProfileBudget', 'profile budget resolver');
-  requireContains(publisherPipeline, 'budget_max_encoded_bytes_per_frame', 'publisher emits encoded budget telemetry');
-  requireContains(publisherPipeline, 'budget_max_wire_bytes_per_second', 'publisher emits wire budget telemetry');
-  requireContains(publisherPipeline, 'budget_expected_recovery', 'publisher emits expected recovery behavior');
+  requireContains(publisherBudgetSource, 'budget_max_encoded_bytes_per_frame', 'publisher emits encoded budget telemetry');
+  requireContains(publisherBudgetSource, 'budget_max_wire_bytes_per_second', 'publisher emits wire budget telemetry');
+  requireContains(publisherBudgetSource, 'budget_expected_recovery', 'publisher emits expected recovery behavior');
   requireContains(sfuClient, 'budget_max_queue_age_ms', 'client enforces queue-age budget');
   requireContains(sfuClient, 'budget_max_buffered_bytes', 'client enforces buffered-byte budget');
 

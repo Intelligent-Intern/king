@@ -356,6 +356,24 @@ export function createPublisherBackpressureController({
     const failureSource = String(details?.source || 'unknown_source');
     const failureTransportPath = String(details?.transportPath || 'unknown_transport');
     const failureMessage = String(details?.message || 'Outgoing SFU video frame send failed.');
+    const publisherFrameTraceId = String(details?.publisherFrameTraceId || details?.publisher_frame_trace_id || '');
+    const publisherPathTraceStages = String(details?.publisherPathTraceStages || details?.publisher_path_trace_stages || '');
+    const sourceDeliveryMs = Math.max(
+      0,
+      Number(details?.sourceDeliveryMs || details?.trace_get_user_media_frame_delivery_ms || 0),
+    );
+    const drawImageMs = Math.max(
+      0,
+      Number(details?.drawImageMs || details?.draw_image_ms || details?.trace_dom_canvas_draw_image_ms || 0),
+    );
+    const readbackMs = Math.max(
+      0,
+      Number(details?.readbackMs || details?.readback_ms || details?.trace_dom_canvas_get_image_data_ms || 0),
+    );
+    const encodeMs = Math.max(
+      0,
+      Number(details?.encodeMs || details?.encode_ms || details?.trace_wlvc_encode_ms || 0),
+    );
     console.warn(
       '[KingRT] SFU frame send failed at exact transport stage',
       `reason=${normalizedReason}`,
@@ -391,6 +409,12 @@ export function createPublisherBackpressureController({
         payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
         payload_bytes: Math.max(0, Number(details?.payloadBytes || 0)),
         wire_payload_bytes: Math.max(0, Number(details?.wirePayloadBytes || 0)),
+        publisher_frame_trace_id: publisherFrameTraceId,
+        publisher_path_trace_stages: publisherPathTraceStages,
+        source_delivery_ms: sourceDeliveryMs,
+        draw_image_ms: drawImageMs,
+        readback_ms: readbackMs,
+        encode_ms: encodeMs,
         retry_after_ms: retryAfterMs,
         send_failure_pause_ms: sendFailurePauseMs,
         binary_continuation_state: String(details?.binaryContinuationState || 'unknown_binary_continuation_state'),

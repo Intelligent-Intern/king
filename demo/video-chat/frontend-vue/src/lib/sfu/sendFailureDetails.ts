@@ -40,6 +40,8 @@ export function buildSfuSendFailureDetails(
       0,
       Number(prepared.metrics?.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0),
     ),
+    publisherFrameTraceId: String(prepared.metrics?.publisher_frame_trace_id || prepared.metrics?.publisherFrameTraceId || ''),
+    publisherPathTraceStages: String(prepared.metrics?.publisher_path_trace_stages || prepared.metrics?.publisherPathTraceStages || ''),
     retryAfterMs: Math.max(0, Number(details.retryAfterMs || 0)),
     binaryContinuationState: String(prepared.metrics?.binary_continuation_state || 'unknown_binary_continuation_state'),
     timestamp: Math.max(0, Number(prepared.timestamp || 0)),

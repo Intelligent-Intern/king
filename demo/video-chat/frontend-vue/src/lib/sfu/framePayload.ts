@@ -203,6 +203,13 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const selectionTileRatio = normalizeUnitFloat(source.selection_tile_ratio ?? source.selectionTileRatio, 0)
   const profile = String(source.outgoing_video_quality_profile ?? source.outgoingVideoQualityProfile ?? '').trim().toLowerCase()
   const expectedRecovery = String(source.budget_expected_recovery ?? source.budgetExpectedRecovery ?? '').trim()
+  const publisherFrameTraceId = String(source.publisher_frame_trace_id ?? source.publisherFrameTraceId ?? '').trim()
+  const publisherPathTraceStage = String(source.publisher_path_trace_stage ?? source.publisherPathTraceStage ?? '').trim()
+  const publisherPathTraceStages = String(source.publisher_path_trace_stages ?? source.publisherPathTraceStages ?? '').trim()
+  const publisherSourceBackend = String(source.publisher_source_backend ?? source.publisherSourceBackend ?? '').trim()
+  const publisherTraceProfile = String(source.publisher_trace_profile ?? source.publisherTraceProfile ?? '').trim()
+  const publisherAspectMode = String(source.publisher_aspect_mode ?? source.publisherAspectMode ?? '').trim()
+  const sourceTrackReadyState = String(source.source_track_ready_state ?? source.sourceTrackReadyState ?? '').trim()
   const metrics: Record<string, unknown> = {
     selection_tile_count: selectionTileCount,
     selection_total_tile_count: selectionTotalTileCount,
@@ -211,6 +218,13 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   }
   if (profile !== '') metrics.outgoing_video_quality_profile = profile
   if (expectedRecovery !== '') metrics.budget_expected_recovery = expectedRecovery
+  if (publisherFrameTraceId !== '') metrics.publisher_frame_trace_id = publisherFrameTraceId
+  if (publisherPathTraceStage !== '') metrics.publisher_path_trace_stage = publisherPathTraceStage
+  if (publisherPathTraceStages !== '') metrics.publisher_path_trace_stages = publisherPathTraceStages
+  if (publisherSourceBackend !== '') metrics.publisher_source_backend = publisherSourceBackend
+  if (publisherTraceProfile !== '') metrics.publisher_trace_profile = publisherTraceProfile
+  if (publisherAspectMode !== '') metrics.publisher_aspect_mode = publisherAspectMode
+  if (sourceTrackReadyState !== '') metrics.source_track_ready_state = sourceTrackReadyState
 
   const integerFields: Array<[string, unknown]> = [
     ['capture_width', source.capture_width ?? source.captureWidth],
@@ -228,6 +242,9 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_min_keyframe_retry_ms', source.budget_min_keyframe_retry_ms ?? source.budgetMinKeyframeRetryMs],
     ['outbound_media_generation', source.outbound_media_generation ?? source.outboundMediaGeneration],
     ['king_receive_at_ms', source.king_receive_at_ms ?? source.kingReceiveAtMs],
+    ['source_video_ready_state', source.source_video_ready_state ?? source.sourceVideoReadyState],
+    ['source_track_width', source.source_track_width ?? source.sourceTrackWidth],
+    ['source_track_height', source.source_track_height ?? source.sourceTrackHeight],
   ]
   for (const [key, fieldValue] of integerFields) {
     const normalized = normalizeNonNegativeInteger(fieldValue)
@@ -245,6 +262,17 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_max_readback_ms', source.budget_max_readback_ms ?? source.budgetMaxReadbackMs],
     ['budget_payload_soft_limit_ratio', source.budget_payload_soft_limit_ratio ?? source.budgetPayloadSoftLimitRatio],
     ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
+    ['source_track_frame_rate', source.source_track_frame_rate ?? source.sourceTrackFrameRate],
+    ['trace_get_user_media_frame_delivery_ms', source.trace_get_user_media_frame_delivery_ms ?? source.traceGetUserMediaFrameDeliveryMs],
+    ['trace_dom_canvas_draw_image_ms', source.trace_dom_canvas_draw_image_ms ?? source.traceDomCanvasDrawImageMs],
+    ['trace_dom_canvas_get_image_data_ms', source.trace_dom_canvas_get_image_data_ms ?? source.traceDomCanvasGetImageDataMs],
+    ['trace_wlvc_encode_ms', source.trace_wlvc_encode_ms ?? source.traceWlvcEncodeMs],
+    ['trace_protected_frame_wrap_ms', source.trace_protected_frame_wrap_ms ?? source.traceProtectedFrameWrapMs],
+    ['trace_protected_frame_skipped_ms', source.trace_protected_frame_skipped_ms ?? source.traceProtectedFrameSkippedMs],
+    ['trace_binary_envelope_encode_ms', source.trace_binary_envelope_encode_ms ?? source.traceBinaryEnvelopeEncodeMs],
+    ['trace_browser_websocket_send_ms', source.trace_browser_websocket_send_ms ?? source.traceBrowserWebsocketSendMs],
+    ['binary_envelope_encode_ms', source.binary_envelope_encode_ms ?? source.binaryEnvelopeEncodeMs],
+    ['websocket_send_ms', source.websocket_send_ms ?? source.websocketSendMs],
     ['king_receive_latency_ms', source.king_receive_latency_ms ?? source.kingReceiveLatencyMs],
     ['king_fanout_latency_ms', source.king_fanout_latency_ms ?? source.kingFanoutLatencyMs],
     ['subscriber_send_latency_ms', source.subscriber_send_latency_ms ?? source.subscriberSendLatencyMs],

@@ -40,7 +40,7 @@ Technical target:
 
 ## Top 20 Active Issues
 
-1. [ ] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
+1. [x] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
 2. [ ] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
 3. [ ] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
 4. [ ] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
@@ -70,6 +70,28 @@ Technical target:
 5. Update `READYNESS_TRACKER.md` only after the sprint is complete.
 
 ## Issue Reports
+
+### 1. `[readback-path-trace]`
+
+Status: Done.
+
+Implementation:
+- Added per-frame publisher trace IDs and stage chains from source delivery through DOM draw/readback, WLVC encode, protected-frame wrapping/skipping, binary envelope encoding, and browser websocket send.
+- Propagated trace fields through frame payload normalization, SFU transport samples, send-failure details, and workspace diagnostics.
+- Kept the live SFU websocket path unchanged while extracting trace/sample helpers so the oversized client files trend down instead of growing.
+
+Verification:
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `node demo/video-chat/frontend-vue/tests/contract/client-diagnostics-contract.mjs`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429050408` served `CallWorkspaceView-CzO0dEHV.js` with `publisher_frame_trace_id`, `trace_binary_envelope_encode_ms`, `trace_browser_websocket_send_ms`, and `browser_websocket_send`.
+- The same deploy still served `WorkspaceShell-3JCxkHpD.js` without `call-left-video-quality`, `SFU_VIDEO_QUALITY_PROFILE_OPTIONS`, or `callVideoQualityOptions`.
 
 ### 9. `[quality-ui-removal-contract]`
 

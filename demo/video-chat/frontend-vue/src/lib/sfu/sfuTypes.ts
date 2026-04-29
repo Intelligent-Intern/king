@@ -65,6 +65,8 @@ export interface SfuSendFailureDetails {
   payloadChars: number
   payloadBytes: number
   wirePayloadBytes: number
+  publisherFrameTraceId: string
+  publisherPathTraceStages: string
   retryAfterMs: number
   binaryContinuationState: string
   timestamp: number
@@ -90,6 +92,11 @@ export interface SfuFrameTransportSample {
   sendDrainMs: number
   sendDrainTargetBytes: number
   sendDrainMaxWaitMs: number
+  binaryEnvelopeEncodeMs: number
+  websocketSendMs: number
+  publisherFrameTraceId: string
+  publisherPathTraceStage: string
+  publisherPathTraceStages: string
   budgetMaxEncodedBytesPerFrame: number
   budgetMaxWireBytesPerSecond: number
   budgetMaxQueueAgeMs: number

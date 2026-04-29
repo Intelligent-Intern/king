@@ -36,6 +36,12 @@ import {
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
 import { buildSfuSendFailureDetails } from './sendFailureDetails'
+import {
+  appendSfuPublisherTraceStage,
+  buildSfuFrameTransportSample,
+  highResolutionNowMs,
+  roundedTransportStageMs,
+} from './sfuClientTransportSample'
 import type {
   SFUClientCallbacks,
   SFUEncodedFrame,
@@ -745,7 +751,18 @@ export class SFUClient {
       })
       return false
     }
+    const envelopeStartedAtMs = highResolutionNowMs()
     const encoded = encodeSfuBinaryFrameEnvelope(prepared)
+    const binaryEnvelopeEncodeMs = roundedTransportStageMs(highResolutionNowMs() - envelopeStartedAtMs)
+    let sendMetrics = appendSfuPublisherTraceStage(
+      {
+        ...metrics,
+        binary_envelope_encode_ms: binaryEnvelopeEncodeMs,
+      },
+      'binary_envelope_encode',
+      binaryEnvelopeEncodeMs,
+    )
+    prepared.metrics = sendMetrics
     if (!(encoded instanceof ArrayBuffer) || encoded.byteLength <= 0) {
       this.recordSendFailure(prepared, {
         reason: 'binary_envelope_encode_failed',
@@ -758,14 +775,25 @@ export class SFUClient {
       return false
     }
     try {
+      const socketSendStartedAtMs = highResolutionNowMs()
       this.ws.send(encoded)
+      const websocketSendMs = roundedTransportStageMs(highResolutionNowMs() - socketSendStartedAtMs)
+      sendMetrics = appendSfuPublisherTraceStage(
+        {
+          ...sendMetrics,
+          websocket_send_ms: websocketSendMs,
+        },
+        'browser_websocket_send',
+        websocketSendMs,
+      )
+      prepared.metrics = sendMetrics
       this.outboundWireBudget.record(encoded.byteLength)
       const binaryContinuationRequired = encoded.byteLength > SFU_BINARY_CONTINUATION_THRESHOLD_BYTES
       const samplePayload = {
-        ...metrics,
+        ...sendMetrics,
         transport_path: 'binary_envelope',
         wire_payload_bytes: encoded.byteLength,
-        wire_overhead_bytes: Math.max(0, encoded.byteLength - Number(metrics.payload_bytes || 0)),
+        wire_overhead_bytes: Math.max(0, encoded.byteLength - Number(sendMetrics.payload_bytes || 0)),
         binary_continuation_state: binaryContinuationRequired
           ? 'receiver_reassembles_rfc_continuation_frames'
           : 'single_binary_message_no_continuation_expected',
@@ -856,6 +884,9 @@ export class SFUClient {
     return {
       ...prepared.metrics,
       ...extraPayload,
+      frame_sequence: prepared.frameSequence,
+      payload_chars: prepared.payloadChars,
+      chunk_count: prepared.chunkCount,
       queue_length: this.outboundFrameQueue.length(),
       queue_payload_chars: this.outboundFrameQueue.queuedBytes(),
       active_payload_chars: this.outboundFrameQueue.activeBytes(),
@@ -948,39 +979,7 @@ export class SFUClient {
     payload: Record<string, unknown>,
     nowMs = Date.now(),
   ): SfuFrameTransportSample {
-    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
-    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
-    const wireVsPayloadRatio = payloadBytes > 0
-      ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
-      : 0
-    const sample = {
-      transportPath: String(payload.transport_path || 'unknown_transport'),
-      payloadBytes,
-      wirePayloadBytes,
-      wireOverheadBytes: Math.max(0, Number(payload.wire_overhead_bytes || 0)),
-      wireVsPayloadRatio,
-      websocketBufferedAmount: Math.max(0, Number(payload.websocket_buffered_amount || payload.buffered_amount || 0)),
-      queueLength: Math.max(0, Number(payload.queue_length || 0)),
-      queuePayloadChars: Math.max(0, Number(payload.queue_payload_chars || 0)),
-      activePayloadChars: Math.max(0, Number(payload.active_payload_chars || 0)),
-      trackId: String(payload.track_id || ''),
-      frameType: String(payload.frame_type || ''),
-      frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
-      chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
-      outgoingVideoQualityProfile: String(payload.outgoing_video_quality_profile || ''),
-      encodeMs: Math.max(0, Number(payload.encode_ms || 0)),
-      queuedAgeMs: Math.max(0, Number(payload.queued_age_ms || 0)),
-      sendDrainMs: Math.max(0, Number(payload.send_drain_ms || 0)),
-      sendDrainTargetBytes: Math.max(0, Number(payload.send_drain_target_buffered_bytes || 0)),
-      sendDrainMaxWaitMs: Math.max(0, Number(payload.send_drain_max_wait_ms || 0)),
-      budgetMaxEncodedBytesPerFrame: Math.max(0, Number(payload.budget_max_encoded_bytes_per_frame || 0)),
-      budgetMaxWireBytesPerSecond: Math.max(0, Number(payload.budget_max_wire_bytes_per_second || 0)),
-      budgetMaxQueueAgeMs: Math.max(0, Number(payload.budget_max_queue_age_ms || 0)),
-      budgetMaxBufferedBytes: Math.max(0, Number(payload.budget_max_buffered_bytes || 0)),
-      binaryContinuationState: String(payload.binary_continuation_state || 'unknown_binary_continuation_state'),
-      binaryContinuationRequired: Boolean(payload.binary_continuation_required),
-      timestampUnixMs: nowMs,
-    }
+    const sample = buildSfuFrameTransportSample(payload, nowMs)
     this.lastFrameTransportSample = sample
     return sample
   }

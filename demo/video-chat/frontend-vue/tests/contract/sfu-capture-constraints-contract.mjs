@@ -24,6 +24,8 @@ async function main() {
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
   const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.js');
 
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'media stack passes diagnostics into local media orchestration');
@@ -34,10 +36,10 @@ async function main() {
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(nextRawStream, 'reconfigure')", 'profile/device reconfigure reports track settings');
   requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'automatic quality profile change reconfigures local tracks');
   requireContains(publisherPipeline, "import { resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
-  requireContains(publisherPipeline, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
-  requireContains(publisherPipeline, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
-  requireContains(publisherPipeline, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');
-  requireContains(publisherPipeline, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher telemetry reports source aspect ratio');
+  requireContains(publisherTelemetry, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
+  requireContains(publisherTelemetry, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
+  requireContains(publisherTelemetry, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');
+  requireContains(publisherTelemetry, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher telemetry reports source aspect ratio');
 
   const server = await createServer({
     root: frontendRoot,
