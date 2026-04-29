@@ -67,16 +67,18 @@ try {
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  requireContains(sfuPublisherControl, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_frame_send_failed'", 'workspace exact-stage send failure backend diagnostic');
   requireContains(sfuPublisherControl, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
   requireContains(sfuPublisherControl, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
   requireContains(sfuPublisherControl, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
   requireContains(sfuPublisherControl, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
   const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
-  requireContains(publisherPipeline, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
-  requireContains(publisherPipeline, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
-  requireContains(publisherPipeline, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
+  const publisherFrameTrace = readFrontend('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherPathMetrics = `${publisherPipeline}\n${publisherFrameTrace}`;
+  requireContains(publisherPathMetrics, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
+  requireContains(publisherPathMetrics, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
+  requireContains(publisherPathMetrics, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
   requireContains(publisherPipeline, 'videoProfile.maxEncodedBytesPerFrame', 'publisher enforces profile encoded byte budget');
 
   const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');
@@ -94,12 +96,14 @@ try {
   requireContains(backendStore, 'videochat_sfu_extract_stage_transport_metadata', 'backend normalizes stage transport metadata');
   requireContains(backendStore, 'king_receive_latency_ms', 'backend preserves King receive latency metric');
   requireContains(backendStore, 'subscriber_send_latency_ms', 'backend preserves subscriber send latency metric');
-  assert.ok(!backendStore.includes('CREATE TABLE IF NOT EXISTS sfu_frames'), 'backend must not persist SFU media frames in SQLite');
-  assert.ok(!backendStore.includes('INSERT INTO sfu_frames'), 'backend must not insert SFU media frames into SQLite');
+  requireContains(backendStore, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'backend bounded SQLite frame buffer table');
+  requireContains(backendStore, 'INSERT INTO sfu_frames', 'backend bounded SQLite frame buffer insert');
+  requireContains(backendStore, 'sqlite_buffer_age_ms', 'backend reports SQLite frame-buffer age metric');
 
   const backendGateway = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   requireContains(backendGateway, 'stampKingReceiveMetrics', 'gateway stamps King receive latency per frame');
   requireContains(backendGateway, 'king_fanout_latency_ms', 'gateway records fanout latency per frame');
+  requireContains(backendGateway, 'videochat_sfu_insert_frame', 'gateway writes frames to bounded SQLite buffer');
 
   process.stdout.write('[sfu-transport-metrics-contract] PASS\n');
 } catch (error) {

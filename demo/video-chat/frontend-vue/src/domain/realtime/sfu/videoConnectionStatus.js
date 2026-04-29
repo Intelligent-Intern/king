@@ -1,6 +1,16 @@
+import { reportClientDiagnostic } from '../../../support/clientDiagnostics';
+
 const SFU_VIDEO_STABLE_MIN_FRAMES = 12;
 const SFU_VIDEO_STABLE_MIN_AGE_MS = 1500;
 const SFU_VIDEO_RECOVERY_CONSOLE_ATTEMPTS = 3;
+
+function captureSfuVideoStatusDiagnostic(event = {}) {
+  try {
+    reportClientDiagnostic(event);
+  } catch {
+    // Video status reporting must not affect decode or render loops.
+  }
+}
 
 function normalizeUserId(value) {
   const normalized = Number(value || 0);
@@ -26,19 +36,7 @@ export function logSfuVideoRecoveryStatus(label, {
   runtime = '',
   state = 'unstable',
 }) {
-  console.warn(
-    label,
-    `state=${String(state || 'unstable')}`,
-    `local_user=${normalizeUserId(localUserId)}`,
-    `remote_user=${normalizeUserId(peer?.userId)}`,
-    `publisher=${String(publisherId || '').trim()}`,
-    `attempts=${Math.max(0, Math.floor(Number(attempt || 0)))}`,
-    `age=${Math.max(0, Math.floor(Number(ageMs || 0)))}ms`,
-    `receive_gap=${Math.max(0, Math.floor(Number(receiveGapMs || 0)))}ms`,
-    `frames=${Math.max(0, Math.floor(Number(peer?.frameCount || 0)))}`,
-    `received=${Math.max(0, Math.floor(Number(peer?.receivedFrameCount || 0)))}`,
-    `runtime=${String(runtime || '').trim()}`,
-  );
+  // Recovery status is reported through runtimeHealth backend diagnostics.
 }
 
 export function noteSfuRemoteVideoFrameStable(peer, frame, {
@@ -56,14 +54,20 @@ export function noteSfuRemoteVideoFrameStable(peer, frame, {
   if (createdAtMs > 0 && (nowMs - createdAtMs) < SFU_VIDEO_STABLE_MIN_AGE_MS) return;
 
   peer.sfuVideoStableLoggedAtMs = nowMs;
-  console.info(
-    '[KingRT] SFU video stable',
-    `local_user=${normalizeUserId(currentUserId)}`,
-    `remote_user=${normalizeUserId(peer.userId || frame?.publisherUserId)}`,
-    `publisher=${String(frame?.publisherId || '').trim()}`,
-    `track=${String(frame?.trackId || '').trim()}`,
-    `frames=${frameCount}`,
-    `received=${Math.max(0, Math.floor(Number(peer.receivedFrameCount || 0)))}`,
-    `runtime=${String(mediaRuntimePath || '').trim()}`,
-  );
+  captureSfuVideoStatusDiagnostic({
+    category: 'media',
+    level: 'info',
+    eventType: 'sfu_remote_video_stable',
+    code: 'sfu_remote_video_stable',
+    message: 'SFU remote video reached the stable frame threshold.',
+    payload: {
+      local_user_id: normalizeUserId(currentUserId),
+      remote_user_id: normalizeUserId(peer.userId || frame?.publisherUserId),
+      publisher_id: String(frame?.publisherId || '').trim(),
+      track_id: String(frame?.trackId || '').trim(),
+      frames: frameCount,
+      received_frames: Math.max(0, Math.floor(Number(peer.receivedFrameCount || 0))),
+      media_runtime_path: String(mediaRuntimePath || '').trim(),
+    },
+  });
 }

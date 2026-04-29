@@ -73,15 +73,6 @@ export function createSfuRemotePeerHelpers({
       .join('|');
   }
 
-  function clearDecodedCanvas(peer) {
-    if (typeof HTMLCanvasElement === 'undefined') return;
-    const canvas = peer?.decodedCanvas;
-    if (!(canvas instanceof HTMLCanvasElement)) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
   function resetSfuRemotePeerMediaContinuity(peer, reason = 'remote_peer_rollover', nowMs = Date.now()) {
     if (!peer || typeof peer !== 'object') return null;
     try {
@@ -94,7 +85,7 @@ export function createSfuRemotePeerHelpers({
     } catch {
       // patch state is rebuilt after the next full-frame base
     }
-    clearDecodedCanvas(peer);
+    // Keep the last visible frame while waiting for the rollover keyframe.
     mediaDebugLog('[SFU] Remote peer media continuity reset', reason);
     return {
       createdAtMs: nowMs,

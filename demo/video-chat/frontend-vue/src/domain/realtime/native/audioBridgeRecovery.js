@@ -49,12 +49,24 @@ export function createNativeAudioBridgeRecovery({
 
     const currentAttempt = Number(nativeAudioTrackRecoveryAttemptsByUserId.get(normalizedUserId) || 0);
     if (currentAttempt >= nativeAudioTrackRecoveryMaxAttempts) {
-      console.error(
-        '[KingRT] native audio bridge recovery exhausted',
-        `user=${normalizedUserId}`,
-        `reason=${String(reason || 'missing_track')}`,
-        nativePeerConnectionTelemetry(peer),
-      );
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'error',
+        eventType: 'native_audio_track_recovery_exhausted',
+        code: 'native_audio_track_recovery_exhausted',
+        message: 'Native protected audio bridge recovery attempts were exhausted.',
+        payload: {
+          reason: String(reason || 'missing_track'),
+          recovery_kind: recoveryKind,
+          attempt: currentAttempt,
+          max_attempts: nativeAudioTrackRecoveryMaxAttempts,
+          user_id: normalizedUserId,
+          media_runtime_path: getMediaRuntimePath(),
+          security: nativeAudioSecurityTelemetrySnapshot(),
+          peer: nativePeerConnectionTelemetry(peer),
+        },
+        immediate: true,
+      });
       return false;
     }
 

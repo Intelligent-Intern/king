@@ -35,11 +35,11 @@ try {
   requireContains(framePayload, 'outbound_media_generation', 'binary metadata preserves outbound media generation');
   requireContains(callWorkspaceView, 'resetSfuOutboundMediaAfterProfileSwitch', 'workspace wires the SFU reset into runtime switching');
   requireContains(callWorkspaceView, 'stopLocalEncodingPipeline,', 'workspace wires encoder stop into lifecycle profile switching');
-  requireContains(lifecycle, 'callMediaPrefs.outgoingVideoQualityProfile', 'profile select changes reconfigure local capture constraints');
-  requireContains(lifecycle, 'resetSfuOutboundMediaForProfileSelect', 'manual quality select flushes old SFU media generations');
-  requireContains(lifecycle, 'stopLocalEncodingPipeline?.();', 'manual quality select stops active encoders before queue reset');
-  requireContains(lifecycle, "reason: 'manual_profile_select'", 'manual quality select reset reason is explicit');
-  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'profile switch watcher reapplies local tracks');
+  requireContains(lifecycle, 'callMediaPrefs.outgoingVideoQualityProfile', 'automatic profile changes reconfigure local capture constraints');
+  requireContains(lifecycle, 'resetSfuOutboundMediaForAutomaticProfileSwitch', 'automatic quality switch flushes old SFU media generations');
+  requireContains(lifecycle, 'stopLocalEncodingPipeline?.();', 'automatic quality switch stops active encoders before queue reset');
+  requireContains(lifecycle, "reason: 'automatic_profile_switch'", 'automatic quality switch reset reason is explicit');
+  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'automatic profile watcher reapplies local tracks');
   requireContains(publisherPipeline, 'stopLocalEncodingPipeline();', 'publisher recreates encoders when the pipeline restarts');
   requireContains(publisherPipeline, 'hasPipelineProfileChanged', 'publisher detects stale in-flight encodes after profile switches');
   requireContains(publisherPipeline, 'if (stopIfPipelineProfileChanged()) return;', 'publisher aborts stale-profile encode ticks before send');
@@ -50,15 +50,15 @@ try {
   assert.ok(resetIndex > 0, 'runtime must reset outbound SFU media before profile switch');
   assert.ok(stopIndex > resetIndex, 'runtime must stop the current encoder after flushing old-profile media');
   assert.ok(setIndex > stopIndex, 'runtime must apply the lower profile only after reset and encoder stop');
-  const manualFunctionIndex = lifecycle.indexOf('function resetSfuOutboundMediaForProfileSelect');
-  const manualStopIndex = lifecycle.indexOf('stopLocalEncodingPipeline?.();', manualFunctionIndex);
-  const manualOutboundResetIndex = lifecycle.indexOf('sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.({', manualFunctionIndex);
-  assert.ok(manualStopIndex > manualFunctionIndex, 'manual profile select reset helper must stop stale encoders first');
-  assert.ok(manualOutboundResetIndex > manualStopIndex, 'manual profile select reset helper must reset outbound media only after encoder stop');
-  const manualResetIndex = lifecycle.indexOf('resetSfuOutboundMediaForProfileSelect(nextValue, previousValue);');
-  const manualReconfigureIndex = lifecycle.indexOf('void reconfigureLocalTracksFromSelectedDevices();', manualResetIndex);
-  assert.ok(manualResetIndex > 0, 'manual profile select must reset outbound media before track reconfigure');
-  assert.ok(manualReconfigureIndex > manualResetIndex, 'manual profile select must reconfigure tracks only after outbound media reset');
+  const automaticFunctionIndex = lifecycle.indexOf('function resetSfuOutboundMediaForAutomaticProfileSwitch');
+  const automaticStopIndex = lifecycle.indexOf('stopLocalEncodingPipeline?.();', automaticFunctionIndex);
+  const automaticOutboundResetIndex = lifecycle.indexOf('sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.({', automaticFunctionIndex);
+  assert.ok(automaticStopIndex > automaticFunctionIndex, 'automatic profile switch reset helper must stop stale encoders first');
+  assert.ok(automaticOutboundResetIndex > automaticStopIndex, 'automatic profile switch reset helper must reset outbound media only after encoder stop');
+  const automaticResetIndex = lifecycle.indexOf('resetSfuOutboundMediaForAutomaticProfileSwitch(nextValue, previousValue);');
+  const automaticReconfigureIndex = lifecycle.indexOf('void reconfigureLocalTracksFromSelectedDevices();', automaticResetIndex);
+  assert.ok(automaticResetIndex > 0, 'automatic profile switch must reset outbound media before track reconfigure');
+  assert.ok(automaticReconfigureIndex > automaticResetIndex, 'automatic profile switch must reconfigure tracks only after outbound media reset');
 
   process.stdout.write('[sfu-profile-switch-actuator-contract] PASS\n');
 } catch (error) {

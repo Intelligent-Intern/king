@@ -580,6 +580,7 @@ export class MediaSecuritySession {
 
   canProtectNativeForTargets(userIds) {
     if (!MediaSecuritySession.supportsNativeTransforms()) return false;
+    if (this.state !== ACTIVE_STATE) return false;
     const normalized = Array.from(new Set((Array.isArray(userIds) ? userIds : [])
       .map(normalizeUserId)
       .filter((userId) => userId > 0 && userId !== this.userId)));

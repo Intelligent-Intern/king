@@ -141,8 +141,15 @@ fetch_archive() {
 
     tmp="${destination}.tmp.$$"
     rm -f "${tmp}"
-    curl -fsSL "${url}" -o "${tmp}"
-    verify_archive "${component}" "${tmp}" "${expected_sha}" "${expected_bytes}"
+    if ! curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused "${url}" -o "${tmp}"; then
+        rm -f "${tmp}"
+        echo "Failed to fetch ${component} archive: ${url}" >&2
+        return 1
+    fi
+    if ! verify_archive "${component}" "${tmp}" "${expected_sha}" "${expected_bytes}"; then
+        rm -f "${tmp}"
+        return 1
+    fi
     mv "${tmp}" "${destination}"
     printf '%s\n' "${destination}"
 }

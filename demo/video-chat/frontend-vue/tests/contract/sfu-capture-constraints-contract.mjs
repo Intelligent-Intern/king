@@ -24,20 +24,46 @@ async function main() {
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const audioCaptureConstraints = read('src/domain/realtime/media/audioCaptureConstraints.js');
+  const accessJoinView = read('src/domain/calls/access/JoinView.vue');
+  const dashboardEnterCall = read('src/domain/calls/dashboard/enterCall.js');
+  const adminEnterCall = read('src/domain/calls/admin/enterCall.js');
+  const workspaceShell = read('src/layouts/WorkspaceShell.vue');
+  const mediaPreferences = read('src/domain/realtime/media/preferences.js');
+  const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
   const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.js');
 
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'media stack passes diagnostics into local media orchestration');
   requireContains(mediaOrchestration, 'videoTrack.getSettings()', 'local media orchestration reads browser-reported track settings');
+  requireContains(mediaOrchestration, 'frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate }', 'local media constraints cap capture FPS to automatic profile');
   requireContains(mediaOrchestration, 'sfu_local_capture_constraints_applied', 'local media orchestration reports applied capture settings');
+  requireContains(mediaOrchestration, 'buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId)', 'local media constraints request browser echo cancellation for selected microphones');
+  requireContains(mediaOrchestration, 'buildOptionalCallAudioCaptureConstraints(wantsAudio)', 'loose local media retry keeps echo cancellation enabled');
+  requireContains(audioCaptureConstraints, 'audio_echo_cancellation', 'capture diagnostics report applied echo-cancellation settings');
+  requireContains(audioCaptureConstraints, 'echoCancellation: true', 'call audio capture requests echo cancellation');
+  requireContains(audioCaptureConstraints, 'noiseSuppression: true', 'call audio capture requests noise suppression');
+  requireContains(audioCaptureConstraints, 'autoGainControl: true', 'call audio capture requests automatic gain control');
+  requireContains(audioCaptureConstraints, 'channelCount: { ideal: 1 }', 'call audio capture requests mono voice input');
+  for (const [label, source] of Object.entries({
+    accessJoinView,
+    dashboardEnterCall,
+    adminEnterCall,
+    workspaceShell,
+    mediaPreferences,
+  })) {
+    requireContains(source, 'buildOptionalCallAudioCaptureConstraints', `${label} uses shared call audio capture constraints`);
+    assert.equal(source.includes('echoCancellation: false'), false, `${label} must not disable browser echo cancellation`);
+  }
   requireContains(mediaOrchestration, 'stale_hd_capture_after_downgrade', 'local media orchestration flags stale HD capture after downgrade');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(rawStream, 'publish')", 'initial publish reports track settings');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(nextRawStream, 'reconfigure')", 'profile/device reconfigure reports track settings');
-  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'quality profile change reconfigures local tracks');
-  requireContains(publisherPipeline, "import { resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
-  requireContains(publisherPipeline, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
-  requireContains(publisherPipeline, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
-  requireContains(publisherPipeline, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');
-  requireContains(publisherPipeline, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher telemetry reports source aspect ratio');
+  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'automatic quality profile change reconfigures local tracks');
+  requireContains(publisherPipeline, "resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
+  requireContains(publisherTelemetry, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
+  requireContains(publisherTelemetry, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
+  requireContains(publisherTelemetry, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');
+  requireContains(publisherTelemetry, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher telemetry reports source aspect ratio');
 
   const server = await createServer({
     root: frontendRoot,
@@ -48,6 +74,7 @@ async function main() {
   try {
     const { SFU_VIDEO_QUALITY_PROFILES } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
     const { resolveContainFrameSizeFromDimensions } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.js');
+    const { buildCallAudioCaptureConstraints } = await server.ssrLoadModule('/src/domain/realtime/media/audioCaptureConstraints.js');
     const quality = SFU_VIDEO_QUALITY_PROFILES.quality;
     const realtime = SFU_VIDEO_QUALITY_PROFILES.realtime;
     const rescue = SFU_VIDEO_QUALITY_PROFILES.rescue;
@@ -69,6 +96,16 @@ async function main() {
     const landscape = resolveContainFrameSizeFromDimensions(1280, 720, quality.frameWidth, quality.frameHeight);
     assert.equal(landscape.frameWidth, 1280, 'landscape sources keep the full quality width');
     assert.equal(landscape.frameHeight, 720, 'landscape sources keep the full quality height');
+
+    const defaultAudio = buildCallAudioCaptureConstraints();
+    assert.equal(defaultAudio.echoCancellation, true, 'default call audio must request echo cancellation');
+    assert.equal(defaultAudio.noiseSuppression, true, 'default call audio must request noise suppression');
+    assert.equal(defaultAudio.autoGainControl, true, 'default call audio must request automatic gain control');
+    assert.equal(defaultAudio.channelCount.ideal, 1, 'default call audio must request mono input');
+
+    const selectedAudio = buildCallAudioCaptureConstraints('mic-1');
+    assert.equal(selectedAudio.deviceId.exact, 'mic-1', 'selected microphone id must be preserved with audio processing constraints');
+    assert.equal(selectedAudio.echoCancellation, true, 'selected call audio must keep echo cancellation');
 
     process.stdout.write('[sfu-capture-constraints-contract] PASS\n');
   } finally {

@@ -15,6 +15,7 @@ import {
   callMediaPrefs,
   refreshCallMediaDevices,
 } from '../../realtime/media/preferences';
+import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 
 const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
@@ -475,7 +476,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
     return {
       video: cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } },
-      audio: microphoneDeviceId === '' ? true : { deviceId: { exact: microphoneDeviceId } },
+      audio: buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId),
     };
   }
 

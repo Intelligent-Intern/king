@@ -345,14 +345,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       });
 
       if (retrySfuSubscription(publisherId, peer, 'remote_video_never_started', nowMs)) {
-        if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
-          console.info(
-            '[KingRT] Auto-resubscribe for stalled SFU publisher',
-            `local_user=${currentUserId.value}`,
-            `remote_user=${Number(peer.userId || 0)}`,
-            `publisher=${publisherId}`,
-          );
-        }
+        // The preceding backend diagnostic carries the stalled publisher details.
       }
       if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
         restartSfuAfterVideoStall('remote_video_never_started', {

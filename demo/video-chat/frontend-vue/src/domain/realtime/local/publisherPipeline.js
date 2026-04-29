@@ -3,7 +3,23 @@ import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
 import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
-import { resolvePublisherFrameSize } from './videoFrameSizing';
+import {
+  stopRetiredLocalStreams,
+  uniqueLocalStreams,
+  unpublishSfuTracksForClient,
+} from './localStreamLifecycle';
+import {
+  buildPublisherTransportStageMetrics,
+  createPublisherFrameTrace,
+  currentSfuCodecId,
+  highResolutionNowMs,
+  markPublisherFrameTraceStage,
+  publisherFrameTraceMetrics,
+  roundedStageMs,
+} from './publisherFrameTrace';
+import { createPublisherSourceReadbackController } from './publisherSourceReadback';
+import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
+import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
   backgroundBaselineCollector,
@@ -14,6 +30,8 @@ export function createLocalPublisherPipelineHelpers({
   refs,
   state,
 }) {
+  let activeSourceReadbackController = null;
+
   const {
     applyCallOutputPreferences,
     canProtectCurrentSfuTargets,
@@ -29,6 +47,7 @@ export function createLocalPublisherPipelineHelpers({
     isWlvcRuntimePath,
     maybeFallbackToNativeRuntime,
     mediaDebugLog,
+    noteWlvcSourceReadbackSuccess = () => false,
     reconfigureLocalTracksFromSelectedDevices,
     renderCallVideoLayout,
     resetBackgroundRuntimeMetrics,
@@ -41,70 +60,8 @@ export function createLocalPublisherPipelineHelpers({
     stopSfuTrackAnnounceTimer,
   } = callbacks;
 
-  function currentSfuCodecId(encoder) {
-    const constructorName = String(encoder?.constructor?.name || '').trim();
-    if (constructorName === 'WasmWaveletVideoEncoder') return 'wlvc_wasm';
-    if (constructorName === 'WaveletVideoEncoder') return 'wlvc_ts';
-    return 'wlvc_unknown';
-  }
-
-  function highResolutionNowMs() {
-    return typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
-  }
-
-  function roundedStageMs(value) {
-    const normalized = Number(value || 0);
-    return Number.isFinite(normalized) ? Number(Math.max(0, normalized).toFixed(3)) : 0;
-  }
-
-  function uniqueLocalStreams(values) {
-    const out = [];
-    const seen = new Set();
-    for (const value of values) {
-      if (!(value instanceof MediaStream)) continue;
-      if (seen.has(value)) continue;
-      seen.add(value);
-      out.push(value);
-    }
-    return out;
-  }
-
   function unpublishSfuTracks(tracks) {
-    if (!refs.sfuClientRef.value || !Array.isArray(tracks)) return;
-    for (const track of tracks) {
-      if (!track?.id) continue;
-      try {
-        refs.sfuClientRef.value.unpublishTrack(track.id);
-      } catch {
-        // best-effort cleanup for stale tracks
-      }
-    }
-  }
-
-  function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
-    const preserved = new Set();
-    const preservedTrackIds = new Set();
-    for (const stream of preservedStreams) {
-      if (stream instanceof MediaStream) {
-        preserved.add(stream);
-        for (const track of stream.getTracks()) {
-          if (track?.id) preservedTrackIds.add(track.id);
-        }
-      }
-    }
-
-    for (const stream of uniqueLocalStreams(retiredStreams)) {
-      if (!(stream instanceof MediaStream)) continue;
-      if (preserved.has(stream)) continue;
-      for (const track of stream.getTracks()) {
-        if (track?.id && preservedTrackIds.has(track.id)) continue;
-        try {
-          track.stop();
-        } catch {
-          // ignore stop failures during stream turnover
-        }
-      }
-    }
+    unpublishSfuTracksForClient(refs.sfuClientRef.value, tracks);
   }
 
   function clearLocalTrackRecoveryTimer() {
@@ -160,6 +117,10 @@ export function createLocalPublisherPipelineHelpers({
   }
 
   function stopLocalEncodingPipeline() {
+    if (activeSourceReadbackController) {
+      void activeSourceReadbackController.close();
+      activeSourceReadbackController = null;
+    }
     if (refs.encodeIntervalRef.value) {
       clearTimeout(refs.encodeIntervalRef.value);
       refs.encodeIntervalRef.value = null;
@@ -306,10 +267,14 @@ export function createLocalPublisherPipelineHelpers({
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
 
-    const canvas = document.createElement('canvas');
-    const initialFrameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
-    canvas.width = initialFrameSize.frameWidth; canvas.height = initialFrameSize.frameHeight;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const sourceReadbackController = createPublisherSourceReadbackController({
+      video,
+      videoTrack,
+      videoProfile,
+      mediaDebugLog,
+    });
+    activeSourceReadbackController = sourceReadbackController;
+    const initialFrameSize = sourceReadbackController.initialFrameSize || resolvePublisherFrameSize(video, videoProfile, videoTrack);
     let previousFullFrameImageData = null;
     let lastFullFrameSentAtMs = 0;
     let lastBackgroundSnapshotSentAtMs = 0;
@@ -450,12 +415,18 @@ export function createLocalPublisherPipelineHelpers({
       return refs.videoPatchEncoderRef.value;
     };
 
-    const scheduleNextWlvcEncodeTick = (delayMs = videoProfile.encodeIntervalMs) => {
+    const scheduleNextWlvcEncodeTick = (delayMs = resolveProfileReadbackIntervalMs(videoProfile)) => {
       if (!refs.videoEncoderRef.value || !isWlvcRuntimePath()) {
         refs.encodeIntervalRef.value = null;
         return;
       }
       refs.encodeIntervalRef.value = setTimeout(runWlvcEncodeTick, Math.max(0, Math.round(delayMs)));
+    };
+
+    const currentOpenSfuClient = () => {
+      const client = refs.sfuClientRef.value;
+      if (!client || !isSfuClientOpen() || typeof client.sendEncodedFrame !== 'function') return null;
+      return client;
     };
 
     const runWlvcEncodeTick = async () => {
@@ -464,7 +435,7 @@ export function createLocalPublisherPipelineHelpers({
         if (!isWlvcRuntimePath()) return;
         if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
-        if (!refs.videoEncoderRef.value || !refs.sfuClientRef.value || !isSfuClientOpen()) return;
+        if (!refs.videoEncoderRef.value || !currentOpenSfuClient()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
@@ -474,7 +445,7 @@ export function createLocalPublisherPipelineHelpers({
         const timestamp = Date.now();
         const remoteKeyframeRequestPending = timestamp < Number(refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs || 0);
         const keyframeRetryDelayMs = Math.max(
-          Number(videoProfile.encodeIntervalMs || 0),
+          resolveProfileReadbackIntervalMs(videoProfile),
           Number(videoProfile.minKeyframeRetryMs || 0),
         );
         if (forcedKeyframeRecoveryPending && timestamp < keyframeRetryBlockedUntilMs) {
@@ -487,47 +458,50 @@ export function createLocalPublisherPipelineHelpers({
         if (refs.sfuTransportState.wlvcBackpressureSkipCount > 0) {
           resetWlvcBackpressureCounters();
         }
-        if (video.readyState < 2 || !ctx) return;
+        if (video.readyState < 2) return;
 
         state.wlvcEncodeInFlight = true;
         const frameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
-        const fullFrameEncoder = await ensureFullFrameEncoder(frameSize);
-        if (!fullFrameEncoder) {
-          mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
-          return;
-        }
-        if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
-          canvas.width = frameSize.frameWidth;
-          canvas.height = frameSize.frameHeight;
-        }
-        const drawStartedAtMs = highResolutionNowMs();
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
-        const readbackStartedAtMs = highResolutionNowMs();
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
-        const drawBudgetMs = Math.max(1, Number(videoProfile.maxDrawImageMs || 0));
-        const readbackBudgetMs = Math.max(1, Number(videoProfile.maxReadbackMs || 0));
-        if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
-          const readbackReason = drawImageMs > drawBudgetMs
-            ? 'canvas_draw_image_budget_exceeded'
-            : 'canvas_get_image_data_budget_exceeded';
+        const trace = createPublisherFrameTrace({
+          timestamp,
+          startedAtMs,
+          pipelineProfileId,
+          video,
+          videoTrack,
+          frameSize,
+        });
+        markPublisherFrameTraceStage(trace, 'get_user_media_frame_delivery', highResolutionNowMs() - startedAtMs);
+        const sourceReadback = await sourceReadbackController.readFrame({
+          trace,
+          timestamp,
+          videoProfile,
+          videoTrack,
+        });
+        if (!sourceReadback) return;
+        if (sourceReadback.budgetExceeded) {
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
             videoTrack.id,
             'sfu_source_readback_budget_exceeded',
             {
-              reason: 'sfu_source_readback_budget_exceeded',
-              stage: 'dom_canvas_readback',
-              source: readbackReason,
-              message: 'Publisher source readback exceeded the active SFU profile budget before WLVC encode.',
-              transportPath: 'publisher_source_readback',
+              ...sourceReadback.details,
               bufferedAmount: getSfuClientBufferedAmount(),
-              payloadBytes: 0,
-              wirePayloadBytes: 0,
-              timestamp,
             },
           );
+          return;
+        }
+        const {
+          imageData,
+          frameSize: readbackFrameSize,
+          drawImageMs,
+          readbackMs,
+          drawBudgetMs,
+          readbackBudgetMs,
+        } = sourceReadback;
+        const frameSizeForMetrics = readbackFrameSize || frameSize;
+        const fullFrameEncoder = await ensureFullFrameEncoder(frameSizeForMetrics);
+        if (!fullFrameEncoder) {
+          mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
           return;
         }
         let frameImageData = imageData;
@@ -627,6 +601,7 @@ export function createLocalPublisherPipelineHelpers({
           ? Number(encoded.data.byteLength || 0)
           : 0;
         const encodeMs = roundedStageMs(highResolutionNowMs() - encodeStartedAtMs);
+        markPublisherFrameTraceStage(trace, 'wlvc_encode', encodeMs);
         const maxEncodedFrameBudgetBytes = Math.max(
           1,
           Number(videoProfile.maxEncodedBytesPerFrame || constants.sfuWlvcMaxDeltaFrameBytes || 0)
@@ -668,38 +643,25 @@ export function createLocalPublisherPipelineHelpers({
           });
           return;
         }
-        const transportStageMetrics = {
-          outgoing_video_quality_profile: pipelineProfileId,
-          capture_width: videoProfile.captureWidth,
-          capture_height: videoProfile.captureHeight,
-          capture_frame_rate: videoProfile.captureFrameRate,
-          frame_width: frameSize.frameWidth,
-          frame_height: frameSize.frameHeight,
-          profile_frame_width: frameSize.profileFrameWidth,
-          profile_frame_height: frameSize.profileFrameHeight,
-          source_frame_width: frameSize.sourceWidth,
-          source_frame_height: frameSize.sourceHeight,
-          source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6)),
-          publisher_aspect_mode: frameSize.aspectMode,
-          draw_image_ms: drawImageMs,
-          readback_ms: readbackMs,
-          encode_ms: encodeMs,
-          local_stage_elapsed_ms: roundedStageMs(highResolutionNowMs() - startedAtMs),
-          encoded_payload_bytes: encodedPayloadBytes,
-          max_payload_bytes: maxEncodedPayloadBytes,
-          budget_max_encoded_bytes_per_frame: maxEncodedFrameBudgetBytes,
-          budget_max_keyframe_bytes_per_frame: maxEncodedKeyframeBudgetBytes,
-          budget_max_wire_bytes_per_second: Math.max(1, Number(videoProfile.maxWireBytesPerSecond || 0)),
-          budget_max_encode_ms: encodeBudgetMs,
-          budget_max_draw_image_ms: drawBudgetMs,
-          budget_max_readback_ms: readbackBudgetMs,
-          budget_payload_soft_limit_bytes: payloadSoftLimitBytes,
-          budget_payload_soft_limit_ratio: payloadSoftLimitRatio,
-          budget_min_keyframe_retry_ms: keyframeRetryDelayMs,
-          budget_max_queue_age_ms: Math.max(1, Number(videoProfile.maxQueueAgeMs || 0)),
-          budget_max_buffered_bytes: Math.max(1, Number(videoProfile.maxBufferedBytes || 0)),
-          budget_expected_recovery: String(videoProfile.expectedRecovery || ''),
-        };
+        const transportStageMetrics = buildPublisherTransportStageMetrics({
+          trace,
+          pipelineProfileId,
+          videoProfile,
+          frameSize: frameSizeForMetrics,
+          drawImageMs,
+          readbackMs,
+          encodeMs,
+          encodedPayloadBytes,
+          maxEncodedFrameBudgetBytes,
+          maxEncodedKeyframeBudgetBytes,
+          maxEncodedPayloadBytes,
+          encodeBudgetMs,
+          drawBudgetMs,
+          readbackBudgetMs,
+          payloadSoftLimitBytes,
+          payloadSoftLimitRatio,
+          keyframeRetryDelayMs,
+        });
 
         const outgoingFrame = {
           publisherId: String(refs.currentUserId()),
@@ -738,6 +700,7 @@ export function createLocalPublisherPipelineHelpers({
         if (constants.protectedMediaEnabled && canProtectCurrentSfuTargets()) {
           try {
             const mediaSecurity = ensureMediaSecuritySession();
+            const protectStartedAtMs = highResolutionNowMs();
             const protectedFrame = await mediaSecurity.protectFrame({
               data: encoded.data,
               runtimePath: 'wlvc_sfu',
@@ -747,8 +710,9 @@ export function createLocalPublisherPipelineHelpers({
               trackId: videoTrack.id,
               timestamp: encoded.timestamp,
             });
+            markPublisherFrameTraceStage(trace, 'protected_frame_wrap', highResolutionNowMs() - protectStartedAtMs);
             const securityBudget = measureProtectedSfuFrameBudget({ protectedFrame, plaintextBytes: encodedPayloadBytes, maxPayloadBytes: maxEncodedPayloadBytes });
-            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...securityBudget.metrics };
+            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...securityBudget.metrics, ...publisherFrameTraceMetrics(trace) };
             if (!securityBudget.ok) {
               paceForcedKeyframeRecovery();
               handleWlvcFramePayloadPressure(securityBudget.metrics.protected_envelope_bytes, videoTrack.id, encodedFrameType, {
@@ -770,8 +734,11 @@ export function createLocalPublisherPipelineHelpers({
               track_id: videoTrack.id,
               media_runtime_path: refs.mediaRuntimePathRef.value,
             });
+            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
           }
         } else {
+          markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+          outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
           hintMediaSecuritySync(
             constants.protectedMediaEnabled
               ? 'peer_handshake_not_ready'
@@ -784,10 +751,21 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (stopIfPipelineProfileChanged()) return;
-        const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+        const sendClient = currentOpenSfuClient();
+        if (!sendClient) {
+          reportSfuClientUnavailableAfterEncode({
+            getSfuClientBufferedAmount,
+            handleWlvcFrameSendFailure,
+            trackId: videoTrack.id,
+            trace,
+            timestamp,
+          });
+          return;
+        }
+        const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
         if (frameSent === false) {
           paceForcedKeyframeRecovery();
-          const sfuSendFailureDetails = refs.sfuClientRef.value?.getLastSendFailure?.() || null;
+          const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
             videoTrack.id,
@@ -814,6 +792,13 @@ export function createLocalPublisherPipelineHelpers({
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {
           lastBackgroundSnapshotSentAtMs = timestamp;
         }
+        noteWlvcSourceReadbackSuccess({
+          timestamp, trackId: videoTrack.id, sourceBackend, readbackMethod,
+          drawImageMs, readbackMs, drawBudgetMs, readbackBudgetMs,
+          readbackBytes: Math.max(0, Number(sourceReadback.readbackBytes || 0)),
+          frameWidth: Math.max(0, Number(frameSizeForMetrics?.frameWidth || 0)),
+          frameHeight: Math.max(0, Number(frameSizeForMetrics?.frameHeight || 0)),
+        });
       } catch (error) {
         const nowMs = Date.now();
         if (nowMs - state.wlvcEncodeLastErrorLogAtMs >= constants.wlvcEncodeErrorLogCooldownMs) {
@@ -862,7 +847,7 @@ export function createLocalPublisherPipelineHelpers({
         if (refs.encodeIntervalRef.value !== null) {
           const finishedAtMs = highResolutionNowMs();
           const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
-          scheduleNextWlvcEncodeTick(videoProfile.encodeIntervalMs - elapsedMs);
+          scheduleNextWlvcEncodeTick(resolveProfileReadbackIntervalMs(videoProfile) - elapsedMs);
         }
       }
     };

@@ -15,6 +15,10 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `missing ${label}`);
 }
 
+function requireNotContains(source, needle, label) {
+  assert.ok(!source.includes(needle), `unexpected ${label}`);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
@@ -61,7 +65,8 @@ try {
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');
   requireContains(remoteCanvas, 'export function resizeCanvasPreservingFrame', 'remote decoder size switches preserve the visible frame');
   requireContains(remoteCanvas, 'snapshotCtx.drawImage(canvas, 0, 0);', 'remote canvas resize snapshots the visible frame before dimensions change');
-  requireContains(remoteCanvas, 'ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, 0, 0, nextWidth, nextHeight);', 'remote canvas resize restores the previous visible frame at the new size');
+  requireContains(remoteCanvas, 'Math.min(nextWidth / previousWidth, nextHeight / previousHeight)', 'remote canvas resize preserves previous-frame aspect ratio');
+  requireContains(remoteCanvas, 'ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, offsetX, offsetY, scaledWidth, scaledHeight);', 'remote canvas resize restores the previous visible frame without stretching');
   requireContains(frameDecode, 'resizeCanvasPreservingFrame(peer.decodedCanvas, nextWidth, nextHeight);', 'decoder reconfigure does not clear the remote canvas before the next keyframe');
   requireContains(remotePeers, "mediaConnectionState: 'connecting'", 'new SFU peers start in connecting media state');
   requireContains(remotePeers, 'function findSfuRemotePeerEntryByPeer', 'remote peer owner lookup for publisher rollover');
@@ -71,6 +76,8 @@ try {
   requireContains(remotePeers, "'track_set_rollover'", 'track rollover resets remote continuity');
   requireContains(remotePeers, 'lastSfuFrameSequenceByTrack: {}', 'rollover clears stale SFU frame sequence continuity');
   requireContains(remotePeers, 'acceptedSfuCacheEpochByTrack: {}', 'rollover clears stale tile cache epoch continuity');
+  requireContains(remotePeers, 'Keep the last visible frame while waiting for the rollover keyframe.', 'rollover preserves the visible remote frame');
+  requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
   requireContains(sfuClient, 'private markPublisherFrameReceived(msg: any', 'SFU client tracks publisher frame freshness');

@@ -22,6 +22,12 @@ export function resizeCanvasPreservingFrame(canvas, width, height) {
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+  const scale = Math.min(nextWidth / previousWidth, nextHeight / previousHeight);
+  const scaledWidth = Math.max(1, Math.round(previousWidth * scale));
+  const scaledHeight = Math.max(1, Math.round(previousHeight * scale));
+  const offsetX = Math.floor((nextWidth - scaledWidth) / 2);
+  const offsetY = Math.floor((nextHeight - scaledHeight) / 2);
   ctx.imageSmoothingEnabled = true;
-  ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, 0, 0, nextWidth, nextHeight);
+  ctx.clearRect(0, 0, nextWidth, nextHeight);
+  ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, offsetX, offsetY, scaledWidth, scaledHeight);
 }

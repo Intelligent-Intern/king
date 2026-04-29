@@ -33,8 +33,11 @@ try {
   requireContains(relay, '$keptBytes -= max(0, (int) ($oldest[\'bytes\'] ?? 0));', 'cleanup drains aggregate byte accounting');
   requireContains(relay, 'videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)', 'publish path uses bounded cleanup cadence');
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'hot path sends JSON-safe relay copy');
-  assert.ok(!store.includes('CREATE TABLE IF NOT EXISTS sfu_frames'), 'SFU media frames must not be persisted in SQLite');
-  assert.ok(!store.includes('INSERT INTO sfu_frames'), 'SFU media frame payloads must not be inserted into SQLite');
+  requireContains(store, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
+  requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');
+  requireContains(store, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');
+  requireContains(store, 'strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)', 'oversized SQLite frame records are rejected before insert');
+  requireContains(store, 'videochat_sfu_trim_frame_buffer_room($pdo, $normalizedRoomId)', 'SQLite frame buffer trims room rows');
 
   process.stdout.write('[sfu-relay-broker-io-budget-contract] PASS\n');
 } catch (error) {

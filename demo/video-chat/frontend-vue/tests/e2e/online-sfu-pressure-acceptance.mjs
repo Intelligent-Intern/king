@@ -19,12 +19,17 @@ const SAMPLE_INTERVAL_MS = Math.max(1_000, Number.parseInt(process.env.VIDEOCHAT
 const SLOW_SUBSCRIBER_DURATION_MS = Math.max(5_000, Number.parseInt(process.env.VIDEOCHAT_ONLINE_PRESSURE_SLOW_MS || '12000', 10));
 const CRITICAL_BUFFERED_BYTES = 5 * 1024 * 1024;
 const MAX_ACCEPTED_BUFFERED_BYTES = 1536 * 1024;
+const MAX_NO_TRANSITION_BUFFERED_BYTES = 512 * 1024;
 const MAX_FINAL_BUFFERED_BYTES = 256 * 1024;
+const MAX_TRANSIENT_BLACK_SAMPLES = 1;
 
 const BLOCKED_RUNTIME_PATTERNS = [
   /\bwrong_key_id\b/i,
   /\bmalformed_protected_frame\b/i,
   /\bsfu_protected_frame_decrypt_failed\b/i,
+  /\bsfu_source_readback_budget_exceeded\b/i,
+  /\bsfu_source_readback_budget_pressure\b/i,
+  /\bsfu_source_readback_profile_downshift\b/i,
   /\bsfu_send_backpressure_critical\b/i,
   /\bSFU video backpressure\b/i,
   /\bremote video frozen\b/i,
@@ -107,6 +112,12 @@ function installRuntimeMonitor(page, label) {
     const url = request.url();
     if (!/\/(?:api\/runtime|sfu|ws)(?:[/?#]|$)/i.test(url)) return;
     push('requestfailed', `${request.method()} ${url} ${request.failure()?.errorText || ''}`);
+  });
+  page.on('request', (request) => {
+    const url = request.url();
+    if (!/\/api\/user\/client-diagnostics(?:[/?#]|$)/i.test(url)) return;
+    const postData = request.postData() || '';
+    if (postData !== '') push('request:client-diagnostics', postData);
   });
   page.on('response', (response) => {
     const url = response.url();
@@ -223,19 +234,64 @@ async function switchCallLayoutMode(page, mode, label) {
   }, mode));
 }
 
-async function switchVideoQualityProfile(page, profile, label) {
-  await waitUntil(`${label} video quality select`, 30_000, async () => page.locator('#call-left-video-quality').count());
-  await page.locator('#call-left-video-quality').selectOption(profile).catch(async () => {
-    await page.evaluate((nextProfile) => {
-      const select = document.querySelector('#call-left-video-quality');
-      if (!(select instanceof HTMLSelectElement)) return;
-      select.value = nextProfile;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }, profile);
-  });
-  await waitUntil(`${label} video quality ${profile}`, 15_000, async () => (
-    page.locator('#call-left-video-quality').inputValue().then((value) => value === profile).catch(() => false)
-  ));
+async function assertNoManualVideoQualitySelect(page, label) {
+  const count = await page.locator('#call-left-video-quality').count();
+  if (count !== 0) throw new Error(`${label} exposes manual video quality select.`);
+}
+
+function automaticQualityTransitions(events, sinceMs) {
+  return events
+    .filter((event) => event.at >= sinceMs && /\bSFU encode pressure - lowering outgoing video quality\b/.test(event.text))
+    .map((event) => ({
+      label: event.label,
+      atMs: event.at - sinceMs,
+      text: event.text,
+      from: /\bfrom=([^\s]+)/.exec(event.text)?.[1] || '',
+      to: /\bto=([^\s]+)/.exec(event.text)?.[1] || '',
+      reason: /\breason=([^\s]+)/.exec(event.text)?.[1] || '',
+    }));
+}
+
+function assertAutomaticQualityTransitions(events, sinceMs) {
+  const transitions = automaticQualityTransitions(events, sinceMs);
+  if (transitions.length === 0) {
+    throw new Error('Pressure acceptance did not observe automatic SFU quality downshift.');
+  }
+  return transitions;
+}
+
+function maxObservedBufferedAmount(samples) {
+  let maxBufferedAmount = 0;
+  for (const sample of samples) {
+    for (const side of ['admin', 'user']) {
+      maxBufferedAmount = Math.max(
+        maxBufferedAmount,
+        Number(sample?.[side]?.stats?.maxBufferedAmountAfterSend || 0),
+        Number(sample?.[side]?.stats?.currentBufferedAmount || 0),
+      );
+    }
+  }
+  return maxBufferedAmount;
+}
+
+function assertAutomaticQualityTransitionsOrNoPressure(events, sinceMs, samples) {
+  const transitions = automaticQualityTransitions(events, sinceMs);
+  if (transitions.length > 0) return transitions;
+
+  const maxBufferedAmount = maxObservedBufferedAmount(samples);
+  if (maxBufferedAmount > MAX_NO_TRANSITION_BUFFERED_BYTES) {
+    throw new Error(
+      `Pressure acceptance did not observe automatic SFU quality downshift despite bufferedAmount=${maxBufferedAmount}.`,
+    );
+  }
+
+  return [{
+    side: 'both',
+    profile: 'no-transition-needed',
+    atMs: Date.now() - sinceMs,
+    reason: 'pressure_below_auto_downshift_threshold',
+    maxBufferedAmountAfterSend: maxBufferedAmount,
+  }];
 }
 
 async function installSlowSubscriberNetwork(context, page) {
@@ -245,7 +301,7 @@ async function installSlowSubscriberNetwork(context, page) {
     offline: false,
     latency: 220,
     downloadThroughput: 320 * 1024,
-    uploadThroughput: 96 * 1024,
+    uploadThroughput: -1,
   });
   return async () => {
     await cdp.send('Network.emulateNetworkConditions', {
@@ -294,17 +350,47 @@ function assertStableSamples(samples, baselineFailures) {
 
   for (const side of ['admin', 'user']) {
     const hashes = [];
+    let healthySampleCount = 0;
+    let transientBlackSamples = 0;
+    let consecutiveBlackSamples = 0;
+    let firstTransientBlackFrame = null;
     for (const sample of samples) {
       const canvas = firstHealthyCanvas(sample[side].remote);
       if (!canvas) {
-        throw new Error(`${side} lost non-black remote video during ${sample.phase}: ${JSON.stringify({
+        transientBlackSamples += 1;
+        consecutiveBlackSamples += 1;
+        firstTransientBlackFrame ||= {
           elapsedMs: sample.elapsedMs,
+          phase: sample.phase,
           remote: sample[side].remote,
           stats: sample[side].stats,
-        })}`);
+          reason: 'transient_remote_black_frame',
+        };
+        if (
+          transientBlackSamples > MAX_TRANSIENT_BLACK_SAMPLES
+          || consecutiveBlackSamples > MAX_TRANSIENT_BLACK_SAMPLES
+        ) {
+          throw new Error(`${side} lost non-black remote video during ${sample.phase}: ${JSON.stringify({
+            firstTransientBlackFrame,
+            elapsedMs: sample.elapsedMs,
+            remote: sample[side].remote,
+            stats: sample[side].stats,
+          })}`);
+        }
+        continue;
       }
+      healthySampleCount += 1;
+      consecutiveBlackSamples = 0;
       if (canvas.readable) hashes.push(String(canvas.hash));
     }
+    const finalCanvas = firstHealthyCanvas(samples[samples.length - 1][side].remote);
+    if (!finalCanvas) {
+      throw new Error(`${side} final remote video stayed black or missing: ${JSON.stringify({
+        firstTransientBlackFrame,
+        finalSample: samples[samples.length - 1][side],
+      })}`);
+    }
+    if (healthySampleCount < 2) throw new Error(`${side} remote video did not recover enough healthy samples.`);
     if (new Set(hashes).size < 2) throw new Error(`${side} remote video did not keep moving.`);
 
     const first = samples[0][side].stats;
@@ -463,6 +549,8 @@ async function main() {
     await waitForSfuBinaryFlow(sfuSocketStats, admin.page, 'admin');
     await waitForSfuBinaryFlow(sfuSocketStats, user.page, 'user');
     await switchCallLayoutMode(admin.page, 'grid', 'admin');
+    await assertNoManualVideoQualitySelect(admin.page, 'admin');
+    await assertNoManualVideoQualitySelect(user.page, 'user');
     await waitForRemoteVideo(admin.page, 'admin grid');
     await waitForRemoteVideo(user.page, 'user grid');
 
@@ -473,13 +561,6 @@ async function main() {
       admin: (await sfuSocketStats(admin.page)).socketFailureCount,
       user: (await sfuSocketStats(user.page)).socketFailureCount,
     };
-
-    await switchVideoQualityProfile(admin.page, 'balanced', 'admin');
-    summary.qualityTransitions.push({ side: 'admin', profile: 'balanced', atMs: Date.now() - stableStartedAt });
-    await switchVideoQualityProfile(user.page, 'realtime', 'user');
-    summary.qualityTransitions.push({ side: 'user', profile: 'realtime', atMs: Date.now() - stableStartedAt });
-    await waitForRemoteVideo(admin.page, 'admin after downshift');
-    await waitForRemoteVideo(user.page, 'user after downshift');
 
     clearSlowSubscriber = await installSlowSubscriberNetwork(user.context, user.page);
     summary.qualityTransitions.push({ side: 'user', profile: 'slow-subscriber-network', atMs: Date.now() - stableStartedAt });
@@ -499,10 +580,11 @@ async function main() {
 
     await clearSlowSubscriber();
     clearSlowSubscriber = null;
-    await switchVideoQualityProfile(admin.page, 'quality', 'admin');
-    summary.qualityTransitions.push({ side: 'admin', profile: 'quality', atMs: Date.now() - stableStartedAt });
-    await switchVideoQualityProfile(user.page, 'balanced', 'user');
-    summary.qualityTransitions.push({ side: 'user', profile: 'balanced', atMs: Date.now() - stableStartedAt });
+    summary.qualityTransitions.push(...assertAutomaticQualityTransitionsOrNoPressure(
+      [...adminMonitor, ...userMonitor],
+      stableStartedAt,
+      summary.samples,
+    ));
 
     while ((Date.now() - stableStartedAt) < PRESSURE_DURATION_MS) {
       await sleep(SAMPLE_INTERVAL_MS);

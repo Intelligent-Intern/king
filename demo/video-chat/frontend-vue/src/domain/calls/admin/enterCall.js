@@ -4,6 +4,7 @@ import {
   callMediaPrefs,
   refreshCallMediaDevices,
 } from '../../realtime/media/preferences';
+import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 
 export function normalizeCallAccessMode(value) {
@@ -207,7 +208,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
     const video = cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } };
-    const audio = microphoneDeviceId === '' ? true : { deviceId: { exact: microphoneDeviceId } };
+    const audio = buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
     return { video, audio };
   }
 

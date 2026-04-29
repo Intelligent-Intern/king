@@ -119,6 +119,41 @@ sha256_file() {
     sha256sum "${path}" | awk '{print $1}'
 }
 
+metadata_value() {
+    local key="$1"
+    local path="$2"
+    sed -n "s/^${key}=\"\\(.*\\)\"$/\\1/p" "${path}" | head -n 1
+}
+
+lsquic_runtime_dir_has_pinned_runtime() {
+    local runtime_dir="$1"
+    local runtime_library="${runtime_dir}/liblsquic.so"
+    local runtime_metadata="${runtime_dir}/king-lsquic-runtime.env"
+    local expected_lock_sha=""
+    local actual_lock_sha=""
+    local actual_library_sha=""
+
+    [[ -f "${runtime_library}" ]] || return 1
+    [[ -f "${runtime_metadata}" ]] || return 1
+
+    expected_lock_sha="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
+    actual_lock_sha="$(metadata_value KING_LSQUIC_RUNTIME_LOCK_SHA256 "${runtime_metadata}")"
+    actual_library_sha="$(metadata_value KING_LSQUIC_RUNTIME_LIBRARY_SHA256 "${runtime_metadata}")"
+
+    [[ "${actual_lock_sha}" == "${expected_lock_sha}" ]] || return 1
+    [[ -n "${actual_library_sha}" ]] || return 1
+    [[ "${actual_library_sha}" == "$(sha256_file "${runtime_library}")" ]] || return 1
+}
+
+release_profile_has_pinned_lsquic_runtime() {
+    lsquic_runtime_dir_has_pinned_runtime "${PROFILE_DIR}/runtime"
+}
+
+release_env_has_pinned_lsquic_runtime() {
+    [[ -n "${KING_LSQUIC_RUNTIME_PREFIX:-}" ]] || return 1
+    lsquic_runtime_dir_has_pinned_runtime "${KING_LSQUIC_RUNTIME_PREFIX}"
+}
+
 resolve_version() {
     sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king.h" | head -n 1
 }
@@ -215,8 +250,15 @@ ensure_release_git_lock_state() {
     if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
         "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
-        # CI checkouts may not contain the generated source cache. Rebuild it from
-        # the deterministic lock whenever the local cache is missing or stale.
+        # CI package jobs normally receive the pinned runtime artifact from the
+        # lsquic-runtime job. When that staged runtime matches the lock, do not
+        # rehydrate the source cache from GitHub during packaging.
+        if release_profile_has_pinned_lsquic_runtime || release_env_has_pinned_lsquic_runtime; then
+            return 0
+        fi
+
+        # CI checkouts may not contain the generated source cache. Rebuild it
+        # from the deterministic lock only when no verified runtime is staged.
         if ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
             echo "Pinned LSQUIC source cache is missing in CI; bootstrapping pinned source cache." >&2
             "${LSQUIC_BOOTSTRAP_SCRIPT}"

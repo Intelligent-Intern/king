@@ -86,19 +86,22 @@ export function createSfuLifecycleHelpers({
         if (!hadActiveConnection) {
           if (state.sfuConnectRetryCount < sfuConnectMaxRetries) {
             state.sfuConnectRetryCount += 1;
-            console.warn(
-              `[KingRT] 🔁 SFU reconnect attempt ${state.sfuConnectRetryCount}/${sfuConnectMaxRetries}`,
-              `delay=${sfuConnectRetryDelayMs}ms`,
-              `runtime=${refs.mediaRuntimePath.value}`,
-            );
+            captureClientDiagnostic({
+              category: 'media',
+              level: 'warning',
+              eventType: 'sfu_connect_retry_scheduled',
+              code: 'sfu_connect_retry_scheduled',
+              message: 'SFU connection retry was scheduled before the call became active.',
+              payload: {
+                retry_count: state.sfuConnectRetryCount,
+                retry_max: sfuConnectMaxRetries,
+                retry_delay_ms: sfuConnectRetryDelayMs,
+                media_runtime_path: refs.mediaRuntimePath.value,
+              },
+            });
             setTimeout(() => requestSfuConnect(), sfuConnectRetryDelayMs);
             return;
           }
-          console.error(
-            '[KingRT] ❌ SFU connection retries exhausted — falling back to native runtime',
-            `attempts=${state.sfuConnectRetryCount}`,
-            `runtime=${refs.mediaRuntimePath.value}`,
-          );
           captureClientDiagnostic({
             category: 'media',
             level: 'error',
@@ -116,11 +119,6 @@ export function createSfuLifecycleHelpers({
           void maybeFallbackToNativeRuntime('sfu_connect_failed');
           return;
         }
-        console.warn(
-          '[KingRT] ⚠️ SFU disconnected after active connection — scheduling reconnect',
-          `runtime=${refs.mediaRuntimePath.value}`,
-          `peers=${refs.remotePeersRef.value.size}`,
-        );
         captureClientDiagnostic({
           category: 'media',
           level: 'warning',

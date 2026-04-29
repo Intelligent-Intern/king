@@ -197,6 +197,7 @@ export function createCallWorkspaceMediaStack(options) {
       isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
       maybeFallbackToNativeRuntime: callbacks.maybeFallbackToNativeRuntime,
       mediaDebugLog: callbacks.mediaDebugLog,
+      noteWlvcSourceReadbackSuccess: sfuTransport.noteWlvcSourceReadbackSuccess,
       reconfigureLocalTracksFromSelectedDevices: callbacks.reconfigureLocalTracksFromSelectedDevices,
       renderCallVideoLayout: () => renderCallVideoLayout(),
       resetBackgroundRuntimeMetrics: callbacks.resetBackgroundRuntimeMetrics,

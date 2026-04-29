@@ -434,19 +434,22 @@ try {
   assert.match(mediaStackSource, /callbacks\.clearMediaSecuritySfuPublisherSeen\?\.\(peerUserId\);/, 'bulk SFU teardown must clear stale media-security publisher targets');
   assert.match(securitySource, /attachNativeSenderTransform/, 'media-security library must attach native sender transform hooks');
   assert.match(securitySource, /attachNativeReceiverTransform/, 'media-security library must attach native receiver transform hooks');
+  assert.match(securitySource, /canProtectNativeForTargets\(userIds\) \{[\s\S]*if \(this\.state !== ACTIVE_STATE\) return false;[\s\S]*this\.canProtectForTargets\(normalized\)/m, 'native audio/video transforms must wait for an active media-security session instead of attaching during rekeying');
   assert.match(securitySource, /codec_id: normalizeProtectedCodecId\(codecId, runtimePath\)/, 'protected frame header must carry normalized codec identity');
   assert.match(securitySource, /if \(codecId && header\.codec_id !== normalizeProtectedCodecId\(codecId, runtimePath\)\) throw new Error\('unsupported_capability'\);/, 'frame decrypt must reject codec identity mismatches');
   assert.match(securityCoreSource, /codec_id: asString\(header\?\.codec_id\)/, 'AAD must bind codec identity into the protected-frame contract');
   assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
+  const sfuMessageHandlerSource = read('../../src/lib/sfu/sfuMessageHandler.ts');
   const sfuTypesSource = read('../../src/lib/sfu/sfuTypes.ts');
   const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
   assert.match(sfuTypesSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
   assert.match(sfuFramePayloadSource, /const protectedFrame = protectionMode === 'transport_only' \? null : arrayBufferToBase64Url\(payloadBytes\)/, 'binary SFU envelope decode must reconstruct protected transport envelopes');
   assert.match(sfuFramePayloadSource, /\.\.\.\(protectedFrame \? \{ protected_frame: protectedFrame \} : \{\}\)/, 'decoded binary SFU frame must surface protected_frame without JSON chunk transport');
-  assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
+  assert.match(sfuMessageHandlerSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
+  assert.doesNotMatch(sfuMessageHandlerSource, /payload\.protected = frame\.protected/, 'SFU receiver must not use ad-hoc protected metadata JSON for protected frames');
 
   process.stdout.write('[media-security-frontend-contract] PASS\n');
 } catch (error) {

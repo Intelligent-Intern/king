@@ -1,3 +1,8 @@
+import {
+  detectPublisherCapturePipelineCapabilities,
+  publisherCaptureCapabilityDiagnosticPayload,
+} from './capturePipelineCapabilities';
+import { buildOptionalCallAudioCaptureConstraints, callAudioSettingsDiagnosticPayload } from '../media/audioCaptureConstraints';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -84,19 +89,15 @@ export function createLocalMediaOrchestrationHelpers({
         ? {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
             deviceId: { exact: cameraDeviceId },
           }
         : {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           };
-    const audio = !wantsAudio
-      ? false
-      : microphoneDeviceId !== ''
-        ? { deviceId: { exact: microphoneDeviceId } }
-        : true;
+    const audio = buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId);
 
     return { video, audio };
   }
@@ -110,10 +111,10 @@ export function createLocalMediaOrchestrationHelpers({
         ? {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           }
         : false,
-      audio: wantsAudio ? true : false,
+      audio: buildOptionalCallAudioCaptureConstraints(wantsAudio),
     };
   }
 
@@ -124,13 +125,15 @@ export function createLocalMediaOrchestrationHelpers({
 
   function reportLocalCaptureSettings(stream, reason) {
     const videoTrack = stream instanceof MediaStream ? stream.getVideoTracks?.()[0] || null : null;
-    if (!videoTrack || typeof videoTrack.getSettings !== 'function') return;
+    const audioTrack = stream instanceof MediaStream ? stream.getAudioTracks?.()[0] || null : null;
+    if (!audioTrack && (!videoTrack || typeof videoTrack.getSettings !== 'function')) return;
     const videoProfile = currentSfuVideoProfile();
     const profileId = String(videoProfile.id || '').trim() || 'balanced';
-    const settings = videoTrack.getSettings() || {};
+    const settings = videoTrack && typeof videoTrack.getSettings === 'function' ? videoTrack.getSettings() || {} : {};
     const settingsWidth = finiteTrackSetting(settings.width);
     const settingsHeight = finiteTrackSetting(settings.height);
     const settingsFrameRate = finiteTrackSetting(settings.frameRate);
+    const captureCapabilities = detectPublisherCapturePipelineCapabilities();
     const staleAfterDowngrade = (profileId === 'realtime' || profileId === 'rescue')
       && (
         (settingsWidth > 0 && settingsWidth > Number(videoProfile.captureWidth || 0) * 1.25)
@@ -148,11 +151,17 @@ export function createLocalMediaOrchestrationHelpers({
         requested_capture_width: Number(videoProfile.captureWidth || 0),
         requested_capture_height: Number(videoProfile.captureHeight || 0),
         requested_capture_frame_rate: Number(videoProfile.captureFrameRate || 0),
+        requested_readback_frame_rate: Number(videoProfile.readbackFrameRate || 0),
+        requested_readback_interval_ms: Number(videoProfile.readbackIntervalMs || videoProfile.encodeIntervalMs || 0),
+        requested_keyframe_interval: Number(videoProfile.keyFrameInterval || 0),
+        requested_wire_budget_bytes_per_second: Number(videoProfile.maxWireBytesPerSecond || 0),
         publisher_frame_width: Number(videoProfile.frameWidth || 0),
         publisher_frame_height: Number(videoProfile.frameHeight || 0),
         track_settings_width: settingsWidth,
         track_settings_height: settingsHeight,
         track_settings_frame_rate: settingsFrameRate,
+        ...callAudioSettingsDiagnosticPayload(audioTrack),
+        ...publisherCaptureCapabilityDiagnosticPayload(captureCapabilities),
         stale_hd_capture_after_downgrade: staleAfterDowngrade,
       },
     });
@@ -186,7 +195,7 @@ export function createLocalMediaOrchestrationHelpers({
     } catch {
       const fallbackConstraints = {
         video: controlState.cameraEnabled !== false,
-        audio: controlState.micEnabled !== false,
+        audio: buildOptionalCallAudioCaptureConstraints(controlState.micEnabled !== false),
       };
       if (fallbackConstraints.video !== true && fallbackConstraints.audio !== true) {
         return new MediaStream();

@@ -650,10 +650,17 @@ export function createCallWorkspaceSocketHelpers({
         startPingLoop();
         refs.clearMediaSecuritySignalCaches();
         refs.startMediaSecurityHandshakeWatchdog();
-        console.info(
-          '[KingRT] WS open - media-security signal caches cleared, full handshake will run',
-          `reconnect=${isReconnectOpen ? '1' : '0'}`,
-        );
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'media_security_handshake_started_after_ws_open',
+          code: 'media_security_handshake_started_after_ws_open',
+          message: 'WebSocket opened and media-security handshake caches were cleared.',
+          payload: {
+            reconnect: isReconnectOpen,
+            connection_state: refs.connectionState.value,
+          },
+        });
         requestRoomSnapshot();
         if (refs.usersSourceMode.value === 'directory' && refs.activeTab.value === 'users') {
           void refreshUsersDirectory();

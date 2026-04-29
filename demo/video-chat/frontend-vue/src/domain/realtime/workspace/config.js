@@ -93,6 +93,13 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
     expectedRecovery: 'downshift_to_balanced_before_critical_buffer',
   }),
 });
+
+function readbackFrameRateForInterval(intervalMs) {
+  const normalizedIntervalMs = Number(intervalMs || 0);
+  if (!Number.isFinite(normalizedIntervalMs) || normalizedIntervalMs <= 0) return 0;
+  return Number((1000 / normalizedIntervalMs).toFixed(3));
+}
+
 export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   rescue: Object.freeze({
     id: 'rescue',
@@ -105,6 +112,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 20,
     keyFrameInterval: 16,
     encodeIntervalMs: 244,
+    readbackFrameRate: readbackFrameRateForInterval(244),
+    readbackIntervalMs: 244,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.rescue,
   }),
   realtime: Object.freeze({
@@ -118,6 +127,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 29,
     keyFrameInterval: 12,
     encodeIntervalMs: 167,
+    readbackFrameRate: readbackFrameRateForInterval(167),
+    readbackIntervalMs: 167,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.realtime,
   }),
   balanced: Object.freeze({
@@ -131,6 +142,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 33,
     keyFrameInterval: 12,
     encodeIntervalMs: 111,
+    readbackFrameRate: readbackFrameRateForInterval(111),
+    readbackIntervalMs: 111,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.balanced,
   }),
   quality: Object.freeze({
@@ -144,16 +157,11 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: SFU_WLVC_FRAME_QUALITY,
     keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
     encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+    readbackFrameRate: readbackFrameRateForInterval(SFU_WLVC_ENCODE_INTERVAL_MS),
+    readbackIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.quality,
   }),
 });
-export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(
-  Object.entries(SFU_VIDEO_QUALITY_PROFILES).map(([value, profile]) => ({
-    value,
-    label: profile.label,
-  }))
-);
-
 export function normalizeSfuVideoQualityProfile(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(SFU_VIDEO_QUALITY_PROFILES, normalized)

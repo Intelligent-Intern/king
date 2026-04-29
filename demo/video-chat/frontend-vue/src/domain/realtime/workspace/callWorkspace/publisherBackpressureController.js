@@ -1,3 +1,10 @@
+import {
+  SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO,
+  SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
+  SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
+} from './runtimeConfig.js';
+import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
+
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
   PAUSE_ENCODE: 'pause_encode',
@@ -27,6 +34,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const subscriberSendLatencyMs = normalizedNumber(stageTelemetry.subscriberSendLatencyMs);
   const skipCount = normalizedNumber(stageTelemetry.skipCount);
   const sendFailureCount = normalizedNumber(stageTelemetry.sendFailureCount);
+  const sourceReadbackFailureCount = normalizedNumber(stageTelemetry.sourceReadbackFailureCount);
   const payloadPressureCount = normalizedNumber(stageTelemetry.payloadPressureCount);
   const encodeFailureCount = normalizedNumber(stageTelemetry.encodeFailureCount);
   const sustainedBackpressureMs = normalizedNumber(stageTelemetry.sustainedBackpressureMs);
@@ -88,6 +96,13 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     if (socketCritical) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
     }
+  } else if (kind === 'source_readback_failure') {
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
+    if (sourceReadbackFailureCount >= sendFailureThreshold) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    }
   } else if (kind === 'payload_pressure') {
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
@@ -121,6 +136,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
       subscriber_send_latency_ms: subscriberSendLatencyMs,
       skip_count: skipCount,
       send_failure_count: sendFailureCount,
+      source_readback_failure_count: sourceReadbackFailureCount,
       payload_pressure_count: payloadPressureCount,
       encode_failure_count: encodeFailureCount,
       sustained_backpressure_ms: sustainedBackpressureMs,
@@ -140,6 +156,7 @@ export function createPublisherBackpressureController({
   getRemotePeerCount,
   getShouldConnectSfu,
   onRestartSfu,
+  probeSfuVideoQualityAfterStableReadback,
   resetWlvcEncoderAfterDroppedEncodedFrame,
   sfuAutoQualityDowngradeBackpressureWindowMs,
   sfuAutoQualityDowngradeSendFailureThreshold,
@@ -157,6 +174,14 @@ export function createPublisherBackpressureController({
   sfuWlvcSendBufferLowWaterBytes,
   state,
 }) {
+  const qualityRecoveryProbe = typeof probeSfuVideoQualityAfterStableReadback === 'function'
+    ? probeSfuVideoQualityAfterStableReadback
+    : (reason, details = {}) => (
+      typeof downgradeSfuVideoQualityAfterEncodePressure === 'function'
+        ? downgradeSfuVideoQualityAfterEncodePressure(reason, { ...details, direction: 'up' })
+        : false
+    );
+
   function resetWlvcBackpressureCounters() {
     state.wlvcBackpressureSkipCount = 0;
     state.wlvcBackpressureFirstAtMs = 0;
@@ -167,11 +192,93 @@ export function createPublisherBackpressureController({
   function resetWlvcFrameSendFailureCounters() {
     state.wlvcFrameSendFailureCount = 0;
     state.wlvcFrameSendFailureFirstAtMs = 0;
+    resetWlvcSourceReadbackFailureCounters();
   }
 
   function resetWlvcPayloadPressureCounters() {
     state.wlvcPayloadPressureCount = 0;
     state.wlvcPayloadPressureFirstAtMs = 0;
+  }
+
+  function resetWlvcSourceReadbackFailureCounters() {
+    state.wlvcSourceReadbackFailureCount = 0;
+    state.wlvcSourceReadbackFailureFirstAtMs = 0;
+  }
+
+  function resetWlvcSourceReadbackRecoveryWindow() {
+    state.wlvcSourceReadbackStableStartedAtMs = 0;
+    state.wlvcSourceReadbackStableSampleCount = 0;
+    state.wlvcSourceReadbackLastSuccessAtMs = 0;
+    state.wlvcSourceReadbackLastDrawMs = 0;
+    state.wlvcSourceReadbackLastReadbackMs = 0;
+  }
+
+  function sourceReadbackTimingIsStable(details = {}) {
+    const ratio = Math.max(
+      0.1,
+      Math.min(0.95, Number(SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO || 0.6)),
+    );
+    const drawImageMs = normalizedNumber(details?.drawImageMs ?? details?.draw_image_ms);
+    const readbackMs = normalizedNumber(details?.readbackMs ?? details?.readback_ms);
+    const drawBudgetMs = Math.max(
+      1,
+      normalizedNumber(details?.drawBudgetMs ?? details?.draw_budget_ms ?? details?.maxDrawImageMs ?? details?.max_draw_image_ms, 1),
+    );
+    const readbackBudgetMs = Math.max(
+      1,
+      normalizedNumber(details?.readbackBudgetMs ?? details?.readback_budget_ms ?? details?.maxReadbackMs ?? details?.max_readback_ms, 1),
+    );
+    if (drawImageMs <= 0 && readbackMs <= 0) return false;
+    return drawImageMs <= drawBudgetMs * ratio && readbackMs <= readbackBudgetMs * ratio;
+  }
+
+  function noteWlvcSourceReadbackSuccess(details = {}) {
+    const nowMs = Math.max(0, Number(details?.nowMs || details?.timestamp || Date.now()));
+    resetWlvcSourceReadbackFailureCounters();
+    state.wlvcSourceReadbackLastSuccessAtMs = nowMs;
+    state.wlvcSourceReadbackLastDrawMs = normalizedNumber(details?.drawImageMs ?? details?.draw_image_ms);
+    state.wlvcSourceReadbackLastReadbackMs = normalizedNumber(details?.readbackMs ?? details?.readback_ms);
+
+    if (!sourceReadbackTimingIsStable(details)) {
+      resetWlvcSourceReadbackRecoveryWindow();
+      return false;
+    }
+    if (state.wlvcSourceReadbackStableStartedAtMs <= 0) {
+      state.wlvcSourceReadbackStableStartedAtMs = nowMs;
+      state.wlvcSourceReadbackStableSampleCount = 0;
+    }
+    state.wlvcSourceReadbackStableSampleCount = Number(state.wlvcSourceReadbackStableSampleCount || 0) + 1;
+
+    const stableForMs = Math.max(0, nowMs - Number(state.wlvcSourceReadbackStableStartedAtMs || 0));
+    if (stableForMs < SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS) return false;
+    const lastQualityChangeAtMs = Math.max(
+      Number(state.sfuAutoQualityDowngradeLastAtMs || 0),
+      Number(state.sfuAutoQualityRecoveryLastAtMs || 0),
+    );
+    if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) return false;
+
+    const probed = qualityRecoveryProbe('sfu_source_readback_recovered', {
+      stable_window_ms: SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
+      stable_for_ms: stableForMs,
+      stable_sample_count: Number(state.wlvcSourceReadbackStableSampleCount || 0),
+      draw_image_ms: state.wlvcSourceReadbackLastDrawMs,
+      readback_ms: state.wlvcSourceReadbackLastReadbackMs,
+      draw_budget_ms: Math.max(0, Number(details?.drawBudgetMs ?? details?.draw_budget_ms ?? 0)),
+      readback_budget_ms: Math.max(0, Number(details?.readbackBudgetMs ?? details?.readback_budget_ms ?? 0)),
+      readback_budget_ratio: SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO,
+      readback_method: String(details?.readbackMethod || details?.readback_method || ''),
+      source_backend: String(details?.sourceBackend || details?.source_backend || ''),
+      readback_bytes: Math.max(0, Number(details?.readbackBytes || details?.readback_bytes || 0)),
+      frame_width: Math.max(0, Number(details?.frameWidth || details?.frame_width || 0)),
+      frame_height: Math.max(0, Number(details?.frameHeight || details?.frame_height || 0)),
+      track_id: String(details?.trackId || details?.track_id || ''),
+      outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+      media_runtime_path: getMediaRuntimePath(),
+    });
+    if (!probed) return false;
+    state.sfuAutoQualityRecoveryLastAtMs = nowMs;
+    resetWlvcSourceReadbackRecoveryWindow();
+    return true;
   }
 
   function wlvcBackpressurePauseMs(bufferedAmount) {
@@ -216,6 +323,7 @@ export function createPublisherBackpressureController({
 
   function handleWlvcEncodeBackpressure(bufferedAmount, trackId) {
     const nowMs = Date.now();
+    resetWlvcSourceReadbackRecoveryWindow();
     if (state.wlvcBackpressureFirstAtMs <= 0) {
       state.wlvcBackpressureFirstAtMs = nowMs;
     }
@@ -228,13 +336,6 @@ export function createPublisherBackpressureController({
 
     if ((nowMs - state.wlvcBackpressureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
       state.wlvcBackpressureLastLogAtMs = nowMs;
-      console.warn(
-        '[KingRT] SFU video backpressure - skipping outgoing WLVC frame',
-        `buffered=${bufferedAmount}`,
-        `skipped=${state.wlvcBackpressureSkipCount}`,
-        `track=${String(trackId || '')}`,
-        `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
-      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -284,6 +385,110 @@ export function createPublisherBackpressureController({
     }
   }
 
+  function isSourceReadbackBudgetFailure(reason, details) {
+    const normalizedReason = String(details?.reason || reason || '').trim().toLowerCase();
+    if (normalizedReason === 'sfu_source_readback_budget_exceeded') return true;
+    return String(details?.transportPath || details?.transport_path || '').trim().toLowerCase() === 'publisher_source_readback';
+  }
+
+  function handleSourceReadbackBudgetFailure(normalizedBuffered, trackId, normalizedReason, details, nowMs, retryAfterMs, sendFailurePauseMs) {
+    resetWlvcSourceReadbackRecoveryWindow();
+    if (
+      state.wlvcSourceReadbackFailureFirstAtMs <= 0
+      || (nowMs - state.wlvcSourceReadbackFailureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
+    ) {
+      state.wlvcSourceReadbackFailureFirstAtMs = nowMs;
+      state.wlvcSourceReadbackFailureCount = 1;
+    } else {
+      state.wlvcSourceReadbackFailureCount += 1;
+    }
+
+    resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
+    state.wlvcDroppedSourceFrameCount = Math.max(0, Number(state.wlvcDroppedSourceFrameCount || 0)) + 1;
+    state.wlvcBackpressurePauseUntilMs = Math.max(
+      state.wlvcBackpressurePauseUntilMs,
+      nowMs + sendFailurePauseMs
+    );
+
+    const sustainedBackpressureMs = state.wlvcSourceReadbackFailureFirstAtMs > 0
+      ? Math.max(0, nowMs - state.wlvcSourceReadbackFailureFirstAtMs)
+      : 0;
+    const decision = decide({
+      kind: 'source_readback_failure',
+      reason: normalizedReason,
+      bufferedAmount: normalizedBuffered,
+      sourceReadbackFailureCount: state.wlvcSourceReadbackFailureCount,
+      sustainedBackpressureMs,
+      queueAgeMs: details?.queueAgeMs,
+      payloadBytes: details?.payloadBytes,
+    });
+    const failureStage = String(details?.stage || 'unknown_stage');
+    const failureSource = String(details?.source || 'unknown_source');
+    const publisherFrameTraceId = String(details?.publisherFrameTraceId || details?.publisher_frame_trace_id || '');
+
+    if ((nowMs - state.wlvcSourceReadbackFailureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
+      state.wlvcSourceReadbackFailureLastLogAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_source_readback_budget_pressure',
+        code: 'sfu_source_readback_budget_pressure',
+        message: 'Publisher source readback exceeded the active profile budget before WLVC encode.',
+        payload: {
+          reason: normalizedReason,
+          stage: failureStage,
+          source: failureSource,
+          transport_path: 'publisher_source_readback',
+          source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          ...publisherDroppedSourceFrameDiagnosticSurface({
+            details,
+            droppedSourceFrameCount: state.wlvcDroppedSourceFrameCount,
+            selectedProfile: callMediaPrefs.outgoingVideoQualityProfile,
+          }),
+          source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
+          requested_action: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)
+            ? PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT
+            : PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE,
+          buffered_amount: normalizedBuffered,
+          retry_after_ms: retryAfterMs,
+          send_failure_pause_ms: sendFailurePauseMs,
+          publisher_frame_trace_id: publisherFrameTraceId,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+      });
+    }
+
+    if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_source_readback_profile_downshift',
+        code: 'sfu_source_readback_profile_downshift',
+        message: 'Outgoing SFU video quality is being lowered after consecutive source-readback budget failures.',
+        payload: {
+          reason: normalizedReason,
+          source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          ...publisherDroppedSourceFrameDiagnosticSurface({
+            details,
+            droppedSourceFrameCount: state.wlvcDroppedSourceFrameCount,
+            selectedProfile: callMediaPrefs.outgoingVideoQualityProfile,
+          }),
+          source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: true,
+      });
+      if (downgradeSfuVideoQualityAfterEncodePressure(normalizedReason)) {
+        resetWlvcSourceReadbackFailureCounters();
+      }
+    }
+  }
+
   function handleWlvcFrameSendFailure(bufferedAmount, trackId, reason = 'sfu_frame_send_failed', failureDetails = null) {
     const details = failureDetails && typeof failureDetails === 'object' ? failureDetails : null;
     const normalizedBuffered = Math.max(
@@ -307,6 +512,12 @@ export function createPublisherBackpressureController({
         Math.max(sfuWlvcBackpressureMinPauseMs, retryAfterMs),
       )
       : sfuWlvcBackpressureMinPauseMs;
+    if (isSourceReadbackBudgetFailure(normalizedReason, details)) {
+      handleSourceReadbackBudgetFailure(normalizedBuffered, trackId, normalizedReason, details || {}, nowMs, retryAfterMs, sendFailurePauseMs);
+      return;
+    }
+    resetWlvcSourceReadbackFailureCounters();
+    resetWlvcSourceReadbackRecoveryWindow();
     if (
       state.wlvcFrameSendFailureFirstAtMs <= 0
       || (nowMs - state.wlvcFrameSendFailureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
@@ -356,15 +567,23 @@ export function createPublisherBackpressureController({
     const failureSource = String(details?.source || 'unknown_source');
     const failureTransportPath = String(details?.transportPath || 'unknown_transport');
     const failureMessage = String(details?.message || 'Outgoing SFU video frame send failed.');
-    console.warn(
-      '[KingRT] SFU frame send failed at exact transport stage',
-      `reason=${normalizedReason}`,
-      `stage=${failureStage}`,
-      `source=${failureSource}`,
-      `transport=${failureTransportPath}`,
-      `buffered=${normalizedBuffered}`,
-      `track=${String(trackId || '')}`,
-      `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
+    const publisherFrameTraceId = String(details?.publisherFrameTraceId || details?.publisher_frame_trace_id || '');
+    const publisherPathTraceStages = String(details?.publisherPathTraceStages || details?.publisher_path_trace_stages || '');
+    const sourceDeliveryMs = Math.max(
+      0,
+      Number(details?.sourceDeliveryMs || details?.trace_get_user_media_frame_delivery_ms || 0),
+    );
+    const drawImageMs = Math.max(
+      0,
+      Number(details?.drawImageMs || details?.draw_image_ms || details?.trace_dom_canvas_draw_image_ms || 0),
+    );
+    const readbackMs = Math.max(
+      0,
+      Number(details?.readbackMs || details?.readback_ms || details?.trace_dom_canvas_get_image_data_ms || 0),
+    );
+    const encodeMs = Math.max(
+      0,
+      Number(details?.encodeMs || details?.encode_ms || details?.trace_wlvc_encode_ms || 0),
     );
     captureClientDiagnostic({
       category: 'media',
@@ -391,6 +610,12 @@ export function createPublisherBackpressureController({
         payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
         payload_bytes: Math.max(0, Number(details?.payloadBytes || 0)),
         wire_payload_bytes: Math.max(0, Number(details?.wirePayloadBytes || 0)),
+        publisher_frame_trace_id: publisherFrameTraceId,
+        publisher_path_trace_stages: publisherPathTraceStages,
+        source_delivery_ms: sourceDeliveryMs,
+        draw_image_ms: drawImageMs,
+        readback_ms: readbackMs,
+        encode_ms: encodeMs,
         retry_after_ms: retryAfterMs,
         send_failure_pause_ms: sendFailurePauseMs,
         binary_continuation_state: String(details?.binaryContinuationState || 'unknown_binary_continuation_state'),
@@ -401,6 +626,7 @@ export function createPublisherBackpressureController({
 
   function handleWlvcFramePayloadPressure(payloadBytes, trackId, frameType = 'delta', details = {}) {
     const nowMs = Date.now();
+    resetWlvcSourceReadbackRecoveryWindow();
     const normalizedPayloadBytes = Math.max(0, Number(payloadBytes || 0));
     const normalizedFrameType = String(frameType || 'delta').trim().toLowerCase() === 'keyframe'
       ? 'keyframe'
@@ -424,14 +650,6 @@ export function createPublisherBackpressureController({
 
     if ((nowMs - state.wlvcPayloadPressureLastLogAtMs) >= sfuBackpressureLogCooldownMs) {
       state.wlvcPayloadPressureLastLogAtMs = nowMs;
-      console.warn(
-        '[KingRT] SFU video payload pressure - dropping oversized WLVC frame',
-        `payload=${normalizedPayloadBytes}`,
-        `frame=${normalizedFrameType}`,
-        `count=${state.wlvcPayloadPressureCount}`,
-        `track=${String(trackId || '')}`,
-        `profile=${String(callMediaPrefs.outgoingVideoQualityProfile || '')}`,
-      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -541,11 +759,6 @@ export function createPublisherBackpressureController({
     }
     state.sfuVideoRecoveryLastAtMs = nowMs;
 
-    console.warn(
-      '[KingRT] restarting SFU socket after video stall',
-      `reason=${String(reason || 'video_stall')}`,
-      `runtime=${getMediaRuntimePath()}`,
-    );
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -572,6 +785,7 @@ export function createPublisherBackpressureController({
     handleWlvcFramePayloadPressure,
     handleWlvcFrameSendFailure,
     handleWlvcRuntimeEncodeError,
+    noteWlvcSourceReadbackSuccess,
     requestWlvcFullFrameKeyframe,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,

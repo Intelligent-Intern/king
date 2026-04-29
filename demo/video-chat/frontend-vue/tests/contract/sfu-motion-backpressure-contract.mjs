@@ -81,7 +81,7 @@ async function main() {
   requireContains(sfuPublisherControl, 'sfu_high_motion_payload_pressure', 'publisher controller high-motion pressure reason');
   requireContains(sfuPublisherControl, 'sfu_send_backpressure_critical', 'publisher controller uses critical send backpressure as an immediate quality-pressure reason');
   requireContains(sfuPublisherControl, 'adaptive_quality_downgrade_enabled: true', 'publisher controller diagnostics expose adaptive quality downgrade');
-  requireContains(sfuPublisherControl, '[KingRT] SFU video payload pressure - dropping oversized WLVC frame', 'publisher controller payload pressure log');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_video_payload_pressure'", 'publisher controller payload pressure backend diagnostic');
   assert.equal(
     sfuPublisherControl.includes('hd_baseline_no_auto_downgrade'),
     false,

@@ -37,23 +37,6 @@
                   </option>
                 </AppSelect>
               </div>
-              <div class="call-left-settings-field">
-                <label for="call-left-video-quality">Quality</label>
-                <AppSelect
-                  id="call-left-video-quality"
-                  aria-label="Outgoing video quality"
-                  :model-value="callMediaPrefs.outgoingVideoQualityProfile"
-                  @update:model-value="setCallOutgoingVideoQualityProfile"
-                >
-                  <option
-                    v-for="option in callVideoQualityOptions"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </AppSelect>
-              </div>
             </section>
 
             <section class="call-left-settings-block" aria-label="Mic">
@@ -926,17 +909,15 @@ import {
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
-  setCallOutgoingVideoQualityProfile,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
-import { SFU_VIDEO_QUALITY_PROFILE_OPTIONS } from '../domain/realtime/workspace/config';
+import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/media/audioCaptureConstraints';
 
 const router = useRouter();
 const route = useRoute();
 const applyBackgroundPreset = applyCallBackgroundPreset;
 const isBackgroundPresetActive = isCallBackgroundPresetActive;
-const callVideoQualityOptions = SFU_VIDEO_QUALITY_PROFILE_OPTIONS;
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);
@@ -2045,9 +2026,7 @@ async function startMicLevelMonitor() {
   if (!AudioContextCtor) return;
 
   const selectedMicId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  const audioConstraints = selectedMicId !== ''
-    ? { deviceId: { exact: selectedMicId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  const audioConstraints = buildOptionalCallAudioCaptureConstraints(true, selectedMicId);
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });

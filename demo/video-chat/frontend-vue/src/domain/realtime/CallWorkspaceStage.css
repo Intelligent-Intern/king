@@ -217,7 +217,7 @@
   max-width: none !important;
   max-height: none !important;
   display: block !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 .video-container.local {
@@ -586,7 +586,7 @@
   width: 100% !important;
   height: 100% !important;
   display: block !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 .workspace-mini-video-slot :deep(video.remote-video),

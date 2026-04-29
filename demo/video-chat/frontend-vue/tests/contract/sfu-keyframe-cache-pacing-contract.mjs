@@ -28,6 +28,8 @@ function readFromRepo(relativePath) {
 async function main() {
   const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
   const publisherPipeline = readFromFrontend('src/domain/realtime/local/publisherPipeline.js');
+  const publisherFrameTrace = readFromFrontend('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
   const sfuTransport = readFromFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   const publisherBackpressureController = readFromFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
@@ -40,7 +42,7 @@ async function main() {
   requireContains(publisherPipeline, '&& !forcedKeyframeRecoveryPending', 'publisher disables selective patches while a full-frame recovery keyframe is pending');
   requireContains(publisherPipeline, '&& !remoteKeyframeRequestPending', 'publisher disables selective patches while a remote receiver waits for a full-frame keyframe');
   requireContains(publisherPipeline, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'publisher clears remote keyframe request after full-frame keyframe send');
-  requireContains(publisherPipeline, 'budget_min_keyframe_retry_ms', 'publisher emits keyframe retry budget telemetry');
+  requireContains(publisherTelemetry, 'budget_min_keyframe_retry_ms', 'publisher emits keyframe retry budget telemetry');
   requireContains(publisherPipeline, 'keyframe_retry_after_ms', 'publisher reports retry delay after payload pressure');
   requireContains(sfuPublisherControl, 'requestWlvcFullFrameKeyframe', 'publisher controller exposes remote full-frame keyframe recovery');
   requireContains(sfuPublisherControl, 'wlvcRemoteKeyframeRequestUntilMs', 'publisher controller stores remote keyframe request window');

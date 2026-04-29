@@ -626,16 +626,6 @@ export function createSfuFrameDecodeHelpers({
         });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
-        if (errorCode !== 'replay_detected') {
-          console.warn(
-            '[KingRT] 🔐 SFU protected frame decrypt failed',
-            `publisher=${publisherId}`,
-            `user=${publisherUserId}`,
-            `error=${errorCode}`,
-            `epoch=${frame.protected?.epoch ?? 'n/a'}`,
-            `runtime=${mediaRuntimePathRef.value}`,
-          );
-        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
@@ -664,18 +654,9 @@ export function createSfuFrameDecodeHelpers({
           codecId: frame.codecId,
           trackId: frame.trackId,
           timestamp: frame.timestamp,
-        });
+      });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
-        if (errorCode !== 'replay_detected') {
-          console.warn(
-            '[KingRT] 🔐 SFU frame decrypt failed (object header)',
-            `publisher=${publisherId}`,
-            `user=${publisherUserId}`,
-            `error=${errorCode}`,
-            `runtime=${mediaRuntimePathRef.value}`,
-          );
-        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,

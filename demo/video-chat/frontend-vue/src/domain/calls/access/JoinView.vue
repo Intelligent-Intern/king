@@ -151,6 +151,7 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../../realtime/media/preferences';
+import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 
 const route = useRoute();
 const router = useRouter();
@@ -567,7 +568,7 @@ function buildPreviewConstraints() {
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
   return {
     video: cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } },
-    audio: microphoneDeviceId === '' ? true : { deviceId: { exact: microphoneDeviceId } },
+    audio: buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId),
   };
 }
 

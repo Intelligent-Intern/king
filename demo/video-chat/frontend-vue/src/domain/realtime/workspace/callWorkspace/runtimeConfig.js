@@ -38,6 +38,9 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS = 2500;
 export const SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS = 1000;
 export const SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD = 2;
 export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 2;
+export const SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS = 15_000;
+export const SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS = 30_000;
+export const SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO = 0.6;
 export const SFU_VIDEO_RECOVERY_RECONNECT_COOLDOWN_MS = 5000;
 export const SFU_BACKPRESSURE_LOG_COOLDOWN_MS = 3000;
 export const SFU_WLVC_MAX_DELTA_FRAME_BYTES = 1280 * 1024;
@@ -46,6 +49,11 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
   quality: 'balanced',
   balanced: 'realtime',
   realtime: 'rescue',
+});
+export const SFU_AUTO_QUALITY_RECOVERY_NEXT = Object.freeze({
+  rescue: 'realtime',
+  realtime: 'balanced',
+  balanced: 'quality',
 });
 export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;

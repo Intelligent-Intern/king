@@ -21,6 +21,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const codecPath = path.resolve(__dirname, '../../src/lib/wavelet/codec.ts');
 const source = fs.readFileSync(codecPath, 'utf8');
+const processorPipelinePath = path.resolve(__dirname, '../../src/lib/wavelet/processor-pipeline.ts');
+const processorPipelineSource = fs.readFileSync(processorPipelinePath, 'utf8');
 
 try {
   assert.ok(
@@ -72,6 +74,15 @@ try {
   assert.ok(
     /payload\.byteLength < HEADER_BYTES_V1/.test(decodeBody) || /byteLength < HEADER_BYTES_V1/.test(decodeBody),
     'decodeFrame must guard minimum frame length'
+  );
+
+  assert.ok(
+    processorPipelineSource.includes('finally {\n          frame.close()\n        }'),
+    'processor pipeline must close locally-created encoder VideoFrames in a finally block'
+  );
+  assert.ok(
+    processorPipelineSource.includes('finally {\n              decoded.close()\n            }'),
+    'processor pipeline must close decoded VideoFrames in a finally block'
   );
 
   process.stdout.write('[wavelet-codec-header-contract] PASS\n');
