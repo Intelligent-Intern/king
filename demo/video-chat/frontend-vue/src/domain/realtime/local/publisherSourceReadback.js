@@ -16,7 +16,10 @@ import {
   createPublisherVideoFrameSourceReader,
   PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND,
 } from './publisherVideoFrameSource.js';
-import { copyVideoFrameToRgbaImageData } from './publisherVideoFrameCopy.js';
+import {
+  copyVideoFrameToRgbaImageData,
+  resolveVideoFrameCopyFrameSize,
+} from './publisherVideoFrameCopy.js';
 import {
   highResolutionNowMs,
   markPublisherFrameTraceStage,
@@ -30,6 +33,11 @@ import {
 } from './videoFrameSizing.js';
 
 const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
+const ZERO_COPY_CAPTURE_GATE_STAGE = 'video_frame_zero_copy_gate';
+const ZERO_COPY_CAPTURE_GATE_SOURCE = 'video_frame_main_thread_canvas_blocked';
+const VIDEO_FRAME_READER_RETRY_COOLDOWN_MS = 250;
+const VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS = 1500;
+const VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT = 3;
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);
@@ -79,6 +87,18 @@ function sourceReadbackBudgetFailureDetails(trace, {
   });
 }
 
+function zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities = {}) {
+  return Boolean(
+    sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
+      && captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.VIDEO_FRAME_COPY,
+  );
+}
+
+function sameFrameDimensions(a = {}, b = {}) {
+  return positiveNumber(a.frameWidth) === positiveNumber(b.frameWidth)
+    && positiveNumber(a.frameHeight) === positiveNumber(b.frameHeight);
+}
+
 function updateTraceSource(trace, sourceBackend, frameSize, videoTrack) {
   if (!trace || typeof trace !== 'object') return;
   trace.sourceBackend = sourceBackend;
@@ -97,7 +117,12 @@ function createDomCanvas(documentRef, frameSize) {
   canvas.width = frameSize.frameWidth;
   canvas.height = frameSize.frameHeight;
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context || typeof context.drawImage !== 'function' || typeof context.getImageData !== 'function') {
+  if (
+    !context
+      || typeof context.drawImage !== 'function'
+      || typeof context.getImageData !== 'function'
+      || typeof context.putImageData !== 'function'
+  ) {
     throw new Error('publisher_source_readback_context_missing');
   }
   return { canvas, context };
@@ -121,13 +146,34 @@ export function createPublisherSourceReadbackController({
     : resolvePublisherFrameSize(video, videoProfile, videoTrack);
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
   let videoFrameReader = null;
-  let videoFrameSourceDisabled = false;
+  let videoFrameReaderRetryAfterMs = 0;
+  let videoFrameReaderTransientFailures = 0;
   let videoFrameCopyToDisabled = false;
   let captureWorkerReadback = null;
   let captureWorkerDisabled = false;
   let lastDomCanvasReadbackAtMs = 0;
+  let copyScaleSourceCanvas = null;
+  let copyScaleSourceContext = null;
+  let copyScaleTargetCanvas = null;
+  let copyScaleTargetContext = null;
 
-  if (canUsePublisherVideoFrameSource(captureCapabilities)) {
+  function closeVideoFrameReader(reason = 'publisher_video_frame_reader_replaced') {
+    const reader = videoFrameReader;
+    videoFrameReader = null;
+    if (reader && typeof reader.close === 'function') {
+      void reader.close(reason).catch(() => {});
+    }
+  }
+
+  function shouldTryVideoFrameReader(nowMs = Date.now()) {
+    return canUsePublisherVideoFrameSource(captureCapabilities)
+      && !(videoFrameCopyToDisabled && captureCapabilities.supportsVideoFrameCopyTo)
+      && nowMs >= videoFrameReaderRetryAfterMs;
+  }
+
+  function ensureVideoFrameReader(reason = 'publisher_video_frame_reader_required') {
+    if (videoFrameReader) return videoFrameReader;
+    if (!shouldTryVideoFrameReader()) return null;
     try {
       videoFrameReader = createPublisherVideoFrameSourceReader({
         videoTrack,
@@ -135,9 +181,38 @@ export function createPublisherSourceReadbackController({
         readTimeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(videoProfile) * 6),
       });
     } catch (error) {
-      videoFrameSourceDisabled = true;
-      mediaDebugLog('[SFU] VideoFrame source reader unavailable; using DOM video canvas fallback', error);
+      videoFrameReader = null;
+      videoFrameReaderTransientFailures += 1;
+      const cooldownMs = videoFrameReaderTransientFailures >= VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT
+        ? VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS
+        : VIDEO_FRAME_READER_RETRY_COOLDOWN_MS;
+      videoFrameReaderRetryAfterMs = Date.now() + cooldownMs;
+      mediaDebugLog(
+        '[SFU] VideoFrame source reader unavailable; retrying before DOM video canvas fallback',
+        reason,
+        error,
+        `failures=${videoFrameReaderTransientFailures}`,
+        `retry_after_ms=${cooldownMs}`,
+      );
     }
+    return videoFrameReader;
+  }
+
+  ensureVideoFrameReader('publisher_source_readback_init');
+
+  function markVideoFrameReaderFailure(result) {
+    closeVideoFrameReader(String(result?.reason || 'publisher_video_frame_source_failed'));
+    videoFrameReaderTransientFailures += 1;
+    const cooldownMs = videoFrameReaderTransientFailures >= VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT
+      ? VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS
+      : VIDEO_FRAME_READER_RETRY_COOLDOWN_MS;
+    videoFrameReaderRetryAfterMs = Date.now() + cooldownMs;
+    mediaDebugLog(
+      '[SFU] VideoFrame source reader failed; retrying processor path before DOM canvas fallback',
+      result?.reason,
+      `failures=${videoFrameReaderTransientFailures}`,
+      `retry_after_ms=${cooldownMs}`,
+    );
   }
 
   if (!captureWorkerDisabled) {
@@ -151,14 +226,84 @@ export function createPublisherSourceReadbackController({
     captureWorkerDisabled = !captureWorkerReadback;
   }
 
+  function ensureCopyScaleSurface(kind, frameSize) {
+    const width = positiveNumber(frameSize?.frameWidth);
+    const height = positiveNumber(frameSize?.frameHeight);
+    if (width <= 0 || height <= 0) {
+      throw new Error('publisher_video_frame_copy_scale_size_missing');
+    }
+    if (kind === 'source') {
+      if (!copyScaleSourceCanvas || !copyScaleSourceContext) {
+        const created = createDomCanvas(documentRef, frameSize);
+        copyScaleSourceCanvas = created.canvas;
+        copyScaleSourceContext = created.context;
+      }
+      if (copyScaleSourceCanvas.width !== width) copyScaleSourceCanvas.width = width;
+      if (copyScaleSourceCanvas.height !== height) copyScaleSourceCanvas.height = height;
+      return { canvas: copyScaleSourceCanvas, context: copyScaleSourceContext };
+    }
+    if (!copyScaleTargetCanvas || !copyScaleTargetContext) {
+      const created = createDomCanvas(documentRef, frameSize);
+      copyScaleTargetCanvas = created.canvas;
+      copyScaleTargetContext = created.context;
+    }
+    if (copyScaleTargetCanvas.width !== width) copyScaleTargetCanvas.width = width;
+    if (copyScaleTargetCanvas.height !== height) copyScaleTargetCanvas.height = height;
+    return { canvas: copyScaleTargetCanvas, context: copyScaleTargetContext };
+  }
+
+  function scaleCopiedVideoFrameImageData({ imageData, sourceFrameSize, targetFrameSize, trace }) {
+    if (sameFrameDimensions(sourceFrameSize, targetFrameSize)) {
+      return {
+        imageData,
+        drawImageMs: 0,
+        readbackMs: 0,
+        readbackBytes: imageData?.data?.byteLength || 0,
+      };
+    }
+
+    const sourceSurface = ensureCopyScaleSurface('source', sourceFrameSize);
+    const targetSurface = ensureCopyScaleSurface('target', targetFrameSize);
+    sourceSurface.context.putImageData(imageData, 0, 0);
+
+    const drawStartedAtMs = highResolutionNowMs();
+    targetSurface.context.drawImage(
+      sourceSurface.canvas,
+      0,
+      0,
+      targetSurface.canvas.width,
+      targetSurface.canvas.height,
+    );
+    const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
+    markPublisherFrameTraceStage(trace, 'video_frame_copy_scale_draw_image', drawImageMs);
+
+    const readbackStartedAtMs = highResolutionNowMs();
+    const scaledImageData = targetSurface.context.getImageData(
+      0,
+      0,
+      targetSurface.canvas.width,
+      targetSurface.canvas.height,
+    );
+    const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
+    markPublisherFrameTraceStage(trace, 'video_frame_copy_scale_get_image_data', readbackMs);
+    return {
+      imageData: scaledImageData,
+      drawImageMs,
+      readbackMs,
+      readbackBytes: scaledImageData.data.byteLength,
+    };
+  }
+
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
-    if (videoFrameReader && !videoFrameSourceDisabled) {
+    const reader = ensureVideoFrameReader('publisher_source_readback_tick');
+    if (reader) {
       const readStartedAtMs = highResolutionNowMs();
-      const result = await videoFrameReader.readFrame({
+      const result = await reader.readFrame({
         timeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(activeProfile) * 6),
       });
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       if (result.ok && result.frame) {
+        videoFrameReaderTransientFailures = 0;
         const frameSize = resolveVideoFrameSize(result.frame, activeProfile);
         updateTraceSource(trace, PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND, frameSize, activeTrack);
         return {
@@ -168,8 +313,7 @@ export function createPublisherSourceReadbackController({
           closeSource: () => closePublisherVideoFrame(result.frame),
         };
       }
-      videoFrameSourceDisabled = true;
-      mediaDebugLog('[SFU] VideoFrame source reader failed; using DOM video canvas fallback', result.reason);
+      markVideoFrameReaderFailure(result);
     }
 
     if (video?.readyState < 2 || !context) return null;
@@ -197,41 +341,55 @@ export function createPublisherSourceReadbackController({
       const drawBudgetMs = Math.max(1, Number(activeProfile.maxDrawImageMs || 0));
       const readbackBudgetMs = Math.max(1, Number(activeProfile.maxReadbackMs || 0));
       if (sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND && !videoFrameCopyToDisabled) {
+        const copyFrameSize = resolveVideoFrameCopyFrameSize(source, frameSize) || frameSize;
         const copyStartedAtMs = highResolutionNowMs();
         const copyResult = await copyVideoFrameToRgbaImageData({
           frame: source,
-          frameSize,
+          frameSize: copyFrameSize,
           ImageDataCtor: globalScope.ImageData,
         });
         const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
         if (copyResult.ok) {
           markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
-          if (copyToMs > readbackBudgetMs) {
+          const scaledCopyResult = scaleCopiedVideoFrameImageData({
+            imageData: copyResult.imageData,
+            sourceFrameSize: copyFrameSize,
+            targetFrameSize: frameSize,
+            trace,
+          });
+          const totalReadbackMs = roundedStageMs(copyToMs + scaledCopyResult.readbackMs);
+          if (scaledCopyResult.drawImageMs > drawBudgetMs || totalReadbackMs > readbackBudgetMs) {
             return {
               budgetExceeded: true,
               details: sourceReadbackBudgetFailureDetails(trace, {
                 stage: 'video_frame_copy_to_rgba',
-                source: 'video_frame_copy_to_budget_exceeded',
+                source: scaledCopyResult.drawImageMs > drawBudgetMs
+                  ? 'video_frame_copy_scale_draw_budget_exceeded'
+                  : 'video_frame_copy_to_budget_exceeded',
                 message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
                 timestamp,
               }),
             };
           }
           return {
-            imageData: copyResult.imageData,
+            imageData: scaledCopyResult.imageData,
             frameSize,
-            drawImageMs: 0,
-            readbackMs: copyToMs,
+            drawImageMs: scaledCopyResult.drawImageMs,
+            readbackMs: totalReadbackMs,
             drawBudgetMs,
             readbackBudgetMs,
             sourceBackend,
-            readbackMethod: 'video_frame_copy_to_rgba',
-            readbackBytes: copyResult.readbackBytes,
+            readbackMethod: sameFrameDimensions(copyFrameSize, frameSize)
+              ? 'video_frame_copy_to_rgba'
+              : 'video_frame_copy_to_rgba_scaled',
+            readbackBytes: scaledCopyResult.readbackBytes || copyResult.readbackBytes,
           };
         }
         if (copyResult.fatal) {
           videoFrameCopyToDisabled = true;
-          mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using canvas readback fallback', copyResult.reason, copyResult.error);
+          closeVideoFrameReader(String(copyResult.reason || 'publisher_video_frame_copy_to_rgba_failed'));
+          mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using video element fallback', copyResult.reason, copyResult.error);
+          return null;
         }
       }
 
@@ -239,6 +397,7 @@ export function createPublisherSourceReadbackController({
         sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
           && captureWorkerReadback
           && !captureWorkerDisabled
+          && !captureCapabilities.supportsVideoFrameCopyTo
       ) {
         const workerStartedAtMs = highResolutionNowMs();
         const workerResult = await captureWorkerReadback.readFrame({
@@ -292,6 +451,19 @@ export function createPublisherSourceReadbackController({
           mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);
           return null;
         }
+      }
+
+      if (zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities)) {
+        markPublisherFrameTraceStage(trace, ZERO_COPY_CAPTURE_GATE_STAGE, 0);
+        return {
+          budgetExceeded: true,
+          details: sourceReadbackBudgetFailureDetails(trace, {
+            stage: ZERO_COPY_CAPTURE_GATE_STAGE,
+            source: ZERO_COPY_CAPTURE_GATE_SOURCE,
+            message: 'Publisher zero-copy capture gate blocked main-thread canvas readback for a VideoFrame source.',
+            timestamp,
+          }),
+        };
       }
 
       const canvasFrameSize = sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
@@ -378,7 +550,7 @@ export function createPublisherSourceReadbackController({
     readFrame,
     close,
     get sourceBackend() {
-      return videoFrameReader && !videoFrameSourceDisabled
+      return videoFrameReader
         ? PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
         : DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND;
     },

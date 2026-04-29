@@ -2,9 +2,9 @@ import { resolveContainFrameSizeFromDimensions, resolvePublisherFrameSize } from
 
 export const DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND = 'dom_canvas_compatibility_fallback';
 export const DOM_CANVAS_COMPATIBILITY_READBACK_METHOD = 'dom_canvas_compatibility_readback';
-export const DOM_CANVAS_COMPATIBILITY_MAX_FRAME_WIDTH = 320;
-export const DOM_CANVAS_COMPATIBILITY_MAX_FRAME_HEIGHT = 180;
-export const DOM_CANVAS_COMPATIBILITY_MAX_FPS = 6;
+export const DOM_CANVAS_COMPATIBILITY_MAX_FRAME_WIDTH = 854;
+export const DOM_CANVAS_COMPATIBILITY_MAX_FRAME_HEIGHT = 480;
+export const DOM_CANVAS_COMPATIBILITY_MAX_FPS = 4;
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);

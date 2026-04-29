@@ -201,6 +201,7 @@ export function createCallWorkspaceMediaStack(options) {
       reconfigureLocalTracksFromSelectedDevices: callbacks.reconfigureLocalTracksFromSelectedDevices,
       renderCallVideoLayout: () => renderCallVideoLayout(),
       resetBackgroundRuntimeMetrics: callbacks.resetBackgroundRuntimeMetrics,
+      resolveWlvcEncodeIntervalMs: sfuTransport.resolveWlvcEncodeIntervalMs,
       resetWlvcBackpressureCounters: sfuTransport.resetWlvcBackpressureCounters,
       resetWlvcFrameSendFailureCounters: sfuTransport.resetWlvcFrameSendFailureCounters,
       shouldDelayWlvcFrameForBackpressure: sfuTransport.shouldDelayWlvcFrameForBackpressure,

@@ -79,6 +79,15 @@ export function createLocalMediaOrchestrationHelpers({
     const wantsAudio = controlState.micEnabled !== false;
     const videoProfile = currentSfuVideoProfile();
 
+    function profileVideoConstraints(extra = {}) {
+      return {
+        width: { ideal: videoProfile.captureWidth, max: videoProfile.captureWidth },
+        height: { ideal: videoProfile.captureHeight, max: videoProfile.captureHeight },
+        frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
+        ...extra,
+      };
+    }
+
     if (!wantsVideo && !wantsAudio) {
       return { video: false, audio: false };
     }
@@ -86,17 +95,10 @@ export function createLocalMediaOrchestrationHelpers({
     const video = !wantsVideo
       ? false
       : cameraDeviceId !== ''
-        ? {
-            width: { ideal: videoProfile.captureWidth },
-            height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
+        ? profileVideoConstraints({
             deviceId: { exact: cameraDeviceId },
-          }
-        : {
-            width: { ideal: videoProfile.captureWidth },
-            height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
-          };
+          })
+        : profileVideoConstraints();
     const audio = buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId);
 
     return { video, audio };
@@ -109,8 +111,8 @@ export function createLocalMediaOrchestrationHelpers({
     return {
       video: wantsVideo
         ? {
-            width: { ideal: videoProfile.captureWidth },
-            height: { ideal: videoProfile.captureHeight },
+            width: { ideal: videoProfile.captureWidth, max: videoProfile.captureWidth },
+            height: { ideal: videoProfile.captureHeight, max: videoProfile.captureHeight },
             frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           }
         : false,

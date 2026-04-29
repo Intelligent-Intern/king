@@ -138,7 +138,7 @@ try {
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'rescue: Object.freeze({', 'WLVC backpressure has a low-bitrate rescue profile');
   assert.ok(!workspaceConfig.includes('export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS'), 'WLVC quality profiles must not be exported as user-facing select options');
-  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';", 'balanced profile starts production calls below the HD stress profile');
+  requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'quality';", 'production calls start on the HD profile before automatic pressure downshift');
   requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
   requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 27;', 'HD baseline captures 27fps camera video after the 10% quality tradeoff');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p width');
@@ -168,8 +168,8 @@ try {
   requireContains(runtimeHealth, "return sfuRuntimeEnabled && mediaRuntimePath.value === 'pending';", 'native signaling block protects SFU startup');
   requireContains(runtimeHealth, "'[KingRT] 📵 No video signal from SFU publisher'", 'remote stall diagnostic remains wired');
   requireContains(runtimeHealth, "'[KingRT] SFU remote video frozen'", 'remote freeze diagnostic remains wired');
-  requireContains(videoConnectionStatus, "'[KingRT] SFU video stable'", 'remote video stable connection status remains wired');
-  requireContains(videoConnectionStatus, '`local_user=${normalizeUserId(currentUserId)}`', 'remote video status includes local participant identity');
+  requireContains(videoConnectionStatus, "eventType: 'sfu_remote_video_stable'", 'remote video stable status is routed to backend diagnostics');
+  requireContains(videoConnectionStatus, 'local_user_id: normalizeUserId(currentUserId)', 'remote video status includes local participant identity');
 
   const nativeSignaling = readFromFrontend('src/domain/realtime/native/signaling.js');
   requireContains(nativeSignaling, "if (sfuRuntimeEnabled() && String(mediaRuntimePath.value || '').trim() !== 'webrtc_native') {", 'native signaling will not hijack WLVC runtime');

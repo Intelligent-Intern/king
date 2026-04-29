@@ -203,11 +203,7 @@ function videochat_handle_sfu_routes(
         );
     };
     if ($disconnectStaleAssetClient()) {
-        return [
-            'status' => 101,
-            'headers' => [],
-            'body' => '',
-        ];
+        return ['status' => 101, 'headers' => [], 'body' => ''];
     }
 
     $userIdString = (string) ($websocketAuth['user']['id'] ?? '');
@@ -239,11 +235,9 @@ function videochat_handle_sfu_routes(
         'role' => $role,
         'tracks' => [],
     ];
-
     if ($role === 'publisher') {
         $sfuRooms[$roomId]['publishers'][$clientId] = &$sfuClients[$clientId];
     }
-    // A video-call peer both publishes local media and subscribes to remote media.
     $sfuRooms[$roomId]['subscribers'][$clientId] = &$sfuClients[$clientId];
 
     $sfuDatabase = null;
@@ -498,7 +492,8 @@ function videochat_handle_sfu_routes(
                     $roomId,
                     (string) $clientId,
                     array_keys($sfuRooms[$roomId]['publishers'] ?? []),
-                    $sqliteFrameBufferCursor
+                    $sqliteFrameBufferCursor,
+                    $slowSubscriberVideoBlockedUntilMsByClient
                 );
                 if (videochat_sfu_now_ms() >= $nextBrokerCleanupMs) {
                     videochat_sfu_cleanup_stale_presence($activeSfuDatabase);
@@ -525,7 +520,8 @@ function videochat_handle_sfu_routes(
                     (string) $clientId,
                     array_keys($sfuRooms[$roomId]['publishers'] ?? []),
                     $liveFrameRelayCursor,
-                    $liveFrameRelaySeenFiles
+                    $liveFrameRelaySeenFiles,
+                    $slowSubscriberVideoBlockedUntilMsByClient
                 );
                 if (videochat_sfu_now_ms() >= $nextLiveFrameRelayCleanupMs) {
                     videochat_sfu_live_frame_relay_cleanup_room($roomId);
@@ -799,9 +795,5 @@ function videochat_handle_sfu_routes(
         unset($sfuRooms[$roomId]['subscribers'][$clientId]);
     }
 
-    return [
-        'status' => 101,
-        'headers' => [],
-        'body' => '',
-    ];
+    return ['status' => 101, 'headers' => [], 'body' => ''];
 }

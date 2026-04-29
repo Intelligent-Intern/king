@@ -30,7 +30,7 @@
 //   [28]     wavelet_type (0=haar, 1=db4, 2=cdf97)
 //   [29]     color_space (0=yuv, 1=rgb)
 //   [30]     entropy_coding (0=rle, 1=arithmetic, 2=none)
-//   [31]     flags: bit0=motion_estimation, bit1=blur_background
+//   [31]     flags: bit0=motion_estimation, bit1=blur_background, bit2=chroma_temporal_residual
 //   [32]     blur_radius (0=off; reserved for higher-level pipeline use)
 //   [33+]    Y_data | U_data | V_data
 //
@@ -41,6 +41,7 @@ const HEADER_BYTES_V1 = 28
 const HEADER_BYTES_V2 = 33
 const CURRENT_HEADER_BYTES = HEADER_BYTES_V2
 const CURRENT_CODEC_VERSION = 2
+const FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL = 1 << 2
 
 // ─── Haar 1D lifting — in-place ─────────────────────────────────────────────
 
@@ -275,6 +276,8 @@ export class WaveletVideoEncoder {
   private config: Required<WaveletCodecConfig>
   private frameCount = 0
   private previousY: Float32Array | null = null
+  private previousU: Float32Array | null = null
+  private previousV: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
     this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
@@ -344,24 +347,40 @@ export class WaveletVideoEncoder {
       }
     }
 
-    // ── Temporal residual on Y (delta frames only) ────────────────────────
+    // ── Temporal residuals (delta frames only) ────────────────────────────
     let yEnc: Float32Array
+    let uEnc: Float32Array
+    let vEnc: Float32Array
+    const useChromaTemporalResidual = !isKey
+      && this.previousU instanceof Float32Array
+      && this.previousV instanceof Float32Array
+      && this.previousU.length === U.length
+      && this.previousV.length === V.length
     if (!isKey && this.previousY) {
       yEnc = new Float32Array(Y.length)
       for (let k = 0; k < Y.length; k++) yEnc[k] = Y[k] - this.previousY[k]
     } else {
       yEnc = Y
     }
+    if (useChromaTemporalResidual) {
+      uEnc = new Float32Array(U.length)
+      vEnc = new Float32Array(V.length)
+      for (let k = 0; k < U.length; k++) uEnc[k] = U[k] - this.previousU![k]
+      for (let k = 0; k < V.length; k++) vEnc[k] = V[k] - this.previousV![k]
+    } else {
+      uEnc = U
+      vEnc = V
+    }
 
     // ── Forward DWT ───────────────────────────────────────────────────────
     dwtFwd2D(yEnc, w, h, levels)
-    dwtFwd2D(U, uvW, uvH, levels)
-    dwtFwd2D(V, uvW, uvH, levels)
+    dwtFwd2D(uEnc, uvW, uvH, levels)
+    dwtFwd2D(vEnc, uvW, uvH, levels)
 
     // ── Quantise ──────────────────────────────────────────────────────────
     const yQ = quantize2D(yEnc, w, h, levels, quality)
-    const uQ = quantize2D(U, uvW, uvH, levels, quality)
-    const vQ = quantize2D(V, uvW, uvH, levels, quality)
+    const uQ = quantize2D(uEnc, uvW, uvH, levels, quality)
+    const vQ = quantize2D(vEnc, uvW, uvH, levels, quality)
 
     // ── Closed-loop reference update ──────────────────────────────────────
     // Reconstruct exactly what the decoder will produce, so encoder and
@@ -372,6 +391,16 @@ export class WaveletVideoEncoder {
       for (let k = 0; k < yRec.length; k++) yRec[k] += this.previousY[k]
     }
     this.previousY = yRec
+    const uRec = dequantize2D(uQ, uvW, uvH, levels, quality)
+    const vRec = dequantize2D(vQ, uvW, uvH, levels, quality)
+    dwtInv2D(uRec, uvW, uvH, levels)
+    dwtInv2D(vRec, uvW, uvH, levels)
+    if (useChromaTemporalResidual && this.previousU && this.previousV) {
+      for (let k = 0; k < uRec.length; k++) uRec[k] += this.previousU[k]
+      for (let k = 0; k < vRec.length; k++) vRec[k] += this.previousV[k]
+    }
+    this.previousU = uRec
+    this.previousV = vRec
 
     let yData: Uint8Array
     let uData: Uint8Array
@@ -417,7 +446,7 @@ export class WaveletVideoEncoder {
     view.setUint8 (28, waveletMap[waveletType] ?? 0)
     view.setUint8 (29, colorMap[colorSpace] ?? 0)
     view.setUint8 (30, entropyMap[entropyCoding] ?? 0)
-    view.setUint8 (31, 0)
+    view.setUint8 (31, useChromaTemporalResidual ? FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL : 0)
     view.setUint8 (32, 0)
 
     body.set(yData, CURRENT_HEADER_BYTES)
@@ -437,6 +466,8 @@ export class WaveletVideoEncoder {
   reset(): void {
     this.frameCount = 0
     this.previousY  = null
+    this.previousU  = null
+    this.previousV  = null
   }
 
   destroy(): void {
@@ -449,6 +480,8 @@ export class WaveletVideoEncoder {
 export class WaveletVideoDecoder {
   private config: Required<WaveletCodecConfig>
   private previousY: Float32Array | null = null
+  private previousU: Float32Array | null = null
+  private previousV: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
     this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
@@ -491,6 +524,7 @@ export class WaveletVideoDecoder {
     const uvH     = view.getUint16(26, false)
     const colorSpace = version >= 2 && view.getUint8(29) === 1 ? 'rgb' : 'yuv'
     const entropyCoding = version >= 2 ? view.getUint8(30) : 0
+    const flags = version >= 2 ? view.getUint8(31) : 0
 
     const HEADER_BYTES = headerBytes
     const payload = new Uint8Array(frameData.data)
@@ -537,7 +571,21 @@ export class WaveletVideoDecoder {
     if (!isKey && this.previousY) {
       for (let k = 0; k < Y.length; k++) Y[k] += this.previousY[k]
     }
+    const hasChromaTemporalResidual = (flags & FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL) !== 0
+    if (
+      !isKey
+      && hasChromaTemporalResidual
+      && this.previousU instanceof Float32Array
+      && this.previousV instanceof Float32Array
+      && this.previousU.length === U.length
+      && this.previousV.length === V.length
+    ) {
+      for (let k = 0; k < U.length; k++) U[k] += this.previousU[k]
+      for (let k = 0; k < V.length; k++) V[k] += this.previousV[k]
+    }
     this.previousY = Y.slice()  // save reconstructed Y for next delta
+    this.previousU = U.slice()
+    this.previousV = V.slice()
 
     // ── YUV → RGBA ────────────────────────────────────────────────────────
     const rgba = new Uint8ClampedArray(w * h * 4)
@@ -573,6 +621,8 @@ export class WaveletVideoDecoder {
 
   reset(): void {
     this.previousY = null
+    this.previousU = null
+    this.previousV = null
   }
 
   destroy(): void {

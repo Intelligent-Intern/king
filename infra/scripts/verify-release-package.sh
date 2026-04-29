@@ -404,10 +404,11 @@ if (is_array($provenance)) {
         'ls_hpack_archive_sha256',
     ] as $provenanceKey) {
         $value = $provenance[$provenanceKey] ?? null;
-        if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
+        if (!is_string($value) || preg_match('/^[A-Fa-f0-9]{64}$/', $value) !== 1) {
             fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
             exit(1);
         }
+        $provenance[$provenanceKey] = strtolower($value);
     }
 
     $dependencyProvenance = $manifest['dependency_provenance'] ?? null;
@@ -435,15 +436,19 @@ if (is_array($provenance)) {
             }
         }
 
-        if (preg_match('/^[a-f0-9]{40}$/', (string) $component['commit']) !== 1) {
+        $componentCommit = (string) $component['commit'];
+        if (preg_match('/^[A-Fa-f0-9]{40}$/', $componentCommit) !== 1) {
             fwrite(STDERR, "Manifest dependency provenance commit is invalid for {$componentName}.\n");
             exit(1);
         }
+        $component['commit'] = strtolower($componentCommit);
 
-        if (preg_match('/^[a-f0-9]{64}$/', (string) $component['archive_sha256']) !== 1) {
+        $componentArchiveHash = (string) $component['archive_sha256'];
+        if (preg_match('/^[A-Fa-f0-9]{64}$/', $componentArchiveHash) !== 1) {
             fwrite(STDERR, "Manifest dependency provenance archive hash is invalid for {$componentName}.\n");
             exit(1);
         }
+        $component['archive_sha256'] = strtolower($componentArchiveHash);
 
         $provenanceKey = $dependencyProvenanceHashKeys[$componentName];
         if (($provenance[$provenanceKey] ?? null) !== $component['archive_sha256']) {

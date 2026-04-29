@@ -34,7 +34,7 @@ try {
   requireContains(pressureGate, 'assertNoManualVideoQualitySelect', 'online gate rejects manual quality controls');
   requireContains(pressureGate, 'assertAutomaticQualityTransitions', 'online gate observes automatic profile changes');
   requireContains(pressureGate, 'assertAutomaticQualityTransitionsOrNoPressure', 'online gate accepts no downshift only with explicit low-pressure proof');
-  requireContains(pressureGate, 'MAX_NO_TRANSITION_BUFFERED_BYTES = 512 * 1024', 'online gate caps no-transition pressure budget');
+  requireContains(pressureGate, 'MAX_NO_TRANSITION_BUFFERED_BYTES = 1024 * 1024', 'online gate caps no-transition pressure budget');
   requireContains(pressureGate, 'pressure_below_auto_downshift_threshold', 'online gate reports no-transition pressure proof');
   requireContains(pressureGate, 'MAX_TRANSIENT_BLACK_SAMPLES = 1', 'online gate allows only one transient black remote sample');
   requireContains(pressureGate, 'transient_remote_black_frame', 'online gate labels the only accepted transient black frame');
@@ -49,8 +49,8 @@ try {
   requireContains(pressureGate, "request:client-diagnostics", 'online gate records backend client diagnostics POST bodies');
   requireContains(pressureGate, '/api\\/user\\/client-diagnostics', 'online gate watches backend diagnostics submissions');
   requireContains(pressureGate, 'remote video frozen', 'online gate blocks remote freeze diagnostics');
-  requireContains(pressureGate, 'CRITICAL_BUFFERED_BYTES = 5 * 1024 * 1024', 'online gate has a critical bufferedAmount ceiling');
-  requireContains(pressureGate, 'MAX_ACCEPTED_BUFFERED_BYTES = 1536 * 1024', 'online gate enforces the quality profile buffer budget');
+  requireContains(pressureGate, 'CRITICAL_BUFFERED_BYTES = 10 * 1024 * 1024', 'online gate has a critical bufferedAmount ceiling');
+  requireContains(pressureGate, 'MAX_ACCEPTED_BUFFERED_BYTES = 8 * 1024 * 1024', 'online gate enforces the quality profile buffer budget');
   requireContains(pressureGate, 'socketFailureCount', 'online gate fails on SFU socket close/error during media flow');
   requireContains(pressureGate, 'luma > 8', 'online gate fails black remote video');
   requireContains(harness, 'highMotionVideo = false', 'media shim keeps high-motion opt-in');

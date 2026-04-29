@@ -51,6 +51,7 @@ export function createLocalPublisherPipelineHelpers({
     reconfigureLocalTracksFromSelectedDevices,
     renderCallVideoLayout,
     resetBackgroundRuntimeMetrics,
+    resolveWlvcEncodeIntervalMs = (intervalMs) => intervalMs,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,
     shouldDelayWlvcFrameForBackpressure,
@@ -415,7 +416,15 @@ export function createLocalPublisherPipelineHelpers({
       return refs.videoPatchEncoderRef.value;
     };
 
-    const scheduleNextWlvcEncodeTick = (delayMs = resolveProfileReadbackIntervalMs(videoProfile)) => {
+    const resolveActiveEncodeIntervalMs = () => resolveWlvcEncodeIntervalMs(
+      resolveProfileReadbackIntervalMs(videoProfile),
+      {
+        profileId: pipelineProfileId,
+        trackId: videoTrack.id,
+      },
+    );
+
+    const scheduleNextWlvcEncodeTick = (delayMs = resolveActiveEncodeIntervalMs()) => {
       if (!refs.videoEncoderRef.value || !isWlvcRuntimePath()) {
         refs.encodeIntervalRef.value = null;
         return;
@@ -795,6 +804,13 @@ export function createLocalPublisherPipelineHelpers({
         noteWlvcSourceReadbackSuccess({
           timestamp, trackId: videoTrack.id, sourceBackend, readbackMethod,
           drawImageMs, readbackMs, drawBudgetMs, readbackBudgetMs,
+          encodedPayloadBytes,
+          maxEncodedPayloadBytes,
+          payloadSoftLimitBytes,
+          payloadSoftLimitRatio,
+          encodeMs,
+          frameType: encodedFrameType,
+          layoutMode: tilePatchMetadata?.layoutMode || 'full_frame',
           readbackBytes: Math.max(0, Number(sourceReadback.readbackBytes || 0)),
           frameWidth: Math.max(0, Number(frameSizeForMetrics?.frameWidth || 0)),
           frameHeight: Math.max(0, Number(frameSizeForMetrics?.frameHeight || 0)),
@@ -847,7 +863,7 @@ export function createLocalPublisherPipelineHelpers({
         if (refs.encodeIntervalRef.value !== null) {
           const finishedAtMs = highResolutionNowMs();
           const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
-          scheduleNextWlvcEncodeTick(resolveProfileReadbackIntervalMs(videoProfile) - elapsedMs);
+          scheduleNextWlvcEncodeTick(resolveActiveEncodeIntervalMs() - elapsedMs);
         }
       }
     };

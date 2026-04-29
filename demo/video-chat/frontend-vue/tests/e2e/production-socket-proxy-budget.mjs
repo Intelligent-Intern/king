@@ -8,9 +8,9 @@ const VIDEOCHAT_DIR = path.resolve(FRONTEND_DIR, '..');
 const LOCAL_ENV_FILE = path.join(VIDEOCHAT_DIR, '.env.local');
 
 const CONTINUATION_THRESHOLD_BYTES = 65_535;
-const QUALITY_MAX_PAYLOAD_BYTES = 1280 * 1024;
-const QUALITY_MAX_BUFFERED_BYTES = 1536 * 1024;
-const CRITICAL_BUFFERED_BYTES = 5 * 1024 * 1024;
+const QUALITY_MAX_PAYLOAD_BYTES = 5632 * 1024;
+const QUALITY_MAX_BUFFERED_BYTES = 8 * 1024 * 1024;
+const CRITICAL_BUFFERED_BYTES = 10 * 1024 * 1024;
 const DRAIN_LOW_WATER_BYTES = 64 * 1024;
 const DEFAULT_TIMEOUT_MS = Math.max(5_000, Number.parseInt(process.env.VIDEOCHAT_PRODUCTION_PROXY_BUDGET_TIMEOUT_MS || '20000', 10));
 const FRAME_SIZES = [
@@ -216,8 +216,8 @@ function encodeBinaryEnvelope({ publisherId, publisherUserId, trackId, frameSequ
     runtime_id: 'wlvc_sfu',
     outgoing_video_quality_profile: 'quality',
     budget_max_encoded_bytes_per_frame: QUALITY_MAX_PAYLOAD_BYTES,
-    budget_max_keyframe_bytes_per_frame: 1536 * 1024,
-    budget_max_wire_bytes_per_second: 2200 * 1024,
+    budget_max_keyframe_bytes_per_frame: 6656 * 1024,
+    budget_max_wire_bytes_per_second: 8400 * 1024,
     budget_max_buffered_bytes: QUALITY_MAX_BUFFERED_BYTES,
     binary_continuation_threshold_bytes: CONTINUATION_THRESHOLD_BYTES,
     layout_mode: 'full_frame',

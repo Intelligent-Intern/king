@@ -40,8 +40,6 @@ ENV KING_EXTENSION_PATH=/opt/king/king.so
 ENV VIDEOCHAT_KING_HOST=0.0.0.0
 ENV VIDEOCHAT_KING_PORT=18080
 ENV VIDEOCHAT_KING_WS_PORT=18080
-ENV VIDEOCHAT_KING_METRICS_PORT=18081
-ENV VIDEOCHAT_KING_ADMIN_PORT=18082
 ENV VIDEOCHAT_KING_WS_PATH=/ws
 ENV VIDEOCHAT_KING_DB_PATH=/data/video-chat.sqlite
 ENV VIDEOCHAT_KING_SFU_BROKER_DB_PATH=/data/video-chat-sfu-broker.sqlite
@@ -49,8 +47,8 @@ ENV VIDEOCHAT_KING_SFU_BROKER_DB_PATH=/data/video-chat-sfu-broker.sqlite
 RUN mkdir -p /data
 
 VOLUME ["/data"]
+# The image listens on 18080 only. docker-compose.v1.yml maps dedicated
+# HTTP/WS/SFU service instances to host ports 18080/18081/18082.
 EXPOSE 18080
-EXPOSE 18081
-EXPOSE 18082
 
 CMD ["./run-dev.sh"]

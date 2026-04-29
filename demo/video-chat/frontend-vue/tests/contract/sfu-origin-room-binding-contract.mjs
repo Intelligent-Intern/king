@@ -72,7 +72,7 @@ try {
   requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
   requireContains(sfuClient, 'this.outboundFrameQueue.enqueue(prepared)', 'bounded outbound frame queue');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3', 'bounded queue frame cap');
-  requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 2 * 1024 * 1024', 'bounded queue byte cap');
+  requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 12 * 1024 * 1024', 'bounded queue byte cap');
   requireContains(outboundFrameQueue, "this.dropQueuedDeltaFrames('replaced_by_newer_delta', prepared.trackId)", 'queued delta replacement');
   requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'keyframe queue reject diagnostic');
   requireContains(sfuClient, 'this.sendBinaryFrame(prepared, metrics)', 'outbound media sends binary envelopes before any compatibility path');

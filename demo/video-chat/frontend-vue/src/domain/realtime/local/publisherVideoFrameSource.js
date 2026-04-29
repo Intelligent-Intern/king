@@ -46,7 +46,7 @@ export function createPublisherVideoFrameSourceReader({
     throw new Error('publisher_video_frame_processor_unsupported');
   }
 
-  const processor = new MediaStreamTrackProcessorCtor({ track: videoTrack });
+  const processor = new MediaStreamTrackProcessorCtor({ track: videoTrack, maxBufferSize: 1 });
   const reader = processor?.readable && typeof processor.readable.getReader === 'function'
     ? processor.readable.getReader()
     : null;
@@ -55,10 +55,26 @@ export function createPublisherVideoFrameSourceReader({
   }
 
   let closed = false;
+  const activeReadPromises = new Set();
+
+  function trackReadPromise(readPromise) {
+    activeReadPromises.add(readPromise);
+    readPromise.finally(() => {
+      activeReadPromises.delete(readPromise);
+    }).catch(() => {});
+    return readPromise;
+  }
+
+  function closePendingReadResults() {
+    for (const readPromise of activeReadPromises) {
+      readPromise.then(closePublisherVideoFrameReadResult).catch(() => {});
+    }
+  }
 
   async function close(reason = 'publisher_video_frame_source_closed') {
     if (closed) return;
     closed = true;
+    closePendingReadResults();
     try {
       if (typeof reader.cancel === 'function') {
         await reader.cancel(reason);
@@ -80,7 +96,7 @@ export function createPublisherVideoFrameSourceReader({
       return { ok: false, reason: 'publisher_video_frame_source_closed', fatal: true };
     }
 
-    const readPromise = Promise.resolve().then(() => reader.read());
+    const readPromise = trackReadPromise(Promise.resolve().then(() => reader.read()));
     let timeoutId = null;
     const timeoutPromise = new Promise((resolve) => {
       timeoutId = setTimeout(() => resolve({ timeout: true }), positiveTimeoutMs(timeoutMs));
@@ -99,6 +115,11 @@ export function createPublisherVideoFrameSourceReader({
       readPromise.then(closePublisherVideoFrameReadResult).catch(() => {});
       await close('publisher_video_frame_read_timeout');
       return { ok: false, reason: 'publisher_video_frame_read_timeout', fatal: true };
+    }
+
+    if (closed) {
+      closePublisherVideoFrameReadResult(result);
+      return { ok: false, reason: 'publisher_video_frame_source_closed', fatal: true };
     }
 
     if (result?.done || !result?.value) {

@@ -63,6 +63,37 @@ function encodeHighMotionDelta(WaveletVideoEncoder, profile) {
   return encoder.encodeFrame(highMotionFrame, 2);
 }
 
+function decodeMovingChromaDelta(WaveletVideoEncoder, WaveletVideoDecoder, profile) {
+  const encoder = new WaveletVideoEncoder({
+    quality: profile.frameQuality,
+    levels: 3,
+    keyFrameInterval: profile.keyFrameInterval,
+  });
+  const decoder = new WaveletVideoDecoder({
+    quality: profile.frameQuality,
+    levels: 3,
+    keyFrameInterval: profile.keyFrameInterval,
+  });
+  const width = profile.frameWidth;
+  const height = profile.frameHeight;
+  const baseFrame = makeImage(width, height, (x, y) => [
+    60 + ((x + y) % 30),
+    80 + (x % 20),
+    130 + (y % 20),
+  ]);
+  const chromaShiftFrame = makeImage(width, height, (x, y) => [
+    60 + ((x + y) % 30),
+    160 + ((x * 3) % 70),
+    40 + ((y * 5) % 90),
+  ]);
+  const key = encoder.encodeFrame(baseFrame, 1);
+  const delta = encoder.encodeFrame(chromaShiftFrame, 2);
+  const deltaBytes = new Uint8Array(delta.data);
+  assert.equal(deltaBytes[31] & 0x04, 0x04, 'moving chroma deltas must set the chroma temporal residual flag');
+  decoder.decodeFrame(key);
+  return decoder.decodeFrame(delta);
+}
+
 async function main() {
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
@@ -73,12 +104,16 @@ async function main() {
 
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_DELTA_FRAME_BYTES', 'motion payload delta cap');
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES', 'motion payload keyframe cap');
+  requireContains(runtimeConfig, 'SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS', 'motion payload cadence throttle window');
+  requireContains(runtimeConfig, 'SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD', 'motion payload repeated-pressure downshift threshold');
   requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS = 1000;', 'one second send-pressure downgrade window');
   requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD = 2;', 'two skipped frames trigger quality downgrade');
   requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 2;', 'two send failures trigger quality downgrade');
   requireContains(publisherPipeline, 'handleWlvcFramePayloadPressure(encodedPayloadBytes', 'publisher drops oversized frames before send');
   requireContains(publisherPipeline, 'encodedPayloadBytes > maxEncodedPayloadBytes', 'publisher compares encoded WLVC payload with cap');
   requireContains(sfuPublisherControl, 'sfu_high_motion_payload_pressure', 'publisher controller high-motion pressure reason');
+  requireContains(sfuPublisherControl, "CADENCE_THROTTLE: 'cadence_throttle'", 'publisher controller throttles high-motion WLVC deltas before profile collapse');
+  requireContains(sfuPublisherControl, 'resolveWlvcEncodeIntervalMs', 'publisher controller exposes active WLVC cadence control');
   requireContains(sfuPublisherControl, 'sfu_send_backpressure_critical', 'publisher controller uses critical send backpressure as an immediate quality-pressure reason');
   requireContains(sfuPublisherControl, 'adaptive_quality_downgrade_enabled: true', 'publisher controller diagnostics expose adaptive quality downgrade');
   requireContains(sfuPublisherControl, "eventType: 'sfu_video_payload_pressure'", 'publisher controller payload pressure backend diagnostic');
@@ -103,7 +138,7 @@ async function main() {
   });
 
   try {
-    const { WaveletVideoEncoder } = await server.ssrLoadModule('/src/lib/wavelet/codec.ts');
+    const { WaveletVideoDecoder, WaveletVideoEncoder } = await server.ssrLoadModule('/src/lib/wavelet/codec.ts');
     const workspaceConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
     const motionConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
     const profiles = workspaceConfig.SFU_VIDEO_QUALITY_PROFILES;
@@ -133,32 +168,48 @@ async function main() {
         },
       },
       {
-        rescue: { captureFrameRate: 7, encodeIntervalMs: 244, frameQuality: 20 },
-        realtime: { captureFrameRate: 11, encodeIntervalMs: 167, frameQuality: 29 },
-        balanced: { captureFrameRate: 14, encodeIntervalMs: 111, frameQuality: 33 },
-        quality: { captureFrameRate: 27, encodeIntervalMs: 92, frameQuality: 43 },
+        rescue: { captureFrameRate: 10, encodeIntervalMs: 167, frameQuality: 42 },
+        realtime: { captureFrameRate: 14, encodeIntervalMs: 125, frameQuality: 46 },
+        balanced: { captureFrameRate: 18, encodeIntervalMs: 100, frameQuality: 52 },
+        quality: { captureFrameRate: 24, encodeIntervalMs: 83, frameQuality: 60 },
       },
-      'SFU profiles must trade about 10% less framerate for higher per-frame quality',
+      'SFU profiles must keep visible two-person grid quality above low-resolution rescue blocks',
     );
 
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);
     const balancedDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.balanced);
     const realtimeDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.realtime);
+    const rescueDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.rescue);
 
     assert.equal(qualityDelta.type, 'delta', 'quality high-motion second frame must be a delta');
     assert.equal(balancedDelta.type, 'delta', 'balanced high-motion second frame must be a delta');
     assert.equal(realtimeDelta.type, 'delta', 'realtime high-motion second frame must be a delta');
-    assert.ok(
-      qualityDelta.data.byteLength > maxDeltaBytes,
-      `quality high-motion delta must trip the payload cap; bytes=${qualityDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+    assert.equal(rescueDelta.type, 'delta', 'rescue high-motion second frame must be a delta');
+    const decodedChromaDelta = decodeMovingChromaDelta(WaveletVideoEncoder, WaveletVideoDecoder, profiles.realtime);
+    assert.equal(
+      decodedChromaDelta.data.length,
+      profiles.realtime.frameWidth * profiles.realtime.frameHeight * 4,
+      'moving chroma delta must decode to a full RGBA frame after temporal reconstruction',
     );
     assert.ok(
-      balancedDelta.data.byteLength <= maxDeltaBytes,
-      `balanced high-motion delta must fit the payload cap; bytes=${balancedDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+      qualityDelta.data.byteLength <= maxDeltaBytes,
+      `quality high-motion delta must fit the global payload cap; bytes=${qualityDelta.data.byteLength}, cap=${maxDeltaBytes}`,
     );
     assert.ok(
-      realtimeDelta.data.byteLength <= maxDeltaBytes,
-      `realtime high-motion delta must fit the payload cap; bytes=${realtimeDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+      qualityDelta.data.byteLength <= profiles.quality.maxEncodedBytesPerFrame,
+      `quality high-motion delta must fit the quality profile budget; bytes=${qualityDelta.data.byteLength}, cap=${profiles.quality.maxEncodedBytesPerFrame}`,
+    );
+    assert.ok(
+      balancedDelta.data.byteLength <= profiles.balanced.maxEncodedBytesPerFrame,
+      `balanced high-motion delta must fit the balanced profile budget; bytes=${balancedDelta.data.byteLength}, cap=${profiles.balanced.maxEncodedBytesPerFrame}`,
+    );
+    assert.ok(
+      realtimeDelta.data.byteLength <= profiles.realtime.maxEncodedBytesPerFrame,
+      `realtime high-motion delta must fit the realtime profile budget; bytes=${realtimeDelta.data.byteLength}, cap=${profiles.realtime.maxEncodedBytesPerFrame}`,
+    );
+    assert.ok(
+      rescueDelta.data.byteLength <= profiles.rescue.maxEncodedBytesPerFrame,
+      `rescue high-motion delta must fit the rescue profile budget; bytes=${rescueDelta.data.byteLength}, cap=${profiles.rescue.maxEncodedBytesPerFrame}`,
     );
     assert.ok(
       profiles.realtime.frameWidth < profiles.balanced.frameWidth,

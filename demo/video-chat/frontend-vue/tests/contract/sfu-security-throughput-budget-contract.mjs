@@ -35,7 +35,7 @@ async function main() {
   requireContains(protectedBudget, 'protected_envelope_bytes', 'protected envelope byte metric');
   requireContains(protectedBudget, 'protection_overhead_bytes', 'protected overhead byte metric');
   requireContains(protectedBudget, 'protection_overhead_ratio', 'protected overhead ratio metric');
-  requireContains(workspaceConfig, 'maxEncodedBytesPerFrame: 180 * 1024', 'rescue profile has explicit encoded-byte budget');
+  requireContains(workspaceConfig, 'maxEncodedBytesPerFrame: 2048 * 1024', 'rescue profile has explicit encoded-byte budget');
   requireContains(publisherPipeline, 'measureProtectedSfuFrameBudget({ protectedFrame, plaintextBytes: encodedPayloadBytes, maxPayloadBytes: maxEncodedPayloadBytes })', 'publisher measures protected frame overhead before send');
   requireContains(publisherPipeline, "reason: 'sfu_protected_media_budget_pressure'", 'publisher drops protected frames that exceed the active budget');
   requireContains(runtimeSwitching, "'sfu_protected_media_budget_pressure'", 'protected overhead pressure bypasses downgrade cooldown');
@@ -65,7 +65,7 @@ async function main() {
   const measured = measureProtectedSfuFrameBudget({
     protectedFrame,
     plaintextBytes: plaintext.byteLength,
-    maxPayloadBytes: 180 * 1024,
+    maxPayloadBytes: 2048 * 1024,
   });
   assert.equal(measured.ok, true, 'normal protected frame must fit the rescue profile budget');
   assert.ok(measured.metrics.protected_envelope_bytes > plaintext.byteLength, 'protected envelope must measure transport overhead');
@@ -73,7 +73,7 @@ async function main() {
 
   const nearBudget = measureProtectedSfuFrameBudget({
     protectedFrame,
-    plaintextBytes: 180 * 1024,
+    plaintextBytes: 2048 * 1024,
     maxPayloadBytes: measured.metrics.protected_envelope_bytes - 1,
   });
   assert.equal(nearBudget.ok, false, 'protected overhead must fail closed when the envelope exceeds budget');

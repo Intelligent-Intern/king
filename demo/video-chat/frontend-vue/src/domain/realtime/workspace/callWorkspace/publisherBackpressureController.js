@@ -2,6 +2,11 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO,
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
   SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
+  SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS,
+  SFU_WLVC_MOTION_DELTA_MAX_CADENCE_LEVEL,
+  SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
+  SFU_WLVC_MOTION_DELTA_STABLE_SAMPLE_COUNT,
+  SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
 } from './runtimeConfig.js';
 import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
 
@@ -9,6 +14,7 @@ export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
   PAUSE_ENCODE: 'pause_encode',
   DROP_FRAME: 'drop_frame',
+  CADENCE_THROTTLE: 'cadence_throttle',
   PROFILE_DOWNSHIFT: 'profile_downshift',
   REQUEST_KEYFRAME: 'request_keyframe',
   SOCKET_RESTART: 'socket_restart',
@@ -44,6 +50,10 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const skipThreshold = Math.max(1, normalizedNumber(config.skipThreshold, 1));
   const sendFailureThreshold = Math.max(1, normalizedNumber(config.sendFailureThreshold, 1));
   const encodeFailureThreshold = Math.max(1, normalizedNumber(config.encodeFailureThreshold, 1));
+  const motionDeltaProfileDownshiftThreshold = Math.max(1, normalizedNumber(
+    config.motionDeltaProfileDownshiftThreshold,
+    SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
+  ));
   const backpressureWindowMs = Math.max(1, normalizedNumber(config.backpressureWindowMs, 1));
   const hardResetAfterMs = Math.max(backpressureWindowMs, normalizedNumber(config.hardResetAfterMs, backpressureWindowMs));
   const maxQueueAgeMs = Math.max(0, normalizedNumber(config.maxQueueAgeMs));
@@ -106,8 +116,14 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   } else if (kind === 'payload_pressure') {
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
+    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.CADENCE_THROTTLE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
-    addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    if (
+      reason === 'sfu_protected_media_budget_pressure'
+      || payloadPressureCount >= motionDeltaProfileDownshiftThreshold
+    ) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    }
   } else if (kind === 'runtime_encode_error') {
     if (encodeFailureCount >= encodeFailureThreshold) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
@@ -200,6 +216,17 @@ export function createPublisherBackpressureController({
     state.wlvcPayloadPressureFirstAtMs = 0;
   }
 
+  function resetWlvcMotionDeltaStableWindow() {
+    state.wlvcMotionDeltaStableStartedAtMs = 0;
+    state.wlvcMotionDeltaStableSampleCount = 0;
+  }
+
+  function resetWlvcMotionDeltaCadence() {
+    state.wlvcMotionDeltaCadenceLevel = 0;
+    state.wlvcMotionDeltaCadenceUntilMs = 0;
+    resetWlvcMotionDeltaStableWindow();
+  }
+
   function resetWlvcSourceReadbackFailureCounters() {
     state.wlvcSourceReadbackFailureCount = 0;
     state.wlvcSourceReadbackFailureFirstAtMs = 0;
@@ -232,9 +259,89 @@ export function createPublisherBackpressureController({
     return drawImageMs <= drawBudgetMs * ratio && readbackMs <= readbackBudgetMs * ratio;
   }
 
+  function motionDeltaPayloadIsStable(details = {}) {
+    const encodedPayloadBytes = normalizedNumber(details?.encodedPayloadBytes ?? details?.encoded_payload_bytes);
+    const payloadSoftLimitBytes = normalizedNumber(details?.payloadSoftLimitBytes ?? details?.payload_soft_limit_bytes);
+    const maxPayloadBytes = normalizedNumber(details?.maxEncodedPayloadBytes ?? details?.max_encoded_payload_bytes);
+    const referenceBytes = payloadSoftLimitBytes > 0 ? payloadSoftLimitBytes : maxPayloadBytes;
+    if (referenceBytes <= 0 || encodedPayloadBytes <= 0) return false;
+    return encodedPayloadBytes <= referenceBytes * 0.72;
+  }
+
+  function noteWlvcMotionDeltaSuccess(details = {}) {
+    const nowMs = Math.max(0, Number(details?.nowMs || details?.timestamp || Date.now()));
+    const cadenceLevel = normalizedMotionDeltaCadenceLevel(nowMs);
+    if (cadenceLevel <= 0) {
+      resetWlvcMotionDeltaStableWindow();
+      return false;
+    }
+    if (!motionDeltaPayloadIsStable(details)) {
+      resetWlvcMotionDeltaStableWindow();
+      return false;
+    }
+    if (state.wlvcMotionDeltaStableStartedAtMs <= 0) {
+      state.wlvcMotionDeltaStableStartedAtMs = nowMs;
+      state.wlvcMotionDeltaStableSampleCount = 0;
+    }
+    state.wlvcMotionDeltaStableSampleCount = Number(state.wlvcMotionDeltaStableSampleCount || 0) + 1;
+    const stableForMs = Math.max(0, nowMs - Number(state.wlvcMotionDeltaStableStartedAtMs || 0));
+    if (
+      stableForMs < SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS
+      || Number(state.wlvcMotionDeltaStableSampleCount || 0) < SFU_WLVC_MOTION_DELTA_STABLE_SAMPLE_COUNT
+    ) {
+      return false;
+    }
+
+    const previousLevel = cadenceLevel;
+    const stableSampleCount = Number(state.wlvcMotionDeltaStableSampleCount || 0);
+    state.wlvcMotionDeltaCadenceLevel = Math.max(0, previousLevel - 1);
+    state.wlvcMotionDeltaCadenceUntilMs = state.wlvcMotionDeltaCadenceLevel > 0
+      ? nowMs + SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS
+      : 0;
+    resetWlvcMotionDeltaStableWindow();
+
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'sfu_wlvc_motion_delta_cadence_recovered',
+      code: 'sfu_wlvc_motion_delta_cadence_recovered',
+      message: 'WLVC motion delta payloads stayed below budget; encode cadence is recovering before a profile upshift probe.',
+      payload: {
+        previous_motion_delta_cadence_level: previousLevel,
+        motion_delta_cadence_level: state.wlvcMotionDeltaCadenceLevel,
+        motion_delta_cadence_multiplier: motionDeltaCadenceMultiplier(nowMs),
+        stable_window_ms: SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
+        stable_for_ms: stableForMs,
+        stable_sample_count: stableSampleCount,
+        payload_bytes: normalizedNumber(details?.encodedPayloadBytes ?? details?.encoded_payload_bytes),
+        payload_soft_limit_bytes: normalizedNumber(details?.payloadSoftLimitBytes ?? details?.payload_soft_limit_bytes),
+        max_payload_bytes: normalizedNumber(details?.maxEncodedPayloadBytes ?? details?.max_encoded_payload_bytes),
+        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+        media_runtime_path: getMediaRuntimePath(),
+      },
+    });
+
+    if (state.wlvcMotionDeltaCadenceLevel <= 0) {
+      resetWlvcPayloadPressureCounters();
+      return qualityRecoveryProbe('sfu_wlvc_motion_delta_recovered', {
+        payload_bytes: normalizedNumber(details?.encodedPayloadBytes ?? details?.encoded_payload_bytes),
+        payload_soft_limit_bytes: normalizedNumber(details?.payloadSoftLimitBytes ?? details?.payload_soft_limit_bytes),
+        max_payload_bytes: normalizedNumber(details?.maxEncodedPayloadBytes ?? details?.max_encoded_payload_bytes),
+        encode_ms: normalizedNumber(details?.encodeMs ?? details?.encode_ms),
+        frame_type: String(details?.frameType || details?.frame_type || ''),
+        layout_mode: String(details?.layoutMode || details?.layout_mode || ''),
+        track_id: String(details?.trackId || details?.track_id || ''),
+        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+        media_runtime_path: getMediaRuntimePath(),
+      });
+    }
+    return true;
+  }
+
   function noteWlvcSourceReadbackSuccess(details = {}) {
     const nowMs = Math.max(0, Number(details?.nowMs || details?.timestamp || Date.now()));
     resetWlvcSourceReadbackFailureCounters();
+    noteWlvcMotionDeltaSuccess(details);
     state.wlvcSourceReadbackLastSuccessAtMs = nowMs;
     state.wlvcSourceReadbackLastDrawMs = normalizedNumber(details?.drawImageMs ?? details?.draw_image_ms);
     state.wlvcSourceReadbackLastReadbackMs = normalizedNumber(details?.readbackMs ?? details?.readback_ms);
@@ -294,6 +401,30 @@ export function createPublisherBackpressureController({
     );
   }
 
+  function normalizedMotionDeltaCadenceLevel(nowMs = Date.now()) {
+    const level = Math.max(0, Math.min(
+      SFU_WLVC_MOTION_DELTA_MAX_CADENCE_LEVEL,
+      Math.floor(Number(state.wlvcMotionDeltaCadenceLevel || 0)),
+    ));
+    if (level <= 0) return 0;
+    if (Number(state.wlvcMotionDeltaCadenceUntilMs || 0) <= nowMs) {
+      resetWlvcMotionDeltaCadence();
+      return 0;
+    }
+    return level;
+  }
+
+  function motionDeltaCadenceMultiplier(nowMs = Date.now()) {
+    const level = normalizedMotionDeltaCadenceLevel(nowMs);
+    return Number((1 + (level * 0.45)).toFixed(2));
+  }
+
+  function resolveWlvcEncodeIntervalMs(baseIntervalMs = 0, details = {}) {
+    const normalizedBaseIntervalMs = Math.max(1, Number(baseIntervalMs || 0));
+    const multiplier = motionDeltaCadenceMultiplier(Date.now());
+    return Math.max(1, Math.round(normalizedBaseIntervalMs * multiplier));
+  }
+
   function shouldThrottleWlvcEncodeLoop(nowMs = Date.now()) {
     return state.wlvcBackpressurePauseUntilMs > nowMs;
   }
@@ -305,6 +436,7 @@ export function createPublisherBackpressureController({
       hardResetAfterMs: sfuWlvcBackpressureHardResetAfterMs,
       highWaterBytes: sfuWlvcSendBufferHighWaterBytes,
       lowWaterBytes: sfuWlvcSendBufferLowWaterBytes,
+      motionDeltaProfileDownshiftThreshold: SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
       sendFailureThreshold: sfuAutoQualityDowngradeSendFailureThreshold,
       skipThreshold: sfuAutoQualityDowngradeSkipThreshold,
     });
@@ -643,6 +775,16 @@ export function createPublisherBackpressureController({
     }
 
     resetWlvcEncoderAfterDroppedEncodedFrame(pressureReason);
+    resetWlvcMotionDeltaStableWindow();
+    const nextCadenceLevel = Math.min(
+      SFU_WLVC_MOTION_DELTA_MAX_CADENCE_LEVEL,
+      Math.max(
+        Number(state.wlvcMotionDeltaCadenceLevel || 0),
+        Math.max(1, Math.ceil(state.wlvcPayloadPressureCount / Math.max(1, SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD - 1))),
+      ),
+    );
+    state.wlvcMotionDeltaCadenceLevel = nextCadenceLevel;
+    state.wlvcMotionDeltaCadenceUntilMs = nowMs + SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS;
     state.wlvcBackpressurePauseUntilMs = Math.max(
       state.wlvcBackpressurePauseUntilMs,
       nowMs + wlvcBackpressurePauseMs(Math.max(normalizedPayloadBytes, sfuWlvcSendBufferHighWaterBytes))
@@ -668,6 +810,10 @@ export function createPublisherBackpressureController({
           frame_type: normalizedFrameType,
           layout_mode: String(details?.layout_mode || details?.layoutMode || 'full_frame'),
           payload_pressure_count: state.wlvcPayloadPressureCount,
+          motion_delta_cadence_level: state.wlvcMotionDeltaCadenceLevel,
+          motion_delta_cadence_until_ms: state.wlvcMotionDeltaCadenceUntilMs,
+          motion_delta_cadence_multiplier: motionDeltaCadenceMultiplier(nowMs),
+          motion_delta_profile_downshift_threshold: SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
           forced_next_keyframe: true,
           track_id: String(trackId || ''),
           outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
@@ -684,6 +830,36 @@ export function createPublisherBackpressureController({
       payloadPressureCount: state.wlvcPayloadPressureCount,
       encodeMs: details?.encode_ms || details?.encodeMs,
     });
+    if (
+      decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.CADENCE_THROTTLE)
+      && (
+        decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)
+        || (nowMs - Number(state.wlvcMotionDeltaLastLogAtMs || 0)) >= sfuBackpressureLogCooldownMs
+      )
+    ) {
+      state.wlvcMotionDeltaLastLogAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_wlvc_motion_delta_cadence_throttled',
+        code: 'sfu_wlvc_motion_delta_cadence_throttled',
+        message: 'WLVC high-motion payload pressure is throttling encode cadence before a destructive profile downshift.',
+        payload: {
+          pressure_reason: pressureReason,
+          payload_bytes: normalizedPayloadBytes,
+          payload_pressure_count: state.wlvcPayloadPressureCount,
+          motion_delta_cadence_level: state.wlvcMotionDeltaCadenceLevel,
+          motion_delta_cadence_until_ms: state.wlvcMotionDeltaCadenceUntilMs,
+          motion_delta_cadence_multiplier: motionDeltaCadenceMultiplier(nowMs),
+          motion_delta_profile_downshift_threshold: SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
+          requested_action: PUBLISHER_BACKPRESSURE_ACTIONS.CADENCE_THROTTLE,
+          track_id: String(trackId || ''),
+          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+          media_runtime_path: getMediaRuntimePath(),
+        },
+        immediate: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+      });
+    }
     if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)) {
       downgradeSfuVideoQualityAfterEncodePressure(pressureReason);
     }
@@ -787,6 +963,7 @@ export function createPublisherBackpressureController({
     handleWlvcRuntimeEncodeError,
     noteWlvcSourceReadbackSuccess,
     requestWlvcFullFrameKeyframe,
+    resolveWlvcEncodeIntervalMs,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,
     restartSfuAfterVideoStall,
