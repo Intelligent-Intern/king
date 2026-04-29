@@ -18,6 +18,7 @@ import {
   roundedStageMs,
 } from './publisherFrameTrace';
 import { createPublisherSourceReadbackController } from './publisherSourceReadback';
+import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
 import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
@@ -46,6 +47,7 @@ export function createLocalPublisherPipelineHelpers({
     isWlvcRuntimePath,
     maybeFallbackToNativeRuntime,
     mediaDebugLog,
+    noteWlvcSourceReadbackSuccess = () => false,
     reconfigureLocalTracksFromSelectedDevices,
     renderCallVideoLayout,
     resetBackgroundRuntimeMetrics,
@@ -427,24 +429,6 @@ export function createLocalPublisherPipelineHelpers({
       return client;
     };
 
-    const dropFrameAfterSfuClientLoss = (trace, timestamp) => {
-      handleWlvcFrameSendFailure(
-        getSfuClientBufferedAmount(),
-        videoTrack.id,
-        'sfu_client_unavailable_after_encode',
-        {
-          reason: 'sfu_client_unavailable_after_encode',
-          stage: 'sfu_client_send_ready',
-          source: 'publisher_pipeline',
-          transportPath: 'publisher_sfu_client',
-          message: 'SFU client disappeared before an encoded publisher frame could be sent.',
-          publisherFrameTraceId: trace?.id || '',
-          publisherPathTraceStages: trace?.stages?.join?.('>') || '',
-          timestamp,
-        },
-      );
-    };
-
     const runWlvcEncodeTick = async () => {
       const startedAtMs = highResolutionNowMs();
       try {
@@ -769,7 +753,13 @@ export function createLocalPublisherPipelineHelpers({
         if (stopIfPipelineProfileChanged()) return;
         const sendClient = currentOpenSfuClient();
         if (!sendClient) {
-          dropFrameAfterSfuClientLoss(trace, timestamp);
+          reportSfuClientUnavailableAfterEncode({
+            getSfuClientBufferedAmount,
+            handleWlvcFrameSendFailure,
+            trackId: videoTrack.id,
+            trace,
+            timestamp,
+          });
           return;
         }
         const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
@@ -802,6 +792,13 @@ export function createLocalPublisherPipelineHelpers({
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {
           lastBackgroundSnapshotSentAtMs = timestamp;
         }
+        noteWlvcSourceReadbackSuccess({
+          timestamp, trackId: videoTrack.id, sourceBackend, readbackMethod,
+          drawImageMs, readbackMs, drawBudgetMs, readbackBudgetMs,
+          readbackBytes: Math.max(0, Number(sourceReadback.readbackBytes || 0)),
+          frameWidth: Math.max(0, Number(frameSizeForMetrics?.frameWidth || 0)),
+          frameHeight: Math.max(0, Number(frameSizeForMetrics?.frameHeight || 0)),
+        });
       } catch (error) {
         const nowMs = Date.now();
         if (nowMs - state.wlvcEncodeLastErrorLogAtMs >= constants.wlvcEncodeErrorLogCooldownMs) {

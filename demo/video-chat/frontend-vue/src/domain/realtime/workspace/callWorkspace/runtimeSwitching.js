@@ -1,3 +1,8 @@
+import {
+  SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
+  SFU_AUTO_QUALITY_RECOVERY_NEXT,
+} from './runtimeConfig.js';
+
 export function createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks,
   constants,
@@ -150,7 +155,77 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     return resolveSfuVideoQualityProfile(refs.callMediaPrefs.outgoingVideoQualityProfile);
   }
 
-  function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure') {
+  function applySfuVideoQualityProfileSwitch({
+    currentProfile,
+    nextProfile,
+    reason,
+    eventType,
+    level = 'warning',
+    message,
+    payload = {},
+  }) {
+    captureClientDiagnostic({
+      category: 'media',
+      level,
+      eventType,
+      code: eventType,
+      message,
+      payload: {
+        ...payload,
+        from_profile: currentProfile,
+        to_profile: nextProfile,
+        reason,
+        media_runtime_path: refs.mediaRuntimePath.value,
+      },
+      immediate: true,
+    });
+    if (typeof resetSfuOutboundMediaAfterProfileSwitch === 'function') {
+      resetSfuOutboundMediaAfterProfileSwitch({
+        fromProfile: currentProfile,
+        toProfile: nextProfile,
+        reason,
+      });
+    }
+    stopLocalEncodingPipeline();
+    setCallOutgoingVideoQualityProfile(nextProfile);
+    return true;
+  }
+
+  function probeSfuVideoQualityAfterStableReadback(reason = 'sfu_source_readback_recovered', details = {}) {
+    const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+    const normalizedReason = String(reason || 'sfu_source_readback_recovered').trim().toLowerCase();
+    const nextProfile = SFU_AUTO_QUALITY_RECOVERY_NEXT[currentProfile] || '';
+    if (nextProfile === '') return false;
+
+    const nowMs = Date.now();
+    const lastQualityChangeAtMs = Math.max(
+      Number(refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs || 0),
+      Number(refs.sfuTransportState.sfuAutoQualityRecoveryLastAtMs || 0),
+    );
+    if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) {
+      return false;
+    }
+    refs.sfuTransportState.sfuAutoQualityRecoveryLastAtMs = nowMs;
+
+    return applySfuVideoQualityProfileSwitch({
+      currentProfile,
+      nextProfile,
+      reason: normalizedReason,
+      eventType: 'sfu_source_readback_profile_upshift',
+      level: 'info',
+      message: 'Outgoing SFU video quality is probing one tier up after stable source-readback timing.',
+      payload: {
+        ...details,
+        failure_count: state.getWlvcEncodeFailureCount(),
+      },
+    });
+  }
+
+  function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure', options = {}) {
+    const qualityDirection = String(options?.direction || options?.qualityDirection || '').trim().toLowerCase();
+    if (qualityDirection === 'up') {
+      return probeSfuVideoQualityAfterStableReadback(reason, options);
+    }
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
     const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
     const bypassQualityDowngradeCooldown = immediateQualityPressureReasons.includes(normalizedReason);
@@ -166,37 +241,23 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     }
     refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs = nowMs;
 
-    captureClientDiagnostic({
-      category: 'media',
-      level: 'warning',
+    return applySfuVideoQualityProfileSwitch({
+      currentProfile,
+      nextProfile,
+      reason: normalizedReason,
       eventType: 'sfu_encode_quality_downgraded',
-      code: 'sfu_encode_quality_downgraded',
       message: 'Outgoing SFU video quality was lowered after repeated encode failures.',
       payload: {
-        from_profile: currentProfile,
-        to_profile: nextProfile,
-        reason: normalizedReason,
         failure_count: state.getWlvcEncodeFailureCount(),
-        media_runtime_path: refs.mediaRuntimePath.value,
       },
-      immediate: true,
     });
-    if (typeof resetSfuOutboundMediaAfterProfileSwitch === 'function') {
-      resetSfuOutboundMediaAfterProfileSwitch({
-        fromProfile: currentProfile,
-        toProfile: nextProfile,
-        reason: normalizedReason,
-      });
-    }
-    stopLocalEncodingPipeline();
-    setCallOutgoingVideoQualityProfile(nextProfile);
-    return true;
   }
 
   return {
     currentSfuVideoProfile,
     downgradeSfuVideoQualityAfterEncodePressure,
     maybeFallbackToNativeRuntime,
+    probeSfuVideoQualityAfterStableReadback,
     setMediaRuntimePath,
     switchMediaRuntimePath,
   };

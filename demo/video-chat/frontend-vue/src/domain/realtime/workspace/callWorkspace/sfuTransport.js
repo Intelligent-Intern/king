@@ -15,9 +15,15 @@ export function createSfuTransportState() {
     wlvcSourceReadbackFailureCount: 0,
     wlvcSourceReadbackFailureFirstAtMs: 0,
     wlvcSourceReadbackFailureLastLogAtMs: 0,
+    wlvcSourceReadbackStableStartedAtMs: 0,
+    wlvcSourceReadbackStableSampleCount: 0,
+    wlvcSourceReadbackLastSuccessAtMs: 0,
+    wlvcSourceReadbackLastDrawMs: 0,
+    wlvcSourceReadbackLastReadbackMs: 0,
     wlvcRemoteKeyframeRequestCount: 0,
     wlvcRemoteKeyframeRequestUntilMs: 0,
     sfuAutoQualityDowngradeLastAtMs: 0,
+    sfuAutoQualityRecoveryLastAtMs: 0,
     sfuVideoRecoveryLastAtMs: 0,
   };
 }
@@ -60,6 +66,7 @@ export function createSfuTransportController(options) {
     handleWlvcFrameSendFailure,
     handleWlvcRuntimeEncodeError: publisherBackpressureController.handleWlvcRuntimeEncodeError,
     isSfuClientOpen,
+    noteWlvcSourceReadbackSuccess: publisherBackpressureController.noteWlvcSourceReadbackSuccess,
     requestWlvcFullFrameKeyframe: publisherBackpressureController.requestWlvcFullFrameKeyframe,
     resetWlvcBackpressureCounters: publisherBackpressureController.resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters: publisherBackpressureController.resetWlvcFrameSendFailureCounters,

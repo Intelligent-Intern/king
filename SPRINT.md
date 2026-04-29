@@ -50,7 +50,7 @@ Technical target:
 8. [x] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
 10. [x] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
-11. [ ] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
+11. [x] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
 12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
 13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
 14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
@@ -303,6 +303,33 @@ Deploy proof:
 - Production asset version `20260429060123` served `CallWorkspaceView-BEW46nwM.js` with `client_console_warning`, `console_warn`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `source_readback_failure_count`, `sfu_video_backpressure`, `sfu_frame_send_failed`, and `sfu_video_reconnect_after_stall`.
 - The same production asset no longer contains the old browser-console warning strings `SFU video payload pressure`, `SFU frame send failed at exact transport stage`, `SFU video backpressure - skipping`, `SFU source readback budget pressure`, or `restarting SFU socket after video stall`.
 - Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` with backend-only markers `media_security_handshake_started_after_ws_open`, `sfu_remote_video_stable`, and `native_audio_track_recovery_exhausted`, and without the old direct console strings `SFU/native media-security frame transform failed`, `WS open - media-security signal caches cleared`, or `SFU video stable`.
+
+### 11. `[auto-readback-recovery]`
+
+Status: Done.
+
+Implementation:
+- Added an automatic recovery profile ladder `rescue -> realtime -> balanced -> quality` with a stable source-readback window, a separate recovery cooldown, and a low-timing budget ratio before any up-probe is allowed.
+- Added SFU transport state for readback stable-window samples, last successful readback/draw timing, and last automatic quality recovery timestamp.
+- Counted readback stability only after an encoded SFU frame is successfully sent, so encode/send pressure cannot accidentally trigger an upward quality probe.
+- Routed the upward probe through the same profile switch actuator as downshifts, including outbound media reset and local encoder restart, but without `onRestartSfu` or SFU socket reconnect.
+- Extracted the SFU-client-loss-after-encode diagnostic out of the oversized publisher pipeline while keeping the pipeline line count moving down.
+- Added backend diagnostic marker `sfu_source_readback_profile_upshift` with readback timing, source backend, frame size, active profile, and stable-window sample data.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-auto-readback-recovery-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-auto-readback-downgrade-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-publisher-backpressure-controller-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `node --check` for the changed SFU recovery modules and contracts
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- Production asset version `20260429071240` served `CallWorkspaceView-6Ak81AyJ.js`.
+- The deployed bundle contains `sfu_source_readback_profile_upshift`, `sfu_source_readback_recovered`, `noteWlvcSourceReadbackSuccess`, `wlvcSourceReadbackStableStartedAtMs`, and `sfu_client_unavailable_after_encode`.
 
 ### 15. `[processor-error-recovery]`
 
