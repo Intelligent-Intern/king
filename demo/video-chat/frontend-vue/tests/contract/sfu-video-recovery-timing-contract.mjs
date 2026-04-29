@@ -15,6 +15,10 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `missing ${label}`);
 }
 
+function requireNotContains(source, needle, label) {
+  assert.ok(!source.includes(needle), `unexpected ${label}`);
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
@@ -72,6 +76,8 @@ try {
   requireContains(remotePeers, "'track_set_rollover'", 'track rollover resets remote continuity');
   requireContains(remotePeers, 'lastSfuFrameSequenceByTrack: {}', 'rollover clears stale SFU frame sequence continuity');
   requireContains(remotePeers, 'acceptedSfuCacheEpochByTrack: {}', 'rollover clears stale tile cache epoch continuity');
+  requireContains(remotePeers, 'Keep the last visible frame while waiting for the rollover keyframe.', 'rollover preserves the visible remote frame');
+  requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
   requireContains(sfuClient, 'private markPublisherFrameReceived(msg: any', 'SFU client tracks publisher frame freshness');

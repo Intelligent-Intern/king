@@ -59,7 +59,7 @@ Technical target:
 17. [x] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
 18. [x] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
 19. [x] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
-20. [ ] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
+20. [x] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
 
 ## Execution Order
 
@@ -556,6 +556,29 @@ Deploy proof:
 - Production asset version `20260429082026` serves `CallWorkspaceView-CVRhCahK.js`.
 - The production call bundle contains `active_capture_backend`, `selected_video_quality_profile`, `source_frame_rate`, `source_readback_ms`, `dropped_source_frame_count`, `automatic_quality_transition_count`, and `automatic_quality_transition_direction`, and still does not contain `call-left-video-quality`.
 - The additional production online-pressure run for call `5590731e-d0b9-4664-b316-a455c8afd17a` exposed a remaining recovery gap: no socket failures and final remote canvases recovered, but two consecutive transient remote-video gaps occurred during recovery. That is the remaining Issue 20 deploy-proof work, not part of the diagnostic-surface contract.
+
+### 20. `[deploy-proof]`
+
+Status: Done.
+
+Implementation:
+- Fixed the remaining production recovery gap by preserving the last visible remote canvas frame while SFU publisher-id or track-set rollover resets decoder continuity and waits for the next keyframe.
+- Kept the stronger recovery contract intact: decoder, patch decoder, frame sequence, cache epoch, render cache state, keyframe wait, and connection status are still reset on rollover; only the user-visible canvas pixels are no longer cleared to black during the handoff.
+- Added a recovery contract guard so future rollover changes cannot reintroduce displayed-canvas clearing.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-recovery-timing-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429082550` serves `CallWorkspaceView-BrrOq_d7.js`.
+- The production call bundle no longer contains `clearDecodedCanvas(peer);` and still does not contain `call-left-video-quality`.
+- `npm run test:e2e:online-sfu-pressure` in `demo/video-chat/frontend-vue` passed against production call `ca4cb091-1402-47aa-a622-4e342f82d2e3` with moving remote canvases on both sides, no runtime failures, no SFU socket failures, no source-readback budget failures, no critical SFU pressure, max observed send buffer `341208` bytes on admin and `330761` bytes on user, and final bufferedAmount `0` on both sides.
 
 ## Parking Rule
 
