@@ -1,3 +1,8 @@
+import {
+  detectPublisherCapturePipelineCapabilities,
+  publisherCaptureCapabilityDiagnosticPayload,
+} from './capturePipelineCapabilities';
+
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -131,6 +136,7 @@ export function createLocalMediaOrchestrationHelpers({
     const settingsWidth = finiteTrackSetting(settings.width);
     const settingsHeight = finiteTrackSetting(settings.height);
     const settingsFrameRate = finiteTrackSetting(settings.frameRate);
+    const captureCapabilities = detectPublisherCapturePipelineCapabilities();
     const staleAfterDowngrade = (profileId === 'realtime' || profileId === 'rescue')
       && (
         (settingsWidth > 0 && settingsWidth > Number(videoProfile.captureWidth || 0) * 1.25)
@@ -153,6 +159,7 @@ export function createLocalMediaOrchestrationHelpers({
         track_settings_width: settingsWidth,
         track_settings_height: settingsHeight,
         track_settings_frame_rate: settingsFrameRate,
+        ...publisherCaptureCapabilityDiagnosticPayload(captureCapabilities),
         stale_hd_capture_after_downgrade: staleAfterDowngrade,
       },
     });

@@ -41,7 +41,7 @@ Technical target:
 ## Top 20 Active Issues
 
 1. [x] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
-2. [ ] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
+2. [x] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
 3. [ ] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
 4. [ ] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
 5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
@@ -92,6 +92,27 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429050408` served `CallWorkspaceView-CzO0dEHV.js` with `publisher_frame_trace_id`, `trace_binary_envelope_encode_ms`, `trace_browser_websocket_send_ms`, and `browser_websocket_send`.
 - The same deploy still served `WorkspaceShell-3JCxkHpD.js` without `call-left-video-quality`, `SFU_VIDEO_QUALITY_PROFILE_OPTIONS`, or `callVideoQualityOptions`.
+
+### 2. `[feature-detect-capture-pipeline]`
+
+Status: Done.
+
+Implementation:
+- Added a focused publisher capture capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker/message transfer support, and DOM canvas readback fallback.
+- Added deterministic backend selection for `video_frame_copy`, `offscreen_canvas_worker`, `dom_canvas_fallback`, and `unsupported`.
+- Wired the detector into existing local capture diagnostics so publish/reconfigure reports include the active capture backend and support flags.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-capture-pipeline-capabilities-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429051000` served `CallWorkspaceView-CWQP-srz.js` with `supports_media_stream_track_processor`, `supports_video_frame_copy_to`, `supports_offscreen_canvas_transfer`, `supports_dom_canvas_fallback`, and `capture_backend`.
 
 ### 9. `[quality-ui-removal-contract]`
 
