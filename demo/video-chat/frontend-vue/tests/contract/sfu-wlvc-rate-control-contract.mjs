@@ -32,6 +32,8 @@ async function main() {
   const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const sfuClient = readFrontend('src/lib/sfu/sfuClient.ts');
+  const outboundFrameBudget = readFrontend('src/lib/sfu/outboundFrameBudget.ts');
   const framePayload = readFrontend('src/lib/sfu/framePayload.ts');
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -41,7 +43,12 @@ async function main() {
   requireContains(publisherPipeline, "reason: 'sfu_wlvc_rate_budget_pressure'", 'publisher reports WLVC rate-budget pressure');
   requireContains(sfuPublisherControl, 'pressureReason = String(details?.reason', 'publisher controller preserves exact payload pressure reason');
   requireContains(sfuPublisherControl, 'downgradeSfuVideoQualityAfterEncodePressure(pressureReason)', 'publisher controller downshifts from exact rate pressure reason');
+  requireContains(publisherBackpressureController, "'sfu_wire_rate_budget_exceeded'", 'wire-rate send budget failures are explicit quality pressure');
+  requireContains(publisherBackpressureController, 'budgetSendFailure || sendFailureCount >= sendFailureThreshold', 'budget send failures downshift before repeated socket pressure');
   requireContains(runtimeSwitching, "'sfu_wlvc_rate_budget_pressure'", 'rate-budget pressure bypasses downgrade cooldown');
+  requireContains(runtimeSwitching, "'sfu_wire_rate_budget_exceeded'", 'wire-rate pressure bypasses downgrade cooldown');
+  requireContains(sfuClient, 'sfu_wire_rate_budget_exceeded', 'SFU client reports rolling wire-rate send drops');
+  requireContains(outboundFrameBudget, 'budget_max_wire_bytes_per_second', 'rolling wire-rate guard follows quality profile budget');
   requireContains(framePayload, 'budget_payload_soft_limit_bytes', 'frame payload carries soft byte limit');
   requireContains(framePayload, 'budget_payload_soft_limit_ratio', 'frame payload carries soft ratio');
   requireContains(backendStore, 'budget_payload_soft_limit_bytes', 'backend preserves soft byte limit');

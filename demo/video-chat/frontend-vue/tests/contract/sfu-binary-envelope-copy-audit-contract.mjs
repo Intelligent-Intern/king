@@ -22,11 +22,12 @@ function read(relativePath) {
 try {
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
+  const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
 
   requireContains(framePayload, 'let payloadBytes = frame.data instanceof ArrayBuffer ? frame.data : new ArrayBuffer(0)', 'outbound binary media reuses the encoded ArrayBuffer');
   requireContains(framePayload, 'const dataBase64 = null', 'transport-only binary decode does not rebuild base64');
   requireContains(framePayload, 'base64UrlEncodedLength(payloadByteLength)', 'transport-only payload char metrics are calculated without allocating base64');
-  requireContains(sfuClient, 'msg.data instanceof ArrayBuffer', 'inbound SFU frames consume binary payloads directly');
+  requireContains(sfuMessageHandler, 'msg.data instanceof ArrayBuffer', 'inbound SFU frames consume binary payloads directly');
   requireContains(sfuClient, 'data_base64: decoded.dataBase64 || undefined', 'legacy base64 field remains absent for binary transport-only frames');
   assert.equal(
     framePayload.includes("const dataBase64 = protectionMode === 'transport_only' ? arrayBufferToBase64Url(payloadBytes) : null"),
@@ -34,7 +35,7 @@ try {
     'transport-only binary frames must not be converted to base64 on receive',
   );
   assert.equal(
-    sfuClient.includes(`dataBase64 !== ''
+    sfuMessageHandler.includes(`dataBase64 !== ''
               ? base64UrlToArrayBuffer(dataBase64)
               : (Array.isArray(msg.data)`),
     false,

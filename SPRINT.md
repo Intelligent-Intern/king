@@ -26,6 +26,7 @@ Active failure:
 - This means the publisher is producing or retaining media bytes faster than the end-to-end SFU path can accept them.
 - The existing downgrade path is not enough. The release fix must identify and remove the bottleneck across the full path, not just keep lowering quality after the socket is already congested.
 - 2026-04-29 online pressure gate reproduced the remaining production failure on bundle `CallWorkspaceView-BQ4Ynkmy.js`: the admin publisher reached `bufferedAmount=2257694` during slow-subscriber pressure before the media path was accepted.
+- 2026-04-29 local hardening added a rolling browser wire-byte budget before `WebSocket.send`, immediate profile downshift for budget send failures, and a smaller extracted SFU message handler; local SFU contracts and build pass, but issue 20 stays open until the online gate passes against the deployed bundle.
 
 Already present and not enough:
 - Frontend SFU transport has bounded send queue, `bufferedAmount` pressure checks, frame drops, payload-pressure drops, and quality downgrade from `quality` to `balanced` to `realtime` to `rescue`.

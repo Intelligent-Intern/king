@@ -22,6 +22,7 @@ const publisherBackpressureController = read('src/domain/realtime/workspace/call
 const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
+const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('src/lib/sfu/inboundFrameAssembler.ts');
 const diagnostics = read('src/support/clientDiagnostics.js');
@@ -48,8 +49,8 @@ requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'ex
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId);', 'target_not_in_room prunes unreachable peer locally');
 requireContains(socketLifecycle, 'void sendMediaSecuritySync(true);', 'media-security target_not_in_room forces reconnect rekey');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
-requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics hook');
-requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');
+requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');
+requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_pressure'", 'sfu frame send pressure diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_aborted'", 'sfu frame send abort diagnostics hook');
 requireContains(sfuPublisherControl, "eventType: 'sfu_frame_send_failed'", 'workspace failed frame send diagnostics hook');

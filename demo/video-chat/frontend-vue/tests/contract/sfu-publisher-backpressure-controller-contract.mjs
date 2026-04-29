@@ -111,6 +111,17 @@ async function main() {
   assert.ok(payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME), 'payload pressure drops before send');
   assert.ok(payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT), 'payload pressure downshifts profile');
 
+  const wireBudgetDecision = decidePublisherBackpressureAction({
+    kind: 'send_failure',
+    reason: 'sfu_wire_rate_budget_exceeded',
+    bufferedAmount: 0,
+    sendFailureCount: 1,
+  }, pressureConfig);
+  assert.ok(
+    wireBudgetDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+    'wire-rate budget send failures downshift immediately before browser buffering can become critical',
+  );
+
   const receiverDecision = decidePublisherBackpressureAction({
     kind: 'receiver_feedback',
     receiverRenderLatencyMs: 1200,

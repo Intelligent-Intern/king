@@ -23,6 +23,8 @@ function read(relativePath) {
 }
 
 const sfuClient = read('../../src/lib/sfu/sfuClient.ts');
+const sfuMessageHandler = read('../../src/lib/sfu/sfuMessageHandler.ts');
+const outboundFrameBudget = read('../../src/lib/sfu/outboundFrameBudget.ts');
 const framePayload = read('../../src/lib/sfu/framePayload.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
@@ -62,7 +64,7 @@ try {
   requireContains(framePayload, 'payload.protection_mode = normalizeProtectionMode(frame.protectionMode,', 'snake_case protection mode');
   requireContains(framePayload, 'export const SFU_FRAME_CHUNK_MAX_CHARS = 8 * 1024', 'chunk size guard');
   requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024', 'binary send backpressure guard aligns with encoder high-water mark');
-  requireContains(sfuClient, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'binary send resumes only at low-water');
+  requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'binary send resumes only at low-water');
   requireContains(sfuClient, 'private async waitForSendBufferDrain(targetBufferedBytes: number', 'chunk sender waits for budgeted websocket drain');
   requireContains(sfuClient, 'private outboundFrameSequenceByTrack = new Map<string, number>()', 'per-track outgoing frame sequence');
   requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
@@ -80,7 +82,7 @@ try {
     !sfuClient.includes('this.inboundFrameAssembler.acceptChunk(msg)'),
     'inbound media hot path must not accept legacy JSON/base64 chunks',
   );
-  requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunks are diagnostically rejected');
+  requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunks are diagnostically rejected');
   requireContains(sfuClient, "ws.binaryType = 'arraybuffer'", 'SFU websocket receives binary media envelopes');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'inbound media uses binary envelope decode');
   requireContains(framePayload, "export const SFU_BINARY_FRAME_MAGIC = 'KSFB'", 'binary frame magic');
@@ -91,16 +93,16 @@ try {
   requireContains(framePayload, 'SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION ? 46 : 42', 'binary frame v1 header length must match the timestamp/sequence/payload-length layout');
   requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
-  requireContains(sfuClient, 'const stringField = (...values: any[]): string => {', 'camel/snake inbound helper');
-  requireContains(sfuClient, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');
-  requireContains(sfuClient, 'publisherId:     stringField(msg.publisherId, msg.publisher_id)', 'publisher event camel/snake compatibility');
-  requireContains(sfuClient, 'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)', 'publisher user event camel/snake compatibility');
-  requireContains(sfuClient, 'publisherName:   stringField(msg.publisherName, msg.publisher_name)', 'publisher name event camel/snake compatibility');
-  requireContains(sfuClient, 'stringField(msg.trackId, msg.track_id)', 'track event camel/snake compatibility');
-  requireContains(sfuClient, 'const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)', 'protected frame inbound compatibility');
-  requireContains(sfuClient, 'stringField(msg.protectionMode, msg.protection_mode)', 'protection mode inbound compatibility');
-  requireContains(sfuClient, 'stringField(msg.frameType, msg.frame_type)', 'frame type inbound compatibility');
-  requireContains(sfuClient, 'frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence))', 'frame sequence inbound compatibility');
+  requireContains(sfuMessageHandler, 'function stringField(...values: any[]): string {', 'camel/snake inbound helper');
+  requireContains(sfuMessageHandler, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');
+  requireContains(sfuMessageHandler, 'publisherId:     stringField(msg.publisherId, msg.publisher_id)', 'publisher event camel/snake compatibility');
+  requireContains(sfuMessageHandler, 'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)', 'publisher user event camel/snake compatibility');
+  requireContains(sfuMessageHandler, 'publisherName:   stringField(msg.publisherName, msg.publisher_name)', 'publisher name event camel/snake compatibility');
+  requireContains(sfuMessageHandler, 'stringField(msg.trackId, msg.track_id)', 'track event camel/snake compatibility');
+  requireContains(sfuMessageHandler, 'const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)', 'protected frame inbound compatibility');
+  requireContains(sfuMessageHandler, 'stringField(msg.protectionMode, msg.protection_mode)', 'protection mode inbound compatibility');
+  requireContains(sfuMessageHandler, 'stringField(msg.frameType, msg.frame_type)', 'frame type inbound compatibility');
+  requireContains(sfuMessageHandler, 'frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence))', 'frame sequence inbound compatibility');
 
   requireContains(backendOrigin, 'export function resolveBackendSfuOriginCandidates()', 'SFU origin candidate resolver');
   requireContains(backendOrigin, 'const primarySfuOrigin = resolveBackendSfuOrigin();', 'primary SFU origin');

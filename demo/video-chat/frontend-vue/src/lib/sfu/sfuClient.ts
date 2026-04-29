@@ -20,16 +20,21 @@ import {
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
 import { normalizeSfuIdentifier } from './identifiers'
+import { handleSfuClientMessage } from './sfuMessageHandler'
+import {
+  SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS,
+  SfuOutboundWireBudget,
+  resolveSfuSendDrainTargetBytes,
+  shouldDropProjectedSfuFrameForBufferBudget,
+} from './outboundFrameBudget'
 import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
-  base64UrlToArrayBuffer,
   prepareSfuOutboundFramePayload,
   SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
   type PreparedSfuOutboundFramePayload,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
-import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
 import type {
   SFUClientCallbacks,
   SFUEncodedFrame,
@@ -60,9 +65,7 @@ export type {
  */
 
 const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024
-const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024
 const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
-const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 160
 const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
@@ -84,6 +87,7 @@ export class SFUClient {
   private disconnectNotified = false
   private inboundFrameAssembler = new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })
   private outboundFrameQueue: SfuOutboundFrameQueue
+  private outboundWireBudget = new SfuOutboundWireBudget()
   private outboundFrameSequenceByTrack = new Map<string, number>()
   private outboundMediaGeneration = 0
   private lastFrameSendPressureDiagnosticAtMs = 0
@@ -253,6 +257,7 @@ export class SFUClient {
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('socket_reconnect')
     this.roomId = roomId
     const generation = this.connectGeneration
@@ -320,6 +325,7 @@ export class SFUClient {
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('leave')
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
@@ -341,6 +347,7 @@ export class SFUClient {
   resetOutboundMediaAfterProfileSwitch(details: { fromProfile?: string; toProfile?: string; reason?: string } = {}): void {
     this.outboundMediaGeneration += 1
     this.outboundFrameSequenceByTrack.clear()
+    this.outboundWireBudget.reset()
     const droppedCount = this.clearOutboundFrameQueue('profile_switch')
     this.reportFrameSendDiagnostic(
       'sfu_profile_switch_outbound_reset',
@@ -399,15 +406,6 @@ export class SFUClient {
 
   private getWebSocketBufferedAmount(): number {
     return Math.max(0, Number(this.ws?.bufferedAmount || 0))
-  }
-
-  private resolveSendDrainTargetBytes(metrics: Record<string, unknown>): number {
-    const bufferedBudgetBytes = Math.max(0, Number(metrics.budget_max_buffered_bytes || 0))
-    if (bufferedBudgetBytes <= 0) return SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES
-    return Math.max(
-      SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES,
-      Math.floor(bufferedBudgetBytes * 0.5),
-    )
   }
 
   private nextOutboundFrameSequence(trackId: string): number {
@@ -497,11 +495,8 @@ export class SFUClient {
       return false
     }
     const projectedWirePayloadBytes = Math.max(0, Number(metrics.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0))
-    if (
-      bufferedBudgetBytes > 0
-      && projectedWirePayloadBytes > 0
-      && (bufferedBeforeSend + projectedWirePayloadBytes) > bufferedBudgetBytes
-    ) {
+    const projectedBufferBudget = shouldDropProjectedSfuFrameForBufferBudget(metrics, bufferedBeforeSend, projectedWirePayloadBytes)
+    if (projectedBufferBudget.drop) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
         'warning',
@@ -509,7 +504,7 @@ export class SFUClient {
         {
           ...metrics,
           buffered_amount: bufferedBeforeSend,
-          projected_buffered_after_send_bytes: bufferedBeforeSend + projectedWirePayloadBytes,
+          projected_buffered_after_send_bytes: projectedBufferBudget.projectedBufferedAfterSendBytes,
           abort_reason: 'sfu_projected_buffer_budget_exceeded',
         },
         true,
@@ -524,13 +519,41 @@ export class SFUClient {
       })
       return false
     }
+    const wireBudget = this.outboundWireBudget.decide(metrics, projectedWirePayloadBytes)
+    if (!wireBudget.ok) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame because it would exceed the active rolling wire budget.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          projected_wire_window_bytes: wireBudget.projectedWindowBytes,
+          current_wire_window_bytes: wireBudget.currentWindowBytes,
+          budget_max_wire_bytes_per_second: wireBudget.maxWireBytesPerSecond,
+          wire_budget_window_ms: wireBudget.windowMs,
+          wire_budget_retry_after_ms: wireBudget.retryAfterMs,
+          abort_reason: 'sfu_wire_rate_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_wire_rate_budget_exceeded',
+        stage: 'browser_websocket_wire_rate_budget',
+        source: 'wire_rate_controller',
+        message: 'Encoded SFU frame would exceed the active rolling wire-byte budget.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
 
     this.reportFrameSendPressureIfNeeded({
       ...metrics,
       buffered_amount: bufferedBeforeSend,
     })
 
-    const drainTargetBufferedBytes = this.resolveSendDrainTargetBytes(metrics)
+    const drainTargetBufferedBytes = resolveSfuSendDrainTargetBytes(metrics)
     const drain = await this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)
     metrics.send_drain_ms = drain.waitedMs
     metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
@@ -626,6 +649,7 @@ export class SFUClient {
     }
     try {
       this.ws.send(encoded)
+      this.outboundWireBudget.record(encoded.byteLength)
       const binaryContinuationRequired = encoded.byteLength > SFU_BINARY_CONTINUATION_THRESHOLD_BYTES
       const samplePayload = {
         ...metrics,
@@ -864,187 +888,11 @@ export class SFUClient {
   }
 
   private handleMessage(msg: any): void {
-    const stringField = (...values: any[]): string => {
-      for (const value of values) {
-        const normalized = String(value ?? '').trim()
-        if (normalized !== '') return normalized
-      }
-      return ''
-    }
-    const integerField = (fallback: number, ...values: any[]): number => {
-      for (const value of values) {
-        const normalized = Number(value)
-        if (Number.isFinite(normalized)) return Math.floor(normalized)
-      }
-      return fallback
-    }
-    const normalizeUnitFloat = (value: unknown, fallback: number): number => {
-      const normalized = Number(value)
-      if (!Number.isFinite(normalized)) return fallback
-      return Math.max(0, Math.min(1, normalized))
-    }
-
-    switch (msg.type) {
-      case 'sfu/joined':
-        for (const publisherId of (msg.publishers ?? [])) {
-          const normalizedPublisherId = stringField(publisherId)
-          if (normalizedPublisherId !== '') {
-            this.subscribe(normalizedPublisherId)
-          }
-        }
-        break
-
-      case 'sfu/tracks':
-        this.cb.onTracks({
-          roomId:          stringField(msg.roomId, msg.room_id),
-          publisherId:     stringField(msg.publisherId, msg.publisher_id),
-          publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
-          publisherName:   stringField(msg.publisherName, msg.publisher_name),
-          tracks:        msg.tracks ?? [],
-        })
-        break
-
-      case 'sfu/unpublished':
-        this.cb.onUnpublished(
-          stringField(msg.publisherId, msg.publisher_id),
-          stringField(msg.trackId, msg.track_id),
-        )
-        break
-
-      case 'sfu/publisher_left':
-        this.cb.onPublisherLeft(stringField(msg.publisherId, msg.publisher_id))
-        break
-
-      case 'sfu/frame':
-        if (this.cb.onEncodedFrame) {
-          const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
-          const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
-          const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
-          const tileMetadataInput = {
-            layoutMode: msg.layoutMode ?? msg.layout_mode,
-            layerId: msg.layerId ?? msg.layer_id,
-            cacheEpoch: msg.cacheEpoch ?? msg.cache_epoch,
-            tileColumns: msg.tileColumns ?? msg.tile_columns,
-            tileRows: msg.tileRows ?? msg.tile_rows,
-            tileWidth: msg.tileWidth ?? msg.tile_width,
-            tileHeight: msg.tileHeight ?? msg.tile_height,
-            tileIndices: msg.tileIndices ?? msg.tile_indices,
-            roiNormX: msg.roiNormX ?? msg.roi_norm_x,
-            roiNormY: msg.roiNormY ?? msg.roi_norm_y,
-            roiNormWidth: msg.roiNormWidth ?? msg.roi_norm_width,
-            roiNormHeight: msg.roiNormHeight ?? msg.roi_norm_height,
-          }
-          const tileMetadata = normalizeTilePatchMetadata(tileMetadataInput)
-          if (this.inboundFrameAssembler.rejectFramePayloadLengthMismatch(msg)) return
-          if (!tileMetadata && hasExplicitSfuTileMetadataFields(tileMetadataInput)) {
-            reportClientDiagnostic({
-              category: 'media',
-              level: 'warning',
-              eventType: 'sfu_frame_rejected',
-              code: 'sfu_frame_rejected',
-              message: 'SFU frame used invalid tile/layer/cache metadata and was rejected.',
-              roomId: this.roomId,
-              payload: {
-                room_id: this.roomId,
-                publisher_id: stringField(msg.publisherId, msg.publisher_id),
-                publisher_user_id: stringField(msg.publisherUserId, msg.publisher_user_id),
-                track_id: stringField(msg.trackId, msg.track_id),
-                frame_id: stringField(msg.frameId, msg.frame_id),
-                frame_sequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
-                reject_reason: 'invalid_tile_metadata',
-              },
-              immediate: true,
-            })
-            return
-          }
-          this.cb.onEncodedFrame({
-            publisherId: stringField(msg.publisherId, msg.publisher_id),
-            publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
-            trackId: stringField(msg.trackId, msg.track_id),
-            timestamp: msg.timestamp,
-            data: dataBase64 !== ''
-              ? base64UrlToArrayBuffer(dataBase64)
-              : (msg.data instanceof ArrayBuffer
-                ? msg.data
-                : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0))),
-            dataBase64: dataBase64 || null,
-            type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
-            protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
-            protectedFrame: protectedFrame || null,
-            protectionMode: stringField(msg.protectionMode, msg.protection_mode) === 'required'
-              ? 'required'
-              : (protectedFrame !== '' ? 'protected' : 'transport_only'),
-            protocolVersion: Math.max(1, integerField(1, msg.protocolVersion, msg.protocol_version)),
-            frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
-            payloadChars,
-            chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
-            frameId: stringField(msg.frameId, msg.frame_id),
-            senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
-            codecId: stringField(msg.codecId, msg.codec_id),
-            runtimeId: stringField(msg.runtimeId, msg.runtime_id),
-            outgoingVideoQualityProfile: stringField(
-              msg.outgoingVideoQualityProfile,
-              msg.outgoing_video_quality_profile,
-            ),
-            kingReceiveLatencyMs: Math.max(0, Number(msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
-            kingFanoutLatencyMs: Math.max(0, Number(msg.kingFanoutLatencyMs ?? msg.king_fanout_latency_ms ?? 0)),
-            subscriberSendLatencyMs: Math.max(0, Number(msg.subscriberSendLatencyMs ?? msg.subscriber_send_latency_ms ?? 0)),
-            layoutMode: tileMetadata?.layoutMode || 'full_frame',
-            layerId: tileMetadata?.layerId || 'full',
-            cacheEpoch: Math.max(0, Number(tileMetadata?.cacheEpoch || 0)),
-            tileColumns: Math.max(0, Number(tileMetadata?.tileColumns || 0)),
-            tileRows: Math.max(0, Number(tileMetadata?.tileRows || 0)),
-            tileWidth: Math.max(0, Number(tileMetadata?.tileWidth || 0)),
-            tileHeight: Math.max(0, Number(tileMetadata?.tileHeight || 0)),
-            tileIndices: Array.isArray(tileMetadata?.tileIndices) ? tileMetadata.tileIndices : null,
-            roiNormX: Number(tileMetadata?.roiNormX ?? 0),
-            roiNormY: Number(tileMetadata?.roiNormY ?? 0),
-            roiNormWidth: Number(tileMetadata?.roiNormWidth ?? 1),
-            roiNormHeight: Number(tileMetadata?.roiNormHeight ?? 1),
-          })
-        }
-        break
-
-      case 'sfu/frame-chunk': {
-        reportClientDiagnostic({
-          category: 'media',
-          level: 'error',
-          eventType: 'sfu_legacy_frame_chunk_rejected',
-          code: 'binary_media_required',
-          message: 'SFU media chunks must use binary media envelopes.',
-          roomId: this.roomId,
-          payload: {
-            room_id: this.roomId,
-            command_type: 'sfu/frame-chunk',
-            publisher_id: stringField(msg.publisherId, msg.publisher_id),
-            publisher_user_id: stringField(msg.publisherUserId, msg.publisher_user_id),
-            track_id: stringField(msg.trackId, msg.track_id),
-            frame_id: stringField(msg.frameId, msg.frame_id),
-            frame_sequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
-            reject_reason: 'binary_media_required',
-            transport_path: 'legacy_json_media_chunk',
-          },
-          immediate: true,
-        })
-        break
-      }
-
-      case 'sfu/error':
-        reportClientDiagnostic({
-          category: 'media',
-          level: 'error',
-          eventType: 'sfu_command_error',
-          code: normalizeSfuIdentifier(stringField(msg.error), 'sfu_command_error'),
-          message: 'SFU command failed.',
-          roomId: stringField(msg.roomId, msg.room_id),
-          payload: {
-            room_id: stringField(msg.roomId, msg.room_id),
-            command_type: stringField(msg.commandType, msg.command_type),
-            error: stringField(msg.error),
-          },
-          immediate: true,
-        })
-        break
-    }
+    handleSfuClientMessage({
+      callbacks: this.cb,
+      inboundFrameAssembler: this.inboundFrameAssembler,
+      roomId: this.roomId,
+      subscribe: (publisherId) => this.subscribe(publisherId),
+    }, msg)
   }
 }

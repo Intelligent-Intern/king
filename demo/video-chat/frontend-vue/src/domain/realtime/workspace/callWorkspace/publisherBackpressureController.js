@@ -55,6 +55,12 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const payloadTooLarge = maxPayloadBytes > 0 && payloadBytes >= maxPayloadBytes;
   const receiverLagging = receiverLagPressureMs > 0 && receiverRenderLatencyMs >= receiverLagPressureMs;
   const subscriberLagging = subscriberSendPressureMs > 0 && subscriberSendLatencyMs >= subscriberSendPressureMs;
+  const budgetSendFailure = [
+    'send_buffer_drain_timeout',
+    'sfu_buffer_budget_exceeded',
+    'sfu_projected_buffer_budget_exceeded',
+    'sfu_wire_rate_budget_exceeded',
+  ].includes(reason);
 
   if (kind === 'pre_encode_buffer') {
     if (socketHigh) {
@@ -76,7 +82,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
-    if (sendFailureCount >= sendFailureThreshold || socketHigh) {
+    if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
     if (socketCritical) {
