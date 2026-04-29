@@ -12,94 +12,94 @@ Sprint rule:
 - Keep media-security, binary SFU envelopes, bounded SQLite frame buffering, live relay, receiver feedback, and online pressure contracts intact.
 - Video quality must stay automatic; there must be no user-facing quality selector in the call UI.
 
-## Sprint: Video Call Fullscreen Quality Path
+## Sprint: Video Call SFU Layer State Wiring
 
 Sprint branch:
-- `sprint/video-call-fullscreen-quality-path`
+- `hotfix/video-call-sfu-layer-state-wiring`
 
 PR target:
 - `development/1.0.7-beta`
 
 Deployed baseline:
-- `development/1.0.7-beta` includes deterministic `VideoFrame` closure, copyTo-first capture, automatic profile/track-constraint coupling, and backend diagnostics for source-readback and encode pressure.
+- `development/1.0.7-beta` includes the fullscreen quality path with protected browser encoder support, fullscreen-aware rendering, and automatic SFU layer preference signaling.
 
 Production symptom:
-- The call now transmits again, but fullscreen quality is still far below browser-native conferencing systems.
-- The remaining gap is not a single CSS scale issue. The current protected SFU path still spends too much budget in manual RGBA/WLVC processing and renders received frames through a canvas pipeline without a fullscreen-aware scheduler or adaptive high/low stream layers.
+- Production bundle `CallWorkspaceView-VElCjgkt.js` throws `Cannot set properties of undefined (setting 'sfuRemoteLayerPreferenceLastAtMs')` inside the websocket message handler when an adaptive SFU layer preference arrives.
+- The crash stops subsequent signaling handling and can break the call even though media transport is otherwise connected.
 
 Technical target:
-- Move the protected media path toward browser-grade quality without dropping King media-security or backend-authoritative SFU contracts.
-- Replace per-frame RGBA hotpath work where browser-native frame/codec primitives can carry more detail per byte.
-- Render remote frames with correct timing, aspect, and fullscreen priority instead of treating every view as the same canvas consumer.
-- Add automatic high/low quality layering so grid tiles do not dictate fullscreen quality and fullscreen does not overload thumbnail delivery.
+- Wire adaptive SFU layer state into the socket lifecycle helper and keep the helper defensive so missing isolated-test refs cannot crash runtime signaling.
+- Keep the adaptive layer contract intact: quality remains automatic, receiver feedback remains backend-routed, and primary-layer requests still protect fullscreen/main quality.
+- Record three next improvements that can materially raise quality beyond this hotfix.
 
 ## Active Issues
 
-1. [x] `[protected-browser-encoder-path]` Build the next protected browser-encoder transport step beyond RGBA/WLVC.
+1. [x] `[socket-layer-state-wiring-hotfix]` Fix adaptive SFU layer preference socket crash.
 
    Scope:
-   - Map the complete local path from camera frame to protected SFU envelope and identify every forced copy, RGBA conversion, lossy size clamp, and wire-budget gate.
-   - Add a capability-gated browser encoder path using `VideoFrame`/WebCodecs primitives where supported, while keeping frames inside King protected binary envelopes.
-   - Keep the current WLVC path as compatibility, not as the quality ceiling for capable browsers.
-   - Prove that encoded chunks are closed/disposed deterministically and diagnostics go to backend telemetry, not console noise.
+   - Inject `sfuTransportState` into `createCallWorkspaceSocketHelpers`.
+   - Add a defensive socket-lifecycle fallback state so adaptive layer messages cannot throw if a test harness or future caller omits optional refs.
+   - Extend the adaptive layer contract to prove the wiring exists and is guarded.
 
    Done when:
-   - Capable browsers can avoid the manual RGBA/WLVC encode hotpath for the primary protected SFU stream.
-   - The fallback path remains bounded and tested.
-   - Contract tests pin the capability gate, protected envelope carriage, frame lifecycle, and diagnostics.
+   - `call/media-quality-pressure` with `prefer_primary_video_layer` or `prefer_thumbnail_video_layer` no longer crashes the websocket handler.
+   - The primary-layer TTL and thumbnail-ignore behavior still use the shared SFU transport state in the real app.
+   - Contract tests fail if the socket helper loses `sfuTransportState` wiring again.
 
    Report:
-   - Implemented a capability-gated protected WebCodecs/VP8 publisher path that reads `VideoFrame`s directly, encodes through browser `VideoEncoder`, closes source frames deterministically, wraps chunks in King media-security envelopes, and sends them through the existing SFU binary frame transport.
-   - Implemented receiver-side `webcodecs_vp8` detection and `VideoDecoder` rendering so browser-encoded frames bypass WLVC metadata/decode and close decoded `VideoFrame`s deterministically.
-   - Extended frontend payload normalization, backend SFU metadata normalization, and media-security protected-frame validation to preserve `webcodecs_vp8`, frame dimensions, and browser-encoder telemetry.
-   - Added a fatal browser-encoder fallback gate: after a WebCodecs path failure the publisher temporarily disables that path and restarts into the compatibility WLVC path instead of leaving video silent.
-   - Verification: `npm run test:contract:sfu`, `npm run test:contract:media-security`, `npm run test:contract:wlvc`, `npm run build`, `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`, `git diff --check`.
+   - Added `sfuTransportState` to the socket lifecycle helper refs in `CallWorkspaceView.vue`.
+   - Added `sfuTransportStateForSocketLifecycle()` with a local fallback state to prevent websocket-handler crashes in omitted-ref contexts.
+   - Extended `sfu-adaptive-quality-layers-contract.mjs` to pin both real app injection and defensive helper behavior.
+   - Verification: `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `git diff --check`.
 
-2. [x] `[fullscreen-remote-render-scheduler]` Make remote render quality fullscreen-aware instead of canvas-fill driven.
+2. [ ] `[server-authoritative-subscriber-layer-routing]` Move layer choice from global publisher profile pressure to per-subscriber SFU routing.
 
    Scope:
-   - Separate remote decode cadence from UI canvas mount/layout cadence.
-   - Preserve source aspect ratio for portrait and landscape video in grid, main, and fullscreen surfaces.
-   - Add timestamp/sequence-aware frame scheduling so stale deltas are dropped and the newest complete frame wins.
-   - Prefer the active fullscreen/main participant for render budget without starving grid thumbnails.
+   - Add subscriber layer preference state to the SFU websocket session.
+   - Filter direct fanout by subscriber preference so thumbnail receivers cannot force the fullscreen receiver down.
+   - Preserve SQLite buffering, binary envelopes, and media-security metadata.
 
    Done when:
-   - Fullscreen/main remote video is not stretched, not cropped into blocky tiles, and does not depend on grid tile dimensions.
-   - Decoder resets/profile switches keep the last good frame until a valid replacement keyframe lands.
-   - Contract and Playwright checks cover portrait, landscape, grid, main, and fullscreen rendering behavior.
+   - A subscriber in mini/grid can receive low-cost frames while a fullscreen subscriber keeps primary frames from the same publisher.
+   - Slow-subscriber isolation remains intact and diagnostics show which layer each subscriber received.
+   - Backend and frontend contracts prove layer preferences are server-authoritative, not just local UI hints.
 
    Report:
-   - Added explicit remote render surface roles (`fullscreen`, `main`, `grid`, `mini`, `fallback`) at video-node mount time so SFU receiver rendering no longer guesses from canvas size or stale parent placement.
-   - Added a surface-aware receiver scheduler: fullscreen/main render every valid newest frame, grid/mini throttle thumbnail deltas, keyframes always render, stale sequence/timestamp frames are skipped, and scheduler skip telemetry goes to backend diagnostics.
-   - Removed per-frame `VideoDecoder.flush()` from the protected browser decoder path so WebCodecs output is no longer serialized on every incoming frame; decoder queue pressure now drops lower-priority thumbnail deltas before backlog grows.
-   - Kept portrait/landscape presentation aspect-safe with explicit centered `object-fit: contain` rules for main/fullscreen/grid/mini canvas/video surfaces.
-   - Verification: `node tests/contract/sfu-fullscreen-render-scheduler-contract.mjs`, `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `npm run build`, `git diff --check`.
-   - Production deploy: `demo/video-chat/scripts/deploy.sh deploy` succeeded and `demo/video-chat/scripts/deploy-smoke.sh` passed for HTTPS, API, lobby WS, SFU WS, certbot hook/SANs, admin infrastructure, and video operations.
+   - Proposed next improvement.
 
-3. [x] `[adaptive-sfu-quality-layers]` Add automatic high/low quality layers for fullscreen and grid.
+3. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
 
    Scope:
-   - Introduce an automatic primary layer for selected/fullscreen participants and a cheaper thumbnail layer for grid/mini surfaces.
-   - Let receiver visibility and layout drive requested layer priority through backend-authoritative SFU control messages.
-   - Keep quality selection out of the UI and keep downgrade/upgrade decisions automatic.
-   - Reuse receiver feedback, backpressure, and bounded buffering so slow thumbnails cannot drag down the fullscreen stream.
+   - Keep one camera source and one media-security session, but produce separate encoded outputs for primary and thumbnail profiles.
+   - Prefer browser `VideoEncoder` for both layers where available; keep WLVC fallback bounded.
+   - Tie layer selection to backend subscriber routing instead of forcing one global publisher profile.
 
    Done when:
-   - Grid view can use low-cost thumbnail delivery while the focused participant receives a higher-detail stream.
-   - The system can downgrade and later re-upgrade layers automatically after pressure/freeze events.
-   - Tests prove layer negotiation, pressure isolation, backend diagnostics, and no manual quality selector.
+   - Fullscreen quality is no longer capped by thumbnail/grid delivery.
+   - Thumbnail streams do not trigger primary stream source-readback or wire-rate pressure.
+   - Contracts prove deterministic `VideoFrame`/chunk closure for both layers.
 
    Report:
-   - Added automatic receiver-side SFU layer preferences driven by remote render surface roles: fullscreen/main and two-person grid request the primary layer, larger grid/mini/fallback request thumbnail delivery.
-   - Layer preference signals now travel through the existing backend-routed `call/media-quality-pressure` channel with explicit `prefer_primary_video_layer` and `prefer_thumbnail_video_layer` actions, requested target profiles, surface role, visible participant count, and frame evidence.
-   - Publisher-side handling now aggregates remote layer requests with a primary-layer TTL, bypasses slow recovery cooldown for primary requests, ignores thumbnail downshifts while a primary request is active, and can jump directly to the requested automatic profile instead of stepping one tier at a time.
-   - Both WLVC and protected browser-decoder receivers send layer preference after accepted renders; explicit requested actions are preserved by the media stack and runtime health pressure senders.
-   - Verification: `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `npm run build`, `git diff --check`.
+   - Proposed next improvement.
+
+4. [ ] `[online-video-quality-regression-probes]` Add automated online probes for blockiness, frame lifecycle, and console cleanliness.
+
+   Scope:
+   - Extend production E2E to detect repeated `VideoFrame was garbage collected without being closed`, websocket handler exceptions, and critical SFU pressure logs.
+   - Add a canvas/video visual quality probe that catches extreme macroblocking or 2-participant grid over-downshift.
+   - Send all relevant warnings into backend diagnostics instead of browser console-only output.
+
+   Done when:
+   - A deployed build fails smoke/acceptance if the websocket handler throws, remote video stops rendering, or `VideoFrame` lifecycle warnings recur.
+   - Two-participant calls assert primary-layer quality instead of accepting thumbnail-level output.
+   - The report includes backend diagnostic IDs for failures instead of requiring browser console screenshots.
+
+   Report:
+   - Proposed next improvement.
 
 ## Execution Order
 
-1. Finish `[protected-browser-encoder-path]`.
-2. Finish `[fullscreen-remote-render-scheduler]`.
-3. Finish `[adaptive-sfu-quality-layers]`.
-4. Deploy after each completed issue and record production evidence in that issue's report.
-5. Push the sprint branch after each completed issue.
+1. Finish `[socket-layer-state-wiring-hotfix]`.
+2. Deploy the hotfix and verify production smoke.
+3. Open PR to `development/1.0.7-beta`.
+4. Use the three proposed issues as the next quality-hardening sprint after this hotfix is merged.

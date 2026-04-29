@@ -57,6 +57,18 @@ export function createCallWorkspaceSocketHelpers({
     mediaSecuritySignalTypes,
     reconnectDelayMs,
   } = constants;
+  const fallbackSfuTransportState = {
+    sfuRemotePrimaryLayerRequestedUntilMs: 0,
+    sfuRemoteLayerPreferenceLastAtMs: 0,
+    sfuRemoteLayerPreferenceLastAction: '',
+  };
+
+  function sfuTransportStateForSocketLifecycle() {
+    if (refs.sfuTransportState && typeof refs.sfuTransportState === 'object') {
+      return refs.sfuTransportState;
+    }
+    return fallbackSfuTransportState;
+  }
 
   function removeParticipantLocallyAfterHangup(userId) {
     const normalizedUserId = Number(userId || 0);
@@ -113,11 +125,12 @@ export function createCallWorkspaceSocketHelpers({
     const primaryLayerRequested = requestedAction === 'prefer_primary_video_layer' || requestedVideoLayer === 'primary';
     const thumbnailLayerRequested = requestedAction === 'prefer_thumbnail_video_layer' || requestedVideoLayer === 'thumbnail';
     const primaryLayerPreferenceTtlMs = 12000;
+    const sfuTransportState = sfuTransportStateForSocketLifecycle();
     if (primaryLayerRequested) {
-      refs.sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs = nowMs + primaryLayerPreferenceTtlMs;
+      sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs = nowMs + primaryLayerPreferenceTtlMs;
     }
-    refs.sfuTransportState.sfuRemoteLayerPreferenceLastAtMs = nowMs;
-    refs.sfuTransportState.sfuRemoteLayerPreferenceLastAction = requestedAction;
+    sfuTransportState.sfuRemoteLayerPreferenceLastAtMs = nowMs;
+    sfuTransportState.sfuRemoteLayerPreferenceLastAction = requestedAction;
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
       || primaryLayerRequested
@@ -128,7 +141,7 @@ export function createCallWorkspaceSocketHelpers({
         senderUserId,
       })
       : false;
-    const primaryLayerActive = nowMs < Number(refs.sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs || 0);
+    const primaryLayerActive = nowMs < Number(sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs || 0);
     let downgraded = false;
     let upgraded = false;
     let ignoredThumbnailRequest = false;
