@@ -10,12 +10,12 @@ export function normalizeParticipantRow(raw) {
   const connectionId = String(raw?.connection_id || '').trim();
   return {
     connectionId,
-    hasConnection: connectionId !== '',
-    roomId: normalizeRoomId(raw?.room_id || 'lobby'),
+    hasConnection: connectionId !== '' || String(raw?.connected_at || '').trim() !== '',
+    roomId: normalizeRoomId(raw?.room_id || raw?.roomId || 'lobby'),
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
-    displayName: String(user.display_name || '').trim() || `User ${userId || 'unknown'}`,
+    displayName: String(user.display_name || user.displayName || '').trim() || `User ${userId || 'unknown'}`,
     role: normalizeRole(user.role),
-    callRole: normalizeCallRole(user.call_role || raw?.call_role || 'participant'),
+    callRole: normalizeCallRole(user.call_role || user.callRole || 'participant'),
     connectedAt: String(raw?.connected_at || ''),
   };
 }

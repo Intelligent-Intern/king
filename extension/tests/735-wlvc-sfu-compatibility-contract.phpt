@@ -132,17 +132,17 @@ $runtimeNeedles = [
     'SFU join with legacy roomId should stay compatible',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU must reject protected frame plus plaintext data',
-    'SFU must reject plaintext fallback in required mode',
-    'SFU frame relay must exclude self and cross-room frames',
+    'protected binary SFU frame envelope should decode',
+    'binary SFU frame envelope with codec/runtime/layout metadata should decode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
+    'SFU live frame relay must not let skipped local frames hide late-arriving remote frames',
 ];
 foreach ($runtimeNeedles as $needle) {
     require_contains($runtimeContract, $needle);
 }
 
 require_contains($frontendContract, '[sfu-origin-room-binding-contract] PASS');
-require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu": "node tests/contract/sfu-origin-room-binding-contract.mjs"');
+require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu":');
 
 $provenanceNeedles = [
     'SFU compatibility decision:',

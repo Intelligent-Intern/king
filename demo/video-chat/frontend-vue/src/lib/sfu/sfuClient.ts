@@ -86,6 +86,11 @@ export class SFUClient {
   private lastFrameTransportSampleAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
+  private publisherLastFrameTime = new Map<string, number>()
+  private stallCheckTimer: ReturnType<typeof setInterval> | null = null
+  private readonly stallCheckIntervalMs = 5000
+  private readonly stallThresholdMs = 15000
+  private readonly stallKeyframeThresholdMs = 12000
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -183,6 +188,7 @@ export class SFUClient {
       if (this.cb.onConnected) {
         this.cb.onConnected()
       }
+      this.startStallCheckTimer()
     }
 
     ws.onmessage = (ev) => {
@@ -227,6 +233,7 @@ export class SFUClient {
           candidate_origin: String(candidates[index] || ''),
         },
       })
+      this.stopStallCheckTimer()
       this.notifyDisconnectOnce()
     }
 
@@ -290,6 +297,10 @@ export class SFUClient {
     this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
   }
 
+  requestKeyframe(publisherId: string): void {
+    this.send({ type: 'sfu/request_keyframe', publisher_id: publisherId })
+  }
+
   unpublishTrack(trackId: string): void {
     this.send({ type: 'sfu/unpublish', track_id: trackId })
   }
@@ -309,6 +320,8 @@ export class SFUClient {
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.publisherLastFrameTime.clear()
+    this.stopStallCheckTimer()
     this.clearOutboundFrameQueue('leave')
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
@@ -734,10 +747,13 @@ export class SFUClient {
 
       case 'sfu/publisher_left':
         this.cb.onPublisherLeft(stringField(msg.publisherId, msg.publisher_id))
+        this.publisherLastFrameTime.delete(stringField(msg.publisherId, msg.publisher_id))
         break
 
       case 'sfu/frame':
         if (this.cb.onEncodedFrame) {
+          const publisherId = stringField(msg.publisherId, msg.publisher_id)
+          this.publisherLastFrameTime.set(publisherId, Date.now())
           const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
           const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
           const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
@@ -857,6 +873,44 @@ export class SFUClient {
           immediate: true,
         })
         break
+    }
+  }
+
+  private startStallCheckTimer(): void {
+    this.stopStallCheckTimer()
+    this.stallCheckTimer = setInterval(() => this.checkStalls(), this.stallCheckIntervalMs)
+  }
+
+  private stopStallCheckTimer(): void {
+    if (this.stallCheckTimer !== null) {
+      clearInterval(this.stallCheckTimer)
+      this.stallCheckTimer = null
+    }
+  }
+
+  private checkStalls(): void {
+    const now = Date.now()
+    for (const [publisherId, lastFrameTime] of this.publisherLastFrameTime.entries()) {
+      const stalledMs = now - lastFrameTime
+      if (stalledMs > this.stallThresholdMs) {
+        reportClientDiagnostic({
+          category: 'media',
+          level: 'error',
+          eventType: 'sfu_native_stall_detected',
+          code: 'sfu_native_stall_detected',
+          message: 'SFU native stall check detected stalled publisher.',
+          roomId: this.roomId,
+          payload: {
+            room_id: this.roomId,
+            publisher_id: publisherId,
+            stalled_ms: stalledMs,
+          },
+          immediate: true,
+        })
+        this.subscribe(publisherId)
+      } else if (stalledMs > this.stallKeyframeThresholdMs) {
+        this.requestKeyframe(publisherId)
+      }
     }
   }
 }

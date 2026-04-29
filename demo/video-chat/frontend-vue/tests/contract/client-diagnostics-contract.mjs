@@ -15,7 +15,7 @@ function requireContains(source, needle, label) {
 }
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
+const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
 const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
 const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');

@@ -158,6 +158,7 @@ function fixtureCall() {
     call_role: user.callRole,
     invite_state: 'allowed',
     joined_at: '2026-04-19T12:00:00.000Z',
+    connected_at: '2026-04-29T01:00:00.000Z',
   }));
 
   return {
