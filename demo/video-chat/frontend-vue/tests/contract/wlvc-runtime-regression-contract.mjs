@@ -168,8 +168,8 @@ try {
   requireContains(runtimeHealth, "return sfuRuntimeEnabled && mediaRuntimePath.value === 'pending';", 'native signaling block protects SFU startup');
   requireContains(runtimeHealth, "'[KingRT] 📵 No video signal from SFU publisher'", 'remote stall diagnostic remains wired');
   requireContains(runtimeHealth, "'[KingRT] SFU remote video frozen'", 'remote freeze diagnostic remains wired');
-  requireContains(videoConnectionStatus, "'[KingRT] SFU video stable'", 'remote video stable connection status remains wired');
-  requireContains(videoConnectionStatus, '`local_user=${normalizeUserId(currentUserId)}`', 'remote video status includes local participant identity');
+  requireContains(videoConnectionStatus, "eventType: 'sfu_remote_video_stable'", 'remote video stable status is routed to backend diagnostics');
+  requireContains(videoConnectionStatus, 'local_user_id: normalizeUserId(currentUserId)', 'remote video status includes local participant identity');
 
   const nativeSignaling = readFromFrontend('src/domain/realtime/native/signaling.js');
   requireContains(nativeSignaling, "if (sfuRuntimeEnabled() && String(mediaRuntimePath.value || '').trim() !== 'webrtc_native') {", 'native signaling will not hijack WLVC runtime');

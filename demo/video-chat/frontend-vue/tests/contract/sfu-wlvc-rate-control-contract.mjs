@@ -42,7 +42,15 @@ async function main() {
   requireContains(publisherPipeline, 'encodedPayloadBytes >= payloadSoftLimitBytes || encodeMs > encodeBudgetMs', 'publisher acts before hard payload/socket pressure');
   requireContains(publisherPipeline, "reason: 'sfu_wlvc_rate_budget_pressure'", 'publisher reports WLVC rate-budget pressure');
   requireContains(sfuPublisherControl, 'pressureReason = String(details?.reason', 'publisher controller preserves exact payload pressure reason');
-  requireContains(sfuPublisherControl, 'downgradeSfuVideoQualityAfterEncodePressure(pressureReason)', 'publisher controller downshifts from exact rate pressure reason');
+  requireContains(sfuPublisherControl, "CADENCE_THROTTLE: 'cadence_throttle'", 'publisher controller can cadence-throttle motion deltas before profile downshift');
+  requireContains(sfuPublisherControl, 'resolveWlvcEncodeIntervalMs', 'publisher controller exposes active WLVC cadence interval');
+  requireContains(sfuPublisherControl, 'motion_delta_cadence_multiplier', 'publisher diagnostics expose motion delta cadence multiplier');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_wlvc_motion_delta_cadence_throttled'", 'publisher controller reports cadence throttling to backend diagnostics');
+  requireContains(sfuPublisherControl, "qualityRecoveryProbe('sfu_wlvc_motion_delta_recovered'", 'publisher controller probes quality recovery after stable motion deltas');
+  requireContains(sfuPublisherControl, 'if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT))', 'publisher controller downshifts only after the pressure decision permits it');
+  requireContains(publisherPipeline, 'resolveWlvcEncodeIntervalMs(', 'publisher encode loop uses automatic cadence control');
+  requireContains(sfuTransport, 'resolveWlvcEncodeIntervalMs: publisherBackpressureController.resolveWlvcEncodeIntervalMs', 'SFU transport exposes cadence control to the publisher pipeline');
+  requireContains(publisherBackpressureController, 'SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD', 'payload-pressure profile downshift has an explicit repeated-pressure threshold');
   requireContains(publisherBackpressureController, "'sfu_wire_rate_budget_exceeded'", 'wire-rate send budget failures are explicit quality pressure');
   requireContains(publisherBackpressureController, 'budgetSendFailure || sendFailureCount >= sendFailureThreshold', 'budget send failures downshift before repeated socket pressure');
   requireContains(publisherBackpressureController, 'details?.retryAfterMs ?? details?.retry_after_ms', 'wire budget retry windows reach publisher encode throttling');

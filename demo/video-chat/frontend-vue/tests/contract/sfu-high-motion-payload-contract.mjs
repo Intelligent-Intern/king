@@ -33,6 +33,10 @@ try {
   requireContains(publisherPipeline, "reason: 'sfu_wlvc_rate_budget_pressure'", 'publisher flags near-budget high-motion payload pressure');
   requireContains(sfuPublisherControl, "pressureReason = String(details?.reason || 'sfu_high_motion_payload_pressure')", 'publisher controller preserves high-motion pressure reason');
   requireContains(sfuPublisherControl, 'resetWlvcEncoderAfterDroppedEncodedFrame(pressureReason)', 'publisher controller forces encoder recovery after payload drop');
+  requireContains(sfuPublisherControl, "CADENCE_THROTTLE: 'cadence_throttle'", 'publisher controller throttles motion cadence before destructive quality collapse');
+  requireContains(sfuPublisherControl, 'motion_delta_cadence_level', 'publisher diagnostics identify active motion cadence level');
+  requireContains(sfuPublisherControl, 'motion_delta_profile_downshift_threshold', 'publisher diagnostics identify repeated-pressure downshift threshold');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_wlvc_motion_delta_cadence_throttled'", 'publisher controller routes high-motion cadence warnings to backend diagnostics');
   requireContains(sfuPublisherControl, 'forced_next_keyframe: true', 'publisher controller marks a forced recoverable keyframe plan');
   requireContains(runtimeSwitching, "'sfu_high_motion_payload_pressure'", 'high-motion pressure downshifts without waiting for cooldown');
   requireContains(runtimeSwitching, "'sfu_wlvc_rate_budget_pressure'", 'near-budget payload pressure downshifts without waiting for cooldown');

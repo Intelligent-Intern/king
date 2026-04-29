@@ -57,7 +57,7 @@ Technical target:
    - Added `sfu-zero-copy-readback-gate-contract.mjs` and extended the RGBA copy contract.
    - Verification: `npm run test:contract:sfu`, `npm run build`.
 
-2. [ ] `[wlvc-motion-delta-rate-control]` Stabilize WLVC quality under movement instead of collapsing into blocky frames.
+2. [x] `[wlvc-motion-delta-rate-control]` Stabilize WLVC quality under movement instead of collapsing into blocky frames.
 
    Scope:
    - Analyze the WLVC encode path for high-motion delta explosion, tile/ROI churn, keyframe cadence, and profile downgrade thresholds.
@@ -70,6 +70,15 @@ Technical target:
    - High-motion calls stay moving at the best sustainable profile instead of dropping straight to unusable block quality.
    - Automatic downgrade and recovery decisions are visible in backend diagnostics.
    - The call UI has no manual quality selector.
+
+   Report:
+   - Added motion-delta cadence throttling to the publisher backpressure controller: first WLVC payload pressure now slows the encode interval and forces a recoverable keyframe before any destructive profile downshift.
+   - Kept profile downshift automatic and thresholded: repeated motion payload pressure can still step down after cadence throttling fails, while protected-media budget pressure remains an immediate safety downshift.
+   - Wired the active cadence multiplier into the local publisher pipeline through `sfuTransport.resolveWlvcEncodeIntervalMs(...)`.
+   - Added automatic cadence recovery and backend diagnostics for `sfu_wlvc_motion_delta_cadence_throttled`, `sfu_wlvc_motion_delta_cadence_recovered`, and `sfu_wlvc_motion_delta_recovered`.
+   - Fixed WLVC chroma delta coding in both TypeScript and WASM C++ sources using a dedicated `bit2=chroma_temporal_residual` flag, then rebuilt `wlvc.js`/`wlvc.wasm` with the ES module factory wrapper intact.
+   - Updated contracts so stable video status is backend-diagnostic based instead of console-log based, and so high-motion tests assert cadence-first behavior plus moving-chroma delta decode.
+   - Verification: `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `node tests/contract/wlvc-wasm-config-surface-contract.mjs`, `node tests/contract/call-layout-sidebar-controls-contract.mjs`, `npm run build`.
 
 3. [ ] `[sfu-replay-pacing-slow-subscriber-isolation]` Smooth SFU send/replay pressure without punishing healthy publishers.
 

@@ -38,7 +38,8 @@ async function main() {
   requireContains(codecCppSource, 'w8(static_cast<uint8_t>(cfg_.wavelet_type));', 'native wavelet header field');
   requireContains(codecCppSource, 'w8(static_cast<uint8_t>(cfg_.color_space));', 'native colorspace header field');
   requireContains(codecCppSource, 'w8(static_cast<uint8_t>(cfg_.entropy_coding));', 'native entropy header field');
-  requireContains(codecCppSource, 'if (cfg_.motion_estimation) flags |= 0x01;', 'native motion flag usage');
+  requireContains(codecCppSource, 'if (cfg_.motion_estimation) flags |= kFrameFlagMotionEstimation;', 'native motion flag usage');
+  requireContains(codecCppSource, 'if (use_temporal_residual) flags |= kFrameFlagChromaTemporalResidual;', 'native chroma temporal residual flag usage');
 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
@@ -80,6 +81,28 @@ async function main() {
     assert.ok(decoded instanceof Uint8Array, 'advanced decoder should return Uint8Array');
     assert.equal(decoded.length, rgba.length, 'advanced decoder should return full RGBA payload');
 
+    const motionEncoder = new mod.Encoder(16, 16, 60, 30, 2, 0, 0, 2, true);
+    const motionDecoder = new mod.Decoder(16, 16, 60, 2, 0, 0, 2);
+    const motionBase = new Uint8Array(16 * 16 * 4);
+    const motionChroma = new Uint8Array(16 * 16 * 4);
+    for (let i = 0; i < motionBase.length; i += 4) {
+      const pixel = i / 4;
+      motionBase[i] = 80;
+      motionBase[i + 1] = 90 + (pixel % 40);
+      motionBase[i + 2] = 140;
+      motionBase[i + 3] = 255;
+      motionChroma[i] = 80;
+      motionChroma[i + 1] = 30 + ((pixel * 7) % 120);
+      motionChroma[i + 2] = 210 - ((pixel * 5) % 90);
+      motionChroma[i + 3] = 255;
+    }
+    const motionKey = motionEncoder.encode(motionBase, 124000);
+    const motionDelta = motionEncoder.encode(motionChroma, 125000);
+    assert.ok(motionDelta instanceof Uint8Array, 'motion encoder should produce a second delta frame');
+    assert.equal(motionDelta[31] & 0x04, 0x04, 'native motion delta should set chroma temporal residual flag bit2');
+    assert.ok(motionDecoder.decode(motionKey) instanceof Uint8Array, 'native decoder should accept motion keyframe');
+    assert.ok(motionDecoder.decode(motionDelta) instanceof Uint8Array, 'native decoder should accept chroma temporal residual delta');
+
     const audio = new mod.AudioProcessor(48000, -48.0, -16.0);
     const samples = new Float32Array([0.0, 0.0, 0.25, -0.25, 0.5, -0.5, 0.0, 0.0]);
     audio.process(samples);
@@ -87,6 +110,8 @@ async function main() {
 
     encoder.delete();
     decoder.delete();
+    motionEncoder.delete();
+    motionDecoder.delete();
     audio.delete();
   } finally {
     globalThis.fetch = originalFetch;

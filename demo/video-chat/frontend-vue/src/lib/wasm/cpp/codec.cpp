@@ -18,7 +18,11 @@ Encoder::Encoder(const EncoderConfig& cfg) : cfg_(cfg) {
     U_.resize(uvW * uvH);
     V_.resize(uvW * uvH);
     Ydelta_.resize(w * h);
+    Udelta_.resize(uvW * uvH);
+    Vdelta_.resize(uvW * uvH);
     prevY_.resize(w * h);
+    prevU_.resize(uvW * uvH);
+    prevV_.resize(uvW * uvH);
     Yq_.resize(w * h);
     Uq_.resize(uvW * uvH);
     Vq_.resize(uvW * uvH);
@@ -70,25 +74,37 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
 
     rgba_to_yuv(rgba);
 
-    // Temporal residual on Y for delta frames
+    // Temporal residuals for delta frames. Chroma residuals are guarded by a
+    // distinct header flag so older motion-estimation metadata stays readable.
     float* y_enc = Y_.data();
-    if (cfg_.motion_estimation && !is_key && frame_count_ > 1) {
+    float* u_enc = U_.data();
+    float* v_enc = V_.data();
+    const bool use_temporal_residual = cfg_.motion_estimation && !is_key && frame_count_ > 1;
+    if (use_temporal_residual) {
         for (int i = 0; i < w * h; ++i)
             Ydelta_[i] = Y_[i] - prevY_[i];
+        for (int i = 0; i < uvW * uvH; ++i) {
+            Udelta_[i] = U_[i] - prevU_[i];
+            Vdelta_[i] = V_[i] - prevV_[i];
+        }
         y_enc = Ydelta_.data();
+        u_enc = Udelta_.data();
+        v_enc = Vdelta_.data();
     }
     std::memcpy(prevY_.data(), Y_.data(), w * h * sizeof(float));
+    std::memcpy(prevU_.data(), U_.data(), uvW * uvH * sizeof(float));
+    std::memcpy(prevV_.data(), V_.data(), uvW * uvH * sizeof(float));
 
     // Forward DWT
     dwt_forward(y_enc, w, h, cfg_.levels, tmp_.data());
-    dwt_forward(U_.data(), uvW, uvH, cfg_.levels, tmp_.data());
-    dwt_forward(V_.data(), uvW, uvH, cfg_.levels, tmp_.data());
+    dwt_forward(u_enc, uvW, uvH, cfg_.levels, tmp_.data());
+    dwt_forward(v_enc, uvW, uvH, cfg_.levels, tmp_.data());
 
     // Quantise
     QuantConfig qcfg = { cfg_.quality, cfg_.levels };
     quantize_2d(y_enc, Yq_.data(), w, h, qcfg);
-    quantize_2d(U_.data(), Uq_.data(), uvW, uvH, qcfg);
-    quantize_2d(V_.data(), Vq_.data(), uvW, uvH, qcfg);
+    quantize_2d(u_enc, Uq_.data(), uvW, uvH, qcfg);
+    quantize_2d(v_enc, Vq_.data(), uvW, uvH, qcfg);
 
     size_t y_rle_sz = 0;
     size_t u_rle_sz = 0;
@@ -138,7 +154,8 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
     w8(static_cast<uint8_t>(cfg_.color_space));
     w8(static_cast<uint8_t>(cfg_.entropy_coding));
     uint8_t flags = 0;
-    if (cfg_.motion_estimation) flags |= 0x01;
+    if (cfg_.motion_estimation) flags |= kFrameFlagMotionEstimation;
+    if (use_temporal_residual) flags |= kFrameFlagChromaTemporalResidual;
     w8(flags);
     w8(0);                                   // blur radius reserved
 
@@ -176,6 +193,8 @@ int Encoder::max_encoded_bytes() const {
 void Encoder::reset() {
     frame_count_ = 0;
     std::fill(prevY_.begin(), prevY_.end(), 0.0f);
+    std::fill(prevU_.begin(), prevU_.end(), 0.0f);
+    std::fill(prevV_.begin(), prevV_.end(), 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +210,8 @@ Decoder::Decoder(const DecoderConfig& cfg) : cfg_(cfg) {
     U_.resize(uvW * uvH);
     V_.resize(uvW * uvH);
     prevY_.resize(w * h);
+    prevU_.resize(uvW * uvH);
+    prevV_.resize(uvW * uvH);
     Yq_.resize(w * h);
     Uq_.resize(uvW * uvH);
     Vq_.resize(uvW * uvH);
@@ -231,11 +252,12 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
     const int uvH = r16();
     int colorSpace = kYUV;
     int entropyMode = kRLE;
+    uint8_t flags = 0;
     if (version >= 2) {
         r8(); // wavelet type
         colorSpace = r8();
         entropyMode = r8();
-        r8(); // flags
+        flags = r8();
         r8(); // blur radius
     }
 
@@ -286,7 +308,15 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
         for (int i = 0; i < w * h; ++i)
             Y_[i] += prevY_[i];
     }
+    if (!is_key && (flags & kFrameFlagChromaTemporalResidual)) {
+        for (int i = 0; i < uvW * uvH; ++i) {
+            U_[i] += prevU_[i];
+            V_[i] += prevV_[i];
+        }
+    }
     std::memcpy(prevY_.data(), Y_.data(), w * h * sizeof(float));
+    std::memcpy(prevU_.data(), U_.data(), uvW * uvH * sizeof(float));
+    std::memcpy(prevV_.data(), V_.data(), uvW * uvH * sizeof(float));
 
     if (colorSpace == kRGB) {
         for (int i = 0; i < w * h; ++i) {
@@ -329,6 +359,8 @@ void Decoder::yuv_to_rgba(uint8_t* rgba, int w, int h,
 
 void Decoder::reset() {
     std::fill(prevY_.begin(), prevY_.end(), 0.0f);
+    std::fill(prevU_.begin(), prevU_.end(), 0.0f);
+    std::fill(prevV_.begin(), prevV_.end(), 0.0f);
 }
 
 } // namespace wlvc

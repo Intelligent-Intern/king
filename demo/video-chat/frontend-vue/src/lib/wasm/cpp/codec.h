@@ -26,7 +26,8 @@
  *   Byte  28     wavelet_type (0=haar, 1=db4, 2=cdf97)
  *   Byte  29     color_space (0=yuv, 1=rgb)
  *   Byte  30     entropy_coding (0=rle, 1=arithmetic, 2=none)
- *   Byte  31     flags: bit0=motion_estimation, bit1=blur_background
+ *   Byte  31     flags: bit0=motion_estimation, bit1=blur_background,
+ *                bit2=chroma_temporal_residual
  *   Byte  32     blur_radius (0=off; reserved for higher-level pipeline use)
  *   [33+]        Y_data | U_data | V_data
  *
@@ -47,6 +48,8 @@ namespace wlvc {
 static const uint32_t kMagic        = 0x574C5643u;
 static const int      kHeaderBytes  = 33;
 static const int      kDefaultLevels = 4;
+static const uint8_t  kFrameFlagMotionEstimation = 0x01;
+static const uint8_t  kFrameFlagChromaTemporalResidual = 0x04;
 
 enum WaveletType {
     kHaar = 0,
@@ -108,8 +111,8 @@ private:
 
     // Planar channel buffers (allocated once)
     std::vector<float>   Y_, U_, V_;     // float DWT workspace
-    std::vector<float>   Ydelta_;        // temporal residual buffer
-    std::vector<float>   prevY_;         // previous luma for delta coding
+    std::vector<float>   Ydelta_, Udelta_, Vdelta_; // temporal residual buffers
+    std::vector<float>   prevY_, prevU_, prevV_;    // previous channels for delta coding
     std::vector<int16_t> Yq_, Uq_, Vq_; // quantised output
     std::vector<float>   tmp_;           // 1-D DWT scratch (max(w,h) floats)
     std::vector<uint8_t> rle_buf_;       // per-channel RLE workspace
@@ -152,7 +155,7 @@ private:
     DecoderConfig cfg_;
 
     std::vector<float>   Y_, U_, V_;
-    std::vector<float>   prevY_;
+    std::vector<float>   prevY_, prevU_, prevV_;
     std::vector<int16_t> Yq_, Uq_, Vq_;
     std::vector<float>   tmp_;
 

@@ -33,6 +33,7 @@ async function main() {
   requireContains(publisherBackpressureController, 'export function createPublisherBackpressureController', 'stateful publisher controller factory');
   requireContains(publisherBackpressureController, "PAUSE_ENCODE: 'pause_encode'", 'controller can pause encode loop');
   requireContains(publisherBackpressureController, "DROP_FRAME: 'drop_frame'", 'controller can drop frames');
+  requireContains(publisherBackpressureController, "CADENCE_THROTTLE: 'cadence_throttle'", 'controller can slow WLVC cadence before profile collapse');
   requireContains(publisherBackpressureController, "PROFILE_DOWNSHIFT: 'profile_downshift'", 'controller can downshift profile');
   requireContains(publisherBackpressureController, "REQUEST_KEYFRAME: 'request_keyframe'", 'controller can request keyframe recovery');
   requireContains(publisherBackpressureController, "SOCKET_RESTART: 'socket_restart'", 'controller can restart only stuck sockets');
@@ -123,7 +124,26 @@ async function main() {
     encodeMs: 48,
   }, pressureConfig);
   assert.ok(payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME), 'payload pressure drops before send');
-  assert.ok(payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT), 'payload pressure downshifts profile');
+  assert.ok(payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.CADENCE_THROTTLE), 'payload pressure throttles WLVC cadence');
+  assert.equal(
+    payloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+    false,
+    'first motion payload pressure must not immediately collapse the profile',
+  );
+
+  const repeatedPayloadDecision = decidePublisherBackpressureAction({
+    kind: 'payload_pressure',
+    payloadBytes: 2_000_000,
+    payloadPressureCount: 3,
+    encodeMs: 48,
+  }, {
+    ...pressureConfig,
+    motionDeltaProfileDownshiftThreshold: 3,
+  });
+  assert.ok(
+    repeatedPayloadDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+    'repeated payload pressure can downshift after cadence throttling fails',
+  );
 
   const wireBudgetDecision = decidePublisherBackpressureAction({
     kind: 'send_failure',
@@ -144,16 +164,25 @@ async function main() {
     wlvcPayloadPressureCount: 0,
     wlvcPayloadPressureFirstAtMs: 0,
     wlvcPayloadPressureLastLogAtMs: 0,
+    wlvcMotionDeltaCadenceLevel: 0,
+    wlvcMotionDeltaCadenceUntilMs: 0,
+    wlvcMotionDeltaStableStartedAtMs: 0,
+    wlvcMotionDeltaStableSampleCount: 0,
+    wlvcMotionDeltaLastLogAtMs: 0,
     wlvcFrameSendFailureLastLogAtMs: Date.now(),
     wlvcFrameSendFailureCount: 0,
     wlvcFrameSendFailureFirstAtMs: 0,
     sfuVideoRecoveryLastAtMs: 0,
   };
   const throttleStartedAtMs = Date.now();
+  let payloadDowngrades = 0;
   const controller = createPublisherBackpressureController({
     callMediaPrefs: { outgoingVideoQualityProfile: 'realtime' },
     captureClientDiagnostic: () => {},
-    downgradeSfuVideoQualityAfterEncodePressure: () => false,
+    downgradeSfuVideoQualityAfterEncodePressure: () => {
+      payloadDowngrades += 1;
+      return false;
+    },
     getMediaRuntimePath: () => 'wlvc_wasm',
     getRemotePeerCount: () => 1,
     getShouldConnectSfu: () => true,
@@ -183,6 +212,37 @@ async function main() {
   assert.ok(
     throttleState.wlvcBackpressurePauseUntilMs >= throttleStartedAtMs + 900,
     'wire-rate retryAfterMs must throttle the encoder for the measured rolling-budget retry window',
+  );
+  controller.handleWlvcFramePayloadPressure(2_000_000, 'delta', 'track-motion', {
+    reason: 'sfu_wlvc_rate_budget_pressure',
+    maxPayloadBytes: 1_500_000,
+    payloadSoftLimitBytes: 1_200_000,
+    encodeMs: 46,
+  });
+  assert.ok(
+    throttleState.wlvcMotionDeltaCadenceLevel >= 1,
+    'first payload pressure must enter WLVC motion delta cadence throttling',
+  );
+  assert.ok(
+    controller.resolveWlvcEncodeIntervalMs(100) > 100,
+    'active motion delta cadence throttling must slow the next encode interval',
+  );
+  assert.equal(payloadDowngrades, 1, 'wire-rate pressure already performed the only immediate profile downgrade so far');
+  controller.handleWlvcFramePayloadPressure(2_000_000, 'delta', 'track-motion', {
+    reason: 'sfu_wlvc_rate_budget_pressure',
+    maxPayloadBytes: 1_500_000,
+    payloadSoftLimitBytes: 1_200_000,
+    encodeMs: 48,
+  });
+  controller.handleWlvcFramePayloadPressure(2_000_000, 'delta', 'track-motion', {
+    reason: 'sfu_wlvc_rate_budget_pressure',
+    maxPayloadBytes: 1_500_000,
+    payloadSoftLimitBytes: 1_200_000,
+    encodeMs: 50,
+  });
+  assert.ok(
+    payloadDowngrades >= 2,
+    'repeated payload pressure may downshift only after cadence throttling does not clear the pressure',
   );
   const keyframeStartedAtMs = Date.now();
   assert.equal(
