@@ -51,9 +51,9 @@ Rejected or superseded candidate commits:
 
 ## Top 20 Active Issues
 
-1. [ ] `[branch-diff-baseline]` Re-run the branch diff before the first cherry-pick and record the exact current SHA, candidate SHA, merge base, and deleted-current-contract list so no stale comparison drives the intake.
-2. [ ] `[patch-equivalence-audit]` For every candidate commit, check whether the behavior is already implemented or superseded in the current branch before editing code.
-3. [ ] `[direct-merge-guard]` Add a local guard note or contract check that rejects wholesale merge outcomes that delete current SFU hardening modules, online acceptance gates, or throughput contracts.
+1. [x] `[branch-diff-baseline]` Re-run the branch diff before the first cherry-pick and record the exact current SHA, candidate SHA, merge base, and deleted-current-contract list so no stale comparison drives the intake.
+2. [x] `[patch-equivalence-audit]` For every candidate commit, check whether the behavior is already implemented or superseded in the current branch before editing code.
+3. [x] `[direct-merge-guard]` Add a local guard note or contract check that rejects wholesale merge outcomes that delete current SFU hardening modules, online acceptance gates, or throughput contracts.
 4. [ ] `[mini-main-selection]` Port the useful part of `694c2d9`: when `main_mini` has no pinned user and the server selected the local user as main, prefer `selection.mini_user_ids` before falling back to arbitrary visible users.
 5. [ ] `[mini-fallback-non-main]` Port the useful part of `376426f`: mini participant fallback must prefer connected visible users other than the main user and must never duplicate the main tile.
 6. [ ] `[roster-shape-normalization]` Port the useful roster normalization from `694c2d9`: accept snake_case and camelCase room/user/call-role fields, but keep current role ordering and live media peer aggregation.
