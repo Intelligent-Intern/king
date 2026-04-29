@@ -56,8 +56,10 @@ try {
     !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
     'sfu client must not route outbound media through legacy chunked JSON before binary envelope send',
   );
-  requireContains(sfuClient, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
-  requireContains(sfuClient, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
+  const sendFailureDetails = readFrontend('src/lib/sfu/sendFailureDetails.ts');
+  requireContains(sendFailureDetails, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
+  requireContains(sendFailureDetails, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
+  requireContains(sendFailureDetails, 'retryAfterMs: Math.max(0, Number(details.retryAfterMs || 0))', 'sfu client persists retry-after pacing on failure');
   requireContains(sfuClient, 'metrics.send_drain_ms = drain.waitedMs', 'sfu client records send-drain timing');
   requireContains(sfuClient, 'sfu_queue_age_budget_exceeded', 'sfu client enforces queue-age budget before send');
   requireContains(sfuClient, 'sfu_buffer_budget_exceeded', 'sfu client enforces websocket buffered budget before critical pressure');

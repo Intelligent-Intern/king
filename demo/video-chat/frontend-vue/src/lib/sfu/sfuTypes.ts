@@ -65,6 +65,7 @@ export interface SfuSendFailureDetails {
   payloadChars: number
   payloadBytes: number
   wirePayloadBytes: number
+  retryAfterMs: number
   binaryContinuationState: string
   timestamp: number
 }

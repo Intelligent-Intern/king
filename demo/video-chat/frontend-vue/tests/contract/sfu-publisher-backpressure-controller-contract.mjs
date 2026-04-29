@@ -61,6 +61,7 @@ async function main() {
 
   const {
     PUBLISHER_BACKPRESSURE_ACTIONS,
+    createPublisherBackpressureController,
     decidePublisherBackpressureAction,
   } = await import(pathToFileURL(controllerPath).href);
 
@@ -120,6 +121,55 @@ async function main() {
   assert.ok(
     wireBudgetDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
     'wire-rate budget send failures downshift immediately before browser buffering can become critical',
+  );
+
+  const throttleState = {
+    wlvcBackpressureSkipCount: 0,
+    wlvcBackpressureFirstAtMs: 0,
+    wlvcBackpressureLastLogAtMs: 0,
+    wlvcBackpressurePauseUntilMs: 0,
+    wlvcPayloadPressureCount: 0,
+    wlvcPayloadPressureFirstAtMs: 0,
+    wlvcPayloadPressureLastLogAtMs: 0,
+    wlvcFrameSendFailureLastLogAtMs: Date.now(),
+    wlvcFrameSendFailureCount: 0,
+    wlvcFrameSendFailureFirstAtMs: 0,
+    sfuVideoRecoveryLastAtMs: 0,
+  };
+  const throttleStartedAtMs = Date.now();
+  const controller = createPublisherBackpressureController({
+    callMediaPrefs: { outgoingVideoQualityProfile: 'realtime' },
+    captureClientDiagnostic: () => {},
+    downgradeSfuVideoQualityAfterEncodePressure: () => false,
+    getMediaRuntimePath: () => 'wlvc_wasm',
+    getRemotePeerCount: () => 1,
+    getShouldConnectSfu: () => true,
+    onRestartSfu: () => {},
+    resetWlvcEncoderAfterDroppedEncodedFrame: () => {},
+    sfuAutoQualityDowngradeBackpressureWindowMs: 1000,
+    sfuAutoQualityDowngradeSendFailureThreshold: 2,
+    sfuAutoQualityDowngradeSkipThreshold: 2,
+    sfuBackpressureLogCooldownMs: 999999,
+    sfuConnectRetryDelayMs: 10,
+    sfuConnected: { value: true },
+    sfuVideoRecoveryReconnectCooldownMs: 5000,
+    sfuWlvcBackpressureHardResetAfterMs: 3000,
+    sfuWlvcBackpressureMaxPauseMs: 2500,
+    sfuWlvcBackpressureMinPauseMs: 350,
+    sfuWlvcEncodeFailureThreshold: 18,
+    sfuWlvcSendBufferCriticalBytes: 2400,
+    sfuWlvcSendBufferHighWaterBytes: 1200,
+    sfuWlvcSendBufferLowWaterBytes: 600,
+    state: throttleState,
+  });
+  controller.handleWlvcFrameSendFailure(0, 'track-wire', 'sfu_wire_rate_budget_exceeded', {
+    reason: 'sfu_wire_rate_budget_exceeded',
+    retryAfterMs: 900,
+    bufferedAmount: 0,
+  });
+  assert.ok(
+    throttleState.wlvcBackpressurePauseUntilMs >= throttleStartedAtMs + 900,
+    'wire-rate retryAfterMs must throttle the encoder for the measured rolling-budget retry window',
   );
 
   const receiverDecision = decidePublisherBackpressureAction({

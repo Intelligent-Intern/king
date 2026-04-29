@@ -45,6 +45,8 @@ async function main() {
   requireContains(sfuPublisherControl, 'downgradeSfuVideoQualityAfterEncodePressure(pressureReason)', 'publisher controller downshifts from exact rate pressure reason');
   requireContains(publisherBackpressureController, "'sfu_wire_rate_budget_exceeded'", 'wire-rate send budget failures are explicit quality pressure');
   requireContains(publisherBackpressureController, 'budgetSendFailure || sendFailureCount >= sendFailureThreshold', 'budget send failures downshift before repeated socket pressure');
+  requireContains(publisherBackpressureController, 'details?.retryAfterMs ?? details?.retry_after_ms', 'wire budget retry windows reach publisher encode throttling');
+  requireContains(publisherBackpressureController, 'send_failure_pause_ms: sendFailurePauseMs', 'send failure diagnostics expose the applied encode pause');
   requireContains(runtimeSwitching, "'sfu_wlvc_rate_budget_pressure'", 'rate-budget pressure bypasses downgrade cooldown');
   requireContains(runtimeSwitching, "'sfu_wire_rate_budget_exceeded'", 'wire-rate pressure bypasses downgrade cooldown');
   requireContains(sfuClient, 'sfu_wire_rate_budget_exceeded', 'SFU client reports rolling wire-rate send drops');

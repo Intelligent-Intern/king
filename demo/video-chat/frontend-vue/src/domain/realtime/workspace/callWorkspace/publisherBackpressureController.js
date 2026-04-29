@@ -297,6 +297,16 @@ export function createPublisherBackpressureController({
     }
 
     const nowMs = Date.now();
+    const retryAfterMs = Math.max(
+      0,
+      Number(details?.retryAfterMs ?? details?.retry_after_ms ?? 0),
+    );
+    const sendFailurePauseMs = retryAfterMs > 0
+      ? Math.min(
+        sfuWlvcBackpressureMaxPauseMs,
+        Math.max(sfuWlvcBackpressureMinPauseMs, retryAfterMs),
+      )
+      : sfuWlvcBackpressureMinPauseMs;
     if (
       state.wlvcFrameSendFailureFirstAtMs <= 0
       || (nowMs - state.wlvcFrameSendFailureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
@@ -309,7 +319,7 @@ export function createPublisherBackpressureController({
     resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
     state.wlvcBackpressurePauseUntilMs = Math.max(
       state.wlvcBackpressurePauseUntilMs,
-      nowMs + sfuWlvcBackpressureMinPauseMs
+      nowMs + sendFailurePauseMs
     );
     const sustainedBackpressureMs = state.wlvcFrameSendFailureFirstAtMs > 0
       ? Math.max(0, nowMs - state.wlvcFrameSendFailureFirstAtMs)
@@ -381,6 +391,8 @@ export function createPublisherBackpressureController({
         payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
         payload_bytes: Math.max(0, Number(details?.payloadBytes || 0)),
         wire_payload_bytes: Math.max(0, Number(details?.wirePayloadBytes || 0)),
+        retry_after_ms: retryAfterMs,
+        send_failure_pause_ms: sendFailurePauseMs,
         binary_continuation_state: String(details?.binaryContinuationState || 'unknown_binary_continuation_state'),
         sender_timestamp: Math.max(0, Number(details?.timestamp || 0)),
       },

@@ -37,6 +37,7 @@ try {
   requireContains(outboundFrameBudget, 'metrics.budget_max_wire_bytes_per_second', 'wire budget follows the active quality profile budget');
   requireContains(sfuClient, 'private outboundWireBudget = new SfuOutboundWireBudget()', 'client tracks rolling outbound wire bytes per socket session');
   requireContains(sfuClient, 'sfu_wire_rate_budget_exceeded', 'client drops frames that would exceed rolling wire bytes per second');
+  requireContains(sfuClient, 'retryAfterMs: wireBudget.retryAfterMs', 'wire budget send failures preserve the measured retry window');
   requireContains(sfuClient, 'this.outboundWireBudget.record(encoded.byteLength)', 'client records sent binary envelope bytes into the rolling budget');
   requireContains(sfuClient, 'this.outboundWireBudget.reset()', 'client clears wire budget on reconnect/profile reset');
   requireContains(sfuClient, 'send_drain_target_buffered_bytes', 'client records low-water drain target');

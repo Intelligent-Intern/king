@@ -35,6 +35,7 @@ import {
   type PreparedSfuOutboundFramePayload,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
+import { buildSfuSendFailureDetails } from './sendFailureDetails'
 import type {
   SFUClientCallbacks,
   SFUEncodedFrame,
@@ -544,6 +545,7 @@ export class SFUClient {
         message: 'Encoded SFU frame would exceed the active rolling wire-byte budget.',
         transportPath: 'binary_envelope',
         bufferedAmount: bufferedBeforeSend,
+        retryAfterMs: wireBudget.retryAfterMs,
       })
       return false
     }
@@ -761,26 +763,14 @@ export class SFUClient {
       message: string
       transportPath: string
       bufferedAmount: number
+      retryAfterMs?: number
     },
   ): void {
-    this.lastSendFailure = {
-      reason: String(details.reason || 'unknown_send_failure'),
-      stage: String(details.stage || 'unknown_stage'),
-      source: String(details.source || 'unknown_source'),
-      message: String(details.message || 'Unknown SFU send failure.'),
-      transportPath: String(details.transportPath || 'unknown_transport'),
-      bufferedAmount: Math.max(0, Number(details.bufferedAmount || 0)),
+    this.lastSendFailure = buildSfuSendFailureDetails(prepared, details, {
       queueLength: this.outboundFrameQueue.length(),
       queuePayloadChars: this.outboundFrameQueue.queuedBytes(),
       activePayloadChars: this.outboundFrameQueue.activeBytes(),
-      trackId: String(prepared.trackId || ''),
-      chunkCount: Math.max(1, Number(prepared.chunkCount || 1)),
-      payloadChars: Math.max(0, Number(prepared.payloadChars || 0)),
-      payloadBytes: Math.max(0, Number(prepared.metrics?.payload_bytes || 0)),
-      wirePayloadBytes: Math.max(0, Number(prepared.metrics?.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0)),
-      binaryContinuationState: String(prepared.metrics?.binary_continuation_state || 'unknown_binary_continuation_state'),
-      timestamp: Math.max(0, Number(prepared.timestamp || 0)),
-    }
+    })
   }
 
   private reportFrameSendPressureIfNeeded(payload: Record<string, unknown>): void {

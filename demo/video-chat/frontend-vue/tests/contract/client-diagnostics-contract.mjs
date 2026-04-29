@@ -23,6 +23,7 @@ const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
 const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
+const sendFailureDetails = read('src/lib/sfu/sendFailureDetails.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('src/lib/sfu/inboundFrameAssembler.ts');
 const diagnostics = read('src/support/clientDiagnostics.js');
@@ -61,7 +62,7 @@ requireContains(inboundFrameAssembler, "'sfu_frame_chunk_timeout'", 'sfu inbound
 requireContains(inboundFrameAssembler, "'sfu_frame_chunk_rejected'", 'sfu inbound chunk rejection diagnostics hook');
 requireContains(inboundFrameAssembler, "'sfu_frame_rejected'", 'sfu inbound frame rejection diagnostics hook');
 requireContains(frameDecode, "eventType: 'sfu_remote_frame_dropped'", 'remote frame continuity drop diagnostics hook');
-requireContains(sfuClient, 'chunkCount: Math.max(1, Number(prepared.chunkCount || 1))', 'sfu frame diagnostics include chunk count');
+requireContains(sendFailureDetails, 'chunkCount: Math.max(1, Number(prepared.chunkCount || 1))', 'sfu frame diagnostics include chunk count');
 requireContains(sfuClient, 'send_wait_ms: drain.waitedMs', 'sfu frame diagnostics include send wait time');
 requireContains(sfuClient, 'payload_chars', 'sfu frame diagnostics include base64/protected payload size');
 requireContains(sfuClient, 'frame_sequence', 'sfu frame diagnostics include frame sequence');
