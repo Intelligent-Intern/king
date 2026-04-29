@@ -46,7 +46,7 @@ Technical target:
 4. [x] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
 5. [x] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [x] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
-7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
+7. [x] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
 8. [ ] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
 10. [ ] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
@@ -202,6 +202,29 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429053725` served `CallWorkspaceView-BB96oO9i.js` with `offscreen_canvas_worker_readback`, `trace_offscreen_worker_round_trip_ms`, `publisher_capture_worker_timeout`, `publisher_capture_worker_post_message_failed`, and `publisher_capture_worker_start_failed`.
 - Production worker asset `publisherCaptureWorker-D0xgm_P4.js` served the off-main-thread `context.getImageData` path and transferred `imageData.data.buffer`.
+
+### 7. `[dom-canvas-last-resort]`
+
+Status: Done.
+
+Implementation:
+- Added a dedicated DOM canvas compatibility fallback policy with explicit `320x180` max frame size and `6 FPS` max readback cadence.
+- Changed DOM video fallback sizing to use the compatibility policy instead of the active high-quality profile dimensions.
+- Changed VideoFrame main-thread canvas fallback to use the same compatibility cap if both direct `copyTo` and OffscreenCanvas worker readback are unavailable.
+- Added DOM compatibility trace stages, throttle skips, readback-method labels, and compatibility-specific draw/readback budget failure reasons.
+- Kept the runtime order strict: `VideoFrame.copyTo` first, OffscreenCanvas worker second, DOM canvas compatibility fallback last.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-dom-canvas-last-resort-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429054231` served `CallWorkspaceView-pZkhK_JP.js` with `dom_canvas_compatibility_fallback`, `dom_canvas_compatibility_readback`, `trace_dom_canvas_compatibility_throttle_ms`, and `dom_canvas_compatibility_get_image_data_budget_exceeded`.
 
 ### 9. `[quality-ui-removal-contract]`
 

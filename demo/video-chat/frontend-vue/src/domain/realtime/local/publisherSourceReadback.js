@@ -4,6 +4,13 @@ import {
 } from './capturePipelineCapabilities.js';
 import { createPublisherCaptureWorkerReadbackController } from './publisherCaptureWorkerReadback.js';
 import {
+  DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
+  DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND,
+  domCanvasCompatibilityReadbackIntervalMs,
+  resolveDomCanvasCompatibilityFrameSize,
+  resolveDomCanvasCompatibilityVideoFrameSize,
+} from './domCanvasFallbackPolicy.js';
+import {
   canUsePublisherVideoFrameSource,
   closePublisherVideoFrame,
   createPublisherVideoFrameSourceReader,
@@ -21,7 +28,6 @@ import {
   resolvePublisherFrameSize,
 } from './videoFrameSizing.js';
 
-const DOM_VIDEO_SOURCE_BACKEND = 'dom_video_canvas';
 const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
 
 function positiveNumber(value) {
@@ -90,13 +96,16 @@ export function createPublisherSourceReadbackController({
     throw new Error('publisher_source_readback_document_missing');
   }
 
-  const initialFrameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
+  const initialFrameSize = captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.DOM_CANVAS_FALLBACK
+    ? resolveDomCanvasCompatibilityFrameSize(video, videoProfile, videoTrack)
+    : resolvePublisherFrameSize(video, videoProfile, videoTrack);
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
   let videoFrameReader = null;
   let videoFrameSourceDisabled = false;
   let videoFrameCopyToDisabled = false;
   let captureWorkerReadback = null;
   let captureWorkerDisabled = false;
+  let lastDomCanvasReadbackAtMs = 0;
 
   if (canUsePublisherVideoFrameSource(captureCapabilities)) {
     try {
@@ -144,11 +153,11 @@ export function createPublisherSourceReadbackController({
     }
 
     if (video?.readyState < 2 || !context) return null;
-    const frameSize = resolvePublisherFrameSize(video, activeProfile, activeTrack);
-    updateTraceSource(trace, DOM_VIDEO_SOURCE_BACKEND, frameSize, activeTrack);
+    const frameSize = resolveDomCanvasCompatibilityFrameSize(video, activeProfile, activeTrack);
+    updateTraceSource(trace, DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND, frameSize, activeTrack);
     return {
       source: video,
-      sourceBackend: DOM_VIDEO_SOURCE_BACKEND,
+      sourceBackend: DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND,
       frameSize,
       closeSource: () => {},
     };
@@ -255,9 +264,21 @@ export function createPublisherSourceReadbackController({
         }
       }
 
-      if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
-        canvas.width = frameSize.frameWidth;
-        canvas.height = frameSize.frameHeight;
+      const canvasFrameSize = sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
+        ? resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile)
+        : frameSize;
+      const compatibilityIntervalMs = domCanvasCompatibilityReadbackIntervalMs(activeProfile);
+      const nowMs = highResolutionNowMs();
+      if (lastDomCanvasReadbackAtMs > 0 && nowMs - lastDomCanvasReadbackAtMs < compatibilityIntervalMs) {
+        markPublisherFrameTraceStage(trace, 'dom_canvas_compatibility_throttle', nowMs - lastDomCanvasReadbackAtMs);
+        return null;
+      }
+      if (trace && typeof trace === 'object') {
+        trace.sourceBackend = DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND;
+      }
+      if (canvas.width !== canvasFrameSize.frameWidth || canvas.height !== canvasFrameSize.frameHeight) {
+        canvas.width = canvasFrameSize.frameWidth;
+        canvas.height = canvasFrameSize.frameHeight;
       }
       const drawStartedAtMs = highResolutionNowMs();
       context.drawImage(source, 0, 0, canvas.width, canvas.height);
@@ -267,6 +288,7 @@ export function createPublisherSourceReadbackController({
         sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND ? 'video_frame_canvas_draw_image' : 'dom_canvas_draw_image',
         drawImageMs,
       );
+      markPublisherFrameTraceStage(trace, 'dom_canvas_compatibility_draw_image', drawImageMs);
 
       const readbackStartedAtMs = highResolutionNowMs();
       const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -276,18 +298,18 @@ export function createPublisherSourceReadbackController({
         sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND ? 'video_frame_canvas_get_image_data' : 'dom_canvas_get_image_data',
         readbackMs,
       );
+      markPublisherFrameTraceStage(trace, 'dom_canvas_compatibility_get_image_data', readbackMs);
+      lastDomCanvasReadbackAtMs = highResolutionNowMs();
 
       if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
         const readbackReason = drawImageMs > drawBudgetMs
-          ? 'canvas_draw_image_budget_exceeded'
-          : 'canvas_get_image_data_budget_exceeded';
+          ? 'dom_canvas_compatibility_draw_budget_exceeded'
+          : 'dom_canvas_compatibility_get_image_data_budget_exceeded';
         return {
           budgetExceeded: true,
           details: publisherFrameFailureDetails(trace, {
             reason: 'sfu_source_readback_budget_exceeded',
-            stage: sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
-              ? 'video_frame_canvas_readback'
-              : 'dom_canvas_readback',
+            stage: DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
             source: readbackReason,
             message: 'Publisher source readback exceeded the active SFU profile budget before WLVC encode.',
             transportPath: 'publisher_source_readback',
@@ -301,12 +323,14 @@ export function createPublisherSourceReadbackController({
 
       return {
         imageData,
-        frameSize,
+        frameSize: canvasFrameSize,
         drawImageMs,
         readbackMs,
         drawBudgetMs,
         readbackBudgetMs,
-        sourceBackend,
+        sourceBackend: DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND,
+        readbackMethod: DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
+        compatibilityFallback: true,
       };
     } finally {
       closeSource();
@@ -331,7 +355,7 @@ export function createPublisherSourceReadbackController({
     get sourceBackend() {
       return videoFrameReader && !videoFrameSourceDisabled
         ? PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
-        : DOM_VIDEO_SOURCE_BACKEND;
+        : DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND;
     },
   };
 }

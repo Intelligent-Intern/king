@@ -40,7 +40,7 @@ async function main() {
   requireContains(sourceReadback, 'sfu_source_readback_budget_exceeded', 'publisher reports source readback budget pressure');
   requireContains(sourceReadback, 'video_frame_copy_to_budget_exceeded', 'publisher reports VideoFrame copyTo budget pressure');
   requireContains(sourceReadback, 'offscreen_canvas_worker_readback', 'publisher moves copyless VideoFrame readback to OffscreenCanvas worker');
-  requireContains(sourceReadback, 'canvas_get_image_data_budget_exceeded', 'publisher distinguishes getImageData pressure');
+  requireContains(sourceReadback, 'dom_canvas_compatibility_get_image_data_budget_exceeded', 'publisher distinguishes compatibility getImageData pressure');
   requireContains(sourceReadback, 'publisher_source_readback', 'publisher reports source readback transport stage');
   requireContains(runtimeSwitching, "'sfu_source_readback_budget_exceeded'", 'readback pressure bypasses downgrade cooldown');
   requireContains(framePayload, 'budget_max_draw_image_ms', 'frame payload carries draw budget');

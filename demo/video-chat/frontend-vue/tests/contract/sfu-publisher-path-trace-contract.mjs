@@ -29,6 +29,9 @@ try {
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_draw_image_ms', 'Offscreen worker draw timing metric');
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_get_image_data_ms', 'Offscreen worker readback timing metric');
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_round_trip_ms', 'Offscreen worker round trip timing metric');
+  requireContains(publisherFrameTrace, 'trace_dom_canvas_compatibility_draw_image_ms', 'DOM compatibility draw timing metric');
+  requireContains(publisherFrameTrace, 'trace_dom_canvas_compatibility_get_image_data_ms', 'DOM compatibility readback timing metric');
+  requireContains(publisherFrameTrace, 'trace_dom_canvas_compatibility_throttle_ms', 'DOM compatibility throttle timing metric');
   requireContains(publisherFrameTrace, 'trace_video_frame_canvas_draw_image_ms', 'VideoFrame canvas draw timing metric');
   requireContains(publisherFrameTrace, 'trace_video_frame_canvas_get_image_data_ms', 'VideoFrame canvas readback timing metric');
   requireContains(publisherFrameTrace, 'trace_dom_canvas_draw_image_ms', 'DOM canvas draw timing metric');
@@ -52,6 +55,9 @@ try {
   requireContains(sourceReadback, "'offscreen_worker_draw_image'", 'source readback records Offscreen worker draw timing');
   requireContains(sourceReadback, "'offscreen_worker_get_image_data'", 'source readback records Offscreen worker readback timing');
   requireContains(sourceReadback, "'offscreen_worker_round_trip'", 'source readback records Offscreen worker round trip timing');
+  requireContains(sourceReadback, "'dom_canvas_compatibility_draw_image'", 'source readback records DOM compatibility draw timing');
+  requireContains(sourceReadback, "'dom_canvas_compatibility_get_image_data'", 'source readback records DOM compatibility readback timing');
+  requireContains(sourceReadback, "'dom_canvas_compatibility_throttle'", 'source readback records DOM compatibility throttle timing');
   requireContains(sourceReadback, "'video_frame_canvas_draw_image'", 'source readback records VideoFrame draw timing');
   requireContains(sourceReadback, "'video_frame_canvas_get_image_data'", 'source readback records VideoFrame canvas readback timing');
   requireContains(sourceReadback, "'dom_canvas_draw_image'", 'source readback records DOM fallback draw timing');
