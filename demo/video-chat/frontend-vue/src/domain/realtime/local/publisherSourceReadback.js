@@ -1,6 +1,8 @@
 import {
   detectPublisherCapturePipelineCapabilities,
+  PUBLISHER_CAPTURE_BACKENDS,
 } from './capturePipelineCapabilities.js';
+import { createPublisherCaptureWorkerReadbackController } from './publisherCaptureWorkerReadback.js';
 import {
   canUsePublisherVideoFrameSource,
   closePublisherVideoFrame,
@@ -20,6 +22,7 @@ import {
 } from './videoFrameSizing.js';
 
 const DOM_VIDEO_SOURCE_BACKEND = 'dom_video_canvas';
+const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);
@@ -92,6 +95,8 @@ export function createPublisherSourceReadbackController({
   let videoFrameReader = null;
   let videoFrameSourceDisabled = false;
   let videoFrameCopyToDisabled = false;
+  let captureWorkerReadback = null;
+  let captureWorkerDisabled = false;
 
   if (canUsePublisherVideoFrameSource(captureCapabilities)) {
     try {
@@ -104,6 +109,17 @@ export function createPublisherSourceReadbackController({
       videoFrameSourceDisabled = true;
       mediaDebugLog('[SFU] VideoFrame source reader unavailable; using DOM video canvas fallback', error);
     }
+  }
+
+  if (!captureWorkerDisabled) {
+    captureWorkerReadback = createPublisherCaptureWorkerReadbackController({
+      capabilities: captureCapabilities,
+      WorkerCtor: globalScope.Worker,
+      ImageDataCtor: globalScope.ImageData,
+      timeoutMs: Math.max(900, Number(videoProfile?.encodeIntervalMs || 0) * 8),
+      mediaDebugLog,
+    });
+    captureWorkerDisabled = !captureWorkerReadback;
   }
 
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
@@ -195,6 +211,50 @@ export function createPublisherSourceReadbackController({
         }
       }
 
+      if (
+        sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
+          && captureWorkerReadback
+          && !captureWorkerDisabled
+      ) {
+        const workerStartedAtMs = highResolutionNowMs();
+        const workerResult = await captureWorkerReadback.readFrame({
+          source,
+          frameSize,
+          timestamp,
+          timeout: Math.max(900, Number(activeProfile?.encodeIntervalMs || 0) * 8),
+        });
+        if (workerResult.ok) {
+          const workerElapsedMs = roundedStageMs(
+            workerResult.workerElapsedMs || (highResolutionNowMs() - workerStartedAtMs),
+          );
+          markPublisherFrameTraceStage(trace, 'offscreen_worker_draw_image', workerResult.drawImageMs);
+          markPublisherFrameTraceStage(trace, 'offscreen_worker_get_image_data', workerResult.readbackMs);
+          markPublisherFrameTraceStage(trace, 'offscreen_worker_round_trip', workerElapsedMs);
+          if (trace && typeof trace === 'object') {
+            trace.sourceBackend = OFFSCREEN_CANVAS_WORKER_READBACK;
+          }
+          return {
+            imageData: workerResult.imageData,
+            frameSize: workerResult.frameSize || frameSize,
+            drawImageMs: workerResult.drawImageMs,
+            readbackMs: workerResult.readbackMs,
+            drawBudgetMs,
+            readbackBudgetMs,
+            sourceBackend: OFFSCREEN_CANVAS_WORKER_READBACK,
+            readbackMethod: 'offscreen_canvas_worker_readback',
+            readbackBytes: workerResult.readbackBytes,
+          };
+        }
+        if (workerResult.fatal) {
+          captureWorkerDisabled = true;
+          if (captureWorkerReadback && typeof captureWorkerReadback.close === 'function') {
+            captureWorkerReadback.close();
+          }
+          captureWorkerReadback = null;
+          mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);
+        }
+      }
+
       if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
         canvas.width = frameSize.frameWidth;
         canvas.height = frameSize.frameHeight;
@@ -258,6 +318,10 @@ export function createPublisherSourceReadbackController({
       await videoFrameReader.close('publisher_source_readback_controller_closed');
     }
     videoFrameReader = null;
+    if (captureWorkerReadback && typeof captureWorkerReadback.close === 'function') {
+      captureWorkerReadback.close();
+    }
+    captureWorkerReadback = null;
   }
 
   return {

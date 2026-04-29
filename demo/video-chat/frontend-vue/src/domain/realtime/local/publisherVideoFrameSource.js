@@ -15,7 +15,6 @@ export function canUsePublisherVideoFrameSource(capabilities = {}) {
   return Boolean(
     capabilities.supportsMediaStreamTrackProcessor
       && capabilities.supportsVideoFrame
-      && capabilities.supportsVideoFrameCopyTo
       && capabilities.supportsVideoFrameClose,
   );
 }

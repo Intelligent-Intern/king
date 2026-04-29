@@ -45,7 +45,7 @@ Technical target:
 3. [x] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
 4. [x] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
 5. [x] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
-6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
+6. [x] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
 7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
 8. [ ] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
@@ -179,6 +179,29 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429052751` served `CallWorkspaceView-BigJQukE.js` with `video_frame_copy_to_rgba`, `trace_video_frame_copy_to_rgba_ms`, and `publisher_video_frame_copy_scale_required`.
+
+### 6. `[offscreen-canvas-fallback]`
+
+Status: Done.
+
+Implementation:
+- Added a runtime capture-worker readback controller that sends transferable `VideoFrame` sources to the existing publisher capture worker and reconstructs `ImageData` from the returned RGBA buffer.
+- Relaxed the `MediaStreamTrackProcessor` source gate so copyless browsers can still produce `VideoFrame` objects for the worker path.
+- Wired source readback order to `VideoFrame.copyTo` first, then `OffscreenCanvas` worker readback, then DOM canvas as the last compatibility fallback.
+- Added worker draw/readback/round-trip trace metrics and fatal worker fallback handling for timeout, malformed result, and `postMessage` transfer failures.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-offscreen-canvas-fallback-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429053725` served `CallWorkspaceView-BB96oO9i.js` with `offscreen_canvas_worker_readback`, `trace_offscreen_worker_round_trip_ms`, `publisher_capture_worker_timeout`, `publisher_capture_worker_post_message_failed`, and `publisher_capture_worker_start_failed`.
+- Production worker asset `publisherCaptureWorker-D0xgm_P4.js` served the off-main-thread `context.getImageData` path and transferred `imageData.data.buffer`.
 
 ### 9. `[quality-ui-removal-contract]`
 
