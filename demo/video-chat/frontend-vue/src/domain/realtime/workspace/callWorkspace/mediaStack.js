@@ -243,6 +243,7 @@ export function createCallWorkspaceMediaStack(options) {
     backgroundFilterController: refs.backgroundFilterController,
     callbacks: {
       clearTransientActivityPublishErrorNotice: callbacks.clearTransientActivityPublishErrorNotice,
+      captureClientDiagnostic: callbacks.captureClientDiagnostic,
       currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
       evaluateBackgroundFilterGates: callbacks.evaluateBackgroundFilterGates,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,

@@ -11,6 +11,7 @@ export function createLocalMediaOrchestrationHelpers({
 }) {
   const {
     clearTransientActivityPublishErrorNotice,
+    captureClientDiagnostic,
     currentSfuVideoProfile,
     isWlvcRuntimePath,
     normalizeRoomId,
@@ -22,6 +23,9 @@ export function createLocalMediaOrchestrationHelpers({
     syncNativePeerLocalTracks,
     sendNativeOffer,
   } = callbacks;
+  const captureDiagnostic = typeof captureClientDiagnostic === 'function'
+    ? captureClientDiagnostic
+    : () => {};
 
   const localPublisherCallbacks = callbacks.localPublisher && typeof callbacks.localPublisher === 'object'
     ? callbacks.localPublisher
@@ -111,6 +115,47 @@ export function createLocalMediaOrchestrationHelpers({
         : false,
       audio: wantsAudio ? true : false,
     };
+  }
+
+  function finiteTrackSetting(value) {
+    const normalized = Number(value);
+    return Number.isFinite(normalized) && normalized > 0 ? normalized : 0;
+  }
+
+  function reportLocalCaptureSettings(stream, reason) {
+    const videoTrack = stream instanceof MediaStream ? stream.getVideoTracks?.()[0] || null : null;
+    if (!videoTrack || typeof videoTrack.getSettings !== 'function') return;
+    const videoProfile = currentSfuVideoProfile();
+    const profileId = String(videoProfile.id || '').trim() || 'balanced';
+    const settings = videoTrack.getSettings() || {};
+    const settingsWidth = finiteTrackSetting(settings.width);
+    const settingsHeight = finiteTrackSetting(settings.height);
+    const settingsFrameRate = finiteTrackSetting(settings.frameRate);
+    const staleAfterDowngrade = (profileId === 'realtime' || profileId === 'rescue')
+      && (
+        (settingsWidth > 0 && settingsWidth > Number(videoProfile.captureWidth || 0) * 1.25)
+        || (settingsHeight > 0 && settingsHeight > Number(videoProfile.captureHeight || 0) * 1.25)
+      );
+    captureDiagnostic({
+      category: 'media',
+      level: staleAfterDowngrade ? 'warning' : 'info',
+      eventType: 'sfu_local_capture_constraints_applied',
+      code: 'sfu_local_capture_constraints_applied',
+      message: 'Browser-reported local capture settings after applying the selected SFU video profile.',
+      payload: {
+        reason: String(reason || 'unknown'),
+        outgoing_video_quality_profile: profileId,
+        requested_capture_width: Number(videoProfile.captureWidth || 0),
+        requested_capture_height: Number(videoProfile.captureHeight || 0),
+        requested_capture_frame_rate: Number(videoProfile.captureFrameRate || 0),
+        publisher_frame_width: Number(videoProfile.frameWidth || 0),
+        publisher_frame_height: Number(videoProfile.frameHeight || 0),
+        track_settings_width: settingsWidth,
+        track_settings_height: settingsHeight,
+        track_settings_frame_rate: settingsFrameRate,
+        stale_hd_capture_after_downgrade: staleAfterDowngrade,
+      },
+    });
   }
 
   function shouldRetryWithLooseConstraints(error) {
@@ -515,6 +560,7 @@ export function createLocalMediaOrchestrationHelpers({
     try {
       const rawStream = await acquireLocalMediaStreamWithFallback();
       refs.localRawStreamRef.value = rawStream;
+      reportLocalCaptureSettings(rawStream, 'publish');
 
       const stream = await applyLocalBackgroundFilter(rawStream);
       refs.localFilteredStreamRef.value = stream;
@@ -659,6 +705,7 @@ export function createLocalMediaOrchestrationHelpers({
       const previousTracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
 
       nextRawStream = await acquireLocalMediaStreamWithFallback();
+      reportLocalCaptureSettings(nextRawStream, 'reconfigure');
       nextOutputStream = await applyLocalBackgroundFilter(nextRawStream);
       if (!(nextOutputStream instanceof MediaStream)) {
         stopRetiredLocalStreams([nextRawStream], []);
