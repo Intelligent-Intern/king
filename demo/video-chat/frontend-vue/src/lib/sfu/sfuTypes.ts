@@ -35,6 +35,8 @@ export interface SFUEncodedFrame {
   kingReceiveLatencyMs?: number
   kingFanoutLatencyMs?: number
   subscriberSendLatencyMs?: number
+  frameWidth?: number
+  frameHeight?: number
   layoutMode?: 'full_frame' | 'tile_foreground' | 'background_snapshot'
   layerId?: 'full' | 'foreground' | 'background'
   cacheEpoch?: number

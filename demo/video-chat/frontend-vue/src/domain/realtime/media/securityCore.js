@@ -242,7 +242,7 @@ export function validateProtectedHeader(header) {
   if (header.contract_version !== CONTRACT_VERSION) throw new Error('malformed_protected_frame');
   if (header.magic !== FRAME_MAGIC || Number(header.version || 0) !== FRAME_VERSION) throw new Error('malformed_protected_frame');
   if (!['webrtc_native', 'wlvc_sfu'].includes(asString(header.runtime_path))) throw new Error('unsupported_capability');
-  if (!['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'].includes(asString(header.codec_id))) throw new Error('unsupported_capability');
+  if (!['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown'].includes(asString(header.codec_id))) throw new Error('unsupported_capability');
   if (!['video', 'audio', 'data'].includes(asString(header.track_kind))) throw new Error('malformed_protected_frame');
   if (!['keyframe', 'delta', 'audio', 'control'].includes(asString(header.frame_kind))) throw new Error('malformed_protected_frame');
   if (!normalizeKexSuite(header.kex_suite) || header.media_suite !== MEDIA_SUITE) throw new Error('unsupported_capability');

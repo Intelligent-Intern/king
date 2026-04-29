@@ -35,7 +35,7 @@ Technical target:
 
 ## Active Issues
 
-1. [ ] `[protected-browser-encoder-path]` Build the next protected browser-encoder transport step beyond RGBA/WLVC.
+1. [x] `[protected-browser-encoder-path]` Build the next protected browser-encoder transport step beyond RGBA/WLVC.
 
    Scope:
    - Map the complete local path from camera frame to protected SFU envelope and identify every forced copy, RGBA conversion, lossy size clamp, and wire-budget gate.
@@ -49,7 +49,11 @@ Technical target:
    - Contract tests pin the capability gate, protected envelope carriage, frame lifecycle, and diagnostics.
 
    Report:
-   - Pending.
+   - Implemented a capability-gated protected WebCodecs/VP8 publisher path that reads `VideoFrame`s directly, encodes through browser `VideoEncoder`, closes source frames deterministically, wraps chunks in King media-security envelopes, and sends them through the existing SFU binary frame transport.
+   - Implemented receiver-side `webcodecs_vp8` detection and `VideoDecoder` rendering so browser-encoded frames bypass WLVC metadata/decode and close decoded `VideoFrame`s deterministically.
+   - Extended frontend payload normalization, backend SFU metadata normalization, and media-security protected-frame validation to preserve `webcodecs_vp8`, frame dimensions, and browser-encoder telemetry.
+   - Added a fatal browser-encoder fallback gate: after a WebCodecs path failure the publisher temporarily disables that path and restarts into the compatibility WLVC path instead of leaving video silent.
+   - Verification: `npm run test:contract:sfu`, `npm run test:contract:media-security`, `npm run test:contract:wlvc`, `npm run build`, `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`, `git diff --check`.
 
 2. [ ] `[fullscreen-remote-render-scheduler]` Make remote render quality fullscreen-aware instead of canvas-fill driven.
 

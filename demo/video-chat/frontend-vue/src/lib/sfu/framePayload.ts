@@ -15,7 +15,7 @@ export const SFU_BINARY_CONTINUATION_THRESHOLD_BYTES = 65535
 export type SfuFrameType = 'keyframe' | 'delta'
 export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
 export type SfuChunkField = 'data_base64_chunk' | 'protected_frame_chunk'
-export type SfuCodecId = 'wlvc_wasm' | 'wlvc_ts' | 'wlvc_unknown'
+export type SfuCodecId = 'wlvc_wasm' | 'wlvc_ts' | 'webcodecs_vp8' | 'wlvc_unknown'
 export type SfuRuntimeId = 'wlvc_sfu' | 'webrtc_native' | 'unknown_runtime'
 
 export interface SfuOutboundFrameInput {
@@ -212,6 +212,11 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const sourceTrackReadyState = String(source.source_track_ready_state ?? source.sourceTrackReadyState ?? '').trim()
   const activeCaptureBackend = String(source.active_capture_backend ?? source.activeCaptureBackend ?? publisherSourceBackend).trim()
   const selectedVideoQualityProfile = String(source.selected_video_quality_profile ?? source.selectedVideoQualityProfile ?? profile).trim().toLowerCase()
+  const publisherReadbackMethod = String(source.publisher_readback_method ?? source.publisherReadbackMethod ?? '').trim()
+  const browserEncoderCodec = String(source.publisher_browser_encoder_codec ?? source.publisherBrowserEncoderCodec ?? '').trim()
+  const browserEncoderConfigCodec = String(source.publisher_browser_encoder_config_codec ?? source.publisherBrowserEncoderConfigCodec ?? '').trim()
+  const browserEncoderHardwareAcceleration = String(source.publisher_browser_encoder_hardware_acceleration ?? source.publisherBrowserEncoderHardwareAcceleration ?? '').trim()
+  const browserEncoderLatencyMode = String(source.publisher_browser_encoder_latency_mode ?? source.publisherBrowserEncoderLatencyMode ?? '').trim()
   const metrics: Record<string, unknown> = {
     selection_tile_count: selectionTileCount,
     selection_total_tile_count: selectionTotalTileCount,
@@ -229,6 +234,11 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   if (sourceTrackReadyState !== '') metrics.source_track_ready_state = sourceTrackReadyState
   if (activeCaptureBackend !== '') metrics.active_capture_backend = activeCaptureBackend
   if (selectedVideoQualityProfile !== '') metrics.selected_video_quality_profile = selectedVideoQualityProfile
+  if (publisherReadbackMethod !== '') metrics.publisher_readback_method = publisherReadbackMethod
+  if (browserEncoderCodec !== '') metrics.publisher_browser_encoder_codec = browserEncoderCodec
+  if (browserEncoderConfigCodec !== '') metrics.publisher_browser_encoder_config_codec = browserEncoderConfigCodec
+  if (browserEncoderHardwareAcceleration !== '') metrics.publisher_browser_encoder_hardware_acceleration = browserEncoderHardwareAcceleration
+  if (browserEncoderLatencyMode !== '') metrics.publisher_browser_encoder_latency_mode = browserEncoderLatencyMode
 
   const integerFields: Array<[string, unknown]> = [
     ['capture_width', source.capture_width ?? source.captureWidth],
@@ -253,6 +263,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['source_frame_height', source.source_frame_height ?? source.sourceFrameHeight],
     ['dropped_source_frame_count', source.dropped_source_frame_count ?? source.droppedSourceFrameCount],
     ['automatic_quality_transition_count', source.automatic_quality_transition_count ?? source.automaticQualityTransitionCount],
+    ['publisher_browser_encoder_bitrate', source.publisher_browser_encoder_bitrate ?? source.publisherBrowserEncoderBitrate],
   ]
   for (const [key, fieldValue] of integerFields) {
     const normalized = normalizeNonNegativeInteger(fieldValue)
@@ -524,7 +535,7 @@ function normalizeProtectionMode(value: unknown, fallback: SfuProtectionMode): S
 
 function normalizeCodecId(value: unknown): string {
   const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts') return normalized
+  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'webcodecs_vp8') return normalized
   return 'wlvc_unknown'
 }
 

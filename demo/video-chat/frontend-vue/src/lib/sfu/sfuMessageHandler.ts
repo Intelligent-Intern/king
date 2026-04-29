@@ -128,6 +128,8 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
           kingReceiveLatencyMs: Math.max(0, Number(msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
           kingFanoutLatencyMs: Math.max(0, Number(msg.kingFanoutLatencyMs ?? msg.king_fanout_latency_ms ?? 0)),
           subscriberSendLatencyMs: Math.max(0, Number(msg.subscriberSendLatencyMs ?? msg.subscriber_send_latency_ms ?? 0)),
+          frameWidth: Math.max(0, integerField(0, msg.frameWidth, msg.frame_width)),
+          frameHeight: Math.max(0, integerField(0, msg.frameHeight, msg.frame_height)),
           layoutMode: tileMetadata?.layoutMode || 'full_frame',
           layerId: tileMetadata?.layerId || 'full',
           cacheEpoch: Math.max(0, Number(tileMetadata?.cacheEpoch || 0)),

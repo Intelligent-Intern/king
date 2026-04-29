@@ -438,7 +438,7 @@ try {
   assert.match(securitySource, /codec_id: normalizeProtectedCodecId\(codecId, runtimePath\)/, 'protected frame header must carry normalized codec identity');
   assert.match(securitySource, /if \(codecId && header\.codec_id !== normalizeProtectedCodecId\(codecId, runtimePath\)\) throw new Error\('unsupported_capability'\);/, 'frame decrypt must reject codec identity mismatches');
   assert.match(securityCoreSource, /codec_id: asString\(header\?\.codec_id\)/, 'AAD must bind codec identity into the protected-frame contract');
-  assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
+  assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
   const sfuMessageHandlerSource = read('../../src/lib/sfu/sfuMessageHandler.ts');

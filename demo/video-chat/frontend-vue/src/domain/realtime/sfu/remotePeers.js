@@ -85,6 +85,11 @@ export function createSfuRemotePeerHelpers({
     } catch {
       // patch state is rebuilt after the next full-frame base
     }
+    try {
+      peer.browserVideoDecoder?.reset?.();
+    } catch {
+      // browser decoder state is rebuilt from the next keyframe
+    }
     // Keep the last visible frame while waiting for the rollover keyframe.
     mediaDebugLog('[SFU] Remote peer media continuity reset', reason);
     return {
@@ -279,6 +284,10 @@ export function createSfuRemotePeerHelpers({
         patchDecoderWidth: Number(existingPeer.patchDecoderWidth || 0),
         patchDecoderHeight: Number(existingPeer.patchDecoderHeight || 0),
         patchDecoderQuality: Number(existingPeer.patchDecoderQuality || 0),
+        browserVideoDecoder: existingPeer.browserVideoDecoder || null,
+        browserVideoDecoderCodec: String(existingPeer.browserVideoDecoderCodec || ''),
+        browserVideoDecoderWidth: Number(existingPeer.browserVideoDecoderWidth || 0),
+        browserVideoDecoderHeight: Number(existingPeer.browserVideoDecoderHeight || 0),
         hasFullFrameBase: continuityReset ? continuityReset.hasFullFrameBase : Boolean(existingPeer.hasFullFrameBase),
         hasFullFrameBaseByTrack: continuityReset ? continuityReset.hasFullFrameBaseByTrack : (existingPeer.hasFullFrameBaseByTrack && typeof existingPeer.hasFullFrameBaseByTrack === 'object'
           ? { ...existingPeer.hasFullFrameBaseByTrack }
@@ -369,6 +378,10 @@ export function createSfuRemotePeerHelpers({
       patchDecoderWidth: 0,
       patchDecoderHeight: 0,
       patchDecoderQuality: 0,
+      browserVideoDecoder: null,
+      browserVideoDecoderCodec: '',
+      browserVideoDecoderWidth: 0,
+      browserVideoDecoderHeight: 0,
       hasFullFrameBase: false,
       hasFullFrameBaseByTrack: {},
       acceptedSfuCacheEpochByTrack: {},

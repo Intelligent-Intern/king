@@ -185,6 +185,7 @@ export function createCallWorkspaceMediaStack(options) {
     callbacks: {
       applyCallOutputPreferences: callbacks.applyCallOutputPreferences,
       canProtectCurrentSfuTargets: callbacks.canProtectCurrentSfuTargets,
+      captureClientDiagnostic: callbacks.captureClientDiagnostic,
       currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
       ensureMediaSecuritySession: callbacks.ensureMediaSecuritySession,
       getSfuClientBufferedAmount: sfuTransport.getSfuClientBufferedAmount,
