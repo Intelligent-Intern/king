@@ -29,6 +29,7 @@ Active failure:
 - 2026-04-29 local hardening added a rolling browser wire-byte budget before `WebSocket.send`, immediate profile downshift for budget send failures, and a smaller extracted SFU message handler; local SFU contracts and build pass, but issue 20 stays open until the online gate passes against the deployed bundle.
 - 2026-04-29 local hardening now carries the rolling wire-budget `retryAfterMs` into the publisher controller so send-budget drops throttle the next encode tick for the measured retry window instead of spinning at the regular frame interval.
 - 2026-04-29 local hardening now turns fresh-receive decoder stalls into an immediate full-frame keyframe request; the publisher resets WLVC, disables selective patch frames until the full-frame keyframe is sent, and still keeps the existing receiver-pressure downshift path.
+- 2026-04-29 local hardening now makes the manual quality select flush SFU outbound media generation before reconfiguring capture/encoder, matching automatic downshift semantics.
 
 Already present and not enough:
 - Frontend SFU transport has bounded send queue, `bufferedAmount` pressure checks, frame drops, payload-pressure drops, and quality downgrade from `quality` to `balanced` to `realtime` to `rescue`.

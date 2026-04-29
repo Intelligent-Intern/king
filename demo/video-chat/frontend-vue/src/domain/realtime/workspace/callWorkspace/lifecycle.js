@@ -116,6 +116,14 @@ export function registerCallWorkspaceLifecycleHelpers({
     isCompactViewport.value = Boolean(event?.matches);
   }
 
+  function resetSfuOutboundMediaForProfileSelect(nextValue, previousValue) {
+    sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.({
+      fromProfile: String(previousValue || ''),
+      toProfile: String(nextValue || ''),
+      reason: 'manual_profile_select',
+    });
+  }
+
   watch(
     () => callMediaPrefs.speakerVolume,
     () => {
@@ -150,6 +158,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     () => callMediaPrefs.outgoingVideoQualityProfile,
     (nextValue, previousValue) => {
       if (nextValue === previousValue) return;
+      resetSfuOutboundMediaForProfileSelect(nextValue, previousValue);
       void reconfigureLocalTracksFromSelectedDevices();
     }
   );

@@ -35,6 +35,8 @@ try {
   requireContains(framePayload, 'outbound_media_generation', 'binary metadata preserves outbound media generation');
   requireContains(callWorkspaceView, 'resetSfuOutboundMediaAfterProfileSwitch', 'workspace wires the SFU reset into runtime switching');
   requireContains(lifecycle, 'callMediaPrefs.outgoingVideoQualityProfile', 'profile select changes reconfigure local capture constraints');
+  requireContains(lifecycle, 'resetSfuOutboundMediaForProfileSelect', 'manual quality select flushes old SFU media generations');
+  requireContains(lifecycle, "reason: 'manual_profile_select'", 'manual quality select reset reason is explicit');
   requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'profile switch watcher reapplies local tracks');
   requireContains(publisherPipeline, 'stopLocalEncodingPipeline();', 'publisher recreates encoders when the pipeline restarts');
 
@@ -44,6 +46,10 @@ try {
   assert.ok(resetIndex > 0, 'runtime must reset outbound SFU media before profile switch');
   assert.ok(stopIndex > resetIndex, 'runtime must stop the current encoder after flushing old-profile media');
   assert.ok(setIndex > stopIndex, 'runtime must apply the lower profile only after reset and encoder stop');
+  const manualResetIndex = lifecycle.indexOf('resetSfuOutboundMediaForProfileSelect(nextValue, previousValue);');
+  const manualReconfigureIndex = lifecycle.indexOf('void reconfigureLocalTracksFromSelectedDevices();', manualResetIndex);
+  assert.ok(manualResetIndex > 0, 'manual profile select must reset outbound media before track reconfigure');
+  assert.ok(manualReconfigureIndex > manualResetIndex, 'manual profile select must reconfigure tracks only after outbound media reset');
 
   process.stdout.write('[sfu-profile-switch-actuator-contract] PASS\n');
 } catch (error) {
