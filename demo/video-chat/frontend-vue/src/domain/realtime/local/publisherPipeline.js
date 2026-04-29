@@ -546,6 +546,21 @@ export function createLocalPublisherPipelineHelpers({
           });
           return;
         }
+        const encodeBudgetMs = Math.max(1, Number(videoProfile.maxEncodeMs || 0));
+        const payloadSoftLimitRatio = Math.max(0.5, Math.min(0.98, Number(videoProfile.payloadSoftLimitRatio || 0.86)));
+        const payloadSoftLimitBytes = Math.max(1, Math.floor(maxEncodedPayloadBytes * payloadSoftLimitRatio));
+        if (encodedPayloadBytes >= payloadSoftLimitBytes || encodeMs > encodeBudgetMs) {
+          handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
+            reason: 'sfu_wlvc_rate_budget_pressure',
+            layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
+            max_payload_bytes: maxEncodedPayloadBytes,
+            payload_soft_limit_bytes: payloadSoftLimitBytes,
+            payload_soft_limit_ratio: payloadSoftLimitRatio,
+            encode_ms: encodeMs,
+            budget_max_encode_ms: encodeBudgetMs,
+          });
+          return;
+        }
         const profileId = String(videoProfile.id || '').trim() || 'balanced';
         const transportStageMetrics = {
           outgoing_video_quality_profile: profileId,
@@ -563,9 +578,11 @@ export function createLocalPublisherPipelineHelpers({
           budget_max_encoded_bytes_per_frame: maxEncodedFrameBudgetBytes,
           budget_max_keyframe_bytes_per_frame: maxEncodedKeyframeBudgetBytes,
           budget_max_wire_bytes_per_second: Math.max(1, Number(videoProfile.maxWireBytesPerSecond || 0)),
-          budget_max_encode_ms: Math.max(1, Number(videoProfile.maxEncodeMs || 0)),
+          budget_max_encode_ms: encodeBudgetMs,
           budget_max_draw_image_ms: drawBudgetMs,
           budget_max_readback_ms: readbackBudgetMs,
+          budget_payload_soft_limit_bytes: payloadSoftLimitBytes,
+          budget_payload_soft_limit_ratio: payloadSoftLimitRatio,
           budget_max_queue_age_ms: Math.max(1, Number(videoProfile.maxQueueAgeMs || 0)),
           budget_max_buffered_bytes: Math.max(1, Number(videoProfile.maxBufferedBytes || 0)),
           budget_expected_recovery: String(videoProfile.expectedRecovery || ''),

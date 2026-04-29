@@ -256,6 +256,7 @@ export function createSfuTransportController({
     const normalizedFrameType = String(frameType || 'delta').trim().toLowerCase() === 'keyframe'
       ? 'keyframe'
       : 'delta';
+    const pressureReason = String(details?.reason || 'sfu_high_motion_payload_pressure');
     if (
       state.wlvcPayloadPressureFirstAtMs <= 0
       || (nowMs - state.wlvcPayloadPressureFirstAtMs) > sfuAutoQualityDowngradeBackpressureWindowMs
@@ -266,7 +267,7 @@ export function createSfuTransportController({
       state.wlvcPayloadPressureCount += 1;
     }
 
-    resetWlvcEncoderAfterDroppedEncodedFrame('sfu_high_motion_payload_pressure');
+    resetWlvcEncoderAfterDroppedEncodedFrame(pressureReason);
     state.wlvcBackpressurePauseUntilMs = Math.max(
       state.wlvcBackpressurePauseUntilMs,
       nowMs + wlvcBackpressurePauseMs(Math.max(normalizedPayloadBytes, sfuWlvcSendBufferHighWaterBytes))
@@ -287,10 +288,15 @@ export function createSfuTransportController({
         level: 'warning',
         eventType: 'sfu_video_payload_pressure',
         code: 'sfu_video_payload_pressure',
-        message: 'Outgoing SFU video frame was dropped before send because high motion made the WLVC payload too large.',
+        message: 'Outgoing SFU video frame was dropped before send because WLVC exceeded the active profile budget.',
         payload: {
           payload_bytes: normalizedPayloadBytes,
+          pressure_reason: pressureReason,
           max_payload_bytes: Math.max(0, Number(details?.max_payload_bytes || details?.maxPayloadBytes || 0)),
+          payload_soft_limit_bytes: Math.max(0, Number(details?.payload_soft_limit_bytes || details?.payloadSoftLimitBytes || 0)),
+          payload_soft_limit_ratio: Math.max(0, Number(details?.payload_soft_limit_ratio || details?.payloadSoftLimitRatio || 0)),
+          encode_ms: Math.max(0, Number(details?.encode_ms || details?.encodeMs || 0)),
+          budget_max_encode_ms: Math.max(0, Number(details?.budget_max_encode_ms || details?.budgetMaxEncodeMs || 0)),
           frame_type: normalizedFrameType,
           layout_mode: String(details?.layout_mode || details?.layoutMode || 'full_frame'),
           payload_pressure_count: state.wlvcPayloadPressureCount,
@@ -303,7 +309,7 @@ export function createSfuTransportController({
       });
     }
 
-    downgradeSfuVideoQualityAfterEncodePressure('sfu_high_motion_payload_pressure');
+    downgradeSfuVideoQualityAfterEncodePressure(pressureReason);
   }
 
   function restartSfuAfterVideoStall(reason, payload = {}) {

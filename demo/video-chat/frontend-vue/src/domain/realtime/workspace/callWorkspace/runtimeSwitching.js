@@ -30,6 +30,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   const immediateQualityPressureReasons = Object.freeze([
     'sfu_frame_send_failed',
     'sfu_high_motion_payload_pressure',
+    'sfu_wlvc_rate_budget_pressure',
     'sfu_remote_quality_pressure',
     'sfu_remote_video_decoder_waiting_keyframe',
     'sfu_remote_video_frozen',

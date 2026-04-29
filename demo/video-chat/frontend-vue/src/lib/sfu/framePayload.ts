@@ -224,6 +224,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_max_wire_bytes_per_second', source.budget_max_wire_bytes_per_second ?? source.budgetMaxWireBytesPerSecond],
     ['budget_max_queue_age_ms', source.budget_max_queue_age_ms ?? source.budgetMaxQueueAgeMs],
     ['budget_max_buffered_bytes', source.budget_max_buffered_bytes ?? source.budgetMaxBufferedBytes],
+    ['budget_payload_soft_limit_bytes', source.budget_payload_soft_limit_bytes ?? source.budgetPayloadSoftLimitBytes],
     ['king_receive_at_ms', source.king_receive_at_ms ?? source.kingReceiveAtMs],
   ]
   for (const [key, fieldValue] of integerFields) {
@@ -240,6 +241,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_max_encode_ms', source.budget_max_encode_ms ?? source.budgetMaxEncodeMs],
     ['budget_max_draw_image_ms', source.budget_max_draw_image_ms ?? source.budgetMaxDrawImageMs],
     ['budget_max_readback_ms', source.budget_max_readback_ms ?? source.budgetMaxReadbackMs],
+    ['budget_payload_soft_limit_ratio', source.budget_payload_soft_limit_ratio ?? source.budgetPayloadSoftLimitRatio],
     ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
     ['king_receive_latency_ms', source.king_receive_latency_ms ?? source.kingReceiveLatencyMs],
     ['king_fanout_latency_ms', source.king_fanout_latency_ms ?? source.kingFanoutLatencyMs],
