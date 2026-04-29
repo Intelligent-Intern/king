@@ -806,10 +806,10 @@ function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int
         (int) ($frame['payload_bytes'] ?? 0)
     );
     if ($payloadBudgetBytes <= 0) {
-        return 2 * 1024 * 1024;
+        return 10 * 1024 * 1024;
     }
 
-    return min(3 * 1024 * 1024, max(128 * 1024, (int) ceil($payloadBudgetBytes * 1.5) + 64 * 1024));
+    return min(10 * 1024 * 1024, max(512 * 1024, (int) ceil($payloadBudgetBytes * 1.5) + 64 * 1024));
 }
 
 function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool

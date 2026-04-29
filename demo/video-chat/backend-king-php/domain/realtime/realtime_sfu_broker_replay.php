@@ -29,7 +29,7 @@ function videochat_sfu_live_frame_relay_max_files_per_room(): int
 
 function videochat_sfu_live_frame_relay_max_room_bytes(): int
 {
-    return 32 * 1024 * 1024;
+    return 96 * 1024 * 1024;
 }
 
 function videochat_sfu_live_frame_relay_cleanup_interval_ms(): int
@@ -56,10 +56,10 @@ function videochat_sfu_live_frame_relay_max_record_bytes(array $frame): int
         (int) ($frame['payload_bytes'] ?? 0)
     );
     if ($payloadBudgetBytes <= 0) {
-        return 2 * 1024 * 1024;
+        return 10 * 1024 * 1024;
     }
 
-    return min(3 * 1024 * 1024, max(128 * 1024, (int) ceil($payloadBudgetBytes * 1.5) + 64 * 1024));
+    return min(10 * 1024 * 1024, max(512 * 1024, (int) ceil($payloadBudgetBytes * 1.5) + 64 * 1024));
 }
 
 function videochat_sfu_live_frame_relay_should_cleanup(string $roomId, int $nowMs): bool

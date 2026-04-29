@@ -50,6 +50,9 @@ try {
   assert.equal(videoFrameSource.includes('document.createElement'), false, 'VideoFrame source must not create DOM canvas');
 
   requireContains(sourceReadback, 'createPublisherVideoFrameSourceReader', 'source readback imports VideoFrame source reader');
+  requireContains(sourceReadback, 'ensureVideoFrameReader(', 'source readback recreates the VideoFrame reader after transient stalls');
+  requireContains(sourceReadback, 'VIDEO_FRAME_READER_RETRY_COOLDOWN_MS', 'source readback keeps transient reader failures on the primary path');
+  requireContains(sourceReadback, 'VideoFrame source reader failed; retrying processor path before DOM canvas fallback', 'source readback does not permanently demote to DOM canvas after one reader timeout');
   requireContains(sourceReadback, 'PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND', 'source readback labels VideoFrame backend');
   requireContains(sourceReadback, 'context.drawImage(source, 0, 0, canvas.width, canvas.height)', 'source readback draws generic frame source, not only video element');
   requireContains(sourceReadback, 'video_frame_processor_read', 'source readback traces processor reads');

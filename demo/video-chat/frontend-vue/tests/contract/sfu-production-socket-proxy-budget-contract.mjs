@@ -30,9 +30,9 @@ try {
     'package script exposes production socket/proxy budget probe',
   );
   requireContains(probe, 'CONTINUATION_THRESHOLD_BYTES = 65_535', 'probe measures around websocket continuation threshold');
-  requireContains(probe, 'QUALITY_MAX_PAYLOAD_BYTES = 1280 * 1024', 'probe exercises full quality profile payload budget');
-  requireContains(probe, 'QUALITY_MAX_BUFFERED_BYTES = 1536 * 1024', 'probe enforces quality bufferedAmount budget');
-  requireContains(probe, 'CRITICAL_BUFFERED_BYTES = 5 * 1024 * 1024', 'probe fails before critical backpressure');
+  requireContains(probe, 'QUALITY_MAX_PAYLOAD_BYTES = 5632 * 1024', 'probe exercises full quality profile payload budget');
+  requireContains(probe, 'QUALITY_MAX_BUFFERED_BYTES = 8 * 1024 * 1024', 'probe enforces quality bufferedAmount budget');
+  requireContains(probe, 'CRITICAL_BUFFERED_BYTES = 10 * 1024 * 1024', 'probe fails before critical backpressure');
   requireContains(probe, 'connectSfuSocket', 'probe opens real production SFU sockets');
   requireContains(probe, "role: 'publisher'", 'probe opens publisher path');
   requireContains(probe, "role: 'subscriber'", 'probe opens subscriber path');

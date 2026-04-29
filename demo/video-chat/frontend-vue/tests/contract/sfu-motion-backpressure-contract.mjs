@@ -168,21 +168,23 @@ async function main() {
         },
       },
       {
-        rescue: { captureFrameRate: 7, encodeIntervalMs: 244, frameQuality: 20 },
-        realtime: { captureFrameRate: 11, encodeIntervalMs: 167, frameQuality: 29 },
-        balanced: { captureFrameRate: 14, encodeIntervalMs: 111, frameQuality: 33 },
-        quality: { captureFrameRate: 27, encodeIntervalMs: 92, frameQuality: 43 },
+        rescue: { captureFrameRate: 10, encodeIntervalMs: 167, frameQuality: 42 },
+        realtime: { captureFrameRate: 14, encodeIntervalMs: 125, frameQuality: 46 },
+        balanced: { captureFrameRate: 18, encodeIntervalMs: 100, frameQuality: 52 },
+        quality: { captureFrameRate: 24, encodeIntervalMs: 83, frameQuality: 60 },
       },
-      'SFU profiles must trade about 10% less framerate for higher per-frame quality',
+      'SFU profiles must keep visible two-person grid quality above low-resolution rescue blocks',
     );
 
     const qualityDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.quality);
     const balancedDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.balanced);
     const realtimeDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.realtime);
+    const rescueDelta = encodeHighMotionDelta(WaveletVideoEncoder, profiles.rescue);
 
     assert.equal(qualityDelta.type, 'delta', 'quality high-motion second frame must be a delta');
     assert.equal(balancedDelta.type, 'delta', 'balanced high-motion second frame must be a delta');
     assert.equal(realtimeDelta.type, 'delta', 'realtime high-motion second frame must be a delta');
+    assert.equal(rescueDelta.type, 'delta', 'rescue high-motion second frame must be a delta');
     const decodedChromaDelta = decodeMovingChromaDelta(WaveletVideoEncoder, WaveletVideoDecoder, profiles.realtime);
     assert.equal(
       decodedChromaDelta.data.length,
@@ -190,16 +192,24 @@ async function main() {
       'moving chroma delta must decode to a full RGBA frame after temporal reconstruction',
     );
     assert.ok(
-      qualityDelta.data.byteLength > maxDeltaBytes,
-      `quality high-motion delta must trip the payload cap; bytes=${qualityDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+      qualityDelta.data.byteLength <= maxDeltaBytes,
+      `quality high-motion delta must fit the global payload cap; bytes=${qualityDelta.data.byteLength}, cap=${maxDeltaBytes}`,
     );
     assert.ok(
-      balancedDelta.data.byteLength <= maxDeltaBytes,
-      `balanced high-motion delta must fit the payload cap; bytes=${balancedDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+      qualityDelta.data.byteLength <= profiles.quality.maxEncodedBytesPerFrame,
+      `quality high-motion delta must fit the quality profile budget; bytes=${qualityDelta.data.byteLength}, cap=${profiles.quality.maxEncodedBytesPerFrame}`,
     );
     assert.ok(
-      realtimeDelta.data.byteLength <= maxDeltaBytes,
-      `realtime high-motion delta must fit the payload cap; bytes=${realtimeDelta.data.byteLength}, cap=${maxDeltaBytes}`,
+      balancedDelta.data.byteLength <= profiles.balanced.maxEncodedBytesPerFrame,
+      `balanced high-motion delta must fit the balanced profile budget; bytes=${balancedDelta.data.byteLength}, cap=${profiles.balanced.maxEncodedBytesPerFrame}`,
+    );
+    assert.ok(
+      realtimeDelta.data.byteLength <= profiles.realtime.maxEncodedBytesPerFrame,
+      `realtime high-motion delta must fit the realtime profile budget; bytes=${realtimeDelta.data.byteLength}, cap=${profiles.realtime.maxEncodedBytesPerFrame}`,
+    );
+    assert.ok(
+      rescueDelta.data.byteLength <= profiles.rescue.maxEncodedBytesPerFrame,
+      `rescue high-motion delta must fit the rescue profile budget; bytes=${rescueDelta.data.byteLength}, cap=${profiles.rescue.maxEncodedBytesPerFrame}`,
     );
     assert.ok(
       profiles.realtime.frameWidth < profiles.balanced.frameWidth,

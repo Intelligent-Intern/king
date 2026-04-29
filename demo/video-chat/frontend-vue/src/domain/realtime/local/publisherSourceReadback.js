@@ -35,6 +35,9 @@ import {
 const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
 const ZERO_COPY_CAPTURE_GATE_STAGE = 'video_frame_zero_copy_gate';
 const ZERO_COPY_CAPTURE_GATE_SOURCE = 'video_frame_main_thread_canvas_blocked';
+const VIDEO_FRAME_READER_RETRY_COOLDOWN_MS = 250;
+const VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS = 1500;
+const VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT = 3;
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);
@@ -143,13 +146,29 @@ export function createPublisherSourceReadbackController({
     : resolvePublisherFrameSize(video, videoProfile, videoTrack);
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
   let videoFrameReader = null;
-  let videoFrameSourceDisabled = false;
+  let videoFrameReaderRetryAfterMs = 0;
+  let videoFrameReaderTransientFailures = 0;
   let videoFrameCopyToDisabled = false;
   let captureWorkerReadback = null;
   let captureWorkerDisabled = false;
   let lastDomCanvasReadbackAtMs = 0;
 
-  if (canUsePublisherVideoFrameSource(captureCapabilities)) {
+  function closeVideoFrameReader(reason = 'publisher_video_frame_reader_replaced') {
+    const reader = videoFrameReader;
+    videoFrameReader = null;
+    if (reader && typeof reader.close === 'function') {
+      void reader.close(reason).catch(() => {});
+    }
+  }
+
+  function shouldTryVideoFrameReader(nowMs = Date.now()) {
+    return canUsePublisherVideoFrameSource(captureCapabilities)
+      && nowMs >= videoFrameReaderRetryAfterMs;
+  }
+
+  function ensureVideoFrameReader(reason = 'publisher_video_frame_reader_required') {
+    if (videoFrameReader) return videoFrameReader;
+    if (!shouldTryVideoFrameReader()) return null;
     try {
       videoFrameReader = createPublisherVideoFrameSourceReader({
         videoTrack,
@@ -157,9 +176,38 @@ export function createPublisherSourceReadbackController({
         readTimeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(videoProfile) * 6),
       });
     } catch (error) {
-      videoFrameSourceDisabled = true;
-      mediaDebugLog('[SFU] VideoFrame source reader unavailable; using DOM video canvas fallback', error);
+      videoFrameReader = null;
+      videoFrameReaderTransientFailures += 1;
+      const cooldownMs = videoFrameReaderTransientFailures >= VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT
+        ? VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS
+        : VIDEO_FRAME_READER_RETRY_COOLDOWN_MS;
+      videoFrameReaderRetryAfterMs = Date.now() + cooldownMs;
+      mediaDebugLog(
+        '[SFU] VideoFrame source reader unavailable; retrying before DOM video canvas fallback',
+        reason,
+        error,
+        `failures=${videoFrameReaderTransientFailures}`,
+        `retry_after_ms=${cooldownMs}`,
+      );
     }
+    return videoFrameReader;
+  }
+
+  ensureVideoFrameReader('publisher_source_readback_init');
+
+  function markVideoFrameReaderFailure(result) {
+    closeVideoFrameReader(String(result?.reason || 'publisher_video_frame_source_failed'));
+    videoFrameReaderTransientFailures += 1;
+    const cooldownMs = videoFrameReaderTransientFailures >= VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT
+      ? VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS
+      : VIDEO_FRAME_READER_RETRY_COOLDOWN_MS;
+    videoFrameReaderRetryAfterMs = Date.now() + cooldownMs;
+    mediaDebugLog(
+      '[SFU] VideoFrame source reader failed; retrying processor path before DOM canvas fallback',
+      result?.reason,
+      `failures=${videoFrameReaderTransientFailures}`,
+      `retry_after_ms=${cooldownMs}`,
+    );
   }
 
   if (!captureWorkerDisabled) {
@@ -174,13 +222,15 @@ export function createPublisherSourceReadbackController({
   }
 
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
-    if (videoFrameReader && !videoFrameSourceDisabled) {
+    const reader = ensureVideoFrameReader('publisher_source_readback_tick');
+    if (reader) {
       const readStartedAtMs = highResolutionNowMs();
-      const result = await videoFrameReader.readFrame({
+      const result = await reader.readFrame({
         timeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(activeProfile) * 6),
       });
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       if (result.ok && result.frame) {
+        videoFrameReaderTransientFailures = 0;
         const frameSize = resolveVideoFrameSize(result.frame, activeProfile);
         updateTraceSource(trace, PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND, frameSize, activeTrack);
         return {
@@ -190,8 +240,7 @@ export function createPublisherSourceReadbackController({
           closeSource: () => closePublisherVideoFrame(result.frame),
         };
       }
-      videoFrameSourceDisabled = true;
-      mediaDebugLog('[SFU] VideoFrame source reader failed; using DOM video canvas fallback', result.reason);
+      markVideoFrameReaderFailure(result);
     }
 
     if (video?.readyState < 2 || !context) return null;
@@ -418,7 +467,7 @@ export function createPublisherSourceReadbackController({
     readFrame,
     close,
     get sourceBackend() {
-      return videoFrameReader && !videoFrameSourceDisabled
+      return videoFrameReader
         ? PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
         : DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND;
     },
