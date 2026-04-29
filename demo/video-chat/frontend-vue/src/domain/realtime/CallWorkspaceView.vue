@@ -1613,6 +1613,7 @@ const {
     sendSocketFrame,
     serverRoomId,
     sessionState,
+    sfuTransportState,
     shouldBlockNativeRuntimeSignaling,
     shouldSuppressCallAckNotice,
     shouldSuppressExpectedSignalingError,

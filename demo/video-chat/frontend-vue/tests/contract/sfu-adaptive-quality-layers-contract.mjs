@@ -32,6 +32,7 @@ async function main() {
   const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
 
   requireContains(packageJson, 'sfu-adaptive-quality-layers-contract.mjs', 'SFU contract suite includes adaptive layer proof');
 
@@ -58,6 +59,8 @@ async function main() {
   requireContains(runtimeHealth, 'payload?.requested_action || (requestFullKeyframe ? ', 'runtime health preserves explicit adaptive layer actions');
   requireContains(socketLifecycle, 'prefer_primary_video_layer', 'publisher handles primary layer requests');
   requireContains(socketLifecycle, 'prefer_thumbnail_video_layer', 'publisher handles thumbnail layer requests');
+  requireContains(socketLifecycle, 'function sfuTransportStateForSocketLifecycle()', 'socket lifecycle guards adaptive layer state wiring');
+  requireContains(socketLifecycle, 'fallbackSfuTransportState', 'socket lifecycle cannot crash when isolated tests omit SFU transport state');
   requireContains(socketLifecycle, 'sfuRemotePrimaryLayerRequestedUntilMs', 'publisher protects active primary layer from thumbnail downshift');
   requireContains(socketLifecycle, 'ignoredThumbnailRequest', 'publisher ignores thumbnail downshift while a primary request is active');
   requireContains(socketLifecycle, "direction: 'up'", 'primary layer request triggers automatic upshift');
@@ -68,6 +71,13 @@ async function main() {
   requireContains(runtimeSwitching, 'requestedProfileForDirection', 'profile switcher can jump to requested automatic layer profile');
   requireContains(runtimeSwitching, "'sfu_remote_thumbnail_layer_requested'", 'thumbnail pressure has explicit downgrade reason');
   requireContains(sfuTransport, 'sfuRemotePrimaryLayerRequestedUntilMs', 'transport state stores primary layer TTL');
+  const socketHelperStart = workspaceView.indexOf('createCallWorkspaceSocketHelpers({');
+  const socketHelperEnd = workspaceView.indexOf('state: socketLifecycleState', socketHelperStart);
+  assert.ok(socketHelperStart >= 0 && socketHelperEnd > socketHelperStart, 'CallWorkspaceView socket helper block must be present');
+  assert.ok(
+    workspaceView.slice(socketHelperStart, socketHelperEnd).includes('sfuTransportState,'),
+    'CallWorkspaceView must inject sfuTransportState into socket lifecycle helpers before adaptive layer messages arrive',
+  );
 
   const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/adaptiveQualityLayers.js')).href;
   const adaptiveModule = await import(moduleUrl);
