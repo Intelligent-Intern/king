@@ -59,7 +59,6 @@ require_contains($provenance, 'On encoder mismatch, the wrapper deletes the stal
 require_contains($provenance, 'On decoder mismatch, the wrapper deletes the stale decoder if possible, recreates it from the cached module reference with current width, height, and quality, then retries the decode exactly through the recreated decoder.');
 require_contains($provenance, 'Non-binding errors still fail closed by rethrowing the original error; this recovery is not a broad catch-all fallback.');
 
-require_contains('SPRINT.md', '- [x] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC binding-mismatch recovery decision');
 require_contains('READYNESS_TRACKER.md', 'Added frontend contract `wlvc-binding-recovery-contract.mjs` and PHPT `734-wlvc-binding-recovery-contract.phpt`.');
 

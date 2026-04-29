@@ -1,19 +1,21 @@
 import { sessionState } from '../domain/auth/session';
 import { fetchBackend } from './backendFetch';
-import { currentAssetVersion } from './assetVersion';
+import { currentAssetVersion, handleAssetLoadFailure } from './assetVersion';
 
 const DIAGNOSTICS_STORAGE_KEY = 'ii.videocall.client_diagnostics.pending.v1';
 const DIAGNOSTICS_MAX_QUEUE = 60;
 const DIAGNOSTICS_MAX_BATCH = 12;
-const DIAGNOSTICS_FLUSH_INTERVAL_MS = 4000;
-const DIAGNOSTICS_DEDUPE_WINDOW_MS = 15000;
+const DIAGNOSTICS_FLUSH_INTERVAL_MS = 30000;
+const DIAGNOSTICS_MAX_REPEAT_COUNT = 9999;
 
 let diagnosticsContextProvider = null;
 let diagnosticsQueue = loadPersistedDiagnosticsQueue();
 let diagnosticsFlushTimer = null;
 let diagnosticsFlushPromise = null;
 let diagnosticsLifecycleBound = false;
-let diagnosticsRetryDelayMs = 2500;
+let diagnosticsRetryDelayMs = DIAGNOSTICS_FLUSH_INTERVAL_MS;
+let diagnosticsGlobalErrorBound = false;
+let diagnosticsSentFingerprints = new Set();
 
 function normalizeString(value, fallback = '', maxLength = 240) {
   const normalized = String(value ?? '').trim();
@@ -164,11 +166,88 @@ function bindDiagnosticsLifecycleHooks() {
   });
 }
 
+function diagnosticErrorName(value) {
+  if (value instanceof Error) return normalizeString(value.name, 'Error', 120);
+  if (value && typeof value === 'object' && typeof value.name === 'string') {
+    return normalizeString(value.name, 'Error', 120);
+  }
+  return '';
+}
+
+function diagnosticErrorMessage(value, fallback = 'Client runtime error captured.') {
+  if (value instanceof Error) return normalizeString(value.message, fallback, 500);
+  if (typeof value === 'string') return normalizeString(value, fallback, 500);
+  if (value && typeof value === 'object' && typeof value.message === 'string') {
+    return normalizeString(value.message, fallback, 500);
+  }
+  return fallback;
+}
+
+function reportGlobalClientRuntimeError(eventType, error, payload = {}) {
+  try {
+    reportClientDiagnostic({
+      category: 'runtime',
+      level: 'error',
+      eventType,
+      code: diagnosticErrorName(error) || eventType,
+      message: diagnosticErrorMessage(error),
+      payload: {
+        ...payload,
+        error,
+      },
+      immediate: true,
+    });
+  } catch {
+    // Never let diagnostics create a secondary global error.
+  }
+}
+
+function bindGlobalClientErrorDiagnostics() {
+  if (diagnosticsGlobalErrorBound || typeof window === 'undefined') return;
+  diagnosticsGlobalErrorBound = true;
+
+  window.addEventListener('error', (event) => {
+    const error = event?.error || event?.message || 'Client runtime error captured.';
+    const payload = {
+      source_file: normalizeString(event?.filename, '', 500),
+      source_line: Math.max(0, Number(event?.lineno || 0)),
+      source_column: Math.max(0, Number(event?.colno || 0)),
+      message: normalizeString(event?.message, '', 500),
+      global_event_type: 'error',
+    };
+    reportGlobalClientRuntimeError('call_workspace_runtime_error', error, payload);
+    handleAssetLoadFailure(error, payload);
+  });
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason || 'Client promise rejection captured.';
+    const payload = {
+      global_event_type: 'unhandledrejection',
+    };
+    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', reason, payload);
+    if (handleAssetLoadFailure(reason, payload)) {
+      event?.preventDefault?.();
+    }
+  });
+
+  window.addEventListener('vite:preloadError', (event) => {
+    const error = event?.payload || event?.error || event || 'Client preload error captured.';
+    const payload = {
+      global_event_type: 'vite:preloadError',
+    };
+    reportGlobalClientRuntimeError('call_workspace_unhandled_rejection', error, payload);
+    if (handleAssetLoadFailure(error, payload)) {
+      event?.preventDefault?.();
+    }
+  });
+}
+
 export function configureClientDiagnostics(contextProvider) {
   diagnosticsContextProvider = typeof contextProvider === 'function' ? contextProvider : null;
   bindDiagnosticsLifecycleHooks();
+  bindGlobalClientErrorDiagnostics();
   if (diagnosticsQueue.length > 0) {
-    scheduleDiagnosticsFlush(250);
+    scheduleDiagnosticsFlush();
   }
 }
 
@@ -187,11 +266,15 @@ export function reportClientDiagnostic({
 
   const normalizedEventType = normalizeIdentifier(eventType, '');
   if (normalizedEventType === '') return null;
+  const normalizedLevel = normalizeLevel(level);
+  if (normalizedLevel !== 'warning' && normalizedLevel !== 'error') {
+    return null;
+  }
 
   const context = resolveDiagnosticsContext();
   const entry = {
     category: normalizeIdentifier(category, 'media'),
-    level: normalizeLevel(level),
+    level: normalizedLevel,
     event_type: normalizedEventType,
     code: normalizeIdentifier(code, ''),
     message: normalizeString(message, '', 500),
@@ -210,15 +293,17 @@ export function reportClientDiagnostic({
   for (let index = diagnosticsQueue.length - 1; index >= 0; index -= 1) {
     const queued = diagnosticsQueue[index];
     if (!queued || diagnosticsFingerprint(queued) !== fingerprint) continue;
-    const ageMs = Math.abs(entry.timestamp_unix_ms - Number(queued.timestamp_unix_ms || 0));
-    if (ageMs > DIAGNOSTICS_DEDUPE_WINDOW_MS) break;
-    queued.repeat_count = Math.min(99, Number(queued.repeat_count || 1) + 1);
+    queued.repeat_count = Math.min(DIAGNOSTICS_MAX_REPEAT_COUNT, Number(queued.repeat_count || 1) + 1);
     queued.client_time = entry.client_time;
     queued.timestamp_unix_ms = entry.timestamp_unix_ms;
     queued.payload = entry.payload;
     persistDiagnosticsQueue();
-    scheduleDiagnosticsFlush(immediate ? 50 : DIAGNOSTICS_FLUSH_INTERVAL_MS);
+    scheduleDiagnosticsFlush();
     return queued;
+  }
+
+  if (diagnosticsSentFingerprints.has(fingerprint)) {
+    return null;
   }
 
   diagnosticsQueue.push(entry);
@@ -227,11 +312,7 @@ export function reportClientDiagnostic({
   }
   persistDiagnosticsQueue();
 
-  if (immediate || diagnosticsQueue.length >= DIAGNOSTICS_MAX_BATCH) {
-    scheduleDiagnosticsFlush(50);
-  } else {
-    scheduleDiagnosticsFlush();
-  }
+  scheduleDiagnosticsFlush();
 
   return entry;
 }
@@ -273,17 +354,20 @@ export async function flushClientDiagnostics({ keepalive = false, reason = 'manu
         throw new Error(`client_diagnostics_http_${response.status}`);
       }
 
+      for (const entry of batch) {
+        diagnosticsSentFingerprints.add(diagnosticsFingerprint(entry));
+      }
       diagnosticsQueue.splice(0, batch.length);
       persistDiagnosticsQueue();
-      diagnosticsRetryDelayMs = 2500;
+      diagnosticsRetryDelayMs = DIAGNOSTICS_FLUSH_INTERVAL_MS;
 
       if (diagnosticsQueue.length > 0) {
-        scheduleDiagnosticsFlush(250);
+        scheduleDiagnosticsFlush();
       }
 
       return true;
     } catch {
-      diagnosticsRetryDelayMs = Math.min(20000, diagnosticsRetryDelayMs * 2);
+      diagnosticsRetryDelayMs = Math.min(120000, diagnosticsRetryDelayMs * 2);
       scheduleDiagnosticsFlush(diagnosticsRetryDelayMs);
       return false;
     } finally {

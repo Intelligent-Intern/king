@@ -15,13 +15,18 @@ export function createCallWorkspaceNativeStack(options) {
   } = options;
   const { markRaw } = vue;
 
+  let audioBridgeState = null;
+  let nativeAudioBridgeRecovery = null;
+  let nativePeerLifecycle = null;
+  let sendNativeOfferProxy = async () => {};
+
   const nativeBridgeRuntime = createNativeBridgeRuntimeHelpers({
     callbacks: {
       apiRequest: callbacks.apiRequest,
       attachMediaSecurityNativeReceiverBase: callbacks.attachMediaSecurityNativeReceiverBase,
       attachMediaSecurityNativeSenderBase: callbacks.attachMediaSecurityNativeSenderBase,
       bumpMediaRenderVersion: callbacks.bumpMediaRenderVersion,
-      clearNativePeerAudioTrackDeadline: callbacks.clearNativePeerAudioTrackDeadline,
+      clearNativePeerAudioTrackDeadline: (...args) => audioBridgeState?.clearNativePeerAudioTrackDeadline?.(...args),
       createNativePeerAudioElement: callbacks.createNativePeerAudioElement,
       createNativePeerVideoElement: callbacks.createNativePeerVideoElement,
       currentNativeAudioBridgeFailureMessage: callbacks.currentNativeAudioBridgeFailureMessage,
@@ -35,14 +40,14 @@ export function createCallWorkspaceNativeStack(options) {
       isNativeWebRtcRuntimePath: callbacks.isNativeWebRtcRuntimePath,
       markParticipantActivity: callbacks.markParticipantActivity,
       mediaDebugLog: callbacks.mediaDebugLog,
-      playNativePeerAudio: callbacks.playNativePeerAudio,
+      playNativePeerAudio: (...args) => nativeAudioBridgeRecovery?.playNativePeerAudio?.(...args),
       renderCallVideoLayout: callbacks.renderCallVideoLayout,
       renderNativeRemoteVideos: callbacks.renderNativeRemoteVideos,
       reportNativeAudioBridgeFailure: callbacks.reportNativeAudioBridgeFailure,
       reportNativeAudioSdpRejected: callbacks.reportNativeAudioSdpRejected,
-      resetNativeAudioTrackRecovery: callbacks.resetNativeAudioTrackRecovery,
-      scheduleNativeOfferRetry: callbacks.scheduleNativeOfferRetry,
-      scheduleNativePeerAudioTrackDeadline: callbacks.scheduleNativePeerAudioTrackDeadline,
+      resetNativeAudioTrackRecovery: (...args) => nativeAudioBridgeRecovery?.resetNativeAudioTrackRecovery?.(...args),
+      scheduleNativeOfferRetry: (...args) => nativePeerLifecycle?.scheduleNativeOfferRetry?.(...args),
+      scheduleNativePeerAudioTrackDeadline: (...args) => nativeAudioBridgeRecovery?.scheduleNativePeerAudioTrackDeadline?.(...args),
       sendSocketFrame: callbacks.sendSocketFrame,
       shouldBypassNativeAudioProtectionForPeer: callbacks.shouldBypassNativeAudioProtectionForPeer,
       shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
@@ -65,14 +70,23 @@ export function createCallWorkspaceNativeStack(options) {
       nativeSdpHasSendableAudio: refs.nativeSdpHasSendableAudio,
       reconfigureLocalTracksFromSelectedDevices: callbacks.reconfigureLocalTracksFromSelectedDevices,
       sessionToken: callbacks.sessionToken,
-      setNativePeerAudioBridgeState: callbacks.setNativePeerAudioBridgeState,
+      setNativePeerAudioBridgeState: (...args) => audioBridgeState?.setNativePeerAudioBridgeState?.(...args),
     },
     state: refs.nativeBridgeRuntimeState,
   });
 
-  const audioBridgeState = createNativeAudioBridgeStateHelpers(refs.nativeAudioBridgeStatusVersion);
+  audioBridgeState = createNativeAudioBridgeStateHelpers(refs.nativeAudioBridgeStatusVersion);
+  const shouldBlockNativeRuntimeSignaling = () => {
+    if (typeof callbacks.shouldBlockNativeRuntimeSignaling === 'function') {
+      return callbacks.shouldBlockNativeRuntimeSignaling();
+    }
+    const sfuEnabled = typeof callbacks.sfuRuntimeEnabled === 'function'
+      ? callbacks.sfuRuntimeEnabled()
+      : false;
+    return Boolean(sfuEnabled) && refs.mediaRuntimePath.value === 'pending';
+  };
 
-  const nativeAudioBridgeRecovery = createNativeAudioBridgeRecovery({
+  nativeAudioBridgeRecovery = createNativeAudioBridgeRecovery({
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
     closeNativePeerConnection: callbacks.closeNativePeerConnection,
     currentMediaSecurityRuntimePath: callbacks.currentMediaSecurityRuntimePath,
@@ -88,13 +102,14 @@ export function createCallWorkspaceNativeStack(options) {
     nativeAudioTrackRecoveryRejoinDelayMs: constants.nativeAudioTrackRecoveryRejoinDelayMs,
     resyncNativeAudioBridgePeerAfterSecurityReady: callbacks.resyncNativeAudioBridgePeerAfterSecurityReady,
     setNativePeerAudioBridgeState: audioBridgeState.setNativePeerAudioBridgeState,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     streamHasLiveTrackKind: callbacks.streamHasLiveTrackKind,
     syncMediaSecurityWithParticipants: callbacks.syncMediaSecurityWithParticipants,
     syncNativePeerConnectionsWithRoster: callbacks.syncNativePeerConnectionsWithRoster,
     telemetrySnapshotProvider: callbacks.telemetrySnapshotProvider,
   });
 
-  const nativePeerLifecycle = createNativePeerLifecycleHelpers({
+  nativePeerLifecycle = createNativePeerLifecycleHelpers({
     bumpMediaRenderVersion: callbacks.bumpMediaRenderVersion,
     clearNativePeerAudioTrackDeadline: audioBridgeState.clearNativePeerAudioTrackDeadline,
     clearRemoteVideoContainer: callbacks.clearRemoteVideoContainer,
@@ -105,9 +120,11 @@ export function createCallWorkspaceNativeStack(options) {
     nativeOfferRetryDelaysMs: constants.nativeOfferRetryDelaysMs,
     nativePeerConnectionsRef: refs.nativePeerConnectionsRef,
     renderNativeRemoteVideos: callbacks.renderNativeRemoteVideos,
-    sendNativeOffer: callbacks.sendNativeOffer,
+    sendNativeOffer: (peer) => sendNativeOfferProxy(peer),
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
   });
+  sendNativeOfferProxy = nativeBridgeRuntime.sendNativeOffer;
 
   let ensureNativePeerConnection = () => null;
   let syncNativePeerConnectionsWithRoster = () => {};
@@ -181,7 +198,9 @@ export function createCallWorkspaceNativeStack(options) {
     sendSocketFrame: callbacks.sendSocketFrame,
     shouldExpectLocalNativeAudioTrack: nativeBridgeRuntime.shouldExpectLocalNativeAudioTrack,
     shouldExpectRemoteNativeAudioTrack: nativeBridgeRuntime.shouldExpectRemoteNativeAudioTrack,
+    shouldBlockNativeRuntimeSignaling,
     shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,
+    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,
     sfuRuntimeEnabled: callbacks.sfuRuntimeEnabled,
     switchMediaRuntimePath: callbacks.switchMediaRuntimePath,
     syncNativePeerLocalTracks: nativeBridgeRuntime.syncNativePeerLocalTracks,

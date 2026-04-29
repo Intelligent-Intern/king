@@ -110,6 +110,7 @@ export function selectCallLayoutParticipants({
   const pinnedUserIds = [...new Set([...layout.pinnedUserIds, ...layout.selection.pinnedUserIds, ...pinnedFromMap])]
     .filter((id) => byUserId.has(id));
   const serverVisibleIds = layout.selection.visibleUserIds.filter((id) => byUserId.has(id));
+  const explicitMiniUserIds = layout.selection.miniUserIds.filter((id) => byUserId.has(id));
   const manualSelectedIds = layout.selectedUserIds.filter((id) => byUserId.has(id));
   const rankedByActivity = sortByActivity(rows, activityByUserId, nowMs).map((row) => row.userId);
 
@@ -136,12 +137,29 @@ export function selectCallLayoutParticipants({
     mainUserId = rankedByActivity.find((id) => clippedVisibleIds.includes(id)) || mainUserId;
   }
   if (!Number.isInteger(mainUserId) || mainUserId <= 0 || !byUserId.has(mainUserId)) {
-    mainUserId = clippedVisibleIds.find((id) => id === Number(currentUserId)) || clippedVisibleIds[0] || Number(currentUserId) || 0;
+    const localUserId = Number(currentUserId);
+    const remoteMainUserId = mode === 'main_mini'
+      ? clippedVisibleIds.find((id) => id !== localUserId)
+      : 0;
+    mainUserId = remoteMainUserId || clippedVisibleIds.find((id) => id === localUserId) || clippedVisibleIds[0] || localUserId || 0;
+  }
+  if (mode === 'main_mini' && pinnedUserIds.length <= 0 && mainUserId === Number(currentUserId)) {
+    if (explicitMiniUserIds.length <= 0) {
+      mainUserId = clippedVisibleIds.find((id) => id !== Number(currentUserId)) || mainUserId;
+    }
   }
 
   const visibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);
+  const explicitMiniVisibleIds = explicitMiniUserIds
+    .filter((id) => clippedVisibleIds.includes(id) && id !== mainUserId);
+  const fallbackMiniUserIds = clippedVisibleIds.filter((id) => id !== mainUserId);
+  const miniUserIds = mode === 'main_mini'
+    ? (explicitMiniUserIds.length > 0
+      ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds)
+      : fallbackMiniUserIds)
+    : [];
   const miniParticipants = mode === 'main_mini'
-    ? visibleParticipants.filter((row) => row.userId !== mainUserId)
+    ? miniUserIds.map((id) => byUserId.get(id)).filter(Boolean)
     : [];
   const gridParticipants = mode === 'grid' ? visibleParticipants : [];
 

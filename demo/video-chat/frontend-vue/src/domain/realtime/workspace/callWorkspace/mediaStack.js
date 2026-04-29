@@ -66,12 +66,14 @@ export function createCallWorkspaceMediaStack(options) {
   } = createSfuFrameDecodeHelpers({
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
     captureClientDiagnosticError: callbacks.captureClientDiagnosticError,
+    currentUserId: () => refs.currentUserId.value,
     ensureMediaSecuritySession: callbacks.ensureMediaSecuritySession,
     ensureSfuRemotePeerForFrame,
     getSfuRemotePeerByFrameIdentity,
     isWlvcRuntimePath: callbacks.isWlvcRuntimePath,
     markParticipantActivity: callbacks.markParticipantActivity,
-    markRemotePeerRenderable,
+    markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer),
+    bumpMediaRenderVersion,
     mediaDebugLog: callbacks.mediaDebugLog,
     mediaRuntimePathRef: refs.mediaRuntimePath,
     normalizeSfuPublisherId,
@@ -86,6 +88,28 @@ export function createCallWorkspaceMediaStack(options) {
     renderCallVideoLayout: () => renderCallVideoLayout(),
     remotePeersRef: refs.remotePeersRef,
     sendMediaSecurityHello: callbacks.sendMediaSecurityHello,
+    sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {
+      if (typeof callbacks.sendSocketFrame !== 'function') return false;
+      const targetUserId = Number(peer?.userId || 0);
+      const localUserId = Number(refs.currentUserId.value || 0);
+      if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
+      const normalizedReason = String(reason || 'sfu_receiver_feedback').trim().toLowerCase();
+      const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
+      return callbacks.sendSocketFrame({
+        type: 'call/media-quality-pressure',
+        target_user_id: targetUserId,
+        payload: {
+          kind: 'sfu-video-quality-pressure',
+          requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video',
+          request_full_keyframe: requestFullKeyframe,
+          reason: normalizedReason,
+          publisher_id: String(publisherId || ''),
+          requester_user_id: localUserId,
+          media_runtime_path: refs.mediaRuntimePath.value,
+          ...payload,
+        },
+      });
+    },
     sfuFrameHeight: constants.sfuFrameHeight,
     sfuFrameQuality: constants.sfuFrameQuality,
     sfuFrameWidth: constants.sfuFrameWidth,
@@ -95,9 +119,11 @@ export function createCallWorkspaceMediaStack(options) {
 
   const runtimeHealth = createCallWorkspaceRuntimeHealthHelpers({
     callbacks: {
+      bumpMediaRenderVersion,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
       mediaDebugLog: callbacks.mediaDebugLog,
       restartSfuAfterVideoStall: callbacks.restartSfuAfterVideoStall,
+      sendSocketFrame: callbacks.sendSocketFrame,
     },
     constants: {
       defaultNativeAudioBridgeFailureMessage: constants.defaultNativeAudioBridgeFailureMessage,
@@ -110,6 +136,7 @@ export function createCallWorkspaceMediaStack(options) {
     refs: {
       connectedParticipantUsers: refs.connectedParticipantUsers,
       connectionState: refs.connectionState,
+      currentUserId: refs.currentUserId,
       mediaRuntimeCapabilities: refs.mediaRuntimeCapabilities,
       mediaRuntimePath: refs.mediaRuntimePath,
       remotePeersRef: refs.remotePeersRef,
@@ -145,6 +172,7 @@ export function createCallWorkspaceMediaStack(options) {
     sfuWlvcBackpressureHardResetAfterMs: constants.sfuWlvcBackpressureHardResetAfterMs,
     sfuWlvcBackpressureMaxPauseMs: constants.sfuWlvcBackpressureMaxPauseMs,
     sfuWlvcBackpressureMinPauseMs: constants.sfuWlvcBackpressureMinPauseMs,
+    sfuWlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
     sfuWlvcSendBufferCriticalBytes: constants.sfuWlvcSendBufferCriticalBytes,
     sfuWlvcSendBufferHighWaterBytes: constants.sfuWlvcSendBufferHighWaterBytes,
     sfuWlvcSendBufferLowWaterBytes: constants.sfuWlvcSendBufferLowWaterBytes,
@@ -162,6 +190,8 @@ export function createCallWorkspaceMediaStack(options) {
       getSfuClientBufferedAmount: sfuTransport.getSfuClientBufferedAmount,
       handleWlvcEncodeBackpressure: sfuTransport.handleWlvcEncodeBackpressure,
       handleWlvcFrameSendFailure: sfuTransport.handleWlvcFrameSendFailure,
+      handleWlvcFramePayloadPressure: sfuTransport.handleWlvcFramePayloadPressure,
+      handleWlvcRuntimeEncodeError: sfuTransport.handleWlvcRuntimeEncodeError,
       hintMediaSecuritySync: callbacks.hintMediaSecuritySync,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
       isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
@@ -203,6 +233,8 @@ export function createCallWorkspaceMediaStack(options) {
       selectiveTileWidth: constants.selectiveTileWidth,
       sendBufferHighWaterBytes: constants.sendBufferHighWaterBytes,
       sfuWlvcFrameQuality: constants.sfuFrameQuality,
+      sfuWlvcMaxDeltaFrameBytes: constants.sfuWlvcMaxDeltaFrameBytes,
+      sfuWlvcMaxKeyframeFrameBytes: constants.sfuWlvcMaxKeyframeFrameBytes,
       wlvcEncodeErrorLogCooldownMs: constants.wlvcEncodeErrorLogCooldownMs,
       wlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
       wlvcEncodeFailureWindowMs: constants.wlvcEncodeFailureWindowMs,
@@ -210,7 +242,6 @@ export function createCallWorkspaceMediaStack(options) {
     },
     refs: {
       currentUserId: () => refs.sessionState.userId,
-      downgradeSfuVideoQualityAfterEncodePressure: callbacks.downgradeSfuVideoQualityAfterEncodePressure,
       encodeIntervalRef: refs.encodeIntervalRef,
       localFilteredStreamRef: refs.localFilteredStreamRef,
       localRawStreamRef: refs.localRawStreamRef,
@@ -235,6 +266,7 @@ export function createCallWorkspaceMediaStack(options) {
     backgroundFilterController: refs.backgroundFilterController,
     callbacks: {
       clearTransientActivityPublishErrorNotice: callbacks.clearTransientActivityPublishErrorNotice,
+      captureClientDiagnostic: callbacks.captureClientDiagnostic,
       currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
       evaluateBackgroundFilterGates: callbacks.evaluateBackgroundFilterGates,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
@@ -291,6 +323,10 @@ export function createCallWorkspaceMediaStack(options) {
 
   function teardownSfuRemotePeers() {
     for (const [, peer] of refs.remotePeersRef.value) {
+      const peerUserId = Number(peer?.userId || 0);
+      if (Number.isInteger(peerUserId) && peerUserId > 0) {
+        callbacks.clearMediaSecuritySfuPublisherSeen?.(peerUserId);
+      }
       callbacks.teardownRemotePeer(peer);
     }
     refs.remotePeersRef.value = new Map();

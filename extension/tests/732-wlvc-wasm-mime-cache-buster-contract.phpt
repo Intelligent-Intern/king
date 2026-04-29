@@ -54,7 +54,6 @@ require_contains($provenance, '`demo/video-chat/frontend-vue/src/lib/wasm/wasm-c
 require_contains($provenance, '`demo/video-chat/edge/edge.php` serves `.wasm` as `application/wasm`; the cache-buster only invalidates stale cached responses after MIME fixes and is not a MIME workaround by itself.');
 require_contains($provenance, 'The audited experiment boundary has no better production-safe replacement for this handling.');
 
-require_contains('SPRINT.md', '- [x] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC WASM MIME/cache-buster decision');
 require_contains('READYNESS_TRACKER.md', 'Added `732-wlvc-wasm-mime-cache-buster-contract.phpt`.');
 

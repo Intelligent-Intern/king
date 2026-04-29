@@ -66,6 +66,16 @@
                 class="workspace-grid-video-slot"
                 :data-user-id="participant.userId"
               ></div>
+              <div
+                v-if="showParticipantMediaOverlay(participant.userId)"
+                class="workspace-video-status-overlay"
+                :class="`state-${participantMediaStatusState(participant.userId)}`"
+                aria-live="polite"
+              >
+                <span class="workspace-video-status-spinner" aria-hidden="true"></span>
+                <span class="workspace-video-status-initials">{{ participantInitials(participant.displayName) }}</span>
+                <span class="workspace-video-status-label">{{ participantMediaStatusLabel(participant.userId) }}</span>
+              </div>
               <span class="workspace-grid-title">{{ participant.displayName }}</span>
             </article>
           </section>
@@ -73,6 +83,15 @@
             <div id="local-video-container" class="video-container local"></div>
             <div id="remote-video-container" class="video-container remote"></div>
             <div id="decoded-video-container" class="video-container decoded"></div>
+            <div
+              v-if="showParticipantMediaOverlay(primaryVideoUserId)"
+              class="workspace-video-status-overlay workspace-main-video-status-overlay"
+              :class="`state-${participantMediaStatusState(primaryVideoUserId)}`"
+              aria-live="polite"
+            >
+              <span class="workspace-video-status-spinner" aria-hidden="true"></span>
+              <span class="workspace-video-status-label">{{ participantMediaStatusLabel(primaryVideoUserId) }}</span>
+            </div>
           </template>
 
           <div class="workspace-reaction-flight">
@@ -166,12 +185,14 @@
               :data-user-id="participant.userId"
             ></div>
             <div
-              v-if="!participantHasRenderableMedia(participant.userId)"
-              class="workspace-mini-video-placeholder"
+              v-if="showParticipantMediaOverlay(participant.userId)"
+              class="workspace-video-status-overlay workspace-mini-video-placeholder"
+              :class="`state-${participantMediaStatusState(participant.userId)}`"
               aria-hidden="true"
             >
+              <span class="workspace-video-status-spinner" aria-hidden="true"></span>
               <span class="workspace-mini-video-initials">{{ participantInitials(participant.displayName) }}</span>
-              <span class="workspace-mini-video-status">Connecting media</span>
+              <span class="workspace-mini-video-status">{{ participantMediaStatusLabel(participant.userId) }}</span>
             </div>
             <span class="workspace-mini-title">{{ participant.displayName }}</span>
             <span class="workspace-mini-meta">{{ participant.role }}</span>

@@ -25,6 +25,9 @@ try {
 
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
   assert.ok(mediaOrchestration.includes('backgroundFilterController'), 'local media orchestration must remain the production background pipeline');
+  assert.ok(mediaOrchestration.includes('function defaultApplyControlStateToLocalTracks'), 'local media orchestration must keep a local track control fallback');
+  assert.ok(mediaOrchestration.includes("track.enabled = controlState.micEnabled !== false"), 'local media fallback must apply microphone state');
+  assert.ok(mediaOrchestration.includes("track.enabled = controlState.cameraEnabled !== false"), 'local media fallback must apply camera state');
 
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
   assert.ok(workspaceView.includes("import { BackgroundFilterController } from './background/controller';"), 'workspace must use the production background controller');

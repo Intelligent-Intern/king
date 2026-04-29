@@ -113,7 +113,6 @@ foreach ($runtimeForbidden as $needle) {
     require_not_contains('demo/video-chat/backend-king-php/domain/realtime/realtime_gossipmesh.php', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 GossipMesh runtime disposition');
 
 echo "OK\n";

@@ -82,6 +82,31 @@ try {
   await bob.handleSenderKeySignal(101, aliceSenderKey.payload);
   await alice.handleSenderKeySignal(202, bobSenderKey.payload);
 
+  const staleParticipantAlice = createMediaSecuritySession({ callId: 'call-stale', roomId: 'room-stale', userId: 101 });
+  const staleParticipantBob = createMediaSecuritySession({ callId: 'call-stale', roomId: 'room-stale', userId: 202 });
+  staleParticipantAlice.markParticipantSet([202]);
+  staleParticipantBob.markParticipantSet([101]);
+  const staleAliceHello = await staleParticipantAlice.buildHelloSignal(202, 'wlvc_sfu');
+  const staleBobHello = await staleParticipantBob.buildHelloSignal(101, 'wlvc_sfu');
+  await staleParticipantAlice.handleHelloSignal(202, staleBobHello.payload);
+  await staleParticipantBob.handleHelloSignal(101, staleAliceHello.payload);
+  const staleSenderKey = await staleParticipantAlice.buildSenderKeySignal(202);
+  staleParticipantBob.markParticipantSet([101, 303]);
+  await assert.rejects(
+    () => staleParticipantBob.handleSenderKeySignal(101, staleSenderKey.payload),
+    /participant_set_mismatch/,
+    'receiver must classify stale participant-set sender keys as reconnectable churn, not a KEX downgrade',
+  );
+
+  const pendingStaleBob = createMediaSecuritySession({ callId: 'call-stale', roomId: 'room-stale', userId: 202 });
+  pendingStaleBob.markParticipantSet([101, 303]);
+  assert.equal(await pendingStaleBob.handleSenderKeySignal(101, staleSenderKey.payload), false, 'sender-key may arrive before hello and be held pending');
+  assert.equal(
+    await pendingStaleBob.handleHelloSignal(101, staleAliceHello.payload),
+    true,
+    'fresh hello handling must survive a stale pending sender-key from an earlier participant set',
+  );
+
   const plaintext = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
   const protectedFrame = await alice.protectFrame({
     data: plaintext,
@@ -113,6 +138,79 @@ try {
     timestamp: 1000,
   });
   assert.deepEqual(Array.from(new Uint8Array(decrypted)), Array.from(plaintext), 'receiver must decrypt protected WLVC frame');
+
+  const aliceDeviceA = createMediaSecuritySession({
+    callId: 'call-multi-device',
+    roomId: 'room-multi-device',
+    userId: 101,
+    deviceId: 'alice-device-a',
+  });
+  const aliceDeviceB = createMediaSecuritySession({
+    callId: 'call-multi-device',
+    roomId: 'room-multi-device',
+    userId: 101,
+    deviceId: 'alice-device-b',
+  });
+  const bobMultiDevice = createMediaSecuritySession({
+    callId: 'call-multi-device',
+    roomId: 'room-multi-device',
+    userId: 202,
+    deviceId: 'bob-device',
+  });
+  aliceDeviceA.markParticipantSet([202]);
+  aliceDeviceB.markParticipantSet([202]);
+  bobMultiDevice.markParticipantSet([101]);
+  const bobMultiHello = await bobMultiDevice.buildHelloSignal(101, 'wlvc_sfu');
+  await aliceDeviceA.handleHelloSignal(202, bobMultiHello.payload);
+  await aliceDeviceB.handleHelloSignal(202, bobMultiHello.payload);
+  await bobMultiDevice.handleHelloSignal(101, (await aliceDeviceA.buildHelloSignal(202, 'wlvc_sfu')).payload);
+  await bobMultiDevice.handleHelloSignal(101, (await aliceDeviceB.buildHelloSignal(202, 'wlvc_sfu')).payload);
+  await bobMultiDevice.handleSenderKeySignal(101, (await aliceDeviceA.buildSenderKeySignal(202)).payload);
+  await bobMultiDevice.handleSenderKeySignal(101, (await aliceDeviceB.buildSenderKeySignal(202)).payload);
+  const protectedFromDeviceA = await aliceDeviceA.protectFrame({
+    data: new Uint8Array([9, 8, 7, 6]),
+    runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
+    trackKind: 'video',
+    frameKind: 'keyframe',
+    trackId: 'camera-a',
+    timestamp: 3000,
+  });
+  const protectedFromDeviceB = await aliceDeviceB.protectFrame({
+    data: new Uint8Array([5, 4, 3, 2]),
+    runtimePath: 'wlvc_sfu',
+    codecId: 'wlvc_ts',
+    trackKind: 'video',
+    frameKind: 'keyframe',
+    trackId: 'camera-b',
+    timestamp: 4000,
+  });
+  assert.deepEqual(
+    Array.from(new Uint8Array(await bobMultiDevice.decryptFrame({
+      data: protectedFromDeviceA.data,
+      protected: protectedFromDeviceA.protected,
+      publisherUserId: 101,
+      runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
+      trackId: 'camera-a',
+      timestamp: 3000,
+    }))),
+    [9, 8, 7, 6],
+    'receiver must keep sender keys for multiple active devices of the same user',
+  );
+  assert.deepEqual(
+    Array.from(new Uint8Array(await bobMultiDevice.decryptFrame({
+      data: protectedFromDeviceB.data,
+      protected: protectedFromDeviceB.protected,
+      publisherUserId: 101,
+      runtimePath: 'wlvc_sfu',
+      codecId: 'wlvc_ts',
+      trackId: 'camera-b',
+      timestamp: 4000,
+    }))),
+    [5, 4, 3, 2],
+    'receiver must not overwrite one device key with another device from the same user',
+  );
 
   await assert.rejects(
     () => bob.decryptFrame({
@@ -305,22 +403,35 @@ try {
   );
 
   const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
+  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.js');
   const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.js');
   const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.js');
+  const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.js');
+  const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const securitySource = read('../../src/domain/realtime/media/security.js');
   const securityCoreSource = read('../../src/domain/realtime/media/securityCore.js');
   assert.match(mediaSecurityRuntimeSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'media-security runtime must expose a scheduled participant sync helper');
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'media-security runtime must resync after session context resets');
   assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');
   assert.match(mediaSecurityRuntimeSource, /const targetIds = mediaSecurityEligibleTargetIds\(\);/, 'handshake timeout watchdog must only operate on settled publisher-discovered targets');
+  assert.match(runtimeConfigSource, /MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS = Object\.freeze\(\[1000, 3000, 6000\]\)/, 'handshake retry watchdog must retry after 1s, then 3s, then 6s');
+  assert.match(mediaSecurityRuntimeSource, /function mediaSecurityHandshakeRetryTimeoutMsForAttempt\(retryAttempt\)/, 'handshake retry watchdog must derive timeout from retry attempt');
+  assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.set\(normalizedTargetId, retryAttempt \+ 1\);/, 'handshake retry watchdog must advance retry attempt after each timeout');
+  assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.delete\(normalizedSenderUserId\);/, 'handshake retry watchdog must reset retry attempts when sender-key is accepted');
+  assert.match(mediaSecurityRuntimeSource, /message\.includes\('participant_set_mismatch'\)/, 'media-security recovery must treat participant-set churn as a reconnectable key path');
+  assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('signal_failed_reconnect'\);/, 'media-security signal failures must trigger a reconnect-style participant sync');
   assert.match(mediaSecurityRuntimeSource, /const marked = session\.markParticipantSet\(\[[\s\S]*normalizedSenderUserId,[\s\S]*\]\);[\s\S]*if \(mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('hello_accepted'\);[\s\S]*\}/m, 'media-security runtime must pin the hello sender into the participant set and only schedule a non-forced follow-up sync once the sender is in the current target set');
   assert.match(mediaSecurityRuntimeSource, /const accepted = await session\.handleSenderKeySignal\(normalizedSenderUserId, payloadBody \|\| \{\}\);[\s\S]*if \(!accepted && mediaSecurityTargetIds\(\)\.includes\(normalizedSenderUserId\)\) \{[\s\S]*scheduleMediaSecurityParticipantSync\('sender_key_pending'\);[\s\S]*\}/m, 'media-security runtime must defer sender-key recovery sync until the sender is present in the current participant target set');
   assert.doesNotMatch(mediaSecurityRuntimeSource, /elapsed=\$\{Date\.now\(\) - helloSentAt\}ms — force-retrying Hello/, 'participant sync must not hide the join race behind a multi-second inline Hello retry loop');
   assert.match(publisherPipelineSource, /protectFrame\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: outgoingFrame\.codecId[\s\S]*outgoingFrame\.protectedFrame = protectedFrame\.protectedFrame;/m, 'publisher pipeline must protect WLVC frames with explicit codec identity before SFU send');
   assert.match(frameDecodeSource, /decryptProtectedFrameEnvelope\(\{[\s\S]*runtimePath: 'wlvc_sfu'[\s\S]*codecId: frame\.codecId/m, 'decode pipeline must decrypt WLVC transport envelopes with codec identity');
   assert.match(frameDecodeSource, /shouldRecoverMediaSecurityFromFrameError\(error\)[\s\S]*recoverMediaSecurityForPublisher\(publisherUserId\);/m, 'decode pipeline must recover the media-security handshake when protected SFU frames arrive before keys');
+  assert.match(frameDecodeSource, /function invalidateRemoteSfuTrackAfterProtectedDecryptFailure\(peer, frame, reason = 'unknown'\)/, 'protected SFU decrypt failures must invalidate stale remote decoder state');
+  assert.match(frameDecodeSource, /keyframe_required_after_recovery: true/, 'protected SFU decrypt failures must require a fresh keyframe after media-security recovery');
   assert.match(mediaSecurityRuntimeSource, /await sendMediaSecurityHello\(normalizedUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedUserId, true\);/m, 'media-security recovery must retry hello and sender-key signals for the remote publisher');
+  assert.match(sfuLifecycleSource, /clearMediaSecuritySfuPublisherSeen\(peerUserId\)[\s\S]*scheduleMediaSecurityParticipantSync\('sfu_publisher_left'\);/m, 'SFU publisher leave events must remove stale media-security targets');
+  assert.match(mediaStackSource, /callbacks\.clearMediaSecuritySfuPublisherSeen\?\.\(peerUserId\);/, 'bulk SFU teardown must clear stale media-security publisher targets');
   assert.match(securitySource, /attachNativeSenderTransform/, 'media-security library must attach native sender transform hooks');
   assert.match(securitySource, /attachNativeReceiverTransform/, 'media-security library must attach native receiver transform hooks');
   assert.match(securitySource, /codec_id: normalizeProtectedCodecId\(codecId, runtimePath\)/, 'protected frame header must carry normalized codec identity');
@@ -329,9 +440,11 @@ try {
   assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
+  const sfuTypesSource = read('../../src/lib/sfu/sfuTypes.ts');
   const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
-  assert.match(sfuClientSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
-  assert.match(sfuFramePayloadSource, /chunkField = 'protected_frame_chunk'/, 'SFU sender must relay protected transport envelope through the binary-envelope chunk field');
+  assert.match(sfuTypesSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
+  assert.match(sfuFramePayloadSource, /const protectedFrame = protectionMode === 'transport_only' \? null : arrayBufferToBase64Url\(payloadBytes\)/, 'binary SFU envelope decode must reconstruct protected transport envelopes');
+  assert.match(sfuFramePayloadSource, /\.\.\.\(protectedFrame \? \{ protected_frame: protectedFrame \} : \{\}\)/, 'decoded binary SFU frame must surface protected_frame without JSON chunk transport');
   assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
 

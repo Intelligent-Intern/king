@@ -219,6 +219,7 @@ async function installUserDashboardRoutes(context, createdBodies, updatedBodies)
       updatedBodies.push(body);
       createdCall = {
         ...buildCallFromBody(body, createdCall.id),
+        status: 'active',
         starts_at: String(body?.starts_at || createdCall.starts_at),
         ends_at: String(body?.ends_at || createdCall.ends_at),
       };
@@ -315,6 +316,36 @@ test('mobile user can create and edit a call with internal participants', async 
       matrixUsers.admin.id,
       matrixUsers.outsider.id,
     ]);
+
+    await page.getByTitle('Enter video call').click();
+    const enterModal = page.getByRole('dialog', { name: 'Enter video call' });
+    await expect(enterModal).toBeVisible();
+    const enterSettings = enterModal.locator('.calls-enter-right-settings .call-left-settings');
+    await expect(enterSettings).toBeVisible();
+    await expect(enterModal.getByRole('group', { name: 'Background blur controls' })).toBeVisible();
+
+    const enterSettingsGeometry = await enterSettings.evaluate((node) => {
+      const scroller = node;
+      const blurControls = scroller.querySelector('[aria-label="Background blur controls"]');
+      if (!blurControls) {
+        return { missingBlurControls: true };
+      }
+      scroller.scrollTop = scroller.scrollHeight;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const blurRect = blurControls.getBoundingClientRect();
+      return {
+        missingBlurControls: false,
+        overflowY: window.getComputedStyle(scroller).overflowY,
+        blurBottom: blurRect.bottom,
+        blurTop: blurRect.top,
+        scrollerBottom: scrollerRect.bottom,
+        scrollerTop: scrollerRect.top,
+      };
+    });
+    expect(enterSettingsGeometry.missingBlurControls).toBe(false);
+    expect(enterSettingsGeometry.overflowY).toBe('auto');
+    expect(enterSettingsGeometry.blurBottom).toBeLessThanOrEqual(enterSettingsGeometry.scrollerBottom + 1);
+    expect(enterSettingsGeometry.blurTop).toBeGreaterThanOrEqual(enterSettingsGeometry.scrollerTop - 1);
   } finally {
     await context.close();
   }

@@ -18,20 +18,40 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion'
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
-import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
+import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'
+import { normalizeSfuIdentifier } from './identifiers'
+import { handleSfuClientMessage } from './sfuMessageHandler'
 import {
-  SFU_FRAME_CHUNK_MAX_CHARS,
+  SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS,
+  SfuOutboundWireBudget,
+  resolveSfuSendDrainTargetBytes,
+  shouldDropProjectedSfuFrameForBufferBudget,
+} from './outboundFrameBudget'
+import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
-  arrayBufferToBase64Url,
-  base64UrlToArrayBuffer,
-  createSfuFrameId,
   prepareSfuOutboundFramePayload,
+  SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
   type PreparedSfuOutboundFramePayload,
-  type SfuChunkField,
 } from './framePayload'
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
-import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './tilePatchMetadata'
+import { buildSfuSendFailureDetails } from './sendFailureDetails'
+import type {
+  SFUClientCallbacks,
+  SFUEncodedFrame,
+  SFUTrack,
+  SfuFrameTransportSample,
+  SfuSendFailureDetails,
+} from './sfuTypes'
+
+export type {
+  SFUClientCallbacks,
+  SFUEncodedFrame,
+  SFUTrack,
+  SFUTracksEvent,
+  SfuFrameTransportSample,
+  SfuSendFailureDetails,
+} from './sfuTypes'
 
 /*
  * Compatibility contract note:
@@ -45,90 +65,29 @@ import { hasExplicitSfuTileMetadataFields, normalizeTilePatchMetadata } from './
  * payload.protection_mode = frame.protectionMode ||
  */
 
-export interface SFUTrack {
-  id: string
-  kind: 'audio' | 'video'
-  label: string
-}
-
-export interface SFUTracksEvent {
-  roomId: string
-  publisherId: string
-  publisherUserId: string
-  publisherName: string
-  tracks: SFUTrack[]
-}
-
-export interface SFUEncodedFrame {
-  publisherId: string
-  publisherUserId?: string
-  trackId: string
-  timestamp: number
-  data?: ArrayBuffer
-  dataBase64?: string | null
-  type: 'keyframe' | 'delta'
-  protected?: Record<string, unknown> | null
-  protectedFrame?: string | null
-  protectionMode?: 'transport_only' | 'protected' | 'required'
-  protocolVersion?: number
-  frameSequence?: number
-  payloadChars?: number
-  chunkCount?: number
-  frameId?: string
-  senderSentAtMs?: number
-  codecId?: string
-  runtimeId?: string
-  layoutMode?: 'full_frame' | 'tile_foreground' | 'background_snapshot'
-  layerId?: 'full' | 'foreground' | 'background'
-  cacheEpoch?: number
-  tileColumns?: number
-  tileRows?: number
-  tileWidth?: number
-  tileHeight?: number
-  tileIndices?: number[] | null
-  roiNormX?: number
-  roiNormY?: number
-  roiNormWidth?: number
-  roiNormHeight?: number
-}
-
-export interface SfuSendFailureDetails {
-  reason: string
-  stage: string
-  source: string
-  message: string
-  transportPath: string
-  bufferedAmount: number
-  queueLength: number
-  queuePayloadChars: number
-  activePayloadChars: number
-  trackId: string
-  chunkCount: number
-  payloadChars: number
-  timestamp: number
-}
-
-export interface SFUClientCallbacks {
-  onTracks:        (e: SFUTracksEvent) => void
-  onUnpublished:   (publisherId: string, trackId: string) => void
-  onPublisherLeft: (publisherId: string) => void
-  onConnected?:    () => void
-  onDisconnect:    () => void
-  onEncodedFrame?: (frame: SFUEncodedFrame) => void
-}
-
-const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 512 * 1024
+const SFU_FRAME_CHUNK_BACKPRESSURE_BYTES = 2 * 1024 * 1024
 const SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS = 16
-const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 2000
 const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
+const SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS = 1000
+const SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS = 6000
+const SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS = 5000
 
 interface SendBufferDrainResult {
   ok: boolean
   waitedMs: number
   bufferedAmount: number
+  targetBufferedBytes: number
+  maxWaitMs: number
+}
+
+interface PublisherFrameHealth {
+  subscribedAtMs: number
+  lastFrameAtMs: number
+  lastRecoveryAtMs: number
+  recoveryCount: number
 }
 
 export class SFUClient {
@@ -139,11 +98,16 @@ export class SFUClient {
   private disconnectNotified = false
   private inboundFrameAssembler = new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })
   private outboundFrameQueue: SfuOutboundFrameQueue
+  private outboundWireBudget = new SfuOutboundWireBudget()
   private outboundFrameSequenceByTrack = new Map<string, number>()
+  private outboundMediaGeneration = 0
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
+  private lastFrameTransportSample: SfuFrameTransportSample | null = null
+  private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
+  private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
@@ -238,6 +202,7 @@ export class SFUClient {
       this.disconnectNotified = false
       setBackendSfuOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
+      this.startPublisherFrameStallTimer()
       if (this.cb.onConnected) {
         this.cb.onConnected()
       }
@@ -271,11 +236,12 @@ export class SFUClient {
       if (this.ws === ws) {
         this.ws = null
       }
+      this.stopPublisherFrameStallTimer()
       reportClientDiagnostic({
         category: 'media',
         level: 'warning',
         eventType: 'sfu_socket_closed',
-        code: normalizeIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
+        code: normalizeSfuIdentifier(String(event?.reason || '').trim(), 'sfu_socket_closed'),
         message: String(event?.reason || 'SFU websocket closed unexpectedly.').trim() || 'SFU websocket closed unexpectedly.',
         roomId,
         payload: {
@@ -302,9 +268,13 @@ export class SFUClient {
 
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     this.connectGeneration += 1
+    this.outboundMediaGeneration += 1
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.publisherFrameHealthById.clear()
+    this.stopPublisherFrameStallTimer()
+    this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('socket_reconnect')
     this.roomId = roomId
     const generation = this.connectGeneration
@@ -345,7 +315,10 @@ export class SFUClient {
   }
 
   subscribe(publisherId: string): void {
-    this.send({ type: 'sfu/subscribe', publisher_id: publisherId })
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    this.trackSubscribedPublisher(normalizedPublisherId)
+    this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })
   }
 
   unpublishTrack(trackId: string): void {
@@ -357,6 +330,10 @@ export class SFUClient {
     const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
     return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
       ...frame,
+      transportMetrics: {
+        ...(frame.transportMetrics || {}),
+        outbound_media_generation: this.outboundMediaGeneration,
+      },
       frameSequence,
       senderSentAtMs: Date.now(),
     }))
@@ -364,9 +341,13 @@ export class SFUClient {
 
   leave(): void {
     this.connectGeneration += 1
+    this.outboundMediaGeneration += 1
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
+    this.publisherFrameHealthById.clear()
+    this.stopPublisherFrameStallTimer()
+    this.outboundWireBudget.reset()
     this.clearOutboundFrameQueue('leave')
     this.send({ type: 'sfu/leave' })
     if (this.ws) {
@@ -381,6 +362,31 @@ export class SFUClient {
     return this.lastSendFailure ? { ...this.lastSendFailure } : null
   }
 
+  getLastFrameTransportSample(): SfuFrameTransportSample | null {
+    return this.lastFrameTransportSample ? { ...this.lastFrameTransportSample } : null
+  }
+
+  resetOutboundMediaAfterProfileSwitch(details: { fromProfile?: string; toProfile?: string; reason?: string } = {}): void {
+    this.outboundMediaGeneration += 1
+    this.outboundFrameSequenceByTrack.clear()
+    this.outboundWireBudget.reset()
+    const droppedCount = this.clearOutboundFrameQueue('profile_switch')
+    this.reportFrameSendDiagnostic(
+      'sfu_profile_switch_outbound_reset',
+      'warning',
+      'SFU outbound media state was reset before applying a lower video quality profile.',
+      {
+        drop_reason: 'profile_switch',
+        dropped_frame_count: droppedCount,
+        from_profile: String(details.fromProfile || ''),
+        to_profile: String(details.toProfile || ''),
+        reason: String(details.reason || 'profile_switch'),
+        outbound_media_generation: this.outboundMediaGeneration,
+      },
+      true,
+    )
+  }
+
   private send(msg: object): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg))
@@ -389,20 +395,111 @@ export class SFUClient {
     return false
   }
 
+  private trackSubscribedPublisher(publisherId: string, nowMs = Date.now()): void {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    const existing = this.publisherFrameHealthById.get(normalizedPublisherId)
+    if (existing) {
+      existing.subscribedAtMs = nowMs
+      return
+    }
+    this.publisherFrameHealthById.set(normalizedPublisherId, {
+      subscribedAtMs: nowMs,
+      lastFrameAtMs: 0,
+      lastRecoveryAtMs: 0,
+      recoveryCount: 0,
+    })
+  }
+
+  private untrackPublisher(publisherId: string): void {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return
+    this.publisherFrameHealthById.delete(normalizedPublisherId)
+  }
+
+  private markPublisherFrameReceived(msg: any, nowMs = Date.now()): void {
+    if (stringField(msg?.type) !== 'sfu/frame') return
+    const publisherId = stringField(msg?.publisherId, msg?.publisher_id)
+    if (publisherId === '') return
+    const health = this.publisherFrameHealthById.get(publisherId)
+    if (health) {
+      health.lastFrameAtMs = nowMs
+      health.recoveryCount = 0
+      return
+    }
+    this.publisherFrameHealthById.set(publisherId, {
+      subscribedAtMs: nowMs,
+      lastFrameAtMs: nowMs,
+      lastRecoveryAtMs: 0,
+      recoveryCount: 0,
+    })
+  }
+
+  private startPublisherFrameStallTimer(): void {
+    this.stopPublisherFrameStallTimer()
+    this.publisherFrameStallTimer = setInterval(() => {
+      this.checkPublisherFrameStalls()
+    }, SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS)
+  }
+
+  private stopPublisherFrameStallTimer(): void {
+    if (this.publisherFrameStallTimer === null) return
+    clearInterval(this.publisherFrameStallTimer)
+    this.publisherFrameStallTimer = null
+  }
+
+  private checkPublisherFrameStalls(nowMs = Date.now()): void {
+    if (!this.isOpen()) return
+    for (const [publisherId, health] of this.publisherFrameHealthById.entries()) {
+      const referenceAtMs = health.lastFrameAtMs > 0 ? health.lastFrameAtMs : health.subscribedAtMs
+      if (referenceAtMs <= 0) continue
+      const ageMs = Math.max(0, nowMs - referenceAtMs)
+      if (ageMs < SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS) continue
+      if ((nowMs - health.lastRecoveryAtMs) < SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS) continue
+
+      health.lastRecoveryAtMs = nowMs
+      health.recoveryCount += 1
+      reportClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_publisher_frame_stall',
+        code: 'sfu_publisher_frame_stall',
+        message: 'SFU publisher subscription is open but no fresh binary media frame has arrived; resubscribing before UI-level recovery restarts the transport.',
+        roomId: this.roomId,
+        payload: {
+          room_id: this.roomId,
+          publisher_id: publisherId,
+          stall_age_ms: ageMs,
+          last_frame_at_ms: health.lastFrameAtMs,
+          subscribed_at_ms: health.subscribedAtMs,
+          recovery_count: health.recoveryCount,
+          recovery_action: 'resubscribe',
+          frame_path: 'binary_or_json_sfu_frame',
+        },
+        immediate: health.recoveryCount <= 2,
+      })
+      this.send({ type: 'sfu/subscribe', publisher_id: publisherId, reason: 'publisher_frame_stall_recovery' })
+    }
+  }
+
   private wait(ms: number): Promise<void> {
     return new Promise((resolve) => {
       setTimeout(resolve, ms)
     })
   }
 
-  private async waitForSendBufferDrain(): Promise<SendBufferDrainResult> {
+  private async waitForSendBufferDrain(targetBufferedBytes: number, maxWaitMs = SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS): Promise<SendBufferDrainResult> {
     const startMs = Date.now()
-    while (this.ws?.readyState === WebSocket.OPEN && this.getWebSocketBufferedAmount() > SFU_FRAME_CHUNK_BACKPRESSURE_BYTES) {
-      if ((Date.now() - startMs) >= SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS) {
+    const normalizedTarget = Math.max(0, Math.floor(Number(targetBufferedBytes || 0)))
+    const normalizedMaxWaitMs = Math.max(1, Math.floor(Number(maxWaitMs || 0)))
+    while (this.ws?.readyState === WebSocket.OPEN && this.getWebSocketBufferedAmount() > normalizedTarget) {
+      if ((Date.now() - startMs) >= normalizedMaxWaitMs) {
         return {
           ok: false,
           waitedMs: Date.now() - startMs,
           bufferedAmount: this.getWebSocketBufferedAmount(),
+          targetBufferedBytes: normalizedTarget,
+          maxWaitMs: normalizedMaxWaitMs,
         }
       }
       await this.wait(SFU_FRAME_CHUNK_BACKPRESSURE_SLEEP_MS)
@@ -411,6 +508,8 @@ export class SFUClient {
       ok: this.ws?.readyState === WebSocket.OPEN,
       waitedMs: Date.now() - startMs,
       bufferedAmount: this.getWebSocketBufferedAmount(),
+      targetBufferedBytes: normalizedTarget,
+      maxWaitMs: normalizedMaxWaitMs,
     }
   }
 
@@ -433,17 +532,142 @@ export class SFUClient {
 
   private async sendPreparedEncodedFrame(prepared: PreparedSfuOutboundFramePayload, queuedAgeMs = 0): Promise<boolean> {
     const metrics = this.metricsForPreparedFrame(prepared, { queued_age_ms: queuedAgeMs })
-    this.reportFrameSendPressureIfNeeded({
-      ...metrics,
-      buffered_amount: this.getWebSocketBufferedAmount(),
-    })
-
-    const legacyChunkValue = this.resolveLegacyChunkValue(prepared)
-    if (prepared.chunkField && legacyChunkValue.length > SFU_FRAME_CHUNK_MAX_CHARS) {
-      return this.sendChunkedFramePayload(prepared.payload, prepared.chunkField, legacyChunkValue, metrics)
+    const bufferedBeforeSend = this.getWebSocketBufferedAmount()
+    if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an old-profile frame after outbound media generation changed.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_profile_switch_generation_mismatch',
+          outbound_media_generation: this.outboundMediaGeneration,
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_profile_switch_generation_mismatch',
+        stage: 'outbound_media_generation_guard',
+        source: 'profile_switch_actuator',
+        message: 'Encoded SFU frame belonged to an older outbound media generation after a profile switch.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
+    const queueAgeBudgetMs = Math.max(0, Number(metrics.budget_max_queue_age_ms || 0))
+    if (queueAgeBudgetMs > 0 && queuedAgeMs > queueAgeBudgetMs) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped a stale encoded frame before it could build socket pressure.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_queue_age_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_queue_age_budget_exceeded',
+        stage: 'outbound_frame_queue_budget',
+        source: 'outbound_frame_queue',
+        message: 'Encoded SFU frame exceeded its profile queue-age budget before websocket send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
     }
 
-    const drain = await this.waitForSendBufferDrain()
+    const bufferedBudgetBytes = Math.max(0, Number(metrics.budget_max_buffered_bytes || 0))
+    if (bufferedBudgetBytes > 0 && bufferedBeforeSend > bufferedBudgetBytes) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame before websocket buffering reached critical pressure.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_buffer_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_buffer_budget_exceeded',
+        stage: 'browser_websocket_buffer_budget',
+        source: 'websocket_buffered_amount',
+        message: 'Encoded SFU frame exceeded its profile websocket buffer budget before send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
+    const projectedWirePayloadBytes = Math.max(0, Number(metrics.projected_binary_envelope_bytes || prepared.projectedBinaryEnvelopeBytes || 0))
+    const projectedBufferBudget = shouldDropProjectedSfuFrameForBufferBudget(metrics, bufferedBeforeSend, projectedWirePayloadBytes)
+    if (projectedBufferBudget.drop) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame because sending it would refill the websocket buffer above the profile budget.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          projected_buffered_after_send_bytes: projectedBufferBudget.projectedBufferedAfterSendBytes,
+          abort_reason: 'sfu_projected_buffer_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_projected_buffer_budget_exceeded',
+        stage: 'browser_websocket_projected_buffer_budget',
+        source: 'websocket_buffered_amount',
+        message: 'Encoded SFU frame would exceed its profile websocket buffer budget after send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
+    const wireBudget = this.outboundWireBudget.decide(metrics, projectedWirePayloadBytes)
+    if (!wireBudget.ok) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame because it would exceed the active rolling wire budget.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          projected_wire_window_bytes: wireBudget.projectedWindowBytes,
+          current_wire_window_bytes: wireBudget.currentWindowBytes,
+          budget_max_wire_bytes_per_second: wireBudget.maxWireBytesPerSecond,
+          wire_budget_window_ms: wireBudget.windowMs,
+          wire_budget_retry_after_ms: wireBudget.retryAfterMs,
+          abort_reason: 'sfu_wire_rate_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_wire_rate_budget_exceeded',
+        stage: 'browser_websocket_wire_rate_budget',
+        source: 'wire_rate_controller',
+        message: 'Encoded SFU frame would exceed the active rolling wire-byte budget.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+        retryAfterMs: wireBudget.retryAfterMs,
+      })
+      return false
+    }
+
+    this.reportFrameSendPressureIfNeeded({
+      ...metrics,
+      buffered_amount: bufferedBeforeSend,
+    })
+
+    const drainTargetBufferedBytes = resolveSfuSendDrainTargetBytes(metrics)
+    const drain = await this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)
+    metrics.send_drain_ms = drain.waitedMs
+    metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
+    metrics.send_drain_max_wait_ms = drain.maxWaitMs
     if (!drain.ok) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -453,6 +677,8 @@ export class SFUClient {
           ...metrics,
           buffered_amount: drain.bufferedAmount,
           send_wait_ms: drain.waitedMs,
+          send_drain_target_buffered_bytes: drain.targetBufferedBytes,
+          send_drain_max_wait_ms: drain.maxWaitMs,
           abort_reason: 'send_buffer_drain_timeout',
         },
         true,
@@ -464,6 +690,17 @@ export class SFUClient {
         message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
         transportPath: 'binary_envelope',
         bufferedAmount: drain.bufferedAmount,
+      })
+      return false
+    }
+    if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_profile_switch_generation_mismatch',
+        stage: 'post_drain_generation_guard',
+        source: 'profile_switch_actuator',
+        message: 'Encoded SFU frame became stale while waiting for websocket backpressure to drain.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: this.getWebSocketBufferedAmount(),
       })
       return false
     }
@@ -479,7 +716,7 @@ export class SFUClient {
         buffered_amount: this.getWebSocketBufferedAmount(),
         abort_reason: 'binary_envelope_send_failed',
         transport_path: 'binary_envelope',
-        legacy_chunk_compatibility_available: Boolean(prepared.chunkField && legacyChunkValue.length > 0),
+        binary_media_required: true,
       },
       true,
     )
@@ -522,11 +759,19 @@ export class SFUClient {
     }
     try {
       this.ws.send(encoded)
+      this.outboundWireBudget.record(encoded.byteLength)
+      const binaryContinuationRequired = encoded.byteLength > SFU_BINARY_CONTINUATION_THRESHOLD_BYTES
       const samplePayload = {
         ...metrics,
         transport_path: 'binary_envelope',
         wire_payload_bytes: encoded.byteLength,
         wire_overhead_bytes: Math.max(0, encoded.byteLength - Number(metrics.payload_bytes || 0)),
+        binary_continuation_state: binaryContinuationRequired
+          ? 'receiver_reassembles_rfc_continuation_frames'
+          : 'single_binary_message_no_continuation_expected',
+        binary_continuation_required: binaryContinuationRequired,
+        binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
+        application_media_chunking: false,
         websocket_buffered_amount: this.getWebSocketBufferedAmount(),
       }
       this.reportFrameSendPressureIfNeeded(samplePayload)
@@ -545,9 +790,9 @@ export class SFUClient {
     }
   }
 
-  private clearOutboundFrameQueue(reason: string): void {
+  private clearOutboundFrameQueue(reason: string): number {
     const droppedCount = this.outboundFrameQueue.clear()
-    if (droppedCount <= 0) return
+    if (droppedCount <= 0) return 0
     this.reportFrameSendDiagnostic(
       'sfu_frame_send_queue_cleared',
       'warning',
@@ -557,6 +802,12 @@ export class SFUClient {
         dropped_frame_count: droppedCount,
       },
     )
+    return droppedCount
+  }
+
+  private isPreparedFrameStaleForOutboundMediaGeneration(prepared: PreparedSfuOutboundFramePayload): boolean {
+    const generation = Math.max(0, Number(prepared.metrics?.outbound_media_generation || 0))
+    return generation !== this.outboundMediaGeneration
   }
 
   private reportOutboundQueuePressureIfNeeded(prepared: PreparedSfuOutboundFramePayload): void {
@@ -611,20 +862,6 @@ export class SFUClient {
     }
   }
 
-  private measureJsonWireBytes(payload: Record<string, unknown>): number {
-    try {
-      return new TextEncoder().encode(JSON.stringify(payload)).byteLength
-    } catch {
-      return String(JSON.stringify(payload) || '').length
-    }
-  }
-
-  private resolveLegacyChunkValue(prepared: PreparedSfuOutboundFramePayload): string {
-    if (prepared.chunkValue !== '') return prepared.chunkValue
-    if (!(prepared.payloadBytes instanceof ArrayBuffer) || prepared.payloadBytes.byteLength <= 0) return ''
-    return arrayBufferToBase64Url(prepared.payloadBytes)
-  }
-
   private recordSendFailure(
     prepared: PreparedSfuOutboundFramePayload,
     details: {
@@ -634,192 +871,14 @@ export class SFUClient {
       message: string
       transportPath: string
       bufferedAmount: number
+      retryAfterMs?: number
     },
   ): void {
-    this.lastSendFailure = {
-      reason: String(details.reason || 'unknown_send_failure'),
-      stage: String(details.stage || 'unknown_stage'),
-      source: String(details.source || 'unknown_source'),
-      message: String(details.message || 'Unknown SFU send failure.'),
-      transportPath: String(details.transportPath || 'unknown_transport'),
-      bufferedAmount: Math.max(0, Number(details.bufferedAmount || 0)),
+    this.lastSendFailure = buildSfuSendFailureDetails(prepared, details, {
       queueLength: this.outboundFrameQueue.length(),
       queuePayloadChars: this.outboundFrameQueue.queuedBytes(),
       activePayloadChars: this.outboundFrameQueue.activeBytes(),
-      trackId: String(prepared.trackId || ''),
-      chunkCount: Math.max(1, Number(prepared.chunkCount || 1)),
-      payloadChars: Math.max(0, Number(prepared.payloadChars || 0)),
-      timestamp: Math.max(0, Number(prepared.timestamp || 0)),
-    }
-  }
-
-  private async sendChunkedFramePayload(
-    payload: Record<string, unknown>,
-    chunkField: SfuChunkField,
-    chunkValue: string,
-    metrics: Record<string, unknown> = {},
-  ): Promise<boolean> {
-    const totalChunks = Math.max(1, Math.ceil(chunkValue.length / SFU_FRAME_CHUNK_MAX_CHARS))
-    const frameId = createSfuFrameId()
-    let totalWaitMs = 0
-    let wirePayloadBytes = 0
-
-    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-      const drain = await this.waitForSendBufferDrain()
-      totalWaitMs += drain.waitedMs
-      if (!drain.ok) {
-        this.reportFrameSendDiagnostic(
-          'sfu_frame_send_aborted',
-          'error',
-          'SFU frame send aborted while waiting for websocket backpressure to drain.',
-          {
-            ...metrics,
-            frame_id: frameId,
-            chunk_index: chunkIndex,
-            chunk_count: totalChunks,
-            chunk_field: chunkField,
-            buffered_amount: drain.bufferedAmount,
-            send_wait_ms: totalWaitMs,
-            abort_reason: 'send_buffer_drain_timeout',
-          },
-          true,
-        )
-        this.recordSendFailure({
-          payload,
-          chunkField,
-          chunkValue,
-          payloadBytes: base64UrlToArrayBuffer(chunkValue),
-          metrics,
-          rawByteLength: 0,
-          projectedBinaryEnvelopeBytes: 0,
-          payloadChars: chunkValue.length,
-          chunkCount: totalChunks,
-          frameType: String(payload.frame_type || 'delta') === 'keyframe' ? 'keyframe' : 'delta',
-          protectionMode: String(payload.protection_mode || 'transport_only') === 'required'
-            ? 'required'
-            : (String(payload.protection_mode || 'transport_only') === 'protected' ? 'protected' : 'transport_only'),
-          publisherId: String(payload.publisher_id || ''),
-          trackId: String(payload.track_id || ''),
-          timestamp: Number(payload.timestamp || 0),
-          frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
-          senderSentAtMs: Math.max(0, Number(payload.sender_sent_at_ms || 0)),
-          tilePatch: null,
-        }, {
-          reason: 'send_buffer_drain_timeout',
-          stage: 'wait_for_chunk_send_buffer_drain',
-          source: 'legacy_chunked_json',
-          message: 'Legacy chunked JSON send timed out while waiting for websocket bufferedAmount to drain.',
-          transportPath: 'legacy_chunked_json',
-          bufferedAmount: drain.bufferedAmount,
-        })
-        return false
-      }
-      const start = chunkIndex * SFU_FRAME_CHUNK_MAX_CHARS
-      const end = start + SFU_FRAME_CHUNK_MAX_CHARS
-      const chunkPayload: Record<string, unknown> = {
-        type: 'sfu/frame-chunk',
-        protocol_version: payload.protocol_version,
-        frame_id: frameId,
-        publisher_id: payload.publisher_id,
-        publisher_user_id: payload.publisher_user_id,
-        track_id: payload.track_id,
-        timestamp: payload.timestamp,
-        frame_type: payload.frame_type,
-        frame_sequence: payload.frame_sequence,
-        sender_sent_at_ms: payload.sender_sent_at_ms,
-        protection_mode: payload.protection_mode,
-        codec_id: payload.codec_id,
-        runtime_id: payload.runtime_id,
-        payload_chars: chunkValue.length,
-        chunk_payload_chars: Math.max(0, chunkValue.slice(start, end).length),
-        chunk_index: chunkIndex,
-        chunk_count: totalChunks,
-        layout_mode: payload.layout_mode,
-        layer_id: payload.layer_id,
-        cache_epoch: payload.cache_epoch,
-        tile_columns: payload.tile_columns,
-        tile_rows: payload.tile_rows,
-        tile_width: payload.tile_width,
-        tile_height: payload.tile_height,
-        tile_indices: payload.tile_indices,
-        roi_norm_x: payload.roi_norm_x,
-        roi_norm_y: payload.roi_norm_y,
-        roi_norm_width: payload.roi_norm_width,
-        roi_norm_height: payload.roi_norm_height,
-      }
-      chunkPayload[chunkField] = chunkValue.slice(start, end)
-      wirePayloadBytes += this.measureJsonWireBytes(chunkPayload)
-      if (!this.send(chunkPayload)) {
-        this.reportFrameSendDiagnostic(
-          'sfu_frame_send_aborted',
-          'error',
-          'SFU frame send aborted because the websocket was not open for a chunk.',
-          {
-            ...metrics,
-            frame_id: frameId,
-            chunk_index: chunkIndex,
-            chunk_count: totalChunks,
-            chunk_field: chunkField,
-            buffered_amount: this.getWebSocketBufferedAmount(),
-            send_wait_ms: totalWaitMs,
-            abort_reason: 'socket_not_open',
-          },
-          true,
-        )
-        this.recordSendFailure({
-          payload,
-          chunkField,
-          chunkValue,
-          payloadBytes: base64UrlToArrayBuffer(chunkValue),
-          metrics,
-          rawByteLength: 0,
-          projectedBinaryEnvelopeBytes: 0,
-          payloadChars: chunkValue.length,
-          chunkCount: totalChunks,
-          frameType: String(payload.frame_type || 'delta') === 'keyframe' ? 'keyframe' : 'delta',
-          protectionMode: String(payload.protection_mode || 'transport_only') === 'required'
-            ? 'required'
-            : (String(payload.protection_mode || 'transport_only') === 'protected' ? 'protected' : 'transport_only'),
-          publisherId: String(payload.publisher_id || ''),
-          trackId: String(payload.track_id || ''),
-          timestamp: Number(payload.timestamp || 0),
-          frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
-          senderSentAtMs: Math.max(0, Number(payload.sender_sent_at_ms || 0)),
-          tilePatch: null,
-        }, {
-          reason: 'socket_not_open',
-          stage: 'send_legacy_chunk',
-          source: 'legacy_chunked_json',
-          message: 'Legacy chunked JSON send found the websocket closed before the current chunk could be sent.',
-          transportPath: 'legacy_chunked_json',
-          bufferedAmount: this.getWebSocketBufferedAmount(),
-        })
-        return false
-      }
-    }
-    this.reportFrameSendPressureIfNeeded({
-      ...metrics,
-      frame_id: frameId,
-      chunk_field: chunkField,
-      chunk_count: totalChunks,
-      transport_path: 'legacy_chunked_json',
-      wire_payload_bytes: wirePayloadBytes,
-      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
-      buffered_amount: this.getWebSocketBufferedAmount(),
-      send_wait_ms: totalWaitMs,
     })
-    this.reportFrameTransportSampleIfNeeded({
-      ...metrics,
-      frame_id: frameId,
-      chunk_field: chunkField,
-      chunk_count: totalChunks,
-      transport_path: 'legacy_chunked_json',
-      wire_payload_bytes: wirePayloadBytes,
-      wire_overhead_bytes: Math.max(0, wirePayloadBytes - Number(metrics.payload_bytes || 0)),
-      websocket_buffered_amount: this.getWebSocketBufferedAmount(),
-      send_wait_ms: totalWaitMs,
-    })
-    return true
   }
 
   private reportFrameSendPressureIfNeeded(payload: Record<string, unknown>): void {
@@ -869,192 +928,73 @@ export class SFUClient {
 
   private reportFrameTransportSampleIfNeeded(payload: Record<string, unknown>): void {
     const nowMs = Date.now()
+    const sample = this.recordFrameTransportSample(payload, nowMs)
     if ((nowMs - this.lastFrameTransportSampleAtMs) < SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS) {
       return
     }
     this.lastFrameTransportSampleAtMs = nowMs
-    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
-    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
     this.reportFrameSendDiagnostic(
       'sfu_frame_transport_sample',
       'info',
       'Sampled SFU frame transport metrics for the active media path.',
       {
         ...payload,
-        wire_vs_payload_ratio: payloadBytes > 0
-          ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
-          : 0,
+        wire_vs_payload_ratio: sample.wireVsPayloadRatio,
       },
     )
   }
 
-  private handleMessage(msg: any): void {
-    const stringField = (...values: any[]): string => {
-      for (const value of values) {
-        const normalized = String(value ?? '').trim()
-        if (normalized !== '') return normalized
-      }
-      return ''
+  private recordFrameTransportSample(
+    payload: Record<string, unknown>,
+    nowMs = Date.now(),
+  ): SfuFrameTransportSample {
+    const payloadBytes = Math.max(0, Number(payload.payload_bytes || 0))
+    const wirePayloadBytes = Math.max(0, Number(payload.wire_payload_bytes || 0))
+    const wireVsPayloadRatio = payloadBytes > 0
+      ? Number((wirePayloadBytes / payloadBytes).toFixed(4))
+      : 0
+    const sample = {
+      transportPath: String(payload.transport_path || 'unknown_transport'),
+      payloadBytes,
+      wirePayloadBytes,
+      wireOverheadBytes: Math.max(0, Number(payload.wire_overhead_bytes || 0)),
+      wireVsPayloadRatio,
+      websocketBufferedAmount: Math.max(0, Number(payload.websocket_buffered_amount || payload.buffered_amount || 0)),
+      queueLength: Math.max(0, Number(payload.queue_length || 0)),
+      queuePayloadChars: Math.max(0, Number(payload.queue_payload_chars || 0)),
+      activePayloadChars: Math.max(0, Number(payload.active_payload_chars || 0)),
+      trackId: String(payload.track_id || ''),
+      frameType: String(payload.frame_type || ''),
+      frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
+      chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
+      outgoingVideoQualityProfile: String(payload.outgoing_video_quality_profile || ''),
+      encodeMs: Math.max(0, Number(payload.encode_ms || 0)),
+      queuedAgeMs: Math.max(0, Number(payload.queued_age_ms || 0)),
+      sendDrainMs: Math.max(0, Number(payload.send_drain_ms || 0)),
+      sendDrainTargetBytes: Math.max(0, Number(payload.send_drain_target_buffered_bytes || 0)),
+      sendDrainMaxWaitMs: Math.max(0, Number(payload.send_drain_max_wait_ms || 0)),
+      budgetMaxEncodedBytesPerFrame: Math.max(0, Number(payload.budget_max_encoded_bytes_per_frame || 0)),
+      budgetMaxWireBytesPerSecond: Math.max(0, Number(payload.budget_max_wire_bytes_per_second || 0)),
+      budgetMaxQueueAgeMs: Math.max(0, Number(payload.budget_max_queue_age_ms || 0)),
+      budgetMaxBufferedBytes: Math.max(0, Number(payload.budget_max_buffered_bytes || 0)),
+      binaryContinuationState: String(payload.binary_continuation_state || 'unknown_binary_continuation_state'),
+      binaryContinuationRequired: Boolean(payload.binary_continuation_required),
+      timestampUnixMs: nowMs,
     }
-    const integerField = (fallback: number, ...values: any[]): number => {
-      for (const value of values) {
-        const normalized = Number(value)
-        if (Number.isFinite(normalized)) return Math.floor(normalized)
-      }
-      return fallback
-    }
-    const normalizeUnitFloat = (value: unknown, fallback: number): number => {
-      const normalized = Number(value)
-      if (!Number.isFinite(normalized)) return fallback
-      return Math.max(0, Math.min(1, normalized))
-    }
-
-    switch (msg.type) {
-      case 'sfu/joined':
-        for (const publisherId of (msg.publishers ?? [])) {
-          const normalizedPublisherId = stringField(publisherId)
-          if (normalizedPublisherId !== '') {
-            this.subscribe(normalizedPublisherId)
-          }
-        }
-        break
-
-      case 'sfu/tracks':
-        this.cb.onTracks({
-          roomId:          stringField(msg.roomId, msg.room_id),
-          publisherId:     stringField(msg.publisherId, msg.publisher_id),
-          publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
-          publisherName:   stringField(msg.publisherName, msg.publisher_name),
-          tracks:        msg.tracks ?? [],
-        })
-        break
-
-      case 'sfu/unpublished':
-        this.cb.onUnpublished(
-          stringField(msg.publisherId, msg.publisher_id),
-          stringField(msg.trackId, msg.track_id),
-        )
-        break
-
-      case 'sfu/publisher_left':
-        this.cb.onPublisherLeft(stringField(msg.publisherId, msg.publisher_id))
-        break
-
-      case 'sfu/frame':
-        if (this.cb.onEncodedFrame) {
-          const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
-          const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
-          const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
-          const tileMetadataInput = {
-            layoutMode: msg.layoutMode ?? msg.layout_mode,
-            layerId: msg.layerId ?? msg.layer_id,
-            cacheEpoch: msg.cacheEpoch ?? msg.cache_epoch,
-            tileColumns: msg.tileColumns ?? msg.tile_columns,
-            tileRows: msg.tileRows ?? msg.tile_rows,
-            tileWidth: msg.tileWidth ?? msg.tile_width,
-            tileHeight: msg.tileHeight ?? msg.tile_height,
-            tileIndices: msg.tileIndices ?? msg.tile_indices,
-            roiNormX: msg.roiNormX ?? msg.roi_norm_x,
-            roiNormY: msg.roiNormY ?? msg.roi_norm_y,
-            roiNormWidth: msg.roiNormWidth ?? msg.roi_norm_width,
-            roiNormHeight: msg.roiNormHeight ?? msg.roi_norm_height,
-          }
-          const tileMetadata = normalizeTilePatchMetadata(tileMetadataInput)
-          if (this.inboundFrameAssembler.rejectFramePayloadLengthMismatch(msg)) return
-          if (!tileMetadata && hasExplicitSfuTileMetadataFields(tileMetadataInput)) {
-            reportClientDiagnostic({
-              category: 'media',
-              level: 'warning',
-              eventType: 'sfu_frame_rejected',
-              code: 'sfu_frame_rejected',
-              message: 'SFU frame used invalid tile/layer/cache metadata and was rejected.',
-              roomId: this.roomId,
-              payload: {
-                room_id: this.roomId,
-                publisher_id: stringField(msg.publisherId, msg.publisher_id),
-                publisher_user_id: stringField(msg.publisherUserId, msg.publisher_user_id),
-                track_id: stringField(msg.trackId, msg.track_id),
-                frame_id: stringField(msg.frameId, msg.frame_id),
-                frame_sequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
-                reject_reason: 'invalid_tile_metadata',
-              },
-              immediate: true,
-            })
-            return
-          }
-          this.cb.onEncodedFrame({
-            publisherId: stringField(msg.publisherId, msg.publisher_id),
-            publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id),
-            trackId: stringField(msg.trackId, msg.track_id),
-            timestamp: msg.timestamp,
-            data: dataBase64 !== ''
-              ? base64UrlToArrayBuffer(dataBase64)
-              : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0)),
-            dataBase64: dataBase64 || null,
-            type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
-            protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
-            protectedFrame: protectedFrame || null,
-            protectionMode: stringField(msg.protectionMode, msg.protection_mode) === 'required'
-              ? 'required'
-              : (protectedFrame !== '' ? 'protected' : 'transport_only'),
-            protocolVersion: Math.max(1, integerField(1, msg.protocolVersion, msg.protocol_version)),
-            frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
-            payloadChars,
-            chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
-            frameId: stringField(msg.frameId, msg.frame_id),
-            senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
-            codecId: stringField(msg.codecId, msg.codec_id),
-            runtimeId: stringField(msg.runtimeId, msg.runtime_id),
-            layoutMode: tileMetadata?.layoutMode || 'full_frame',
-            layerId: tileMetadata?.layerId || 'full',
-            cacheEpoch: Math.max(0, Number(tileMetadata?.cacheEpoch || 0)),
-            tileColumns: Math.max(0, Number(tileMetadata?.tileColumns || 0)),
-            tileRows: Math.max(0, Number(tileMetadata?.tileRows || 0)),
-            tileWidth: Math.max(0, Number(tileMetadata?.tileWidth || 0)),
-            tileHeight: Math.max(0, Number(tileMetadata?.tileHeight || 0)),
-            tileIndices: Array.isArray(tileMetadata?.tileIndices) ? tileMetadata.tileIndices : null,
-            roiNormX: Number(tileMetadata?.roiNormX ?? 0),
-            roiNormY: Number(tileMetadata?.roiNormY ?? 0),
-            roiNormWidth: Number(tileMetadata?.roiNormWidth ?? 1),
-            roiNormHeight: Number(tileMetadata?.roiNormHeight ?? 1),
-          })
-        }
-        break
-
-      case 'sfu/frame-chunk': {
-        const reassembledFrame = this.inboundFrameAssembler.acceptChunk(msg)
-        if (reassembledFrame) {
-          this.handleMessage(reassembledFrame)
-        }
-        break
-      }
-
-      case 'sfu/error':
-        reportClientDiagnostic({
-          category: 'media',
-          level: 'error',
-          eventType: 'sfu_command_error',
-          code: normalizeIdentifier(stringField(msg.error), 'sfu_command_error'),
-          message: 'SFU command failed.',
-          roomId: stringField(msg.roomId, msg.room_id),
-          payload: {
-            room_id: stringField(msg.roomId, msg.room_id),
-            command_type: stringField(msg.commandType, msg.command_type),
-            error: stringField(msg.error),
-          },
-          immediate: true,
-        })
-        break
-    }
+    this.lastFrameTransportSample = sample
+    return sample
   }
-}
 
-function normalizeIdentifier(value: string, fallback = ''): string {
-  const normalized = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._:-]+/g, '_')
-    .replace(/^[_:.-]+|[_:.-]+$/g, '')
-
-  return normalized || fallback
+  private handleMessage(msg: any): void {
+    this.markPublisherFrameReceived(msg)
+    if (stringField(msg?.type) === 'sfu/publisher_left') {
+      this.untrackPublisher(stringField(msg?.publisherId, msg?.publisher_id))
+    }
+    handleSfuClientMessage({
+      callbacks: this.cb,
+      inboundFrameAssembler: this.inboundFrameAssembler,
+      roomId: this.roomId,
+      subscribe: (publisherId) => this.subscribe(publisherId),
+    }, msg)
+  }
 }

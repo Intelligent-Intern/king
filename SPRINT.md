@@ -4,69 +4,75 @@ Purpose:
 - This file contains exactly 20 active sprint issues.
 - Detailed history, parked ideas, and overflow items belong in `BACKLOG.md`.
 - Completion evidence belongs in `READYNESS_TRACKER.md`.
-- Branch-specific comparison notes live in `documentation/dev/video-chat/branch-compare-1.0.7-video-codec.md`.
 
 Active GitHub issue:
 - #148 Batch 3: Core Runtime, Experiment Intake, And Release Closure (`1.0.7-beta`)
 
 Sprint rule:
-- Keep only issues that are currently actionable and release-relevant.
-- Do not keep completed work in this file.
-- Do not weaken King v1 contracts to make a merge easier.
+- Keep only issues that directly remove the current publisher source-readback bottleneck in the SFU/WLVC online video call path.
+- Do not weaken King v1 contracts to make frame capture cheaper.
+- Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
+- Keep media-security, binary SFU envelopes, no-SQLite-frame-persistence, live relay, receiver feedback, and online pressure contracts intact.
+- The quality selector must control the full capture/readback/encode/wire budget, not only the final SFU wire profile.
+
+## Sprint: Publisher VideoFrame Readback Hotpath Replacement
+
+Sprint branch:
+- `sprint/video-call-hardening`
+
+PR target:
+- `development/1.0.7-beta`
+
+Production symptom:
+- Deployed bundle `CallWorkspaceView-Dt8LisTE.js` reports repeated send failures before encode:
+  - `reason=sfu_source_readback_budget_exceeded`
+  - `stage=dom_canvas_readback`
+  - `source=canvas_draw_image_budget_exceeded`
+  - `transport=publisher_source_readback`
+  - `buffered=0`
+- This means the bottleneck is local publisher source readback on the browser main thread, not SFU network backpressure.
+
+Technical target:
+- Move the hot path away from DOM `canvas.drawImage(video, ...)` plus `getImageData(...)` on the main thread.
+- Prefer `MediaStreamTrackProcessor` and `VideoFrame` copy paths where supported.
+- Use worker/off-main-thread processing with `OffscreenCanvas` as the fallback.
+- Keep a DOM-canvas fallback only as a compatibility path with much lower capture size/FPS and explicit diagnostics.
 
 ## Top 20 Active Issues
 
-1. [x] Define the merge strategy for `origin/experiments/1.0.7-video-codec`: codec donor branch only, not wholesale runtime replacement.
-2. [x] Port the experiment branch WLVC payload/header v2 semantics into the current codec path without regressing the current transport contract.
-3. [x] Port the richer WASM/native codec configuration surface (`waveletType`, `entropyCoding`, `dwtLevels`, `colorSpace`, `motionEstimation`) into the current runtime.
-4. [x] Decide which experiment blur/processor-pipeline pieces are worth porting and integrate only the parts that reduce duplication with the current background/media pipeline.
-5. [x] Keep the current binary SFU transport as the production contract and remove the remaining legacy JSON/base64 fallback from the hot video path.
-6. [x] Replace generic `sfu_chunk_send_failed` handling with exact-stage diagnostics and enforce sender backpressure at the real transport boundary.
-7. [x] Finish a versioned binary media envelope contract that carries frame identity, timing, protection state, codec/runtime id, and tile/layer metadata without base64 expansion.
-8. [x] Preserve and prove the current protected-media/media-security contract on the merged codec path; no hidden downgrade to transport-only media.
-9. [x] Fix the realtime join race by gating media-security activation on publisher discovery plus a short settle window instead of multi-second retries.
-10. [x] Stabilize native audio bridge negotiation and recovery with a strict state machine for capability, key exchange, SDP readiness, ICE, transform attach, remote track arrival, and playback.
-11. [x] Prove whether selective tile/segmentation transport stays valuable with the improved codec and keep it only if it still reduces real wire bytes materially.
-12. [x] Keep tile/layer/cache generation semantics explicit so stale or mixed-generation patches fail closed instead of rendering corruption.
-13. [x] Preserve multi-worker SFU correctness: room affinity or broker fanout must remain explicit and bounded for realtime media.
-14. [x] Audit the backend SFU store/gateway after codec merge so binary replay, protected-frame parsing, and cross-worker fanout remain contract-correct.
-15. [x] Reconcile the test surface: keep the current stronger transport/runtime/media-security contracts and add only the useful new codec-focused tests from the experiment branch.
-16. [x] Remove or rewrite contracts/tests that only prove superseded experimental paths once the merged codec/runtime path is in place.
-17. [x] Keep `CallWorkspaceView` and its extracted runtime modules modular; do not re-monolithize the realtime workspace while merging codec work.
-18. [x] Produce a keep/port/delete/superseded checklist for all branch-difference files so cleanup after the merge is deliberate instead of ad hoc.
-19. [ ] Run the merged path against the HD acceptance gate: 1280x720 at 30 fps, 60-second two-browser call, no hidden degraded state, no remote stall, no unbounded sender queue.
-20. [ ] Update `READYNESS_TRACKER.md`, `BACKLOG.md`, and release notes only after the merged codec + transport + media-security contract is proven by tests and live evidence.
+1. [ ] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
+2. [ ] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
+3. [ ] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
+4. [ ] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
+5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
+6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
+7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
+8. [ ] `[source-budget-profile-coupling]` Make `balanced`, `realtime`, `rescue`, and user-selected quality profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
+9. [ ] `[quality-select-contract]` Ensure the visible quality selector actually changes the capture/readback profile immediately and is not only a cosmetic or encode-wire setting.
+10. [ ] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
+11. [ ] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
+12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
+13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
+14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
+15. [ ] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
+16. [ ] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
+17. [ ] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
+18. [ ] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
+19. [ ] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
+20. [ ] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
+
+## Execution Order
+
+1. Finish issues 1-2 before changing capture behavior.
+2. Build the worker/VideoFrame path behind capability detection and keep the current DOM path as fallback until tests prove parity.
+3. Couple quality selection and automatic downgrade to source readback before touching SFU restart policy.
+4. Add contracts and high-motion pressure proof before deploying.
+5. Update `READYNESS_TRACKER.md` only after the sprint is complete.
 
 ## Parking Rule
 
 Move an item to `BACKLOG.md` if any of the following is true:
-- it is not required for the current release bar
-- it depends on unresolved work in one of the 20 issues above
-- it is exploratory rather than contract-critical
+- it does not directly improve publisher source readback, capture scaling, or SFU/WLVC video continuity
+- it weakens media-security, live relay, binary SFU, or no-persistence contracts
+- it is exploratory rather than required for production proof
 - it is already completed and only needs archival evidence
-
-## Contract Compatibility Anchors
-
-- [x] Preserve contributor credit for the experiment work.
-- [x] Separate reusable topology/signaling ideas from experiment-only behavior.
-- [x] Port only compatible GossipMesh runtime pieces; do not import `.DS_Store`, `tmp_*`, debug PHPTs, generated test results, generated build churn, or submodule gitlinks.
-- [x] Add `documentation/gossipmesh.md` only after the production contract matches the implementation.
-- [x] GossipMesh is either rejected with documented reasons or ported as a tested King runtime capability.
-- [x] Keep current WASM MIME/cache-buster handling unless a better production-safe replacement exists.
-- [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.
-- [x] Document the outcome in `READYNESS_TRACKER.md`.
-- [x] Remaining codec experiment diffs are either ported with tests or explicitly classified as superseded by current implementation.
-- [x] Review `extension/src/gossip_mesh/*` and decide the production King API surface.
-- [x] Review `extension/src/gossip_mesh/sfu_signaling.php` against the current video-chat SFU room-binding and admission model.
-- [x] Treat direct P2P transport in the experiment branch as research until it is re-specified under current backend-authoritative room/call contracts.
-- [x] Explicitly decide whether transport-level DataChannel protection is sufficient for any intended payloads or whether app-level protected envelopes are required.
-- [x] Decide whether `demo/video-chat/frontend-vue/src/lib/sfu/gossip_mesh_client.js` should be ported, replaced, or folded into the current SFU client.
-- [x] Add contract tests for GossipMesh message routing, membership, IIBIN envelope use, duplicate suppression, TTL handling, relay fallback, and failure behavior.
-- [x] Keep the current stronger SFU constraints: explicit room/call binding, DB-backed admission, no process-local room identity, and no client-invented call state.
-- [x] Reject any experiment behavior that weakens current room/admission/security guarantees.
-- [x] Video-chat SFU remains compatible with current room/admission/security contracts.
-- [x] Compare `codec-test.html`, `codec-test.md`, `src/lib/wasm`, `src/lib/wavelet`, `src/lib/kalman`, and `mediaRuntime*` against the experiment branch.
-- [x] Keep current debug-log abstraction and avoid reintroducing noisy direct `console.*` paths in hot codec loops.
-- [x] Keep current WASM encoder/decoder binding-mismatch recovery unless disproven by tests.
-- [x] Port only verified codec correctness or performance improvements with targeted frontend tests.
-- [x] Add explicit regression checks for encode/decode parity, crash-free decode failure, runtime-path switching, and remote render continuity.

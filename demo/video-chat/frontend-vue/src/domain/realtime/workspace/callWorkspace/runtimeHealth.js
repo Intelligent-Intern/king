@@ -1,3 +1,8 @@
+import {
+  logSfuVideoRecoveryStatus,
+  shouldExposeSfuVideoRecoveryAttempt,
+} from '../../sfu/videoConnectionStatus';
+
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
   constants,
@@ -5,9 +10,11 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   state,
 }) {
   const {
+    bumpMediaRenderVersion,
     captureClientDiagnostic,
     mediaDebugLog,
     restartSfuAfterVideoStall,
+    sendSocketFrame,
   } = callbacks;
   const {
     mediaSecuritySessionClass,
@@ -20,6 +27,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   const {
     connectedParticipantUsers,
     connectionState,
+    currentUserId,
     mediaRuntimeCapabilities,
     mediaRuntimePath,
     remotePeersRef,
@@ -28,6 +36,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     shouldConnectSfu,
     videoEncoderRef,
   } = refs;
+  const sfuRemoteVideoFrozenConsoleLabel = '[KingRT] SFU remote video frozen';
+  const sfuNoVideoSignalConsoleLabel = '[KingRT] 📵 No video signal from SFU publisher';
   const {
     getRemoteVideoStallTimer,
     setRemoteVideoStallTimer,
@@ -79,6 +89,72 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return sfuRuntimeEnabled && mediaRuntimePath.value === 'pending';
   }
 
+  function setRemoteVideoStatus(peer, stateName, message, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    const normalizedState = String(stateName || '').trim().toLowerCase();
+    const normalizedMessage = String(message || '').trim();
+    if (
+      String(peer.mediaConnectionState || '') === normalizedState
+      && String(peer.mediaConnectionMessage || '') === normalizedMessage
+    ) {
+      return false;
+    }
+    peer.mediaConnectionState = normalizedState;
+    peer.mediaConnectionMessage = normalizedMessage;
+    peer.mediaConnectionUpdatedAtMs = nowMs;
+    if (typeof bumpMediaRenderVersion === 'function') {
+      bumpMediaRenderVersion();
+    }
+    return true;
+  }
+
+  function retrySfuSubscription(publisherId, peer, reason, nowMs = Date.now()) {
+    if (!sfuClientRef.value) return false;
+    sfuClientRef.value.subscribe(publisherId);
+    if (peer && typeof peer === 'object') {
+      peer.lastSubscribeRetryAtMs = nowMs;
+      peer.lastSubscribeRetryReason = String(reason || '').trim();
+    }
+    return true;
+  }
+
+  function remoteVideoReconnectThresholdMs() {
+    return Math.max(remoteVideoFreezeThresholdMs * 3, remoteVideoStallThresholdMs * 2);
+  }
+
+  function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
+    if (typeof sendSocketFrame !== 'function') return false;
+    const targetUserId = Number(peer?.userId || 0);
+    const localUserId = Number(currentUserId.value || 0);
+    if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
+    const normalizedReason = String(reason || 'sfu_remote_video_frozen').trim().toLowerCase();
+    const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
+
+    const lastSentAtMs = Number(peer.lastQualityPressureSentAtMs || 0);
+    const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
+    if (lastSentAtMs > 0 && (nowMs - lastSentAtMs) < minIntervalMs) return false;
+
+    const sent = sendSocketFrame({
+      type: 'call/media-quality-pressure',
+      target_user_id: targetUserId,
+      payload: {
+        kind: 'sfu-video-quality-pressure',
+        requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video',
+        request_full_keyframe: requestFullKeyframe,
+        reason: normalizedReason,
+        publisher_id: String(publisherId || ''),
+        requester_user_id: localUserId,
+        media_runtime_path: mediaRuntimePath.value,
+        ...payload,
+      },
+    });
+    if (sent) {
+      peer.lastQualityPressureSentAtMs = nowMs;
+      peer.lastQualityPressureReason = String(reason || '').trim();
+    }
+    return sent;
+  }
+
   function checkRemoteVideoStalls() {
     if (!isWlvcRuntimePath() || !shouldConnectSfu.value) return;
 
@@ -105,23 +181,76 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
         const frozenAgeMs = Math.max(0, nowMs - lastFrameAtMs);
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
-        console.warn(
-          '[KingRT] SFU remote video frozen',
-          `id=${publisherId}`,
-          `user=${Number(peer.userId || 0)}`,
-          `last_frame=${frozenAgeMs}ms`,
-          `last_received=${receiveGapMs}ms`,
-          `frames=${frameCount}`,
-          `runtime=${mediaRuntimePath.value}`,
-        );
+        const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
+        const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
-        if (typeof peer.decoder?.reset === 'function' && receiveGapMs < remoteVideoFreezeThresholdMs) {
+        setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+        const freezeQualityDowngradeReason = receivingFreshFrames
+          ? 'sfu_remote_video_decoder_waiting_keyframe'
+          : 'sfu_remote_video_frozen';
+        const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;
+        const remoteQualityPressureSent = shouldSendRemoteQualityPressure
+          ? sendRemoteSfuVideoQualityPressure(
+            peer,
+            publisherId,
+            freezeQualityDowngradeReason,
+            nowMs,
+            {
+              frozen_age_ms: frozenAgeMs,
+              receive_gap_ms: receiveGapMs,
+              freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+            }
+          )
+          : false;
+        if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
+          logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
+            ageMs: frozenAgeMs,
+            attempt: peer.freezeRecoveryCount,
+            localUserId: currentUserId.value,
+            peer,
+            publisherId,
+            receiveGapMs,
+            runtime: mediaRuntimePath.value,
+            state: 'frozen',
+          });
+        }
+        if (typeof peer.decoder?.reset === 'function' && receivingFreshFrames) {
           try {
             peer.decoder.reset();
             peer.needsKeyframe = true;
           } catch {
           }
+        }
+        if (receivingFreshFrames) {
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'warning',
+            eventType: 'sfu_remote_video_decoder_waiting_keyframe',
+            code: 'sfu_remote_video_decoder_waiting_keyframe',
+            message: 'Remote SFU video is receiving frames but waiting for a renderable keyframe before restarting transport.',
+            payload: {
+              publisher_id: publisherId,
+              publisher_user_id: Number(peer.userId || 0),
+              publisher_name: String(peer.displayName || '').trim(),
+              track_count: trackCount,
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+              frozen_age_ms: frozenAgeMs,
+              receive_gap_ms: receiveGapMs,
+              freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              remote_quality_pressure_sent: remoteQualityPressureSent,
+              remote_peer_count: remotePeersRef.value.size,
+              sfu_connected: sfuConnected.value,
+              connection_state: connectionState.value,
+              media_runtime_path: mediaRuntimePath.value,
+            },
+            immediate: true,
+          });
+          retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);
+          continue;
         }
         captureClientDiagnostic({
           category: 'media',
@@ -139,6 +268,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             frozen_age_ms: frozenAgeMs,
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+            remote_quality_pressure_sent: remoteQualityPressureSent,
+            socket_restart_deferred: !shouldRestartFrozenVideo,
+            remote_video_reconnect_threshold_ms: remoteVideoReconnectThresholdMs(),
             remote_peer_count: remotePeersRef.value.size,
             sfu_connected: sfuConnected.value,
             connection_state: connectionState.value,
@@ -146,10 +278,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           },
           immediate: true,
         });
-        if (sfuClientRef.value) {
-          sfuClientRef.value.subscribe(publisherId);
-        }
-        if (Number(peer.freezeRecoveryCount || 0) >= 2 || receiveGapMs >= remoteVideoFreezeThresholdMs * 2) {
+        retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
+        if (shouldRestartFrozenVideo) {
           restartSfuAfterVideoStall('remote_video_frozen', {
             publisher_id: publisherId,
             publisher_user_id: Number(peer.userId || 0),
@@ -161,18 +291,33 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         continue;
       }
 
-      if ((nowMs - createdAtMs) < remoteVideoStallThresholdMs) continue;
+      if ((nowMs - createdAtMs) < remoteVideoStallThresholdMs) {
+        setRemoteVideoStatus(peer, 'connecting', 'Connecting media', nowMs);
+        continue;
+      }
       if (stalledLoggedAtMs > 0 && (nowMs - stalledLoggedAtMs) < remoteVideoStallThresholdMs) continue;
 
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
-      console.warn(
-        '[KingRT] 📵 No video signal from SFU publisher',
-        `id=${publisherId}`,
-        `user=${Number(peer.userId || 0)}`,
-        `stalled=${stalledAgeMs}ms`,
-        `tracks=${trackCount}`,
-        `runtime=${mediaRuntimePath.value}`,
-      );
+      peer.stallRecoveryCount = Number(peer.stallRecoveryCount || 0) + 1;
+      setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+      const remoteQualityPressureSent = peer.stallRecoveryCount >= 2
+        ? sendRemoteSfuVideoQualityPressure(peer, publisherId, 'sfu_remote_video_never_started', nowMs, {
+          age_ms: stalledAgeMs,
+          stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+          received_frame_count: Number(peer.receivedFrameCount || 0),
+        })
+        : false;
+      if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+        logSfuVideoRecoveryStatus(sfuNoVideoSignalConsoleLabel, {
+          ageMs: stalledAgeMs,
+          attempt: Math.max(3, Number(peer.stallRecoveryCount || 0)),
+          localUserId: currentUserId.value,
+          peer,
+          publisherId,
+          runtime: mediaRuntimePath.value,
+          state: 'never_started',
+        });
+      }
 
       peer.stalledLoggedAtMs = nowMs;
       captureClientDiagnostic({
@@ -189,6 +334,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           frame_count: frameCount,
           received_frame_count: Number(peer.receivedFrameCount || 0),
           age_ms: stalledAgeMs,
+          remote_quality_pressure_sent: remoteQualityPressureSent,
           remote_peer_count: remotePeersRef.value.size,
           connected_participant_count: connectedParticipantUsers.value.length,
           sfu_connected: sfuConnected.value,
@@ -198,15 +344,17 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         immediate: true,
       });
 
-      if (sfuClientRef.value && stalledAgeMs > remoteVideoStallThresholdMs * 2) {
-        console.info(
-          '[KingRT] 🔄 Auto-resubscribe for stalled SFU publisher',
-          `id=${publisherId}`,
-          `user=${Number(peer.userId || 0)}`,
-        );
-        sfuClientRef.value.subscribe(publisherId);
+      if (retrySfuSubscription(publisherId, peer, 'remote_video_never_started', nowMs)) {
+        if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
+          console.info(
+            '[KingRT] Auto-resubscribe for stalled SFU publisher',
+            `local_user=${currentUserId.value}`,
+            `remote_user=${Number(peer.userId || 0)}`,
+            `publisher=${publisherId}`,
+          );
+        }
       }
-      if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
+      if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
         restartSfuAfterVideoStall('remote_video_never_started', {
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),

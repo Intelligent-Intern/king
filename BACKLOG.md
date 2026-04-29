@@ -12,13 +12,13 @@ Rules:
 - Do not weaken the strongest correct King v1 contract to simplify cleanup.
 - If an item becomes release-critical, move it into `SPRINT.md` and remove it from this file.
 
-## Parked After Current Codec Merge Sprint
+## Parked After 1.0.7 SFU Media Closure
 
-1. [ ] After the codec merge stabilizes, decide whether topology observability (`#Q-31`) is still needed for `1.0.7-beta` or can stay parked until the next beta.
-2. [ ] If selective tile/segmentation survives the merged codec path, evaluate a second-pass optimization for smarter ROI selection instead of keeping today's heuristics by default.
-3. [ ] Revisit long-term packet/header compaction after the binary media envelope is proven stable; do not churn the wire contract again during the current merge.
-4. [ ] If IIBIN is proven useful after the branch merge audit, plan a real runtime integration path instead of keeping package-only experiment code around.
-5. [ ] Do a second cleanup pass over superseded experiment artifacts only after the keep/port/delete matrix is complete and merged.
+1. [ ] Decide whether topology observability (`#Q-31`) is still needed for `1.0.7-beta` or can stay parked until the next beta.
+2. [ ] Selective tile/background transport survived the online HD gate; evaluate a second-pass ROI optimization after release instead of changing the current proven heuristics now.
+3. [ ] The binary media envelope is proven by the online HD gate; revisit long-term packet/header compaction after `1.0.7-beta`, not during the current release closure.
+4. [ ] The native King PHP IIBIN SFU control/metadata boundary is proven; plan deeper runtime integration only after the shipped media path remains stable.
+5. [ ] Do a second cleanup pass over superseded experiment artifacts after the `1.0.7` closure is merged.
 
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 

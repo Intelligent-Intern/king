@@ -32,7 +32,17 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 const shell = fs.readFileSync(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
+const participantUi = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.js'), 'utf8');
+const preferences = fs.readFileSync(path.join(root, 'src/domain/realtime/media/preferences.js'), 'utf8');
+const workspaceConfig = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/config.js'), 'utf8');
+const lifecycle = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/lifecycle.js'), 'utf8');
+const mediaOrchestration = fs.readFileSync(path.join(root, 'src/domain/realtime/local/mediaOrchestration.js'), 'utf8');
+const publisherPipeline = fs.readFileSync(path.join(root, 'src/domain/realtime/local/publisherPipeline.js'), 'utf8');
+const runtimeSwitching = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js'), 'utf8');
 const settingsCss = fs.readFileSync(path.join(root, 'src/styles/call-settings.css'), 'utf8');
+const responsiveCss = fs.readFileSync(path.join(root, 'src/styles/responsive.css'), 'utf8');
+const adminCallsResponsiveCss = fs.readFileSync(path.join(root, 'src/domain/calls/admin/CallsViewResponsive.css'), 'utf8');
+const userDashboardCss = fs.readFileSync(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.css'), 'utf8');
 
 try {
   const callSettingsStart = shell.indexOf('class="call-left-settings-block call-left-owner-edit-block"');
@@ -49,6 +59,19 @@ try {
   assert.match(callSettingsMarkup, /class="call-left-settings-field"[\s\S]*id="call-left-layout-strategy"/, 'activity strategy must use the existing call-left settings field wrapper');
   assert.doesNotMatch(callSettingsMarkup, /class="call-left-layout-controls"/, 'layout controls must not use a bespoke styling wrapper');
   assert.doesNotMatch(callSettingsMarkup, /aria-label="Call settings video layout"/, 'layout controls must not introduce a bespoke nested panel');
+  assert.match(shell, /<label for="call-left-video-quality">Quality<\/label>[\s\S]*<AppSelect[\s\S]*id="call-left-video-quality"/, 'video quality must use the existing AppSelect styling');
+  assert.match(shell, /:model-value="callMediaPrefs\.outgoingVideoQualityProfile"/, 'video quality select must reflect the persisted outgoing profile');
+  assert.match(shell, /@update:model-value="setCallOutgoingVideoQualityProfile"/, 'video quality select must persist user-selected profile changes');
+  assert.match(shell, /v-for="option in callVideoQualityOptions"/, 'video quality select must render the shared SFU profile options');
+  assert.match(shell, /class="call-left-settings-field"[\s\S]*id="call-left-video-quality"/, 'video quality must use the existing call-left settings field wrapper');
+  assert.match(shell, /const callVideoQualityOptions = SFU_VIDEO_QUALITY_PROFILE_OPTIONS;/, 'video quality select must use profile options from workspace config');
+  assert.match(preferences, /export function setCallOutgoingVideoQualityProfile\(profile\) \{[\s\S]*?toOutgoingVideoQualityProfile\(profile\)[\s\S]*?persistCallMediaPrefs\(\);[\s\S]*?\}/, 'video quality setter must normalize and persist the selected profile');
+  assert.match(lifecycle, /\(\) => callMediaPrefs\.outgoingVideoQualityProfile,[\s\S]*?void reconfigureLocalTracksFromSelectedDevices\(\);/, 'video quality changes must reconfigure local tracks in active calls');
+  assert.match(runtimeSwitching, /return resolveSfuVideoQualityProfile\(refs\.callMediaPrefs\.outgoingVideoQualityProfile\);/, 'runtime must resolve the active SFU profile from the selected preference');
+  assert.match(mediaOrchestration, /frameRate:\s*\{\s*ideal:\s*videoProfile\.captureFrameRate,\s*max:\s*30\s*\}/, 'local capture constraints must use the selected SFU profile framerate');
+  assert.match(publisherPipeline, /quality:\s*videoProfile\.frameQuality/, 'WLVC encoder quality must use the selected SFU profile quality');
+  assert.match(publisherPipeline, /setTimeout\(runWlvcEncodeTick,\s*Math\.max\(0,\s*Math\.round\(delayMs\)\)\)/, 'WLVC encode loop must use the selected SFU profile encode interval');
+  assert.match(workspaceConfig, /quality:\s*Object\.freeze\(\{[\s\S]*?label:\s*'Quality'/, 'quality option must be clearly labeled as Quality in the select');
 
   const controlsState = balancedBlock(shell, 'const callLayoutSidebarState = reactive');
   assert.match(controlsState, /currentMode:\s*'main_mini'/, 'sidebar controls must own current layout mode state');
@@ -57,13 +80,45 @@ try {
   assert.match(controlsState, /setStrategy:\s*null/, 'sidebar controls must delegate strategy changes through injected callbacks');
 
   assert.match(shell, /callLayoutControls:\s*callLayoutSidebarState/, 'workspace shell must provide layout controls to call workspace');
-  assert.match(workspace, /const controls = workspaceSidebarState\?\.callLayoutControls;/, 'call workspace must write layout controls through sidebar state');
-  assert.match(workspace, /controls\.setMode = setCallLayoutMode;/, 'call workspace must route mode changes through sidebar callbacks');
-  assert.match(workspace, /controls\.setStrategy = setCallLayoutStrategy;/, 'call workspace must route strategy changes through sidebar callbacks');
+  assert.match(workspace, /workspaceSidebarState,/, 'call workspace must pass sidebar state into participant UI helpers');
+  assert.match(participantUi, /const controls = workspaceSidebarState\?\.callLayoutControls;/, 'call workspace must write layout controls through sidebar state');
+  assert.match(participantUi, /controls\.setMode = setCallLayoutMode;/, 'call workspace must route mode changes through sidebar callbacks');
+  assert.match(participantUi, /controls\.setStrategy = setCallLayoutStrategy;/, 'call workspace must route strategy changes through sidebar callbacks');
   assert.doesNotMatch(workspace, /Activity strategy/, 'activity strategy UI must not render inside the workspace stage overlay');
   assert.doesNotMatch(workspace, /call-layout-controls/, 'workspace stage must not own layout control markup');
   assert.doesNotMatch(shell, /call-left-layout-controls/, 'sidebar layout controls must not use bespoke CSS hooks');
   assert.doesNotMatch(settingsCss, /\.call-left-layout-controls\b/, 'sidebar layout controls must not add ad-hoc CSS');
+  assert.match(
+    responsiveCss,
+    /\.shell\.call-workspace-mode\.mobile-mode \.sidebar\s*\{[\s\S]*?z-index:\s*75;/,
+    'mobile call sidebars must layer above the bottom action controls',
+  );
+
+  for (const [label, source] of [
+    ['admin calls', adminCallsResponsiveCss],
+    ['user dashboard', userDashboardCss],
+  ]) {
+    assert.match(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overflow-y:\s*auto;/,
+      `${label} mobile enter-call settings must scroll to background blur controls`,
+    );
+    assert.match(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overscroll-behavior:\s*contain;/,
+      `${label} mobile enter-call settings must contain touch scroll`,
+    );
+    assert.doesNotMatch(
+      source,
+      /\.calls-enter-right-settings \.call-left-settings\s*\{[\s\S]*?overflow-y:\s*hidden;/,
+      `${label} mobile enter-call settings must not clip lower controls`,
+    );
+    assert.match(
+      source,
+      /grid-template-rows:\s*minmax\(112px,\s*34%\) minmax\(0,\s*1fr\);/,
+      `${label} mobile enter-call layout must leave more space for settings controls`,
+    );
+  }
 
   process.stdout.write('[call-layout-sidebar-controls-contract] PASS\n');
 } catch (error) {

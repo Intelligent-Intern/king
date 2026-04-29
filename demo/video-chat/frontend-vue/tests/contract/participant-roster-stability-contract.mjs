@@ -32,9 +32,9 @@ function functionBody(source, name) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const workspacePath = path.resolve(__dirname, '../../src/domain/realtime/CallWorkspaceView.vue');
+const roomStatePath = path.resolve(__dirname, '../../src/domain/realtime/workspace/callWorkspace/roomState.js');
 const rosterPath = path.resolve(__dirname, '../../src/domain/realtime/workspace/roster.js');
-const workspaceSource = fs.readFileSync(workspacePath, 'utf8');
+const roomStateSource = fs.readFileSync(roomStatePath, 'utf8');
 const rosterSource = fs.readFileSync(rosterPath, 'utf8');
 
 try {
@@ -53,7 +53,7 @@ try {
     'roster signature must ignore reconnect timestamps'
   );
 
-  const snapshotBody = functionBody(workspaceSource, 'applyRoomSnapshot');
+  const snapshotBody = functionBody(roomStateSource, 'applyRoomSnapshot');
   assert.match(
     snapshotBody,
     /const participantsChanged = applyParticipantsSnapshot\(payload\?\.participants\);/,
@@ -75,6 +75,22 @@ try {
   );
 
   const liveMediaPeerMergeBody = functionBody(rosterSource, 'mergeLiveMediaPeerIntoRoster');
+  const normalizeParticipantBody = functionBody(rosterSource, 'normalizeParticipantRow');
+  assert.match(
+    normalizeParticipantBody,
+    /raw\?\.connected_at \|\| raw\?\.connectedAt/,
+    'participant rows must normalize snake_case and camelCase connected timestamps'
+  );
+  assert.match(
+    normalizeParticipantBody,
+    /hasConnection: connectionId !== '' \|\| connectedAt !== '' \|\| connectionCount > 0/,
+    'participant rows must treat non-empty connectedAt and connection counts as live connection evidence'
+  );
+  assert.match(
+    normalizeParticipantBody,
+    /raw\?\.display_name \|\| raw\?\.displayName/,
+    'participant rows must accept top-level display-name fields from call fixtures'
+  );
   assert.match(
     liveMediaPeerMergeBody,
     /peerUserId === currentUserId/,
@@ -96,12 +112,12 @@ try {
     'backend-confirmed live media peers may supplement a missing snapshot row'
   );
   assert.match(
-    workspaceSource,
+    roomStateSource,
     /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'sfu',[\s\S]*\}\);/,
     'SFU remote peers must supplement the call roster so decoded canvases get a layout slot'
   );
   assert.match(
-    workspaceSource,
+    roomStateSource,
     /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'native',[\s\S]*\}\);/,
     'native WebRTC peers must supplement the call roster so remote videos get a layout slot'
   );

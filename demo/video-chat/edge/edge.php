@@ -253,6 +253,17 @@ $writeResponse = static function ($client, int $status, string $reason, array $h
     $writeAll($client, $response);
 };
 
+$proxyCorsHeaders = static function (): array {
+    return [
+        'Content-Type' => 'text/plain; charset=utf-8',
+        'Access-Control-Allow-Origin' => '*',
+        'Access-Control-Allow-Methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
+        'Access-Control-Allow-Headers' => 'Authorization, Content-Type, X-Session-Id',
+        'Access-Control-Max-Age' => '600',
+        'Vary' => 'Origin',
+    ];
+};
+
 $contentType = static function (string $path): string {
     return match (strtolower(pathinfo($path, PATHINFO_EXTENSION))) {
         'html' => 'text/html; charset=utf-8',
@@ -355,7 +366,7 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     return $requestLine . "\r\n" . implode("\r\n", $filtered) . "\r\n\r\n" . $body;
 };
 
-$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeResponse, $injectForwardHeaders): void {
+$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders): void {
     [$upstreamHost, $upstreamPort] = $parseUpstream($upstream);
     $upstreamStream = @stream_socket_client(
         "tcp://{$upstreamHost}:{$upstreamPort}",
@@ -366,7 +377,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     );
 
     if (!is_resource($upstreamStream)) {
-        $writeResponse($client, 502, 'Bad Gateway', ['Content-Type' => 'text/plain; charset=utf-8'], "Bad Gateway\n");
+        $writeResponse($client, 502, 'Bad Gateway', $proxyCorsHeaders(), "Bad Gateway\n");
         return;
     }
 

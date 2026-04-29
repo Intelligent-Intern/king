@@ -47,7 +47,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains('documentation/experiment-intake-provenance.md', $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Preserve contributor credit for the experiment work.');
 require_contains('READYNESS_TRACKER.md', 'Q-14 contributor-credit baseline');
 
 echo "OK\n";

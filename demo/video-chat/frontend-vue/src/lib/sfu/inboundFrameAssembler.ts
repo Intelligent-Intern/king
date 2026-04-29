@@ -561,7 +561,7 @@ function buildReassembledFrame(input: {
   }
 }
 
-function stringField(...values: any[]): string {
+export function stringField(...values: any[]): string {
   for (const value of values) {
     const normalized = String(value ?? '').trim()
     if (normalized !== '') return normalized

@@ -8,6 +8,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     appendMediaRuntimeTransitionEvent,
     captureClientDiagnostic,
     mediaDebugLog,
+    resetSfuOutboundMediaAfterProfileSwitch,
     resolveSfuVideoQualityProfile,
     setCallOutgoingVideoQualityProfile,
     startEncodingPipeline,
@@ -27,6 +28,22 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     sfuAutoQualityDowngradeNext,
     sfuRuntimeEnabled,
   } = constants;
+  const immediateQualityPressureReasons = Object.freeze([
+    'sfu_frame_send_failed',
+    'sfu_high_motion_payload_pressure',
+    'sfu_protected_media_budget_pressure',
+    'sfu_wlvc_rate_budget_pressure',
+    'sfu_remote_quality_pressure',
+    'sfu_remote_video_decoder_waiting_keyframe',
+    'sfu_remote_video_frozen',
+    'sfu_buffer_budget_exceeded',
+    'sfu_projected_buffer_budget_exceeded',
+    'sfu_send_backpressure',
+    'sfu_send_backpressure_critical',
+    'sfu_wire_rate_budget_exceeded',
+    'send_buffer_drain_timeout',
+    'sfu_source_readback_budget_exceeded',
+  ]);
 
   function setMediaRuntimePath(nextPath, reason) {
     const previousPath = refs.mediaRuntimePath.value;
@@ -135,11 +152,16 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
 
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure') {
     const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
-    const nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
+    const normalizedReason = String(reason || 'encode_pressure').trim().toLowerCase();
+    const bypassQualityDowngradeCooldown = immediateQualityPressureReasons.includes(normalizedReason);
+    let nextProfile = sfuAutoQualityDowngradeNext[currentProfile] || '';
     if (nextProfile === '') return false;
 
     const nowMs = Date.now();
-    if ((nowMs - refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs) < sfuAutoQualityDowngradeCooldownMs) {
+    if (
+      !bypassQualityDowngradeCooldown
+      && (nowMs - refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs) < sfuAutoQualityDowngradeCooldownMs
+    ) {
       return false;
     }
     refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs = nowMs;
@@ -148,7 +170,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       '[KingRT] SFU encode pressure - lowering outgoing video quality',
       `from=${currentProfile || 'default'}`,
       `to=${nextProfile}`,
-      `reason=${String(reason || 'encode_pressure')}`,
+      `reason=${normalizedReason}`,
     );
     captureClientDiagnostic({
       category: 'media',
@@ -159,11 +181,20 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       payload: {
         from_profile: currentProfile,
         to_profile: nextProfile,
+        reason: normalizedReason,
         failure_count: state.getWlvcEncodeFailureCount(),
         media_runtime_path: refs.mediaRuntimePath.value,
       },
       immediate: true,
     });
+    if (typeof resetSfuOutboundMediaAfterProfileSwitch === 'function') {
+      resetSfuOutboundMediaAfterProfileSwitch({
+        fromProfile: currentProfile,
+        toProfile: nextProfile,
+        reason: normalizedReason,
+      });
+    }
+    stopLocalEncodingPipeline();
     setCallOutgoingVideoQualityProfile(nextProfile);
     return true;
   }

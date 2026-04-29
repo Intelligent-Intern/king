@@ -78,6 +78,9 @@ require_text "${EDGE_DIR}/edge.php" "\$path === '/ws' || \$host === \$wsDomain"
 require_text "${EDGE_DIR}/edge.php" "\$path === '/sfu' || \$host === \$sfuDomain"
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_CDN_DOMAIN'
 require_text "${EDGE_DIR}/edge.php" 'Access-Control-Allow-Origin'
+require_text "${EDGE_DIR}/edge.php" '$proxyCorsHeaders'
+require_text "${EDGE_DIR}/edge.php" "'Access-Control-Allow-Methods' => 'GET,POST,PATCH,DELETE,OPTIONS'"
+require_text "${EDGE_DIR}/edge.php" '$writeResponse($client, 502, '\''Bad Gateway'\'', $proxyCorsHeaders(), "Bad Gateway\n")'
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_WRITE_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" '$written === 0'

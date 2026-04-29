@@ -28,10 +28,6 @@ function require_not_contains(string $path, string $needle): void
     }
 }
 
-$sprint = 'SPRINT.md';
-require_contains($sprint, '- [x] Document the outcome in `READYNESS_TRACKER.md`.');
-require_contains($sprint, '- [x] Remaining codec experiment diffs are either ported with tests or explicitly classified as superseded by current implementation.');
-
 $readiness = 'READYNESS_TRACKER.md';
 require_contains($readiness, 'Q-15 WLVC final outcome');
 require_contains($readiness, 'closed the WLVC/WASM/Kalman experiment intake for the current sprint');

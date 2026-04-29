@@ -1,9 +1,9 @@
 import { computed, nextTick, onBeforeUnmount, watch } from 'vue';
 
+import { createCallWorkspaceModerationSync } from './moderationSync';
+
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
-    activeCallId,
-    activeMessagesLimit,
     activeReactions,
     activeRoomId,
     activeTab,
@@ -23,7 +23,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     connectedParticipantUsers,
     controlState,
     currentUserId,
-    currentUserStatusLabel,
     desiredRoomId,
     formatTimestamp,
     gridVideoSlotId,
@@ -42,6 +41,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     lobbyPage,
     lobbyQueue,
     localReactionEchoes,
+    mediaRenderVersion,
     mediaRuntimeCapabilities,
     miniVideoSlotId,
     moderationActionState,
@@ -58,6 +58,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     parseUsersDirectoryQuery,
     participantActivityByUserId,
     participantActivityWeight,
+    participantHasRenderableMedia,
     participantUsers,
     peerControlStateByUserId,
     pinnedUsers,
@@ -68,19 +69,12 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     renderCallVideoLayout,
     replaceNumericArray,
     requestRoomSnapshot,
+    remotePeersRef,
     rightSidebarCollapsed,
     sendSocketFrame,
     selectCallLayoutParticipants,
-    setShellLeftSidebarCollapsed,
-    setShellTabletSidebarOpen,
-    setSidebarTab,
     showLobbyTab,
-    showRightSidebar: showRightSidebarBase,
-    shouldShowLeftSidebarRestoreButton,
-    snapshotUsersLimit,
-    syncUsersDirectoryPresentationBase,
     typingByRoom,
-    userRowBase,
     usersDirectoryLoading,
     usersDirectoryPagination,
     usersDirectoryRows,
@@ -109,7 +103,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     REACTION_CLIENT_WINDOW_MS,
     ROSTER_VIRTUAL_OVERSCAN,
     ROSTER_VIRTUAL_ROW_HEIGHT,
-    TYPING_SWEEP_MS,
     USERS_PAGE_SIZE,
     VISIBLE_PARTICIPANTS_LIMIT,
     ALONE_IDLE_ACTIVITY_EVENTS,
@@ -118,28 +111,17 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     ALONE_IDLE_PROMPT_AFTER_MS,
     ALONE_IDLE_TICK_MS,
     layoutModeOptionsFor,
+    REMOTE_VIDEO_FREEZE_THRESHOLD_MS,
+    REMOTE_VIDEO_STALL_THRESHOLD_MS,
   } = context;
 
-  void activeCallId;
-  void activeMessagesLimit;
-  void currentUserStatusLabel;
   void nextTickOverride;
-  void setShellLeftSidebarCollapsed;
-  void setShellTabletSidebarOpen;
-  void setSidebarTab;
-  void shouldShowLeftSidebarRestoreButton;
-  void showRightSidebarBase;
-  void snapshotUsersLimit;
-  void syncUsersDirectoryPresentationBase;
-  void userRowBase;
-  void TYPING_SWEEP_MS;
 
   let reactionId = 0;
   let reactionQueueTimer = null;
   let reactionWindowStartedMs = 0;
   let reactionSentInWindow = 0;
   let reactionBatchCounter = 0;
-  let moderationSyncTimer = null;
   let lobbyToastTimer = null;
   let aloneIdleWatchTimer = null;
   let aloneIdleCountdownTimer = null;
@@ -297,6 +279,75 @@ const showMiniParticipantStrip = computed(() => (
   currentLayoutMode.value === 'main_mini'
   && connectedParticipantUsers.value.length > 1
 ));
+
+function remotePeerForParticipant(userId) {
+  if (mediaRenderVersion && typeof mediaRenderVersion === 'object') {
+    mediaRenderVersion.value;
+  }
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return null;
+  const peers = remotePeersRef?.value instanceof Map ? remotePeersRef.value : new Map();
+  for (const peer of peers.values()) {
+    if (!peer || typeof peer !== 'object') continue;
+    if (Number(peer.userId || 0) === normalizedUserId) return peer;
+  }
+  return null;
+}
+
+function participantMediaStatus(userId) {
+  if (mediaRenderVersion && typeof mediaRenderVersion === 'object') {
+    mediaRenderVersion.value;
+  }
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) {
+    return { show: false, state: 'local', label: '' };
+  }
+
+  const hasRenderable = typeof participantHasRenderableMedia === 'function'
+    ? participantHasRenderableMedia(normalizedUserId)
+    : false;
+  const peer = remotePeerForParticipant(normalizedUserId);
+  if (!peer) {
+    return { show: true, state: 'connecting', label: 'Connecting media' };
+  }
+
+  const nowMs = Date.now();
+  const state = String(peer.mediaConnectionState || '').trim().toLowerCase();
+  const message = String(peer.mediaConnectionMessage || '').trim();
+  if (state === 'recovering') {
+    return { show: true, state: 'recovering', label: message || 'Reconnecting video' };
+  }
+
+  const frameCount = Number(peer.frameCount || 0);
+  if (!hasRenderable || frameCount <= 0) {
+    const createdAtMs = Number(peer.createdAtMs || 0);
+    const ageMs = createdAtMs > 0 ? Math.max(0, nowMs - createdAtMs) : 0;
+    if (ageMs >= REMOTE_VIDEO_STALL_THRESHOLD_MS) {
+      return { show: true, state: 'recovering', label: 'Reconnecting video' };
+    }
+    return { show: true, state: 'connecting', label: message || 'Connecting media' };
+  }
+
+  const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
+  if (lastFrameAtMs > 0 && (nowMs - lastFrameAtMs) >= Math.max(REMOTE_VIDEO_FREEZE_THRESHOLD_MS * 3, REMOTE_VIDEO_STALL_THRESHOLD_MS * 2)) {
+    return { show: true, state: 'recovering', label: 'Reconnecting video' };
+  }
+
+  return { show: false, state: 'live', label: '' };
+}
+
+function showParticipantMediaOverlay(userId) {
+  return participantMediaStatus(userId).show;
+}
+
+function participantMediaStatusLabel(userId) {
+  return participantMediaStatus(userId).label;
+}
+
+function participantMediaStatusState(userId) {
+  return participantMediaStatus(userId).state;
+}
+
 const layoutModeOptions = computed(() => layoutModeOptionsFor(CALL_LAYOUT_MODES));
 const layoutStrategyOptions = computed(() => CALL_LAYOUT_STRATEGIES);
 const showCompactMiniStripToggle = computed(() => (
@@ -527,6 +578,25 @@ function rowActionKey(action, userId) {
   return `${action}:${Number(userId)}`;
 }
 
+const {
+  clearModerationSyncTimer,
+  consumeQueuedModerationSyncEntries,
+  flushQueuedModerationSync,
+  queueModerationSync,
+  syncModerationStateToPeers,
+  syncModerationStateToPeersWithPayload,
+} = createCallWorkspaceModerationSync({
+  activeRoomId,
+  connectedParticipantUsers,
+  currentUserId,
+  isSocketOnline,
+  mutedUsers,
+  pinnedUsers,
+  sendSocketFrame,
+  rowActionKey,
+  MODERATION_SYNC_FLUSH_INTERVAL_MS,
+});
+
 function setRowAction(store, action, userId, text = '', pending = false) {
   store[rowActionKey(action, userId)] = {
     text: String(text || '').trim(),
@@ -714,6 +784,7 @@ function shouldSuppressCallAckNotice(signalType) {
     || normalized === 'ice'
     || normalized === 'hangup'
     || normalized === 'control-state'
+    || normalized === 'media-quality-pressure'
     || normalized === 'moderation-state';
 }
 
@@ -945,93 +1016,6 @@ function normalizeDirectoryUser(raw) {
   };
 }
 
-function clearModerationSyncTimer() {
-  if (moderationSyncTimer === null) return;
-  clearTimeout(moderationSyncTimer);
-  moderationSyncTimer = null;
-}
-
-function queueModerationSync(action, userId) {
-  const normalizedAction = String(action || '').trim().toLowerCase();
-  const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-  if (normalizedAction !== 'mute' && normalizedAction !== 'pin') return;
-
-  const nextState = normalizedAction === 'mute'
-    ? (mutedUsers[normalizedUserId] === true)
-    : (pinnedUsers[normalizedUserId] === true);
-
-  const key = rowActionKey(normalizedAction, normalizedUserId);
-  moderationSyncQueue[key] = {
-    action: normalizedAction,
-    userId: normalizedUserId,
-    state: nextState,
-    updatedAt: Date.now(),
-  };
-
-  if (moderationSyncTimer !== null) return;
-  moderationSyncTimer = setTimeout(() => {
-    moderationSyncTimer = null;
-    flushQueuedModerationSync();
-  }, MODERATION_SYNC_FLUSH_INTERVAL_MS);
-}
-
-function consumeQueuedModerationSyncEntries() {
-  const queuedEntries = Object.values(moderationSyncQueue);
-  for (const key of Object.keys(moderationSyncQueue)) {
-    delete moderationSyncQueue[key];
-  }
-  return queuedEntries;
-}
-
-function buildModerationStatePayloadFromQueue() {
-  const moderatedState = {};
-  const queuedEntries = consumeQueuedModerationSyncEntries();
-  for (const entry of queuedEntries) {
-    const action = String(entry?.action || '').trim().toLowerCase();
-    const userId = Number(entry?.userId || 0);
-    if (!Number.isInteger(userId) || userId <= 0) continue;
-    if (action !== 'mute' && action !== 'pin') continue;
-
-    const key = rowActionKey(action, userId);
-    moderatedState[key] = {
-      updatedAt: Number(entry?.updatedAt || Date.now()),
-      pending: false,
-      muted: action === 'mute' ? Boolean(entry?.state) : undefined,
-      pinned: action === 'pin' ? Boolean(entry?.state) : undefined,
-    };
-  }
-  return moderatedState;
-}
-
-function buildFullModerationStatePayload() {
-  const moderatedState = {};
-
-  for (const [rawUserId, muted] of Object.entries(mutedUsers)) {
-    const userId = Number(rawUserId);
-    if (!Number.isInteger(userId) || userId <= 0) continue;
-    if (muted !== true) continue;
-    moderatedState[rowActionKey('mute', userId)] = {
-      updatedAt: Date.now(),
-      pending: false,
-      muted: true,
-    };
-  }
-
-  for (const [rawUserId, pinned] of Object.entries(pinnedUsers)) {
-    const userId = Number(rawUserId);
-    if (!Number.isInteger(userId) || userId <= 0) continue;
-    if (pinned !== true) continue;
-    moderatedState[rowActionKey('pin', userId)] = {
-      updatedAt: Date.now(),
-      pending: false,
-      pinned: true,
-    };
-  }
-
-  return moderatedState;
-}
-
 function markUserActionText(userId, action, text, pending = false) {
   setRowAction(moderationActionState, action, userId, text, pending);
 }
@@ -1209,50 +1193,6 @@ function syncControlStateToPeers() {
   }
 
   return sentCount;
-}
-
-function syncModerationStateToPeers() {
-  return syncModerationStateToPeersWithPayload(buildFullModerationStatePayload());
-}
-
-function syncModerationStateToPeersWithPayload(moderatedUsers) {
-  const normalizedPayload = moderatedUsers && typeof moderatedUsers === 'object' ? moderatedUsers : {};
-  const payloadKeys = Object.keys(normalizedPayload);
-  if (payloadKeys.length === 0) return 0;
-
-  const peerIds = connectedParticipantUsers.value
-    .map((row) => row.userId)
-    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
-  if (peerIds.length <= 0) return 0;
-
-  let sentCount = 0;
-  for (const targetUserId of peerIds) {
-    const sent = sendSocketFrame({
-      type: 'call/moderation-state',
-      target_user_id: targetUserId,
-      payload: {
-        kind: 'workspace-moderation-state',
-        actor_user_id: currentUserId.value,
-        room_id: activeRoomId.value,
-        moderated_users: normalizedPayload,
-      },
-    });
-    if (sent) sentCount += 1;
-  }
-
-  return sentCount;
-}
-
-function flushQueuedModerationSync() {
-  clearModerationSyncTimer();
-  if (!isSocketOnline.value) {
-    consumeQueuedModerationSyncEntries();
-    return 0;
-  }
-
-  const moderatedUsers = buildModerationStatePayloadFromQueue();
-  if (Object.keys(moderatedUsers).length === 0) return 0;
-  return syncModerationStateToPeersWithPayload(moderatedUsers);
 }
 
 function emitReaction(emoji) {
@@ -1702,10 +1642,6 @@ function openLeftSidebarOverlay(event) {
   openFn();
 }
 
-function handleCompactViewportChange(event) {
-  isCompactViewport.value = Boolean(event?.matches);
-}
-
 let reconnectTimer = null;
 let pingTimer = null;
 
@@ -1743,13 +1679,13 @@ let pingTimer = null;
     emitReaction,
     ensureAloneIdleWatchTimer,
     evaluateAloneIdlePrompt,
+    consumeQueuedModerationSyncEntries,
     filteredUsers,
     flushQueuedModerationSync,
     flushQueuedReactions,
     goToLobbyPage,
     goToUsersPage,
     gridVideoParticipants,
-    handleCompactViewportChange,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
     hideRightSidebar,
@@ -1779,6 +1715,9 @@ let pingTimer = null;
     openLeftSidebarOverlay,
     openLobbyRequestsPanel,
     participantActivityScore,
+    participantMediaStatus,
+    participantMediaStatusLabel,
+    participantMediaStatusState,
     participantVisibilityScore,
     participantsByUserId,
     peerControlSnapshot,
@@ -1806,6 +1745,7 @@ let pingTimer = null;
     showChatUnreadBadge,
     showChatUnreadToast,
     showCompactMiniStripToggle,
+    showParticipantMediaOverlay,
     showLobbyJoinToast,
     showLobbyRequestBadge,
     showMiniParticipantStrip,

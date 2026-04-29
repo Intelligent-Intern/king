@@ -208,6 +208,12 @@ export class MediaSecuritySession {
     }));
   }
 
+  pendingSenderKeyMapKey(senderUserId, deviceId = '') {
+    const sender = normalizeUserId(senderUserId);
+    const device = asString(deviceId);
+    return `${sender}:${device}`;
+  }
+
   async transcriptHashForPeer({ sender, selectedKexSuite, payload, participantSetHash }) {
     const peerPublicKey = asString(payload.public_key);
     const peerHybridPublicKey = asString(payload.hybrid_public_key);
@@ -342,27 +348,48 @@ export class MediaSecuritySession {
     );
 
     const existing = this.peers.get(sender) || {};
-    this.peers.set(sender, {
-      ...existing,
+    const deviceId = asString(payload.device_id);
+    const deviceContext = {
       state: 'capability_ready',
       publicKeyBytes,
       wrappingKey,
-      deviceId: asString(payload.device_id),
+      deviceId,
       capability,
       helloPayload: {
-        device_id: asString(payload.device_id),
+        device_id: deviceId,
         public_key: asString(payload.public_key),
         hybrid_public_key: asString(payload.hybrid_public_key),
       },
       kexSuite: selectedKexSuite,
       transcriptHash,
       participantSetHash,
+    };
+    const devices = existing.devices instanceof Map ? new Map(existing.devices) : new Map();
+    if (deviceId !== '') {
+      devices.set(deviceId, deviceContext);
+    }
+    this.peers.set(sender, {
+      ...existing,
+      ...deviceContext,
+      devices,
     });
 
-    const pending = this.pendingSenderKeys.get(sender);
-    if (pending) {
-      this.pendingSenderKeys.delete(sender);
-      await this.handleSenderKeySignal(sender, pending);
+    const pendingKeys = [
+      this.pendingSenderKeyMapKey(sender, deviceId),
+      this.pendingSenderKeyMapKey(sender, ''),
+    ];
+    for (const pendingKey of pendingKeys) {
+      const pending = this.pendingSenderKeys.get(pendingKey);
+      if (!pending) continue;
+      this.pendingSenderKeys.delete(pendingKey);
+      try {
+        await this.handleSenderKeySignal(sender, pending);
+      } catch (error) {
+        if (asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch') {
+          continue;
+        }
+        throw error;
+      }
     }
     return true;
   }
@@ -434,34 +461,38 @@ export class MediaSecuritySession {
     const sender = normalizeUserId(senderUserId);
     if (sender <= 0 || sender === this.userId) return false;
     const peer = this.peers.get(sender);
-    if (!peer?.wrappingKey) {
-      this.pendingSenderKeys.set(sender, payload);
+    const senderDeviceId = asString(payload.device_id);
+    const devices = peer?.devices instanceof Map ? peer.devices : new Map();
+    const deviceContext = senderDeviceId !== '' ? devices.get(senderDeviceId) : null;
+    const keyContext = deviceContext || (senderDeviceId === '' ? peer : null);
+    if (!keyContext?.wrappingKey) {
+      this.pendingSenderKeys.set(this.pendingSenderKeyMapKey(sender, senderDeviceId), payload);
       return false;
     }
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
-    if (payloadKexSuite === '' || payloadKexSuite !== peer.kexSuite || payload.media_suite !== MEDIA_SUITE) {
+    if (payloadKexSuite === '' || payloadKexSuite !== keyContext.kexSuite || payload.media_suite !== MEDIA_SUITE) {
       throw new Error('downgrade_attempt');
     }
     const participantSetHash = await this.participantHashForPeer(sender);
     const transcriptHash = await this.transcriptHashForPeer({
       sender,
       selectedKexSuite: payloadKexSuite,
-      payload: peer.helloPayload || {
-        device_id: peer.deviceId,
-        public_key: bytesToBase64Url(peer.publicKeyBytes || new Uint8Array()),
+      payload: keyContext.helloPayload || {
+        device_id: keyContext.deviceId,
+        public_key: bytesToBase64Url(keyContext.publicKeyBytes || new Uint8Array()),
         hybrid_public_key: '',
       },
       participantSetHash,
     });
     this.participantSetHash = participantSetHash;
+    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('participant_set_mismatch');
     if (asString(payload.kex_transcript_hash) !== transcriptHash) throw new Error('downgrade_attempt');
-    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('downgrade_attempt');
     if (
-      asString(peer.participantSetHash) !== participantSetHash
-      || asString(peer.transcriptHash) !== transcriptHash
+      asString(keyContext.participantSetHash) !== participantSetHash
+      || asString(keyContext.transcriptHash) !== transcriptHash
     ) {
-      this.pendingSenderKeys.set(sender, payload);
+      this.pendingSenderKeys.set(this.pendingSenderKeyMapKey(sender, senderDeviceId), payload);
       return false;
     }
 
@@ -484,18 +515,30 @@ export class MediaSecuritySession {
       participantSetHash,
       rekeyReason: asString(payload.rekey_reason) || 'sender_key',
     });
-    const mediaKeyBytes = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, peer.wrappingKey, encryptedKey);
+    const mediaKeyBytes = await subtle.decrypt({ name: 'AES-GCM', iv: nonce, additionalData: aad, tagLength: 128 }, keyContext.wrappingKey, encryptedKey);
     const receiverKey = await subtle.importKey('raw', mediaKeyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
-    const receiverKeys = peer.receiverKeys instanceof Map ? peer.receiverKeys : new Map();
+    const receiverKeys = peer?.receiverKeys instanceof Map ? new Map(peer.receiverKeys) : new Map();
     receiverKeys.set(`${epoch}:${senderKeyId}`, receiverKey);
+    const nextDevices = peer?.devices instanceof Map ? new Map(peer.devices) : new Map();
+    if (senderDeviceId !== '') {
+      nextDevices.set(senderDeviceId, {
+        ...keyContext,
+        state: 'active',
+        kexSuite: payloadKexSuite,
+        transcriptHash,
+        participantSetHash,
+      });
+    }
     this.peers.set(sender, {
       ...peer,
+      ...keyContext,
       state: 'active',
       receiverKeys,
       highestEpoch: Math.max(Number(peer.highestEpoch || 0), epoch),
       kexSuite: payloadKexSuite,
       transcriptHash,
       participantSetHash,
+      devices: nextDevices,
     });
     this.selectedKexSuite = payloadKexSuite;
     this.state = ACTIVE_STATE;
@@ -585,7 +628,9 @@ export class MediaSecuritySession {
     for (const key of Array.from(this.replayBySenderEpoch.keys())) {
       if (key.startsWith(`${normalized}:`)) this.replayBySenderEpoch.delete(key);
     }
-    this.pendingSenderKeys.delete(normalized);
+    for (const key of Array.from(this.pendingSenderKeys.keys())) {
+      if (String(key).startsWith(`${normalized}:`)) this.pendingSenderKeys.delete(key);
+    }
   }
 
   async protectFrame({ data, runtimePath, codecId, trackKind = 'video', frameKind = 'delta', trackId = '', timestamp = 0 } = {}) {

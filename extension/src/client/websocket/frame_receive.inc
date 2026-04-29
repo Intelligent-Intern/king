@@ -1,8 +1,56 @@
-static zend_result king_websocket_receive_one_frame(
+typedef struct _king_websocket_raw_frame {
+    unsigned char opcode;
+    unsigned char *payload;
+    size_t payload_len;
+    bool fin;
+} king_websocket_raw_frame;
+
+#define KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS 250
+
+static zend_long king_websocket_frame_part_timeout_ms(zend_long timeout_ms)
+{
+    if (timeout_ms < 0) {
+        return timeout_ms;
+    }
+
+    return timeout_ms < KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS
+        ? KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS
+        : timeout_ms;
+}
+
+static void king_websocket_raw_frame_release(king_websocket_raw_frame *frame)
+{
+    if (frame->payload != NULL) {
+        efree(frame->payload);
+    }
+
+    frame->opcode = 0;
+    frame->payload = NULL;
+    frame->payload_len = 0;
+    frame->fin = false;
+}
+
+static bool king_websocket_opcode_is_supported(unsigned char opcode)
+{
+    switch (opcode) {
+        case KING_WS_OPCODE_CONTINUATION:
+        case KING_WS_OPCODE_TEXT:
+        case KING_WS_OPCODE_BINARY:
+        case KING_WS_OPCODE_CLOSE:
+        case KING_WS_OPCODE_PING:
+        case KING_WS_OPCODE_PONG:
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+static zend_result king_websocket_read_raw_frame(
     king_ws_state *state,
     zend_long timeout_ms,
-    bool *message_ready,
     bool *timed_out,
+    king_websocket_raw_frame *frame,
     const char *function_name
 )
 {
@@ -15,8 +63,11 @@ static zend_result king_websocket_receive_one_frame(
     bool masked;
     zend_long frame_part_timeout_ms;
 
-    *message_ready = false;
     *timed_out = false;
+    frame->opcode = 0;
+    frame->payload = NULL;
+    frame->payload_len = 0;
+    frame->fin = false;
 
     if (
         king_websocket_read_exact(
@@ -35,6 +86,8 @@ static zend_result king_websocket_receive_one_frame(
         return SUCCESS;
     }
 
+    frame->fin = (header[0] & 0x80) != 0;
+
     if ((header[0] & 0x70) != 0) {
         return king_websocket_reject_received_protocol_violation(
             state,
@@ -44,18 +97,10 @@ static zend_result king_websocket_receive_one_frame(
         );
     }
 
-    if ((header[0] & 0x80) == 0) {
-        return king_websocket_reject_received_protocol_violation(
-            state,
-            function_name,
-            "%s() received a fragmented WebSocket frame that v1 does not support.",
-            function_name
-        );
-    }
-
-    frame_part_timeout_ms = timeout_ms > 0 ? timeout_ms : 100;
+    frame_part_timeout_ms = king_websocket_frame_part_timeout_ms(timeout_ms);
 
     opcode = (unsigned char) (header[0] & 0x0f);
+    frame->opcode = opcode;
     masked = (header[1] & 0x80) != 0;
     if (state->server_endpoint) {
         if (!masked) {
@@ -152,6 +197,25 @@ static zend_result king_websocket_receive_one_frame(
         );
     }
 
+    if (!king_websocket_opcode_is_supported(opcode)) {
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
+            "%s() received an unsupported WebSocket opcode %u.",
+            function_name,
+            (unsigned int) opcode
+        );
+    }
+
+    if (king_websocket_opcode_is_control(opcode) && !frame->fin) {
+        return king_websocket_reject_received_protocol_violation(
+            state,
+            function_name,
+            "%s() received a fragmented control WebSocket frame.",
+            function_name
+        );
+    }
+
     if (masked) {
         bool mask_timed_out = false;
 
@@ -178,7 +242,11 @@ static zend_result king_websocket_receive_one_frame(
     }
 
     if (
-        (opcode == KING_WS_OPCODE_TEXT || opcode == KING_WS_OPCODE_BINARY)
+        (
+            opcode == KING_WS_OPCODE_TEXT
+            || opcode == KING_WS_OPCODE_BINARY
+            || opcode == KING_WS_OPCODE_CONTINUATION
+        )
         && payload_len > (size_t) state->max_payload_size
     ) {
         king_websocket_set_error(
@@ -224,41 +292,55 @@ static zend_result king_websocket_receive_one_frame(
         }
     }
 
-    switch (opcode) {
-        case KING_WS_OPCODE_TEXT:
-        case KING_WS_OPCODE_BINARY:
-            if (
-                king_websocket_message_queue_push(
-                    state,
-                    (const char *) payload_buffer,
-                    payload_len,
-                    opcode == KING_WS_OPCODE_BINARY
-                ) != SUCCESS
-            ) {
-                if (payload_buffer != NULL) {
-                    efree(payload_buffer);
-                }
-                return king_websocket_reject_received_backpressure_overflow(
-                    state,
-                    function_name
-                );
-            }
-            *message_ready = true;
-            break;
+    frame->payload = payload_buffer;
+    frame->payload_len = payload_len;
+    return SUCCESS;
+}
 
+static zend_result king_websocket_queue_received_message(
+    king_ws_state *state,
+    const unsigned char *payload,
+    size_t payload_len,
+    bool is_binary,
+    bool *message_ready,
+    const char *function_name
+)
+{
+    if (
+        king_websocket_message_queue_push(
+            state,
+            payload != NULL ? (const char *) payload : "",
+            payload_len,
+            is_binary
+        ) != SUCCESS
+    ) {
+        return king_websocket_reject_received_backpressure_overflow(
+            state,
+            function_name
+        );
+    }
+
+    *message_ready = true;
+    return SUCCESS;
+}
+
+static zend_result king_websocket_handle_control_frame(
+    king_ws_state *state,
+    const king_websocket_raw_frame *frame,
+    const char *function_name
+)
+{
+    switch (frame->opcode) {
         case KING_WS_OPCODE_PING:
             if (
                 king_websocket_send_frame(
                     state,
                     KING_WS_OPCODE_PONG,
-                    payload_buffer,
-                    payload_len,
+                    frame->payload,
+                    frame->payload_len,
                     function_name
                 ) != SUCCESS
             ) {
-                if (payload_buffer != NULL) {
-                    efree(payload_buffer);
-                }
                 return FAILURE;
             }
             break;
@@ -267,10 +349,7 @@ static zend_result king_websocket_receive_one_frame(
             break;
 
         case KING_WS_OPCODE_CLOSE:
-            if (payload_len == 1) {
-                if (payload_buffer != NULL) {
-                    efree(payload_buffer);
-                }
+            if (frame->payload_len == 1) {
                 return king_websocket_reject_received_protocol_violation(
                     state,
                     function_name,
@@ -279,14 +358,11 @@ static zend_result king_websocket_receive_one_frame(
                 );
             }
 
-            if (payload_len >= 2) {
+            if (frame->payload_len >= 2) {
                 zend_long close_code =
-                    ((zend_long) payload_buffer[0] << 8) | (zend_long) payload_buffer[1];
+                    ((zend_long) frame->payload[0] << 8) | (zend_long) frame->payload[1];
 
                 if (!king_websocket_close_code_is_valid(close_code)) {
-                    if (payload_buffer != NULL) {
-                        efree(payload_buffer);
-                    }
                     return king_websocket_reject_received_protocol_violation(
                         state,
                         function_name,
@@ -297,8 +373,12 @@ static zend_result king_websocket_receive_one_frame(
                 }
             }
 
-            if (payload_buffer != NULL) {
-                king_websocket_store_close_reason(state, payload_buffer, payload_len);
+            if (frame->payload != NULL) {
+                king_websocket_store_close_reason(
+                    state,
+                    frame->payload,
+                    frame->payload_len
+                );
             } else {
                 king_websocket_store_close_reason(
                     state,
@@ -312,8 +392,8 @@ static zend_result king_websocket_receive_one_frame(
                     king_websocket_send_frame(
                         state,
                         KING_WS_OPCODE_CLOSE,
-                        payload_buffer,
-                        payload_len,
+                        frame->payload,
+                        frame->payload_len,
                         function_name
                     ) == SUCCESS
                 ) {
@@ -325,23 +405,260 @@ static zend_result king_websocket_receive_one_frame(
             break;
 
         default:
-            if (payload_buffer != NULL) {
-                efree(payload_buffer);
-            }
             return king_websocket_reject_received_protocol_violation(
                 state,
                 function_name,
                 "%s() received an unsupported WebSocket opcode %u.",
                 function_name,
-                (unsigned int) opcode
+                (unsigned int) frame->opcode
             );
     }
 
-    if (payload_buffer != NULL) {
-        efree(payload_buffer);
+    return SUCCESS;
+}
+
+static zend_result king_websocket_append_fragment(
+    smart_str *message,
+    size_t *message_len,
+    const king_websocket_raw_frame *frame,
+    king_ws_state *state,
+    const char *function_name
+)
+{
+    size_t max_payload_size = state->max_payload_size > 0
+        ? (size_t) state->max_payload_size
+        : 0;
+
+    if (
+        *message_len > max_payload_size
+        || frame->payload_len > max_payload_size - *message_len
+    ) {
+        king_websocket_set_error(
+            "%s() received a fragmented WebSocket message payload %zu larger than max_payload_size %ld.",
+            function_name,
+            *message_len + frame->payload_len,
+            state->max_payload_size
+        );
+        return FAILURE;
     }
 
+    if (frame->payload_len > 0) {
+        smart_str_appendl(
+            message,
+            (const char *) frame->payload,
+            frame->payload_len
+        );
+    }
+
+    *message_len += frame->payload_len;
     return SUCCESS;
+}
+
+static zend_result king_websocket_receive_fragmented_message(
+    king_ws_state *state,
+    king_websocket_raw_frame *first_frame,
+    zend_long frame_part_timeout_ms,
+    bool *message_ready,
+    const char *function_name
+)
+{
+    smart_str message = {0};
+    size_t message_len = 0;
+    bool is_binary = first_frame->opcode == KING_WS_OPCODE_BINARY;
+
+    if (
+        king_websocket_append_fragment(
+            &message,
+            &message_len,
+            first_frame,
+            state,
+            function_name
+        ) != SUCCESS
+    ) {
+        king_websocket_raw_frame_release(first_frame);
+        smart_str_free(&message);
+        return FAILURE;
+    }
+    king_websocket_raw_frame_release(first_frame);
+
+    while (1) {
+        king_websocket_raw_frame next_frame;
+        bool timed_out = false;
+
+        if (
+            king_websocket_read_raw_frame(
+                state,
+                frame_part_timeout_ms,
+                &timed_out,
+                &next_frame,
+                function_name
+            ) != SUCCESS
+        ) {
+            smart_str_free(&message);
+            return FAILURE;
+        }
+
+        if (timed_out) {
+            smart_str_free(&message);
+            king_websocket_set_error(
+                "%s() received an incomplete fragmented WebSocket message.",
+                function_name
+            );
+            return FAILURE;
+        }
+
+        if (king_websocket_opcode_is_control(next_frame.opcode)) {
+            zend_result result = king_websocket_handle_control_frame(
+                state,
+                &next_frame,
+                function_name
+            );
+            king_websocket_raw_frame_release(&next_frame);
+
+            if (result != SUCCESS) {
+                smart_str_free(&message);
+                return FAILURE;
+            }
+
+            if (state->closed) {
+                smart_str_free(&message);
+                return SUCCESS;
+            }
+
+            continue;
+        }
+
+        if (next_frame.opcode != KING_WS_OPCODE_CONTINUATION) {
+            king_websocket_raw_frame_release(&next_frame);
+            smart_str_free(&message);
+            return king_websocket_reject_received_protocol_violation(
+                state,
+                function_name,
+                "%s() received a non-continuation WebSocket frame while a fragmented message was active.",
+                function_name
+            );
+        }
+
+        if (
+            king_websocket_append_fragment(
+                &message,
+                &message_len,
+                &next_frame,
+                state,
+                function_name
+            ) != SUCCESS
+        ) {
+            king_websocket_raw_frame_release(&next_frame);
+            smart_str_free(&message);
+            return FAILURE;
+        }
+
+        if (next_frame.fin) {
+            king_websocket_raw_frame_release(&next_frame);
+            break;
+        }
+
+        king_websocket_raw_frame_release(&next_frame);
+    }
+
+    if (message.s != NULL) {
+        smart_str_0(&message);
+    }
+
+    if (
+        king_websocket_queue_received_message(
+            state,
+            message.s != NULL ? (const unsigned char *) ZSTR_VAL(message.s) : NULL,
+            message_len,
+            is_binary,
+            message_ready,
+            function_name
+        ) != SUCCESS
+    ) {
+        smart_str_free(&message);
+        return FAILURE;
+    }
+
+    smart_str_free(&message);
+    return SUCCESS;
+}
+
+static zend_result king_websocket_receive_one_frame(
+    king_ws_state *state,
+    zend_long timeout_ms,
+    bool *message_ready,
+    bool *timed_out,
+    const char *function_name
+)
+{
+    king_websocket_raw_frame frame;
+    zend_long frame_part_timeout_ms = king_websocket_frame_part_timeout_ms(timeout_ms);
+    zend_result result;
+
+    *message_ready = false;
+    *timed_out = false;
+
+    if (
+        king_websocket_read_raw_frame(
+            state,
+            timeout_ms,
+            timed_out,
+            &frame,
+            function_name
+        ) != SUCCESS
+    ) {
+        return FAILURE;
+    }
+
+    if (*timed_out) {
+        return SUCCESS;
+    }
+
+    switch (frame.opcode) {
+        case KING_WS_OPCODE_TEXT:
+        case KING_WS_OPCODE_BINARY:
+            if (!frame.fin) {
+                return king_websocket_receive_fragmented_message(
+                    state,
+                    &frame,
+                    frame_part_timeout_ms,
+                    message_ready,
+                    function_name
+                );
+            }
+
+            result = king_websocket_queue_received_message(
+                state,
+                frame.payload,
+                frame.payload_len,
+                frame.opcode == KING_WS_OPCODE_BINARY,
+                message_ready,
+                function_name
+            );
+            king_websocket_raw_frame_release(&frame);
+            return result;
+
+        case KING_WS_OPCODE_CONTINUATION:
+            king_websocket_raw_frame_release(&frame);
+            return king_websocket_reject_received_protocol_violation(
+                state,
+                function_name,
+                "%s() received a WebSocket continuation frame without an active fragmented message.",
+                function_name
+            );
+
+        case KING_WS_OPCODE_PING:
+        case KING_WS_OPCODE_PONG:
+        case KING_WS_OPCODE_CLOSE:
+        default:
+            result = king_websocket_handle_control_frame(
+                state,
+                &frame,
+                function_name
+            );
+            king_websocket_raw_frame_release(&frame);
+            return result;
+    }
 }
 
 static zend_result king_websocket_pump_transport(
@@ -423,4 +740,3 @@ static void king_websocket_drain_transport(
         current_timeout = 0;
     }
 }
-

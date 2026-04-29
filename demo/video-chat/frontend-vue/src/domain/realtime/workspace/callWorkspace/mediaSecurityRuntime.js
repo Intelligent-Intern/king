@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -10,7 +11,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
     attachMediaSecurityNativeReceiversForPeer,
     captureClientDiagnostic,
     captureClientDiagnosticError,
-    closeNativePeerConnection,
     createMediaSecuritySession,
     createMediaSecurityTargetHelpers,
     ensureNativePeerConnection,
@@ -29,6 +29,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
   } = callbacks;
   const {
     mediaSecurityHandshakeTimeoutMs,
+    mediaSecurityHandshakeRetryTimeoutsMs,
     mediaSecuritySfuTargetSettleMs,
     nativeFrameErrorLogCooldownMs,
     sfuRuntimeEnabled,
@@ -69,6 +70,18 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHandshakeWatchdogTimer = null;
     }
     state.mediaSecurityHandshakeRetryingByUserId.clear();
+    state.mediaSecurityHandshakeRetryCountByUserId.clear();
+  }
+
+  function mediaSecurityHandshakeRetryTimeoutMsForAttempt(retryAttempt) {
+    const normalizedAttempt = Math.max(0, Number(retryAttempt || 0));
+    const configuredTimeouts = Array.isArray(mediaSecurityHandshakeRetryTimeoutsMs)
+      ? mediaSecurityHandshakeRetryTimeoutsMs
+      : [];
+    const timeoutIndex = Math.min(normalizedAttempt, Math.max(0, configuredTimeouts.length - 1));
+    const configuredTimeout = Number(configuredTimeouts[timeoutIndex] || 0);
+    if (Number.isFinite(configuredTimeout) && configuredTimeout > 0) return configuredTimeout;
+    return Number(mediaSecurityHandshakeTimeoutMs || 6000);
   }
 
   async function checkMediaSecurityHandshakeTimeouts() {
@@ -87,18 +100,24 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const peerState = String(peer?.state || '').trim().toLowerCase();
       if (peerState === 'active') {
         state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
+        state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedTargetId);
         continue;
       }
 
       const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
-      if (helloSentAt <= 0 || (nowMs - helloSentAt) <= mediaSecurityHandshakeTimeoutMs) continue;
+      const retryAttempt = Number(state.mediaSecurityHandshakeRetryCountByUserId.get(normalizedTargetId) || 0);
+      const retryTimeoutMs = mediaSecurityHandshakeRetryTimeoutMsForAttempt(retryAttempt);
+      if (helloSentAt <= 0 || (nowMs - helloSentAt) < retryTimeoutMs) continue;
 
       state.mediaSecurityHandshakeRetryingByUserId.add(normalizedTargetId);
+      state.mediaSecurityHandshakeRetryCountByUserId.set(normalizedTargetId, retryAttempt + 1);
       state.mediaSecurityHelloSentAtByUserId.delete(normalizedTargetId);
       console.warn(
         '[KingRT] Media-security handshake timeout - retrying media-security exchange',
         `user=${normalizedTargetId}`,
         `state=${peerState || 'missing'}`,
+        `attempt=${retryAttempt + 1}`,
+        `timeout=${retryTimeoutMs}ms`,
         `elapsed=${nowMs - helloSentAt}ms`,
       );
       captureClientDiagnostic({
@@ -110,6 +129,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
         payload: {
           target_user_id: normalizedTargetId,
           peer_state: peerState,
+          retry_attempt: retryAttempt + 1,
+          retry_timeout_ms: retryTimeoutMs,
           elapsed_ms: nowMs - helloSentAt,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
@@ -170,6 +191,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.mediaSecurityHelloSignalsSent.clear();
       state.mediaSecuritySenderKeySignalsSent.clear();
       state.mediaSecurityRecoveryLastByUserId.clear();
+      state.mediaSecurityHandshakeRetryCountByUserId.clear();
       mediaSecuritySessionRef.value = createMediaSecuritySession(context);
       mediaSecurityStateVersion.value += 1;
       scheduleMediaSecurityParticipantSync('context_changed');
@@ -293,34 +315,20 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   function reportNativeAudioBridgeFailure(peer, code, message, extraPayload = {}) {
-    const normalizedMessage = String(message || '').trim() || nativeAudioBridgeFailureMessage();
-    setNativePeerAudioBridgeState(peer, 'transform_attach_failed', normalizedMessage);
-    console.error(
-      '[KingRT] 🔇 AUDIO BRIDGE FAILED',
-      `code=${String(code || 'native_audio_bridge_failed')}`,
-      `user=${Number(peer?.userId || 0)}`,
-      normalizedMessage,
-    );
-    captureClientDiagnostic({
-      category: 'media',
-      level: 'error',
-      eventType: String(code || 'native_audio_bridge_failed'),
-      code: String(code || 'native_audio_bridge_failed'),
-      message: normalizedMessage,
-      payload: {
-        target_user_id: Number(peer?.userId || 0),
-        connection_state: String(peer?.pc?.connectionState || '').trim().toLowerCase(),
-        media_runtime_path: mediaRuntimePath.value,
-        security: nativeAudioSecurityTelemetrySnapshot(),
-        ...extraPayload,
-      },
-      immediate: true,
+    reportNativeAudioBridgeFailureEvent({
+      captureClientDiagnostic,
+      code,
+      defaultMessage: nativeAudioBridgeFailureMessage(),
+      extraPayload,
+      isSocketOnline,
+      mediaRuntimePath,
+      message,
+      nativeAudioSecurityTelemetrySnapshot,
+      peer,
+      setNativePeerAudioBridgeState,
+      shouldUseNativeAudioBridge,
+      syncMediaSecurityWithParticipants,
     });
-    setTimeout(() => {
-      if (!isSocketOnline.value || !shouldUseNativeAudioBridge()) return;
-      console.info('[KingRT] 🔑 Forcing media-security rekey after audio bridge failure (user=%d)', Number(peer?.userId || 0));
-      void syncMediaSecurityWithParticipants(true);
-    }, 1500);
   }
 
   function mediaSecurityHelloSignalKey(targetUserId, session) {
@@ -349,6 +357,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecuritySenderKeySignalsSent.clear();
     state.mediaSecurityHelloSentAtByUserId.clear();
     state.mediaSecurityHandshakeRetryingByUserId.clear();
+    state.mediaSecurityHandshakeRetryCountByUserId.clear();
   }
 
   async function sendMediaSecurityHello(targetUserId, force = false) {
@@ -557,13 +566,52 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const message = String(error?.message || error || '').trim().toLowerCase();
     return message.includes('wrong_key_id')
       || message.includes('wrong_epoch')
+      || message.includes('participant_set_mismatch')
       || message.includes('downgrade_attempt');
   }
 
-  function shouldTreatNativeFrameErrorAsTransient(direction, error) {
-    void direction;
-    void error;
-    return false;
+  function isRemoteNativeFrameError(direction, senderUserId = 0) {
+    const normalizedDirection = String(direction || '').trim().toLowerCase();
+    const normalizedSenderUserId = Number(senderUserId || 0);
+    return normalizedDirection === 'receiver'
+      && Number.isInteger(normalizedSenderUserId)
+      && normalizedSenderUserId > 0
+      && normalizedSenderUserId !== currentUserId.value;
+  }
+
+  function nativeSenderKeyAvailable(senderUserId = 0) {
+    const normalizedSenderUserId = Number(senderUserId || 0);
+    if (
+      !Number.isInteger(normalizedSenderUserId)
+      || normalizedSenderUserId <= 0
+      || normalizedSenderUserId === currentUserId.value
+    ) {
+      return false;
+    }
+    return ensureMediaSecuritySession().canProtectNativeForTargets([normalizedSenderUserId]);
+  }
+
+  function shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId = 0) {
+    if (!isRemoteNativeFrameError(direction, senderUserId)) return false;
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    if (message === 'malformed_protected_frame') {
+      return !shouldMaintainNativePeerConnections() || !nativeSenderKeyAvailable(senderUserId);
+    }
+    return shouldRecoverMediaSecurityFromFrameError(error)
+      && !nativeSenderKeyAvailable(senderUserId);
+  }
+
+  function shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId = 0) {
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    return isRemoteNativeFrameError(direction, senderUserId)
+      && shouldMaintainNativePeerConnections()
+      && nativeSenderKeyAvailable(senderUserId)
+      && message === 'malformed_protected_frame';
+  }
+
+  function shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId = 0) {
+    return isRemoteNativeFrameError(direction, senderUserId)
+      && shouldRecoverMediaSecurityFromFrameError(error);
   }
 
   function shouldSendTransportOnlySfuFrame(error) {
@@ -707,7 +755,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const code = direction === 'receiver'
       ? 'native_media_frame_decrypt_failed'
       : 'native_media_frame_encrypt_failed';
-    const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error);
+    const bootstrapFrameDrop = shouldTreatNativeFrameErrorAsBootstrapDrop(direction, error, senderUserId);
+    const transientFrameDrop = shouldTreatNativeFrameErrorAsTransient(direction, error, senderUserId);
+    const recoverableFrameDrop = transientFrameDrop
+      || shouldTreatNativeFrameErrorAsRecoverableDrop(direction, error, senderUserId);
     const logKey = [code, direction || 'unknown', senderUserId || 0, trackId || 'n/a', errorMessage].join(':');
     const nowMs = Date.now();
     const lastLogMs = Number(state.nativeFrameErrorLastLogByKey.get(logKey) || 0);
@@ -716,8 +767,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
       state.nativeFrameErrorLastLogByKey.set(logKey, nowMs);
     }
 
-    if (shouldLog) {
-      const logMethod = transientFrameDrop ? console.warn : console.error;
+    if (shouldLog && !bootstrapFrameDrop) {
+      const logMethod = recoverableFrameDrop ? console.warn : console.error;
       logMethod(
         '[KingRT] SFU/native media-security frame transform failed',
         `direction=${direction || 'unknown'}`,
@@ -726,10 +777,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
         `error=${errorMessage}`,
       );
     }
-    if (shouldLog) {
+    if (shouldLog && !bootstrapFrameDrop) {
       captureClientDiagnostic({
         category: 'media',
-        level: transientFrameDrop ? 'warning' : 'error',
+        level: recoverableFrameDrop ? 'warning' : 'error',
         eventType: code,
         code,
         message: errorMessage,
@@ -739,8 +790,9 @@ export function createCallWorkspaceMediaSecurityRuntime({
           track_id: trackId,
           media_runtime_path: mediaRuntimePath.value,
           security: nativeAudioSecurityTelemetrySnapshot(),
+          recoverable_frame_drop: recoverableFrameDrop,
         },
-        immediate: !transientFrameDrop,
+        immediate: !recoverableFrameDrop,
       });
     }
 
@@ -761,8 +813,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
           'Protected audio bridge paused because the remote native stream is not yet wrapped.'
         );
       }
-      closeNativePeerConnection(senderUserId);
-      return;
     }
 
     const shouldRecoverReceiver = shouldRecoverMediaSecurityFromFrameError(error) || transientFrameDrop;
@@ -814,6 +864,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         if (accepted) {
           state.mediaSecurityHelloSentAtByUserId.delete(normalizedSenderUserId);
           state.mediaSecurityHandshakeRetryingByUserId.delete(normalizedSenderUserId);
+          state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedSenderUserId);
           resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted');
         }
         if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
@@ -822,6 +873,17 @@ export function createCallWorkspaceMediaSecurityRuntime({
       }
     } catch (error) {
       mediaDebugLog('[MediaSecurity] signaling failed', error);
+      const errorCode = String(error?.message || error || '').trim().toLowerCase();
+      if (
+        (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
+        && mediaSecurityTargetIds().includes(normalizedSenderUserId)
+      ) {
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
+        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
+        scheduleMediaSecurityParticipantSync('signal_failed_reconnect');
+        startMediaSecurityHandshakeWatchdog();
+      }
       captureClientDiagnosticError('media_security_signal_failed', error, {
         signal_type: type,
         sender_user_id: normalizedSenderUserId,

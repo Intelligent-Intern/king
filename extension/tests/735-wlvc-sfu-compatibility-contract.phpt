@@ -32,6 +32,8 @@ function require_order(string $path, string $before, string $after): void
 }
 
 $sfuClient = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts';
+$sfuMessageHandler = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts';
+$inboundFrameAssembler = 'demo/video-chat/frontend-vue/src/lib/sfu/inboundFrameAssembler.ts';
 $backendOrigin = 'demo/video-chat/frontend-vue/src/support/backendOrigin.js';
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
 $store = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php';
@@ -52,7 +54,10 @@ $clientNeedles = [
     "query.set('call_id', normalizedCallId)",
     "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })",
     "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })",
-    "this.send({ type: 'sfu/subscribe', publisher_id: publisherId })",
+    'const normalizedPublisherId = stringField(publisherId)',
+    'this.trackSubscribedPublisher(normalizedPublisherId)',
+    "this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })",
+    "this.send({ type: 'sfu/subscribe', publisher_id: publisherId, reason: 'publisher_frame_stall_recovery' })",
     "this.send({ type: 'sfu/unpublish', track_id: trackId })",
     'publisher_id: frame.publisherId',
     'publisher_user_id: frame.publisherUserId ||',
@@ -60,7 +65,15 @@ $clientNeedles = [
     'frame_type: frame.type',
     'payload.protected_frame = frame.protectedFrame',
     'payload.protection_mode = frame.protectionMode ||',
-    'const stringField = (...values: any[]): string => {',
+    "import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'",
+    'decodeSfuBinaryFrameEnvelope(ev.data)',
+    'this.markPublisherFrameReceived(msg)',
+];
+foreach ($clientNeedles as $needle) {
+    require_contains($sfuClient, $needle);
+}
+
+$messageHandlerNeedles = [
     'roomId:          stringField(msg.roomId, msg.room_id)',
     'publisherId:     stringField(msg.publisherId, msg.publisher_id)',
     'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)',
@@ -70,9 +83,11 @@ $clientNeedles = [
     'stringField(msg.protectionMode, msg.protection_mode)',
     'stringField(msg.frameType, msg.frame_type)',
 ];
-foreach ($clientNeedles as $needle) {
-    require_contains($sfuClient, $needle);
+foreach ($messageHandlerNeedles as $needle) {
+    require_contains($sfuMessageHandler, $needle);
 }
+
+require_contains($inboundFrameAssembler, 'export function stringField(...values: any[]): string');
 
 $originNeedles = [
     'export function resolveBackendSfuOriginCandidates()',
@@ -132,17 +147,19 @@ $runtimeNeedles = [
     'SFU join with legacy roomId should stay compatible',
     'SFU join room mismatch must fail',
     'SFU publish room mismatch must fail',
-    'protected SFU frame envelope should decode',
-    'SFU must reject protected frame plus plaintext data',
-    'SFU must reject plaintext fallback in required mode',
-    'SFU frame relay must exclude self and cross-room frames',
+    'protected binary SFU frame envelope should decode',
+    'JSON SFU media frame must be rejected in binary-required mode',
+    'JSON SFU media chunks must be rejected in binary-required mode',
+    'SFU live frame relay must preserve protected frame and codec/runtime metadata',
+    'SFU live frame relay should skip publishers that are local to the subscriber worker',
 ];
 foreach ($runtimeNeedles as $needle) {
     require_contains($runtimeContract, $needle);
 }
 
 require_contains($frontendContract, '[sfu-origin-room-binding-contract] PASS');
-require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu": "node tests/contract/sfu-origin-room-binding-contract.mjs"');
+require_contains('demo/video-chat/frontend-vue/package.json', '"test:contract:sfu":');
+require_contains('demo/video-chat/frontend-vue/package.json', 'node tests/contract/sfu-origin-room-binding-contract.mjs');
 
 $provenanceNeedles = [
     'SFU compatibility decision:',
@@ -155,7 +172,6 @@ foreach ($provenanceNeedles as $needle) {
     require_contains($provenance, $needle);
 }
 
-require_contains('SPRINT.md', '- [x] Keep current SFU origin, call-id, snake_case compatibility, and room-binding behavior.');
 require_contains('READYNESS_TRACKER.md', 'Q-15 WLVC SFU compatibility decision');
 require_contains('READYNESS_TRACKER.md', 'Added frontend contract `sfu-origin-room-binding-contract.mjs` and PHPT `735-wlvc-sfu-compatibility-contract.phpt`.');
 

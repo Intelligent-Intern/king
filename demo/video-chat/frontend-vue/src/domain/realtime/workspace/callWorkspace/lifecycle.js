@@ -26,7 +26,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     consumeQueuedModerationSyncEntries,
     detectMediaRuntimeCapabilities,
     flushQueuedReactions,
-    handleCompactViewportChange,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
     initSFU,
@@ -42,6 +41,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     setActiveTab,
     setMediaRuntimePath,
     startRemoteVideoStallTimer,
+    stopLocalEncodingPipeline,
     stopLocalTyping,
     stopSfuTrackAnnounceTimer,
     switchMediaRuntimePath,
@@ -113,6 +113,19 @@ export function registerCallWorkspaceLifecycleHelpers({
     return /waiting for the media-security handshake/i.test(String(message || ''));
   }
 
+  function handleCompactViewportChange(event) {
+    isCompactViewport.value = Boolean(event?.matches);
+  }
+
+  function resetSfuOutboundMediaForProfileSelect(nextValue, previousValue) {
+    stopLocalEncodingPipeline?.();
+    sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.({
+      fromProfile: String(previousValue || ''),
+      toProfile: String(nextValue || ''),
+      reason: 'manual_profile_select',
+    });
+  }
+
   watch(
     () => callMediaPrefs.speakerVolume,
     () => {
@@ -147,6 +160,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     () => callMediaPrefs.outgoingVideoQualityProfile,
     (nextValue, previousValue) => {
       if (nextValue === previousValue) return;
+      resetSfuOutboundMediaForProfileSelect(nextValue, previousValue);
       void reconfigureLocalTracksFromSelectedDevices();
     }
   );
@@ -227,11 +241,6 @@ export function registerCallWorkspaceLifecycleHelpers({
       ? 'native_audio_bridge_waiting'
       : 'native_audio_bridge_blocked';
     const diagnosticLevel = waitingForSecurity ? 'warning' : 'error';
-    const logMethod = waitingForSecurity ? console.warn : console.error;
-    logMethod(
-      waitingForSecurity ? '[KingRT] 🔇 AUDIO BRIDGE WAITING:' : '[KingRT] 🔇 AUDIO BRIDGE BLOCKED:',
-      message
-    );
     const diagnosticKey = `${refs.activeRoomId.value}:${diagnosticEventType}:${message}`;
     if (nativeAudioBridgeBlockDiagnosticsSent.has(diagnosticKey)) return;
     nativeAudioBridgeBlockDiagnosticsSent.add(diagnosticKey);
