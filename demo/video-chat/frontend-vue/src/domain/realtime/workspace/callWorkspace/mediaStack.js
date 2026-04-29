@@ -95,13 +95,16 @@ export function createCallWorkspaceMediaStack(options) {
       if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
       const normalizedReason = String(reason || 'sfu_receiver_feedback').trim().toLowerCase();
       const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
+      const requestedAction = String(
+        payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'),
+      ).trim().toLowerCase();
       return callbacks.sendSocketFrame({
         type: 'call/media-quality-pressure',
         target_user_id: targetUserId,
         payload: {
           kind: 'sfu-video-quality-pressure',
-          requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video',
-          request_full_keyframe: requestFullKeyframe,
+          requested_action: requestedAction,
+          request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
           reason: normalizedReason,
           publisher_id: String(publisherId || ''),
           requester_user_id: localUserId,

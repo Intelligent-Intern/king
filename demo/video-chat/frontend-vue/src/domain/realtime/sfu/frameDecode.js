@@ -70,6 +70,7 @@ export function createSfuFrameDecodeHelpers({
     bumpMediaRenderVersion,
     mediaRuntimePathRef,
     renderCallVideoLayout,
+    requestRemoteSfuLayerPreference: receiverFeedback.maybeSendReceiverLayerPreference,
   });
 
   function sfuFrameTrackStateKey(frame) {
@@ -349,6 +350,9 @@ export function createSfuFrameDecodeHelpers({
     }
     if (!rendered) return false;
     markRemoteFrameRendered(peer, frame, renderedAtMs);
+    receiverFeedback.maybeSendReceiverLayerPreference(peer, frame?.publisherId, frame, renderDecision.role, {
+      codec_id: String(frame?.codecId || frame?.codec_id || 'wlvc'),
+    });
     peer.frameCount = Number(peer.frameCount || 0) + 1;
     peer.lastFrameAtMs = renderedAtMs;
     peer.stalledLoggedAtMs = 0;

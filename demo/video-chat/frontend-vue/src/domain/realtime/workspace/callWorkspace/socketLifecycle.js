@@ -104,11 +104,23 @@ export function createCallWorkspaceSocketHelpers({
     const kind = String(payloadBody?.kind || '').trim().toLowerCase();
     if (kind !== 'sfu-video-quality-pressure') return false;
 
+    const nowMs = Date.now();
     const senderUserId = Number(sender?.user_id || 0);
     const requestedAction = String(payloadBody?.requested_action || '').trim().toLowerCase();
     const sourceReason = String(payloadBody?.reason || '').trim().toLowerCase();
+    const requestedVideoLayer = String(payloadBody?.requested_video_layer || '').trim().toLowerCase();
+    const requestedVideoQualityProfile = String(payloadBody?.requested_video_quality_profile || '').trim().toLowerCase();
+    const primaryLayerRequested = requestedAction === 'prefer_primary_video_layer' || requestedVideoLayer === 'primary';
+    const thumbnailLayerRequested = requestedAction === 'prefer_thumbnail_video_layer' || requestedVideoLayer === 'thumbnail';
+    const primaryLayerPreferenceTtlMs = 12000;
+    if (primaryLayerRequested) {
+      refs.sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs = nowMs + primaryLayerPreferenceTtlMs;
+    }
+    refs.sfuTransportState.sfuRemoteLayerPreferenceLastAtMs = nowMs;
+    refs.sfuTransportState.sfuRemoteLayerPreferenceLastAction = requestedAction;
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
+      || primaryLayerRequested
       || sourceReason === 'sfu_remote_video_decoder_waiting_keyframe';
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
@@ -116,22 +128,49 @@ export function createCallWorkspaceSocketHelpers({
         senderUserId,
       })
       : false;
-    const downgraded = typeof downgradeSfuVideoQualityAfterEncodePressure === 'function'
-      ? downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')
-      : false;
+    const primaryLayerActive = nowMs < Number(refs.sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs || 0);
+    let downgraded = false;
+    let upgraded = false;
+    let ignoredThumbnailRequest = false;
+    if (typeof downgradeSfuVideoQualityAfterEncodePressure === 'function') {
+      if (primaryLayerRequested) {
+        upgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_primary_layer_requested', {
+          direction: 'up',
+          bypassQualityRecoveryCooldown: true,
+          requested_video_layer: 'primary',
+          requested_video_quality_profile: requestedVideoQualityProfile || 'quality',
+        });
+      } else if (thumbnailLayerRequested) {
+        if (primaryLayerActive) {
+          ignoredThumbnailRequest = true;
+        } else {
+          downgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_thumbnail_layer_requested', {
+            requested_video_layer: 'thumbnail',
+            requested_video_quality_profile: requestedVideoQualityProfile || 'realtime',
+          });
+        }
+      } else {
+        downgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure');
+      }
+    }
     captureClientDiagnostic({
       category: 'media',
-      level: 'warning',
+      level: primaryLayerRequested ? 'info' : 'warning',
       eventType: 'sfu_remote_quality_pressure_received',
       code: 'sfu_remote_quality_pressure_received',
-      message: 'A remote receiver requested lower outgoing SFU video quality after repeated freezes.',
+      message: 'A remote receiver requested an automatic outgoing SFU video layer or quality change.',
       payload: {
         sender_user_id: senderUserId,
         requested_action: requestedAction || 'downgrade_outgoing_video',
+        requested_video_layer: requestedVideoLayer,
+        requested_video_quality_profile: requestedVideoQualityProfile,
         source_reason: sourceReason,
         source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
         full_keyframe_requested: forcedFullKeyframe,
+        primary_layer_active: primaryLayerActive,
+        ignored_thumbnail_request: ignoredThumbnailRequest,
         downgraded,
+        upgraded,
       },
       immediate: true,
     });
