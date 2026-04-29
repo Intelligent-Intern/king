@@ -1,6 +1,7 @@
 import { markRaw } from 'vue';
 import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
 import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
+import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
 
 export function createLocalPublisherPipelineHelpers({
@@ -658,6 +659,17 @@ export function createLocalPublisherPipelineHelpers({
               trackId: videoTrack.id,
               timestamp: encoded.timestamp,
             });
+            const securityBudget = measureProtectedSfuFrameBudget({ protectedFrame, plaintextBytes: encodedPayloadBytes, maxPayloadBytes: maxEncodedPayloadBytes });
+            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...securityBudget.metrics };
+            if (!securityBudget.ok) {
+              paceForcedKeyframeRecovery();
+              handleWlvcFramePayloadPressure(securityBudget.metrics.protected_envelope_bytes, videoTrack.id, encodedFrameType, {
+                reason: 'sfu_protected_media_budget_pressure',
+                max_payload_bytes: maxEncodedPayloadBytes,
+                ...securityBudget.metrics,
+              });
+              return;
+            }
             outgoingFrame.data = new ArrayBuffer(0);
             outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
             outgoingFrame.protectionMode = 'protected';
