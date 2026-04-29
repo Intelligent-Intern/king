@@ -36,6 +36,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     'sfu_send_backpressure',
     'sfu_send_backpressure_critical',
     'send_buffer_drain_timeout',
+    'sfu_source_readback_budget_exceeded',
   ]);
 
   function setMediaRuntimePath(nextPath, reason) {

@@ -409,6 +409,30 @@ export function createLocalPublisherPipelineHelpers({
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
         const timestamp = Date.now();
+        const drawBudgetMs = Math.max(1, Number(videoProfile.maxDrawImageMs || 0));
+        const readbackBudgetMs = Math.max(1, Number(videoProfile.maxReadbackMs || 0));
+        if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
+          const readbackReason = drawImageMs > drawBudgetMs
+            ? 'canvas_draw_image_budget_exceeded'
+            : 'canvas_get_image_data_budget_exceeded';
+          handleWlvcFrameSendFailure(
+            getSfuClientBufferedAmount(),
+            videoTrack.id,
+            'sfu_source_readback_budget_exceeded',
+            {
+              reason: 'sfu_source_readback_budget_exceeded',
+              stage: 'dom_canvas_readback',
+              source: readbackReason,
+              message: 'Publisher source readback exceeded the active SFU profile budget before WLVC encode.',
+              transportPath: 'publisher_source_readback',
+              bufferedAmount: getSfuClientBufferedAmount(),
+              payloadBytes: 0,
+              wirePayloadBytes: 0,
+              timestamp,
+            },
+          );
+          return;
+        }
         let frameImageData = imageData;
         let tilePatchMetadata = null;
         let tilePatchTransportMetrics = null;
@@ -540,6 +564,8 @@ export function createLocalPublisherPipelineHelpers({
           budget_max_keyframe_bytes_per_frame: maxEncodedKeyframeBudgetBytes,
           budget_max_wire_bytes_per_second: Math.max(1, Number(videoProfile.maxWireBytesPerSecond || 0)),
           budget_max_encode_ms: Math.max(1, Number(videoProfile.maxEncodeMs || 0)),
+          budget_max_draw_image_ms: drawBudgetMs,
+          budget_max_readback_ms: readbackBudgetMs,
           budget_max_queue_age_ms: Math.max(1, Number(videoProfile.maxQueueAgeMs || 0)),
           budget_max_buffered_bytes: Math.max(1, Number(videoProfile.maxBufferedBytes || 0)),
           budget_expected_recovery: String(videoProfile.expectedRecovery || ''),

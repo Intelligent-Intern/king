@@ -611,6 +611,8 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'encode_ms' => ['encode_ms', 'encodeMs'],
         'local_stage_elapsed_ms' => ['local_stage_elapsed_ms', 'localStageElapsedMs'],
         'budget_max_encode_ms' => ['budget_max_encode_ms', 'budgetMaxEncodeMs'],
+        'budget_max_draw_image_ms' => ['budget_max_draw_image_ms', 'budgetMaxDrawImageMs'],
+        'budget_max_readback_ms' => ['budget_max_readback_ms', 'budgetMaxReadbackMs'],
         'send_drain_ms' => ['send_drain_ms', 'sendDrainMs'],
         'king_receive_latency_ms' => ['king_receive_latency_ms', 'kingReceiveLatencyMs'],
         'king_fanout_latency_ms' => ['king_fanout_latency_ms', 'kingFanoutLatencyMs'],

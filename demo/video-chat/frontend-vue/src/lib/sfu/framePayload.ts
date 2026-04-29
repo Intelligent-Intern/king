@@ -238,6 +238,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['encode_ms', source.encode_ms ?? source.encodeMs],
     ['local_stage_elapsed_ms', source.local_stage_elapsed_ms ?? source.localStageElapsedMs],
     ['budget_max_encode_ms', source.budget_max_encode_ms ?? source.budgetMaxEncodeMs],
+    ['budget_max_draw_image_ms', source.budget_max_draw_image_ms ?? source.budgetMaxDrawImageMs],
+    ['budget_max_readback_ms', source.budget_max_readback_ms ?? source.budgetMaxReadbackMs],
     ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
     ['king_receive_latency_ms', source.king_receive_latency_ms ?? source.kingReceiveLatencyMs],
     ['king_fanout_latency_ms', source.king_fanout_latency_ms ?? source.kingFanoutLatencyMs],
