@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/realtime_sfu_binary_payload.php';
 require_once __DIR__ . '/realtime_sfu_iibin.php';
+require_once __DIR__ . '/realtime_sfu_subscriber_budget.php';
 
 function videochat_sfu_now_ms(): int
 {

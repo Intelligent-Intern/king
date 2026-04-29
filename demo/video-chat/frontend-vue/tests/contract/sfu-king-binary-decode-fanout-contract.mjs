@@ -21,6 +21,7 @@ function read(relativePath) {
 
 try {
   const helper = read('../backend-king-php/domain/realtime/realtime_sfu_binary_payload.php');
+  const subscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
   const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
 
@@ -46,10 +47,12 @@ try {
   requireContains(gateway, "$outboundFrame['data_binary'] = $dataBinary;", 'direct fanout frame keeps raw binary payload');
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'live relay receives a JSON-safe copy');
   requireContains(gateway, 'videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)', 'live relay publishes the JSON-safe frame');
-  requireContains(gateway, "videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame", 'direct fanout sends the raw outbound frame');
+  requireContains(gateway, 'videochat_sfu_direct_fanout_frame(', 'gateway delegates direct fanout without mutating relay frame');
+  requireContains(subscriberBudget, '$frameForSubscriber = $outboundFrame;', 'direct fanout helper preserves the raw outbound frame per subscriber');
+  requireContains(subscriberBudget, "videochat_sfu_send_outbound_message($subClient['websocket'], $frameForSubscriber", 'direct fanout sends the raw outbound frame');
   assert.ok(
     gateway.indexOf('$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);')
-      < gateway.indexOf("videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame"),
+      < gateway.indexOf('videochat_sfu_direct_fanout_frame('),
     'JSON relay conversion must not replace the raw direct-fanout frame',
   );
 

@@ -325,6 +325,7 @@ function videochat_handle_sfu_routes(
     $brokerTrackSignatures = [];
     $liveFrameRelayCursor = '';
     $liveFrameRelaySeenFiles = [];
+    $slowSubscriberVideoBlockedUntilMsByClient = [];
     $nextBrokerPollMs = 0;
     $nextLiveFrameRelayPollMs = 0;
     $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
@@ -349,6 +350,7 @@ function videochat_handle_sfu_routes(
         &$sfuDatabase,
         &$nextBrokerOpenAttemptMs,
         &$nextBrokerFramePresenceTouchMs,
+        &$slowSubscriberVideoBlockedUntilMsByClient,
         $ensureBrokerDatabase
     ): void {
         $trackId = $msg['track_id'] ?? $msg['trackId'] ?? '';
@@ -452,29 +454,14 @@ function videochat_handle_sfu_routes(
             ], 3000);
         }
 
-        foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
-            $subscriberSendStartedAtMs = videochat_sfu_now_ms();
-            $outboundFrame['subscriber_send_latency_ms'] = max(0, $subscriberSendStartedAtMs - $fanoutStartedAtMs);
-            if (!videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame, [
-                'sfu_send_path' => 'direct_fanout',
-                'room_id' => $roomId,
-                'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
-                'worker_pid' => getmypid(),
-                'subscriber_send_latency_ms' => $outboundFrame['subscriber_send_latency_ms'],
-            ])) {
-                videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_binary_required_failed', [
-                    'room_id' => $roomId,
-                    'publisher_id' => (string) $clientId,
-                    'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
-                    'track_id' => (string) $trackId,
-                    'frame_type' => (string) $frameType,
-                    'protection_mode' => (string) $protectionMode,
-                    'sfu_send_path' => 'direct_fanout',
-                    'worker_pid' => getmypid(),
-                    ...videochat_sfu_transport_metric_fields($outboundFrame, 0),
-                ]);
-            }
-        }
+        videochat_sfu_direct_fanout_frame(
+            videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId),
+            $outboundFrame,
+            $fanoutStartedAtMs,
+            $roomId,
+            (string) $clientId,
+            $slowSubscriberVideoBlockedUntilMsByClient
+        );
     };
     while (true) {
         if ($disconnectStaleAssetClient()) {
