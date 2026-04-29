@@ -56,7 +56,7 @@ Technical target:
 14. [x] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
-17. [ ] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
+17. [x] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
 18. [ ] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
 19. [ ] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
 20. [ ] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
@@ -476,6 +476,37 @@ Deploy proof:
 - Production asset version `20260429065130` served `CallWorkspaceView-DX9qLCvC.js` with `native_audio_receiver_track`, `receiver_track_after_security_ready`, `media_security_handshake_started_after_ws_open`, and `native_audio_track_recovery_exhausted`, and without `exposeToConsole` or the old native frame console error string.
 - Production diagnostics for asset `20260429065130` showed `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `media_security_handshake_timeout`, and `media_security_sender_key_not_ready`; no fresh `native_audio_receiver_transform_failed` was present in the current-asset query.
 - Production asset version `20260429065839` served `CallWorkspaceView-DVqCK1Kb.js`, `WorkspaceShell-GtWA0igW.js`, `JoinView-gtNUpyFT.js`, and `preferences-geDd2h5r.js` with `echoCancellation`, `noiseSuppression`, `autoGainControl`, `channelCount`, `audio_echo_cancellation`, `audio_noise_suppression`, and `audio_auto_gain_control`; no deployed bundle contained disabled `echoCancellation:false`/`noiseSuppression:false`/`autoGainControl:false` markers.
+
+### 17. `[no-frame-persistence-regression]`
+
+Status: Done.
+
+Implementation:
+- Added a dedicated SFU no-frame-persistence regression contract that scans backend realtime code, migrations, and SFU/local frontend media code.
+- Removed the unused legacy `videochat_sfu_encode_stored_frame_payload()` / `videochat_sfu_decode_stored_frame_payload()` helpers so the old stored-frame vocabulary cannot be reused by accident.
+- Proved the only remaining `sfu_frames` backend references are explicit legacy table drops in bootstrap and migration `0020_drop_legacy_sfu_frame_persistence`.
+- Proved JSON `sfu/frame` and `sfu/frame-chunk` commands fail with `binary_media_required`, outbound frames use binary WebSocket send, the gateway publishes only a bounded live relay copy, and direct fanout keeps the raw live frame path.
+- Updated the backend realtime SFU contract for the extracted direct-fanout helper and the current raw binary decode behavior.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-no-frame-persistence-regression-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-relay-broker-io-budget-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-king-binary-decode-fanout-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-transport-metrics-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `php -n demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php` locally; the SQLite section skipped because local `pdo_sqlite` is not loaded.
+- Production container: `docker exec king-videochat-v1-videochat-backend-sfu-v1-1 php /app/tests/realtime-sfu-contract.php`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429080125` served `CallWorkspaceView-MpQQQFLk.js`.
+- The production call bundle contains `binary_media_required`, `sendEncodedFrame`, `binary_envelope_send_failed`, and `direct legacy JSON/base64 fallback has been removed`.
+- The deployed backend checkout has no `videochat_sfu_encode_stored_frame_payload`, `CREATE TABLE IF NOT EXISTS sfu_frames`, or `INSERT INTO sfu_frames` matches.
+- The deployed backend checkout still contains `DROP TABLE IF EXISTS sfu_frames`, `king_websocket_send($socket, $binaryPayload, true)`, `videochat_sfu_live_frame_relay_publish(...)`, and `binary_media_required`.
 
 ## Parking Rule
 

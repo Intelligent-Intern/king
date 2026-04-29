@@ -281,12 +281,13 @@ try {
         'SFU runtime events should be available for HD transport pressure diagnostics'
     );
     $sfuGatewaySource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
+    $sfuSubscriberBudgetSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_subscriber_budget.php');
     videochat_realtime_sfu_assert(
         str_contains($sfuGatewaySource, 'sfu_presence_touch_failed'),
         'SFU publisher presence touch diagnostics should be wired without frame persistence'
     );
     videochat_realtime_sfu_assert(
-        str_contains($sfuGatewaySource, 'sfu_frame_direct_fanout_binary_required_failed'),
+        str_contains($sfuSubscriberBudgetSource, 'sfu_frame_direct_fanout_binary_required_failed'),
         'SFU direct fanout binary-required diagnostics should be wired'
     );
     $sfuStoreSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
@@ -306,7 +307,7 @@ try {
         );
     }
     videochat_realtime_sfu_assert(
-        str_contains($sfuGatewaySource, "'sfu_send_path' => 'direct_fanout'")
+        str_contains($sfuSubscriberBudgetSource, "'sfu_send_path' => 'direct_fanout'")
         && str_contains($sfuBrokerReplaySource, "'sfu_send_path' => 'live_relay_poll'")
         && str_contains($sfuGatewaySource, "'sfu_send_path' => 'live_relay_publish'"),
         'Every SFU frame send path must classify its live diagnostic send path'
@@ -645,8 +646,8 @@ try {
     $decodedLegacyBinaryPayload = is_array($decodedLegacyBinaryEnvelope['payload'] ?? null) ? $decodedLegacyBinaryEnvelope['payload'] : [];
     videochat_realtime_sfu_assert(
         (string) ($decodedLegacyBinaryPayload['track_id'] ?? '') === 'track_legacy'
-        && (string) ($decodedLegacyBinaryPayload['data_base64'] ?? '') === 'QUJD',
-        'legacy binary SFU frame envelope must preserve payload after the 42-byte v1 header'
+        && (string) ($decodedLegacyBinaryPayload['data_binary'] ?? '') === 'ABC',
+        'legacy binary SFU frame envelope must preserve raw payload after the 42-byte v1 header'
     );
     $protectedBinaryEnvelope = videochat_sfu_encode_binary_frame_envelope([
         'type' => 'sfu/frame',
