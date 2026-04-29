@@ -7,6 +7,7 @@ import {
 } from './wlvcFrameMetadata';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
 import { createSfuReceiverFeedback } from './receiverFeedback';
+import { resizeCanvasPreservingFrame } from './remoteCanvas';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -113,10 +114,7 @@ export function createSfuFrameDecodeHelpers({
     peer.frameHeight = nextHeight;
     peer.frameQuality = nextQuality;
     peer.needsKeyframe = true;
-    if (peer.decodedCanvas instanceof HTMLCanvasElement) {
-      peer.decodedCanvas.width = nextWidth;
-      peer.decodedCanvas.height = nextHeight;
-    }
+    resizeCanvasPreservingFrame(peer.decodedCanvas, nextWidth, nextHeight);
     mediaDebugLog('[SFU] Remote decoder reconfigured', publisherId, `${nextWidth}x${nextHeight}`, `q=${nextQuality}`);
     return true;
   }

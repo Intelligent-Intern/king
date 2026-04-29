@@ -11,7 +11,7 @@ $capturePath = $argv[1];
 $port = (int) $argv[2];
 $mode = $argv[3];
 
-if ($mode !== 'interleaved_ping') {
+if (!in_array($mode, ['interleaved_ping', 'slow_large_binary'], true)) {
     fwrite(STDERR, "unsupported fragment mode: {$mode}\n");
     exit(1);
 }
@@ -51,6 +51,11 @@ function king_ws_fragment_write_raw($stream, string $frame): void
 
 function king_ws_fragment_write_frame($stream, int $opcode, string $payload = '', bool $fin = true): void
 {
+    king_ws_fragment_write_raw($stream, king_ws_fragment_frame_bytes($opcode, $payload, $fin));
+}
+
+function king_ws_fragment_frame_bytes(int $opcode, string $payload = '', bool $fin = true): string
+{
     $payloadLen = strlen($payload);
     $frame = chr(($fin ? 0x80 : 0x00) | ($opcode & 0x0f));
 
@@ -62,7 +67,15 @@ function king_ws_fragment_write_frame($stream, int $opcode, string $payload = ''
         $frame .= chr(127) . pack('NN', ($payloadLen >> 32) & 0xffffffff, $payloadLen & 0xffffffff);
     }
 
-    king_ws_fragment_write_raw($stream, $frame . $payload);
+    return $frame . $payload;
+}
+
+function king_ws_fragment_write_slow_frame($stream, int $opcode, string $payload, int $firstBytes, int $delayMicros): void
+{
+    $frame = king_ws_fragment_frame_bytes($opcode, $payload, true);
+    king_ws_fragment_write_raw($stream, substr($frame, 0, $firstBytes));
+    usleep($delayMicros);
+    king_ws_fragment_write_raw($stream, substr($frame, $firstBytes));
 }
 
 function king_ws_fragment_read_client_frame($stream): ?array
@@ -202,11 +215,16 @@ $response = "HTTP/1.1 101 Switching Protocols\r\n"
 fwrite($client, $response);
 fflush($client);
 
-king_ws_fragment_write_frame($client, 0x1, 'he', false);
-king_ws_fragment_write_frame($client, 0x9, 'ok', true);
-king_ws_fragment_write_frame($client, 0x0, 'llo', true);
-king_ws_fragment_write_frame($client, 0x2, "a\0", false);
-king_ws_fragment_write_frame($client, 0x0, 'b', true);
+if ($mode === 'slow_large_binary') {
+    $payload = 'KRT0' . str_repeat('x', 69996);
+    king_ws_fragment_write_slow_frame($client, 0x2, $payload, 4096, 50000);
+} else {
+    king_ws_fragment_write_frame($client, 0x1, 'he', false);
+    king_ws_fragment_write_frame($client, 0x9, 'ok', true);
+    king_ws_fragment_write_frame($client, 0x0, 'llo', true);
+    king_ws_fragment_write_frame($client, 0x2, "a\0", false);
+    king_ws_fragment_write_frame($client, 0x0, 'b', true);
+}
 
 while (($clientFrame = king_ws_fragment_read_client_frame($client)) !== null) {
     $capture['client_frames'][] = $clientFrame;

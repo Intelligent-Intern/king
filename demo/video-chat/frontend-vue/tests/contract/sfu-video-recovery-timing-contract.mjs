@@ -24,6 +24,7 @@ try {
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
@@ -57,6 +58,10 @@ try {
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');
+  requireContains(remoteCanvas, 'export function resizeCanvasPreservingFrame', 'remote decoder size switches preserve the visible frame');
+  requireContains(remoteCanvas, 'snapshotCtx.drawImage(canvas, 0, 0);', 'remote canvas resize snapshots the visible frame before dimensions change');
+  requireContains(remoteCanvas, 'ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, 0, 0, nextWidth, nextHeight);', 'remote canvas resize restores the previous visible frame at the new size');
+  requireContains(frameDecode, 'resizeCanvasPreservingFrame(peer.decodedCanvas, nextWidth, nextHeight);', 'decoder reconfigure does not clear the remote canvas before the next keyframe');
   requireContains(remotePeers, "mediaConnectionState: 'connecting'", 'new SFU peers start in connecting media state');
   requireContains(remotePeers, 'function findSfuRemotePeerEntryByPeer', 'remote peer owner lookup for publisher rollover');
   requireContains(remotePeers, 'publisherId: normalizedPublisherId', 'publisher alias lookup adopts the current frame publisher id');

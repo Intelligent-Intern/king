@@ -5,6 +5,19 @@ typedef struct _king_websocket_raw_frame {
     bool fin;
 } king_websocket_raw_frame;
 
+#define KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS 250
+
+static zend_long king_websocket_frame_part_timeout_ms(zend_long timeout_ms)
+{
+    if (timeout_ms < 0) {
+        return timeout_ms;
+    }
+
+    return timeout_ms < KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS
+        ? KING_WS_FRAME_PART_TIMEOUT_FLOOR_MS
+        : timeout_ms;
+}
+
 static void king_websocket_raw_frame_release(king_websocket_raw_frame *frame)
 {
     if (frame->payload != NULL) {
@@ -84,7 +97,7 @@ static zend_result king_websocket_read_raw_frame(
         );
     }
 
-    frame_part_timeout_ms = timeout_ms > 0 ? timeout_ms : 100;
+    frame_part_timeout_ms = king_websocket_frame_part_timeout_ms(timeout_ms);
 
     opcode = (unsigned char) (header[0] & 0x0f);
     frame->opcode = opcode;
@@ -579,7 +592,7 @@ static zend_result king_websocket_receive_one_frame(
 )
 {
     king_websocket_raw_frame frame;
-    zend_long frame_part_timeout_ms = timeout_ms > 0 ? timeout_ms : 100;
+    zend_long frame_part_timeout_ms = king_websocket_frame_part_timeout_ms(timeout_ms);
     zend_result result;
 
     *message_ready = false;

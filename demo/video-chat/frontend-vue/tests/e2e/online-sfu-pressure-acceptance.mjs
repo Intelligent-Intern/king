@@ -296,7 +296,13 @@ function assertStableSamples(samples, baselineFailures) {
     const hashes = [];
     for (const sample of samples) {
       const canvas = firstHealthyCanvas(sample[side].remote);
-      if (!canvas) throw new Error(`${side} lost non-black remote video during ${sample.phase}.`);
+      if (!canvas) {
+        throw new Error(`${side} lost non-black remote video during ${sample.phase}: ${JSON.stringify({
+          elapsedMs: sample.elapsedMs,
+          remote: sample[side].remote,
+          stats: sample[side].stats,
+        })}`);
+      }
       if (canvas.readable) hashes.push(String(canvas.hash));
     }
     if (new Set(hashes).size < 2) throw new Error(`${side} remote video did not keep moving.`);

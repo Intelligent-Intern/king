@@ -32,6 +32,9 @@ Active failure:
 - 2026-04-29 local hardening now makes the manual quality select flush SFU outbound media generation before reconfiguring capture/encoder, matching automatic downshift semantics.
 - 2026-04-29 local hardening now stops the active encoder before manual profile resets and aborts stale in-flight WLVC ticks if their captured profile no longer matches the selected profile.
 - 2026-04-29 local hardening now restarts local media and SFU after foreground recovery so minimized/backgrounded browsers do not remain with a recycled but unstarted SFU client.
+- 2026-04-29 production root cause isolated below the frontend: King WebSocket receive used the 15ms SFU poll timeout for already-started extended binary frames, so payload reads around and above the 64KB continuation threshold could abort mid-frame. The frame-part read now has a 250ms floor while the SFU receive loop keeps its short poll cadence.
+- 2026-04-29 frontend recovery hardening preserves the last visible remote canvas frame across decoder size/profile reconfiguration, so the UI does not publish a black canvas between profile switch and next renderable keyframe.
+- 2026-04-29 online acceptance passed after deploy: `production-socket-proxy-budget` delivered frames from 32KB through 1.31MB, and `online-sfu-pressure` passed with high motion, security, profile switches, and slow-subscriber simulation without critical backpressure or black remote video.
 
 Already present and not enough:
 - Frontend SFU transport has bounded send queue, `bufferedAmount` pressure checks, frame drops, payload-pressure drops, and quality downgrade from `quality` to `balanced` to `realtime` to `rescue`.
@@ -60,7 +63,7 @@ Already present and not enough:
 17. [x] `[relay-broker-io-budget]` Audit live frame relay, broker DB, filesystem, and any persistence/spool path; media bytes must use a bounded, measured path and never create unbounded synchronous DB/file I/O in the hot frame path.
 18. [x] `[production-socket-proxy-budget]` Measure production TLS/proxy/websocket buffer behavior between browser and King, including frame sizes around continuation thresholds, server send buffers, close/error cases, and any config that caps throughput below the profile budget.
 19. [x] `[receiver-feedback-loop]` Add receiver-to-publisher feedback for decode/render lag, missed sequences, and subscriber pressure so the publisher downshifts from real receiver evidence before the sender socket reaches critical backpressure.
-20. [ ] `[online-acceptance-no-critical-pressure]` Build the online acceptance gate: two-browser call with high motion, security enabled, profile changes, and slow-subscriber simulation must run without `sfu_send_backpressure_critical`, remote freeze, unbounded queue growth, or black video.
+20. [x] `[online-acceptance-no-critical-pressure]` Build the online acceptance gate: two-browser call with high motion, security enabled, profile changes, and slow-subscriber simulation must run without `sfu_send_backpressure_critical`, remote freeze, unbounded queue growth, or black video.
 
 ## Execution Order
 
