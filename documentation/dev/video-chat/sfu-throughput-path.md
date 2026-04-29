@@ -60,6 +60,15 @@ be copied into outbound frame metadata before the socket send:
 - `budget_max_queue_age_ms`
 - `budget_max_buffered_bytes`
 
+## Production Proxy Probe
+
+`demo/video-chat/frontend-vue/tests/e2e/production-socket-proxy-budget.mjs`
+opens real production `/sfu` publisher and subscriber sockets, sends binary SFU
+envelopes around the 65,535 byte continuation threshold and up to the `quality`
+profile payload budget, then fails on websocket close/error, SFU error frames,
+critical `bufferedAmount`, missing subscriber binary delivery, or post-drain
+buffering above the active quality budget.
+
 ## Failure Interpretation
 
 `sfu_send_backpressure_critical` means at least one earlier stage produced,
