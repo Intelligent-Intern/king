@@ -30,6 +30,7 @@ Active failure:
 - 2026-04-29 local hardening now carries the rolling wire-budget `retryAfterMs` into the publisher controller so send-budget drops throttle the next encode tick for the measured retry window instead of spinning at the regular frame interval.
 - 2026-04-29 local hardening now turns fresh-receive decoder stalls into an immediate full-frame keyframe request; the publisher resets WLVC, disables selective patch frames until the full-frame keyframe is sent, and still keeps the existing receiver-pressure downshift path.
 - 2026-04-29 local hardening now makes the manual quality select flush SFU outbound media generation before reconfiguring capture/encoder, matching automatic downshift semantics.
+- 2026-04-29 local hardening now stops the active encoder before manual profile resets and aborts stale in-flight WLVC ticks if their captured profile no longer matches the selected profile.
 - 2026-04-29 local hardening now restarts local media and SFU after foreground recovery so minimized/backgrounded browsers do not remain with a recycled but unstarted SFU client.
 
 Already present and not enough:

@@ -48,9 +48,7 @@ export function createLocalPublisherPipelineHelpers({
   }
 
   function highResolutionNowMs() {
-    return typeof performance !== 'undefined' && typeof performance.now === 'function'
-      ? performance.now()
-      : Date.now();
+    return typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now();
   }
 
   function roundedStageMs(value) {
@@ -303,14 +301,16 @@ export function createLocalPublisherPipelineHelpers({
     }
 
     const videoProfile = currentSfuVideoProfile();
+    const pipelineProfileId = String(videoProfile.id || '').trim() || 'balanced';
+    const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
+    const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
 
     try {
       const nextEncoder = await createHybridEncoder({
-        width: videoProfile.frameWidth,
-        height: videoProfile.frameHeight,
-        quality: videoProfile.frameQuality,
-        keyFrameInterval: videoProfile.keyFrameInterval,
+        width: videoProfile.frameWidth, height: videoProfile.frameHeight,
+        quality: videoProfile.frameQuality, keyFrameInterval: videoProfile.keyFrameInterval,
       });
+      if (stopIfPipelineProfileChanged()) return;
       refs.videoEncoderRef.value = nextEncoder ? markRaw(nextEncoder) : null;
       if (!refs.videoEncoderRef.value) {
         mediaDebugLog('[SFU] WLVC encoder unavailable; falling back to native WebRTC path');
@@ -337,8 +337,7 @@ export function createLocalPublisherPipelineHelpers({
     }
 
     const canvas = document.createElement('canvas');
-    canvas.width = videoProfile.frameWidth;
-    canvas.height = videoProfile.frameHeight;
+    canvas.width = videoProfile.frameWidth; canvas.height = videoProfile.frameHeight;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     let previousFullFrameImageData = null;
     let lastFullFrameSentAtMs = 0;
@@ -374,9 +373,7 @@ export function createLocalPublisherPipelineHelpers({
         keyFrameInterval: 1,
       });
       refs.videoPatchEncoderRef.value = nextPatchEncoder ? markRaw(nextPatchEncoder) : null;
-      refs.videoPatchEncoderWidth.value = nextWidth;
-      refs.videoPatchEncoderHeight.value = nextHeight;
-      refs.videoPatchEncoderQuality.value = nextQuality;
+      refs.videoPatchEncoderWidth.value = nextWidth; refs.videoPatchEncoderHeight.value = nextHeight; refs.videoPatchEncoderQuality.value = nextQuality;
       return refs.videoPatchEncoderRef.value;
     };
 
@@ -392,6 +389,7 @@ export function createLocalPublisherPipelineHelpers({
       const startedAtMs = highResolutionNowMs();
       try {
         if (!isWlvcRuntimePath()) return;
+        if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
         if (!refs.videoEncoderRef.value || !refs.sfuClientRef.value || !isSfuClientOpen()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
@@ -587,9 +585,8 @@ export function createLocalPublisherPipelineHelpers({
           });
           return;
         }
-        const profileId = String(videoProfile.id || '').trim() || 'balanced';
         const transportStageMetrics = {
-          outgoing_video_quality_profile: profileId,
+          outgoing_video_quality_profile: pipelineProfileId,
           capture_width: videoProfile.captureWidth,
           capture_height: videoProfile.captureHeight,
           capture_frame_rate: videoProfile.captureFrameRate,
@@ -697,6 +694,7 @@ export function createLocalPublisherPipelineHelpers({
           );
         }
 
+        if (stopIfPipelineProfileChanged()) return;
         const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
         if (frameSent === false) {
           paceForcedKeyframeRecovery();

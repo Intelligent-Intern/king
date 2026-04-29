@@ -2081,7 +2081,6 @@ const {
     setManualSocketClose: (value) => { manualSocketClose = value; },
   },
 }));
-
 registerCallWorkspaceLifecycleHelpers({
   vue: { watch, onMounted, onBeforeUnmount, nextTick },
   callbacks: {
@@ -2120,6 +2119,7 @@ registerCallWorkspaceLifecycleHelpers({
     setActiveTab,
     setMediaRuntimePath,
     startRemoteVideoStallTimer,
+    stopLocalEncodingPipeline,
     stopLocalTyping,
     stopSfuTrackAnnounceTimer,
     switchMediaRuntimePath,

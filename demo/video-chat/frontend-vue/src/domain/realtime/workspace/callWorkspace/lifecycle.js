@@ -41,6 +41,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     setActiveTab,
     setMediaRuntimePath,
     startRemoteVideoStallTimer,
+    stopLocalEncodingPipeline,
     stopLocalTyping,
     stopSfuTrackAnnounceTimer,
     switchMediaRuntimePath,
@@ -117,6 +118,7 @@ export function registerCallWorkspaceLifecycleHelpers({
   }
 
   function resetSfuOutboundMediaForProfileSelect(nextValue, previousValue) {
+    stopLocalEncodingPipeline?.();
     sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.({
       fromProfile: String(previousValue || ''),
       toProfile: String(nextValue || ''),
