@@ -507,7 +507,7 @@ function videochat_handle_sfu_routes(
                     $nextBrokerOpenAttemptMs = videochat_sfu_now_ms() + 500;
                 }
             }
-            $nextBrokerPollMs = videochat_sfu_now_ms() + 100;
+            $nextBrokerPollMs = videochat_sfu_now_ms() + videochat_sfu_broker_poll_interval_ms();
         }
         if (videochat_sfu_now_ms() >= $nextLiveFrameRelayPollMs) {
             try {
@@ -533,7 +533,7 @@ function videochat_handle_sfu_routes(
             $nextLiveFrameRelayPollMs = videochat_sfu_now_ms() + videochat_sfu_live_frame_relay_poll_interval_ms();
         }
 
-        $frame = @king_client_websocket_receive($websocket, 100);
+        $frame = @king_client_websocket_receive($websocket, videochat_sfu_receive_poll_timeout_ms());
         if ($frame === null || $frame === false) {
             $status = function_exists('king_client_websocket_get_status')
                 ? (int) king_client_websocket_get_status($websocket)

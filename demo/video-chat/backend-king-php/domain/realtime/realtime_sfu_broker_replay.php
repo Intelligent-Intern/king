@@ -7,6 +7,16 @@ function videochat_sfu_broker_publisher_leave_grace_ms(): int
     return 3000;
 }
 
+function videochat_sfu_receive_poll_timeout_ms(): int
+{
+    return 15;
+}
+
+function videochat_sfu_broker_poll_interval_ms(): int
+{
+    return 100;
+}
+
 function videochat_sfu_live_frame_relay_ttl_ms(): int
 {
     return 2500;
@@ -30,6 +40,11 @@ function videochat_sfu_live_frame_relay_cleanup_interval_ms(): int
 function videochat_sfu_live_frame_relay_poll_interval_ms(): int
 {
     return 50;
+}
+
+function videochat_sfu_live_frame_relay_poll_batch_limit(): int
+{
+    return 12;
 }
 
 function videochat_sfu_live_frame_relay_max_record_bytes(array $frame): int
@@ -301,7 +316,16 @@ function videochat_sfu_live_frame_relay_poll(
     array &$seenFrameFiles
 ): int {
     $sentCount = 0;
-    foreach (videochat_sfu_live_frame_relay_read($roomId, $clientId, $localPublisherIds, $cursor, $seenFrameFiles) as $frame) {
+    foreach (
+        videochat_sfu_live_frame_relay_read(
+            $roomId,
+            $clientId,
+            $localPublisherIds,
+            $cursor,
+            $seenFrameFiles,
+            videochat_sfu_live_frame_relay_poll_batch_limit()
+        ) as $frame
+    ) {
         $subscriberSendStartedAtMs = videochat_sfu_now_ms();
         $kingFanoutStartedAtMs = max(0, (int) ($frame['king_receive_at_ms'] ?? 0));
         if ($kingFanoutStartedAtMs > 0) {
