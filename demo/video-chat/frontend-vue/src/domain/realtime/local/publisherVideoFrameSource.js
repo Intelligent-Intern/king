@@ -29,6 +29,11 @@ export function closePublisherVideoFrame(frame) {
   }
 }
 
+function closePublisherVideoFrameReadResult(result) {
+  if (result?.done || !result?.value) return;
+  closePublisherVideoFrame(result.value);
+}
+
 export function createPublisherVideoFrameSourceReader({
   videoTrack,
   MediaStreamTrackProcessorCtor = functionRef(globalThis?.MediaStreamTrackProcessor),
@@ -75,16 +80,23 @@ export function createPublisherVideoFrameSourceReader({
       return { ok: false, reason: 'publisher_video_frame_source_closed', fatal: true };
     }
 
-    const readPromise = reader.read();
+    const readPromise = Promise.resolve().then(() => reader.read());
     let timeoutId = null;
     const timeoutPromise = new Promise((resolve) => {
       timeoutId = setTimeout(() => resolve({ timeout: true }), positiveTimeoutMs(timeoutMs));
     });
-    const result = await Promise.race([readPromise, timeoutPromise]);
+    let result = null;
+    try {
+      result = await Promise.race([readPromise, timeoutPromise]);
+    } catch {
+      if (timeoutId !== null) clearTimeout(timeoutId);
+      await close('publisher_video_frame_read_failed');
+      return { ok: false, reason: 'publisher_video_frame_read_failed', fatal: true };
+    }
     if (timeoutId !== null) clearTimeout(timeoutId);
 
     if (result?.timeout) {
-      readPromise.catch(() => {});
+      readPromise.then(closePublisherVideoFrameReadResult).catch(() => {});
       await close('publisher_video_frame_read_timeout');
       return { ok: false, reason: 'publisher_video_frame_read_timeout', fatal: true };
     }

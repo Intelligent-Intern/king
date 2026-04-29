@@ -54,7 +54,7 @@ Technical target:
 12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
 13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
 14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
-15. [ ] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
+15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [ ] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
 17. [ ] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
 18. [ ] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
@@ -301,6 +301,31 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429060123` served `CallWorkspaceView-BEW46nwM.js` with `client_console_warning`, `console_warn`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `source_readback_failure_count`, `sfu_video_backpressure`, `sfu_frame_send_failed`, and `sfu_video_reconnect_after_stall`.
 - The same production asset no longer contains the old browser-console warning strings `SFU video payload pressure`, `SFU frame send failed at exact transport stage`, `SFU video backpressure - skipping`, `SFU source readback budget pressure`, or `restarting SFU socket after video stall`.
+
+### 15. `[processor-error-recovery]`
+
+Status: Done.
+
+Implementation:
+- Closed late `MediaStreamTrackProcessor` `VideoFrame` results that arrive after a source-read timeout, preventing browser `VideoFrame was garbage collected without being closed` stalls.
+- Converted source-reader failures into a fatal capture-pipeline reset reason instead of letting broken reads poison the publisher loop.
+- Closed worker-transferred `VideoFrame` sources in a `finally` block so `drawImage` and `getImageData` exceptions cannot leak frames.
+- Stopped the worker-fatal path from falling through to DOM `drawImage` with a transferred/closed `VideoFrame`; the current tick is dropped and the next tick restarts capture with a fresh frame.
+- Kept the SFU websocket alive for these failures; recovery is scoped to source/readback pipeline state first.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-frame-primary-path-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-offscreen-canvas-fallback-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429062611` served `CallWorkspaceView-B86v7ctS.js` with `publisher_video_frame_read_failed`, `OffscreenCanvas capture worker failed`, and the worker-side `closeFrameSource(source)` cleanup.
+- Production diagnostics for asset `20260429062611` no longer showed `wlvc_encode_frame_failed` in the queried recent window after the transferred-`VideoFrame` fallback fix.
 
 ## Parking Rule
 

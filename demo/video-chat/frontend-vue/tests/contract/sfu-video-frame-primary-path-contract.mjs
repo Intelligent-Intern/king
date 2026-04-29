@@ -44,6 +44,8 @@ try {
   requireContains(videoFrameSource, 'reader.read()', 'VideoFrame source pulls camera frames');
   requireContains(videoFrameSource, 'publisher_video_frame_read_timeout', 'VideoFrame source has timeout recovery');
   requireContains(videoFrameSource, 'frame.close()', 'VideoFrame source closes consumed frames');
+  requireContains(videoFrameSource, 'readPromise.then(closePublisherVideoFrameReadResult)', 'VideoFrame source closes late frames after timeout');
+  requireContains(videoFrameSource, 'publisher_video_frame_read_failed', 'VideoFrame source converts read failures into fatal recovery');
   assert.equal(videoFrameSource.includes("from 'vue'"), false, 'VideoFrame source must not import Vue');
   assert.equal(videoFrameSource.includes('document.createElement'), false, 'VideoFrame source must not create DOM canvas');
 
@@ -102,6 +104,42 @@ try {
   sourceModule.closePublisherVideoFrame(result.frame);
   assert.equal(result.frame.closed, true);
   await reader.close();
+
+  const lateFrame = new FakeVideoFrame();
+  let cancelReason = '';
+  class SlowMediaStreamTrackProcessor {
+    constructor(input) {
+      assert.equal(input.track.id, 'track-late');
+      this.readable = {
+        getReader() {
+          return {
+            read() {
+              return new Promise((resolve) => {
+                setTimeout(() => resolve({ done: false, value: lateFrame }), 20);
+              });
+            },
+            async cancel(reason) {
+              cancelReason = String(reason || '');
+            },
+            releaseLock() {},
+          };
+        },
+      };
+    }
+  }
+
+  const slowReader = sourceModule.createPublisherVideoFrameSourceReader({
+    videoTrack: { id: 'track-late' },
+    MediaStreamTrackProcessorCtor: SlowMediaStreamTrackProcessor,
+    readTimeoutMs: 1,
+  });
+  const timeoutResult = await slowReader.readFrame({ timeoutMs: 1 });
+  assert.equal(timeoutResult.ok, false);
+  assert.equal(timeoutResult.reason, 'publisher_video_frame_read_timeout');
+  assert.equal(cancelReason, 'publisher_video_frame_read_timeout');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(lateFrame.closed, true, 'late VideoFrame returned after timeout must be closed');
+  await slowReader.close();
 
   process.stdout.write('[sfu-video-frame-primary-path-contract] PASS\n');
 } catch (error) {

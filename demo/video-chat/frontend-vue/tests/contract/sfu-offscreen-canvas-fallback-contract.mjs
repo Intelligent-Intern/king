@@ -23,6 +23,7 @@ try {
   const workerReadbackSource = read('src/domain/realtime/local/publisherCaptureWorkerReadback.js');
   const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
   const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.js');
+  const captureWorkerSource = read('src/domain/realtime/local/publisherCaptureWorker.js');
   const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
   const packageJson = read('package.json');
 
@@ -54,6 +55,8 @@ try {
     false,
     'VideoFrame source must remain available for copyless OffscreenCanvas worker fallback',
   );
+  requireContains(captureWorkerSource, 'finally {\n    closeFrameSource(source);\n  }', 'worker closes transferred VideoFrame sources after draw/readback failures');
+  requireContains(sourceReadback, "mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);\n          return null;", 'worker-fatal VideoFrame transfer must not fall through to DOM drawImage with a closed transferred frame');
 
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_draw_image_ms', 'trace exposes worker draw timing');
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_get_image_data_ms', 'trace exposes worker readback timing');

@@ -106,14 +106,20 @@ async function handleReadback(payload = {}) {
   const frameSize = resolveWorkerFrameSize(source, payload);
   const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);
 
-  const drawStartedAtMs = highResolutionNowMs();
-  context.drawImage(source, 0, 0, frameSize.frameWidth, frameSize.frameHeight);
-  const drawImageMs = roundedMs(highResolutionNowMs() - drawStartedAtMs);
+  let drawImageMs = 0;
+  let readbackMs = 0;
+  let imageData = null;
+  try {
+    const drawStartedAtMs = highResolutionNowMs();
+    context.drawImage(source, 0, 0, frameSize.frameWidth, frameSize.frameHeight);
+    drawImageMs = roundedMs(highResolutionNowMs() - drawStartedAtMs);
 
-  const readbackStartedAtMs = highResolutionNowMs();
-  const imageData = context.getImageData(0, 0, frameSize.frameWidth, frameSize.frameHeight);
-  const readbackMs = roundedMs(highResolutionNowMs() - readbackStartedAtMs);
-  closeFrameSource(source);
+    const readbackStartedAtMs = highResolutionNowMs();
+    imageData = context.getImageData(0, 0, frameSize.frameWidth, frameSize.frameHeight);
+    readbackMs = roundedMs(highResolutionNowMs() - readbackStartedAtMs);
+  } finally {
+    closeFrameSource(source);
+  }
 
   self.postMessage({
     type: PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK_RESULT,

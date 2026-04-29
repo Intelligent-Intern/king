@@ -262,6 +262,7 @@ export function createPublisherSourceReadbackController({
           }
           captureWorkerReadback = null;
           mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);
+          return null;
         }
       }
 
