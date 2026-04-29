@@ -105,6 +105,7 @@ Technical target:
    - Apply the crop in the capture/composition pipeline before `VideoEncoder` or WLVC encode, not as receiver-only CSS, so fewer pixels go over the SFU path and the remaining visible area can use higher effective quality.
    - Preserve correct aspect ratio and avoid stretching for portrait camera sources, landscape camera sources, fullscreen, mini-video, and grid tiles.
    - Treat fullscreen as a first-class framing target: fullscreen landscape should keep full-width detail, fullscreen portrait should crop/zoom intentionally without desktop stretching.
+   - Toggle fullscreen by double-clicking a video tile; a second double-click on the fullscreen video exits fullscreen and restores the previous grid/mini framing target.
    - Treat every mini-video as a square framing target with client-side crop/zoom, no rounded visual masking, and no transport of unused side bands.
    - Keep quality automatic; the UI may expose framing affordances later, but this sprint must not add a manual quality selector.
 
@@ -112,6 +113,7 @@ Technical target:
    - A landscape camera rendered into a portrait tile is center-cropped before encode and does not transmit the discarded side bands.
    - A portrait camera stays portrait without desktop stretching or horizontal overfill.
    - Fullscreen playback selects the correct landscape or portrait crop and remains sharp instead of falling back to thumbnail framing.
+   - Double-clicking a video enters fullscreen for that participant, and double-clicking again exits without breaking the SFU layer preference state.
    - Mini-video thumbnails are square, crop/zoom correctly, and do not distort the source aspect ratio.
    - The receiver sees the intended crop with sharper visible detail at the same or lower wire budget.
    - Contracts cover the crop math for landscape-to-portrait, portrait-to-portrait, fullscreen landscape, fullscreen portrait, and square mini-video cases.
