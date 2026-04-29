@@ -143,12 +143,14 @@ export function selectCallLayoutParticipants({
     mainUserId = remoteMainUserId || clippedVisibleIds.find((id) => id === localUserId) || clippedVisibleIds[0] || localUserId || 0;
   }
   if (mode === 'main_mini' && pinnedUserIds.length <= 0 && mainUserId === Number(currentUserId)) {
-    mainUserId = clippedVisibleIds.find((id) => id !== Number(currentUserId)) || mainUserId;
+    const miniIds = (layout.selection.mini_user_ids || []).filter((id) => byUserId.has(id));
+    mainUserId = miniIds.find((id) => id !== Number(currentUserId)) || clippedVisibleIds.find((id) => id !== Number(currentUserId)) || mainUserId;
   }
 
   const visibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);
+  const miniUserIds = mode === 'main_mini' ? (layout.selection.mini_user_ids || []).filter((id) => byUserId.has(id)) : [];
   const miniParticipants = mode === 'main_mini'
-    ? visibleParticipants.filter((row) => row.userId !== mainUserId)
+    ? miniUserIds.map((id) => byUserId.get(id)).filter(Boolean)
     : [];
   const gridParticipants = mode === 'grid' ? visibleParticipants : [];
 
