@@ -358,6 +358,9 @@ export function createSfuFrameDecodeHelpers({
     peer.stalledLoggedAtMs = 0;
     peer.freezeRecoveryCount = 0;
     peer.stallRecoveryCount = 0;
+    peer.sfuSocketRestartCount = 0;
+    peer.lastSfuSocketRestartAtMs = 0;
+    peer.nextSfuSocketRestartAllowedAtMs = 0;
     peer.mediaConnectionState = 'live';
     peer.mediaConnectionMessage = '';
     peer.mediaConnectionUpdatedAtMs = renderedAtMs;
