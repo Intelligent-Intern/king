@@ -32,10 +32,12 @@ try {
   requireContains(workerClientSource, "new URL('./publisherCaptureWorker.js', import.meta.url)", 'module worker URL factory');
   requireContains(workerClientSource, "type: 'module'", 'module worker construction');
   requireContains(workerClientSource, 'canUsePublisherCaptureWorker', 'worker capability gate');
-  requireContains(workerSource, "import { resolveContainFrameSizeFromDimensions } from './videoFrameSizing.js'", 'worker owns aspect-preserving frame sizing');
+  requireContains(workerSource, 'resolveFramedFrameSizeFromDimensions', 'worker owns aspect-preserving and crop-aware frame sizing');
+  requireContains(workerSource, 'normalizePublisherFramingTarget', 'worker normalizes cover/contain framing target');
   requireContains(workerSource, 'new OffscreenCanvas(frameWidth, frameHeight)', 'worker creates offscreen canvas when not transferred');
   requireContains(workerSource, "captureCanvas.getContext('2d'", 'worker owns 2D context');
-  requireContains(workerSource, 'context.drawImage(source, 0, 0, frameSize.frameWidth, frameSize.frameHeight)', 'worker owns frame scaling');
+  requireContains(workerSource, 'crop.x', 'worker owns source crop x before scaling');
+  requireContains(workerSource, 'crop.width', 'worker owns source crop width before scaling');
   requireContains(workerSource, 'context.getImageData(0, 0, frameSize.frameWidth, frameSize.frameHeight)', 'worker owns RGBA readback');
   requireContains(workerSource, 'closeFrameSource(source)', 'worker closes transferred frame sources');
   requireContains(workerSource, 'imageData.data.buffer', 'worker transfers readback buffer back to main thread');
@@ -63,6 +65,12 @@ try {
     generation: 8,
     sourceWidth: 720,
     sourceHeight: 1280,
+    sourceCropX: 40,
+    sourceCropY: 0,
+    sourceCropWidth: 640,
+    sourceCropHeight: 1280,
+    framingMode: 'cover',
+    targetAspectRatio: 0.5,
     profileFrameWidth: 1280,
     profileFrameHeight: 720,
     timestamp: 1234,
@@ -70,6 +78,10 @@ try {
   assert.equal(readbackMessage.type, protocol.PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK);
   assert.equal(readbackMessage.requestId, 'req-1');
   assert.equal(readbackMessage.profileFrameWidth, 1280);
+  assert.equal(readbackMessage.sourceCropX, 40);
+  assert.equal(readbackMessage.sourceCropWidth, 640);
+  assert.equal(readbackMessage.framingMode, 'cover');
+  assert.equal(readbackMessage.targetAspectRatio, 0.5);
   assert.deepEqual(protocol.publisherCaptureWorkerTransferListForReadback(readbackMessage), [source]);
 
   assert.equal(client.canUsePublisherCaptureWorker({

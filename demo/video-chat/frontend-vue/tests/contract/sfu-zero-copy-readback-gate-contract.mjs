@@ -29,8 +29,8 @@ try {
   requireContains(sourceReadback, 'video_frame_main_thread_canvas_blocked', 'source readback emits exact zero-copy gate failure source');
   requireContains(sourceReadback, 'zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities)', 'source readback checks the gate before DOM canvas fallback');
   assert.ok(
-    sourceReadback.indexOf('zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities)') < sourceReadback.indexOf('context.drawImage(source'),
-    'zero-copy gate must run before any main-thread canvas drawImage fallback',
+    sourceReadback.indexOf('zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities)') < sourceReadback.lastIndexOf('drawSourceFrame(context, source'),
+    'zero-copy gate must run before the main-thread DOM canvas drawImage fallback helper is called',
   );
   requireContains(videoFrameCopy, 'resolveVideoFrameCopyFrameSize', 'copy helper can align VideoFrame copy to source dimensions');
 

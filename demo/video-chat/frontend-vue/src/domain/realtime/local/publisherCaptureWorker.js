@@ -1,5 +1,8 @@
 import { PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES } from './publisherCaptureWorkerProtocol.js';
-import { resolveContainFrameSizeFromDimensions } from './videoFrameSizing.js';
+import {
+  normalizePublisherFramingTarget,
+  resolveFramedFrameSizeFromDimensions,
+} from './videoFrameSizing.js';
 
 let workerGeneration = 0;
 let captureCanvas = null;
@@ -87,14 +90,27 @@ function resolveWorkerFrameSize(source, payload = {}) {
   const profileFrameWidth = positiveNumber(payload.profileFrameWidth) || positiveNumber(payload.frameWidth);
   const profileFrameHeight = positiveNumber(payload.profileFrameHeight) || positiveNumber(payload.frameHeight);
   return {
-    ...resolveContainFrameSizeFromDimensions(
+    ...resolveFramedFrameSizeFromDimensions(
       dimensions.width,
       dimensions.height,
       profileFrameWidth,
       profileFrameHeight,
+      normalizePublisherFramingTarget({
+        mode: payload.framingMode,
+        targetAspectRatio: payload.targetAspectRatio,
+      }),
     ),
     profileFrameWidth,
     profileFrameHeight,
+  };
+}
+
+function workerSourceCrop(frameSize = {}) {
+  return {
+    x: positiveNumber(frameSize.sourceCropX),
+    y: positiveNumber(frameSize.sourceCropY),
+    width: positiveNumber(frameSize.sourceCropWidth) || positiveNumber(frameSize.sourceWidth),
+    height: positiveNumber(frameSize.sourceCropHeight) || positiveNumber(frameSize.sourceHeight),
   };
 }
 
@@ -111,9 +127,20 @@ async function handleReadback(payload = {}) {
   try {
     frameSize = resolveWorkerFrameSize(source, payload);
     const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);
+    const crop = workerSourceCrop(frameSize);
 
     const drawStartedAtMs = highResolutionNowMs();
-    context.drawImage(source, 0, 0, frameSize.frameWidth, frameSize.frameHeight);
+    context.drawImage(
+      source,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      frameSize.frameWidth,
+      frameSize.frameHeight,
+    );
     drawImageMs = roundedMs(highResolutionNowMs() - drawStartedAtMs);
 
     const readbackStartedAtMs = highResolutionNowMs();
@@ -134,8 +161,14 @@ async function handleReadback(payload = {}) {
     profileFrameHeight: frameSize.profileFrameHeight,
     sourceWidth: frameSize.sourceWidth,
     sourceHeight: frameSize.sourceHeight,
+    sourceCropX: frameSize.sourceCropX,
+    sourceCropY: frameSize.sourceCropY,
+    sourceCropWidth: frameSize.sourceCropWidth,
+    sourceCropHeight: frameSize.sourceCropHeight,
     sourceAspectRatio: Number(frameSize.sourceAspectRatio.toFixed(6)),
     aspectMode: frameSize.aspectMode,
+    framingMode: frameSize.framingMode,
+    targetAspectRatio: Number(frameSize.targetAspectRatio.toFixed(6)),
     rgba: imageData.data,
     drawImageMs,
     readbackMs,

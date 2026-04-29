@@ -64,7 +64,7 @@ async function main() {
   requireContains(remotePeers, "canvas.className = 'remote-video'", 'SFU remote canvas receives remote-video class');
   requireCssRuleContains(stageCss, '.video-container :deep(video),', 'object-fit: contain !important;', 'main video surface');
   requireCssRuleContains(stageCss, '.workspace-grid-video-slot :deep(video),', 'object-fit: contain !important;', 'grid video surface');
-  requireCssRuleContains(stageCss, '.workspace-mini-video-slot :deep(video),', 'object-fit: contain !important;', 'mini strip video surface');
+  requireContains(stageCss, '[data-call-video-framing-mode="cover"]', 'portrait or square targets use explicit framing mode instead of CSS stretching');
 
   const server = await createServer({
     root: frontendRoot,

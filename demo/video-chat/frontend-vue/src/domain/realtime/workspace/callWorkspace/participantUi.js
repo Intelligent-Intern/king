@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, watch } from 'vue';
 
 import { createCallWorkspaceModerationSync } from './moderationSync';
+import { createVideoFullscreenToggle } from './videoFullscreenToggle';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
@@ -1250,6 +1251,18 @@ function sendLayoutCommand(type, payload = {}) {
   });
 }
 
+const { toggleVideoFullscreen } = createVideoFullscreenToggle({
+  callLayoutState,
+  currentLayoutMode,
+  nextTick,
+  normalizeCallLayoutMode,
+  primaryVideoUserId,
+  renderCallVideoLayout,
+  replaceNumericArray,
+  sendLayoutCommand,
+  syncCallLayoutSidebarControls,
+});
+
 function setCallLayoutMode(mode) {
   const normalizedMode = normalizeCallLayoutMode(mode, currentLayoutMode.value);
   callLayoutState.mode = normalizedMode;
@@ -1760,6 +1773,7 @@ let pingTimer = null;
     syncUsersListViewport,
     toggleCamera,
     toggleCompactMiniStripPlacement,
+    toggleVideoFullscreen,
     toggleHandRaised,
     toggleMicrophone,
     togglePinned,

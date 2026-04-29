@@ -196,6 +196,11 @@
   border-radius: 0;
   border: 0;
   margin: 0;
+  cursor: zoom-in;
+}
+
+.workspace-stage.layout-main-only .workspace-main-video {
+  cursor: zoom-out;
 }
 
 .video-container {
@@ -243,6 +248,13 @@
   image-rendering: auto;
 }
 
+.video-container :deep([data-call-video-framing-mode="cover"]),
+.workspace-grid-video-slot :deep([data-call-video-framing-mode="cover"]),
+.workspace-mini-video-slot :deep([data-call-video-framing-mode="cover"]) {
+  object-fit: cover !important;
+  object-position: center center !important;
+}
+
 .video-container.remote {
   z-index: 5;
 }
@@ -275,6 +287,7 @@
   border-radius: 18px;
   background: var(--color-0b1324);
   box-shadow: 0 16px 30px var(--color-rgba-0-0-0-0-28);
+  cursor: zoom-in;
 }
 
 .workspace-grid-video-slot {
@@ -544,6 +557,7 @@
 
 .workspace-mini-tile {
   aspect-ratio: 1 / 1;
+  cursor: zoom-in;
 }
 
 .workspace-mini-video-slot {
@@ -597,12 +611,13 @@
   width: 100% !important;
   height: 100% !important;
   display: block !important;
-  object-fit: contain !important;
+  object-fit: cover !important;
+  object-position: center center !important;
 }
 
 .workspace-mini-video-slot :deep(video.remote-video),
 .workspace-mini-video-slot :deep(canvas.remote-video) {
-  object-fit: contain !important;
+  object-fit: cover !important;
   object-position: center center !important;
   image-rendering: auto;
   background: var(--bg-video);

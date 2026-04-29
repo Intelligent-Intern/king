@@ -42,8 +42,10 @@ export function remoteRenderPriorityForRole(role) {
 }
 
 export function applyRemoteVideoSurfaceRole(node, {
+  framingMode = '',
   layoutMode = '',
   role = REMOTE_RENDER_SURFACE_ROLES.FALLBACK,
+  targetAspectRatio = 0,
   userId = 0,
   visibleParticipantCount = 0,
 } = {}) {
@@ -52,6 +54,18 @@ export function applyRemoteVideoSurfaceRole(node, {
   node.dataset.callVideoSurfaceRole = normalizedRole;
   node.dataset.callVideoRenderPriority = String(remoteRenderPriorityForRole(normalizedRole));
   node.dataset.callVideoLayoutMode = String(layoutMode || '');
+  const normalizedFramingMode = String(framingMode || '').trim().toLowerCase();
+  if (normalizedFramingMode === 'cover') {
+    node.dataset.callVideoFramingMode = 'cover';
+  } else {
+    node.dataset.callVideoFramingMode = 'contain';
+  }
+  const normalizedTargetAspectRatio = Number(targetAspectRatio || 0);
+  if (Number.isFinite(normalizedTargetAspectRatio) && normalizedTargetAspectRatio > 0) {
+    node.dataset.callVideoTargetAspectRatio = normalizedTargetAspectRatio.toFixed(6);
+  } else {
+    delete node.dataset.callVideoTargetAspectRatio;
+  }
   const normalizedVisibleParticipantCount = Number(visibleParticipantCount || 0);
   if (Number.isInteger(normalizedVisibleParticipantCount) && normalizedVisibleParticipantCount > 0) {
     node.dataset.callVideoVisibleParticipantCount = String(normalizedVisibleParticipantCount);

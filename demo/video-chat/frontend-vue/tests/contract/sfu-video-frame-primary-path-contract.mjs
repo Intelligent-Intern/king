@@ -56,7 +56,8 @@ try {
   requireContains(sourceReadback, '!(videoFrameCopyToDisabled && captureCapabilities.supportsVideoFrameCopyTo)', 'source readback falls back to video element if copyTo becomes unusable');
   requireContains(sourceReadback, 'VideoFrame source reader failed; retrying processor path before DOM canvas fallback', 'source readback does not permanently demote to DOM canvas after one reader timeout');
   requireContains(sourceReadback, 'PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND', 'source readback labels VideoFrame backend');
-  requireContains(sourceReadback, 'context.drawImage(source, 0, 0, canvas.width, canvas.height)', 'source readback draws generic frame source, not only video element');
+  requireContains(sourceReadback, 'drawSourceFrame(context, source, canvasFrameSize', 'source readback draws generic frame source through crop-aware helper');
+  requireContains(sourceReadback, 'context.drawImage(', 'source readback owns generic drawImage path, not only video element');
   requireContains(sourceReadback, 'video_frame_processor_read', 'source readback traces processor reads');
   requireContains(sourceReadback, 'video_frame_canvas_draw_image', 'source readback traces VideoFrame canvas draw stage');
   requireContains(sourceReadback, 'video_frame_canvas_get_image_data', 'source readback traces VideoFrame canvas readback stage');

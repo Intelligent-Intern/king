@@ -54,12 +54,13 @@
           </button>
         </header>
 
-        <article class="workspace-main-video">
+        <article class="workspace-main-video" @dblclick.stop="toggleVideoFullscreen(primaryVideoUserId)">
           <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
             <article
               v-for="participant in gridVideoParticipants"
               :key="participant.userId"
               class="workspace-grid-tile"
+              @dblclick.stop="toggleVideoFullscreen(participant.userId)"
             >
               <div
                 :id="gridVideoSlotId(participant.userId)"
@@ -178,6 +179,7 @@
             v-for="participant in miniVideoParticipants"
             :key="participant.userId"
             class="workspace-mini-tile"
+            @dblclick.stop="toggleVideoFullscreen(participant.userId)"
           >
             <div
               :id="miniVideoSlotId(participant.userId)"
