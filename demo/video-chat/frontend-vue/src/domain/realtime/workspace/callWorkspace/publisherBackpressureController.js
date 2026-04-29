@@ -505,6 +505,35 @@ export function createPublisherBackpressureController({
     return downgradeSfuVideoQualityAfterEncodePressure(reason);
   }
 
+  function requestWlvcFullFrameKeyframe(reason = 'sfu_remote_keyframe_request', details = {}) {
+    const nowMs = Date.now();
+    const normalizedReason = String(reason || 'sfu_remote_keyframe_request').trim().toLowerCase();
+    state.wlvcRemoteKeyframeRequestCount = Number(state.wlvcRemoteKeyframeRequestCount || 0) + 1;
+    state.wlvcRemoteKeyframeRequestUntilMs = Math.max(
+      Number(state.wlvcRemoteKeyframeRequestUntilMs || 0),
+      nowMs + Math.max(3000, sfuWlvcBackpressureMinPauseMs * 6),
+    );
+    resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_remote_full_keyframe_requested',
+      code: 'sfu_remote_full_keyframe_requested',
+      message: 'A remote receiver requested a full-frame SFU keyframe; selective patch frames are disabled until it is sent.',
+      payload: {
+        reason: normalizedReason,
+        sender_user_id: Math.max(0, Number(details?.senderUserId || details?.sender_user_id || 0)),
+        publisher_id: String(details?.publisher_id || details?.publisherId || ''),
+        request_count: state.wlvcRemoteKeyframeRequestCount,
+        request_until_ms: state.wlvcRemoteKeyframeRequestUntilMs,
+        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+        media_runtime_path: getMediaRuntimePath(),
+      },
+      immediate: true,
+    });
+    return true;
+  }
+
   function restartSfuAfterVideoStall(reason, payload = {}) {
     const nowMs = Date.now();
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {
@@ -543,6 +572,7 @@ export function createPublisherBackpressureController({
     handleWlvcFramePayloadPressure,
     handleWlvcFrameSendFailure,
     handleWlvcRuntimeEncodeError,
+    requestWlvcFullFrameKeyframe,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,
     restartSfuAfterVideoStall,

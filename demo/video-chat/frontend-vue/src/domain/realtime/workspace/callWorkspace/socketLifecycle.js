@@ -37,6 +37,7 @@ export function createCallWorkspaceSocketHelpers({
     refreshUsersDirectoryPresentation,
     removeParticipantFromSnapshot,
     removeSfuRemotePeersForUserId,
+    requestWlvcFullFrameKeyframe,
     requestHeaders,
     requestRoomSnapshot,
     resetPeerControlState,
@@ -105,6 +106,16 @@ export function createCallWorkspaceSocketHelpers({
 
     const senderUserId = Number(sender?.user_id || 0);
     const requestedAction = String(payloadBody?.requested_action || '').trim().toLowerCase();
+    const sourceReason = String(payloadBody?.reason || '').trim().toLowerCase();
+    const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
+      || requestedAction === 'force_full_keyframe'
+      || sourceReason === 'sfu_remote_video_decoder_waiting_keyframe';
+    const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
+      ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
+        ...payloadBody,
+        senderUserId,
+      })
+      : false;
     const downgraded = typeof downgradeSfuVideoQualityAfterEncodePressure === 'function'
       ? downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')
       : false;
@@ -117,8 +128,9 @@ export function createCallWorkspaceSocketHelpers({
       payload: {
         sender_user_id: senderUserId,
         requested_action: requestedAction || 'downgrade_outgoing_video',
-        source_reason: String(payloadBody?.reason || '').trim(),
+        source_reason: sourceReason,
         source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
+        full_keyframe_requested: forcedFullKeyframe,
         downgraded,
       },
       immediate: true,

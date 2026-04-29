@@ -38,8 +38,12 @@ async function main() {
   requireContains(publisherPipeline, 'forcedKeyframeRecoveryPending', 'publisher tracks forced keyframe recovery state');
   requireContains(publisherPipeline, 'keyframeRetryBlockedUntilMs', 'publisher blocks repeated forced keyframe retries');
   requireContains(publisherPipeline, '&& !forcedKeyframeRecoveryPending', 'publisher disables selective patches while a full-frame recovery keyframe is pending');
+  requireContains(publisherPipeline, '&& !remoteKeyframeRequestPending', 'publisher disables selective patches while a remote receiver waits for a full-frame keyframe');
+  requireContains(publisherPipeline, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'publisher clears remote keyframe request after full-frame keyframe send');
   requireContains(publisherPipeline, 'budget_min_keyframe_retry_ms', 'publisher emits keyframe retry budget telemetry');
   requireContains(publisherPipeline, 'keyframe_retry_after_ms', 'publisher reports retry delay after payload pressure');
+  requireContains(sfuPublisherControl, 'requestWlvcFullFrameKeyframe', 'publisher controller exposes remote full-frame keyframe recovery');
+  requireContains(sfuPublisherControl, 'wlvcRemoteKeyframeRequestUntilMs', 'publisher controller stores remote keyframe request window');
   requireContains(sfuPublisherControl, 'keyframe_retry_after_ms', 'publisher controller diagnostics preserve keyframe retry pacing');
   requireContains(framePayload, 'budget_min_keyframe_retry_ms', 'binary frame metadata preserves keyframe retry budget');
   requireContains(kingSfuStore, 'budget_min_keyframe_retry_ms', 'King SFU relay preserves keyframe retry budget metadata');

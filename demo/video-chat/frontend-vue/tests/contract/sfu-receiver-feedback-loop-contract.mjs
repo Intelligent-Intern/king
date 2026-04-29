@@ -38,7 +38,10 @@ try {
   requireContains(frameDecode, 'receiverFeedback.maybeSendReceiverSequenceGapFeedback', 'continuity path sends sequence-gap pressure');
   requireContains(mediaStack, 'sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {', 'media stack wires receiver feedback to signaling');
   requireContains(mediaStack, "type: 'call/media-quality-pressure'", 'receiver feedback uses existing quality-pressure signaling');
+  requireContains(mediaStack, "requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'", 'receiver feedback can request a full keyframe when the decoder is waiting');
+  requireContains(mediaStack, 'request_full_keyframe: requestFullKeyframe', 'receiver feedback marks explicit keyframe requests');
   requireContains(socketLifecycle, 'downgradeSfuVideoQualityAfterEncodePressure', 'publisher downshifts after receiver pressure');
+  requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'publisher handles explicit full-keyframe receiver pressure');
   requireContains(socketLifecycle, "eventType: 'sfu_remote_quality_pressure_received'", 'publisher records receiver pressure diagnostics');
 
   process.stdout.write('[sfu-receiver-feedback-loop-contract] PASS\n');

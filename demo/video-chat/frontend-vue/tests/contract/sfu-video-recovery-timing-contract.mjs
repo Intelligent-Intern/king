@@ -43,6 +43,8 @@ try {
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
+  requireContains(runtimeHealth, "requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'", 'fresh receive/keyframe-wait asks publisher for full-frame keyframe');
+  requireContains(runtimeHealth, 'const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;', 'fresh receive/keyframe-wait bypasses the second-freeze delay');
   requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();', 'frozen video restart waits for sustained receive loss');
   requireContains(runtimeHealth, 'if (shouldRestartFrozenVideo) {', 'frozen video reconnect is gated after staged recovery');
   requireContains(runtimeHealth, 'remote_quality_pressure_sent', 'remote freeze diagnostics include remote quality-pressure result');
@@ -50,6 +52,8 @@ try {
   requireContains(runtimeHealth, 'stalledAgeMs >= remoteVideoStallThresholdMs * 2', 'never-started video reconnect timing');
   requireContains(socketLifecycle, "type === 'call/media-quality-pressure'", 'socket lifecycle consumes remote quality-pressure signal');
   requireContains(socketLifecycle, "downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')", 'remote quality pressure lowers sender outgoing quality');
+  requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'remote keyframe wait is routed into publisher full-frame keyframe recovery');
+  requireContains(socketLifecycle, 'full_keyframe_requested', 'remote pressure diagnostics record full-keyframe recovery');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');

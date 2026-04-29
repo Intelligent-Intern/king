@@ -127,6 +127,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     const targetUserId = Number(peer?.userId || 0);
     const localUserId = Number(currentUserId.value || 0);
     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
+    const normalizedReason = String(reason || 'sfu_remote_video_frozen').trim().toLowerCase();
+    const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
 
     const lastSentAtMs = Number(peer.lastQualityPressureSentAtMs || 0);
     const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
@@ -137,8 +139,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       target_user_id: targetUserId,
       payload: {
         kind: 'sfu-video-quality-pressure',
-        requested_action: 'downgrade_outgoing_video',
-        reason: String(reason || 'sfu_remote_video_frozen'),
+        requested_action: requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video',
+        request_full_keyframe: requestFullKeyframe,
+        reason: normalizedReason,
         publisher_id: String(publisherId || ''),
         requester_user_id: localUserId,
         media_runtime_path: mediaRuntimePath.value,
@@ -186,7 +189,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const freezeQualityDowngradeReason = receivingFreshFrames
           ? 'sfu_remote_video_decoder_waiting_keyframe'
           : 'sfu_remote_video_frozen';
-        const remoteQualityPressureSent = peer.freezeRecoveryCount >= 2
+        const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;
+        const remoteQualityPressureSent = shouldSendRemoteQualityPressure
           ? sendRemoteSfuVideoQualityPressure(
             peer,
             publisherId,

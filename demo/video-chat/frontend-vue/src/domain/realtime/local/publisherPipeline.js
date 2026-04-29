@@ -401,6 +401,7 @@ export function createLocalPublisherPipelineHelpers({
           return;
         }
         const timestamp = Date.now();
+        const remoteKeyframeRequestPending = timestamp < Number(refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs || 0);
         const keyframeRetryDelayMs = Math.max(
           Number(videoProfile.encodeIntervalMs || 0),
           Number(videoProfile.minKeyframeRetryMs || 0),
@@ -458,6 +459,7 @@ export function createLocalPublisherPipelineHelpers({
         const encodeStartedAtMs = highResolutionNowMs();
         const canAttemptSelectivePatch = constants.selectiveTileEnabled
           && !forcedKeyframeRecoveryPending
+          && !remoteKeyframeRequestPending
           && previousFullFrameImageData instanceof ImageData
           && (timestamp - lastFullFrameSentAtMs) <= constants.selectiveTileBaseRefreshMs
           && refs.sfuTransportState.wlvcBackpressureSkipCount === 0
@@ -719,6 +721,7 @@ export function createLocalPublisherPipelineHelpers({
             selectiveTileCacheEpoch = outgoingCacheEpoch;
             forcedKeyframeRecoveryPending = false;
             keyframeRetryBlockedUntilMs = 0;
+            refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
           }
           lastFullFrameSentAtMs = timestamp;
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {
@@ -770,9 +773,7 @@ export function createLocalPublisherPipelineHelpers({
       } finally {
         state.wlvcEncodeInFlight = false;
         if (refs.encodeIntervalRef.value !== null) {
-          const finishedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
-            ? performance.now()
-            : Date.now();
+          const finishedAtMs = highResolutionNowMs();
           const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
           scheduleNextWlvcEncodeTick(videoProfile.encodeIntervalMs - elapsedMs);
         }

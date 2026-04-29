@@ -12,6 +12,8 @@ export function createSfuTransportState() {
     wlvcFrameSendFailureLastLogAtMs: 0,
     wlvcFrameSendFailureCount: 0,
     wlvcFrameSendFailureFirstAtMs: 0,
+    wlvcRemoteKeyframeRequestCount: 0,
+    wlvcRemoteKeyframeRequestUntilMs: 0,
     sfuAutoQualityDowngradeLastAtMs: 0,
     sfuVideoRecoveryLastAtMs: 0,
   };
@@ -55,6 +57,7 @@ export function createSfuTransportController(options) {
     handleWlvcFrameSendFailure,
     handleWlvcRuntimeEncodeError: publisherBackpressureController.handleWlvcRuntimeEncodeError,
     isSfuClientOpen,
+    requestWlvcFullFrameKeyframe: publisherBackpressureController.requestWlvcFullFrameKeyframe,
     resetWlvcBackpressureCounters: publisherBackpressureController.resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters: publisherBackpressureController.resetWlvcFrameSendFailureCounters,
     restartSfuAfterVideoStall: publisherBackpressureController.restartSfuAfterVideoStall,

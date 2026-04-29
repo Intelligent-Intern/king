@@ -42,6 +42,8 @@ async function main() {
   requireContains(publisherBackpressureController, 'sfuWlvcSendBufferHighWaterBytes', 'controller owns high-water pressure');
   requireContains(publisherBackpressureController, 'sfuWlvcSendBufferCriticalBytes', 'controller owns critical stuck-socket pressure');
   requireContains(publisherBackpressureController, 'sfuWlvcEncodeFailureThreshold', 'controller owns runtime encode failure threshold');
+  requireContains(publisherBackpressureController, 'function requestWlvcFullFrameKeyframe', 'controller owns receiver-requested full-frame keyframe recovery');
+  requireContains(publisherPipeline, 'remoteKeyframeRequestPending', 'publisher pipeline observes receiver-requested full-frame keyframe recovery');
 
   requireContains(sfuTransport, "import { createPublisherBackpressureController } from './publisherBackpressureController';", 'SFU transport delegates publisher pressure decisions');
   requireContains(sfuTransport, 'createPublisherBackpressureController(options)', 'SFU transport instantiates publisher controller');
@@ -170,6 +172,24 @@ async function main() {
   assert.ok(
     throttleState.wlvcBackpressurePauseUntilMs >= throttleStartedAtMs + 900,
     'wire-rate retryAfterMs must throttle the encoder for the measured rolling-budget retry window',
+  );
+  const keyframeStartedAtMs = Date.now();
+  assert.equal(
+    controller.requestWlvcFullFrameKeyframe('sfu_remote_video_decoder_waiting_keyframe', {
+      sender_user_id: 7,
+      publisher_id: 'sfu_1',
+    }),
+    true,
+    'receiver keyframe-wait pressure must be accepted by the publisher controller',
+  );
+  assert.ok(
+    throttleState.wlvcRemoteKeyframeRequestUntilMs >= keyframeStartedAtMs + 3000,
+    'receiver keyframe-wait pressure must hold selective patches closed until a full-frame keyframe is sent',
+  );
+  assert.equal(
+    throttleState.wlvcRemoteKeyframeRequestCount,
+    1,
+    'receiver keyframe-wait pressure increments the explicit full-frame keyframe request counter',
   );
 
   const receiverDecision = decidePublisherBackpressureAction({
