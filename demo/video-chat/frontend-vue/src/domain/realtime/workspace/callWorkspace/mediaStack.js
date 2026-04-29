@@ -169,6 +169,7 @@ export function createCallWorkspaceMediaStack(options) {
     sfuWlvcBackpressureHardResetAfterMs: constants.sfuWlvcBackpressureHardResetAfterMs,
     sfuWlvcBackpressureMaxPauseMs: constants.sfuWlvcBackpressureMaxPauseMs,
     sfuWlvcBackpressureMinPauseMs: constants.sfuWlvcBackpressureMinPauseMs,
+    sfuWlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
     sfuWlvcSendBufferCriticalBytes: constants.sfuWlvcSendBufferCriticalBytes,
     sfuWlvcSendBufferHighWaterBytes: constants.sfuWlvcSendBufferHighWaterBytes,
     sfuWlvcSendBufferLowWaterBytes: constants.sfuWlvcSendBufferLowWaterBytes,
@@ -187,6 +188,7 @@ export function createCallWorkspaceMediaStack(options) {
       handleWlvcEncodeBackpressure: sfuTransport.handleWlvcEncodeBackpressure,
       handleWlvcFrameSendFailure: sfuTransport.handleWlvcFrameSendFailure,
       handleWlvcFramePayloadPressure: sfuTransport.handleWlvcFramePayloadPressure,
+      handleWlvcRuntimeEncodeError: sfuTransport.handleWlvcRuntimeEncodeError,
       hintMediaSecuritySync: callbacks.hintMediaSecuritySync,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
       isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
@@ -237,7 +239,6 @@ export function createCallWorkspaceMediaStack(options) {
     },
     refs: {
       currentUserId: () => refs.sessionState.userId,
-      downgradeSfuVideoQualityAfterEncodePressure: callbacks.downgradeSfuVideoQualityAfterEncodePressure,
       encodeIntervalRef: refs.encodeIntervalRef,
       localFilteredStreamRef: refs.localFilteredStreamRef,
       localRawStreamRef: refs.localRawStreamRef,

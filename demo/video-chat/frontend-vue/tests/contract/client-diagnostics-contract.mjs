@@ -18,6 +18,8 @@ const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
 const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
 const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
 const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
@@ -50,7 +52,7 @@ requireContains(sfuClient, "case 'sfu/error':", 'sfu command error diagnostics h
 requireContains(sfuClient, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_pressure'", 'sfu frame send pressure diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_aborted'", 'sfu frame send abort diagnostics hook');
-requireContains(sfuTransport, "eventType: 'sfu_frame_send_failed'", 'workspace failed frame send diagnostics hook');
+requireContains(sfuPublisherControl, "eventType: 'sfu_frame_send_failed'", 'workspace failed frame send diagnostics hook');
 requireContains(sfuClient, "'sfu_frame_send_queue_pressure'", 'sfu frame send queue pressure diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_dropped'", 'sfu frame send queue drop diagnostics hook');
 requireContains(outboundFrameQueue, "'sfu_frame_send_queue_keyframe_blocked'", 'sfu keyframe queue blocking diagnostics hook');

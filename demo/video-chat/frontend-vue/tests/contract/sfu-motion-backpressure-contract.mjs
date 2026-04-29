@@ -67,6 +67,8 @@ async function main() {
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
 
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_DELTA_FRAME_BYTES', 'motion payload delta cap');
@@ -76,14 +78,14 @@ async function main() {
   requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 2;', 'two send failures trigger quality downgrade');
   requireContains(publisherPipeline, 'handleWlvcFramePayloadPressure(encodedPayloadBytes', 'publisher drops oversized frames before send');
   requireContains(publisherPipeline, 'encodedPayloadBytes > maxEncodedPayloadBytes', 'publisher compares encoded WLVC payload with cap');
-  requireContains(sfuTransport, 'sfu_high_motion_payload_pressure', 'transport high-motion pressure reason');
-  requireContains(sfuTransport, 'sfu_send_backpressure_critical', 'transport uses critical send backpressure as an immediate quality-pressure reason');
-  requireContains(sfuTransport, 'adaptive_quality_downgrade_enabled: true', 'transport diagnostics expose adaptive quality downgrade');
-  requireContains(sfuTransport, '[KingRT] SFU video payload pressure - dropping oversized WLVC frame', 'transport payload pressure log');
+  requireContains(sfuPublisherControl, 'sfu_high_motion_payload_pressure', 'publisher controller high-motion pressure reason');
+  requireContains(sfuPublisherControl, 'sfu_send_backpressure_critical', 'publisher controller uses critical send backpressure as an immediate quality-pressure reason');
+  requireContains(sfuPublisherControl, 'adaptive_quality_downgrade_enabled: true', 'publisher controller diagnostics expose adaptive quality downgrade');
+  requireContains(sfuPublisherControl, '[KingRT] SFU video payload pressure - dropping oversized WLVC frame', 'publisher controller payload pressure log');
   assert.equal(
-    sfuTransport.includes('hd_baseline_no_auto_downgrade'),
+    sfuPublisherControl.includes('hd_baseline_no_auto_downgrade'),
     false,
-    'transport diagnostics must not claim HD is pinned while adaptive downgrade is active',
+    'publisher controller diagnostics must not claim HD is pinned while adaptive downgrade is active',
   );
   assert.equal(
     runtimeSwitching.includes("immediateMotionPressure && currentProfile === 'quality'"),

@@ -21,6 +21,7 @@ export function createLocalPublisherPipelineHelpers({
     handleWlvcEncodeBackpressure,
     handleWlvcFrameSendFailure,
     handleWlvcFramePayloadPressure,
+    handleWlvcRuntimeEncodeError,
     hintMediaSecuritySync,
     isSfuClientOpen,
     isWlvcRuntimePath,
@@ -740,7 +741,12 @@ export function createLocalPublisherPipelineHelpers({
 
         state.wlvcEncodeFailureCount += 1;
         if (state.wlvcEncodeFailureCount >= constants.wlvcEncodeFailureThreshold) {
-          if (refs.downgradeSfuVideoQualityAfterEncodePressure('wlvc_encode_runtime_error')) {
+          if (handleWlvcRuntimeEncodeError({
+            encodeFailureCount: state.wlvcEncodeFailureCount,
+            reason: 'wlvc_encode_runtime_error',
+            trackId: videoTrack.id,
+            mediaRuntimePath: refs.mediaRuntimePathRef.value,
+          })) {
             state.wlvcEncodeFailureCount = 0;
             state.wlvcEncodeFirstFailureAtMs = 0;
             return;

@@ -63,11 +63,13 @@ try {
   requireContains(sfuClient, 'sfu_buffer_budget_exceeded', 'sfu client enforces websocket buffered budget before critical pressure');
 
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  requireContains(sfuTransport, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
-  requireContains(sfuTransport, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
-  requireContains(sfuTransport, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
-  requireContains(sfuTransport, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
-  requireContains(sfuTransport, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
+  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
+  requireContains(sfuPublisherControl, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
+  requireContains(sfuPublisherControl, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
+  requireContains(sfuPublisherControl, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
+  requireContains(sfuPublisherControl, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
+  requireContains(sfuPublisherControl, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
   const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
   requireContains(publisherPipeline, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');

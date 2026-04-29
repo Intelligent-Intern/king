@@ -29,6 +29,8 @@ async function main() {
   const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
   const publisherPipeline = readFromFrontend('src/domain/realtime/local/publisherPipeline.js');
   const sfuTransport = readFromFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const publisherBackpressureController = readFromFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const framePayload = readFromFrontend('src/lib/sfu/framePayload.ts');
   const kingSfuStore = readFromRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -38,7 +40,7 @@ async function main() {
   requireContains(publisherPipeline, '&& !forcedKeyframeRecoveryPending', 'publisher disables selective patches while a full-frame recovery keyframe is pending');
   requireContains(publisherPipeline, 'budget_min_keyframe_retry_ms', 'publisher emits keyframe retry budget telemetry');
   requireContains(publisherPipeline, 'keyframe_retry_after_ms', 'publisher reports retry delay after payload pressure');
-  requireContains(sfuTransport, 'keyframe_retry_after_ms', 'transport diagnostics preserve keyframe retry pacing');
+  requireContains(sfuPublisherControl, 'keyframe_retry_after_ms', 'publisher controller diagnostics preserve keyframe retry pacing');
   requireContains(framePayload, 'budget_min_keyframe_retry_ms', 'binary frame metadata preserves keyframe retry budget');
   requireContains(kingSfuStore, 'budget_min_keyframe_retry_ms', 'King SFU relay preserves keyframe retry budget metadata');
 

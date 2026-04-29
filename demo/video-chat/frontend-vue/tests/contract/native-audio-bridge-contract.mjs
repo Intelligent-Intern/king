@@ -115,6 +115,8 @@ try {
   const audioBridgeState = readFrontend('src/domain/realtime/native/audioBridgeState.js');
   const nativeStack = readFrontend('src/domain/realtime/workspace/callWorkspace/nativeStack.js');
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const runtimeConfig = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   requireContains(mediaSecurityRuntime, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
   requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform errors are console-throttled');
@@ -180,9 +182,9 @@ try {
   requireContains(audioBridgeFailureReporter, 'const AUDIO_BRIDGE_CONSOLE_ESCALATION_COUNT = 3;', 'native audio bridge console output waits for repeated failure');
   requireContains(audioBridgeFailureReporter, 'failure_count: failureCount', 'native audio bridge diagnostics retain repeated failure counts');
   requireContains(signaling, "await peer.pc.setLocalDescription({ type: 'rollback' });", 'forced recovery offers handle native offer glare');
-  requireContains(sfuTransport, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
-  requireContains(sfuTransport, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
-  requireContains(sfuTransport, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
+  requireContains(sfuPublisherControl, 'socketLooksStuck', 'sustained critical SFU websocket backpressure has a bounded stuck-socket check');
+  requireContains(sfuPublisherControl, "restartSfuAfterVideoStall('sfu_send_buffer_stuck'", 'only stuck critical SFU websocket buffers reconnect the SFU socket');
+  requireContains(sfuPublisherControl, 'wlvcBackpressurePauseUntilMs', 'SFU websocket backpressure throttles the WLVC encoder instead of reconnecting immediately');
   requireContains(signaling, '!nativePeerHasLocalLiveAudioSender(peer)', 'native bridge validates local audio sender before answering');
   requireContains(peerLifecycle, 'function shouldSyncNativeLocalTracksBeforeOffer', 'native bridge avoids pre-creating non-initiator audio transceivers before remote offers');
   requireContains(bridgeRuntime, 'native_audio_sender_replace_track_failed', 'native bridge reports replaceTrack failures');
