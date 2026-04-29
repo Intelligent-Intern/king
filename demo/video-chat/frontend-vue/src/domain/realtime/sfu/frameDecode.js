@@ -7,7 +7,13 @@ import {
 } from './wlvcFrameMetadata';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
 import { createSfuReceiverFeedback } from './receiverFeedback';
-import { resizeCanvasPreservingFrame } from './remoteCanvas';
+import { createRemoteBrowserEncodedVideoRenderer, isProtectedBrowserEncodedVideoFrame } from './remoteBrowserEncodedVideo';
+import {
+  clearCanvas,
+  putImageDataOntoCanvas,
+  resizeCanvas,
+  resizeCanvasPreservingFrame,
+} from './remoteCanvas';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -51,6 +57,15 @@ export function createSfuFrameDecodeHelpers({
     currentUserId,
     mediaRuntimePathRef,
     sendRemoteSfuVideoQualityPressure,
+  });
+  const remoteBrowserEncodedVideo = createRemoteBrowserEncodedVideoRenderer({
+    captureClientDiagnostic,
+    captureClientDiagnosticError,
+    currentUserId,
+    markRemotePeerRenderable,
+    bumpMediaRenderVersion,
+    mediaRuntimePathRef,
+    renderCallVideoLayout,
   });
 
   function sfuFrameTrackStateKey(frame) {
@@ -168,27 +183,6 @@ export function createSfuFrameDecodeHelpers({
     peer.patchDecoderHeight = nextHeight;
     peer.patchDecoderQuality = nextQuality;
     mediaDebugLog('[SFU] Remote patch decoder reconfigured', publisherId, `${nextWidth}x${nextHeight}`, `q=${nextQuality}`);
-    return true;
-  }
-
-  function resizeCanvas(canvas, width, height) {
-    if (!(canvas instanceof HTMLCanvasElement)) return;
-    if (canvas.width !== width) canvas.width = width;
-    if (canvas.height !== height) canvas.height = height;
-  }
-
-  function clearCanvas(canvas) {
-    if (!(canvas instanceof HTMLCanvasElement)) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-
-  function putImageDataOntoCanvas(canvas, imageData, x, y) {
-    if (!(canvas instanceof HTMLCanvasElement) || !(imageData instanceof ImageData)) return false;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return false;
-    ctx.putImageData(imageData, x, y);
     return true;
   }
 
@@ -438,6 +432,11 @@ export function createSfuFrameDecodeHelpers({
     } catch {
       // patch decoder state is also rebuilt from the next clean base
     }
+    try {
+      peer.browserVideoDecoder?.reset?.();
+    } catch {
+      // browser decoder state is rebuilt from the next clean keyframe
+    }
     if (peer.decodedCanvas instanceof HTMLCanvasElement) {
       clearCanvas(peer.decodedCanvas);
     }
@@ -459,6 +458,11 @@ export function createSfuFrameDecodeHelpers({
         peer.decoder?.reset?.();
       } catch {
         // the next full-frame keyframe can rebuild full-frame decoder state
+      }
+      try {
+        peer.browserVideoDecoder?.reset?.();
+      } catch {
+        // the next browser keyframe can rebuild WebCodecs decoder state
       }
     }
     mediaDebugLog('[SFU] Remote decoder reset after sequence gap without clearing render cache', reason);
@@ -602,7 +606,7 @@ export function createSfuFrameDecodeHelpers({
   }
 
   async function decodeSfuFrameForPeer(publisherId, peer, frame) {
-    if (!peer || !peer.decoder) return;
+    if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) return;
     peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
     peer.lastReceivedFrameAtMs = Date.now();
     const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
@@ -675,6 +679,11 @@ export function createSfuFrameDecodeHelpers({
         }
         return;
       }
+    }
+
+    if (isProtectedBrowserEncodedVideoFrame(frame)) {
+      await remoteBrowserEncodedVideo.decodeProtectedBrowserEncodedVideoFrame(peer, frame, frameData);
+      return;
     }
 
     const frameMetadata = readWlvcFrameMetadata(frameData, {
@@ -850,7 +859,7 @@ export function createSfuFrameDecodeHelpers({
         void sendMediaSecurityHello(publisherUserId);
       }
     }
-    if (!peer || !peer.decoder) {
+    if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) {
       const init = ensureSfuRemotePeerForFrame(frame);
       if (init) {
         void init.then((createdPeer) => {

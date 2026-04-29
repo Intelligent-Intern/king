@@ -66,7 +66,7 @@ function nativeEncodedFrameAadTrackId(trackKind = 'data') {
 
 function normalizeProtectedCodecId(value, runtimePath = '') {
   const normalized = asString(value).toLowerCase();
-  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'wlvc_unknown') return normalized;
+  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'webcodecs_vp8' || normalized === 'wlvc_unknown') return normalized;
   if (asString(runtimePath).toLowerCase() === 'webrtc_native') return 'webrtc_native';
   return 'wlvc_unknown';
 }

@@ -129,7 +129,7 @@ function videochat_sfu_normalize_codec_id(string $codecId): string
 {
     $normalized = strtolower(trim($codecId));
     return match ($normalized) {
-        'wlvc_wasm', 'wlvc_ts' => $normalized,
+        'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8' => $normalized,
         default => 'wlvc_unknown',
     };
 }
@@ -628,6 +628,25 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
     if ($recovery !== '' && preg_match('/^[A-Za-z0-9_.:-]{1,96}$/', $recovery) === 1) {
         $metadata['budget_expected_recovery'] = $recovery;
     }
+    $stringFields = [
+        'publisher_readback_method' => ['publisher_readback_method', 'publisherReadbackMethod'],
+        'publisher_browser_encoder_codec' => ['publisher_browser_encoder_codec', 'publisherBrowserEncoderCodec'],
+        'publisher_browser_encoder_config_codec' => ['publisher_browser_encoder_config_codec', 'publisherBrowserEncoderConfigCodec'],
+        'publisher_browser_encoder_hardware_acceleration' => ['publisher_browser_encoder_hardware_acceleration', 'publisherBrowserEncoderHardwareAcceleration'],
+        'publisher_browser_encoder_latency_mode' => ['publisher_browser_encoder_latency_mode', 'publisherBrowserEncoderLatencyMode'],
+    ];
+    foreach ($stringFields as $target => $keys) {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $frame)) {
+                continue;
+            }
+            $value = trim((string) $frame[$key]);
+            if ($value !== '' && preg_match('/^[A-Za-z0-9_.:-]{1,96}$/', $value) === 1) {
+                $metadata[$target] = $value;
+            }
+            break;
+        }
+    }
 
     $intFields = [
         'capture_width' => ['capture_width', 'captureWidth'],
@@ -645,6 +664,7 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'budget_min_keyframe_retry_ms' => ['budget_min_keyframe_retry_ms', 'budgetMinKeyframeRetryMs'],
         'outbound_media_generation' => ['outbound_media_generation', 'outboundMediaGeneration'],
         'king_receive_at_ms' => ['king_receive_at_ms', 'kingReceiveAtMs'],
+        'publisher_browser_encoder_bitrate' => ['publisher_browser_encoder_bitrate', 'publisherBrowserEncoderBitrate'],
     ];
     foreach ($intFields as $target => $keys) {
         foreach ($keys as $key) {

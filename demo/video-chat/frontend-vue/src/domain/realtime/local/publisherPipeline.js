@@ -8,6 +8,8 @@ import {
   uniqueLocalStreams,
   unpublishSfuTracksForClient,
 } from './localStreamLifecycle';
+import { clearLocalPreviewElement as clearLocalPreviewElementNode } from './localPreviewElement';
+import { maybeStartProtectedBrowserVideoEncoderPublisher } from './protectedBrowserVideoEncoder';
 import {
   buildPublisherTransportStageMetrics,
   createPublisherFrameTrace,
@@ -31,10 +33,12 @@ export function createLocalPublisherPipelineHelpers({
   state,
 }) {
   let activeSourceReadbackController = null;
+  const protectedBrowserEncoderGate = { disabledUntilMs: 0 };
 
   const {
     applyCallOutputPreferences,
     canProtectCurrentSfuTargets,
+    captureClientDiagnostic = () => {},
     currentSfuVideoProfile,
     ensureMediaSecuritySession,
     getSfuClientBufferedAmount,
@@ -154,23 +158,10 @@ export function createLocalPublisherPipelineHelpers({
   }
 
   function clearLocalPreviewElement() {
-    const node = refs.localVideoElement.value;
-    if (node instanceof HTMLVideoElement) {
-      try {
-        node.pause();
-      } catch {
-        // ignore
-      }
-      node.srcObject = null;
-      node.remove();
-    }
-    refs.localVideoElement.value = null;
-
-    const container = document.getElementById('local-video-container');
-    if (container) {
-      container.innerHTML = '';
-    }
-    renderCallVideoLayout();
+    clearLocalPreviewElementNode({
+      localVideoElementRef: refs.localVideoElement,
+      renderCallVideoLayout,
+    });
   }
 
   function unpublishAndStopLocalTracks() {
@@ -267,6 +258,23 @@ export function createLocalPublisherPipelineHelpers({
     const pipelineProfileId = String(videoProfile.id || '').trim() || 'balanced';
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
+    const protectedBrowserPublisher = await maybeStartProtectedBrowserVideoEncoderPublisher({
+      videoTrack,
+      videoProfile,
+      pipelineProfileId,
+      constants,
+      refs,
+      callbacks,
+      captureClientDiagnostic,
+      captureClientDiagnosticError,
+      currentSfuVideoProfile,
+      restartPublisher: startEncodingPipeline,
+      gate: protectedBrowserEncoderGate,
+    });
+    if (protectedBrowserPublisher) {
+      activeSourceReadbackController = protectedBrowserPublisher;
+      return;
+    }
 
     const sourceReadbackController = createPublisherSourceReadbackController({
       video,
@@ -506,6 +514,8 @@ export function createLocalPublisherPipelineHelpers({
           readbackMs,
           drawBudgetMs,
           readbackBudgetMs,
+          sourceBackend,
+          readbackMethod,
         } = sourceReadback;
         const frameSizeForMetrics = readbackFrameSize || frameSize;
         const fullFrameEncoder = await ensureFullFrameEncoder(frameSizeForMetrics);

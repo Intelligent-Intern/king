@@ -156,6 +156,9 @@ export function createSfuLifecycleHelpers({
     if (peer.patchDecoder) {
       try { peer.patchDecoder.destroy(); } catch {}
     }
+    if (peer.browserVideoDecoder) {
+      try { peer.browserVideoDecoder.close(); } catch {}
+    }
     if (peer.video instanceof HTMLElement) {
       peer.video.remove();
     }

@@ -31,3 +31,24 @@ export function resizeCanvasPreservingFrame(canvas, width, height) {
   ctx.clearRect(0, 0, nextWidth, nextHeight);
   ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, offsetX, offsetY, scaledWidth, scaledHeight);
 }
+
+export function resizeCanvas(canvas, width, height) {
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+}
+
+export function clearCanvas(canvas) {
+  if (!(canvas instanceof HTMLCanvasElement)) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+export function putImageDataOntoCanvas(canvas, imageData, x, y) {
+  if (!(canvas instanceof HTMLCanvasElement) || !(imageData instanceof ImageData)) return false;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return false;
+  ctx.putImageData(imageData, x, y);
+  return true;
+}
