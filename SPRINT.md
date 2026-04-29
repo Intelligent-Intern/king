@@ -55,7 +55,7 @@ Technical target:
    - Added a fatal browser-encoder fallback gate: after a WebCodecs path failure the publisher temporarily disables that path and restarts into the compatibility WLVC path instead of leaving video silent.
    - Verification: `npm run test:contract:sfu`, `npm run test:contract:media-security`, `npm run test:contract:wlvc`, `npm run build`, `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`, `git diff --check`.
 
-2. [ ] `[fullscreen-remote-render-scheduler]` Make remote render quality fullscreen-aware instead of canvas-fill driven.
+2. [x] `[fullscreen-remote-render-scheduler]` Make remote render quality fullscreen-aware instead of canvas-fill driven.
 
    Scope:
    - Separate remote decode cadence from UI canvas mount/layout cadence.
@@ -69,7 +69,12 @@ Technical target:
    - Contract and Playwright checks cover portrait, landscape, grid, main, and fullscreen rendering behavior.
 
    Report:
-   - Pending.
+   - Added explicit remote render surface roles (`fullscreen`, `main`, `grid`, `mini`, `fallback`) at video-node mount time so SFU receiver rendering no longer guesses from canvas size or stale parent placement.
+   - Added a surface-aware receiver scheduler: fullscreen/main render every valid newest frame, grid/mini throttle thumbnail deltas, keyframes always render, stale sequence/timestamp frames are skipped, and scheduler skip telemetry goes to backend diagnostics.
+   - Removed per-frame `VideoDecoder.flush()` from the protected browser decoder path so WebCodecs output is no longer serialized on every incoming frame; decoder queue pressure now drops lower-priority thumbnail deltas before backlog grows.
+   - Kept portrait/landscape presentation aspect-safe with explicit centered `object-fit: contain` rules for main/fullscreen/grid/mini canvas/video surfaces.
+   - Verification: `node tests/contract/sfu-fullscreen-render-scheduler-contract.mjs`, `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `npm run build`, `git diff --check`.
+   - Production deploy: `demo/video-chat/scripts/deploy.sh deploy` succeeded and `demo/video-chat/scripts/deploy-smoke.sh` passed for HTTPS, API, lobby WS, SFU WS, certbot hook/SANs, admin infrastructure, and video operations.
 
 3. [ ] `[adaptive-sfu-quality-layers]` Add automatic high/low quality layers for fullscreen and grid.
 

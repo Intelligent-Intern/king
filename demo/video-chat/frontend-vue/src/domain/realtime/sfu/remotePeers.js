@@ -113,6 +113,7 @@ export function createSfuRemotePeerHelpers({
       lastSfuFrameSequenceByTrack: {},
       lastSfuFrameTimestampByTrack: {},
       lastSfuFrameDropLoggedAtMs: 0,
+      remoteRenderStateByTrack: {},
     };
   }
 
@@ -307,6 +308,9 @@ export function createSfuRemotePeerHelpers({
           ? { ...existingPeer.lastSfuFrameTimestampByTrack }
           : {}),
         lastSfuFrameDropLoggedAtMs: continuityReset ? continuityReset.lastSfuFrameDropLoggedAtMs : Number(existingPeer.lastSfuFrameDropLoggedAtMs || 0),
+        remoteRenderStateByTrack: continuityReset ? continuityReset.remoteRenderStateByTrack : (existingPeer.remoteRenderStateByTrack && typeof existingPeer.remoteRenderStateByTrack === 'object'
+          ? { ...existingPeer.remoteRenderStateByTrack }
+          : {}),
       };
       if (updatedPeer.decodedCanvas instanceof HTMLElement) {
         updatedPeer.decodedCanvas.dataset.publisherId = publisherId;
@@ -408,6 +412,7 @@ export function createSfuRemotePeerHelpers({
       lastSfuFrameSequenceByTrack: {},
       lastSfuFrameTimestampByTrack: {},
       lastSfuFrameDropLoggedAtMs: 0,
+      remoteRenderStateByTrack: {},
     };
     setSfuRemotePeer(publisherId, peer);
 

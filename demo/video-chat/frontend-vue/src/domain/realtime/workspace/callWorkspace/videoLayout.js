@@ -1,3 +1,8 @@
+import {
+  REMOTE_RENDER_SURFACE_ROLES,
+  applyRemoteVideoSurfaceRole,
+} from '../../sfu/remoteRenderScheduler';
+
 export function createCallWorkspaceVideoLayoutHelpers({
   callbacks,
   refs,
@@ -73,8 +78,16 @@ export function createCallWorkspaceVideoLayoutHelpers({
     });
   }
 
-  function mountVideoNode(target, node, assignedNodes) {
+  function mountVideoNode(target, node, assignedNodes, {
+    role = REMOTE_RENDER_SURFACE_ROLES.FALLBACK,
+    userId = 0,
+  } = {}) {
     if (!(target instanceof HTMLElement) || !(node instanceof HTMLElement)) return false;
+    applyRemoteVideoSurfaceRole(node, {
+      layoutMode: currentLayoutMode(),
+      role,
+      userId,
+    });
     assignedNodes.add(node);
     if (node.parentElement !== target || target.children.length !== 1 || target.firstElementChild !== node) {
       target.replaceChildren(node);
@@ -102,17 +115,20 @@ export function createCallWorkspaceVideoLayoutHelpers({
       const primaryTarget = userId === refs.currentUserId.value
         ? document.getElementById('local-video-container')
         : document.getElementById('remote-video-container');
-      if (mountVideoNode(primaryTarget, node, assignedNodes)) return;
+      const primaryRole = currentLayoutMode() === 'main_only'
+        ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN
+        : REMOTE_RENDER_SURFACE_ROLES.MAIN;
+      if (mountVideoNode(primaryTarget, node, assignedNodes, { role: primaryRole, userId })) return;
     }
 
     const miniSlot = document.getElementById(miniVideoSlotId(userId));
-    if (mountVideoNode(miniSlot, node, assignedNodes)) return;
+    if (mountVideoNode(miniSlot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.MINI, userId })) return;
 
     const gridSlot = document.getElementById(gridVideoSlotId(userId));
-    if (mountVideoNode(gridSlot, node, assignedNodes)) return;
+    if (mountVideoNode(gridSlot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId })) return;
 
     const decodedFallback = document.getElementById('decoded-video-container');
-    mountVideoNode(decodedFallback, node, assignedNodes);
+    mountVideoNode(decodedFallback, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.FALLBACK, userId });
   }
 
   function renderCallVideoLayout() {
@@ -125,7 +141,7 @@ export function createCallWorkspaceVideoLayoutHelpers({
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(gridVideoSlotId(userId));
         const node = mediaNodeForUserId(userId);
-        if (!mountVideoNode(slot, node, assignedNodes)) {
+        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId })) {
           clearUnassignedChildren(slot, assignedNodes);
         }
       }
@@ -136,16 +152,22 @@ export function createCallWorkspaceVideoLayoutHelpers({
       const primaryNode = mediaNodeForUserId(primaryUserId);
 
       if (primaryUserId === refs.currentUserId.value) {
-        mountVideoNode(localContainer, primaryNode, assignedNodes);
+        mountVideoNode(localContainer, primaryNode, assignedNodes, {
+          role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
+          userId: primaryUserId,
+        });
       } else {
-        mountVideoNode(remoteContainer, primaryNode, assignedNodes);
+        mountVideoNode(remoteContainer, primaryNode, assignedNodes, {
+          role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
+          userId: primaryUserId,
+        });
       }
 
       for (const participant of miniVideoParticipants()) {
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(miniVideoSlotId(userId));
         const node = mediaNodeForUserId(userId);
-        if (!mountVideoNode(slot, node, assignedNodes)) {
+        if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.MINI, userId })) {
           clearUnassignedChildren(slot, assignedNodes);
         }
       }

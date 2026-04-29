@@ -231,7 +231,16 @@
 .video-container :deep(video.remote-video),
 .video-container :deep(canvas.remote-video) {
   object-fit: contain !important;
+  object-position: center center !important;
+  image-rendering: auto;
   background: var(--bg-video);
+}
+
+.video-container :deep([data-call-video-surface-role="main"]),
+.video-container :deep([data-call-video-surface-role="fullscreen"]) {
+  object-fit: contain !important;
+  object-position: center center !important;
+  image-rendering: auto;
 }
 
 .video-container.remote {
@@ -287,6 +296,8 @@
   max-height: 100% !important;
   display: block !important;
   object-fit: contain !important;
+  object-position: center center !important;
+  image-rendering: auto;
 }
 
 .workspace-grid-title {
@@ -592,6 +603,8 @@
 .workspace-mini-video-slot :deep(video.remote-video),
 .workspace-mini-video-slot :deep(canvas.remote-video) {
   object-fit: contain !important;
+  object-position: center center !important;
+  image-rendering: auto;
   background: var(--bg-video);
 }
 

@@ -1,5 +1,10 @@
 import { markRaw } from 'vue';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
+import {
+  markRemoteFrameRendered,
+  shouldDecodeRemoteFrame,
+  shouldRenderRemoteFrame,
+} from './remoteRenderScheduler';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 
@@ -106,6 +111,12 @@ export function createRemoteBrowserEncodedVideoRenderer({
     if (!peer || typeof peer !== 'object') return false;
     const canvas = peer.decodedCanvas;
     if (!(canvas instanceof HTMLCanvasElement)) return false;
+    const renderedAtMs = Date.now();
+    const renderDecision = shouldRenderRemoteFrame(peer, frame, renderedAtMs);
+    if (!renderDecision.render) {
+      maybeCaptureBrowserSchedulerSkip(peer, frame, renderDecision, renderedAtMs);
+      return true;
+    }
     const width = positiveInteger(videoFrame?.displayWidth || videoFrame?.codedWidth, browserFrameDimension(frame, 'frameWidth', canvas.width || 640));
     const height = positiveInteger(videoFrame?.displayHeight || videoFrame?.codedHeight, browserFrameDimension(frame, 'frameHeight', canvas.height || 360));
     if (width <= 0 || height <= 0) return false;
@@ -113,10 +124,10 @@ export function createRemoteBrowserEncodedVideoRenderer({
     if (canvas.height !== height) canvas.height = height;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
-    const renderedAtMs = Date.now();
     const previousConnectionState = String(peer.mediaConnectionState || '');
     const previousConnectionMessage = String(peer.mediaConnectionMessage || '');
     ctx.drawImage(videoFrame, 0, 0, width, height);
+    markRemoteFrameRendered(peer, frame, renderedAtMs);
     peer.frameWidth = width;
     peer.frameHeight = height;
     peer.frameCount = Number(peer.frameCount || 0) + 1;
@@ -145,6 +156,33 @@ export function createRemoteBrowserEncodedVideoRenderer({
     return true;
   }
 
+  function maybeCaptureBrowserSchedulerSkip(peer, frame, decision, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return;
+    if ((nowMs - Number(peer.lastSfuBrowserSchedulerSkipTelemetryAtMs || 0)) < 2000) return;
+    peer.lastSfuBrowserSchedulerSkipTelemetryAtMs = nowMs;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'sfu_browser_decoder_scheduled_skip',
+      code: 'sfu_browser_decoder_scheduled_skip',
+      message: 'Browser-decoded SFU frame was skipped by the surface-aware receiver scheduler.',
+      payload: {
+        codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        publisher_id: String(frame?.publisherId || ''),
+        publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+        track_id: String(frame?.trackId || ''),
+        frame_type: String(frame?.type || ''),
+        frame_timestamp: Number(frame?.timestamp || 0),
+        frame_sequence: Number(frame?.frameSequence || 0),
+        scheduler_reason: String(decision?.reason || ''),
+        render_surface_role: String(decision?.role || ''),
+        render_elapsed_ms: Math.max(0, Number(decision?.elapsedMs || 0)),
+        render_min_interval_ms: Math.max(0, Number(decision?.minIntervalMs || 0)),
+        media_runtime_path: mediaRuntimePathRef.value,
+      },
+    });
+  }
+
   async function decodeProtectedBrowserEncodedVideoFrame(peer, frame, frameData) {
     if (!isProtectedBrowserEncodedVideoFrame(frame)) return false;
     if (typeof globalScope.VideoDecoder !== 'function' || typeof globalScope.EncodedVideoChunk !== 'function') {
@@ -171,13 +209,17 @@ export function createRemoteBrowserEncodedVideoRenderer({
     });
     if (!decoder) return true;
     try {
+      const decodeDecision = shouldDecodeRemoteFrame(peer, frame, Number(decoder.decodeQueueSize || 0));
+      if (!decodeDecision.decode) {
+        maybeCaptureBrowserSchedulerSkip(peer, frame, decodeDecision, Date.now());
+        return true;
+      }
       const chunk = new globalScope.EncodedVideoChunk({
         type: normalizeChunkType(frame?.type),
         timestamp: Math.max(0, Number(frame?.timestamp || Date.now())) * 1000,
         data: new Uint8Array(frameData || new ArrayBuffer(0)),
       });
       decoder.decode(chunk);
-      await decoder.flush();
     } catch (error) {
       peer.needsKeyframe = true;
       try {
