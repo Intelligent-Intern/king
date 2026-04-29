@@ -1,8 +1,8 @@
+import { buildOptionalCallAudioCaptureConstraints } from '../media/audioCaptureConstraints';
 import {
-  detectPublisherCapturePipelineCapabilities,
-  publisherCaptureCapabilityDiagnosticPayload,
-} from './capturePipelineCapabilities';
-import { buildOptionalCallAudioCaptureConstraints, callAudioSettingsDiagnosticPayload } from '../media/audioCaptureConstraints';
+  applySfuVideoProfileConstraintsToStream,
+  reportSfuLocalCaptureSettings,
+} from './sfuCaptureProfileConstraints';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -120,52 +120,23 @@ export function createLocalMediaOrchestrationHelpers({
     };
   }
 
-  function finiteTrackSetting(value) {
-    const normalized = Number(value);
-    return Number.isFinite(normalized) && normalized > 0 ? normalized : 0;
+  function reportLocalCaptureSettings(stream, reason) {
+    reportSfuLocalCaptureSettings({
+      stream,
+      reason,
+      videoProfile: currentSfuVideoProfile(),
+      captureDiagnostic,
+    });
   }
 
-  function reportLocalCaptureSettings(stream, reason) {
-    const videoTrack = stream instanceof MediaStream ? stream.getVideoTracks?.()[0] || null : null;
-    const audioTrack = stream instanceof MediaStream ? stream.getAudioTracks?.()[0] || null : null;
-    if (!audioTrack && (!videoTrack || typeof videoTrack.getSettings !== 'function')) return;
-    const videoProfile = currentSfuVideoProfile();
-    const profileId = String(videoProfile.id || '').trim() || 'balanced';
-    const settings = videoTrack && typeof videoTrack.getSettings === 'function' ? videoTrack.getSettings() || {} : {};
-    const settingsWidth = finiteTrackSetting(settings.width);
-    const settingsHeight = finiteTrackSetting(settings.height);
-    const settingsFrameRate = finiteTrackSetting(settings.frameRate);
-    const captureCapabilities = detectPublisherCapturePipelineCapabilities();
-    const staleAfterDowngrade = (profileId === 'realtime' || profileId === 'rescue')
-      && (
-        (settingsWidth > 0 && settingsWidth > Number(videoProfile.captureWidth || 0) * 1.25)
-        || (settingsHeight > 0 && settingsHeight > Number(videoProfile.captureHeight || 0) * 1.25)
-      );
-    captureDiagnostic({
-      category: 'media',
-      level: staleAfterDowngrade ? 'warning' : 'info',
-      eventType: 'sfu_local_capture_constraints_applied',
-      code: 'sfu_local_capture_constraints_applied',
-      message: 'Browser-reported local capture settings after applying the selected SFU video profile.',
-      payload: {
-        reason: String(reason || 'unknown'),
-        outgoing_video_quality_profile: profileId,
-        requested_capture_width: Number(videoProfile.captureWidth || 0),
-        requested_capture_height: Number(videoProfile.captureHeight || 0),
-        requested_capture_frame_rate: Number(videoProfile.captureFrameRate || 0),
-        requested_readback_frame_rate: Number(videoProfile.readbackFrameRate || 0),
-        requested_readback_interval_ms: Number(videoProfile.readbackIntervalMs || videoProfile.encodeIntervalMs || 0),
-        requested_keyframe_interval: Number(videoProfile.keyFrameInterval || 0),
-        requested_wire_budget_bytes_per_second: Number(videoProfile.maxWireBytesPerSecond || 0),
-        publisher_frame_width: Number(videoProfile.frameWidth || 0),
-        publisher_frame_height: Number(videoProfile.frameHeight || 0),
-        track_settings_width: settingsWidth,
-        track_settings_height: settingsHeight,
-        track_settings_frame_rate: settingsFrameRate,
-        ...callAudioSettingsDiagnosticPayload(audioTrack),
-        ...publisherCaptureCapabilityDiagnosticPayload(captureCapabilities),
-        stale_hd_capture_after_downgrade: staleAfterDowngrade,
-      },
+  async function enforceSfuVideoCaptureProfile(stream, reason) {
+    return applySfuVideoProfileConstraintsToStream({
+      stream,
+      reason,
+      videoProfile: currentSfuVideoProfile(),
+      captureDiagnostic,
+      captureClientDiagnosticError,
+      mediaRuntimePath: refs.mediaRuntimePathRef.value,
     });
   }
 
@@ -185,7 +156,9 @@ export function createLocalMediaOrchestrationHelpers({
     }
 
     try {
-      return await navigator.mediaDevices.getUserMedia(strictConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(strictConstraints);
+      await enforceSfuVideoCaptureProfile(stream, 'strict');
+      return stream;
     } catch (error) {
       if (!shouldRetryWithLooseConstraints(error)) {
         throw error;
@@ -193,7 +166,9 @@ export function createLocalMediaOrchestrationHelpers({
     }
 
     try {
-      return await navigator.mediaDevices.getUserMedia(looseConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(looseConstraints);
+      await enforceSfuVideoCaptureProfile(stream, 'loose_retry');
+      return stream;
     } catch {
       const fallbackConstraints = {
         video: controlState.cameraEnabled !== false,
@@ -202,7 +177,9 @@ export function createLocalMediaOrchestrationHelpers({
       if (fallbackConstraints.video !== true && fallbackConstraints.audio !== true) {
         return new MediaStream();
       }
-      return navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+      await enforceSfuVideoCaptureProfile(stream, 'boolean_fallback');
+      return stream;
     }
   }
 

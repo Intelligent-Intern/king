@@ -23,6 +23,7 @@ function read(relativePath) {
 async function main() {
   const workspaceConfig = read('src/domain/realtime/workspace/config.js');
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
   const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
@@ -30,9 +31,13 @@ async function main() {
   requireContains(workspaceConfig, 'readbackFrameRate', 'profiles define readback FPS');
   requireContains(workspaceConfig, 'readbackIntervalMs', 'profiles define readback interval');
   requireContains(mediaOrchestration, 'frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate }', 'capture constraints hard-cap profile FPS');
-  requireContains(mediaOrchestration, 'requested_readback_frame_rate', 'capture diagnostics include readback FPS');
-  requireContains(mediaOrchestration, 'requested_keyframe_interval', 'capture diagnostics include keyframe cadence');
-  requireContains(mediaOrchestration, 'requested_wire_budget_bytes_per_second', 'capture diagnostics include wire budget');
+  requireContains(mediaOrchestration, 'applySfuVideoProfileConstraintsToStream', 'capture enforcement runs after browser track selection');
+  requireContains(captureProfileConstraints, 'applied_width_max', 'capture diagnostics expose enforced camera width max');
+  requireContains(captureProfileConstraints, 'applied_height_max', 'capture diagnostics expose enforced camera height max');
+  requireContains(captureProfileConstraints, 'applied_frame_rate_max', 'capture diagnostics expose enforced camera FPS max');
+  requireContains(captureProfileConstraints, 'requested_readback_frame_rate', 'capture diagnostics include readback FPS');
+  requireContains(captureProfileConstraints, 'requested_keyframe_interval', 'capture diagnostics include keyframe cadence');
+  requireContains(captureProfileConstraints, 'requested_wire_budget_bytes_per_second', 'capture diagnostics include wire budget');
   requireContains(publisherPipeline, 'resolveProfileReadbackIntervalMs(videoProfile)', 'publisher tick cadence uses profile readback interval');
   requireContains(sourceReadback, 'resolveProfileReadbackIntervalMs(activeProfile)', 'source readback timeouts use active profile interval');
   requireContains(publisherFrameTrace, 'readback_frame_rate', 'transport metrics include readback FPS');

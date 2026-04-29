@@ -12,99 +12,50 @@ Sprint rule:
 - Keep media-security, binary SFU envelopes, bounded SQLite frame buffering, live relay, receiver feedback, and online pressure contracts intact.
 - Video quality must stay automatic; there must be no user-facing quality selector in the call UI.
 
-## Sprint: Video Call Performance And Quality Hardening
+## Sprint: Video Call Capture Profile Coupling
 
 Sprint branch:
-- `sprint/video-call-performance-quality`
+- `sprint/video-call-capture-profile-coupling`
 
 PR target:
 - `development/1.0.7-beta`
 
 Deployed baseline:
-- `development/1.0.7-beta` includes the deployed bounded SQLite SFU frame-buffer hotfix from merge `d1da7fe`.
-- Production deploy smoke passed after the hotfix deploy on `https://kingrt.com/`.
+- `development/1.0.7-beta` includes the merged video-call performance/quality hardening branch with deterministic `VideoFrame` closure and the copyTo-first capture path.
 
-Production symptoms:
-- High-motion calls can still collapse into visibly blocky video or freeze/reconnect loops.
-- The current diagnostics identify the publisher-side bottleneck at source readback, WLVC motion delta pressure, or SFU replay/send pacing, but the next sprint must remove the remaining throughput waste instead of hiding it behind lower quality.
-- Browser console warnings such as leaked `VideoFrame` objects are release blockers because they can cause stalls under pressure.
+Production symptom:
+- Video quality improved after fixing the `VideoFrame` lifecycle, but publisher capture can still waste throughput when the browser returns a larger camera track than the active automatic SFU profile needs.
+- `getUserMedia` asks for profile-capped dimensions, but fallback/browser selection can still leave the real track oversized until readback diagnostics notice it.
 
 Technical target:
-- Keep protected SFU media on.
-- Preserve bounded SQLite buffering for short replay/backfill.
-- Maximize real moving-video quality by removing unnecessary main-thread readback work, stabilizing WLVC delta generation under motion, and preventing slow subscribers or replay bursts from pressuring healthy publishers.
+- Couple the real camera track to the active automatic SFU profile before source readback.
+- Avoid copying/scaling oversized source frames when the browser supports track constraints.
+- Keep quality selection fully automatic and report the exact requested/applied capture envelope to backend diagnostics.
 
 ## Active Issues
 
-1. [x] `[readback-zero-copy-gate]` Remove source readback as a normal hotpath bottleneck.
+1. [x] `[capture-profile-track-constraints]` Enforce automatic SFU profile constraints on the actual camera track.
 
    Scope:
-   - Audit the full publisher path from `MediaStreamTrackProcessor` frame pull through `VideoFrame.copyTo`, worker fallback, WLVC input normalization, protected frame wrapping, and SFU socket send.
-   - Make the normal supported-browser path avoid DOM canvas readback entirely for profile-matched frames.
-   - Keep DOM canvas only as a capped compatibility fallback with explicit backend-routed diagnostics.
-   - Close every `VideoFrame` deterministically on success, skip, timeout, worker transfer, fallback, and error paths.
-   - Add an acceptance gate that fails on `sfu_source_readback_budget_exceeded`, leaked `VideoFrame` warnings, or main-thread canvas readback being selected when zero-copy support is available.
+   - Add a focused helper for SFU capture-profile track constraints instead of growing `CallWorkspaceView.vue` or `mediaOrchestration.js`.
+   - Apply `width`, `height`, and `frameRate` caps to the selected video track after strict, loose, and boolean-fallback `getUserMedia` acquisition.
+   - Respect browser-reported camera capabilities so impossible min/max constraints do not break capture.
+   - Keep capture settings and constraint failures in backend diagnostics, not as browser-console noise.
+   - Prove the real track cap happens before WLVC source readback.
 
    Done when:
-   - High-motion online pressure runs do not emit `sfu_source_readback_budget_exceeded`.
-   - Console-visible `VideoFrame was garbage collected without being closed` warnings are gone.
-   - Backend diagnostics still record the exact active capture backend and source timing.
+   - Capable camera tracks receive `applyConstraints()` for the active automatic SFU profile after browser track selection.
+   - Boolean `getUserMedia` fallback cannot silently leave an oversized HD source without a follow-up profile constraint attempt.
+   - `mediaOrchestration.js` stays below the 800-line target by extracting the constraint/reporting code.
 
    Report:
-   - Aligned automatic capture dimensions with published profile dimensions and hard-capped browser capture width/height/FPS in `getUserMedia` constraints.
-   - Added source-dimension `VideoFrame.copyTo(..., { format: 'RGBA' })` sizing so profile-matched and capture-matched frames do not fall into DOM canvas scaling.
-   - Added the zero-copy capture gate: if a browser supports the VideoFrame copy path, main-thread canvas readback from a `VideoFrame` source is blocked and reported as exact source-readback pressure instead of silently using `drawImage/getImageData`.
-   - Added `sfu-zero-copy-readback-gate-contract.mjs` and extended the RGBA copy contract.
-   - Verification: `npm run test:contract:sfu`, `npm run build`.
-
-2. [x] `[wlvc-motion-delta-rate-control]` Stabilize WLVC quality under movement instead of collapsing into blocky frames.
-
-   Scope:
-   - Analyze the WLVC encode path for high-motion delta explosion, tile/ROI churn, keyframe cadence, and profile downgrade thresholds.
-   - Prefer framerate and delta cadence control before destructive resolution collapse when motion spikes.
-   - Add motion-aware keyframe and recovery probing so quality can return after a stable window without SFU socket churn.
-   - Keep profile selection automatic and remove any remaining user-facing quality control paths.
-   - Route codec and profile warnings to backend diagnostics instead of browser console noise.
-
-   Done when:
-   - High-motion calls stay moving at the best sustainable profile instead of dropping straight to unusable block quality.
-   - Automatic downgrade and recovery decisions are visible in backend diagnostics.
-   - The call UI has no manual quality selector.
-
-   Report:
-   - Added motion-delta cadence throttling to the publisher backpressure controller: first WLVC payload pressure now slows the encode interval and forces a recoverable keyframe before any destructive profile downshift.
-   - Kept profile downshift automatic and thresholded: repeated motion payload pressure can still step down after cadence throttling fails, while protected-media budget pressure remains an immediate safety downshift.
-   - Wired the active cadence multiplier into the local publisher pipeline through `sfuTransport.resolveWlvcEncodeIntervalMs(...)`.
-   - Added automatic cadence recovery and backend diagnostics for `sfu_wlvc_motion_delta_cadence_throttled`, `sfu_wlvc_motion_delta_cadence_recovered`, and `sfu_wlvc_motion_delta_recovered`.
-   - Fixed WLVC chroma delta coding in both TypeScript and WASM C++ sources using a dedicated `bit2=chroma_temporal_residual` flag, then rebuilt `wlvc.js`/`wlvc.wasm` with the ES module factory wrapper intact.
-   - Updated contracts so stable video status is backend-diagnostic based instead of console-log based, and so high-motion tests assert cadence-first behavior plus moving-chroma delta decode.
-   - Verification: `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `node tests/contract/wlvc-wasm-config-surface-contract.mjs`, `node tests/contract/call-layout-sidebar-controls-contract.mjs`, `npm run build`.
-
-3. [x] `[sfu-replay-pacing-slow-subscriber-isolation]` Smooth SFU send/replay pressure without punishing healthy publishers.
-
-   Scope:
-   - Trace the backend SFU receive, live relay, bounded SQLite frame buffer, subscriber cursor, and replay loops for throughput stalls.
-   - Add or tighten per-subscriber pacing so slow consumers drop stale deltas, request/receive keyframes first, and cannot create publisher backpressure.
-   - Keep the bounded SQLite buffer as a short replay/backfill mechanism, not an unbounded frame store.
-   - Prove binary envelope validation, media-security, room admission, and duplicate suppression still hold.
-   - Add production diagnostics that distinguish live-send pressure, replay pressure, slow-subscriber pressure, and publisher-source pressure.
-
-   Done when:
-   - Slow subscriber simulations do not trigger healthy publisher downgrades or reconnect loops.
-   - Replayed frames are bounded, ordered, and stale-frame-pruned.
-   - Backend diagnostics identify the exact pressure station without browser console warnings.
-
-   Report:
-   - Added a budgeted replay sender shared by live relay and bounded SQLite replay so slow subscribers are cooled down before replay sends can burn request-loop time.
-   - Added replay-specific pacing limits: stricter send budget, capped replay batch size, stale-delta pruning, and pre-keyframe delta pruning so replay starts from the nearest useful keyframe instead of flooding old deltas.
-   - Kept bounded SQLite buffering intact as a short replay/backfill mechanism and left direct live fanout on the existing binary-required path.
-   - Added backend diagnostics for `sfu_frame_replay_stale_delta_pruned`, `sfu_frame_replay_pre_keyframe_delta_pruned`, `sfu_frame_replay_slow_subscriber_skipped`, and `sfu_frame_replay_slow_subscriber_isolated`, each tagged with the exact `sfu_send_path`.
-   - Kept `realtime_sfu_gateway.php` under the 800-line source target while threading the shared subscriber cooldown into live-relay and SQLite replay polls.
-   - Verification: `php -l` on changed PHP files, `npm run test:contract:sfu`, `php demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php` (local `pdo_sqlite` skip), `npm run build`.
+   - Added `sfuCaptureProfileConstraints.js` with `buildSfuVideoProfileTrackConstraints(...)`, `applySfuVideoProfileConstraintsToStream(...)`, and shared capture diagnostics.
+   - Enforced active profile constraints immediately after strict, loose-retry, and boolean-fallback camera acquisition.
+   - Moved local capture settings reporting out of `mediaOrchestration.js`, reducing it from 801 to 778 lines.
+   - Extended SFU contracts to assert actual track `applyConstraints()` enforcement, capability clamping, diagnostics, and fallback coverage.
 
 ## Execution Order
 
-1. Finish `[readback-zero-copy-gate]` first; source readback failures are currently the clearest hard bottleneck.
-2. Then harden `[wlvc-motion-delta-rate-control]`; this determines visible quality once source readback is no longer the choke point.
-3. Finish with `[sfu-replay-pacing-slow-subscriber-isolation]`; this protects multi-party and slow-client cases without weakening media security or buffering.
-4. Commit after each checkbox, deploy after each completed issue, and add a short report under the issue before checking it off.
+1. Finish `[capture-profile-track-constraints]`.
+2. Deploy after the issue is completed.
+3. Push the sprint branch after deploy verification.

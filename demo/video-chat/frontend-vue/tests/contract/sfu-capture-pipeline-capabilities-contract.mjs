@@ -88,6 +88,7 @@ class CopylessVideoFrame {
 try {
   const detectorSource = read('src/domain/realtime/local/capturePipelineCapabilities.js');
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
   requireContains(detectorSource, 'MediaStreamTrackProcessor', 'MediaStreamTrackProcessor detection');
   requireContains(detectorSource, "prototypeMethod(VideoFrameCtor, 'copyTo')", 'VideoFrame.copyTo detection');
   requireContains(detectorSource, "prototypeMethod(VideoFrameCtor, 'close')", 'VideoFrame.close detection');
@@ -95,9 +96,10 @@ try {
   requireContains(detectorSource, 'MessageChannel', 'worker transfer detection');
   requireContains(detectorSource, 'supportsDomCanvasFallback', 'DOM canvas fallback detection');
   requireContains(detectorSource, 'publisherCaptureCapabilityDiagnosticPayload', 'diagnostic payload helper');
-  requireContains(mediaOrchestration, "from './capturePipelineCapabilities'", 'local media orchestration imports capture capability detector');
-  requireContains(mediaOrchestration, 'detectPublisherCapturePipelineCapabilities()', 'local capture diagnostics probe browser capability state');
-  requireContains(mediaOrchestration, 'publisherCaptureCapabilityDiagnosticPayload(captureCapabilities)', 'local capture diagnostics include capability payload');
+  requireContains(mediaOrchestration, "from './sfuCaptureProfileConstraints'", 'local media orchestration imports capture profile enforcement');
+  requireContains(captureProfileConstraints, "from './capturePipelineCapabilities'", 'capture profile enforcement imports capture capability detector');
+  requireContains(captureProfileConstraints, 'detectPublisherCapturePipelineCapabilities()', 'local capture diagnostics probe browser capability state');
+  requireContains(captureProfileConstraints, 'publisherCaptureCapabilityDiagnosticPayload(captureCapabilities)', 'local capture diagnostics include capability payload');
 
   const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/capturePipelineCapabilities.js')).href;
   const {
