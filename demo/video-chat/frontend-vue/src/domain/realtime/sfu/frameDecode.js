@@ -6,6 +6,7 @@ import {
   readWlvcFrameMetadata,
 } from './wlvcFrameMetadata';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
+import { createSfuReceiverFeedback } from './receiverFeedback';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -32,6 +33,7 @@ export function createSfuFrameDecodeHelpers({
   renderCallVideoLayout,
   remotePeersRef,
   sendMediaSecurityHello,
+  sendRemoteSfuVideoQualityPressure,
   sfuFrameHeight,
   sfuFrameQuality,
   sfuFrameWidth,
@@ -43,6 +45,12 @@ export function createSfuFrameDecodeHelpers({
     if (!Number.isFinite(normalized)) return fallback;
     return Math.floor(normalized);
   }
+
+  const receiverFeedback = createSfuReceiverFeedback({
+    currentUserId,
+    mediaRuntimePathRef,
+    sendRemoteSfuVideoQualityPressure,
+  });
 
   function sfuFrameTrackStateKey(frame) {
     return String(frame?.trackId || '').trim() || 'default';
@@ -354,6 +362,9 @@ export function createSfuFrameDecodeHelpers({
           media_runtime_path: mediaRuntimePathRef.value,
         },
       });
+      receiverFeedback.maybeSendReceiverRenderLagFeedback(peer, frame?.publisherId, frame, receiverRenderLatencyMs, {
+        outgoing_video_quality_profile: String(frame?.outgoingVideoQualityProfile || ''),
+      });
     }
     markRemotePeerRenderable(peer);
     if (
@@ -545,12 +556,17 @@ export function createSfuFrameDecodeHelpers({
         return true;
       }
       if (lastSequence > 0 && frameSequence > (lastSequence + 1)) {
+        const missingFrameCount = frameSequence - lastSequence - 1;
         if (frameType !== 'keyframe') {
           resetRemoteSfuDecoderAfterSequenceGap(peer, frame, 'sequence_gap_delta');
           logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_delta', {
             last_frame_sequence: lastSequence,
-            missing_frame_count: frameSequence - lastSequence - 1,
+            missing_frame_count: missingFrameCount,
           }, true);
+          receiverFeedback.maybeSendReceiverSequenceGapFeedback(peer, publisherId, frame, missingFrameCount, {
+            last_frame_sequence: lastSequence,
+            drop_reason: 'sequence_gap_delta',
+          });
           peer.lastSfuFrameSequenceByTrack[trackKey] = frameSequence;
           if (frameTimestamp > 0) {
             peer.lastSfuFrameTimestampByTrack[trackKey] = frameTimestamp;
@@ -559,7 +575,11 @@ export function createSfuFrameDecodeHelpers({
         }
         logDroppedRemoteSfuFrame(peer, publisherId, frame, 'sequence_gap_keyframe', {
           last_frame_sequence: lastSequence,
-          missing_frame_count: frameSequence - lastSequence - 1,
+          missing_frame_count: missingFrameCount,
+        });
+        receiverFeedback.maybeSendReceiverSequenceGapFeedback(peer, publisherId, frame, missingFrameCount, {
+          last_frame_sequence: lastSequence,
+          drop_reason: 'sequence_gap_keyframe',
         });
       }
       peer.lastSfuFrameSequenceByTrack[trackKey] = frameSequence;

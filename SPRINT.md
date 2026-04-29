@@ -52,7 +52,7 @@ Already present and not enough:
 16. [x] `[slow-subscriber-isolation]` Prevent one slow receiver from backing up the publisher path: per-subscriber video send budgets must drop or skip video for that subscriber without blocking direct fanout to fast subscribers.
 17. [x] `[relay-broker-io-budget]` Audit live frame relay, broker DB, filesystem, and any persistence/spool path; media bytes must use a bounded, measured path and never create unbounded synchronous DB/file I/O in the hot frame path.
 18. [ ] `[production-socket-proxy-budget]` Measure production TLS/proxy/websocket buffer behavior between browser and King, including frame sizes around continuation thresholds, server send buffers, close/error cases, and any config that caps throughput below the profile budget.
-19. [ ] `[receiver-feedback-loop]` Add receiver-to-publisher feedback for decode/render lag, missed sequences, and subscriber pressure so the publisher downshifts from real receiver evidence before the sender socket reaches critical backpressure.
+19. [x] `[receiver-feedback-loop]` Add receiver-to-publisher feedback for decode/render lag, missed sequences, and subscriber pressure so the publisher downshifts from real receiver evidence before the sender socket reaches critical backpressure.
 20. [ ] `[online-acceptance-no-critical-pressure]` Build the online acceptance gate: two-browser call with high motion, security enabled, profile changes, and slow-subscriber simulation must run without `sfu_send_backpressure_critical`, remote freeze, unbounded queue growth, or black video.
 
 ## Execution Order

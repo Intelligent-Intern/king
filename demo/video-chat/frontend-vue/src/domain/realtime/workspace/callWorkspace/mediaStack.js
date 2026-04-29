@@ -88,6 +88,25 @@ export function createCallWorkspaceMediaStack(options) {
     renderCallVideoLayout: () => renderCallVideoLayout(),
     remotePeersRef: refs.remotePeersRef,
     sendMediaSecurityHello: callbacks.sendMediaSecurityHello,
+    sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {
+      if (typeof callbacks.sendSocketFrame !== 'function') return false;
+      const targetUserId = Number(peer?.userId || 0);
+      const localUserId = Number(refs.currentUserId.value || 0);
+      if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
+      return callbacks.sendSocketFrame({
+        type: 'call/media-quality-pressure',
+        target_user_id: targetUserId,
+        payload: {
+          kind: 'sfu-video-quality-pressure',
+          requested_action: 'downgrade_outgoing_video',
+          reason: String(reason || 'sfu_receiver_feedback'),
+          publisher_id: String(publisherId || ''),
+          requester_user_id: localUserId,
+          media_runtime_path: refs.mediaRuntimePath.value,
+          ...payload,
+        },
+      });
+    },
     sfuFrameHeight: constants.sfuFrameHeight,
     sfuFrameQuality: constants.sfuFrameQuality,
     sfuFrameWidth: constants.sfuFrameWidth,
