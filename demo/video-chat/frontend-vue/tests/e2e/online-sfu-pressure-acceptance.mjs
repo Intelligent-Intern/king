@@ -223,19 +223,30 @@ async function switchCallLayoutMode(page, mode, label) {
   }, mode));
 }
 
-async function switchVideoQualityProfile(page, profile, label) {
-  await waitUntil(`${label} video quality select`, 30_000, async () => page.locator('#call-left-video-quality').count());
-  await page.locator('#call-left-video-quality').selectOption(profile).catch(async () => {
-    await page.evaluate((nextProfile) => {
-      const select = document.querySelector('#call-left-video-quality');
-      if (!(select instanceof HTMLSelectElement)) return;
-      select.value = nextProfile;
-      select.dispatchEvent(new Event('change', { bubbles: true }));
-    }, profile);
-  });
-  await waitUntil(`${label} video quality ${profile}`, 15_000, async () => (
-    page.locator('#call-left-video-quality').inputValue().then((value) => value === profile).catch(() => false)
-  ));
+async function assertNoManualVideoQualitySelect(page, label) {
+  const count = await page.locator('#call-left-video-quality').count();
+  if (count !== 0) throw new Error(`${label} exposes manual video quality select.`);
+}
+
+function automaticQualityTransitions(events, sinceMs) {
+  return events
+    .filter((event) => event.at >= sinceMs && /\bSFU encode pressure - lowering outgoing video quality\b/.test(event.text))
+    .map((event) => ({
+      label: event.label,
+      atMs: event.at - sinceMs,
+      text: event.text,
+      from: /\bfrom=([^\s]+)/.exec(event.text)?.[1] || '',
+      to: /\bto=([^\s]+)/.exec(event.text)?.[1] || '',
+      reason: /\breason=([^\s]+)/.exec(event.text)?.[1] || '',
+    }));
+}
+
+function assertAutomaticQualityTransitions(events, sinceMs) {
+  const transitions = automaticQualityTransitions(events, sinceMs);
+  if (transitions.length === 0) {
+    throw new Error('Pressure acceptance did not observe automatic SFU quality downshift.');
+  }
+  return transitions;
 }
 
 async function installSlowSubscriberNetwork(context, page) {
@@ -463,6 +474,8 @@ async function main() {
     await waitForSfuBinaryFlow(sfuSocketStats, admin.page, 'admin');
     await waitForSfuBinaryFlow(sfuSocketStats, user.page, 'user');
     await switchCallLayoutMode(admin.page, 'grid', 'admin');
+    await assertNoManualVideoQualitySelect(admin.page, 'admin');
+    await assertNoManualVideoQualitySelect(user.page, 'user');
     await waitForRemoteVideo(admin.page, 'admin grid');
     await waitForRemoteVideo(user.page, 'user grid');
 
@@ -473,13 +486,6 @@ async function main() {
       admin: (await sfuSocketStats(admin.page)).socketFailureCount,
       user: (await sfuSocketStats(user.page)).socketFailureCount,
     };
-
-    await switchVideoQualityProfile(admin.page, 'balanced', 'admin');
-    summary.qualityTransitions.push({ side: 'admin', profile: 'balanced', atMs: Date.now() - stableStartedAt });
-    await switchVideoQualityProfile(user.page, 'realtime', 'user');
-    summary.qualityTransitions.push({ side: 'user', profile: 'realtime', atMs: Date.now() - stableStartedAt });
-    await waitForRemoteVideo(admin.page, 'admin after downshift');
-    await waitForRemoteVideo(user.page, 'user after downshift');
 
     clearSlowSubscriber = await installSlowSubscriberNetwork(user.context, user.page);
     summary.qualityTransitions.push({ side: 'user', profile: 'slow-subscriber-network', atMs: Date.now() - stableStartedAt });
@@ -499,10 +505,7 @@ async function main() {
 
     await clearSlowSubscriber();
     clearSlowSubscriber = null;
-    await switchVideoQualityProfile(admin.page, 'quality', 'admin');
-    summary.qualityTransitions.push({ side: 'admin', profile: 'quality', atMs: Date.now() - stableStartedAt });
-    await switchVideoQualityProfile(user.page, 'balanced', 'user');
-    summary.qualityTransitions.push({ side: 'user', profile: 'balanced', atMs: Date.now() - stableStartedAt });
+    summary.qualityTransitions.push(...assertAutomaticQualityTransitions([...adminMonitor, ...userMonitor], stableStartedAt));
 
     while ((Date.now() - stableStartedAt) < PRESSURE_DURATION_MS) {
       await sleep(SAMPLE_INTERVAL_MS);

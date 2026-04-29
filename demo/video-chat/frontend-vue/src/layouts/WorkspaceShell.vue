@@ -37,23 +37,6 @@
                   </option>
                 </AppSelect>
               </div>
-              <div class="call-left-settings-field">
-                <label for="call-left-video-quality">Quality</label>
-                <AppSelect
-                  id="call-left-video-quality"
-                  aria-label="Outgoing video quality"
-                  :model-value="callMediaPrefs.outgoingVideoQualityProfile"
-                  @update:model-value="setCallOutgoingVideoQualityProfile"
-                >
-                  <option
-                    v-for="option in callVideoQualityOptions"
-                    :key="option.value"
-                    :value="option.value"
-                  >
-                    {{ option.label }}
-                  </option>
-                </AppSelect>
-              </div>
             </section>
 
             <section class="call-left-settings-block" aria-label="Mic">
@@ -926,17 +909,14 @@ import {
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
-  setCallOutgoingVideoQualityProfile,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
-import { SFU_VIDEO_QUALITY_PROFILE_OPTIONS } from '../domain/realtime/workspace/config';
 
 const router = useRouter();
 const route = useRoute();
 const applyBackgroundPreset = applyCallBackgroundPreset;
 const isBackgroundPresetActive = isCallBackgroundPresetActive;
-const callVideoQualityOptions = SFU_VIDEO_QUALITY_PROFILE_OPTIONS;
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);

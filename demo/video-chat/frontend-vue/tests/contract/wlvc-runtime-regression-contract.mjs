@@ -137,7 +137,7 @@ try {
   const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'rescue: Object.freeze({', 'WLVC backpressure has a low-bitrate rescue profile');
-  requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
+  assert.ok(!workspaceConfig.includes('export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS'), 'WLVC quality profiles must not be exported as user-facing select options');
   requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';", 'balanced profile starts production calls below the HD stress profile');
   requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
   requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 27;', 'HD baseline captures 27fps camera video after the 10% quality tradeoff');

@@ -13,7 +13,7 @@ Sprint rule:
 - Do not weaken King v1 contracts to make frame capture cheaper.
 - Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
 - Keep media-security, binary SFU envelopes, no-SQLite-frame-persistence, live relay, receiver feedback, and online pressure contracts intact.
-- The quality selector must control the full capture/readback/encode/wire budget, not only the final SFU wire profile.
+- Video quality must not be user-selectable in the call UI; automatic profile selection must control the full capture/readback/encode/wire budget, not only the final SFU wire profile.
 
 ## Sprint: Publisher VideoFrame Readback Hotpath Replacement
 
@@ -47,8 +47,8 @@ Technical target:
 5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
 7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
-8. [ ] `[source-budget-profile-coupling]` Make `balanced`, `realtime`, `rescue`, and user-selected quality profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
-9. [ ] `[quality-select-contract]` Ensure the visible quality selector actually changes the capture/readback profile immediately and is not only a cosmetic or encode-wire setting.
+8. [ ] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
+9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
 10. [ ] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
 11. [ ] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
 12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
@@ -65,9 +65,37 @@ Technical target:
 
 1. Finish issues 1-2 before changing capture behavior.
 2. Build the worker/VideoFrame path behind capability detection and keep the current DOM path as fallback until tests prove parity.
-3. Couple quality selection and automatic downgrade to source readback before touching SFU restart policy.
+3. Couple automatic quality selection and downgrade to source readback before touching SFU restart policy.
 4. Add contracts and high-motion pressure proof before deploying.
 5. Update `READYNESS_TRACKER.md` only after the sprint is complete.
+
+## Issue Reports
+
+### 9. `[quality-ui-removal-contract]`
+
+Status: Done.
+
+Implementation:
+- Removed the manual outgoing video quality select from the call sidebar.
+- Removed the user-facing SFU quality option export so profiles remain internal automatic runtime state.
+- Retained automatic profile switching through existing SFU pressure/downgrade paths and changed profile-switch reset diagnostics from manual to automatic.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/call-layout-sidebar-controls-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-profile-switch-actuator-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-capture-constraints-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/wlvc-runtime-regression-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-online-acceptance-no-critical-pressure-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-motion-backpressure-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-profile-budget-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-wlvc-rate-control-contract.mjs`
+- `npm run build` in `demo/video-chat/frontend-vue`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429045418` served `WorkspaceShell-bFusnFa4.js` without `call-left-video-quality`, `SFU_VIDEO_QUALITY_PROFILE_OPTIONS`, or `callVideoQualityOptions`.
 
 ## Parking Rule
 

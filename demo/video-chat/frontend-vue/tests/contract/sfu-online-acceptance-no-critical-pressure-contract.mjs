@@ -31,8 +31,8 @@ try {
     'package script exposes the online no-critical-pressure gate',
   );
   requireContains(pressureGate, 'highMotionVideo: true', 'online gate uses high-motion capture');
-  requireContains(pressureGate, 'switchVideoQualityProfile', 'online gate exercises runtime profile changes');
-  requireContains(pressureGate, '#call-left-video-quality', 'online gate drives the real quality select');
+  requireContains(pressureGate, 'assertNoManualVideoQualitySelect', 'online gate rejects manual quality controls');
+  requireContains(pressureGate, 'assertAutomaticQualityTransitions', 'online gate observes automatic profile changes');
   requireContains(pressureGate, 'installSlowSubscriberNetwork', 'online gate simulates one slow subscriber');
   requireContains(pressureGate, 'sfu_send_backpressure_critical', 'online gate blocks critical publisher pressure');
   requireContains(pressureGate, 'remote video frozen', 'online gate blocks remote freeze diagnostics');

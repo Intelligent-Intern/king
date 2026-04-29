@@ -32,7 +32,7 @@ async function main() {
   requireContains(mediaOrchestration, 'stale_hd_capture_after_downgrade', 'local media orchestration flags stale HD capture after downgrade');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(rawStream, 'publish')", 'initial publish reports track settings');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(nextRawStream, 'reconfigure')", 'profile/device reconfigure reports track settings');
-  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'quality profile change reconfigures local tracks');
+  requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'automatic quality profile change reconfigures local tracks');
   requireContains(publisherPipeline, "import { resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
   requireContains(publisherPipeline, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
   requireContains(publisherPipeline, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');

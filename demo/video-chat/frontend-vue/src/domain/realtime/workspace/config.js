@@ -147,13 +147,6 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.quality,
   }),
 });
-export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(
-  Object.entries(SFU_VIDEO_QUALITY_PROFILES).map(([value, profile]) => ({
-    value,
-    label: profile.label,
-  }))
-);
-
 export function normalizeSfuVideoQualityProfile(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(SFU_VIDEO_QUALITY_PROFILES, normalized)
