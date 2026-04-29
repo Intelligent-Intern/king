@@ -398,8 +398,8 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   const { codecId, runtimeId, transportMetrics } = parseSfuEnvelopeMetadata(metadataJson)
 
   const protectedFrame = protectionMode === 'transport_only' ? null : arrayBufferToBase64Url(payloadBytes)
-  const dataBase64 = protectionMode === 'transport_only' ? arrayBufferToBase64Url(payloadBytes) : null
-  const payloadChars = protectedFrame ? protectedFrame.length : String(dataBase64 || '').length
+  const dataBase64 = null
+  const payloadChars = protectedFrame ? protectedFrame.length : base64UrlEncodedLength(payloadByteLength)
 
   return {
     payloadBytes,

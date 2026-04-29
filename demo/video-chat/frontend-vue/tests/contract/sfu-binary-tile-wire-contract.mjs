@@ -29,7 +29,8 @@ try {
   requireContains(framePayload, 'runtime_id: runtimeId', 'binary envelope metadata must preserve runtime id');
   requireContains(framePayload, 'serializeSfuEnvelopeMetadata', 'binary envelope must serialize generic frame metadata');
   requireContains(framePayload, 'parseSfuEnvelopeMetadata', 'binary envelope must decode generic frame metadata');
-  requireContains(framePayload, "const payloadChars = protectedFrame ? protectedFrame.length : String(dataBase64 || '').length", 'binary envelope decode advertises base64/protected payload chars');
+  requireContains(framePayload, 'const dataBase64 = null', 'binary envelope decode avoids transport-only base64 reconstruction');
+  requireContains(framePayload, 'const payloadChars = protectedFrame ? protectedFrame.length : base64UrlEncodedLength(payloadByteLength)', 'binary envelope decode advertises projected payload chars without base64 conversion');
   requireContains(framePayload, 'payload_bytes: payloadByteLength', 'binary envelope decode keeps raw byte length separately');
   requireContains(framePayload, 'binary_envelope_version: metadataJsonBytes > 0', 'binary envelope metrics use the numeric metadata byte count');
 

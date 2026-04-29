@@ -963,7 +963,9 @@ export class SFUClient {
             timestamp: msg.timestamp,
             data: dataBase64 !== ''
               ? base64UrlToArrayBuffer(dataBase64)
-              : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0)),
+              : (msg.data instanceof ArrayBuffer
+                ? msg.data
+                : (Array.isArray(msg.data) ? new Uint8Array(msg.data).buffer : new ArrayBuffer(0))),
             dataBase64: dataBase64 || null,
             type: stringField(msg.frameType, msg.frame_type) === 'keyframe' ? 'keyframe' : 'delta',
             protected: msg.protected && typeof msg.protected === 'object' ? msg.protected : null,
