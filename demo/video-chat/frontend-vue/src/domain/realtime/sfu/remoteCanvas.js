@@ -52,3 +52,41 @@ export function putImageDataOntoCanvas(canvas, imageData, x, y) {
   ctx.putImageData(imageData, x, y);
   return true;
 }
+
+export function softDeblockDecodedCanvas(canvas, {
+  frameQuality = 0,
+  layoutMode = 'full_frame',
+} = {}) {
+  if (!(canvas instanceof HTMLCanvasElement)) return false;
+  const width = Math.max(0, Number(canvas.width || 0));
+  const height = Math.max(0, Number(canvas.height || 0));
+  if (width < 2 || height < 2) return false;
+
+  const normalizedLayoutMode = String(layoutMode || 'full_frame').trim().toLowerCase();
+  const normalizedQuality = Math.max(0, Math.floor(Number(frameQuality || 0)));
+  const isPatchComposited = normalizedLayoutMode === 'tile_foreground' || normalizedLayoutMode === 'background_snapshot';
+  const shouldDeblock = isPatchComposited || normalizedQuality <= 52;
+  if (!shouldDeblock) return false;
+
+  const blurPx = isPatchComposited ? 0.42 : 0.28;
+  const blendAlpha = isPatchComposited ? 0.34 : 0.24;
+  let scratch = canvas.__kingRtSoftDeblockCanvas;
+  if (!(scratch instanceof HTMLCanvasElement)) {
+    scratch = document.createElement('canvas');
+    canvas.__kingRtSoftDeblockCanvas = scratch;
+  }
+  if (scratch.width !== width) scratch.width = width;
+  if (scratch.height !== height) scratch.height = height;
+
+  const scratchCtx = scratch.getContext('2d');
+  const ctx = canvas.getContext('2d');
+  if (!scratchCtx || !ctx) return false;
+  scratchCtx.clearRect(0, 0, width, height);
+  scratchCtx.drawImage(canvas, 0, 0);
+  ctx.save();
+  ctx.globalAlpha = blendAlpha;
+  ctx.filter = `blur(${blurPx}px)`;
+  ctx.drawImage(scratch, 0, 0);
+  ctx.restore();
+  return true;
+}

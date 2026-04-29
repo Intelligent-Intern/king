@@ -146,6 +146,25 @@ Technical target:
    - Fresh rendered frames now clear the hard-reconnect debt.
    - Verification: `node tests/contract/sfu-video-recovery-timing-contract.mjs`, `npm run test:contract:sfu`.
 
+7. [x] `[remote-wlvc-tile-deblocking]` Smooth visible WLVC tile and block artifacts on remote canvases.
+
+   Scope:
+   - Keep the current canvas resolution and automatic quality control intact.
+   - Add a lightweight receiver-side deblocking pass after remote SFU frame compositing.
+   - Target selective tile composites and lower-quality WLVC full frames, where block edges are visible in large desktop tiles.
+   - Preserve original detail by blending a small blur over the decoded canvas instead of replacing it with a blurred-only image.
+
+   Done when:
+   - Large remote canvas tiles no longer show harsh checker/tile boundaries from WLVC quantization or selective patch seams.
+   - The smoothing path runs after `tile_foreground` / `background_snapshot` composition and after low-quality full-frame decode.
+   - Contract coverage pins the deblocking helper and decode integration.
+
+   Report:
+   - Added `softDeblockDecodedCanvas()` with scratch-canvas reuse, small blur radius, and alpha blending.
+   - Applied the deblock pass after remote frame composition in the SFU decode path.
+   - Kept high-quality full frames untouched unless they are selective tile composites.
+   - Verification: `node tests/contract/sfu-selective-tile-runtime-contract.mjs`.
+
 ## Execution Order
 
 1. Finish `[socket-layer-state-wiring-hotfix]`.

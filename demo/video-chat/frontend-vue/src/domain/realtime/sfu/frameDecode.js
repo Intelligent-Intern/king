@@ -13,6 +13,7 @@ import {
   putImageDataOntoCanvas,
   resizeCanvas,
   resizeCanvasPreservingFrame,
+  softDeblockDecodedCanvas,
 } from './remoteCanvas';
 import {
   markRemoteFrameRendered,
@@ -349,6 +350,10 @@ export function createSfuFrameDecodeHelpers({
       rendered = true;
     }
     if (!rendered) return false;
+    softDeblockDecodedCanvas(canvas, {
+      frameQuality: Number(decoded.quality || peer.frameQuality || sfuFrameQuality),
+      layoutMode,
+    });
     markRemoteFrameRendered(peer, frame, renderedAtMs);
     receiverFeedback.maybeSendReceiverLayerPreference(peer, frame?.publisherId, frame, renderDecision.role, {
       codec_id: String(frame?.codecId || frame?.codec_id || 'wlvc'),
