@@ -61,7 +61,8 @@ try {
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');
   requireContains(remoteCanvas, 'export function resizeCanvasPreservingFrame', 'remote decoder size switches preserve the visible frame');
   requireContains(remoteCanvas, 'snapshotCtx.drawImage(canvas, 0, 0);', 'remote canvas resize snapshots the visible frame before dimensions change');
-  requireContains(remoteCanvas, 'ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, 0, 0, nextWidth, nextHeight);', 'remote canvas resize restores the previous visible frame at the new size');
+  requireContains(remoteCanvas, 'Math.min(nextWidth / previousWidth, nextHeight / previousHeight)', 'remote canvas resize preserves previous-frame aspect ratio');
+  requireContains(remoteCanvas, 'ctx.drawImage(snapshot, 0, 0, previousWidth, previousHeight, offsetX, offsetY, scaledWidth, scaledHeight);', 'remote canvas resize restores the previous visible frame without stretching');
   requireContains(frameDecode, 'resizeCanvasPreservingFrame(peer.decodedCanvas, nextWidth, nextHeight);', 'decoder reconfigure does not clear the remote canvas before the next keyframe');
   requireContains(remotePeers, "mediaConnectionState: 'connecting'", 'new SFU peers start in connecting media state');
   requireContains(remotePeers, 'function findSfuRemotePeerEntryByPeer', 'remote peer owner lookup for publisher rollover');

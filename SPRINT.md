@@ -52,7 +52,7 @@ Technical target:
 10. [x] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
 11. [x] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
 12. [x] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
-13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
+13. [x] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
 14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
@@ -355,6 +355,36 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429073805` served `CallWorkspaceView-DhP9DKwL.js`.
 - The deployed bundle contains `offscreen_worker_draw_image_budget_exceeded`, `offscreen_worker_get_image_data_budget_exceeded`, `Publisher OffscreenCanvas worker source readback exceeded`, `offscreen_canvas_worker_readback`, and `sfu_source_readback_budget_exceeded`.
+
+### 13. `[portrait-aspect-preservation]`
+
+Status: Done.
+
+Implementation:
+- Proved the existing profile sizing preserves portrait `1080x1920` and landscape `1920x1080` aspect ratios through the `VideoFrame` path, OffscreenCanvas worker sizing, WLVC metadata, publisher trace fields, and frame payload width/height metadata.
+- Changed main call video/canvas slots and mini video/canvas slots to `object-fit: contain` so portrait camera streams are no longer stretched or cropped to a full-width desktop tile; grid slots already use contain.
+- Changed remote canvas resize restoration to preserve the previous frame with a centered contain draw instead of stretching the prior canvas snapshot across the new decoded dimensions.
+- Updated the recovery timing contract to require non-stretched remote canvas resize behavior instead of the old full-canvas draw anchor.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-portrait-aspect-preservation-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/call-mini-strip-responsive-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/call-layout-ui-options-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-source-budget-profile-coupling-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-recovery-timing-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `node --check demo/video-chat/frontend-vue/tests/contract/sfu-portrait-aspect-preservation-contract.mjs`
+- `node --check demo/video-chat/frontend-vue/src/domain/realtime/sfu/remoteCanvas.js`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429074411` served `CallWorkspaceView-BtsAwBma.js` and `CallWorkspaceView-08sQqbYI.css`.
+- The deployed CSS contains `object-fit:contain!important` for `.video-container`, `.workspace-mini-video-slot`, and `.workspace-grid-video-slot` video/canvas rules.
+- The deployed bundle contains `source_contain`, `publisher_aspect_mode`, `source_aspect_ratio`, `frame_width`, `frame_height`, `displayWidth`, and `displayHeight`.
 
 ### 15. `[processor-error-recovery]`
 
