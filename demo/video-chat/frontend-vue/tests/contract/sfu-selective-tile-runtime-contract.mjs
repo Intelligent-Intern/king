@@ -33,6 +33,7 @@ try {
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
 
   requireContains(runtimeConfig, 'export const SFU_SELECTIVE_TILE_PATCH_ENABLED = true', 'workspace selective tile switch');
   requireContains(runtimeConfig, 'export const SFU_BACKGROUND_SNAPSHOT_ENABLED = true', 'workspace background snapshot switch');
@@ -62,6 +63,12 @@ try {
   requireContains(frameDecode, 'function composeRemoteSfuTrackLayers', 'workspace remote layer compositing helper');
   requireContains(frameDecode, 'trackRenderState.foregroundLayerActive = false', 'workspace clears stale foreground layer before recomposite');
   requireContains(frameDecode, "frameMetadata.type === 'keyframe' && !isSelectiveTileFrame", 'selective patch keyframes must not clear full-frame keyframe wait');
+  requireContains(remoteCanvas, 'export function softDeblockDecodedCanvas', 'remote canvas deblocking helper');
+  requireContains(remoteCanvas, "normalizedLayoutMode === 'tile_foreground' || normalizedLayoutMode === 'background_snapshot'", 'remote deblocker targets selective tile composites');
+  requireContains(remoteCanvas, 'normalizedQuality <= 52', 'remote deblocker also smooths low-quality WLVC full frames');
+  requireContains(remoteCanvas, 'ctx.filter = `blur(${blurPx}px)`', 'remote deblocker uses lightweight canvas blur');
+  requireContains(remoteCanvas, 'ctx.globalAlpha = blendAlpha', 'remote deblocker blends blur over original detail');
+  requireContains(frameDecode, 'softDeblockDecodedCanvas(canvas, {', 'remote decode applies deblocking after compositing');
 
   const queue = read('src/lib/sfu/outboundFrameQueue.ts');
   requireContains(queue, 'SFU_FRAME_SEND_QUEUE_BACKGROUND_SNAPSHOT_MAX_AGE_MS', 'background snapshot queue max age');
