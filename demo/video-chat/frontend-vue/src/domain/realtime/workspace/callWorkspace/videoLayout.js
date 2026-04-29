@@ -78,15 +78,46 @@ export function createCallWorkspaceVideoLayoutHelpers({
     });
   }
 
+  function targetAspectRatioForSurface(target, role) {
+    if (role === REMOTE_RENDER_SURFACE_ROLES.MINI) return 1;
+    if (!(target instanceof HTMLElement)) return 0;
+    const rect = typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
+    const width = Number(rect?.width || target.clientWidth || 0);
+    const height = Number(rect?.height || target.clientHeight || 0);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 0;
+    return width / height;
+  }
+
+  function framingForSurface(target, role) {
+    const targetAspectRatio = targetAspectRatioForSurface(target, role);
+    const isPortraitOrSquare = targetAspectRatio > 0 && targetAspectRatio <= 1.02;
+    const shouldCover = role === REMOTE_RENDER_SURFACE_ROLES.MINI
+      || (
+        isPortraitOrSquare
+        && [
+          REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN,
+          REMOTE_RENDER_SURFACE_ROLES.GRID,
+          REMOTE_RENDER_SURFACE_ROLES.MAIN,
+        ].includes(role)
+      );
+    return {
+      framingMode: shouldCover ? 'cover' : 'contain',
+      targetAspectRatio: targetAspectRatio || 0,
+    };
+  }
+
   function mountVideoNode(target, node, assignedNodes, {
     role = REMOTE_RENDER_SURFACE_ROLES.FALLBACK,
     userId = 0,
     visibleParticipantCount = 0,
   } = {}) {
     if (!(target instanceof HTMLElement) || !(node instanceof HTMLElement)) return false;
+    const framing = framingForSurface(target, role);
     applyRemoteVideoSurfaceRole(node, {
+      framingMode: framing.framingMode,
       layoutMode: currentLayoutMode(),
       role,
+      targetAspectRatio: framing.targetAspectRatio,
       userId,
       visibleParticipantCount,
     });

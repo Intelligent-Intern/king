@@ -27,8 +27,9 @@ import {
   roundedStageMs,
 } from './publisherFrameTrace.js';
 import {
-  resolveContainFrameSizeFromDimensions,
+  resolveFramedFrameSizeFromDimensions,
   resolveProfileReadbackIntervalMs,
+  resolvePublisherFramingTarget,
   resolvePublisherFrameSize,
 } from './videoFrameSizing.js';
 
@@ -57,15 +58,52 @@ function frameSourceDimensions(frame) {
   };
 }
 
-function resolveVideoFrameSize(frame, videoProfile = {}) {
+function resolveVideoFrameSize(frame, videoProfile = {}, framingTarget = {}) {
   const source = frameSourceDimensions(frame);
   const maxWidth = positiveNumber(videoProfile.frameWidth);
   const maxHeight = positiveNumber(videoProfile.frameHeight);
   return {
-    ...resolveContainFrameSizeFromDimensions(source.width, source.height, maxWidth, maxHeight),
+    ...resolveFramedFrameSizeFromDimensions(source.width, source.height, maxWidth, maxHeight, framingTarget),
     profileFrameWidth: maxWidth,
     profileFrameHeight: maxHeight,
   };
+}
+
+function sourceCropForFrameSize(frameSize = {}, fallbackWidth = 0, fallbackHeight = 0) {
+  const sourceCropWidth = positiveNumber(frameSize.sourceCropWidth) || positiveNumber(frameSize.sourceWidth) || positiveNumber(fallbackWidth);
+  const sourceCropHeight = positiveNumber(frameSize.sourceCropHeight) || positiveNumber(frameSize.sourceHeight) || positiveNumber(fallbackHeight);
+  return {
+    x: positiveNumber(frameSize.sourceCropX),
+    y: positiveNumber(frameSize.sourceCropY),
+    width: sourceCropWidth,
+    height: sourceCropHeight,
+  };
+}
+
+function drawSourceFrame(context, source, frameSize = {}, targetWidth = 0, targetHeight = 0) {
+  const normalizedTargetWidth = positiveNumber(targetWidth);
+  const normalizedTargetHeight = positiveNumber(targetHeight);
+  const crop = sourceCropForFrameSize(frameSize, source?.width || source?.videoWidth, source?.height || source?.videoHeight);
+  if (
+    normalizedTargetWidth > 0
+      && normalizedTargetHeight > 0
+      && crop.width > 0
+      && crop.height > 0
+  ) {
+    context.drawImage(
+      source,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      normalizedTargetWidth,
+      normalizedTargetHeight,
+    );
+    return;
+  }
+  context.drawImage(source, 0, 0, normalizedTargetWidth, normalizedTargetHeight);
 }
 
 function sourceReadbackBudgetFailureDetails(trace, {
@@ -267,10 +305,10 @@ export function createPublisherSourceReadbackController({
     sourceSurface.context.putImageData(imageData, 0, 0);
 
     const drawStartedAtMs = highResolutionNowMs();
-    targetSurface.context.drawImage(
+    drawSourceFrame(
+      targetSurface.context,
       sourceSurface.canvas,
-      0,
-      0,
+      targetFrameSize,
       targetSurface.canvas.width,
       targetSurface.canvas.height,
     );
@@ -295,6 +333,7 @@ export function createPublisherSourceReadbackController({
   }
 
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
+    const framingTarget = resolvePublisherFramingTarget(video);
     const reader = ensureVideoFrameReader('publisher_source_readback_tick');
     if (reader) {
       const readStartedAtMs = highResolutionNowMs();
@@ -304,7 +343,7 @@ export function createPublisherSourceReadbackController({
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       if (result.ok && result.frame) {
         videoFrameReaderTransientFailures = 0;
-        const frameSize = resolveVideoFrameSize(result.frame, activeProfile);
+        const frameSize = resolveVideoFrameSize(result.frame, activeProfile, framingTarget);
         updateTraceSource(trace, PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND, frameSize, activeTrack);
         return {
           source: result.frame,
@@ -400,7 +439,7 @@ export function createPublisherSourceReadbackController({
           && !captureCapabilities.supportsVideoFrameCopyTo
       ) {
         const workerStartedAtMs = highResolutionNowMs();
-        const workerResult = await captureWorkerReadback.readFrame({
+      const workerResult = await captureWorkerReadback.readFrame({
           source,
           frameSize,
           timestamp,
@@ -467,7 +506,7 @@ export function createPublisherSourceReadbackController({
       }
 
       const canvasFrameSize = sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
-        ? resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile)
+        ? resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile, resolvePublisherFramingTarget(video))
         : frameSize;
       const compatibilityIntervalMs = domCanvasCompatibilityReadbackIntervalMs(activeProfile);
       const nowMs = highResolutionNowMs();
@@ -483,7 +522,7 @@ export function createPublisherSourceReadbackController({
         canvas.height = canvasFrameSize.frameHeight;
       }
       const drawStartedAtMs = highResolutionNowMs();
-      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      drawSourceFrame(context, source, canvasFrameSize, canvas.width, canvas.height);
       const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
       markPublisherFrameTraceStage(
         trace,

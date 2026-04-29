@@ -1,4 +1,4 @@
-import { resolveContainFrameSizeFromDimensions, resolvePublisherFrameSize } from './videoFrameSizing.js';
+import { resolveFramedFrameSizeFromDimensions, resolvePublisherFrameSize } from './videoFrameSizing.js';
 
 export const DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND = 'dom_canvas_compatibility_fallback';
 export const DOM_CANVAS_COMPATIBILITY_READBACK_METHOD = 'dom_canvas_compatibility_readback';
@@ -49,7 +49,7 @@ export function resolveDomCanvasCompatibilityFrameSize(video, videoProfile = {},
   return resolvePublisherFrameSize(video, resolveDomCanvasCompatibilityProfile(videoProfile), videoTrack);
 }
 
-export function resolveDomCanvasCompatibilityVideoFrameSize(frame, videoProfile = {}) {
+export function resolveDomCanvasCompatibilityVideoFrameSize(frame, videoProfile = {}, framingTarget = {}) {
   const sourceWidth = positiveNumber(frame?.displayWidth)
     || positiveNumber(frame?.codedWidth)
     || positiveNumber(frame?.visibleRect?.width)
@@ -60,11 +60,12 @@ export function resolveDomCanvasCompatibilityVideoFrameSize(frame, videoProfile 
     || positiveNumber(frame?.height);
   const compatibilityProfile = resolveDomCanvasCompatibilityProfile(videoProfile);
   return {
-    ...resolveContainFrameSizeFromDimensions(
+    ...resolveFramedFrameSizeFromDimensions(
       sourceWidth,
       sourceHeight,
       compatibilityProfile.frameWidth,
       compatibilityProfile.frameHeight,
+      framingTarget,
     ),
     profileFrameWidth: compatibilityProfile.frameWidth,
     profileFrameHeight: compatibilityProfile.frameHeight,

@@ -1925,6 +1925,7 @@ const {
   toggleMicrophone,
   togglePinned,
   toggleScreenShare,
+  toggleVideoFullscreen,
   toggleUserMuted,
   typingUsers,
   updatePeerControlState,

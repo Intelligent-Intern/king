@@ -98,7 +98,7 @@ Technical target:
    Report:
    - Proposed next improvement.
 
-5. [ ] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
+5. [x] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
 
    Scope:
    - Add automatic layout-aware region-of-interest framing before the publisher encode step: when the target tile is portrait, zoom the camera frame until the portrait viewport is filled and crop the left/right landscape margins.
@@ -119,7 +119,11 @@ Technical target:
    - Contracts cover the crop math for landscape-to-portrait, portrait-to-portrait, fullscreen landscape, fullscreen portrait, and square mini-video cases.
 
    Report:
-   - Proposed next improvement from production UI feedback.
+   - Added layout-derived framing metadata (`contain`/`cover` plus target aspect ratio) to mounted video surfaces.
+   - Added client-side source crop math before publisher encode, including DOM canvas, OffscreenCanvas worker, and VideoFrame copy-scale readback paths.
+   - Mini-videos are square crop/zoom targets; portrait/square main or fullscreen surfaces crop before encode when the surface aspect demands it.
+   - Added double-click fullscreen toggle: double-click a grid, mini, or main video to enter fullscreen; double-click the fullscreen video again to restore the previous layout.
+   - Added contract coverage for crop math, fullscreen toggling, worker crop propagation, and CSS framing mode.
 
 ## Execution Order
 

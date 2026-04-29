@@ -60,7 +60,7 @@ try {
   );
   requireContains(captureWorkerSource, 'let frameSize = null;', 'worker keeps frame size available after guarded source cleanup');
   assert.ok(
-    captureWorkerSource.indexOf('try {\n    frameSize = resolveWorkerFrameSize(source, payload);') < captureWorkerSource.indexOf('context.drawImage(source'),
+    captureWorkerSource.indexOf('try {\n    frameSize = resolveWorkerFrameSize(source, payload);') < captureWorkerSource.indexOf('context.drawImage(\n      source,'),
     'worker must enter the guarded close path before resolving canvas/readback setup',
   );
   requireContains(captureWorkerSource, 'finally {\n    closeFrameSource(source);\n  }', 'worker closes transferred VideoFrame sources after setup/draw/readback failures');
