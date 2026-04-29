@@ -14,6 +14,10 @@ import {
   resizeCanvas,
   resizeCanvasPreservingFrame,
 } from './remoteCanvas';
+import {
+  markRemoteFrameRendered,
+  shouldRenderRemoteFrame,
+} from './remoteRenderScheduler';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -263,6 +267,35 @@ export function createSfuFrameDecodeHelpers({
     if (!(canvas instanceof HTMLCanvasElement)) return false;
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
+    const renderDecision = shouldRenderRemoteFrame(peer, frame, renderedAtMs);
+    if (!renderDecision.render) {
+      if (
+        (renderedAtMs - Number(peer.lastSfuRenderSkipTelemetryAtMs || 0)) >= 2000
+      ) {
+        peer.lastSfuRenderSkipTelemetryAtMs = renderedAtMs;
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'sfu_receiver_render_scheduled_skip',
+          code: 'sfu_receiver_render_scheduled_skip',
+          message: 'Remote SFU frame render was skipped by the surface-aware receiver scheduler.',
+          payload: {
+            publisher_id: String(frame?.publisherId || ''),
+            publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+            track_id: String(frame?.trackId || ''),
+            frame_type: String(frame?.type || ''),
+            frame_sequence: normalizeSfuFrameNumber(frame?.frameSequence),
+            frame_timestamp: normalizeSfuFrameNumber(frame?.timestamp),
+            render_skip_reason: String(renderDecision.reason || ''),
+            render_surface_role: String(renderDecision.role || ''),
+            render_elapsed_ms: Math.max(0, Number(renderDecision.elapsedMs || 0)),
+            render_min_interval_ms: Math.max(0, Number(renderDecision.minIntervalMs || 0)),
+            media_runtime_path: mediaRuntimePathRef.value,
+          },
+        });
+      }
+      return true;
+    }
     const imageData = new ImageData(decoded.data, decoded.width, decoded.height);
     const trackKey = sfuFrameTrackStateKey(frame);
     ensureRemoteSfuTrackCacheState(peer);
@@ -315,6 +348,7 @@ export function createSfuFrameDecodeHelpers({
       rendered = true;
     }
     if (!rendered) return false;
+    markRemoteFrameRendered(peer, frame, renderedAtMs);
     peer.frameCount = Number(peer.frameCount || 0) + 1;
     peer.lastFrameAtMs = renderedAtMs;
     peer.stalledLoggedAtMs = 0;
