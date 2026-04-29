@@ -60,6 +60,25 @@ function resolveVideoFrameSize(frame, videoProfile = {}) {
   };
 }
 
+function sourceReadbackBudgetFailureDetails(trace, {
+  stage,
+  source,
+  message,
+  timestamp,
+}) {
+  return publisherFrameFailureDetails(trace, {
+    reason: 'sfu_source_readback_budget_exceeded',
+    stage,
+    source,
+    message,
+    transportPath: 'publisher_source_readback',
+    bufferedAmount: 0,
+    payloadBytes: 0,
+    wirePayloadBytes: 0,
+    timestamp,
+  });
+}
+
 function updateTraceSource(trace, sourceBackend, frameSize, videoTrack) {
   if (!trace || typeof trace !== 'object') return;
   trace.sourceBackend = sourceBackend;
@@ -190,15 +209,10 @@ export function createPublisherSourceReadbackController({
           if (copyToMs > readbackBudgetMs) {
             return {
               budgetExceeded: true,
-              details: publisherFrameFailureDetails(trace, {
-                reason: 'sfu_source_readback_budget_exceeded',
+              details: sourceReadbackBudgetFailureDetails(trace, {
                 stage: 'video_frame_copy_to_rgba',
                 source: 'video_frame_copy_to_budget_exceeded',
                 message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
-                transportPath: 'publisher_source_readback',
-                bufferedAmount: 0,
-                payloadBytes: 0,
-                wirePayloadBytes: 0,
                 timestamp,
               }),
             };
@@ -242,6 +256,20 @@ export function createPublisherSourceReadbackController({
           markPublisherFrameTraceStage(trace, 'offscreen_worker_round_trip', workerElapsedMs);
           if (trace && typeof trace === 'object') {
             trace.sourceBackend = OFFSCREEN_CANVAS_WORKER_READBACK;
+          }
+          if (workerResult.drawImageMs > drawBudgetMs || workerResult.readbackMs > readbackBudgetMs) {
+            const readbackReason = workerResult.drawImageMs > drawBudgetMs
+              ? 'offscreen_worker_draw_image_budget_exceeded'
+              : 'offscreen_worker_get_image_data_budget_exceeded';
+            return {
+              budgetExceeded: true,
+              details: sourceReadbackBudgetFailureDetails(trace, {
+                stage: 'offscreen_canvas_worker_readback',
+                source: readbackReason,
+                message: 'Publisher OffscreenCanvas worker source readback exceeded the active SFU profile budget before WLVC encode.',
+                timestamp,
+              }),
+            };
           }
           return {
             imageData: workerResult.imageData,
@@ -309,15 +337,10 @@ export function createPublisherSourceReadbackController({
           : 'dom_canvas_compatibility_get_image_data_budget_exceeded';
         return {
           budgetExceeded: true,
-          details: publisherFrameFailureDetails(trace, {
-            reason: 'sfu_source_readback_budget_exceeded',
+          details: sourceReadbackBudgetFailureDetails(trace, {
             stage: DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
             source: readbackReason,
             message: 'Publisher source readback exceeded the active SFU profile budget before WLVC encode.',
-            transportPath: 'publisher_source_readback',
-            bufferedAmount: 0,
-            payloadBytes: 0,
-            wirePayloadBytes: 0,
             timestamp,
           }),
         };

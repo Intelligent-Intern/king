@@ -51,7 +51,7 @@ Technical target:
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
 10. [x] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
 11. [x] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
-12. [ ] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
+12. [x] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
 13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
 14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
@@ -330,6 +330,31 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - Production asset version `20260429071240` served `CallWorkspaceView-6Ak81AyJ.js`.
 - The deployed bundle contains `sfu_source_readback_profile_upshift`, `sfu_source_readback_recovered`, `noteWlvcSourceReadbackSuccess`, `wlvcSourceReadbackStableStartedAtMs`, and `sfu_client_unavailable_after_encode`.
+
+### 12. `[high-motion-readback-budget]`
+
+Status: Done.
+
+Implementation:
+- Added a deterministic local high-motion readback budget benchmark for all automatic SFU profiles and every selected capture backend: `VideoFrame.copyTo`, `OffscreenCanvas` worker readback, and DOM-canvas compatibility fallback.
+- Proved the benchmark against full-frame `1920x1080` motion while preserving the profile caps and DOM fallback `320x180`/`6 FPS` compatibility limits.
+- Added the missing OffscreenCanvas worker success-path budget gate so worker `drawImage` or `getImageData` overruns now fail as `sfu_source_readback_budget_exceeded` before WLVC encode, matching the VideoFrame-copy and DOM-canvas paths.
+- Added exact source markers `offscreen_worker_draw_image_budget_exceeded` and `offscreen_worker_get_image_data_budget_exceeded` for backend-side diagnosis.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-high-motion-readback-budget-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-source-readback-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-auto-readback-downgrade-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429073805` served `CallWorkspaceView-DhP9DKwL.js`.
+- The deployed bundle contains `offscreen_worker_draw_image_budget_exceeded`, `offscreen_worker_get_image_data_budget_exceeded`, `Publisher OffscreenCanvas worker source readback exceeded`, `offscreen_canvas_worker_readback`, and `sfu_source_readback_budget_exceeded`.
 
 ### 15. `[processor-error-recovery]`
 
