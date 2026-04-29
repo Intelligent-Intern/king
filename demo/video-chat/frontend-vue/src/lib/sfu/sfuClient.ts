@@ -379,12 +379,62 @@ export class SFUClient {
 
   private async sendPreparedEncodedFrame(prepared: PreparedSfuOutboundFramePayload, queuedAgeMs = 0): Promise<boolean> {
     const metrics = this.metricsForPreparedFrame(prepared, { queued_age_ms: queuedAgeMs })
+    const bufferedBeforeSend = this.getWebSocketBufferedAmount()
+    const queueAgeBudgetMs = Math.max(0, Number(metrics.budget_max_queue_age_ms || 0))
+    if (queueAgeBudgetMs > 0 && queuedAgeMs > queueAgeBudgetMs) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped a stale encoded frame before it could build socket pressure.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_queue_age_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_queue_age_budget_exceeded',
+        stage: 'outbound_frame_queue_budget',
+        source: 'outbound_frame_queue',
+        message: 'Encoded SFU frame exceeded its profile queue-age budget before websocket send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
+
+    const bufferedBudgetBytes = Math.max(0, Number(metrics.budget_max_buffered_bytes || 0))
+    if (bufferedBudgetBytes > 0 && bufferedBeforeSend > bufferedBudgetBytes) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an encoded frame before websocket buffering reached critical pressure.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_buffer_budget_exceeded',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_buffer_budget_exceeded',
+        stage: 'browser_websocket_buffer_budget',
+        source: 'websocket_buffered_amount',
+        message: 'Encoded SFU frame exceeded its profile websocket buffer budget before send.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
+
     this.reportFrameSendPressureIfNeeded({
       ...metrics,
-      buffered_amount: this.getWebSocketBufferedAmount(),
+      buffered_amount: bufferedBeforeSend,
     })
 
     const drain = await this.waitForSendBufferDrain()
+    metrics.send_drain_ms = drain.waitedMs
     if (!drain.ok) {
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
@@ -676,6 +726,14 @@ export class SFUClient {
       frameType: String(payload.frame_type || ''),
       frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
       chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
+      outgoingVideoQualityProfile: String(payload.outgoing_video_quality_profile || ''),
+      encodeMs: Math.max(0, Number(payload.encode_ms || 0)),
+      queuedAgeMs: Math.max(0, Number(payload.queued_age_ms || 0)),
+      sendDrainMs: Math.max(0, Number(payload.send_drain_ms || 0)),
+      budgetMaxEncodedBytesPerFrame: Math.max(0, Number(payload.budget_max_encoded_bytes_per_frame || 0)),
+      budgetMaxWireBytesPerSecond: Math.max(0, Number(payload.budget_max_wire_bytes_per_second || 0)),
+      budgetMaxQueueAgeMs: Math.max(0, Number(payload.budget_max_queue_age_ms || 0)),
+      budgetMaxBufferedBytes: Math.max(0, Number(payload.budget_max_buffered_bytes || 0)),
       binaryContinuationState: String(payload.binary_continuation_state || 'unknown_binary_continuation_state'),
       binaryContinuationRequired: Boolean(payload.binary_continuation_required),
       timestampUnixMs: nowMs,
@@ -801,6 +859,13 @@ export class SFUClient {
             senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
             codecId: stringField(msg.codecId, msg.codec_id),
             runtimeId: stringField(msg.runtimeId, msg.runtime_id),
+            outgoingVideoQualityProfile: stringField(
+              msg.outgoingVideoQualityProfile,
+              msg.outgoing_video_quality_profile,
+            ),
+            kingReceiveLatencyMs: Math.max(0, Number(msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
+            kingFanoutLatencyMs: Math.max(0, Number(msg.kingFanoutLatencyMs ?? msg.king_fanout_latency_ms ?? 0)),
+            subscriberSendLatencyMs: Math.max(0, Number(msg.subscriberSendLatencyMs ?? msg.subscriber_send_latency_ms ?? 0)),
             layoutMode: tileMetadata?.layoutMode || 'full_frame',
             layerId: tileMetadata?.layerId || 'full',
             cacheEpoch: Math.max(0, Number(tileMetadata?.cacheEpoch || 0)),

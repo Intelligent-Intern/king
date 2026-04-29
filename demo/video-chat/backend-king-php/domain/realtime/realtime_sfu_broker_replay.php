@@ -227,6 +227,7 @@ function videochat_sfu_live_frame_relay_read(
             continue;
         }
         $frame['publisher_id'] = (string) ($frame['publisher_id'] ?? $publisherId);
+        $frame['live_relay_age_ms'] = max(0, $nowMs - $createdAtMs);
         if ($cursor === '' || strcmp($basename, $cursor) > 0) {
             $cursor = $basename;
         }
@@ -250,11 +251,18 @@ function videochat_sfu_live_frame_relay_poll(
 ): int {
     $sentCount = 0;
     foreach (videochat_sfu_live_frame_relay_read($roomId, $clientId, $localPublisherIds, $cursor, $seenFrameFiles) as $frame) {
+        $subscriberSendStartedAtMs = videochat_sfu_now_ms();
+        $kingFanoutStartedAtMs = max(0, (int) ($frame['king_receive_at_ms'] ?? 0));
+        if ($kingFanoutStartedAtMs > 0) {
+            $frame['subscriber_send_latency_ms'] = max(0, $subscriberSendStartedAtMs - $kingFanoutStartedAtMs);
+        }
         if (videochat_sfu_send_outbound_message($websocket, $frame, [
             'sfu_send_path' => 'live_relay_poll',
             'room_id' => $roomId,
             'subscriber_id' => $clientId,
             'worker_pid' => getmypid(),
+            'subscriber_send_latency_ms' => (float) ($frame['subscriber_send_latency_ms'] ?? 0),
+            'live_relay_age_ms' => (float) ($frame['live_relay_age_ms'] ?? 0),
         ])) {
             $sentCount++;
         }

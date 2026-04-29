@@ -35,6 +35,15 @@ try {
   requireContains(framePayload, 'roi_area_ratio', 'frame payload ROI area metric');
   requireContains(framePayload, 'selection_tile_ratio', 'frame payload selected tile ratio metric');
   requireContains(framePayload, 'selection_mask_guided', 'frame payload matte-guided metric');
+  requireContains(framePayload, 'outgoing_video_quality_profile', 'frame payload outgoing profile metric');
+  requireContains(framePayload, 'draw_image_ms', 'frame payload draw timing metric');
+  requireContains(framePayload, 'readback_ms', 'frame payload readback timing metric');
+  requireContains(framePayload, 'encode_ms', 'frame payload encode timing metric');
+  requireContains(framePayload, 'budget_max_encoded_bytes_per_frame', 'frame payload encoded byte budget metric');
+  requireContains(framePayload, 'budget_max_wire_bytes_per_second', 'frame payload wire byte budget metric');
+  requireContains(framePayload, 'budget_max_queue_age_ms', 'frame payload queue age budget metric');
+  requireContains(framePayload, 'budget_max_buffered_bytes', 'frame payload buffered bytes budget metric');
+  requireContains(framePayload, 'transportMetrics: normalizeTransportMetrics', 'binary envelope preserves stage transport metrics');
 
   const sfuClient = readFrontend('src/lib/sfu/sfuClient.ts');
   requireContains(sfuClient, 'SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS', 'sfu client transport sample cooldown');
@@ -49,6 +58,9 @@ try {
   );
   requireContains(sfuClient, 'stage: String(details.stage ||', 'sfu client persists exact send stage on failure');
   requireContains(sfuClient, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
+  requireContains(sfuClient, 'metrics.send_drain_ms = drain.waitedMs', 'sfu client records send-drain timing');
+  requireContains(sfuClient, 'sfu_queue_age_budget_exceeded', 'sfu client enforces queue-age budget before send');
+  requireContains(sfuClient, 'sfu_buffer_budget_exceeded', 'sfu client enforces websocket buffered budget before critical pressure');
 
   const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   requireContains(sfuTransport, '[KingRT] SFU frame send failed at exact transport stage', 'workspace exact-stage send failure log');
@@ -56,6 +68,16 @@ try {
   requireContains(sfuTransport, 'binary_continuation_state: String(details?.binaryContinuationState', 'workspace failed frame send diagnostic includes binary continuation state');
   requireContains(sfuTransport, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
   requireContains(sfuTransport, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
+
+  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
+  requireContains(publisherPipeline, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
+  requireContains(publisherPipeline, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
+  requireContains(publisherPipeline, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
+  requireContains(publisherPipeline, 'videoProfile.maxEncodedBytesPerFrame', 'publisher enforces profile encoded byte budget');
+
+  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');
+  requireContains(frameDecode, 'sfu_receiver_render_sample', 'receiver records render latency sample');
+  requireContains(frameDecode, 'receiver_render_latency_ms', 'receiver render sample includes render latency');
 
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   requireContains(backendStore, 'function videochat_sfu_transport_metric_fields', 'backend transport metric helper');
@@ -65,8 +87,15 @@ try {
   requireContains(backendStore, 'sfu_frame_binary_send_sample', 'backend sampled binary send diagnostic');
   requireContains(backendStore, 'selection_tile_ratio', 'backend selected tile ratio metric');
   requireContains(backendStore, 'selection_mask_guided', 'backend matte-guided metric');
+  requireContains(backendStore, 'videochat_sfu_extract_stage_transport_metadata', 'backend normalizes stage transport metadata');
+  requireContains(backendStore, 'king_receive_latency_ms', 'backend preserves King receive latency metric');
+  requireContains(backendStore, 'subscriber_send_latency_ms', 'backend preserves subscriber send latency metric');
   assert.ok(!backendStore.includes('CREATE TABLE IF NOT EXISTS sfu_frames'), 'backend must not persist SFU media frames in SQLite');
   assert.ok(!backendStore.includes('INSERT INTO sfu_frames'), 'backend must not insert SFU media frames into SQLite');
+
+  const backendGateway = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php');
+  requireContains(backendGateway, 'stampKingReceiveMetrics', 'gateway stamps King receive latency per frame');
+  requireContains(backendGateway, 'king_fanout_latency_ms', 'gateway records fanout latency per frame');
 
   process.stdout.write('[sfu-transport-metrics-contract] PASS\n');
 } catch (error) {

@@ -39,8 +39,47 @@ export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 350;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2500;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
 export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';
+export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
+  rescue: Object.freeze({
+    maxEncodedBytesPerFrame: 180 * 1024,
+    maxKeyframeBytesPerFrame: 256 * 1024,
+    maxWireBytesPerSecond: 420 * 1024,
+    maxEncodeMs: 45,
+    maxQueueAgeMs: 120,
+    maxBufferedBytes: 384 * 1024,
+    expectedRecovery: 'hold_rescue_until_socket_low_water',
+  }),
+  realtime: Object.freeze({
+    maxEncodedBytesPerFrame: 360 * 1024,
+    maxKeyframeBytesPerFrame: 560 * 1024,
+    maxWireBytesPerSecond: 850 * 1024,
+    maxEncodeMs: 55,
+    maxQueueAgeMs: 140,
+    maxBufferedBytes: 640 * 1024,
+    expectedRecovery: 'downshift_to_rescue_before_critical_buffer',
+  }),
+  balanced: Object.freeze({
+    maxEncodedBytesPerFrame: 720 * 1024,
+    maxKeyframeBytesPerFrame: 960 * 1024,
+    maxWireBytesPerSecond: 1400 * 1024,
+    maxEncodeMs: 70,
+    maxQueueAgeMs: 180,
+    maxBufferedBytes: 1024 * 1024,
+    expectedRecovery: 'downshift_to_realtime_before_critical_buffer',
+  }),
+  quality: Object.freeze({
+    maxEncodedBytesPerFrame: 1280 * 1024,
+    maxKeyframeBytesPerFrame: 1536 * 1024,
+    maxWireBytesPerSecond: 2200 * 1024,
+    maxEncodeMs: 90,
+    maxQueueAgeMs: 220,
+    maxBufferedBytes: 1536 * 1024,
+    expectedRecovery: 'downshift_to_balanced_before_critical_buffer',
+  }),
+});
 export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   rescue: Object.freeze({
+    id: 'rescue',
     label: 'Low',
     captureWidth: 640,
     captureHeight: 360,
@@ -50,8 +89,10 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 20,
     keyFrameInterval: 16,
     encodeIntervalMs: 244,
+    ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.rescue,
   }),
   realtime: Object.freeze({
+    id: 'realtime',
     label: 'Fast',
     captureWidth: 640,
     captureHeight: 360,
@@ -61,8 +102,10 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 29,
     keyFrameInterval: 12,
     encodeIntervalMs: 167,
+    ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.realtime,
   }),
   balanced: Object.freeze({
+    id: 'balanced',
     label: 'Balanced',
     captureWidth: 960,
     captureHeight: 540,
@@ -72,8 +115,10 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: 33,
     keyFrameInterval: 12,
     encodeIntervalMs: 111,
+    ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.balanced,
   }),
   quality: Object.freeze({
+    id: 'quality',
     label: 'Quality',
     captureWidth: LOCAL_CAMERA_CAPTURE_WIDTH,
     captureHeight: LOCAL_CAMERA_CAPTURE_HEIGHT,
@@ -83,6 +128,7 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
     frameQuality: SFU_WLVC_FRAME_QUALITY,
     keyFrameInterval: SFU_WLVC_KEYFRAME_INTERVAL,
     encodeIntervalMs: SFU_WLVC_ENCODE_INTERVAL_MS,
+    ...SFU_VIDEO_QUALITY_PROFILE_BUDGETS.quality,
   }),
 });
 export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS = Object.freeze(
@@ -101,6 +147,10 @@ export function normalizeSfuVideoQualityProfile(value) {
 
 export function resolveSfuVideoQualityProfile(value) {
   return SFU_VIDEO_QUALITY_PROFILES[normalizeSfuVideoQualityProfile(value)];
+}
+
+export function resolveSfuVideoQualityProfileBudget(value) {
+  return SFU_VIDEO_QUALITY_PROFILE_BUDGETS[normalizeSfuVideoQualityProfile(value)];
 }
 export const LOCAL_TRACK_RECOVERY_BASE_DELAY_MS = 1200;
 export const LOCAL_TRACK_RECOVERY_MAX_DELAY_MS = 10_000;

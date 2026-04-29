@@ -330,6 +330,15 @@ function videochat_handle_sfu_routes(
     $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
     $nextLiveFrameRelayCleanupMs = videochat_sfu_now_ms() + 5000;
     $nextBrokerFramePresenceTouchMs = 0;
+    $stampKingReceiveMetrics = static function (array $msg): array {
+        $kingReceiveAtMs = videochat_sfu_now_ms();
+        $msg['king_receive_at_ms'] = $kingReceiveAtMs;
+        $senderSentAtMs = max(0, (int) ($msg['sender_sent_at_ms'] ?? ($msg['senderSentAtMs'] ?? 0)));
+        if ($senderSentAtMs > 0) {
+            $msg['king_receive_latency_ms'] = max(0, $kingReceiveAtMs - $senderSentAtMs);
+        }
+        return $msg;
+    };
     $processFramePayload = static function (array $msg) use (
         &$sfuRooms,
         &$sfuClients,
@@ -408,6 +417,11 @@ function videochat_handle_sfu_routes(
             'payload_chars' => $payloadChars,
             'chunk_count' => $chunkCount,
         ], videochat_sfu_normalize_frame_transport_metadata($msg));
+        $fanoutStartedAtMs = videochat_sfu_now_ms();
+        $kingReceiveAtMs = max(0, (int) ($outboundFrame['king_receive_at_ms'] ?? 0));
+        if ($kingReceiveAtMs > 0) {
+            $outboundFrame['king_fanout_latency_ms'] = max(0, $fanoutStartedAtMs - $kingReceiveAtMs);
+        }
         if ($frameId !== '') {
             $outboundFrame['frame_id'] = $frameId;
         }
@@ -432,11 +446,14 @@ function videochat_handle_sfu_routes(
         }
 
         foreach (videochat_sfu_room_subscriber_targets($sfuRooms[$roomId] ?? [], (string) $clientId) as $subClient) {
+            $subscriberSendStartedAtMs = videochat_sfu_now_ms();
+            $outboundFrame['subscriber_send_latency_ms'] = max(0, $subscriberSendStartedAtMs - $fanoutStartedAtMs);
             if (!videochat_sfu_send_outbound_message($subClient['websocket'], $outboundFrame, [
                 'sfu_send_path' => 'direct_fanout',
                 'room_id' => $roomId,
                 'subscriber_id' => (string) ($subClient['client_id'] ?? ''),
                 'worker_pid' => getmypid(),
+                'subscriber_send_latency_ms' => $outboundFrame['subscriber_send_latency_ms'],
             ])) {
                 videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_binary_required_failed', [
                     'room_id' => $roomId,
@@ -535,7 +552,7 @@ function videochat_handle_sfu_routes(
                 ]);
                 continue;
             }
-            $msg = is_array($command['payload'] ?? null) ? $command['payload'] : [];
+            $msg = is_array($command['payload'] ?? null) ? $stampKingReceiveMetrics($command['payload']) : [];
             $processFramePayload($msg);
             continue;
         }
@@ -713,7 +730,7 @@ function videochat_handle_sfu_routes(
                     break;
 
                 case 'sfu/frame':
-                    $processFramePayload($msg);
+                    $processFramePayload($stampKingReceiveMetrics($msg));
                     break;
 
                 case 'sfu/frame-chunk':

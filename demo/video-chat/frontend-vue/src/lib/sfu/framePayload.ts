@@ -123,7 +123,7 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
   const roiAreaRatio = tilePatch
     ? Number((Math.max(0, Number(tilePatch.roiNormWidth || 0)) * Math.max(0, Number(tilePatch.roiNormHeight || 0))).toFixed(6))
     : 1
-  const metadataJson = serializeSfuEnvelopeMetadata({ tilePatch, codecId, runtimeId })
+  const metadataJson = serializeSfuEnvelopeMetadata({ tilePatch, codecId, runtimeId, transportMetrics })
   const metadataJsonBytes = encodeUtf8(metadataJson).byteLength
   const projectedBinaryEnvelopeBytes = (metadataJsonBytes > 0 ? 46 : 42)
     + encodeUtf8(String(frame.publisherId || '')).byteLength
@@ -163,6 +163,7 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       codec_id: codecId,
       runtime_id: runtimeId,
       protection_mode: protectionMode,
+      ...transportMetrics,
       raw_byte_length: rawByteLength,
       payload_bytes: payloadByteLength,
       payload_chars: payloadChars,
@@ -200,12 +201,55 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const selectionTileCount = normalizeNonNegativeInteger(source.selection_tile_count ?? source.selectionTileCount)
   const selectionTotalTileCount = normalizeNonNegativeInteger(source.selection_total_tile_count ?? source.selectionTotalTileCount)
   const selectionTileRatio = normalizeUnitFloat(source.selection_tile_ratio ?? source.selectionTileRatio, 0)
-  return {
+  const profile = String(source.outgoing_video_quality_profile ?? source.outgoingVideoQualityProfile ?? '').trim().toLowerCase()
+  const expectedRecovery = String(source.budget_expected_recovery ?? source.budgetExpectedRecovery ?? '').trim()
+  const metrics: Record<string, unknown> = {
     selection_tile_count: selectionTileCount,
     selection_total_tile_count: selectionTotalTileCount,
     selection_tile_ratio: selectionTileRatio,
     selection_mask_guided: Boolean(source.selection_mask_guided ?? source.selectionMaskGuided),
   }
+  if (profile !== '') metrics.outgoing_video_quality_profile = profile
+  if (expectedRecovery !== '') metrics.budget_expected_recovery = expectedRecovery
+
+  const integerFields: Array<[string, unknown]> = [
+    ['capture_width', source.capture_width ?? source.captureWidth],
+    ['capture_height', source.capture_height ?? source.captureHeight],
+    ['frame_width', source.frame_width ?? source.frameWidth],
+    ['frame_height', source.frame_height ?? source.frameHeight],
+    ['encoded_payload_bytes', source.encoded_payload_bytes ?? source.encodedPayloadBytes],
+    ['max_payload_bytes', source.max_payload_bytes ?? source.maxPayloadBytes],
+    ['budget_max_encoded_bytes_per_frame', source.budget_max_encoded_bytes_per_frame ?? source.budgetMaxEncodedBytesPerFrame],
+    ['budget_max_keyframe_bytes_per_frame', source.budget_max_keyframe_bytes_per_frame ?? source.budgetMaxKeyframeBytesPerFrame],
+    ['budget_max_wire_bytes_per_second', source.budget_max_wire_bytes_per_second ?? source.budgetMaxWireBytesPerSecond],
+    ['budget_max_queue_age_ms', source.budget_max_queue_age_ms ?? source.budgetMaxQueueAgeMs],
+    ['budget_max_buffered_bytes', source.budget_max_buffered_bytes ?? source.budgetMaxBufferedBytes],
+    ['king_receive_at_ms', source.king_receive_at_ms ?? source.kingReceiveAtMs],
+  ]
+  for (const [key, fieldValue] of integerFields) {
+    const normalized = normalizeNonNegativeInteger(fieldValue)
+    if (normalized > 0) metrics[key] = normalized
+  }
+
+  const numberFields: Array<[string, unknown]> = [
+    ['capture_frame_rate', source.capture_frame_rate ?? source.captureFrameRate],
+    ['draw_image_ms', source.draw_image_ms ?? source.drawImageMs],
+    ['readback_ms', source.readback_ms ?? source.readbackMs],
+    ['encode_ms', source.encode_ms ?? source.encodeMs],
+    ['local_stage_elapsed_ms', source.local_stage_elapsed_ms ?? source.localStageElapsedMs],
+    ['budget_max_encode_ms', source.budget_max_encode_ms ?? source.budgetMaxEncodeMs],
+    ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
+    ['king_receive_latency_ms', source.king_receive_latency_ms ?? source.kingReceiveLatencyMs],
+    ['king_fanout_latency_ms', source.king_fanout_latency_ms ?? source.kingFanoutLatencyMs],
+    ['subscriber_send_latency_ms', source.subscriber_send_latency_ms ?? source.subscriberSendLatencyMs],
+    ['receiver_render_latency_ms', source.receiver_render_latency_ms ?? source.receiverRenderLatencyMs],
+  ]
+  for (const [key, fieldValue] of numberFields) {
+    const normalized = normalizeNonNegativeNumber(fieldValue)
+    if (normalized > 0) metrics[key] = normalized
+  }
+
+  return metrics
 }
 
 export function createSfuFrameId(): string {
@@ -345,7 +389,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   offset += metadataJsonByteLength
   const payloadBytes = bytes.slice(offset, offset + payloadByteLength).buffer
   const tilePatch = parseTilePatchMetadataJson(metadataJson)
-  const { codecId, runtimeId } = parseSfuEnvelopeMetadata(metadataJson)
+  const { codecId, runtimeId, transportMetrics } = parseSfuEnvelopeMetadata(metadataJson)
 
   const protectedFrame = protectionMode === 'transport_only' ? null : arrayBufferToBase64Url(payloadBytes)
   const dataBase64 = protectionMode === 'transport_only' ? arrayBufferToBase64Url(payloadBytes) : null
@@ -376,6 +420,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
       payload_chars: payloadChars,
       chunk_count: 1,
       frame_id: frameId,
+      ...transportMetrics,
       ...flattenTilePatchMetadata(tilePatch),
       ...(protectedFrame ? { protected_frame: protectedFrame } : {}),
       ...(dataBase64 ? { data_base64: dataBase64 } : {}),
@@ -393,6 +438,12 @@ function normalizeUnitFloat(value: unknown, fallback = 0): number {
   const normalized = Number(value)
   if (!Number.isFinite(normalized)) return fallback
   return Math.max(0, Math.min(1, normalized))
+}
+
+function normalizeNonNegativeNumber(value: unknown): number {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized < 0) return 0
+  return Number(normalized.toFixed(3))
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number): number {
@@ -440,12 +491,15 @@ function serializeSfuEnvelopeMetadata(input: {
   tilePatch?: SfuTilePatchMetadata | null
   codecId?: string | null
   runtimeId?: string | null
+  transportMetrics?: Record<string, unknown> | null
+  metrics?: Record<string, unknown> | null
 }): string {
   const tilePatch = normalizeTilePatchMetadata(input.tilePatch)
   const metadata: Record<string, unknown> = {
     codec_id: normalizeCodecId(input.codecId),
     runtime_id: normalizeRuntimeId(input.runtimeId),
   }
+  Object.assign(metadata, normalizeTransportMetrics(input.transportMetrics ?? input.metrics))
   Object.assign(metadata, flattenTilePatchMetadata(tilePatch))
   return JSON.stringify(metadata)
 }
@@ -453,19 +507,21 @@ function serializeSfuEnvelopeMetadata(input: {
 function parseSfuEnvelopeMetadata(value: string): {
   codecId: string
   runtimeId: string
+  transportMetrics: Record<string, unknown>
 } {
   try {
     const parsed = JSON.parse(String(value || ''))
     if (!parsed || typeof parsed !== 'object') {
-      return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime' }
+      return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime', transportMetrics: {} }
     }
     const source = parsed as Record<string, unknown>
     return {
       codecId: normalizeCodecId(source.codecId ?? source.codec_id),
       runtimeId: normalizeRuntimeId(source.runtimeId ?? source.runtime_id),
+      transportMetrics: normalizeTransportMetrics(source),
     }
   } catch {
-    return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime' }
+    return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime', transportMetrics: {} }
   }
 }
 

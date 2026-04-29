@@ -326,6 +326,35 @@ export function createSfuFrameDecodeHelpers({
     if (!(canvas.parentElement instanceof HTMLElement)) {
       renderCallVideoLayout();
     }
+    const senderSentAtMs = normalizeSfuFrameNumber(frame?.senderSentAtMs);
+    const receiverRenderLatencyMs = senderSentAtMs > 0
+      ? Math.max(0, renderedAtMs - senderSentAtMs)
+      : 0;
+    if (
+      receiverRenderLatencyMs > 0
+      && (renderedAtMs - Number(peer.lastSfuRenderTelemetryAtMs || 0)) >= 2000
+    ) {
+      peer.lastSfuRenderTelemetryAtMs = renderedAtMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'sfu_receiver_render_sample',
+        code: 'sfu_receiver_render_sample',
+        message: 'Sampled SFU receiver render latency for the active media path.',
+        payload: {
+          publisher_id: String(frame?.publisherId || ''),
+          publisher_user_id: String(frame?.publisherUserId || ''),
+          track_id: String(frame?.trackId || ''),
+          frame_sequence: normalizeSfuFrameNumber(frame?.frameSequence),
+          outgoing_video_quality_profile: String(frame?.outgoingVideoQualityProfile || ''),
+          receiver_render_latency_ms: receiverRenderLatencyMs,
+          king_receive_latency_ms: Math.max(0, Number(frame?.kingReceiveLatencyMs || 0)),
+          king_fanout_latency_ms: Math.max(0, Number(frame?.kingFanoutLatencyMs || 0)),
+          subscriber_send_latency_ms: Math.max(0, Number(frame?.subscriberSendLatencyMs || 0)),
+          media_runtime_path: mediaRuntimePathRef.value,
+        },
+      });
+    }
     markRemotePeerRenderable(peer);
     if (
       (previousConnectionState !== 'live' || previousConnectionMessage !== '')

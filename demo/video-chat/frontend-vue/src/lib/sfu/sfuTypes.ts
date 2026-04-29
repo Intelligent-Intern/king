@@ -31,6 +31,10 @@ export interface SFUEncodedFrame {
   senderSentAtMs?: number
   codecId?: string
   runtimeId?: string
+  outgoingVideoQualityProfile?: string
+  kingReceiveLatencyMs?: number
+  kingFanoutLatencyMs?: number
+  subscriberSendLatencyMs?: number
   layoutMode?: 'full_frame' | 'tile_foreground' | 'background_snapshot'
   layerId?: 'full' | 'foreground' | 'background'
   cacheEpoch?: number
@@ -78,6 +82,14 @@ export interface SfuFrameTransportSample {
   frameType: string
   frameSequence: number
   chunkCount: number
+  outgoingVideoQualityProfile: string
+  encodeMs: number
+  queuedAgeMs: number
+  sendDrainMs: number
+  budgetMaxEncodedBytesPerFrame: number
+  budgetMaxWireBytesPerSecond: number
+  budgetMaxQueueAgeMs: number
+  budgetMaxBufferedBytes: number
   binaryContinuationState: string
   binaryContinuationRequired: boolean
   timestampUnixMs: number

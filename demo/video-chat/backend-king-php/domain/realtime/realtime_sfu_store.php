@@ -565,13 +565,82 @@ function videochat_sfu_send_outbound_message(mixed $socket, array $payload, arra
 /**
  * @return array<string, mixed>
  */
+function videochat_sfu_extract_stage_transport_metadata(array $frame): array
+{
+    $metadata = [];
+    $profile = strtolower(trim((string) ($frame['outgoing_video_quality_profile'] ?? ($frame['outgoingVideoQualityProfile'] ?? ''))));
+    if ($profile !== '' && preg_match('/^[a-z0-9_-]{1,32}$/', $profile) === 1) {
+        $metadata['outgoing_video_quality_profile'] = $profile;
+    }
+    $recovery = trim((string) ($frame['budget_expected_recovery'] ?? ($frame['budgetExpectedRecovery'] ?? '')));
+    if ($recovery !== '' && preg_match('/^[A-Za-z0-9_.:-]{1,96}$/', $recovery) === 1) {
+        $metadata['budget_expected_recovery'] = $recovery;
+    }
+
+    $intFields = [
+        'capture_width' => ['capture_width', 'captureWidth'],
+        'capture_height' => ['capture_height', 'captureHeight'],
+        'frame_width' => ['frame_width', 'frameWidth'],
+        'frame_height' => ['frame_height', 'frameHeight'],
+        'encoded_payload_bytes' => ['encoded_payload_bytes', 'encodedPayloadBytes'],
+        'max_payload_bytes' => ['max_payload_bytes', 'maxPayloadBytes'],
+        'budget_max_encoded_bytes_per_frame' => ['budget_max_encoded_bytes_per_frame', 'budgetMaxEncodedBytesPerFrame'],
+        'budget_max_keyframe_bytes_per_frame' => ['budget_max_keyframe_bytes_per_frame', 'budgetMaxKeyframeBytesPerFrame'],
+        'budget_max_wire_bytes_per_second' => ['budget_max_wire_bytes_per_second', 'budgetMaxWireBytesPerSecond'],
+        'budget_max_queue_age_ms' => ['budget_max_queue_age_ms', 'budgetMaxQueueAgeMs'],
+        'budget_max_buffered_bytes' => ['budget_max_buffered_bytes', 'budgetMaxBufferedBytes'],
+        'king_receive_at_ms' => ['king_receive_at_ms', 'kingReceiveAtMs'],
+    ];
+    foreach ($intFields as $target => $keys) {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $frame)) {
+                continue;
+            }
+            $value = max(0, (int) $frame[$key]);
+            if ($value > 0) {
+                $metadata[$target] = $value;
+            }
+            break;
+        }
+    }
+
+    $floatFields = [
+        'capture_frame_rate' => ['capture_frame_rate', 'captureFrameRate'],
+        'draw_image_ms' => ['draw_image_ms', 'drawImageMs'],
+        'readback_ms' => ['readback_ms', 'readbackMs'],
+        'encode_ms' => ['encode_ms', 'encodeMs'],
+        'local_stage_elapsed_ms' => ['local_stage_elapsed_ms', 'localStageElapsedMs'],
+        'budget_max_encode_ms' => ['budget_max_encode_ms', 'budgetMaxEncodeMs'],
+        'send_drain_ms' => ['send_drain_ms', 'sendDrainMs'],
+        'king_receive_latency_ms' => ['king_receive_latency_ms', 'kingReceiveLatencyMs'],
+        'king_fanout_latency_ms' => ['king_fanout_latency_ms', 'kingFanoutLatencyMs'],
+        'subscriber_send_latency_ms' => ['subscriber_send_latency_ms', 'subscriberSendLatencyMs'],
+        'live_relay_age_ms' => ['live_relay_age_ms', 'liveRelayAgeMs'],
+        'receiver_render_latency_ms' => ['receiver_render_latency_ms', 'receiverRenderLatencyMs'],
+    ];
+    foreach ($floatFields as $target => $keys) {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $frame)) {
+                continue;
+            }
+            $value = max(0.0, (float) $frame[$key]);
+            if ($value > 0.0) {
+                $metadata[$target] = round($value, 3);
+            }
+            break;
+        }
+    }
+
+    return $metadata;
+}
+
 function videochat_sfu_extract_layout_metadata(array $frame): array
 {
     $layoutMode = strtolower(trim((string) ($frame['layout_mode'] ?? '')));
-    $metadata = [
+    $metadata = array_merge([
         'codec_id' => videochat_sfu_normalize_codec_id((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? ''))),
         'runtime_id' => videochat_sfu_normalize_runtime_id((string) ($frame['runtime_id'] ?? ($frame['runtimeId'] ?? ''))),
-    ];
+    ], videochat_sfu_extract_stage_transport_metadata($frame));
     if ($layoutMode === '') {
         return $metadata;
     }
@@ -647,6 +716,7 @@ function videochat_sfu_transport_metric_fields(array $payload, int $wirePayloadB
         'transport_frame_kind' => $layoutMode . ':' . $layerId,
         'codec_id' => videochat_sfu_normalize_codec_id((string) ($payload['codec_id'] ?? ($payload['codecId'] ?? ''))),
         'runtime_id' => videochat_sfu_normalize_runtime_id((string) ($payload['runtime_id'] ?? ($payload['runtimeId'] ?? ''))),
+        ...videochat_sfu_extract_stage_transport_metadata($payload),
         'cache_epoch' => max(0, (int) ($payload['cache_epoch'] ?? 0)),
         'tile_count' => count($tileIndices),
         'selection_tile_count' => max(0, (int) ($payload['selection_tile_count'] ?? 0)),
@@ -940,6 +1010,7 @@ function videochat_sfu_normalize_frame_transport_metadata(array $source): array
     if (array_key_exists('selection_mask_guided', $source) || array_key_exists('selectionMaskGuided', $source)) {
         $metadata['selection_mask_guided'] = (bool) ($source['selection_mask_guided'] ?? $source['selectionMaskGuided']);
     }
+    $metadata = array_merge($metadata, videochat_sfu_extract_stage_transport_metadata($source));
     $protectionMode = strtolower(trim((string) ($source['protection_mode'] ?? ($source['protectionMode'] ?? ''))));
     if (in_array($protectionMode, ['transport_only', 'protected', 'required'], true)) {
         $metadata['protection_mode'] = $protectionMode;

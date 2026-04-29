@@ -45,6 +45,17 @@ export function createLocalPublisherPipelineHelpers({
     return 'wlvc_unknown';
   }
 
+  function highResolutionNowMs() {
+    return typeof performance !== 'undefined' && typeof performance.now === 'function'
+      ? performance.now()
+      : Date.now();
+  }
+
+  function roundedStageMs(value) {
+    const normalized = Number(value || 0);
+    return Number.isFinite(normalized) ? Number(Math.max(0, normalized).toFixed(3)) : 0;
+  }
+
   function uniqueLocalStreams(values) {
     const out = [];
     const seen = new Set();
@@ -374,9 +385,7 @@ export function createLocalPublisherPipelineHelpers({
     };
 
     const runWlvcEncodeTick = async () => {
-      const startedAtMs = typeof performance !== 'undefined' && typeof performance.now === 'function'
-        ? performance.now()
-        : Date.now();
+      const startedAtMs = highResolutionNowMs();
       try {
         if (!isWlvcRuntimePath()) return;
         if (state.wlvcEncodeInFlight) return;
@@ -393,8 +402,12 @@ export function createLocalPublisherPipelineHelpers({
         if (video.readyState < 2 || !ctx) return;
 
         state.wlvcEncodeInFlight = true;
+        const drawStartedAtMs = highResolutionNowMs();
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
+        const readbackStartedAtMs = highResolutionNowMs();
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
         const timestamp = Date.now();
         let frameImageData = imageData;
         let tilePatchMetadata = null;
@@ -403,6 +416,7 @@ export function createLocalPublisherPipelineHelpers({
         let encodedFrameType = 'keyframe';
         let outgoingCacheEpoch = selectiveTileCacheEpoch;
         const matteMaskImageData = backgroundFilterController.getCurrentMatteMaskSnapshot();
+        const encodeStartedAtMs = highResolutionNowMs();
         const canAttemptSelectivePatch = constants.selectiveTileEnabled
           && previousFullFrameImageData instanceof ImageData
           && (timestamp - lastFullFrameSentAtMs) <= constants.selectiveTileBaseRefreshMs
@@ -489,9 +503,18 @@ export function createLocalPublisherPipelineHelpers({
         const encodedPayloadBytes = encoded?.data instanceof ArrayBuffer
           ? Number(encoded.data.byteLength || 0)
           : 0;
+        const encodeMs = roundedStageMs(highResolutionNowMs() - encodeStartedAtMs);
+        const maxEncodedFrameBudgetBytes = Math.max(
+          1,
+          Number(videoProfile.maxEncodedBytesPerFrame || constants.sfuWlvcMaxDeltaFrameBytes || 0)
+        );
+        const maxEncodedKeyframeBudgetBytes = Math.max(
+          1,
+          Number(videoProfile.maxKeyframeBytesPerFrame || constants.sfuWlvcMaxKeyframeFrameBytes || 0)
+        );
         const maxEncodedPayloadBytes = encodedFrameType === 'delta' || tilePatchMetadata
-          ? Math.max(1, Number(constants.sfuWlvcMaxDeltaFrameBytes || 0))
-          : Math.max(1, Number(constants.sfuWlvcMaxKeyframeFrameBytes || 0));
+          ? maxEncodedFrameBudgetBytes
+          : maxEncodedKeyframeBudgetBytes;
         if (encodedPayloadBytes > maxEncodedPayloadBytes) {
           handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
             layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
@@ -499,13 +522,38 @@ export function createLocalPublisherPipelineHelpers({
           });
           return;
         }
+        const profileId = String(videoProfile.id || '').trim() || 'balanced';
+        const transportStageMetrics = {
+          outgoing_video_quality_profile: profileId,
+          capture_width: videoProfile.captureWidth,
+          capture_height: videoProfile.captureHeight,
+          capture_frame_rate: videoProfile.captureFrameRate,
+          frame_width: videoProfile.frameWidth,
+          frame_height: videoProfile.frameHeight,
+          draw_image_ms: drawImageMs,
+          readback_ms: readbackMs,
+          encode_ms: encodeMs,
+          local_stage_elapsed_ms: roundedStageMs(highResolutionNowMs() - startedAtMs),
+          encoded_payload_bytes: encodedPayloadBytes,
+          max_payload_bytes: maxEncodedPayloadBytes,
+          budget_max_encoded_bytes_per_frame: maxEncodedFrameBudgetBytes,
+          budget_max_keyframe_bytes_per_frame: maxEncodedKeyframeBudgetBytes,
+          budget_max_wire_bytes_per_second: Math.max(1, Number(videoProfile.maxWireBytesPerSecond || 0)),
+          budget_max_encode_ms: Math.max(1, Number(videoProfile.maxEncodeMs || 0)),
+          budget_max_queue_age_ms: Math.max(1, Number(videoProfile.maxQueueAgeMs || 0)),
+          budget_max_buffered_bytes: Math.max(1, Number(videoProfile.maxBufferedBytes || 0)),
+          budget_expected_recovery: String(videoProfile.expectedRecovery || ''),
+        };
 
         const outgoingFrame = {
           publisherId: String(refs.currentUserId()),
           publisherUserId: String(refs.currentUserId()),
           trackId: videoTrack.id,
           timestamp: encoded.timestamp,
-          transportMetrics: tilePatchTransportMetrics,
+          transportMetrics: {
+            ...transportStageMetrics,
+            ...(tilePatchTransportMetrics || {}),
+          },
           data: encoded.data,
           type: encodedFrameType,
           codecId: currentSfuCodecId(tilePatchMetadata ? refs.videoPatchEncoderRef.value : refs.videoEncoderRef.value),
