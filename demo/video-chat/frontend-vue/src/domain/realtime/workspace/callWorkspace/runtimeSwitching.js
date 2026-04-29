@@ -2,6 +2,7 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
   SFU_AUTO_QUALITY_RECOVERY_NEXT,
 } from './runtimeConfig.js';
+import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.js';
 
 export function createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks,
@@ -164,6 +165,10 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     message,
     payload = {},
   }) {
+    const direction = eventType === 'sfu_source_readback_profile_upshift' ? 'up' : 'down';
+    const transitionCount = Math.max(0, Number(refs.sfuTransportState.sfuAutomaticQualityTransitionCount || 0)) + 1;
+    refs.sfuTransportState.sfuAutomaticQualityTransitionCount = transitionCount;
+    refs.sfuTransportState.sfuAutomaticQualityTransitionLastAtMs = Date.now();
     captureClientDiagnostic({
       category: 'media',
       level,
@@ -172,6 +177,12 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       message,
       payload: {
         ...payload,
+        ...publisherQualityTransitionDiagnosticSurface({
+          transitionCount,
+          direction,
+          fromProfile: currentProfile,
+          toProfile: nextProfile,
+        }),
         from_profile: currentProfile,
         to_profile: nextProfile,
         reason,

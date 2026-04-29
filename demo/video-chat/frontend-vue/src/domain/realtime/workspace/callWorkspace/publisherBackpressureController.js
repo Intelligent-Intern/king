@@ -3,6 +3,7 @@ import {
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
   SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
 } from './runtimeConfig.js';
+import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
@@ -403,6 +404,7 @@ export function createPublisherBackpressureController({
     }
 
     resetWlvcEncoderAfterDroppedEncodedFrame(normalizedReason);
+    state.wlvcDroppedSourceFrameCount = Math.max(0, Number(state.wlvcDroppedSourceFrameCount || 0)) + 1;
     state.wlvcBackpressurePauseUntilMs = Math.max(
       state.wlvcBackpressurePauseUntilMs,
       nowMs + sendFailurePauseMs
@@ -438,6 +440,11 @@ export function createPublisherBackpressureController({
           source: failureSource,
           transport_path: 'publisher_source_readback',
           source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          ...publisherDroppedSourceFrameDiagnosticSurface({
+            details,
+            droppedSourceFrameCount: state.wlvcDroppedSourceFrameCount,
+            selectedProfile: callMediaPrefs.outgoingVideoQualityProfile,
+          }),
           source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
           requested_action: decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)
             ? PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT
@@ -464,6 +471,11 @@ export function createPublisherBackpressureController({
         payload: {
           reason: normalizedReason,
           source_readback_failure_count: state.wlvcSourceReadbackFailureCount,
+          ...publisherDroppedSourceFrameDiagnosticSurface({
+            details,
+            droppedSourceFrameCount: state.wlvcDroppedSourceFrameCount,
+            selectedProfile: callMediaPrefs.outgoingVideoQualityProfile,
+          }),
           source_readback_failure_threshold: sfuAutoQualityDowngradeSendFailureThreshold,
           track_id: String(trackId || ''),
           outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),

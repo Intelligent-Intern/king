@@ -210,6 +210,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const publisherTraceProfile = String(source.publisher_trace_profile ?? source.publisherTraceProfile ?? '').trim()
   const publisherAspectMode = String(source.publisher_aspect_mode ?? source.publisherAspectMode ?? '').trim()
   const sourceTrackReadyState = String(source.source_track_ready_state ?? source.sourceTrackReadyState ?? '').trim()
+  const activeCaptureBackend = String(source.active_capture_backend ?? source.activeCaptureBackend ?? publisherSourceBackend).trim()
+  const selectedVideoQualityProfile = String(source.selected_video_quality_profile ?? source.selectedVideoQualityProfile ?? profile).trim().toLowerCase()
   const metrics: Record<string, unknown> = {
     selection_tile_count: selectionTileCount,
     selection_total_tile_count: selectionTotalTileCount,
@@ -225,6 +227,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   if (publisherTraceProfile !== '') metrics.publisher_trace_profile = publisherTraceProfile
   if (publisherAspectMode !== '') metrics.publisher_aspect_mode = publisherAspectMode
   if (sourceTrackReadyState !== '') metrics.source_track_ready_state = sourceTrackReadyState
+  if (activeCaptureBackend !== '') metrics.active_capture_backend = activeCaptureBackend
+  if (selectedVideoQualityProfile !== '') metrics.selected_video_quality_profile = selectedVideoQualityProfile
 
   const integerFields: Array<[string, unknown]> = [
     ['capture_width', source.capture_width ?? source.captureWidth],
@@ -245,6 +249,10 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['source_video_ready_state', source.source_video_ready_state ?? source.sourceVideoReadyState],
     ['source_track_width', source.source_track_width ?? source.sourceTrackWidth],
     ['source_track_height', source.source_track_height ?? source.sourceTrackHeight],
+    ['source_frame_width', source.source_frame_width ?? source.sourceFrameWidth],
+    ['source_frame_height', source.source_frame_height ?? source.sourceFrameHeight],
+    ['dropped_source_frame_count', source.dropped_source_frame_count ?? source.droppedSourceFrameCount],
+    ['automatic_quality_transition_count', source.automatic_quality_transition_count ?? source.automaticQualityTransitionCount],
   ]
   for (const [key, fieldValue] of integerFields) {
     const normalized = normalizeNonNegativeInteger(fieldValue)
@@ -263,6 +271,11 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_payload_soft_limit_ratio', source.budget_payload_soft_limit_ratio ?? source.budgetPayloadSoftLimitRatio],
     ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
     ['source_track_frame_rate', source.source_track_frame_rate ?? source.sourceTrackFrameRate],
+    ['source_frame_rate', source.source_frame_rate ?? source.sourceFrameRate],
+    ['source_draw_image_ms', source.source_draw_image_ms ?? source.sourceDrawImageMs],
+    ['source_draw_image_budget_ms', source.source_draw_image_budget_ms ?? source.sourceDrawImageBudgetMs],
+    ['source_readback_ms', source.source_readback_ms ?? source.sourceReadbackMs],
+    ['source_readback_budget_ms', source.source_readback_budget_ms ?? source.sourceReadbackBudgetMs],
     ['trace_get_user_media_frame_delivery_ms', source.trace_get_user_media_frame_delivery_ms ?? source.traceGetUserMediaFrameDeliveryMs],
     ['trace_dom_canvas_draw_image_ms', source.trace_dom_canvas_draw_image_ms ?? source.traceDomCanvasDrawImageMs],
     ['trace_dom_canvas_get_image_data_ms', source.trace_dom_canvas_get_image_data_ms ?? source.traceDomCanvasGetImageDataMs],

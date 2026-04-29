@@ -130,9 +130,12 @@ export function buildPublisherTransportStageMetrics({
   payloadSoftLimitRatio,
   keyframeRetryDelayMs,
 }) {
+  const sourceFrameRate = Math.max(0, Number(trace?.sourceTrackFrameRate || 0));
   return {
     ...publisherFrameTraceMetrics(trace),
     outgoing_video_quality_profile: pipelineProfileId,
+    selected_video_quality_profile: String(pipelineProfileId || ''),
+    active_capture_backend: String(trace?.sourceBackend || 'unknown_source_backend'),
     capture_width: videoProfile.captureWidth,
     capture_height: videoProfile.captureHeight,
     capture_frame_rate: videoProfile.captureFrameRate,
@@ -145,10 +148,15 @@ export function buildPublisherTransportStageMetrics({
     profile_frame_height: frameSize.profileFrameHeight,
     source_frame_width: frameSize.sourceWidth,
     source_frame_height: frameSize.sourceHeight,
+    source_frame_rate: sourceFrameRate,
     source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6)),
     publisher_aspect_mode: frameSize.aspectMode,
     draw_image_ms: drawImageMs,
     readback_ms: readbackMs,
+    source_draw_image_ms: drawImageMs,
+    source_draw_image_budget_ms: drawBudgetMs,
+    source_readback_ms: readbackMs,
+    source_readback_budget_ms: readbackBudgetMs,
     encode_ms: encodeMs,
     local_stage_elapsed_ms: roundedStageMs(highResolutionNowMs() - trace.startedAtMs),
     encoded_payload_bytes: encodedPayloadBytes,

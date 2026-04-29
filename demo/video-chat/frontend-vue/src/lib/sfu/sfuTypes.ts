@@ -87,6 +87,14 @@ export interface SfuFrameTransportSample {
   frameSequence: number
   chunkCount: number
   outgoingVideoQualityProfile: string
+  selectedVideoQualityProfile: string
+  activeCaptureBackend: string
+  sourceFrameWidth: number
+  sourceFrameHeight: number
+  sourceFrameRate: number
+  sourceReadbackMs: number
+  droppedSourceFrameCount: number
+  automaticQualityTransitionCount: number
   encodeMs: number
   queuedAgeMs: number
   sendDrainMs: number

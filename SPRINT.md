@@ -58,7 +58,7 @@ Technical target:
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
 17. [x] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
 18. [x] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
-19. [ ] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
+19. [x] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
 20. [ ] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
 
 ## Execution Order
@@ -533,6 +533,29 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429081201` serves `CallWorkspaceView-CCmMYIyk.js`.
 - The production call bundle contains `sfu_source_readback_budget_exceeded`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, and `client-diagnostics`, and still does not contain `call-left-video-quality`.
+
+### 19. `[diagnostic-surface]`
+
+Status: Done.
+
+Implementation:
+- Added a focused publisher diagnostics surface that normalizes active capture backend, selected automatic profile, source frame size/FPS, draw/readback timing, dropped-source-frame count, and automatic quality-transition counters.
+- Added the clear diagnostic fields to source-readback pressure/downshift events, automatic up/down profile transition events, publisher frame transport metrics, normalized SFU frame payloads, and typed SFU transport samples.
+- Kept the user-facing quality select out of the call UI; profile changes remain automatic and are now observable through backend-routed diagnostics.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-diagnostic-surface-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429082026` serves `CallWorkspaceView-CVRhCahK.js`.
+- The production call bundle contains `active_capture_backend`, `selected_video_quality_profile`, `source_frame_rate`, `source_readback_ms`, `dropped_source_frame_count`, `automatic_quality_transition_count`, and `automatic_quality_transition_direction`, and still does not contain `call-left-video-quality`.
+- The additional production online-pressure run for call `5590731e-d0b9-4664-b316-a455c8afd17a` exposed a remaining recovery gap: no socket failures and final remote canvases recovered, but two consecutive transient remote-video gaps occurred during recovery. That is the remaining Issue 20 deploy-proof work, not part of the diagnostic-surface contract.
 
 ## Parking Rule
 
