@@ -18,7 +18,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion'
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
-import { SfuInboundFrameAssembler } from './inboundFrameAssembler'
+import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'
 import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
