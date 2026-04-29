@@ -21,6 +21,7 @@ export function createCallWorkspaceSocketHelpers({
     clearTransientActivityPublishErrorNotice,
     closeNativePeerConnection,
     closeSocketLocal,
+    downgradeSfuVideoQualityAfterEncodePressure,
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
@@ -72,6 +73,59 @@ export function createCallWorkspaceSocketHelpers({
     return participantsChanged;
   }
 
+  function recoverExpectedSignalingPublishFailure({
+    failedCommandType,
+    failedTargetUserId,
+    signalingError,
+  }) {
+    const normalizedTargetUserId = Number(failedTargetUserId || 0);
+    const normalizedError = String(signalingError || '').trim().toLowerCase();
+    const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
+
+    if (targetIsKnown && normalizedError === 'target_not_in_room') {
+      removeParticipantLocallyAfterHangup(normalizedTargetUserId);
+    }
+
+    requestRoomSnapshot();
+    if (mediaSecuritySignalTypes.includes(failedCommandType)) {
+      setTimeout(() => {
+        void sendMediaSecuritySync(true);
+      }, 500);
+      return;
+    }
+
+    if (targetIsKnown && normalizedError !== 'target_not_in_room') {
+      scheduleNativeOfferRetryForUserId(normalizedTargetUserId, 'signaling_publish_retry');
+    }
+  }
+
+  function handleMediaQualityPressure(payloadBody, sender) {
+    const kind = String(payloadBody?.kind || '').trim().toLowerCase();
+    if (kind !== 'sfu-video-quality-pressure') return false;
+
+    const senderUserId = Number(sender?.user_id || 0);
+    const requestedAction = String(payloadBody?.requested_action || '').trim().toLowerCase();
+    const downgraded = typeof downgradeSfuVideoQualityAfterEncodePressure === 'function'
+      ? downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')
+      : false;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_remote_quality_pressure_received',
+      code: 'sfu_remote_quality_pressure_received',
+      message: 'A remote receiver requested lower outgoing SFU video quality after repeated freezes.',
+      payload: {
+        sender_user_id: senderUserId,
+        requested_action: requestedAction || 'downgrade_outgoing_video',
+        source_reason: String(payloadBody?.reason || '').trim(),
+        source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
+        downgraded,
+      },
+      immediate: true,
+    });
+    return true;
+  }
+
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
     if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
@@ -94,6 +148,11 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'call/hangup') {
       removeParticipantLocallyAfterHangup(senderUserId);
+      return;
+    }
+
+    if (type === 'call/media-quality-pressure') {
+      handleMediaQualityPressure(payloadBody || {}, sender);
       return;
     }
 
@@ -279,14 +338,11 @@ export function createCallWorkspaceSocketHelpers({
         return;
       }
       if (refs.shouldSuppressExpectedSignalingError(payload)) {
-        if (mediaSecuritySignalTypes.includes(failedCommandType)) {
-          requestRoomSnapshot();
-          setTimeout(() => {
-            void sendMediaSecuritySync(false);
-          }, 500);
-        } else {
-          scheduleNativeOfferRetryForUserId(failedTargetUserId, 'signaling_publish_retry');
-        }
+        recoverExpectedSignalingPublishFailure({
+          failedCommandType,
+          failedTargetUserId,
+          signalingError: payload?.details?.error,
+        });
         return;
       }
       if (code === 'activity_publish_failed') {

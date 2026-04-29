@@ -382,7 +382,14 @@ export class MediaSecuritySession {
       const pending = this.pendingSenderKeys.get(pendingKey);
       if (!pending) continue;
       this.pendingSenderKeys.delete(pendingKey);
-      await this.handleSenderKeySignal(sender, pending);
+      try {
+        await this.handleSenderKeySignal(sender, pending);
+      } catch (error) {
+        if (asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch') {
+          continue;
+        }
+        throw error;
+      }
     }
     return true;
   }
@@ -479,8 +486,8 @@ export class MediaSecuritySession {
       participantSetHash,
     });
     this.participantSetHash = participantSetHash;
+    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('participant_set_mismatch');
     if (asString(payload.kex_transcript_hash) !== transcriptHash) throw new Error('downgrade_attempt');
-    if (asString(payload.participant_set_hash) !== participantSetHash) throw new Error('downgrade_attempt');
     if (
       asString(keyContext.participantSetHash) !== participantSetHash
       || asString(keyContext.transcriptHash) !== transcriptHash

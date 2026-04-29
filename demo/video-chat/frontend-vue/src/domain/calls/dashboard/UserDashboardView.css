@@ -549,7 +549,9 @@
   .calls-enter-right-settings .call-left-settings {
     padding: 8px;
     gap: 6px;
-    overflow-y: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .calls-enter-right-settings .call-left-settings-block {
@@ -679,7 +681,7 @@
   }
 
   .calls-enter-layout {
-    grid-template-rows: minmax(0, 38%) minmax(0, 62%);
+    grid-template-rows: minmax(112px, 34%) minmax(0, 1fr);
   }
 
   .calls-enter-preview-frame {

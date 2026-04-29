@@ -290,6 +290,7 @@ function videochat_handle_realtime_websocket_route(
                         'ice' => 'call/ice',
                         'hangup' => 'call/hangup',
                         'control_state' => 'call/control-state',
+                        'media_quality_pressure' => 'call/media-quality-pressure',
                         'moderation_state' => 'call/moderation-state',
                         'media_security_hello' => 'media-security/hello',
                         'media_security_sender_key' => 'media-security/sender-key',

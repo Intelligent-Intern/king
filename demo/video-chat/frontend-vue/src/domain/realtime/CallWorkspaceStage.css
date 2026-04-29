@@ -24,9 +24,9 @@
   --text-secondary: var(--color-c0d1ef);
   --text-muted: var(--color-94add3);
   --text-dim: var(--color-7f9cc8);
-  --mini-strip-height: 156px;
-  --mini-story-width: 92px;
-  --mini-story-height: 136px;
+  --mini-strip-height: 170px;
+  --mini-story-width: 150px;
+  --mini-story-height: 150px;
   --mini-strip-gap: 8px;
   position: relative;
   height: 100%;
@@ -228,6 +228,11 @@
   transform: scaleX(-1);
 }
 
+.video-container :deep(canvas.remote-video) {
+  object-fit: contain !important;
+  background: var(--bg-video);
+}
+
 .video-container.remote {
   z-index: 5;
 }
@@ -265,20 +270,29 @@
 .workspace-grid-video-slot {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+  contain: strict;
 }
 
 .workspace-grid-video-slot :deep(video),
 .workspace-grid-video-slot :deep(canvas) {
+  position: absolute;
+  inset: 0;
   width: 100% !important;
   height: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
   display: block !important;
-  object-fit: cover !important;
+  object-fit: contain !important;
 }
 
 .workspace-grid-title {
   position: absolute;
   left: 10px;
   bottom: 10px;
+  z-index: 4;
   max-width: calc(100% - 20px);
   overflow: hidden;
   padding: 5px 8px;
@@ -290,6 +304,70 @@
   text-overflow: ellipsis;
   text-shadow: 0 1px 3px var(--color-rgba-0-0-0-0-75);
   white-space: nowrap;
+}
+
+.workspace-video-status-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 14px;
+  background:
+    radial-gradient(circle at 50% 30%, var(--color-rgba-255-255-255-0-18), transparent 34%),
+    color-mix(in srgb, var(--color-0b1324) 88%, transparent);
+  color: var(--color-f1f6ff);
+  pointer-events: none;
+}
+
+.workspace-main-video-status-overlay {
+  z-index: 25;
+}
+
+.workspace-video-status-overlay.state-recovering {
+  background:
+    radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--brand-cyan) 22%, transparent), transparent 34%),
+    color-mix(in srgb, var(--color-0b1324) 84%, transparent);
+}
+
+.workspace-video-status-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-rgba-255-255-255-0-18);
+  border-top-color: var(--brand-cyan);
+  border-radius: 50%;
+  animation: workspaceVideoStatusSpin 900ms linear infinite;
+}
+
+.workspace-video-status-initials {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-rgba-255-255-255-0-18);
+  border-radius: 0;
+  background: var(--color-rgba-0-0-0-0-28);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.workspace-video-status-label {
+  max-width: min(220px, 100%);
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-c9d9f4);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@keyframes workspaceVideoStatusSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .workspace-reaction-flight {
@@ -441,7 +519,7 @@
   min-height: 0;
   background: var(--bg-mini-video);
   border: 1px solid var(--color-rgba-255-255-255-0-18);
-  border-radius: 16px;
+  border-radius: 0;
   padding: 8px;
   display: grid;
   align-content: center;
@@ -453,7 +531,7 @@
 }
 
 .workspace-mini-tile {
-  aspect-ratio: 9 / 13;
+  aspect-ratio: 1 / 1;
 }
 
 .workspace-mini-video-slot {
@@ -508,6 +586,11 @@
   height: 100% !important;
   display: block !important;
   object-fit: cover !important;
+}
+
+.workspace-mini-video-slot :deep(canvas.remote-video) {
+  object-fit: contain !important;
+  background: var(--bg-video);
 }
 
 .workspace-mini-title {

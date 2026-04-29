@@ -176,6 +176,7 @@ import {
   ACTIVITY_PUBLISH_INTERVAL_MS,
   CALL_STATE_SIGNAL_TYPES,
   MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
+  MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
   MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
   MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
   NATIVE_AUDIO_TRACK_RECOVERY_DELAY_MS,
@@ -205,6 +206,8 @@ import {
   SFU_BACKGROUND_SNAPSHOT_TILE_WIDTH,
   SFU_BACKPRESSURE_LOG_COOLDOWN_MS,
   SFU_PROTECTED_MEDIA_ENABLED,
+  SFU_WLVC_MAX_DELTA_FRAME_BYTES,
+  SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES,
   SFU_SELECTIVE_TILE_BASE_REFRESH_MS,
   SFU_SELECTIVE_TILE_DIFF_THRESHOLD,
   SFU_SELECTIVE_TILE_HEIGHT,
@@ -422,6 +425,7 @@ const mediaSecurityRecoveryLastByUserId = new Map();
 // Tracks when a media-security/hello was last sent per peer for handshake-timeout detection.
 const mediaSecurityHelloSentAtByUserId = new Map();
 const mediaSecurityHandshakeRetryingByUserId = new Set();
+const mediaSecurityHandshakeRetryCountByUserId = new Map();
 const mediaSecuritySfuPublisherFirstSeenAtByUserId = new Map();
 const nativeFrameErrorLastLogByKey = new Map();
 const nativeAudioBridgeBlockDiagnosticsSent = new Set();
@@ -689,6 +693,11 @@ let gridVideoParticipants = computed(() => []);
 let miniVideoParticipants = computed(() => []);
 let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 let primaryVideoUserId = computed(() => currentUserId.value);
+const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);
+const liveGridVideoParticipants = computed(() => gridVideoParticipants.value);
+const liveMiniVideoParticipants = computed(() => miniVideoParticipants.value);
+const liveNormalizedCallLayout = computed(() => normalizedCallLayout.value);
+const livePrimaryVideoUserId = computed(() => primaryVideoUserId.value);
 
 function sendSocketFrame(payload) {
   const socket = socketRef.value;
@@ -888,6 +897,7 @@ const mediaSecurityRuntimeState = {
   mediaSecurityRecoveryLastByUserId,
   mediaSecurityHelloSentAtByUserId,
   mediaSecurityHandshakeRetryingByUserId,
+  mediaSecurityHandshakeRetryCountByUserId,
   mediaSecuritySfuPublisherFirstSeenAtByUserId,
   nativeFrameErrorLastLogByKey,
   nativeAudioBridgeQuarantineByUserId,
@@ -947,6 +957,7 @@ const mediaSecurityRuntimeState = {
   },
   constants: {
     mediaSecurityHandshakeTimeoutMs: MEDIA_SECURITY_HANDSHAKE_TIMEOUT_MS,
+    mediaSecurityHandshakeRetryTimeoutsMs: MEDIA_SECURITY_HANDSHAKE_RETRY_TIMEOUTS_MS,
     mediaSecurityHandshakeWatchdogIntervalMs: MEDIA_SECURITY_HANDSHAKE_WATCHDOG_INTERVAL_MS,
     mediaSecuritySfuTargetSettleMs: MEDIA_SECURITY_SFU_TARGET_SETTLE_MS,
     nativeFrameErrorLogCooldownMs: NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS,
@@ -1067,23 +1078,7 @@ const localPublisherPipelineState = {
   set wlvcEncodeWarmupUntilMs(value) { wlvcEncodeWarmupUntilMs = value; },
 };
 
-/*
- * Regression anchors for the extracted WLVC runtime modules.
- * These exact strings are pinned by PHPT contract 737 even though the
- * executable implementations now live in `workspace/callWorkspace/*` and
- * `sfu/frameDecode.js`.
- * await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a')
- * await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b')
- * setMediaRuntimePath('unsupported', 'capability_probe_unsupported')
- * appendMediaRuntimeTransitionEvent({
- * teardownSfuRemotePeers();
- * teardownNativePeerConnections();
- * const init = ensureSfuRemotePeerForFrame(frame);
- * void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
- * ctx.putImageData(imageData, 0, 0);
- * markRemoteFrameActivity(publisherUserId);
- * mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1;
- */
+/* Regression anchors for extracted WLVC runtime modules: await switchMediaRuntimePath('wlvc_wasm', 'capability_probe_stage_a'); await switchMediaRuntimePath('webrtc_native', 'capability_probe_stage_b'); setMediaRuntimePath('unsupported', 'capability_probe_unsupported'); appendMediaRuntimeTransitionEvent({; teardownSfuRemotePeers(); teardownNativePeerConnections(); const init = ensureSfuRemotePeerForFrame(frame); void decodeSfuFrameForPeer(publisherId, nextPeer, frame); ctx.putImageData(imageData, 0, 0); markRemoteFrameActivity(publisherUserId); mediaRenderVersion.value = mediaRenderVersion.value >= 1_000_000 ? 0 : mediaRenderVersion.value + 1; */
 
 const mediaStack = createCallWorkspaceMediaStack({
   callbacks: {
@@ -1110,6 +1105,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
+    clearMediaSecuritySfuPublisherSeen,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
       if (sfuClientRef.value) {
         sfuClientRef.value.leave();
@@ -1191,6 +1187,8 @@ const mediaStack = createCallWorkspaceMediaStack({
     sfuWlvcBackpressureHardResetAfterMs: SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS,
     sfuWlvcBackpressureMaxPauseMs: SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS,
     sfuWlvcBackpressureMinPauseMs: SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS,
+    sfuWlvcMaxDeltaFrameBytes: SFU_WLVC_MAX_DELTA_FRAME_BYTES,
+    sfuWlvcMaxKeyframeFrameBytes: SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES,
     sfuWlvcSendBufferCriticalBytes: SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES,
     sfuWlvcSendBufferHighWaterBytes: SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES,
     sfuWlvcSendBufferLowWaterBytes: SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES,
@@ -1208,11 +1206,11 @@ const mediaStack = createCallWorkspaceMediaStack({
     connectedParticipantUsers,
     connectionState,
     controlState,
-    currentLayoutMode,
+    currentLayoutMode: liveCurrentLayoutMode,
     currentUserId,
     desiredRoomId,
     encodeIntervalRef,
-    gridVideoParticipants,
+    gridVideoParticipants: liveGridVideoParticipants,
     isSocketOnline,
     localFilteredStreamRef,
     localMediaOrchestrationState,
@@ -1224,11 +1222,11 @@ const mediaStack = createCallWorkspaceMediaStack({
     mediaRenderVersion,
     mediaRuntimeCapabilities,
     mediaRuntimePath,
-    miniVideoParticipants,
+    miniVideoParticipants: liveMiniVideoParticipants,
     nativePeerConnectionsRef,
-    normalizedCallLayout,
+    normalizedCallLayout: liveNormalizedCallLayout,
     pendingSfuRemotePeerInitializers,
-    primaryVideoUserId,
+    primaryVideoUserId: livePrimaryVideoUserId,
     remoteFrameActivityLastByUserId,
     remotePeersRef,
     sfuClientRef,
@@ -1344,6 +1342,7 @@ stopActivityMonitor = stopActivityMonitorHelper;
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeSfuPublisherId,
+    clearMediaSecuritySfuPublisherSeen,
     noteMediaSecuritySfuPublisherSeen,
     publishLocalTracks: (...args) => publishLocalTracks(...args),
     publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),
@@ -1559,6 +1558,7 @@ const {
     clearTransientActivityPublishErrorNotice,
     closeNativePeerConnection,
     closeSocketLocal: (...args) => closeSocket(...args),
+    downgradeSfuVideoQualityAfterEncodePressure: (...args) => downgradeSfuVideoQualityAfterEncodePressure(...args),
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
@@ -1728,6 +1728,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   lobbyPage,
   lobbyQueue,
   localReactionEchoes,
+  mediaRenderVersion,
   mediaRuntimeCapabilities,
   miniVideoSlotId,
   moderationActionState,
@@ -1744,6 +1745,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   parseUsersDirectoryQuery,
   participantActivityByUserId,
   participantActivityWeight,
+  participantHasRenderableMedia,
   participantUsers,
   peerControlStateByUserId,
   pinnedUsers,
@@ -1754,6 +1756,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   renderCallVideoLayout,
   replaceNumericArray,
   requestRoomSnapshot: (...args) => requestRoomSnapshot(...args),
+  remotePeersRef,
   rightSidebarCollapsed,
   sendSocketFrame,
   selectCallLayoutParticipants,
@@ -1794,6 +1797,8 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   ALONE_IDLE_POLL_MS,
   ALONE_IDLE_PROMPT_AFTER_MS,
   ALONE_IDLE_TICK_MS,
+  REMOTE_VIDEO_FREEZE_THRESHOLD_MS,
+  REMOTE_VIDEO_STALL_THRESHOLD_MS,
 });
 
 ({
@@ -1885,6 +1890,9 @@ const {
   openLeftSidebarOverlay,
   openLobbyRequestsPanel,
   participantActivityScore,
+  participantMediaStatus,
+  participantMediaStatusLabel,
+  participantMediaStatusState,
   participantVisibilityScore,
   participantsByUserId,
   publishLayoutSelectionState,
@@ -1903,6 +1911,7 @@ const {
   showLobbyJoinToast,
   showLobbyRequestBadge,
   showMiniParticipantStrip,
+  showParticipantMediaOverlay,
   showRightSidebar,
   snapshotUsersRows,
   stripParticipants,

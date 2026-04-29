@@ -1,6 +1,6 @@
 import { markRaw } from 'vue';
 import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
-import { cloneImageData, planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
+import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
 
 export function createLocalPublisherPipelineHelpers({
@@ -20,6 +20,7 @@ export function createLocalPublisherPipelineHelpers({
     getSfuClientBufferedAmount,
     handleWlvcEncodeBackpressure,
     handleWlvcFrameSendFailure,
+    handleWlvcFramePayloadPressure,
     hintMediaSecuritySync,
     isSfuClientOpen,
     isWlvcRuntimePath,
@@ -485,6 +486,19 @@ export function createLocalPublisherPipelineHelpers({
             outgoingCacheEpoch = selectiveTileCacheEpoch + 1;
           }
         }
+        const encodedPayloadBytes = encoded?.data instanceof ArrayBuffer
+          ? Number(encoded.data.byteLength || 0)
+          : 0;
+        const maxEncodedPayloadBytes = encodedFrameType === 'delta' || tilePatchMetadata
+          ? Math.max(1, Number(constants.sfuWlvcMaxDeltaFrameBytes || 0))
+          : Math.max(1, Number(constants.sfuWlvcMaxKeyframeFrameBytes || 0));
+        if (encodedPayloadBytes > maxEncodedPayloadBytes) {
+          handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
+            layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
+            max_payload_bytes: maxEncodedPayloadBytes,
+          });
+          return;
+        }
 
         const outgoingFrame = {
           publisherId: String(refs.currentUserId()),
@@ -571,7 +585,7 @@ export function createLocalPublisherPipelineHelpers({
         resetWlvcFrameSendFailureCounters();
         state.wlvcEncodeFailureCount = 0;
         state.wlvcEncodeFirstFailureAtMs = 0;
-        previousFullFrameImageData = cloneImageData(imageData);
+        previousFullFrameImageData = imageData;
         if (!tilePatchMetadata) {
           if (encodedFrameType === 'keyframe') {
             selectiveTileCacheEpoch = outgoingCacheEpoch;

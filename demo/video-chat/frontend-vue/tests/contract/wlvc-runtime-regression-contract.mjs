@@ -140,7 +140,7 @@ try {
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS', 'WLVC video quality profile options exist');
   requireContains(workspaceConfig, "export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'balanced';", 'balanced profile starts production calls below the HD stress profile');
   requireContains(workspaceConfig, 'quality: Object.freeze({', 'HD quality profile stays available for the HD acceptance gate');
-  requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 30;', 'HD baseline captures 30fps camera video');
+  requireContains(workspaceConfig, 'export const LOCAL_CAMERA_CAPTURE_FRAME_RATE = 27;', 'HD baseline captures 27fps camera video after the 10% quality tradeoff');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_WIDTH = 1280;', 'HD baseline encodes 720p width');
   requireContains(workspaceConfig, 'export const SFU_WLVC_FRAME_HEIGHT = 720;', 'HD baseline encodes 720p height');
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES', 'WLVC encode loop has backpressure high-water mark');
@@ -186,6 +186,11 @@ try {
   requireContains(videoLayout, 'function mountRemotePeerFallback(peer, assignedNodes)', 'video layout must retain remote peer media nodes when primary selection misses the node lookup');
   requireContains(videoLayout, "document.getElementById('decoded-video-container')", 'video layout must visibly mount decoded SFU peers even before roster slots exist');
   requireContains(videoLayout, 'mountRemotePeerFallback(peer, assignedNodes);', 'video layout must mount remote peer fallback before removing unassigned nodes');
+  requireContains(workspace, 'const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);', 'media stack must read the live layout mode after participant UI replaces placeholders');
+  requireContains(workspace, 'currentLayoutMode: liveCurrentLayoutMode,', 'media stack current layout ref must not capture the initial placeholder');
+  requireContains(workspace, 'gridVideoParticipants: liveGridVideoParticipants,', 'media stack grid participants ref must not capture the initial placeholder');
+  requireContains(workspaceStage, '.workspace-grid-video-slot :deep(canvas)', 'grid layout must style decoded canvas nodes inside grid slots');
+  requireContains(workspaceStage, 'object-fit: contain !important;', 'grid video must fit inside its tile instead of cropping oversized frames');
   requireContains(workspaceStage, 'z-index: 15;', 'decoded fallback layer must sit above local preview when used');
 
   process.stdout.write('[wlvc-runtime-regression-contract] PASS\n');

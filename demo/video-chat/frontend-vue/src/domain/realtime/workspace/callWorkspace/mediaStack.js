@@ -73,6 +73,7 @@ export function createCallWorkspaceMediaStack(options) {
     isWlvcRuntimePath: callbacks.isWlvcRuntimePath,
     markParticipantActivity: callbacks.markParticipantActivity,
     markRemotePeerRenderable: (peer) => markRemotePeerRenderable(peer),
+    bumpMediaRenderVersion,
     mediaDebugLog: callbacks.mediaDebugLog,
     mediaRuntimePathRef: refs.mediaRuntimePath,
     normalizeSfuPublisherId,
@@ -96,9 +97,11 @@ export function createCallWorkspaceMediaStack(options) {
 
   const runtimeHealth = createCallWorkspaceRuntimeHealthHelpers({
     callbacks: {
+      bumpMediaRenderVersion,
       captureClientDiagnostic: callbacks.captureClientDiagnostic,
       mediaDebugLog: callbacks.mediaDebugLog,
       restartSfuAfterVideoStall: callbacks.restartSfuAfterVideoStall,
+      sendSocketFrame: callbacks.sendSocketFrame,
     },
     constants: {
       defaultNativeAudioBridgeFailureMessage: constants.defaultNativeAudioBridgeFailureMessage,
@@ -164,6 +167,7 @@ export function createCallWorkspaceMediaStack(options) {
       getSfuClientBufferedAmount: sfuTransport.getSfuClientBufferedAmount,
       handleWlvcEncodeBackpressure: sfuTransport.handleWlvcEncodeBackpressure,
       handleWlvcFrameSendFailure: sfuTransport.handleWlvcFrameSendFailure,
+      handleWlvcFramePayloadPressure: sfuTransport.handleWlvcFramePayloadPressure,
       hintMediaSecuritySync: callbacks.hintMediaSecuritySync,
       isSfuClientOpen: sfuTransport.isSfuClientOpen,
       isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
@@ -205,6 +209,8 @@ export function createCallWorkspaceMediaStack(options) {
       selectiveTileWidth: constants.selectiveTileWidth,
       sendBufferHighWaterBytes: constants.sendBufferHighWaterBytes,
       sfuWlvcFrameQuality: constants.sfuFrameQuality,
+      sfuWlvcMaxDeltaFrameBytes: constants.sfuWlvcMaxDeltaFrameBytes,
+      sfuWlvcMaxKeyframeFrameBytes: constants.sfuWlvcMaxKeyframeFrameBytes,
       wlvcEncodeErrorLogCooldownMs: constants.wlvcEncodeErrorLogCooldownMs,
       wlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
       wlvcEncodeFailureWindowMs: constants.wlvcEncodeFailureWindowMs,
@@ -293,6 +299,10 @@ export function createCallWorkspaceMediaStack(options) {
 
   function teardownSfuRemotePeers() {
     for (const [, peer] of refs.remotePeersRef.value) {
+      const peerUserId = Number(peer?.userId || 0);
+      if (Number.isInteger(peerUserId) && peerUserId > 0) {
+        callbacks.clearMediaSecuritySfuPublisherSeen?.(peerUserId);
+      }
       callbacks.teardownRemotePeer(peer);
     }
     refs.remotePeersRef.value = new Map();

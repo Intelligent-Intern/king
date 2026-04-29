@@ -220,6 +220,28 @@ try {
     videochat_realtime_signaling_assert((string) ($controlStateTargetFrame['type'] ?? '') === 'call/control-state', 'target should receive control-state');
     videochat_realtime_signaling_assert((string) (($controlStateTargetFrame['payload'] ?? [])['kind'] ?? '') === 'workspace-control-state', 'control-state payload kind mismatch');
 
+    $decodedMediaQualityPressure = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/media-quality-pressure',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'sfu-video-quality-pressure',
+            'requested_action' => 'downgrade_outgoing_video',
+            'reason' => 'sfu_remote_video_frozen',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaQualityPressure['ok'] ?? false), 'call/media-quality-pressure should decode');
+    $mediaQualityPressurePublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedMediaQualityPressure,
+        $sender,
+        1_780_300_124_800
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaQualityPressurePublish['ok'] ?? false), 'call/media-quality-pressure publish should succeed');
+    $mediaQualityPressureTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($mediaQualityPressureTargetFrame['type'] ?? '') === 'call/media-quality-pressure', 'target should receive media-quality-pressure');
+    videochat_realtime_signaling_assert((string) (($mediaQualityPressureTargetFrame['payload'] ?? [])['kind'] ?? '') === 'sfu-video-quality-pressure', 'media-quality-pressure payload kind mismatch');
+
     $decodedModerationState = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/moderation-state',
         'target_user_id' => 200,

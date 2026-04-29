@@ -288,6 +288,10 @@
     z-index: 30;
   }
 
+  .shell.call-workspace-mode.mobile-mode .sidebar {
+    z-index: 75;
+  }
+
   .shell.mobile-mode .sidebar.sidebar-left {
     left: 0;
     right: 0;

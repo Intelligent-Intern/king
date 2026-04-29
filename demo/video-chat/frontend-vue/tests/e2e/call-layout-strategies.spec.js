@@ -415,6 +415,15 @@ test('mobile admin switches layout strategy in the sidebar and moves the mini-vi
     await page.getByRole('button', { name: 'Open left sidebar' }).click();
   }
   await expect(callSettings).toBeVisible();
+  const mobileSidebarLayering = await page.evaluate(() => {
+    const sidebar = document.querySelector('.shell.call-workspace-mode.mobile-mode .sidebar.sidebar-left');
+    const controls = document.querySelector('.workspace-controls');
+    return {
+      sidebarZIndex: Number(window.getComputedStyle(sidebar).zIndex),
+      controlsZIndex: Number(window.getComputedStyle(controls).zIndex),
+    };
+  });
+  expect(mobileSidebarLayering.sidebarZIndex).toBeGreaterThan(mobileSidebarLayering.controlsZIndex);
 
   await callSettings.getByLabel('Video layout mode').selectOption('grid');
   await expect(page.locator('.workspace-stage.layout-grid')).toBeVisible();
