@@ -11,6 +11,7 @@ Sprint rule:
 - Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
 - Keep media-security, binary SFU envelopes, bounded SQLite frame buffering, live relay, receiver feedback, and online pressure contracts intact.
 - Video quality must stay automatic; there must be no user-facing quality selector in the call UI.
+- Layout-driven portrait framing must be applied before encode when possible; do not fake portrait video by stretching a landscape frame in CSS.
 
 ## Sprint: Video Call SFU Layer State Wiring
 
@@ -30,7 +31,7 @@ Production symptom:
 Technical target:
 - Wire adaptive SFU layer state into the socket lifecycle helper and keep the helper defensive so missing isolated-test refs cannot crash runtime signaling.
 - Keep the adaptive layer contract intact: quality remains automatic, receiver feedback remains backend-routed, and primary-layer requests still protect fullscreen/main quality.
-- Record three next improvements that can materially raise quality beyond this hotfix.
+- Record the next improvements that can materially raise quality beyond this hotfix.
 
 ## Active Issues
 
@@ -97,9 +98,30 @@ Technical target:
    Report:
    - Proposed next improvement.
 
+5. [ ] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
+
+   Scope:
+   - Add automatic layout-aware region-of-interest framing before the publisher encode step: when the target tile is portrait, zoom the camera frame until the portrait viewport is filled and crop the left/right landscape margins.
+   - Apply the crop in the capture/composition pipeline before `VideoEncoder` or WLVC encode, not as receiver-only CSS, so fewer pixels go over the SFU path and the remaining visible area can use higher effective quality.
+   - Preserve correct aspect ratio and avoid stretching for portrait camera sources, landscape camera sources, fullscreen, mini-video, and grid tiles.
+   - Treat fullscreen as a first-class framing target: fullscreen landscape should keep full-width detail, fullscreen portrait should crop/zoom intentionally without desktop stretching.
+   - Treat every mini-video as a square framing target with client-side crop/zoom, no rounded visual masking, and no transport of unused side bands.
+   - Keep quality automatic; the UI may expose framing affordances later, but this sprint must not add a manual quality selector.
+
+   Done when:
+   - A landscape camera rendered into a portrait tile is center-cropped before encode and does not transmit the discarded side bands.
+   - A portrait camera stays portrait without desktop stretching or horizontal overfill.
+   - Fullscreen playback selects the correct landscape or portrait crop and remains sharp instead of falling back to thumbnail framing.
+   - Mini-video thumbnails are square, crop/zoom correctly, and do not distort the source aspect ratio.
+   - The receiver sees the intended crop with sharper visible detail at the same or lower wire budget.
+   - Contracts cover the crop math for landscape-to-portrait, portrait-to-portrait, fullscreen landscape, fullscreen portrait, and square mini-video cases.
+
+   Report:
+   - Proposed next improvement from production UI feedback.
+
 ## Execution Order
 
 1. Finish `[socket-layer-state-wiring-hotfix]`.
 2. Deploy the hotfix and verify production smoke.
 3. Open PR to `development/1.0.7-beta`.
-4. Use the three proposed issues as the next quality-hardening sprint after this hotfix is merged.
+4. Use the proposed issues as the next quality-hardening sprint after this hotfix is merged.
