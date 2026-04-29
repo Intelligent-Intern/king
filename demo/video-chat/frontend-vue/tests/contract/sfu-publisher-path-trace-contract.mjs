@@ -25,6 +25,7 @@ try {
   requireContains(publisherFrameTrace, 'publisher_path_trace_stages', 'publisher trace stage chain metric');
   requireContains(publisherFrameTrace, 'trace_get_user_media_frame_delivery_ms', 'getUserMedia delivery timing metric');
   requireContains(publisherFrameTrace, 'trace_video_frame_processor_read_ms', 'VideoFrame processor read timing metric');
+  requireContains(publisherFrameTrace, 'trace_video_frame_copy_to_rgba_ms', 'VideoFrame RGBA copy timing metric');
   requireContains(publisherFrameTrace, 'trace_video_frame_canvas_draw_image_ms', 'VideoFrame canvas draw timing metric');
   requireContains(publisherFrameTrace, 'trace_video_frame_canvas_get_image_data_ms', 'VideoFrame canvas readback timing metric');
   requireContains(publisherFrameTrace, 'trace_dom_canvas_draw_image_ms', 'DOM canvas draw timing metric');
@@ -44,6 +45,7 @@ try {
 
   const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
   requireContains(sourceReadback, "markPublisherFrameTraceStage(trace, 'video_frame_processor_read'", 'source readback records VideoFrame processor timing');
+  requireContains(sourceReadback, "markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba'", 'source readback records VideoFrame RGBA copy timing');
   requireContains(sourceReadback, "'video_frame_canvas_draw_image'", 'source readback records VideoFrame draw timing');
   requireContains(sourceReadback, "'video_frame_canvas_get_image_data'", 'source readback records VideoFrame canvas readback timing');
   requireContains(sourceReadback, "'dom_canvas_draw_image'", 'source readback records DOM fallback draw timing');

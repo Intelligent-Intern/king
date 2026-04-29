@@ -38,6 +38,7 @@ async function main() {
   requireContains(publisherPipeline, 'sourceReadbackController.readFrame({', 'publisher reads source frames through source readback controller');
   requireContains(sourceReadback, 'drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs', 'publisher bounds source readback before encode');
   requireContains(sourceReadback, 'sfu_source_readback_budget_exceeded', 'publisher reports source readback budget pressure');
+  requireContains(sourceReadback, 'video_frame_copy_to_budget_exceeded', 'publisher reports VideoFrame copyTo budget pressure');
   requireContains(sourceReadback, 'canvas_get_image_data_budget_exceeded', 'publisher distinguishes getImageData pressure');
   requireContains(sourceReadback, 'publisher_source_readback', 'publisher reports source readback transport stage');
   requireContains(runtimeSwitching, "'sfu_source_readback_budget_exceeded'", 'readback pressure bypasses downgrade cooldown');

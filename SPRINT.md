@@ -44,7 +44,7 @@ Technical target:
 2. [x] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
 3. [x] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
 4. [x] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
-5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
+5. [x] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
 7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
 8. [ ] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
@@ -157,6 +157,28 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429052354` served `CallWorkspaceView-D-HLrmll.js` with `MediaStreamTrackProcessor`, `video_frame_processor_canvas_readback`, and `publisher_video_frame_read_timeout`.
+
+### 5. `[video-frame-rgba-copy]`
+
+Status: Done.
+
+Implementation:
+- Added a direct `VideoFrame.copyTo(..., { format: 'RGBA' })` helper that produces `ImageData` for WLVC without `drawImage` or `getImageData`.
+- Wired the source-readback controller to try direct `VideoFrame` RGBA copy before canvas fallback when the source frame already matches the active profile dimensions.
+- Added budget handling and trace timing for `video_frame_copy_to_rgba`; fatal copy failures disable the copy path and fall back to the existing canvas readback.
+- Kept scaling through the existing canvas fallback for mismatched source/profile sizes; profile-coupled capture sizing is tracked by issue 8.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-frame-rgba-copy-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429052751` served `CallWorkspaceView-BigJQukE.js` with `video_frame_copy_to_rgba`, `trace_video_frame_copy_to_rgba_ms`, and `publisher_video_frame_copy_scale_required`.
 
 ### 9. `[quality-ui-removal-contract]`
 

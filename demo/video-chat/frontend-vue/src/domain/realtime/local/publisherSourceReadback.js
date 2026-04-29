@@ -7,6 +7,7 @@ import {
   createPublisherVideoFrameSourceReader,
   PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND,
 } from './publisherVideoFrameSource.js';
+import { copyVideoFrameToRgbaImageData } from './publisherVideoFrameCopy.js';
 import {
   highResolutionNowMs,
   markPublisherFrameTraceStage,
@@ -90,6 +91,7 @@ export function createPublisherSourceReadbackController({
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
   let videoFrameReader = null;
   let videoFrameSourceDisabled = false;
+  let videoFrameCopyToDisabled = false;
 
   if (canUsePublisherVideoFrameSource(captureCapabilities)) {
     try {
@@ -146,12 +148,57 @@ export function createPublisherSourceReadbackController({
     if (!sourceFrame) return null;
 
     const { source, sourceBackend, frameSize, closeSource } = sourceFrame;
-    if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
-      canvas.width = frameSize.frameWidth;
-      canvas.height = frameSize.frameHeight;
-    }
-
     try {
+      const drawBudgetMs = Math.max(1, Number(activeProfile.maxDrawImageMs || 0));
+      const readbackBudgetMs = Math.max(1, Number(activeProfile.maxReadbackMs || 0));
+      if (sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND && !videoFrameCopyToDisabled) {
+        const copyStartedAtMs = highResolutionNowMs();
+        const copyResult = await copyVideoFrameToRgbaImageData({
+          frame: source,
+          frameSize,
+          ImageDataCtor: globalScope.ImageData,
+        });
+        const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
+        if (copyResult.ok) {
+          markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
+          if (copyToMs > readbackBudgetMs) {
+            return {
+              budgetExceeded: true,
+              details: publisherFrameFailureDetails(trace, {
+                reason: 'sfu_source_readback_budget_exceeded',
+                stage: 'video_frame_copy_to_rgba',
+                source: 'video_frame_copy_to_budget_exceeded',
+                message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
+                transportPath: 'publisher_source_readback',
+                bufferedAmount: 0,
+                payloadBytes: 0,
+                wirePayloadBytes: 0,
+                timestamp,
+              }),
+            };
+          }
+          return {
+            imageData: copyResult.imageData,
+            frameSize,
+            drawImageMs: 0,
+            readbackMs: copyToMs,
+            drawBudgetMs,
+            readbackBudgetMs,
+            sourceBackend,
+            readbackMethod: 'video_frame_copy_to_rgba',
+            readbackBytes: copyResult.readbackBytes,
+          };
+        }
+        if (copyResult.fatal) {
+          videoFrameCopyToDisabled = true;
+          mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using canvas readback fallback', copyResult.reason, copyResult.error);
+        }
+      }
+
+      if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
+        canvas.width = frameSize.frameWidth;
+        canvas.height = frameSize.frameHeight;
+      }
       const drawStartedAtMs = highResolutionNowMs();
       context.drawImage(source, 0, 0, canvas.width, canvas.height);
       const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
@@ -170,8 +217,6 @@ export function createPublisherSourceReadbackController({
         readbackMs,
       );
 
-      const drawBudgetMs = Math.max(1, Number(activeProfile.maxDrawImageMs || 0));
-      const readbackBudgetMs = Math.max(1, Number(activeProfile.maxReadbackMs || 0));
       if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
         const readbackReason = drawImageMs > drawBudgetMs
           ? 'canvas_draw_image_budget_exceeded'

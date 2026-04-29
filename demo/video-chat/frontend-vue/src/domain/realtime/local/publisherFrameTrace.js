@@ -3,6 +3,7 @@ let publisherFrameTraceSequence = 0;
 const TRACE_STAGE_METRIC_KEYS = Object.freeze({
   get_user_media_frame_delivery: 'trace_get_user_media_frame_delivery_ms',
   video_frame_processor_read: 'trace_video_frame_processor_read_ms',
+  video_frame_copy_to_rgba: 'trace_video_frame_copy_to_rgba_ms',
   video_frame_canvas_draw_image: 'trace_video_frame_canvas_draw_image_ms',
   video_frame_canvas_get_image_data: 'trace_video_frame_canvas_get_image_data_ms',
   dom_canvas_draw_image: 'trace_dom_canvas_draw_image_ms',
