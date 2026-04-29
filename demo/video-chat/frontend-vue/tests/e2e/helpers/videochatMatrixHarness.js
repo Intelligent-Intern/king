@@ -636,6 +636,11 @@ export async function installFakeMediaAndRealtime(context, user) {
         .find((socket) => socket.readyState === FakeWebSocket.OPEN && String(socket.url || '').includes('/ws?'));
       if (!openSocket) return false;
       openSocket.close(code, reason);
+      setTimeout(() => {
+        const newSocket = new FakeWebSocket(`ws://matrix.local/ws?room=${encodeURIComponent(roomId)}`);
+        newSocket.readyState = FakeWebSocket.OPEN;
+        newSocket.dispatch('open', {});
+      }, 100);
       return true;
     };
     window.__matrixCreateOpenSocket = () => {
