@@ -30,12 +30,13 @@ async function main() {
 
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'media stack passes diagnostics into local media orchestration');
   requireContains(mediaOrchestration, 'videoTrack.getSettings()', 'local media orchestration reads browser-reported track settings');
+  requireContains(mediaOrchestration, 'frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate }', 'local media constraints cap capture FPS to automatic profile');
   requireContains(mediaOrchestration, 'sfu_local_capture_constraints_applied', 'local media orchestration reports applied capture settings');
   requireContains(mediaOrchestration, 'stale_hd_capture_after_downgrade', 'local media orchestration flags stale HD capture after downgrade');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(rawStream, 'publish')", 'initial publish reports track settings');
   requireContains(mediaOrchestration, "reportLocalCaptureSettings(nextRawStream, 'reconfigure')", 'profile/device reconfigure reports track settings');
   requireContains(lifecycle, 'void reconfigureLocalTracksFromSelectedDevices();', 'automatic quality profile change reconfigures local tracks');
-  requireContains(publisherPipeline, "import { resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
+  requireContains(publisherPipeline, "resolvePublisherFrameSize } from './videoFrameSizing';", 'publisher uses aspect-preserving source frame sizing');
   requireContains(publisherTelemetry, 'frame_width: frameSize.frameWidth', 'publisher telemetry reports actual WLVC frame width');
   requireContains(publisherTelemetry, 'frame_height: frameSize.frameHeight', 'publisher telemetry reports actual WLVC frame height');
   requireContains(publisherTelemetry, 'profile_frame_width: frameSize.profileFrameWidth', 'publisher telemetry keeps profile frame width');

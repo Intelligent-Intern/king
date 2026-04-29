@@ -25,6 +25,7 @@ import {
 } from './publisherFrameTrace.js';
 import {
   resolveContainFrameSizeFromDimensions,
+  resolveProfileReadbackIntervalMs,
   resolvePublisherFrameSize,
 } from './videoFrameSizing.js';
 
@@ -112,7 +113,7 @@ export function createPublisherSourceReadbackController({
       videoFrameReader = createPublisherVideoFrameSourceReader({
         videoTrack,
         MediaStreamTrackProcessorCtor: globalScope.MediaStreamTrackProcessor,
-        readTimeoutMs: Math.max(600, Number(videoProfile?.encodeIntervalMs || 0) * 6),
+        readTimeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(videoProfile) * 6),
       });
     } catch (error) {
       videoFrameSourceDisabled = true;
@@ -125,7 +126,7 @@ export function createPublisherSourceReadbackController({
       capabilities: captureCapabilities,
       WorkerCtor: globalScope.Worker,
       ImageDataCtor: globalScope.ImageData,
-      timeoutMs: Math.max(900, Number(videoProfile?.encodeIntervalMs || 0) * 8),
+      timeoutMs: Math.max(900, resolveProfileReadbackIntervalMs(videoProfile) * 8),
       mediaDebugLog,
     });
     captureWorkerDisabled = !captureWorkerReadback;
@@ -135,7 +136,7 @@ export function createPublisherSourceReadbackController({
     if (videoFrameReader && !videoFrameSourceDisabled) {
       const readStartedAtMs = highResolutionNowMs();
       const result = await videoFrameReader.readFrame({
-        timeoutMs: Math.max(600, Number(activeProfile?.encodeIntervalMs || 0) * 6),
+        timeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(activeProfile) * 6),
       });
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       if (result.ok && result.frame) {
@@ -230,7 +231,7 @@ export function createPublisherSourceReadbackController({
           source,
           frameSize,
           timestamp,
-          timeout: Math.max(900, Number(activeProfile?.encodeIntervalMs || 0) * 8),
+          timeout: Math.max(900, resolveProfileReadbackIntervalMs(activeProfile) * 8),
         });
         if (workerResult.ok) {
           const workerElapsedMs = roundedStageMs(

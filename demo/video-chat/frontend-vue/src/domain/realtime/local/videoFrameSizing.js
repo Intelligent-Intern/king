@@ -91,3 +91,8 @@ export function resolvePublisherFrameSize(video, videoProfile = {}, videoTrack =
     profileFrameHeight: evenFloor(maxHeight, 2),
   };
 }
+
+export function resolveProfileReadbackIntervalMs(videoProfile = {}) {
+  const readbackIntervalMs = positiveFiniteNumber(videoProfile.readbackIntervalMs);
+  return readbackIntervalMs || positiveFiniteNumber(videoProfile.encodeIntervalMs) || 1;
+}

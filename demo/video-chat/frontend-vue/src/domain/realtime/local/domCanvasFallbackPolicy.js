@@ -23,6 +23,10 @@ export function resolveDomCanvasCompatibilityProfile(videoProfile = {}) {
   const cappedFrameWidth = evenFloor(Math.min(activeWidth, DOM_CANVAS_COMPATIBILITY_MAX_FRAME_WIDTH), DOM_CANVAS_COMPATIBILITY_MAX_FRAME_WIDTH);
   const cappedFrameHeight = evenFloor(Math.min(activeHeight, DOM_CANVAS_COMPATIBILITY_MAX_FRAME_HEIGHT), DOM_CANVAS_COMPATIBILITY_MAX_FRAME_HEIGHT);
   const maxFpsIntervalMs = Math.ceil(1000 / DOM_CANVAS_COMPATIBILITY_MAX_FPS);
+  const readbackIntervalMs = Math.max(
+    positiveNumber(videoProfile.readbackIntervalMs) || positiveNumber(videoProfile.encodeIntervalMs),
+    maxFpsIntervalMs,
+  );
   return {
     ...videoProfile,
     frameWidth: cappedFrameWidth,
@@ -31,7 +35,12 @@ export function resolveDomCanvasCompatibilityProfile(videoProfile = {}) {
       positiveNumber(videoProfile.captureFrameRate) || DOM_CANVAS_COMPATIBILITY_MAX_FPS,
       DOM_CANVAS_COMPATIBILITY_MAX_FPS,
     ),
-    encodeIntervalMs: Math.max(positiveNumber(videoProfile.encodeIntervalMs), maxFpsIntervalMs),
+    readbackFrameRate: Math.min(
+      positiveNumber(videoProfile.readbackFrameRate) || DOM_CANVAS_COMPATIBILITY_MAX_FPS,
+      DOM_CANVAS_COMPATIBILITY_MAX_FPS,
+    ),
+    readbackIntervalMs,
+    encodeIntervalMs: Math.max(positiveNumber(videoProfile.encodeIntervalMs), readbackIntervalMs),
     domCanvasCompatibilityFallback: true,
   };
 }
@@ -64,7 +73,7 @@ export function resolveDomCanvasCompatibilityVideoFrameSize(frame, videoProfile 
 
 export function domCanvasCompatibilityReadbackIntervalMs(videoProfile = {}) {
   return Math.max(
-    positiveNumber(videoProfile.encodeIntervalMs),
+    positiveNumber(videoProfile.readbackIntervalMs) || positiveNumber(videoProfile.encodeIntervalMs),
     Math.ceil(1000 / DOM_CANVAS_COMPATIBILITY_MAX_FPS),
   );
 }

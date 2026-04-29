@@ -66,7 +66,7 @@ try {
   assert.match(preferences, /export function setCallOutgoingVideoQualityProfile\(profile\) \{[\s\S]*?toOutgoingVideoQualityProfile\(profile\)[\s\S]*?persistCallMediaPrefs\(\);[\s\S]*?\}/, 'video quality setter must normalize and persist the automatic profile');
   assert.match(lifecycle, /\(\) => callMediaPrefs\.outgoingVideoQualityProfile,[\s\S]*?void reconfigureLocalTracksFromSelectedDevices\(\);/, 'video quality changes must reconfigure local tracks in active calls');
   assert.match(runtimeSwitching, /return resolveSfuVideoQualityProfile\(refs\.callMediaPrefs\.outgoingVideoQualityProfile\);/, 'runtime must resolve the active SFU profile from automatic state');
-  assert.match(mediaOrchestration, /frameRate:\s*\{\s*ideal:\s*videoProfile\.captureFrameRate,\s*max:\s*30\s*\}/, 'local capture constraints must use the automatic SFU profile framerate');
+  assert.match(mediaOrchestration, /frameRate:\s*\{\s*ideal:\s*videoProfile\.captureFrameRate,\s*max:\s*videoProfile\.captureFrameRate\s*\}/, 'local capture constraints must hard-cap the automatic SFU profile framerate');
   assert.match(publisherPipeline, /const nextQuality = Math\.max\(1, Math\.floor\(Number\(videoProfile\.frameQuality/, 'WLVC encoder quality must use the automatic SFU profile quality');
   assert.match(publisherPipeline, /setTimeout\(runWlvcEncodeTick,\s*Math\.max\(0,\s*Math\.round\(delayMs\)\)\)/, 'WLVC encode loop must use the automatic SFU profile encode interval');
   assert.doesNotMatch(workspaceConfig, /SFU_VIDEO_QUALITY_PROFILE_OPTIONS/, 'workspace config must not export user-facing SFU quality select options');

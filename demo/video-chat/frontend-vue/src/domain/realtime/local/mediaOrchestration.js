@@ -89,13 +89,13 @@ export function createLocalMediaOrchestrationHelpers({
         ? {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
             deviceId: { exact: cameraDeviceId },
           }
         : {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           };
     const audio = !wantsAudio
       ? false
@@ -115,7 +115,7 @@ export function createLocalMediaOrchestrationHelpers({
         ? {
             width: { ideal: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight },
-            frameRate: { ideal: videoProfile.captureFrameRate, max: 30 },
+            frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
           }
         : false,
       audio: wantsAudio ? true : false,
@@ -154,6 +154,10 @@ export function createLocalMediaOrchestrationHelpers({
         requested_capture_width: Number(videoProfile.captureWidth || 0),
         requested_capture_height: Number(videoProfile.captureHeight || 0),
         requested_capture_frame_rate: Number(videoProfile.captureFrameRate || 0),
+        requested_readback_frame_rate: Number(videoProfile.readbackFrameRate || 0),
+        requested_readback_interval_ms: Number(videoProfile.readbackIntervalMs || videoProfile.encodeIntervalMs || 0),
+        requested_keyframe_interval: Number(videoProfile.keyFrameInterval || 0),
+        requested_wire_budget_bytes_per_second: Number(videoProfile.maxWireBytesPerSecond || 0),
         publisher_frame_width: Number(videoProfile.frameWidth || 0),
         publisher_frame_height: Number(videoProfile.frameHeight || 0),
         track_settings_width: settingsWidth,

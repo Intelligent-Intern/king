@@ -18,7 +18,7 @@ import {
   roundedStageMs,
 } from './publisherFrameTrace';
 import { createPublisherSourceReadbackController } from './publisherSourceReadback';
-import { resolvePublisherFrameSize } from './videoFrameSizing';
+import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
   backgroundBaselineCollector,
@@ -413,7 +413,7 @@ export function createLocalPublisherPipelineHelpers({
       return refs.videoPatchEncoderRef.value;
     };
 
-    const scheduleNextWlvcEncodeTick = (delayMs = videoProfile.encodeIntervalMs) => {
+    const scheduleNextWlvcEncodeTick = (delayMs = resolveProfileReadbackIntervalMs(videoProfile)) => {
       if (!refs.videoEncoderRef.value || !isWlvcRuntimePath()) {
         refs.encodeIntervalRef.value = null;
         return;
@@ -437,7 +437,7 @@ export function createLocalPublisherPipelineHelpers({
         const timestamp = Date.now();
         const remoteKeyframeRequestPending = timestamp < Number(refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs || 0);
         const keyframeRetryDelayMs = Math.max(
-          Number(videoProfile.encodeIntervalMs || 0),
+          resolveProfileReadbackIntervalMs(videoProfile),
           Number(videoProfile.minKeyframeRetryMs || 0),
         );
         if (forcedKeyframeRecoveryPending && timestamp < keyframeRetryBlockedUntilMs) {
@@ -821,7 +821,7 @@ export function createLocalPublisherPipelineHelpers({
         if (refs.encodeIntervalRef.value !== null) {
           const finishedAtMs = highResolutionNowMs();
           const elapsedMs = Math.max(0, finishedAtMs - startedAtMs);
-          scheduleNextWlvcEncodeTick(videoProfile.encodeIntervalMs - elapsedMs);
+          scheduleNextWlvcEncodeTick(resolveProfileReadbackIntervalMs(videoProfile) - elapsedMs);
         }
       }
     };

@@ -47,7 +47,7 @@ Technical target:
 5. [x] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [x] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
 7. [x] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
-8. [ ] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
+8. [x] `[source-budget-profile-coupling]` Make `quality`, `balanced`, `realtime`, and `rescue` automatic profiles set capture dimensions, readback FPS, keyframe cadence, and wire byte budgets together.
 9. [x] `[quality-ui-removal-contract]` Remove the visible quality selector from the call UI and prove quality changes only through automatic profile switching and diagnostics.
 10. [ ] `[auto-readback-downgrade]` On two consecutive source-readback budget failures, reduce capture resolution/FPS before another frame is read, not after repeated failed encode/send attempts.
 11. [ ] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
@@ -225,6 +225,29 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429054231` served `CallWorkspaceView-pZkhK_JP.js` with `dom_canvas_compatibility_fallback`, `dom_canvas_compatibility_readback`, `trace_dom_canvas_compatibility_throttle_ms`, and `dom_canvas_compatibility_get_image_data_budget_exceeded`.
+
+### 8. `[source-budget-profile-coupling]`
+
+Status: Done.
+
+Implementation:
+- Added explicit `readbackFrameRate` and `readbackIntervalMs` fields to every automatic SFU video profile.
+- Changed local camera constraints so profile `captureFrameRate` is both the ideal and max FPS, preventing low profiles from silently capturing at 30 FPS.
+- Changed the publisher encode/readback loop and source-reader/worker timeouts to use the profile readback interval instead of treating `encodeIntervalMs` as an implicit readback clock.
+- Added capture diagnostics and transport metrics for requested readback FPS, readback interval, keyframe cadence, and wire byte budget.
+- Kept DOM canvas fallback constrained to its compatibility cap while preserving the coupled readback interval fields.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-source-budget-profile-coupling-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429055046` served `CallWorkspaceView-3iI3pUJj.js` with `readback_frame_rate`, `readback_interval_ms`, `requested_readback_frame_rate`, `requested_wire_budget_bytes_per_second`, `dom_canvas_compatibility_fallback`, and `sfu_source_readback_budget_exceeded`.
 
 ### 9. `[quality-ui-removal-contract]`
 
