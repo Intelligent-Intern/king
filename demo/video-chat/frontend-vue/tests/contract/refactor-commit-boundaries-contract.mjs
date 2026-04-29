@@ -65,7 +65,7 @@ try {
     'participantUi.js',
     'roomState.js',
     'routeResolution.js',
-    'runtimeHealth.js',
+    'runtimeHealth.ts',
     'runtimeSwitching.js',
     'sfuTransport.js',
     'socketLifecycle.js',
