@@ -33,6 +33,8 @@ try {
   requireContains(workerReadbackSource, 'new ImageDataCtor(rgba, frameWidth, frameHeight)', 'worker readback reconstructs ImageData');
   requireContains(workerReadbackSource, 'publisher_capture_worker_timeout', 'worker readback timeout recovery');
   requireContains(workerReadbackSource, 'publisher_capture_worker_post_message_failed', 'worker readback postMessage fallback reason');
+  requireContains(workerReadbackSource, 'closeGraceMs = 250', 'worker readback keeps a close grace window for transferred VideoFrames');
+  requireContains(workerReadbackSource, 'setTimeout(() => {', 'worker readback delays terminate so transferred frames can close in worker finally');
   assert.equal(workerReadbackSource.includes("from 'vue'"), false, 'worker readback helper must not import Vue');
 
   requireContains(sourceReadback, 'createPublisherCaptureWorkerReadbackController({', 'source readback creates capture worker controller');
@@ -80,6 +82,7 @@ try {
   }
 
   const posted = [];
+  let terminated = 0;
   class FakeWorker {
     constructor(url, options) {
       this.url = String(url);
@@ -123,7 +126,9 @@ try {
       });
     }
 
-    terminate() {}
+    terminate() {
+      terminated += 1;
+    }
   }
 
   const controller = workerModule.createPublisherCaptureWorkerReadbackController({
@@ -138,6 +143,7 @@ try {
     workerUrl: 'fake-worker.js',
     ImageDataCtor: FakeImageData,
     timeoutMs: 100,
+    closeGraceMs: 1,
   });
 
   assert.ok(controller, 'worker readback controller should be created for worker-capable browsers');
@@ -165,6 +171,10 @@ try {
   assert.equal(posted[1].message.type, 'kingrt/publisher-capture-worker/readback');
   assert.deepEqual(posted[1].transfers, [source]);
   controller.close();
+  assert.equal(posted[2].message.type, 'kingrt/publisher-capture-worker/close');
+  assert.equal(terminated, 0, 'worker terminate must not run synchronously before transferred VideoFrame cleanup can execute');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.equal(terminated, 1, 'worker terminate should run after the close grace window');
 
   process.stdout.write('[sfu-offscreen-canvas-fallback-contract] PASS\n');
 } catch (error) {

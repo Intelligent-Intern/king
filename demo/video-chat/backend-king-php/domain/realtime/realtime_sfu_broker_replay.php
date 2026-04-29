@@ -347,6 +347,48 @@ function videochat_sfu_live_frame_relay_poll(
 }
 
 /**
+ * @param array<int|string, string|bool> $localPublisherIds
+ */
+function videochat_sfu_sqlite_frame_buffer_poll(
+    PDO $pdo,
+    mixed $websocket,
+    string $roomId,
+    string $clientId,
+    array $localPublisherIds,
+    int &$cursor
+): int {
+    $sentCount = 0;
+    foreach (
+        videochat_sfu_fetch_buffered_frames(
+            $pdo,
+            $roomId,
+            $clientId,
+            $localPublisherIds,
+            $cursor,
+            videochat_sfu_frame_buffer_poll_batch_limit()
+        ) as $frame
+    ) {
+        $subscriberSendStartedAtMs = videochat_sfu_now_ms();
+        $kingFanoutStartedAtMs = max(0, (int) ($frame['king_receive_at_ms'] ?? 0));
+        if ($kingFanoutStartedAtMs > 0) {
+            $frame['subscriber_send_latency_ms'] = max(0, $subscriberSendStartedAtMs - $kingFanoutStartedAtMs);
+        }
+        if (videochat_sfu_send_outbound_message($websocket, $frame, [
+            'sfu_send_path' => 'sqlite_frame_buffer_poll',
+            'room_id' => $roomId,
+            'subscriber_id' => $clientId,
+            'worker_pid' => getmypid(),
+            'subscriber_send_latency_ms' => (float) ($frame['subscriber_send_latency_ms'] ?? 0),
+            'sqlite_buffer_age_ms' => (float) ($frame['sqlite_buffer_age_ms'] ?? 0),
+        ])) {
+            $sentCount++;
+        }
+    }
+
+    return $sentCount;
+}
+
+/**
  * @param array<string, int|bool> $knownPublishers
  * @param array<string, bool> $activePublishers
  */

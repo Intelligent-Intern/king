@@ -12,7 +12,7 @@ Sprint rule:
 - Keep only issues that directly remove the current publisher source-readback bottleneck in the SFU/WLVC online video call path.
 - Do not weaken King v1 contracts to make frame capture cheaper.
 - Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
-- Keep media-security, binary SFU envelopes, no-SQLite-frame-persistence, live relay, receiver feedback, and online pressure contracts intact.
+- Keep media-security, binary SFU envelopes, bounded SQLite frame buffering, live relay, receiver feedback, and online pressure contracts intact.
 - Video quality must not be user-selectable in the call UI; automatic profile selection must control the full capture/readback/encode/wire budget, not only the final SFU wire profile.
 
 ## Sprint: Publisher VideoFrame Readback Hotpath Replacement
@@ -56,7 +56,7 @@ Technical target:
 14. [x] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
-17. [x] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
+17. [x] `[bounded-sqlite-frame-buffer]` Restore bounded SQLite frame buffering for cross-worker replay while keeping binary SFU envelopes, protected-frame validation, live relay, TTL cleanup, and duplicate-suppression cursors intact.
 18. [x] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
 19. [x] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
 20. [x] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
@@ -450,7 +450,7 @@ Status: Done.
 
 Implementation:
 - Updated the media-security contract to assert the current SFU receiver module still surfaces `protectedFrame: protectedFrame || null` and still rejects ad-hoc `payload.protected = frame.protected` metadata.
-- Kept WLVC/SFU publisher protection on the existing protected-frame envelope path; no frame persistence or plaintext fallback was added.
+- Kept WLVC/SFU publisher protection on the existing protected-frame envelope path; no plaintext fallback was added.
 - Passed media-security readiness into the native peer factory so native audio receiver tracks that arrive during rekeying enter `waiting_security` instead of immediately failing playback.
 - Retried native audio receiver transform attachment after `ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')`; `native_audio_receiver_transform_failed` is now emitted only after a security-ready retry fails.
 - Removed the stale `exposeToConsole` gate from native-audio bridge failure recovery so repeated bridge failures still trigger the forced media-security sync/rekey timer instead of throwing before recovery.
@@ -477,16 +477,16 @@ Deploy proof:
 - Production diagnostics for asset `20260429065130` showed `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, `media_security_handshake_timeout`, and `media_security_sender_key_not_ready`; no fresh `native_audio_receiver_transform_failed` was present in the current-asset query.
 - Production asset version `20260429065839` served `CallWorkspaceView-DVqCK1Kb.js`, `WorkspaceShell-GtWA0igW.js`, `JoinView-gtNUpyFT.js`, and `preferences-geDd2h5r.js` with `echoCancellation`, `noiseSuppression`, `autoGainControl`, `channelCount`, `audio_echo_cancellation`, `audio_noise_suppression`, and `audio_auto_gain_control`; no deployed bundle contained disabled `echoCancellation:false`/`noiseSuppression:false`/`autoGainControl:false` markers.
 
-### 17. `[no-frame-persistence-regression]`
+### 17. `[bounded-sqlite-frame-buffer]`
 
 Status: Done.
 
 Implementation:
-- Added a dedicated SFU no-frame-persistence regression contract that scans backend realtime code, migrations, and SFU/local frontend media code.
-- Removed the unused legacy `videochat_sfu_encode_stored_frame_payload()` / `videochat_sfu_decode_stored_frame_payload()` helpers so the old stored-frame vocabulary cannot be reused by accident.
-- Proved the only remaining `sfu_frames` backend references are explicit legacy table drops in bootstrap and migration `0020_drop_legacy_sfu_frame_persistence`.
-- Proved JSON `sfu/frame` and `sfu/frame-chunk` commands fail with `binary_media_required`, outbound frames use binary WebSocket send, the gateway publishes only a bounded live relay copy, and direct fanout keeps the raw live frame path.
-- Updated the backend realtime SFU contract for the extracted direct-fanout helper and the current raw binary decode behavior.
+- Restored `sfu_frames` as a bounded SQLite replay buffer owned by the SFU broker, with monotonic cursor rows, short TTL cleanup, per-room row caps, per-record byte limits, and JSON-safe payload storage.
+- Reintroduced `videochat_sfu_decode_stored_frame_payload()` as a validating replay decoder for protected frames and transport-only base64 frames; raw binary stays on the live path and is converted before storage.
+- Wired the publisher hot path to insert the JSON-safe relay copy into SQLite and wired subscriber polling through `videochat_sfu_sqlite_frame_buffer_poll()` with duplicate-suppression cursors and local-publisher skips.
+- Kept the live relay and direct fanout paths active alongside SQLite buffering so same-worker subscribers stay live and cross-worker subscribers have two bounded replay paths.
+- Updated the stale no-persistence contracts to assert bounded buffering instead of rejecting the requested SQLite buffer.
 
 Verification:
 - `node demo/video-chat/frontend-vue/tests/contract/sfu-no-frame-persistence-regression-contract.mjs`
@@ -495,18 +495,13 @@ Verification:
 - `node demo/video-chat/frontend-vue/tests/contract/sfu-transport-metrics-contract.mjs`
 - `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
 - `npm run build` in `demo/video-chat/frontend-vue`
+- `php extension/run-tests.php -q tests/724-gossipmesh-frontend-client-decision-contract.phpt tests/730-gossipmesh-videochat-sfu-compatibility-contract.phpt`
 - `php -n demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php` locally; the SQLite section skipped because local `pdo_sqlite` is not loaded.
 - Production container: `docker exec king-videochat-v1-videochat-backend-sfu-v1-1 php /app/tests/realtime-sfu-contract.php`
 - `git diff --check`
 
 Deploy proof:
-- Deployed to `https://kingrt.com/`.
-- `demo/video-chat/scripts/deploy-smoke.sh` passed.
-- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
-- Production asset version `20260429080125` served `CallWorkspaceView-MpQQQFLk.js`.
-- The production call bundle contains `binary_media_required`, `sendEncodedFrame`, `binary_envelope_send_failed`, and `direct legacy JSON/base64 fallback has been removed`.
-- The deployed backend checkout has no `videochat_sfu_encode_stored_frame_payload`, `CREATE TABLE IF NOT EXISTS sfu_frames`, or `INSERT INTO sfu_frames` matches.
-- The deployed backend checkout still contains `DROP TABLE IF EXISTS sfu_frames`, `king_websocket_send($socket, $binaryPayload, true)`, `videochat_sfu_live_frame_relay_publish(...)`, and `binary_media_required`.
+- Previous no-persistence deploy proof is superseded by the restored bounded SQLite buffer contract. Redeploy proof must verify `CREATE TABLE IF NOT EXISTS sfu_frames`, `INSERT INTO sfu_frames`, `videochat_sfu_sqlite_frame_buffer_poll`, `binary_media_required`, and protected-frame validation in the deployed backend.
 
 ### 18. `[online-pressure-readback-proof]`
 

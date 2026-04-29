@@ -96,12 +96,14 @@ try {
   requireContains(backendStore, 'videochat_sfu_extract_stage_transport_metadata', 'backend normalizes stage transport metadata');
   requireContains(backendStore, 'king_receive_latency_ms', 'backend preserves King receive latency metric');
   requireContains(backendStore, 'subscriber_send_latency_ms', 'backend preserves subscriber send latency metric');
-  assert.ok(!backendStore.includes('CREATE TABLE IF NOT EXISTS sfu_frames'), 'backend must not persist SFU media frames in SQLite');
-  assert.ok(!backendStore.includes('INSERT INTO sfu_frames'), 'backend must not insert SFU media frames into SQLite');
+  requireContains(backendStore, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'backend bounded SQLite frame buffer table');
+  requireContains(backendStore, 'INSERT INTO sfu_frames', 'backend bounded SQLite frame buffer insert');
+  requireContains(backendStore, 'sqlite_buffer_age_ms', 'backend reports SQLite frame-buffer age metric');
 
   const backendGateway = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   requireContains(backendGateway, 'stampKingReceiveMetrics', 'gateway stamps King receive latency per frame');
   requireContains(backendGateway, 'king_fanout_latency_ms', 'gateway records fanout latency per frame');
+  requireContains(backendGateway, 'videochat_sfu_insert_frame', 'gateway writes frames to bounded SQLite buffer');
 
   process.stdout.write('[sfu-transport-metrics-contract] PASS\n');
 } catch (error) {

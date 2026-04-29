@@ -67,6 +67,7 @@ foreach ($forbiddenClientPaths as $path) {
 }
 
 $sfuClientPath = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts';
+$sfuMessageHandlerPath = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts';
 $sfuClientNeedles = [
     'export class SFUClient',
     'resolveBackendSfuOriginCandidates',
@@ -77,12 +78,20 @@ $sfuClientNeedles = [
     "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })",
     'protected_frame',
     'protection_mode',
-    "case 'sfu/frame':",
-    'protectedFrame: protectedFrame || null',
-    "'transport_only'",
+    'handleSfuClientMessage',
 ];
 foreach ($sfuClientNeedles as $needle) {
     require_contains($sfuClientPath, $needle);
+}
+
+$sfuMessageHandlerNeedles = [
+    "case 'sfu/frame':",
+    'protectedFrame: protectedFrame || null',
+    'protectionMode:',
+    "'transport_only'",
+];
+foreach ($sfuMessageHandlerNeedles as $needle) {
+    require_contains($sfuMessageHandlerPath, $needle);
 }
 
 $forbiddenSfuClientNeedles = [

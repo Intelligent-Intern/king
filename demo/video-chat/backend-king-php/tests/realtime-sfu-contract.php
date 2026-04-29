@@ -284,7 +284,7 @@ try {
     $sfuSubscriberBudgetSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_subscriber_budget.php');
     videochat_realtime_sfu_assert(
         str_contains($sfuGatewaySource, 'sfu_presence_touch_failed'),
-        'SFU publisher presence touch diagnostics should be wired without frame persistence'
+        'SFU publisher presence touch diagnostics should be wired'
     );
     videochat_realtime_sfu_assert(
         str_contains($sfuSubscriberBudgetSource, 'sfu_frame_direct_fanout_binary_required_failed'),
@@ -341,18 +341,21 @@ try {
         'SFU store must normalize codec/runtime ids centrally'
     );
     videochat_realtime_sfu_assert(
-        !str_contains($sfuStoreSource, 'CREATE TABLE IF NOT EXISTS sfu_frames')
-        && !str_contains($sfuStoreSource, 'INSERT INTO sfu_frames')
-        && !str_contains($sfuGatewaySource, 'videochat_sfu_insert_frame')
-        && !str_contains($sfuBrokerReplaySource, 'sfu_frame_broker_replay_binary'),
-        'SFU media frames must stay on the live websocket path and must not be persisted in SQLite'
+        str_contains($sfuStoreSource, 'CREATE TABLE IF NOT EXISTS sfu_frames')
+        && str_contains($sfuStoreSource, 'INSERT INTO sfu_frames')
+        && str_contains($sfuStoreSource, 'function videochat_sfu_decode_stored_frame_payload(')
+        && str_contains($sfuGatewaySource, 'videochat_sfu_insert_frame')
+        && str_contains($sfuBrokerReplaySource, 'videochat_sfu_sqlite_frame_buffer_poll'),
+        'SFU media frames must use the bounded SQLite frame buffer for cross-worker replay'
     );
     videochat_realtime_sfu_assert(
         function_exists('videochat_sfu_live_frame_relay_publish')
         && function_exists('videochat_sfu_live_frame_relay_read')
+        && function_exists('videochat_sfu_sqlite_frame_buffer_poll')
         && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_publish')
-        && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_poll'),
-        'SFU cross-worker media fanout must use the bounded live relay, not SQLite frame persistence'
+        && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_poll')
+        && str_contains($sfuGatewaySource, 'videochat_sfu_sqlite_frame_buffer_poll'),
+        'SFU cross-worker media fanout must keep bounded live relay and SQLite frame-buffer replay'
     );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),
@@ -740,6 +743,8 @@ try {
     $mainFrameTableExists = (int) $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sfu_frames'")->fetchColumn();
     videochat_realtime_sfu_assert($mainFrameTableExists === 0, 'Main SQLite bootstrap must remove the old frame persistence table');
     videochat_sfu_bootstrap($pdo);
+    $mainFrameTableAfterSfuBootstrap = (int) $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sfu_frames'")->fetchColumn();
+    videochat_realtime_sfu_assert($mainFrameTableAfterSfuBootstrap === 1, 'SFU bootstrap must create the bounded frame buffer table');
 
     videochat_sfu_upsert_publisher($pdo, 'room-alpha', 'publisher-a', '100', 'Publisher A');
     videochat_sfu_upsert_publisher($pdo, 'room-alpha', 'publisher-b', '200', 'Publisher B');
@@ -790,15 +795,57 @@ try {
     videochat_realtime_sfu_assert($remainingTrackRows === 0, 'SFU stale publisher cleanup must remove expired tracks');
 
     $frameTableExists = (int) $pdo->query("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sfu_frames'")->fetchColumn();
-    videochat_realtime_sfu_assert($frameTableExists === 0, 'SFU bootstrap must remove the old frame persistence table');
+    videochat_realtime_sfu_assert($frameTableExists === 1, 'SFU bootstrap must keep the bounded frame buffer table');
 
     videochat_sfu_upsert_publisher($pdo, 'room-alpha', 'publisher-b', '200', 'Publisher B');
     videochat_sfu_upsert_track($pdo, 'room-alpha', 'publisher-b', 'camera-b', 'video', 'Camera B');
+    $bufferFramePayload = [
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-b',
+        'publisher_user_id' => '200',
+        'track_id' => 'camera-b',
+        'timestamp' => 12348,
+        'frame_type' => 'delta',
+        'protection_mode' => 'transport_only',
+        'protocol_version' => 2,
+        'frame_sequence' => 44,
+        'sender_sent_at_ms' => 1770000000200,
+        'data_base64' => videochat_sfu_base64url_encode('abc'),
+        'payload_chars' => videochat_sfu_base64url_encoded_length(3),
+        'payload_bytes' => 3,
+        'chunk_count' => 1,
+        'codec_id' => 'wlvc_wasm',
+        'runtime_id' => 'wlvc_sfu',
+    ];
+    videochat_realtime_sfu_assert(
+        videochat_sfu_insert_frame($pdo, 'room-alpha', 'publisher-b', $bufferFramePayload),
+        'SFU bounded SQLite frame buffer should accept a transport frame'
+    );
+    $bufferCursor = 0;
+    $bufferedFrames = videochat_sfu_fetch_buffered_frames($pdo, 'room-alpha', 'subscriber-x', [], $bufferCursor, 10);
+    videochat_realtime_sfu_assert(count($bufferedFrames) === 1, 'SFU bounded SQLite frame buffer should replay one remote frame');
+    videochat_realtime_sfu_assert(
+        (string) ($bufferedFrames[0]['publisher_id'] ?? '') === 'publisher-b'
+        && (string) ($bufferedFrames[0]['data_base64'] ?? '') === videochat_sfu_base64url_encode('abc')
+        && (int) ($bufferedFrames[0]['frame_sequence'] ?? 0) === 44,
+        'SFU bounded SQLite frame buffer must preserve frame payload and metadata'
+    );
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_buffered_frames($pdo, 'room-alpha', 'subscriber-x', [], $bufferCursor, 10) === [],
+        'SFU bounded SQLite frame buffer cursor should suppress duplicate delivery'
+    );
+    $localBufferCursor = 0;
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_buffered_frames($pdo, 'room-alpha', 'subscriber-y', ['publisher-b'], $localBufferCursor, 10) === [],
+        'SFU bounded SQLite frame buffer should skip publishers local to the subscriber worker'
+    );
 
     videochat_sfu_remove_track($pdo, 'room-alpha', 'publisher-b', 'mic-b');
     videochat_realtime_sfu_assert(count(videochat_sfu_fetch_tracks($pdo, 'room-alpha', 'publisher-b')) === 1, 'SFU unpublish should remove only target track');
     videochat_sfu_remove_publisher($pdo, 'room-alpha', 'publisher-b');
     videochat_realtime_sfu_assert(videochat_sfu_fetch_tracks($pdo, 'room-alpha', 'publisher-b') === [], 'SFU publisher removal should remove tracks');
+    $remainingBufferedRows = (int) $pdo->query("SELECT COUNT(*) FROM sfu_frames WHERE room_id = 'room-alpha' AND publisher_id = 'publisher-b'")->fetchColumn();
+    videochat_realtime_sfu_assert($remainingBufferedRows === 0, 'SFU publisher removal should remove buffered frames');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[realtime-sfu-contract] PASS\n");

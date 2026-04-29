@@ -83,15 +83,20 @@ try {
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
 
-  requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_publishers', 'SFU bootstrap persists only publisher metadata');
-  requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_tracks', 'SFU bootstrap persists only track metadata');
-  requireContains(store, "$pdo->exec('DROP TABLE IF EXISTS sfu_frames');", 'SFU bootstrap removes legacy frame table');
+  requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_publishers', 'SFU bootstrap persists publisher metadata');
+  requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_tracks', 'SFU bootstrap persists track metadata');
+  requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'SFU bootstrap creates bounded frame buffer table');
+  requireContains(store, 'frame_row_id INTEGER PRIMARY KEY AUTOINCREMENT', 'SFU frame buffer has monotonic cursor rows');
+  requireContains(store, 'payload_json TEXT NOT NULL', 'SFU frame buffer stores JSON-safe frame payloads');
+  requireContains(store, 'function videochat_sfu_frame_buffer_ttl_ms(): int', 'SFU frame buffer has a short TTL');
+  requireContains(store, 'return 2500;', 'SFU frame buffer keeps frame records short-lived');
+  requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SFU frame buffer has a room row cap');
+  requireContains(store, 'function videochat_sfu_decode_stored_frame_payload', 'SFU frame buffer decodes stored payloads before replay');
+  requireContains(store, 'function videochat_sfu_insert_frame', 'SFU frame buffer has one insert helper');
+  requireContains(store, 'function videochat_sfu_fetch_buffered_frames', 'SFU frame buffer has one replay helper');
   requireContains(migrations, "'name' => '0020_drop_legacy_sfu_frame_persistence'", 'migration keeps legacy frame persistence removal');
   requireContains(migrations, "'DROP TABLE IF EXISTS sfu_frames'", 'migration drops legacy sfu_frames table');
-  requireNotContains(store, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'SFU store frame table');
-  requireNotContains(store, 'INSERT INTO sfu_frames', 'SFU store frame insert');
   requireNotContains(store, 'videochat_sfu_encode_stored_frame_payload', 'legacy stored frame helper');
-  requireNotContains(store, 'videochat_sfu_decode_stored_frame_payload', 'legacy stored frame helper');
 
   requireContains(store, "if ($type === 'sfu/frame' || $type === 'sfu/frame-chunk') {", 'JSON media command rejection gate');
   requireContains(store, "'error' => 'binary_media_required'", 'JSON media command rejection reason');
@@ -109,10 +114,10 @@ try {
   requireContains(frameHotPath, 'videochat_sfu_upsert_publisher(', 'frame hotpath only refreshes publisher presence');
   requireContains(frameHotPath, 'videochat_sfu_touch_track(', 'frame hotpath only refreshes track presence');
   requireContains(frameHotPath, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'frame hotpath uses JSON-safe relay copy');
+  requireContains(frameHotPath, 'videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame)', 'frame hotpath writes JSON-safe frame copy to bounded SQLite buffer');
   requireContains(frameHotPath, 'videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)', 'frame hotpath publishes to live relay');
   requireContains(frameHotPath, 'videochat_sfu_direct_fanout_frame(', 'frame hotpath keeps direct live fanout');
   assert.equal(/\$activeSfuDatabase->(?:prepare|exec|query)\s*\(/.test(frameHotPath), false, 'frame hotpath must not write frame payload SQL directly');
-  assert.equal(/videochat_sfu_(?:insert|upsert|store|persist)_frame/i.test(frameHotPath), false, 'frame hotpath must not call frame persistence helpers');
 
   requireContains(relay, 'function videochat_sfu_live_frame_relay_ttl_ms(): int', 'live relay has transient TTL');
   requireContains(relay, 'return 2500;', 'live relay keeps frame records short-lived');
@@ -120,6 +125,8 @@ try {
   requireContains(relay, 'function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs = null): void', 'live relay cleanup exists');
   requireContains(relay, "@unlink($file);", 'live relay deletes expired transient files');
   requireContains(relay, "return '/dev/shm/king-videochat-sfu-live-relay';", 'live relay prefers memory-backed transient storage');
+  requireContains(relay, 'function videochat_sfu_sqlite_frame_buffer_poll(', 'broker replay polls the bounded SQLite frame buffer');
+  requireContains(relay, "sfu_send_path' => 'sqlite_frame_buffer_poll'", 'SQLite frame-buffer replay labels its send path');
   requireContains(subscriberBudget, 'videochat_sfu_send_outbound_message($subClient[\'websocket\'], $frameForSubscriber', 'direct fanout sends live binary frames');
 
   requireContains(sfuClient, 'async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean>', 'client sends encoded frames live');
@@ -140,20 +147,8 @@ try {
 
   assertNoDisallowedMatches(
     backendSources,
-    /\bsfu_frames\b/gi,
-    'legacy sfu_frames reference outside explicit table drop',
-    ({ line }) => line.includes('DROP TABLE IF EXISTS sfu_frames'),
-  );
-  assertNoDisallowedMatches(
-    backendSources,
-    /\b(CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?|INSERT\s+INTO|REPLACE\s+INTO|UPDATE|ALTER\s+TABLE)\b[\s\S]{0,260}\b(sfu_frames?|sfu_frame_chunks?|video_frames?|media_frames?|frame_payload|protected_frame|data_base64|data_binary|payload_bytes|payload_chars)\b/gi,
-    'backend SQL frame payload persistence',
-    ({ line }) => line.includes('DROP TABLE IF EXISTS sfu_frames'),
-  );
-  assertNoDisallowedMatches(
-    backendSources,
-    /\bvideochat_sfu_(?:insert|upsert|store|persist|encode_stored|decode_stored)_frame\b/gi,
-    'backend frame persistence helper',
+    /\bvideochat_sfu_(?:upsert|store|persist|encode_stored)_frame\b/gi,
+    'legacy backend frame persistence helper',
   );
   assertNoDisallowedMatches(
     frontendSfuSources,

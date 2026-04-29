@@ -325,6 +325,7 @@ function videochat_handle_sfu_routes(
     $brokerTrackSignatures = [];
     $liveFrameRelayCursor = '';
     $liveFrameRelaySeenFiles = [];
+    $sqliteFrameBufferCursor = 0;
     $slowSubscriberVideoBlockedUntilMsByClient = [];
     $nextBrokerPollMs = 0;
     $nextLiveFrameRelayPollMs = 0;
@@ -441,6 +442,18 @@ function videochat_handle_sfu_routes(
             $outboundFrame['data'] = $frameData;
         }
         $relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);
+        if ($activeSfuDatabase instanceof PDO && !videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame)) {
+            videochat_sfu_log_runtime_event('sfu_frame_sqlite_buffer_insert_failed', [
+                'room_id' => $roomId,
+                'publisher_id' => (string) $clientId,
+                'track_id' => (string) $trackId,
+                'frame_type' => (string) $frameType,
+                'protection_mode' => (string) $protectionMode,
+                'sfu_send_path' => 'sqlite_frame_buffer_insert',
+                'worker_pid' => getmypid(),
+                ...videochat_sfu_transport_metric_fields($relayFrame, 0),
+            ], 3000);
+        }
         if (!videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)) {
             videochat_sfu_log_runtime_event('sfu_frame_live_relay_publish_failed', [
                 'room_id' => $roomId,
@@ -478,6 +491,14 @@ function videochat_handle_sfu_routes(
                     $clientId,
                     $knownBrokerPublishers,
                     $brokerTrackSignatures
+                );
+                videochat_sfu_sqlite_frame_buffer_poll(
+                    $activeSfuDatabase,
+                    $websocket,
+                    $roomId,
+                    (string) $clientId,
+                    array_keys($sfuRooms[$roomId]['publishers'] ?? []),
+                    $sqliteFrameBufferCursor
                 );
                 if (videochat_sfu_now_ms() >= $nextBrokerCleanupMs) {
                     videochat_sfu_cleanup_stale_presence($activeSfuDatabase);

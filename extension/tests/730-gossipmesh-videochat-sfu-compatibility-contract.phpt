@@ -63,6 +63,7 @@ $gatewayNeedles = [
     'videochat_sfu_bootstrap($sfuDatabase)',
     'videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName)',
     'videochat_sfu_poll_broker(',
+    'videochat_sfu_sqlite_frame_buffer_poll(',
     'videochat_sfu_live_frame_relay_publish(',
     'videochat_sfu_live_frame_relay_poll(',
     'videochat_sfu_remove_publisher(',
@@ -90,6 +91,10 @@ $storeNeedles = [
     '\'protected_frame_too_large\'',
     '$payload[\'room_id\'] = $normalizedBoundRoomId;',
     'function videochat_sfu_decode_stored_frame_payload(',
+    'function videochat_sfu_insert_frame(',
+    'function videochat_sfu_fetch_buffered_frames(',
+    'CREATE TABLE IF NOT EXISTS sfu_frames',
+    'INSERT INTO sfu_frames',
     "require_once __DIR__ . '/realtime_sfu_broker_replay.php';",
 ];
 foreach ($storeNeedles as $needle) {
@@ -99,6 +104,7 @@ foreach ($storeNeedles as $needle) {
 $brokerReplayNeedles = [
     'function videochat_sfu_live_frame_relay_publish(',
     'function videochat_sfu_live_frame_relay_read(',
+    'function videochat_sfu_sqlite_frame_buffer_poll(',
 ];
 foreach ($brokerReplayNeedles as $needle) {
     require_contains($brokerReplay, $needle);
@@ -137,8 +143,8 @@ $runtimeContractNeedles = [
     'JSON SFU media chunks must be rejected in binary-required mode',
     'SFU live frame relay must preserve protected frame and codec/runtime metadata',
     'SFU live frame relay should skip publishers that are local to the subscriber worker',
-    'SFU media frames must stay on the live websocket path and must not be persisted in SQLite',
-    'SFU cross-worker media fanout must use the bounded live relay, not SQLite frame persistence',
+    'SFU media frames must use the bounded SQLite frame buffer for cross-worker replay',
+    'SFU cross-worker media fanout must keep bounded live relay and SQLite frame-buffer replay',
     'SFU reconnect should recover publishers from store',
 ];
 foreach ($runtimeContractNeedles as $needle) {

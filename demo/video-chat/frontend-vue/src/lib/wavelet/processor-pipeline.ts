@@ -115,28 +115,35 @@ export class WaveletVideoProcessor {
         outputCtx.drawImage(sourceVideo, 0, 0, this.config.width, this.config.height)
         
         const frame = new VideoFrame(outputCanvas, { timestamp })
-        
-        const encodeStart = performance.now()
-        const encoded = this.codec.encodeFrame(frame)
-        const encodeTime = performance.now() - encodeStart
-        frame.close()
+        let encoded: ArrayBuffer | null = null
+        let encodeTime = 0
+        try {
+          const encodeStart = performance.now()
+          encoded = this.codec.encodeFrame(frame)
+          encodeTime = performance.now() - encodeStart
+        } finally {
+          frame.close()
+        }
 
         if (encoded && encoded.byteLength > 0) {
           const decodeStart = performance.now()
           const decoded = this.codec.decodeFrame(encoded, timestamp)
           const decodeTime = performance.now() - decodeStart
-          
+
           if (decoded) {
-            this.ctx.drawImage(decoded, 0, 0)
-            outputCtx.drawImage(this.canvas, 0, 0)
-            decoded.close()
-            
-            // Track local stats
-            this.localStats.framesProcessed++
-            this.localStats.totalBytes += encoded.byteLength
-            this.localStats.compressionRatio = (this.config.width * this.config.height * 4) / Math.max(encoded.byteLength, 1)
-            this.localStats.avgEncodeTimeMs = (this.localStats.avgEncodeTimeMs * (this.localStats.framesProcessed - 1) + encodeTime) / this.localStats.framesProcessed
-            this.localStats.avgDecodeTimeMs = (this.localStats.avgDecodeTimeMs * (this.localStats.framesProcessed - 1) + decodeTime) / this.localStats.framesProcessed
+            try {
+              this.ctx.drawImage(decoded, 0, 0)
+              outputCtx.drawImage(this.canvas, 0, 0)
+
+              // Track local stats
+              this.localStats.framesProcessed++
+              this.localStats.totalBytes += encoded.byteLength
+              this.localStats.compressionRatio = (this.config.width * this.config.height * 4) / Math.max(encoded.byteLength, 1)
+              this.localStats.avgEncodeTimeMs = (this.localStats.avgEncodeTimeMs * (this.localStats.framesProcessed - 1) + encodeTime) / this.localStats.framesProcessed
+              this.localStats.avgDecodeTimeMs = (this.localStats.avgDecodeTimeMs * (this.localStats.framesProcessed - 1) + decodeTime) / this.localStats.framesProcessed
+            } finally {
+              decoded.close()
+            }
           } else {
             // Decode failed - show original
             outputCtx.drawImage(sourceVideo, 0, 0, this.config.width, this.config.height)

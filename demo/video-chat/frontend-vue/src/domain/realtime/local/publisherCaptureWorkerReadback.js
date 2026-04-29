@@ -44,6 +44,7 @@ export function createPublisherCaptureWorkerReadbackController({
   workerUrl,
   ImageDataCtor = globalThis?.ImageData,
   timeoutMs = 1200,
+  closeGraceMs = 250,
   mediaDebugLog = () => {},
 } = {}) {
   if (!canUsePublisherCaptureWorker(capabilities)) {
@@ -177,22 +178,27 @@ export function createPublisherCaptureWorkerReadbackController({
       pending.delete(requestId);
     }
     if (worker) {
+      const closingWorker = worker;
       try {
-        if (typeof worker.removeEventListener === 'function') {
-          worker.removeEventListener('message', handleWorkerMessage);
+        if (typeof closingWorker.removeEventListener === 'function') {
+          closingWorker.removeEventListener('message', handleWorkerMessage);
         }
       } catch {
         // Worker listener cleanup is best-effort during call teardown.
       }
       try {
-        worker.postMessage({ type: PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.CLOSE });
+        closingWorker.postMessage({ type: PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.CLOSE });
       } catch {
         // Terminate below when close cannot be delivered.
       }
-      try {
-        if (typeof worker.terminate === 'function') worker.terminate();
-      } catch (error) {
-        mediaDebugLog('[SFU] capture worker termination failed', error);
+      if (typeof closingWorker.terminate === 'function') {
+        setTimeout(() => {
+          try {
+            closingWorker.terminate();
+          } catch (error) {
+            mediaDebugLog('[SFU] capture worker termination failed', error);
+          }
+        }, Math.max(0, Number(closeGraceMs || 0)));
       }
     }
     worker = null;
