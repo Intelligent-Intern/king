@@ -1,3 +1,5 @@
+import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.js';
+
 export function registerCallWorkspaceLifecycleHelpers({
   vue,
   callbacks,
@@ -108,6 +110,20 @@ export function registerCallWorkspaceLifecycleHelpers({
     typingSweepMs,
     mediaSecuritySessionClass,
   } = constants;
+  const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
+    callbacks: {
+      captureClientDiagnostic,
+      publishLocalTracks,
+      stopLocalEncodingPipeline,
+    },
+    refs: {
+      callMediaPrefs,
+      localStreamRef,
+      localTracksPublishedToSfuRef,
+      mediaRuntimePath,
+      sfuClientRef,
+    },
+  });
 
   function isNativeAudioSecurityWaitingMessage(message) {
     return /waiting for the media-security handshake/i.test(String(message || ''));
@@ -307,8 +323,14 @@ export function registerCallWorkspaceLifecycleHelpers({
     attachAloneIdleActivityListeners();
     setAloneIdleLastActiveMs(Date.now());
     setDetachForegroundReconnect(attachForegroundReconnectHandlers({
-      onBackground: markWorkspaceReconnectAfterForeground,
-      onForeground: reconnectWorkspaceAfterForeground,
+      onBackground: (context) => {
+        markWorkspaceReconnectAfterForeground();
+        sfuBackgroundTabPolicy.pauseVideoForBackground(context);
+      },
+      onForeground: (context) => {
+        reconnectWorkspaceAfterForeground();
+        void sfuBackgroundTabPolicy.resumeVideoAfterForeground(context);
+      },
     }));
 
     setDetachMediaDeviceWatcher(attachCallMediaDeviceWatcher({ requestPermissions: true }));

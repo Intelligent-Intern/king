@@ -3,27 +3,39 @@ export function attachForegroundReconnectHandlers({ onBackground = null, onForeg
     return () => {};
   }
 
-  const handleBackground = () => {
+  const backgroundContextFor = (event = null) => ({
+    reason: String(event?.type || 'background'),
+    hidden: document.visibilityState === 'hidden',
+    visibility_state: String(document.visibilityState || ''),
+  });
+
+  const foregroundContextFor = (event = null) => ({
+    reason: String(event?.type || 'foreground'),
+    hidden: false,
+    visibility_state: String(document.visibilityState || ''),
+  });
+
+  const handleBackground = (event = null) => {
     if (typeof onBackground === 'function') {
-      onBackground();
+      onBackground(backgroundContextFor(event));
     }
   };
 
-  const handleForeground = () => {
+  const handleForeground = (event = null) => {
     if (document.visibilityState === 'hidden') {
       return;
     }
     if (typeof onForeground === 'function') {
-      onForeground();
+      onForeground(foregroundContextFor(event));
     }
   };
 
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'hidden') {
-      handleBackground();
+      handleBackground({ type: 'document_hidden' });
       return;
     }
-    handleForeground();
+    handleForeground({ type: 'document_visible' });
   };
 
   window.addEventListener('blur', handleBackground);

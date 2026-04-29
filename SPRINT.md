@@ -53,7 +53,7 @@ Technical target:
 11. [x] `[auto-readback-recovery]` After a stable window with low readback timing and no source failures, probe one quality tier upward without causing SFU socket restart churn.
 12. [x] `[high-motion-readback-budget]` Add a high-motion local benchmark/contract proving the selected readback path stays inside budget at each supported profile.
 13. [x] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
-14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
+14. [x] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
 17. [ ] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
@@ -385,6 +385,35 @@ Deploy proof:
 - Production asset version `20260429074411` served `CallWorkspaceView-BtsAwBma.js` and `CallWorkspaceView-08sQqbYI.css`.
 - The deployed CSS contains `object-fit:contain!important` for `.video-container`, `.workspace-mini-video-slot`, and `.workspace-grid-video-slot` video/canvas rules.
 - The deployed bundle contains `source_contain`, `publisher_aspect_mode`, `source_aspect_ratio`, `frame_width`, `frame_height`, `displayWidth`, and `displayHeight`.
+
+### 14. `[background-tab-policy]`
+
+Status: Done.
+
+Implementation:
+- Added an explicit SFU background-tab policy that treats true `document_hidden`/`pagehide` as browser throttling, stops the WLVC source-readback/encode loop, unpublishes only the local SFU video track, and leaves audio/websocket status paths alive instead of pretending frozen video is healthy.
+- Kept normal `window.blur` as a reconnect hint only; visible blur does not pause video publishing.
+- Added backend diagnostics `sfu_background_tab_video_paused` and `sfu_background_tab_video_resumed` with `background_video_policy=pause_sfu_video_keep_audio_status`, visibility state, track id, active auto profile, and runtime path.
+- On foreground, the policy republishes local tracks and lets the existing foreground reconnect recycle stale SFU/socket state if the browser throttled the tab.
+- Kept the policy in a focused `backgroundTabPolicy.js` helper and wired it through lifecycle so `CallWorkspaceView.vue` did not grow.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-background-tab-policy-contract.mjs`
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-recovery-timing-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `node --check demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.js`
+- `node --check demo/video-chat/frontend-vue/tests/contract/sfu-background-tab-policy-contract.mjs`
+- `node --check demo/video-chat/frontend-vue/src/support/foregroundReconnect.js`
+- `node --check demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/lifecycle.js`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429075256` served `CallWorkspaceView-BBZ29uHE.js` and `CallWorkspaceView-08sQqbYI.css`.
+- The deployed bundle contains `sfu_background_tab_video_paused`, `sfu_background_tab_video_resumed`, `pause_sfu_video_keep_audio_status`, `background_video_policy`, `document_hidden`, and `unpublishTrack`.
 
 ### 15. `[processor-error-recovery]`
 
