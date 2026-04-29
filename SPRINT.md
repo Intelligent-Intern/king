@@ -36,7 +36,7 @@ Technical target:
 
 ## Active Issues
 
-1. [ ] `[readback-zero-copy-gate]` Remove source readback as a normal hotpath bottleneck.
+1. [x] `[readback-zero-copy-gate]` Remove source readback as a normal hotpath bottleneck.
 
    Scope:
    - Audit the full publisher path from `MediaStreamTrackProcessor` frame pull through `VideoFrame.copyTo`, worker fallback, WLVC input normalization, protected frame wrapping, and SFU socket send.
@@ -49,6 +49,13 @@ Technical target:
    - High-motion online pressure runs do not emit `sfu_source_readback_budget_exceeded`.
    - Console-visible `VideoFrame was garbage collected without being closed` warnings are gone.
    - Backend diagnostics still record the exact active capture backend and source timing.
+
+   Report:
+   - Aligned automatic capture dimensions with published profile dimensions and hard-capped browser capture width/height/FPS in `getUserMedia` constraints.
+   - Added source-dimension `VideoFrame.copyTo(..., { format: 'RGBA' })` sizing so profile-matched and capture-matched frames do not fall into DOM canvas scaling.
+   - Added the zero-copy capture gate: if a browser supports the VideoFrame copy path, main-thread canvas readback from a `VideoFrame` source is blocked and reported as exact source-readback pressure instead of silently using `drawImage/getImageData`.
+   - Added `sfu-zero-copy-readback-gate-contract.mjs` and extended the RGBA copy contract.
+   - Verification: `npm run test:contract:sfu`, `npm run build`.
 
 2. [ ] `[wlvc-motion-delta-rate-control]` Stabilize WLVC quality under movement instead of collapsing into blocky frames.
 

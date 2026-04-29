@@ -29,6 +29,23 @@ export function canCopyVideoFrameToRgba(frame, frameSize = {}) {
   );
 }
 
+export function resolveVideoFrameCopyFrameSize(frame, fallbackFrameSize = {}) {
+  const sourceWidth = frameDimension(frame, ['displayWidth', 'codedWidth', 'visibleRect.width', 'width']);
+  const sourceHeight = frameDimension(frame, ['displayHeight', 'codedHeight', 'visibleRect.height', 'height']);
+  if (sourceWidth <= 0 || sourceHeight <= 0) return null;
+  return {
+    ...fallbackFrameSize,
+    frameWidth: sourceWidth,
+    frameHeight: sourceHeight,
+    sourceWidth,
+    sourceHeight,
+    sourceAspectRatio: sourceWidth / sourceHeight,
+    aspectMode: 'video_frame_copy_source',
+    profileFrameWidth: positiveInteger(fallbackFrameSize.profileFrameWidth || fallbackFrameSize.frameWidth),
+    profileFrameHeight: positiveInteger(fallbackFrameSize.profileFrameHeight || fallbackFrameSize.frameHeight),
+  };
+}
+
 export async function copyVideoFrameToRgbaImageData({
   frame,
   frameSize,

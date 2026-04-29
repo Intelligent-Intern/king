@@ -104,8 +104,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   rescue: Object.freeze({
     id: 'rescue',
     label: 'Low',
-    captureWidth: 640,
-    captureHeight: 360,
+    captureWidth: 320,
+    captureHeight: 180,
     captureFrameRate: 7,
     frameWidth: 320,
     frameHeight: 180,
@@ -119,8 +119,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   realtime: Object.freeze({
     id: 'realtime',
     label: 'Fast',
-    captureWidth: 640,
-    captureHeight: 360,
+    captureWidth: 512,
+    captureHeight: 288,
     captureFrameRate: 11,
     frameWidth: 512,
     frameHeight: 288,
@@ -134,8 +134,8 @@ export const SFU_VIDEO_QUALITY_PROFILES = Object.freeze({
   balanced: Object.freeze({
     id: 'balanced',
     label: 'Balanced',
-    captureWidth: 960,
-    captureHeight: 540,
+    captureWidth: 640,
+    captureHeight: 360,
     captureFrameRate: 14,
     frameWidth: 640,
     frameHeight: 360,

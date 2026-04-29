@@ -16,7 +16,10 @@ import {
   createPublisherVideoFrameSourceReader,
   PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND,
 } from './publisherVideoFrameSource.js';
-import { copyVideoFrameToRgbaImageData } from './publisherVideoFrameCopy.js';
+import {
+  copyVideoFrameToRgbaImageData,
+  resolveVideoFrameCopyFrameSize,
+} from './publisherVideoFrameCopy.js';
 import {
   highResolutionNowMs,
   markPublisherFrameTraceStage,
@@ -30,6 +33,8 @@ import {
 } from './videoFrameSizing.js';
 
 const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
+const ZERO_COPY_CAPTURE_GATE_STAGE = 'video_frame_zero_copy_gate';
+const ZERO_COPY_CAPTURE_GATE_SOURCE = 'video_frame_main_thread_canvas_blocked';
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);
@@ -77,6 +82,23 @@ function sourceReadbackBudgetFailureDetails(trace, {
     wirePayloadBytes: 0,
     timestamp,
   });
+}
+
+function zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities = {}) {
+  return Boolean(
+    sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
+      && captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.VIDEO_FRAME_COPY,
+  );
+}
+
+function videoFrameCopyWithinProfileCaptureBudget(copyFrameSize, videoProfile = {}) {
+  const frameWidth = positiveNumber(copyFrameSize?.frameWidth);
+  const frameHeight = positiveNumber(copyFrameSize?.frameHeight);
+  if (frameWidth <= 0 || frameHeight <= 0) return false;
+  const captureWidth = positiveNumber(videoProfile.captureWidth) || positiveNumber(videoProfile.frameWidth);
+  const captureHeight = positiveNumber(videoProfile.captureHeight) || positiveNumber(videoProfile.frameHeight);
+  if (captureWidth <= 0 || captureHeight <= 0) return true;
+  return frameWidth <= captureWidth * 1.1 && frameHeight <= captureHeight * 1.1;
 }
 
 function updateTraceSource(trace, sourceBackend, frameSize, videoTrack) {
@@ -197,41 +219,46 @@ export function createPublisherSourceReadbackController({
       const drawBudgetMs = Math.max(1, Number(activeProfile.maxDrawImageMs || 0));
       const readbackBudgetMs = Math.max(1, Number(activeProfile.maxReadbackMs || 0));
       if (sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND && !videoFrameCopyToDisabled) {
-        const copyStartedAtMs = highResolutionNowMs();
-        const copyResult = await copyVideoFrameToRgbaImageData({
-          frame: source,
-          frameSize,
-          ImageDataCtor: globalScope.ImageData,
-        });
-        const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
-        if (copyResult.ok) {
-          markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
-          if (copyToMs > readbackBudgetMs) {
+        const copyFrameSize = resolveVideoFrameCopyFrameSize(source, frameSize) || frameSize;
+        if (videoFrameCopyWithinProfileCaptureBudget(copyFrameSize, activeProfile)) {
+          const copyStartedAtMs = highResolutionNowMs();
+          const copyResult = await copyVideoFrameToRgbaImageData({
+            frame: source,
+            frameSize: copyFrameSize,
+            ImageDataCtor: globalScope.ImageData,
+          });
+          const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
+          if (copyResult.ok) {
+            markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
+            if (copyToMs > readbackBudgetMs) {
+              return {
+                budgetExceeded: true,
+                details: sourceReadbackBudgetFailureDetails(trace, {
+                  stage: 'video_frame_copy_to_rgba',
+                  source: 'video_frame_copy_to_budget_exceeded',
+                  message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
+                  timestamp,
+                }),
+              };
+            }
             return {
-              budgetExceeded: true,
-              details: sourceReadbackBudgetFailureDetails(trace, {
-                stage: 'video_frame_copy_to_rgba',
-                source: 'video_frame_copy_to_budget_exceeded',
-                message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
-                timestamp,
-              }),
+              imageData: copyResult.imageData,
+              frameSize: copyFrameSize,
+              drawImageMs: 0,
+              readbackMs: copyToMs,
+              drawBudgetMs,
+              readbackBudgetMs,
+              sourceBackend,
+              readbackMethod: 'video_frame_copy_to_rgba',
+              readbackBytes: copyResult.readbackBytes,
             };
           }
-          return {
-            imageData: copyResult.imageData,
-            frameSize,
-            drawImageMs: 0,
-            readbackMs: copyToMs,
-            drawBudgetMs,
-            readbackBudgetMs,
-            sourceBackend,
-            readbackMethod: 'video_frame_copy_to_rgba',
-            readbackBytes: copyResult.readbackBytes,
-          };
-        }
-        if (copyResult.fatal) {
-          videoFrameCopyToDisabled = true;
-          mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using canvas readback fallback', copyResult.reason, copyResult.error);
+          if (copyResult.fatal) {
+            videoFrameCopyToDisabled = true;
+            mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using canvas readback fallback', copyResult.reason, copyResult.error);
+          }
+        } else {
+          markPublisherFrameTraceStage(trace, 'video_frame_copy_profile_oversize', 0);
         }
       }
 
@@ -292,6 +319,19 @@ export function createPublisherSourceReadbackController({
           mediaDebugLog('[SFU] OffscreenCanvas capture worker failed; using DOM canvas fallback', workerResult.reason, workerResult.error);
           return null;
         }
+      }
+
+      if (zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities)) {
+        markPublisherFrameTraceStage(trace, ZERO_COPY_CAPTURE_GATE_STAGE, 0);
+        return {
+          budgetExceeded: true,
+          details: sourceReadbackBudgetFailureDetails(trace, {
+            stage: ZERO_COPY_CAPTURE_GATE_STAGE,
+            source: ZERO_COPY_CAPTURE_GATE_SOURCE,
+            message: 'Publisher zero-copy capture gate blocked main-thread canvas readback for a VideoFrame source.',
+            timestamp,
+          }),
+        };
       }
 
       const canvasFrameSize = sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND

@@ -27,12 +27,15 @@ try {
 
   requireContains(copySource, 'await frame.copyTo(rgba, { format: \'RGBA\' })', 'VideoFrame RGBA copyTo hotpath');
   requireContains(copySource, 'new ImageDataCtor(new Uint8ClampedArray', 'VideoFrame copy produces ImageData for WLVC');
+  requireContains(copySource, 'resolveVideoFrameCopyFrameSize', 'VideoFrame copy exposes source-dimension copy sizing');
+  requireContains(copySource, "aspectMode: 'video_frame_copy_source'", 'VideoFrame copy labels source-dimension copies');
   requireContains(copySource, 'publisher_video_frame_copy_scale_required', 'VideoFrame copy refuses unscaled mismatches');
   requireContains(copySource, 'publisher_video_frame_copy_to_rgba_failed', 'VideoFrame copy reports fatal copyTo errors');
   assert.equal(copySource.includes('getImageData'), false, 'VideoFrame copy helper must not use canvas getImageData');
   assert.equal(copySource.includes('drawImage'), false, 'VideoFrame copy helper must not use canvas drawImage');
 
   requireContains(sourceReadback, 'copyVideoFrameToRgbaImageData({', 'source readback attempts VideoFrame copy before canvas fallback');
+  requireContains(sourceReadback, 'const copyFrameSize = resolveVideoFrameCopyFrameSize(source, frameSize) || frameSize', 'source readback copies source dimensions before canvas fallback');
   requireContains(sourceReadback, 'video_frame_copy_to_rgba', 'source readback labels direct VideoFrame RGBA readback');
   requireContains(sourceReadback, 'video_frame_copy_to_budget_exceeded', 'source readback budgets VideoFrame copyTo');
   assert.ok(
@@ -77,6 +80,20 @@ try {
   assert.equal(copied.imageData.data[0], 17);
   assert.equal(copied.readbackBytes, 16);
   assert.equal(copiedDestinations.length, 1);
+
+  const sourceSized = copyModule.resolveVideoFrameCopyFrameSize(frame, {
+    frameWidth: 1,
+    frameHeight: 1,
+    profileFrameWidth: 1,
+    profileFrameHeight: 1,
+  });
+  assert.equal(sourceSized.frameWidth, 2);
+  assert.equal(sourceSized.frameHeight, 2);
+  assert.equal(sourceSized.sourceWidth, 2);
+  assert.equal(sourceSized.sourceHeight, 2);
+  assert.equal(sourceSized.profileFrameWidth, 1);
+  assert.equal(sourceSized.profileFrameHeight, 1);
+  assert.equal(sourceSized.aspectMode, 'video_frame_copy_source');
 
   const scaled = await copyModule.copyVideoFrameToRgbaImageData({
     frame,
