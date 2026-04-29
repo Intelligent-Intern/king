@@ -158,6 +158,7 @@ function fixtureCall() {
     call_role: user.callRole,
     invite_state: 'allowed',
     joined_at: '2026-04-19T12:00:00.000Z',
+    connected_at: '2026-04-29T01:00:00.000Z',
   }));
 
   return {
@@ -477,6 +478,17 @@ export async function installFakeMediaAndRealtime(context, user) {
         setTimeout(() => {
           this.readyState = FakeWebSocket.OPEN;
           this.dispatch('open', {});
+          const welcome = {
+            type: 'system/welcome',
+            active_room_id: roomId,
+            call_context: {
+              user_id: activeUser.id,
+              call_id: callId,
+              call_role: activeUser.callRole,
+              can_moderate: activeUser.role === 'admin' || activeUser.callRole === 'owner' || activeUser.callRole === 'moderator',
+            },
+          };
+          this.emit(welcome);
         }, 0);
       }
 
@@ -672,6 +684,7 @@ export async function openMatrixWorkspace(page) {
     setup.connectionState = 'online';
     setup.connectionReason = 'ready';
     setup.serverRoomId = roomId;
+    if ('hasRealtimeRoomSync' in setup) setup.hasRealtimeRoomSync = true;
     if ('activeCallId' in setup) setup.activeCallId = callId;
     if ('viewerCallRole' in setup) setup.viewerCallRole = window.__matrixActiveUser?.callRole || 'participant';
     setup.participantsRaw = Array.isArray(window.__matrixParticipants) ? window.__matrixParticipants : [];

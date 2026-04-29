@@ -583,7 +583,7 @@ test('admin layout controls react to activity and pinning overrides active-speak
       await admin.page.getByRole('button', { name: 'Open left sidebar' }).click();
     }
     await expect(layoutControls).toBeVisible();
-    await expect(admin.page.locator('.workspace-mini-title')).toContainText('Layout Admin');
+    await expect(admin.page.locator('.workspace-mini-title')).toContainText('Active User');
 
     await layoutControls.getByLabel('Video layout mode').selectOption('grid');
     await expect(admin.page.locator('.workspace-stage.layout-grid')).toBeVisible();

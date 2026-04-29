@@ -188,8 +188,13 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     });
   });
 
+  function hasConnectedParticipantEvidence(row) {
+    if (Number(row?.connections || 0) > 0) return true;
+    return String(row?.connectedAt || row?.connected_at || '').trim() !== '';
+  }
+
   const connectedParticipantUsers = computed(() => (
-    participantUsers.value.filter((row) => Number(row?.connections || 0) > 0)
+    participantUsers.value.filter((row) => hasConnectedParticipantEvidence(row))
   ));
   connectedParticipantUsersRef.value = connectedParticipantUsers;
 

@@ -54,15 +54,15 @@ Rejected or superseded candidate commits:
 1. [x] `[branch-diff-baseline]` Re-run the branch diff before the first cherry-pick and record the exact current SHA, candidate SHA, merge base, and deleted-current-contract list so no stale comparison drives the intake.
 2. [x] `[patch-equivalence-audit]` For every candidate commit, check whether the behavior is already implemented or superseded in the current branch before editing code.
 3. [x] `[direct-merge-guard]` Add a local guard note or contract check that rejects wholesale merge outcomes that delete current SFU hardening modules, online acceptance gates, or throughput contracts.
-4. [ ] `[mini-main-selection]` Port the useful part of `694c2d9`: when `main_mini` has no pinned user and the server selected the local user as main, prefer `selection.mini_user_ids` before falling back to arbitrary visible users.
-5. [ ] `[mini-fallback-non-main]` Port the useful part of `376426f`: mini participant fallback must prefer connected visible users other than the main user and must never duplicate the main tile.
-6. [ ] `[roster-shape-normalization]` Port the useful roster normalization from `694c2d9`: accept snake_case and camelCase room/user/call-role fields, but keep current role ordering and live media peer aggregation.
-7. [ ] `[connected-at-normalization]` Harden connected participant filtering so `connected_at` / `connectedAt` counts only when it is a non-empty normalized timestamp, and connection counts still win when present.
-8. [ ] `[layout-fixture-coverage]` Compare `fd0d4a5` and current fixtures; add only missing `connected_at` fixture coverage for participant rows without weakening any existing E2E assertions.
-9. [ ] `[harness-welcome-flow]` Port the useful part of `2a505fc`: fake server sockets should emit the same welcome/snapshot flow as KingRT, while preserving current media-security and control-state checks.
-10. [ ] `[harness-realtime-room-sync]` Port explicit realtime room sync and main-user selection setup only where tests otherwise depend on incidental defaults.
-11. [ ] `[reconnect-snapshot-assertion]` Compare `cbc40e5` against the current reconnect E2E; add missing snapshot-after-reconnect assertions only if they strengthen the existing media-security/control-state test.
-12. [ ] `[reject-reconnect-weakening]` Ensure no cherry-pick from `2a505fc` or `e6e8d04` removes sidebar, grid, mini-strip, media-security, control-state, or snapshot assertions.
+4. [x] `[mini-main-selection]` Port the useful part of `694c2d9`: when `main_mini` has no pinned user and the server selected the local user as main, prefer `selection.mini_user_ids` before falling back to arbitrary visible users.
+5. [x] `[mini-fallback-non-main]` Port the useful part of `376426f`: mini participant fallback must prefer connected visible users other than the main user and must never duplicate the main tile.
+6. [x] `[roster-shape-normalization]` Port the useful roster normalization from `694c2d9`: accept snake_case and camelCase room/user/call-role fields, but keep current role ordering and live media peer aggregation.
+7. [x] `[connected-at-normalization]` Harden connected participant filtering so `connected_at` / `connectedAt` counts only when it is a non-empty normalized timestamp, and connection counts still win when present.
+8. [x] `[layout-fixture-coverage]` Compare `fd0d4a5` and current fixtures; add only missing `connected_at` fixture coverage for participant rows without weakening any existing E2E assertions.
+9. [x] `[harness-welcome-flow]` Port the useful part of `2a505fc`: fake server sockets should emit the same welcome/snapshot flow as KingRT, while preserving current media-security and control-state checks.
+10. [x] `[harness-realtime-room-sync]` Port explicit realtime room sync and main-user selection setup only where tests otherwise depend on incidental defaults.
+11. [x] `[reconnect-snapshot-assertion]` Compare `cbc40e5` against the current reconnect E2E; add missing snapshot-after-reconnect assertions only if they strengthen the existing media-security/control-state test.
+12. [x] `[reject-reconnect-weakening]` Ensure no cherry-pick from `2a505fc` or `e6e8d04` removes sidebar, grid, mini-strip, media-security, control-state, or snapshot assertions.
 13. [ ] `[shared-string-field-helper]` Evaluate `4ff8e1b`; export/reuse `stringField` only if it reduces duplicate parsing without undoing `sfuMessageHandler.ts` or binary frame validation.
 14. [ ] `[keyframe-before-restart-review]` Compare `1147f44` with current receiver feedback; port only missing keyframe-first recovery behavior and keep current profile byte budgets and downgrade thresholds.
 15. [ ] `[reject-buffer-threshold-regression]` Explicitly reject `1147f44` buffer increases and looser downgrade windows unless measurements prove they improve throughput without reintroducing critical backpressure.

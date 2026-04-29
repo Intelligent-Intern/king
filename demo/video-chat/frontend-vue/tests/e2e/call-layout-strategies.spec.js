@@ -72,6 +72,32 @@ test('activity strategy moves the active participant into main video without exc
   expect(result.miniParticipants.map((row) => row.userId)).toEqual([4, 2, 1, 5]);
 });
 
+test('main-mini layout honors explicit mini user ids without duplicating the main tile', async ({ page }) => {
+  const result = await withCallLayoutHelpers(page, (helpers) => helpers.selectCallLayoutParticipants({
+    participants: [
+      { userId: 1, displayName: 'Layout Admin', role: 'admin', callRole: 'owner' },
+      { userId: 2, displayName: 'Active User', role: 'user', callRole: 'participant' },
+      { userId: 3, displayName: 'Observer', role: 'user', callRole: 'participant' },
+    ],
+    currentUserId: 1,
+    layoutState: {
+      mode: 'main_mini',
+      strategy: 'manual_pinned',
+      main_user_id: 1,
+      selected_user_ids: [1, 2, 3],
+      selection: {
+        main_user_id: 1,
+        visible_user_ids: [1, 2, 3],
+        mini_user_ids: [2, 1, 2],
+      },
+    },
+  }));
+
+  expect(result.mainUserId).toBe(1);
+  expect(result.visibleUserIds).toEqual([1, 2, 3]);
+  expect(result.miniParticipants.map((row) => row.userId)).toEqual([2]);
+});
+
 test('pinning wins over activity and grid mode is capped to eight visible videos', async ({ page }) => {
   const result = await withCallLayoutHelpers(page, (helpers) => {
     const participants = Array.from({ length: 10 }, (_, index) => ({
@@ -154,8 +180,8 @@ async function installLayoutApiRoutes(page) {
       email: 'admin@example.test',
     },
     participants: [
-      { user_id: 1, display_name: 'Layout Admin', email: 'admin@example.test', call_role: 'owner', invite_state: 'allowed', joined_at: '2026-04-19T12:00:00.000Z' },
-      { user_id: 2, display_name: 'Active User', email: 'user@example.test', call_role: 'participant', invite_state: 'allowed', joined_at: '2026-04-19T12:00:01.000Z' },
+      { user_id: 1, display_name: 'Layout Admin', email: 'admin@example.test', call_role: 'owner', invite_state: 'allowed', joined_at: '2026-04-19T12:00:00.000Z', connected_at: '2026-04-29T01:00:00.000Z' },
+      { user_id: 2, display_name: 'Active User', email: 'user@example.test', call_role: 'participant', invite_state: 'allowed', joined_at: '2026-04-19T12:00:01.000Z', connected_at: '2026-04-29T01:00:01.000Z' },
     ],
   };
 
@@ -296,6 +322,11 @@ async function installFakeLayoutSocket(page, options = {}) {
         setTimeout(() => {
           this.readyState = FakeWebSocket.OPEN;
           this.dispatch('open', {});
+          this.emit({
+            type: 'system/welcome',
+            active_room_id: roomId,
+            call_context: { user_id: 1, call_id: callId, call_role: 'owner', can_moderate: true },
+          });
         }, 0);
       }
 

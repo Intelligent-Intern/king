@@ -6,17 +6,19 @@ import {
 
 export function normalizeParticipantRow(raw) {
   const user = raw && typeof raw.user === 'object' ? raw.user : {};
-  const userId = Number(user.id);
-  const connectionId = String(raw?.connection_id || '').trim();
+  const userId = Number(user.id || raw?.user_id || raw?.userId || 0);
+  const connectionId = String(raw?.connection_id || raw?.connectionId || '').trim();
+  const connectedAt = String(raw?.connected_at || raw?.connectedAt || '').trim();
+  const connectionCount = Number(raw?.connections || raw?.connection_count || raw?.connectionCount || 0);
   return {
     connectionId,
-    hasConnection: connectionId !== '',
-    roomId: normalizeRoomId(raw?.room_id || 'lobby'),
+    hasConnection: connectionId !== '' || connectedAt !== '' || connectionCount > 0,
+    roomId: normalizeRoomId(raw?.room_id || raw?.roomId || 'lobby'),
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
-    displayName: String(user.display_name || '').trim() || `User ${userId || 'unknown'}`,
-    role: normalizeRole(user.role),
-    callRole: normalizeCallRole(user.call_role || raw?.call_role || 'participant'),
-    connectedAt: String(raw?.connected_at || ''),
+    displayName: String(user.display_name || user.displayName || raw?.display_name || raw?.displayName || '').trim() || `User ${userId || 'unknown'}`,
+    role: normalizeRole(user.role || raw?.role),
+    callRole: normalizeCallRole(user.call_role || user.callRole || raw?.call_role || raw?.callRole || 'participant'),
+    connectedAt,
   };
 }
 
