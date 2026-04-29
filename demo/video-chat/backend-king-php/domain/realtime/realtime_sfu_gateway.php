@@ -355,6 +355,7 @@ function videochat_handle_sfu_routes(
         $timestamp = $msg['timestamp'] ?? 0;
         $frameData = $msg['data'] ?? [];
         $dataBase64 = is_string($msg['data_base64'] ?? null) ? trim((string) $msg['data_base64']) : '';
+        $dataBinary = videochat_sfu_frame_data_binary($msg);
         $frameType = $msg['frame_type'] ?? $msg['frameType'] ?? 'delta';
         $protectedFrame = is_string($msg['protected_frame'] ?? null) ? trim((string) $msg['protected_frame']) : '';
         $protectionMode = (string) ($msg['protection_mode'] ?? ($protectedFrame !== '' ? 'protected' : 'transport_only'));
@@ -362,7 +363,9 @@ function videochat_handle_sfu_routes(
         $frameSequence = max(0, (int) ($msg['frame_sequence'] ?? ($msg['frameSequence'] ?? 0)));
         $senderSentAtMs = max(0, (int) ($msg['sender_sent_at_ms'] ?? ($msg['senderSentAtMs'] ?? 0)));
         $payloadChars = max(0, (int) ($msg['payload_chars'] ?? ($msg['payloadChars'] ?? 0)));
-        $actualPayloadCharsForFrame = $protectedFrame !== '' ? strlen($protectedFrame) : strlen($dataBase64);
+        $actualPayloadCharsForFrame = $protectedFrame !== ''
+            ? strlen($protectedFrame)
+            : videochat_sfu_transport_payload_chars($dataBase64, $dataBinary);
         if ($payloadChars > 0 && $actualPayloadCharsForFrame > 0 && $payloadChars !== $actualPayloadCharsForFrame) {
             return;
         }
@@ -427,12 +430,16 @@ function videochat_handle_sfu_routes(
         }
         if ($protectedFrame !== '') {
             $outboundFrame['protected_frame'] = $protectedFrame;
+        } elseif ($dataBinary !== '') {
+            $outboundFrame['data_binary'] = $dataBinary;
+            $outboundFrame['payload_bytes'] = strlen($dataBinary);
         } elseif ($dataBase64 !== '') {
             $outboundFrame['data_base64'] = $dataBase64;
         } else {
             $outboundFrame['data'] = $frameData;
         }
-        if (!videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $outboundFrame)) {
+        $relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);
+        if (!videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)) {
             videochat_sfu_log_runtime_event('sfu_frame_live_relay_publish_failed', [
                 'room_id' => $roomId,
                 'publisher_id' => (string) $clientId,
@@ -441,7 +448,7 @@ function videochat_handle_sfu_routes(
                 'protection_mode' => (string) $protectionMode,
                 'sfu_send_path' => 'live_relay_publish',
                 'worker_pid' => getmypid(),
-                ...videochat_sfu_transport_metric_fields($outboundFrame, 0),
+                ...videochat_sfu_transport_metric_fields($relayFrame, 0),
             ], 3000);
         }
 

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/realtime_sfu_binary_payload.php';
 require_once __DIR__ . '/realtime_sfu_iibin.php';
 
 function videochat_sfu_now_ms(): int
@@ -383,13 +384,21 @@ function videochat_sfu_encode_binary_frame_envelope(array $frame): string|false
 
     $protectedFrame = is_string($frame['protected_frame'] ?? null) ? trim((string) $frame['protected_frame']) : '';
     $dataBase64 = is_string($frame['data_base64'] ?? null) ? trim((string) $frame['data_base64']) : '';
-    if ($protectedFrame !== '' && $dataBase64 !== '') {
+    $dataBinary = videochat_sfu_frame_data_binary($frame);
+    if ($protectedFrame !== '' && ($dataBase64 !== '' || $dataBinary !== '')) {
+        return false;
+    }
+    if ($dataBase64 !== '' && $dataBinary !== '') {
         return false;
     }
 
-    $payloadBytes = $protectedFrame !== ''
-        ? videochat_sfu_base64url_decode_strict($protectedFrame)
-        : videochat_sfu_base64url_decode_strict($dataBase64);
+    if ($protectedFrame !== '') {
+        $payloadBytes = videochat_sfu_base64url_decode_strict($protectedFrame);
+    } elseif ($dataBinary !== '') {
+        $payloadBytes = $dataBinary;
+    } else {
+        $payloadBytes = videochat_sfu_base64url_decode_strict($dataBase64);
+    }
     if (!is_string($payloadBytes) || $payloadBytes === '') {
         return false;
     }
@@ -496,7 +505,6 @@ function videochat_sfu_decode_binary_client_frame(string $frame, string $boundRo
         return ['ok' => false, 'payload' => [], 'error' => 'invalid_binary_envelope'];
     }
 
-    $payloadBase64 = videochat_sfu_base64url_encode($payloadBytes);
     $payload = [
         'type' => 'sfu/frame',
         'room_id' => videochat_presence_normalize_room_id($boundRoomId, ''),
@@ -509,7 +517,7 @@ function videochat_sfu_decode_binary_client_frame(string $frame, string $boundRo
         'protection_mode' => $protectionMode,
         'frame_sequence' => max(0, $frameSequence),
         'sender_sent_at_ms' => max(0, $senderSentAtMs),
-        'payload_chars' => strlen($payloadBase64),
+        'payload_chars' => videochat_sfu_base64url_encoded_length($payloadByteLength),
         'chunk_count' => 1,
         'payload_bytes' => $payloadByteLength,
     ];
@@ -520,9 +528,9 @@ function videochat_sfu_decode_binary_client_frame(string $frame, string $boundRo
         $payload['frame_id'] = $frameId;
     }
     if ($protectionMode === 'transport_only') {
-        $payload['data_base64'] = $payloadBase64;
+        $payload['data_binary'] = $payloadBytes;
     } else {
-        $payload['protected_frame'] = $payloadBase64;
+        $payload['protected_frame'] = videochat_sfu_base64url_encode($payloadBytes);
     }
 
     return ['ok' => true, 'payload' => $payload, 'error' => ''];
