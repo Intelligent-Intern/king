@@ -1640,6 +1640,7 @@ const {
     appendMediaRuntimeTransitionEvent,
     captureClientDiagnostic,
     mediaDebugLog,
+    resetSfuOutboundMediaAfterProfileSwitch: (details) => sfuClientRef.value?.resetOutboundMediaAfterProfileSwitch?.(details),
     resolveSfuVideoQualityProfile,
     setCallOutgoingVideoQualityProfile,
     startEncodingPipeline,

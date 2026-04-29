@@ -295,6 +295,7 @@ export function createSfuTransportController({
           max_payload_bytes: Math.max(0, Number(details?.max_payload_bytes || details?.maxPayloadBytes || 0)),
           payload_soft_limit_bytes: Math.max(0, Number(details?.payload_soft_limit_bytes || details?.payloadSoftLimitBytes || 0)),
           payload_soft_limit_ratio: Math.max(0, Number(details?.payload_soft_limit_ratio || details?.payloadSoftLimitRatio || 0)),
+          keyframe_retry_after_ms: Math.max(0, Number(details?.keyframe_retry_after_ms || details?.keyframeRetryAfterMs || 0)),
           encode_ms: Math.max(0, Number(details?.encode_ms || details?.encodeMs || 0)),
           budget_max_encode_ms: Math.max(0, Number(details?.budget_max_encode_ms || details?.budgetMaxEncodeMs || 0)),
           frame_type: normalizedFrameType,

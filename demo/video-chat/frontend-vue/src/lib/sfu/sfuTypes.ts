@@ -47,6 +47,7 @@ export interface SFUEncodedFrame {
   roiNormY?: number
   roiNormWidth?: number
   roiNormHeight?: number
+  transportMetrics?: Record<string, unknown>
 }
 
 export interface SfuSendFailureDetails {

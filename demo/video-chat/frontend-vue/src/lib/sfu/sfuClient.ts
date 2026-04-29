@@ -81,6 +81,7 @@ export class SFUClient {
   private inboundFrameAssembler = new SfuInboundFrameAssembler({ getRoomId: () => this.roomId })
   private outboundFrameQueue: SfuOutboundFrameQueue
   private outboundFrameSequenceByTrack = new Map<string, number>()
+  private outboundMediaGeneration = 0
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
@@ -244,6 +245,7 @@ export class SFUClient {
 
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     this.connectGeneration += 1
+    this.outboundMediaGeneration += 1
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
@@ -299,6 +301,10 @@ export class SFUClient {
     const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
     return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
       ...frame,
+      transportMetrics: {
+        ...(frame.transportMetrics || {}),
+        outbound_media_generation: this.outboundMediaGeneration,
+      },
       frameSequence,
       senderSentAtMs: Date.now(),
     }))
@@ -306,6 +312,7 @@ export class SFUClient {
 
   leave(): void {
     this.connectGeneration += 1
+    this.outboundMediaGeneration += 1
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
@@ -325,6 +332,26 @@ export class SFUClient {
 
   getLastFrameTransportSample(): SfuFrameTransportSample | null {
     return this.lastFrameTransportSample ? { ...this.lastFrameTransportSample } : null
+  }
+
+  resetOutboundMediaAfterProfileSwitch(details: { fromProfile?: string; toProfile?: string; reason?: string } = {}): void {
+    this.outboundMediaGeneration += 1
+    this.outboundFrameSequenceByTrack.clear()
+    const droppedCount = this.clearOutboundFrameQueue('profile_switch')
+    this.reportFrameSendDiagnostic(
+      'sfu_profile_switch_outbound_reset',
+      'warning',
+      'SFU outbound media state was reset before applying a lower video quality profile.',
+      {
+        drop_reason: 'profile_switch',
+        dropped_frame_count: droppedCount,
+        from_profile: String(details.fromProfile || ''),
+        to_profile: String(details.toProfile || ''),
+        reason: String(details.reason || 'profile_switch'),
+        outbound_media_generation: this.outboundMediaGeneration,
+      },
+      true,
+    )
   }
 
   private send(msg: object): boolean {
@@ -380,6 +407,29 @@ export class SFUClient {
   private async sendPreparedEncodedFrame(prepared: PreparedSfuOutboundFramePayload, queuedAgeMs = 0): Promise<boolean> {
     const metrics = this.metricsForPreparedFrame(prepared, { queued_age_ms: queuedAgeMs })
     const bufferedBeforeSend = this.getWebSocketBufferedAmount()
+    if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped an old-profile frame after outbound media generation changed.',
+        {
+          ...metrics,
+          buffered_amount: bufferedBeforeSend,
+          abort_reason: 'sfu_profile_switch_generation_mismatch',
+          outbound_media_generation: this.outboundMediaGeneration,
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_profile_switch_generation_mismatch',
+        stage: 'outbound_media_generation_guard',
+        source: 'profile_switch_actuator',
+        message: 'Encoded SFU frame belonged to an older outbound media generation after a profile switch.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: bufferedBeforeSend,
+      })
+      return false
+    }
     const queueAgeBudgetMs = Math.max(0, Number(metrics.budget_max_queue_age_ms || 0))
     if (queueAgeBudgetMs > 0 && queuedAgeMs > queueAgeBudgetMs) {
       this.reportFrameSendDiagnostic(
@@ -455,6 +505,17 @@ export class SFUClient {
         message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
         transportPath: 'binary_envelope',
         bufferedAmount: drain.bufferedAmount,
+      })
+      return false
+    }
+    if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_profile_switch_generation_mismatch',
+        stage: 'post_drain_generation_guard',
+        source: 'profile_switch_actuator',
+        message: 'Encoded SFU frame became stale while waiting for websocket backpressure to drain.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: this.getWebSocketBufferedAmount(),
       })
       return false
     }
@@ -543,9 +604,9 @@ export class SFUClient {
     }
   }
 
-  private clearOutboundFrameQueue(reason: string): void {
+  private clearOutboundFrameQueue(reason: string): number {
     const droppedCount = this.outboundFrameQueue.clear()
-    if (droppedCount <= 0) return
+    if (droppedCount <= 0) return 0
     this.reportFrameSendDiagnostic(
       'sfu_frame_send_queue_cleared',
       'warning',
@@ -555,6 +616,12 @@ export class SFUClient {
         dropped_frame_count: droppedCount,
       },
     )
+    return droppedCount
+  }
+
+  private isPreparedFrameStaleForOutboundMediaGeneration(prepared: PreparedSfuOutboundFramePayload): boolean {
+    const generation = Math.max(0, Number(prepared.metrics?.outbound_media_generation || 0))
+    return generation !== this.outboundMediaGeneration
   }
 
   private reportOutboundQueuePressureIfNeeded(prepared: PreparedSfuOutboundFramePayload): void {

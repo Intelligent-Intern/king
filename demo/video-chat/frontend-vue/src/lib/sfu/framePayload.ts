@@ -225,6 +225,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_max_queue_age_ms', source.budget_max_queue_age_ms ?? source.budgetMaxQueueAgeMs],
     ['budget_max_buffered_bytes', source.budget_max_buffered_bytes ?? source.budgetMaxBufferedBytes],
     ['budget_payload_soft_limit_bytes', source.budget_payload_soft_limit_bytes ?? source.budgetPayloadSoftLimitBytes],
+    ['budget_min_keyframe_retry_ms', source.budget_min_keyframe_retry_ms ?? source.budgetMinKeyframeRetryMs],
+    ['outbound_media_generation', source.outbound_media_generation ?? source.outboundMediaGeneration],
     ['king_receive_at_ms', source.king_receive_at_ms ?? source.kingReceiveAtMs],
   ]
   for (const [key, fieldValue] of integerFields) {

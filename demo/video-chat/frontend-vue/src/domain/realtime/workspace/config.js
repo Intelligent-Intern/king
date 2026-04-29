@@ -50,6 +50,7 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
     maxQueueAgeMs: 120,
     maxBufferedBytes: 384 * 1024,
     payloadSoftLimitRatio: 0.9,
+    minKeyframeRetryMs: 1400,
     expectedRecovery: 'hold_rescue_until_socket_low_water',
   }),
   realtime: Object.freeze({
@@ -62,6 +63,7 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
     maxQueueAgeMs: 140,
     maxBufferedBytes: 640 * 1024,
     payloadSoftLimitRatio: 0.88,
+    minKeyframeRetryMs: 1100,
     expectedRecovery: 'downshift_to_rescue_before_critical_buffer',
   }),
   balanced: Object.freeze({
@@ -74,6 +76,7 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
     maxQueueAgeMs: 180,
     maxBufferedBytes: 1024 * 1024,
     payloadSoftLimitRatio: 0.86,
+    minKeyframeRetryMs: 900,
     expectedRecovery: 'downshift_to_realtime_before_critical_buffer',
   }),
   quality: Object.freeze({
@@ -86,6 +89,7 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
     maxQueueAgeMs: 220,
     maxBufferedBytes: 1536 * 1024,
     payloadSoftLimitRatio: 0.84,
+    minKeyframeRetryMs: 800,
     expectedRecovery: 'downshift_to_balanced_before_critical_buffer',
   }),
 });

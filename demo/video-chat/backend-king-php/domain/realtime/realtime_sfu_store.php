@@ -590,6 +590,8 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'budget_max_queue_age_ms' => ['budget_max_queue_age_ms', 'budgetMaxQueueAgeMs'],
         'budget_max_buffered_bytes' => ['budget_max_buffered_bytes', 'budgetMaxBufferedBytes'],
         'budget_payload_soft_limit_bytes' => ['budget_payload_soft_limit_bytes', 'budgetPayloadSoftLimitBytes'],
+        'budget_min_keyframe_retry_ms' => ['budget_min_keyframe_retry_ms', 'budgetMinKeyframeRetryMs'],
+        'outbound_media_generation' => ['outbound_media_generation', 'outboundMediaGeneration'],
         'king_receive_at_ms' => ['king_receive_at_ms', 'kingReceiveAtMs'],
     ];
     foreach ($intFields as $target => $keys) {

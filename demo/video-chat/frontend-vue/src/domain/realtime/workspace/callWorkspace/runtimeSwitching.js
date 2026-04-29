@@ -8,6 +8,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     appendMediaRuntimeTransitionEvent,
     captureClientDiagnostic,
     mediaDebugLog,
+    resetSfuOutboundMediaAfterProfileSwitch,
     resolveSfuVideoQualityProfile,
     setCallOutgoingVideoQualityProfile,
     startEncodingPipeline,
@@ -182,6 +183,14 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       },
       immediate: true,
     });
+    if (typeof resetSfuOutboundMediaAfterProfileSwitch === 'function') {
+      resetSfuOutboundMediaAfterProfileSwitch({
+        fromProfile: currentProfile,
+        toProfile: nextProfile,
+        reason: normalizedReason,
+      });
+    }
+    stopLocalEncodingPipeline();
     setCallOutgoingVideoQualityProfile(nextProfile);
     return true;
   }

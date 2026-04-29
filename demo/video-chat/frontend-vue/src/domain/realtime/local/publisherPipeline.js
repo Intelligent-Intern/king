@@ -342,6 +342,8 @@ export function createLocalPublisherPipelineHelpers({
     let lastFullFrameSentAtMs = 0;
     let lastBackgroundSnapshotSentAtMs = 0;
     let selectiveTileCacheEpoch = 0;
+    let forcedKeyframeRecoveryPending = false;
+    let keyframeRetryBlockedUntilMs = 0;
 
     const ensureSelectivePatchEncoder = async (width, height, quality) => {
       const nextWidth = Math.max(1, Math.floor(Number(width || 0)));
@@ -396,6 +398,18 @@ export function createLocalPublisherPipelineHelpers({
           handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
           return;
         }
+        const timestamp = Date.now();
+        const keyframeRetryDelayMs = Math.max(
+          Number(videoProfile.encodeIntervalMs || 0),
+          Number(videoProfile.minKeyframeRetryMs || 0),
+        );
+        if (forcedKeyframeRecoveryPending && timestamp < keyframeRetryBlockedUntilMs) {
+          refs.sfuTransportState.wlvcBackpressurePauseUntilMs = Math.max(
+            refs.sfuTransportState.wlvcBackpressurePauseUntilMs,
+            keyframeRetryBlockedUntilMs,
+          );
+          return;
+        }
         if (refs.sfuTransportState.wlvcBackpressureSkipCount > 0) {
           resetWlvcBackpressureCounters();
         }
@@ -408,7 +422,6 @@ export function createLocalPublisherPipelineHelpers({
         const readbackStartedAtMs = highResolutionNowMs();
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
-        const timestamp = Date.now();
         const drawBudgetMs = Math.max(1, Number(videoProfile.maxDrawImageMs || 0));
         const readbackBudgetMs = Math.max(1, Number(videoProfile.maxReadbackMs || 0));
         if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
@@ -442,6 +455,7 @@ export function createLocalPublisherPipelineHelpers({
         const matteMaskImageData = backgroundFilterController.getCurrentMatteMaskSnapshot();
         const encodeStartedAtMs = highResolutionNowMs();
         const canAttemptSelectivePatch = constants.selectiveTileEnabled
+          && !forcedKeyframeRecoveryPending
           && previousFullFrameImageData instanceof ImageData
           && (timestamp - lastFullFrameSentAtMs) <= constants.selectiveTileBaseRefreshMs
           && refs.sfuTransportState.wlvcBackpressureSkipCount === 0
@@ -539,10 +553,16 @@ export function createLocalPublisherPipelineHelpers({
         const maxEncodedPayloadBytes = encodedFrameType === 'delta' || tilePatchMetadata
           ? maxEncodedFrameBudgetBytes
           : maxEncodedKeyframeBudgetBytes;
+        const paceForcedKeyframeRecovery = () => {
+          forcedKeyframeRecoveryPending = true;
+          keyframeRetryBlockedUntilMs = timestamp + keyframeRetryDelayMs;
+        };
         if (encodedPayloadBytes > maxEncodedPayloadBytes) {
+          paceForcedKeyframeRecovery();
           handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
             layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
             max_payload_bytes: maxEncodedPayloadBytes,
+            keyframe_retry_after_ms: keyframeRetryDelayMs,
           });
           return;
         }
@@ -550,12 +570,14 @@ export function createLocalPublisherPipelineHelpers({
         const payloadSoftLimitRatio = Math.max(0.5, Math.min(0.98, Number(videoProfile.payloadSoftLimitRatio || 0.86)));
         const payloadSoftLimitBytes = Math.max(1, Math.floor(maxEncodedPayloadBytes * payloadSoftLimitRatio));
         if (encodedPayloadBytes >= payloadSoftLimitBytes || encodeMs > encodeBudgetMs) {
+          paceForcedKeyframeRecovery();
           handleWlvcFramePayloadPressure(encodedPayloadBytes, videoTrack.id, encodedFrameType, {
             reason: 'sfu_wlvc_rate_budget_pressure',
             layout_mode: tilePatchMetadata?.layoutMode || 'full_frame',
             max_payload_bytes: maxEncodedPayloadBytes,
             payload_soft_limit_bytes: payloadSoftLimitBytes,
             payload_soft_limit_ratio: payloadSoftLimitRatio,
+            keyframe_retry_after_ms: keyframeRetryDelayMs,
             encode_ms: encodeMs,
             budget_max_encode_ms: encodeBudgetMs,
           });
@@ -583,6 +605,7 @@ export function createLocalPublisherPipelineHelpers({
           budget_max_readback_ms: readbackBudgetMs,
           budget_payload_soft_limit_bytes: payloadSoftLimitBytes,
           budget_payload_soft_limit_ratio: payloadSoftLimitRatio,
+          budget_min_keyframe_retry_ms: keyframeRetryDelayMs,
           budget_max_queue_age_ms: Math.max(1, Number(videoProfile.maxQueueAgeMs || 0)),
           budget_max_buffered_bytes: Math.max(1, Number(videoProfile.maxBufferedBytes || 0)),
           budget_expected_recovery: String(videoProfile.expectedRecovery || ''),
@@ -661,6 +684,7 @@ export function createLocalPublisherPipelineHelpers({
 
         const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
         if (frameSent === false) {
+          paceForcedKeyframeRecovery();
           const sfuSendFailureDetails = refs.sfuClientRef.value?.getLastSendFailure?.() || null;
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
@@ -680,6 +704,8 @@ export function createLocalPublisherPipelineHelpers({
         if (!tilePatchMetadata) {
           if (encodedFrameType === 'keyframe') {
             selectiveTileCacheEpoch = outgoingCacheEpoch;
+            forcedKeyframeRecoveryPending = false;
+            keyframeRetryBlockedUntilMs = 0;
           }
           lastFullFrameSentAtMs = timestamp;
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {
