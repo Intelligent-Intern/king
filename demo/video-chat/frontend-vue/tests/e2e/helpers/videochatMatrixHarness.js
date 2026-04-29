@@ -478,6 +478,8 @@ export async function installFakeMediaAndRealtime(context, user) {
         setTimeout(() => {
           this.readyState = FakeWebSocket.OPEN;
           this.dispatch('open', {});
+          const welcome = { type: 'system/welcome', active_room_id: roomId, call_context: { user_id: activeUser.id, call_id: callId } };
+          this.dispatch('message', { data: JSON.stringify(welcome) });
         }, 0);
       }
 
@@ -673,6 +675,7 @@ export async function openMatrixWorkspace(page) {
     setup.connectionState = 'online';
     setup.connectionReason = 'ready';
     setup.serverRoomId = roomId;
+    if ('hasRealtimeRoomSync' in setup) setup.hasRealtimeRoomSync = true;
     if ('activeCallId' in setup) setup.activeCallId = callId;
     if ('viewerCallRole' in setup) setup.viewerCallRole = window.__matrixActiveUser?.callRole || 'participant';
     setup.participantsRaw = Array.isArray(window.__matrixParticipants) ? window.__matrixParticipants : [];
@@ -690,6 +693,7 @@ export async function openMatrixWorkspace(page) {
     setup.callLayoutState.selection.visible_user_ids.splice(0, setup.callLayoutState.selection.visible_user_ids.length, 1, 2);
     setup.callLayoutState.selection.mini_user_ids.splice(0, setup.callLayoutState.selection.mini_user_ids.length, 2);
     setup.callLayoutState.selection.pinned_user_ids.splice(0, setup.callLayoutState.selection.pinned_user_ids.length);
+    setup.callLayoutState.selection.main_user_id = 1;
   }, { roomId: matrixRoomId, callId: matrixCallId });
 }
 
