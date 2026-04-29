@@ -4,82 +4,86 @@ Purpose:
 - This file contains exactly 20 active sprint issues.
 - Detailed history, parked ideas, and overflow items belong in `BACKLOG.md`.
 - Completion evidence belongs in `READYNESS_TRACKER.md`.
-- Branch-specific comparison notes live in `documentation/dev/video-chat/branch-compare-1.0.7-video-codec.md`.
+- Branch-specific comparison notes live in this file until the cherry-pick intake is complete.
 
 Active GitHub issue:
 - #148 Batch 3: Core Runtime, Experiment Intake, And Release Closure (`1.0.7-beta`)
 
 Sprint rule:
-- Keep only issues that directly eliminate SFU/WLVC encode pressure and end-to-end media throughput stalls.
+- Keep only issues that directly harden the current SFU/WLVC online video call path.
 - Do not keep completed work in this file.
 - Do not weaken King v1 contracts to make a merge easier.
 - Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
-- Treat the current hotfix PR as the base for this sprint branch until it is merged into `development/1.0.7-beta`.
+- Cherry-pick useful commits from `more-payload-1.0.7-online-video-call` with `git cherry-pick -x` where possible, then resolve conflicts by preserving the strongest current contract.
+- If a source commit is only partially usable, keep provenance in the local commit message with the source SHA and the rejected hunks.
 
-## Sprint: SFU Encode Pressure Elimination
+## Sprint: More Payload Branch Cherry-Pick Intake
 
 Sprint branch:
 - `sprint/video-call-hardening`
 
-Active failure:
-- Online publisher logs `SFU encode pressure - lowering outgoing video quality from=realtime to=rescue reason=sfu_send_backpressure_critical`.
-- This means the publisher is producing or retaining media bytes faster than the end-to-end SFU path can accept them.
-- The existing downgrade path is not enough. The release fix must identify and remove the bottleneck across the full path, not just keep lowering quality after the socket is already congested.
-- 2026-04-29 online pressure gate reproduced the remaining production failure on bundle `CallWorkspaceView-BQ4Ynkmy.js`: the admin publisher reached `bufferedAmount=2257694` during slow-subscriber pressure before the media path was accepted.
-- 2026-04-29 local hardening added a rolling browser wire-byte budget before `WebSocket.send`, immediate profile downshift for budget send failures, and a smaller extracted SFU message handler; local SFU contracts and build pass, but issue 20 stays open until the online gate passes against the deployed bundle.
-- 2026-04-29 local hardening now carries the rolling wire-budget `retryAfterMs` into the publisher controller so send-budget drops throttle the next encode tick for the measured retry window instead of spinning at the regular frame interval.
-- 2026-04-29 local hardening now turns fresh-receive decoder stalls into an immediate full-frame keyframe request; the publisher resets WLVC, disables selective patch frames until the full-frame keyframe is sent, and still keeps the existing receiver-pressure downshift path.
-- 2026-04-29 local hardening now makes the manual quality select flush SFU outbound media generation before reconfiguring capture/encoder, matching automatic downshift semantics.
-- 2026-04-29 local hardening now stops the active encoder before manual profile resets and aborts stale in-flight WLVC ticks if their captured profile no longer matches the selected profile.
-- 2026-04-29 local hardening now restarts local media and SFU after foreground recovery so minimized/backgrounded browsers do not remain with a recycled but unstarted SFU client.
-- 2026-04-29 production root cause isolated below the frontend: King WebSocket receive used the 15ms SFU poll timeout for already-started extended binary frames, so payload reads around and above the 64KB continuation threshold could abort mid-frame. The frame-part read now has a 250ms floor while the SFU receive loop keeps its short poll cadence.
-- 2026-04-29 frontend recovery hardening preserves the last visible remote canvas frame across decoder size/profile reconfiguration, so the UI does not publish a black canvas between profile switch and next renderable keyframe.
-- 2026-04-29 online acceptance passed after deploy: `production-socket-proxy-budget` delivered frames from 32KB through 1.31MB, and `online-sfu-pressure` passed with high motion, security, profile switches, and slow-subscriber simulation without critical backpressure or black remote video.
+Candidate branch:
+- `origin/more-payload-1.0.7-online-video-call`
+- current baseline: `327640f`
+- candidate head: `e0b4e2a`
+- merge base: `5605b23`
 
-Already present and not enough:
-- Frontend SFU transport has bounded send queue, `bufferedAmount` pressure checks, frame drops, payload-pressure drops, and quality downgrade from `quality` to `balanced` to `realtime` to `rescue`.
-- Quality profile changes reconfigure local tracks, but the sprint must prove queued frames, encoder state, capture constraints, and keyframe/cache state actually switch immediately.
-- Backend SFU has binary envelopes, direct fanout, live frame relay, broker-backed publisher/track state, and JSON media rejection.
-- Therefore every active issue below is about finding, proving, and removing the real throughput ceiling.
+Branch analysis:
+- Direct merge is rejected. `HEAD..origin/more-payload-1.0.7-online-video-call` would delete current hardening files including `publisherBackpressureController.js`, `outboundFrameBudget.ts`, `sendFailureDetails.ts`, `sfuMessageHandler.ts`, multiple SFU throughput contracts, `online-sfu-pressure-acceptance.mjs`, and `production-socket-proxy-budget.mjs`.
+- The candidate branch contains useful layout/test-harness fixes and recovery ideas, but also older SFU client code that predates the current measured throughput budget, binary envelope path, receiver feedback, large-frame receive fix, and online pressure acceptance gate.
+- The intake must therefore cherry-pick or manually port only the useful deltas while preserving current SFU byte budgets, binary media-only contracts, media-security recovery, and online acceptance coverage.
+
+Useful candidate commits:
+- `694c2d9` mini participant strip / active user display: useful, but must preserve current stricter layout contracts.
+- `376426f` mini fallback and connected participant filtering: useful, but connectedAt must be normalized strictly instead of treating any non-null value as connected.
+- `fd0d4a5` fixture `connected_at`: mostly already present; keep only missing fixture coverage.
+- `2a505fc` harness server-socket flow pieces: useful only for `system/welcome`, realtime room sync, and explicit main selection; reject weakened assertions.
+- `cbc40e5` reconnect snapshot assertion: useful only if it adds coverage beyond the current media-security/control-state reconnect test.
+- `4ff8e1b` shared `stringField` helper: small refactor candidate if it does not fight the current `sfuMessageHandler.ts` extraction.
+- `1147f44` recovery idea: keyframe-first / less restart churn is useful; buffer increases and looser downgrade thresholds are rejected.
+- `76c356b` publisher-scoped stall tracker: useful only if adapted to the current binary frame path and current diagnostics; do not replace runtime health.
+
+Rejected or superseded candidate commits:
+- `c8621be`, `c2cf73d`, `bc19f56`: reject the runtimeHealth TypeScript conversion because it removes stronger current stall/recovery behavior.
+- `da90906`: only compare PHPT/contract patterns; do not weaken or delete current SFU hardening contracts.
+- `e6e8d04`: reject reconnect test simplification; only consider the fake socket reconnect helper if it proves app reconnect logic instead of bypassing it.
+- Merge commits `ccce8ad`, `b554ec1`, `0005817`, and `e0b4e2a` are not direct cherry-pick candidates.
 
 ## Top 20 Active Issues
 
-1. [x] `[full-path-throughput-analysis]` Analyze and document the complete media path with measured timings and byte counts: camera capture, background processing, DOM/canvas readback, WLVC encode, selective tile planning, binary envelope build, outbound queue, browser `WebSocket.bufferedAmount`, network/proxy, King websocket receive, binary decode, SFU relay/fanout/broker, King websocket send, receiver decode, and render.
-2. [x] `[stage-telemetry]` Add correlated per-frame diagnostics for every stage in the path, including `frame_sequence`, profile, payload bytes, wire bytes, queue age, buffered bytes, encode ms, send-drain ms, King receive latency, fanout latency, subscriber send latency, and receiver render latency.
-3. [x] `[profile-byte-budget]` Define enforceable per-profile throughput budgets for `quality`, `balanced`, `realtime`, and `rescue`: max encoded bytes/frame, max wire bytes/sec, max encode ms, max queue age, max buffered bytes, and expected recovery behavior before `sfu_send_backpressure_critical`.
-4. [x] `[capture-constraints]` Prove each outgoing quality profile actually applies lower camera constraints and lower publisher dimensions after a downgrade, including browser-reported track settings and no stale HD capture after switching to `realtime` or `rescue`.
-5. [x] `[source-readback]` Remove or bound DOM video/canvas readback pressure in the publisher pipeline by measuring `drawImage/getImageData` cost and moving to a faster supported source path where available, without weakening WLVC/SFU transport semantics.
-6. [x] `[wlvc-rate-control]` Make WLVC encode adapt before socket pressure: dynamic quality/resolution/fps decisions must target the byte budget from issue 3 instead of waiting for queue pressure after frames are already too large.
-7. [x] `[high-motion-payloads]` Fix high-motion payload spikes so movement cannot repeatedly create oversized delta/keyframe payloads; selective tiles, background snapshots, and full-frame fallback must stay under budget or drop early with a forced recoverable keyframe plan.
-8. [x] `[keyframe-cache-pacing]` Harden keyframe, cache-epoch, and selective-tile pacing so drops, profile switches, security sync, and reconnects do not cause repeated large full-frame bursts that refill the send buffer.
-9. [x] `[security-throughput-budget]` Enable protected SFU media only with measured overhead: encryption, protected envelope size, keyframe cadence, and receiver decrypt must fit the same throughput budget and must not reintroduce `wrong_key_id`/`malformed_protected_frame` recovery loops.
-10. [x] `[profile-switch-actuator]` Make automatic downgrade a real actuator: flush stale queued frames, reset/recreate the correct encoder, reapply capture constraints, force exactly one new-profile keyframe, and prove no old-profile frame is sent after the switch.
-11. [x] `[publisher-backpressure-controller]` Replace scattered skip/pause/downgrade/reconnect decisions with one publisher controller that consumes stage telemetry and decides encode pause, frame drop, profile downshift, keyframe request, and socket restart with bounded queues.
-12. [x] `[browser-ws-send-drain]` Fix browser websocket send pacing so large frames are never allowed to sit behind a 500ms drain timeout and refill `bufferedAmount`; enforce low-water resume, early drop, and audio/control priority.
-13. [x] `[binary-envelope-copy-audit]` Audit and reduce frontend binary envelope copies/base64-derived metrics so per-frame CPU and memory churn do not become the hidden bottleneck under motion.
-14. [x] `[king-receive-loop-fairness]` Profile and fix the King `/sfu` receive loop so broker polling, live relay polling, cleanup, presence touches, and websocket receive cannot starve each other or delay incoming media frames.
-15. [x] `[king-binary-decode-fanout]` Profile and optimize King binary decode and outbound binary envelope fanout so server-side validation, metadata handling, and re-encoding do not copy or serialize media payloads more than necessary.
-16. [x] `[slow-subscriber-isolation]` Prevent one slow receiver from backing up the publisher path: per-subscriber video send budgets must drop or skip video for that subscriber without blocking direct fanout to fast subscribers.
-17. [x] `[relay-broker-io-budget]` Audit live frame relay, broker DB, filesystem, and any persistence/spool path; media bytes must use a bounded, measured path and never create unbounded synchronous DB/file I/O in the hot frame path.
-18. [x] `[production-socket-proxy-budget]` Measure production TLS/proxy/websocket buffer behavior between browser and King, including frame sizes around continuation thresholds, server send buffers, close/error cases, and any config that caps throughput below the profile budget.
-19. [x] `[receiver-feedback-loop]` Add receiver-to-publisher feedback for decode/render lag, missed sequences, and subscriber pressure so the publisher downshifts from real receiver evidence before the sender socket reaches critical backpressure.
-20. [x] `[online-acceptance-no-critical-pressure]` Build the online acceptance gate: two-browser call with high motion, security enabled, profile changes, and slow-subscriber simulation must run without `sfu_send_backpressure_critical`, remote freeze, unbounded queue growth, or black video.
+1. [ ] `[branch-diff-baseline]` Re-run the branch diff before the first cherry-pick and record the exact current SHA, candidate SHA, merge base, and deleted-current-contract list so no stale comparison drives the intake.
+2. [ ] `[patch-equivalence-audit]` For every candidate commit, check whether the behavior is already implemented or superseded in the current branch before editing code.
+3. [ ] `[direct-merge-guard]` Add a local guard note or contract check that rejects wholesale merge outcomes that delete current SFU hardening modules, online acceptance gates, or throughput contracts.
+4. [ ] `[mini-main-selection]` Port the useful part of `694c2d9`: when `main_mini` has no pinned user and the server selected the local user as main, prefer `selection.mini_user_ids` before falling back to arbitrary visible users.
+5. [ ] `[mini-fallback-non-main]` Port the useful part of `376426f`: mini participant fallback must prefer connected visible users other than the main user and must never duplicate the main tile.
+6. [ ] `[roster-shape-normalization]` Port the useful roster normalization from `694c2d9`: accept snake_case and camelCase room/user/call-role fields, but keep current role ordering and live media peer aggregation.
+7. [ ] `[connected-at-normalization]` Harden connected participant filtering so `connected_at` / `connectedAt` counts only when it is a non-empty normalized timestamp, and connection counts still win when present.
+8. [ ] `[layout-fixture-coverage]` Compare `fd0d4a5` and current fixtures; add only missing `connected_at` fixture coverage for participant rows without weakening any existing E2E assertions.
+9. [ ] `[harness-welcome-flow]` Port the useful part of `2a505fc`: fake server sockets should emit the same welcome/snapshot flow as KingRT, while preserving current media-security and control-state checks.
+10. [ ] `[harness-realtime-room-sync]` Port explicit realtime room sync and main-user selection setup only where tests otherwise depend on incidental defaults.
+11. [ ] `[reconnect-snapshot-assertion]` Compare `cbc40e5` against the current reconnect E2E; add missing snapshot-after-reconnect assertions only if they strengthen the existing media-security/control-state test.
+12. [ ] `[reject-reconnect-weakening]` Ensure no cherry-pick from `2a505fc` or `e6e8d04` removes sidebar, grid, mini-strip, media-security, control-state, or snapshot assertions.
+13. [ ] `[shared-string-field-helper]` Evaluate `4ff8e1b`; export/reuse `stringField` only if it reduces duplicate parsing without undoing `sfuMessageHandler.ts` or binary frame validation.
+14. [ ] `[keyframe-before-restart-review]` Compare `1147f44` with current receiver feedback; port only missing keyframe-first recovery behavior and keep current profile byte budgets and downgrade thresholds.
+15. [ ] `[reject-buffer-threshold-regression]` Explicitly reject `1147f44` buffer increases and looser downgrade windows unless measurements prove they improve throughput without reintroducing critical backpressure.
+16. [ ] `[publisher-stall-tracker]` Adapt the useful idea from `76c356b` into the current SFU client only if publisher last-frame tracking is updated from the binary envelope path, not only JSON `sfu/frame` messages.
+17. [ ] `[stall-recovery-layering]` Ensure any publisher-scoped stall tracker complements, not replaces, current `runtimeHealth.js` diagnostics, targeted quality-pressure signaling, auto-resubscribe, and bounded SFU restart logic.
+18. [ ] `[runtime-health-ts-reject]` Document and enforce rejection of `c8621be`/`c2cf73d`/`bc19f56` unless a later change preserves every current runtimeHealth behavior and contract.
+19. [ ] `[contract-pattern-audit]` Compare `da90906` against current PHPT/frontend contracts; port only stale-path corrections and never delete tests that protect SFU throughput, binary media, or online pressure acceptance.
+20. [ ] `[cherry-pick-provenance-gate]` After each accepted port, commit locally with source SHA provenance, run the focused contract/E2E tests for the touched area, update this sprint checkbox, and do not push to GitHub.
 
 ## Execution Order
 
-1. Complete issue 1 first and do not guess the bottleneck.
-2. Add issue 2 telemetry before changing thresholds so every later fix has proof.
-3. Freeze issue 3 budgets and make all profile/controller changes obey them.
-4. Fix publisher byte production first: capture, readback, WLVC rate control, high-motion payloads, keyframe/cache pacing, and security overhead.
-5. Fix publisher send control next: profile switch actuation, unified backpressure controller, browser send/drain, and binary envelope copy pressure.
-6. Fix King path next: receive-loop fairness, binary decode/fanout, slow subscriber isolation, relay/broker I/O, and production socket/proxy limits.
-7. Add receiver feedback and run the online acceptance gate last.
-8. Update `READYNESS_TRACKER.md` only after issue 20 passes online.
+1. Finish issues 1-3 before any source commit is cherry-picked.
+2. Port layout and roster fixes first because they are product-visible and lower-risk.
+3. Port only strengthening test-harness pieces next; never accept test simplifications as merge-conflict fixes.
+4. Evaluate SFU recovery commits last, because they touch the hottest path and must preserve the current measured throughput budget.
+5. Run focused tests after each accepted port, then update `READYNESS_TRACKER.md` only after the cherry-pick intake is complete.
 
 ## Parking Rule
 
 Move an item to `BACKLOG.md` if any of the following is true:
-- it does not directly reduce SFU/WLVC encode pressure or media path throughput stalls
-- it depends on unresolved proof from the full-path analysis
+- it does not directly improve the current SFU/WLVC online video call path
+- it depends on unresolved proof from a still-open intake issue
 - it is exploratory rather than contract-critical
 - it is already completed and only needs archival evidence
