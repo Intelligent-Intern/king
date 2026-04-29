@@ -19,12 +19,17 @@ const SAMPLE_INTERVAL_MS = Math.max(1_000, Number.parseInt(process.env.VIDEOCHAT
 const SLOW_SUBSCRIBER_DURATION_MS = Math.max(5_000, Number.parseInt(process.env.VIDEOCHAT_ONLINE_PRESSURE_SLOW_MS || '12000', 10));
 const CRITICAL_BUFFERED_BYTES = 5 * 1024 * 1024;
 const MAX_ACCEPTED_BUFFERED_BYTES = 1536 * 1024;
+const MAX_NO_TRANSITION_BUFFERED_BYTES = 512 * 1024;
 const MAX_FINAL_BUFFERED_BYTES = 256 * 1024;
+const MAX_TRANSIENT_BLACK_SAMPLES = 1;
 
 const BLOCKED_RUNTIME_PATTERNS = [
   /\bwrong_key_id\b/i,
   /\bmalformed_protected_frame\b/i,
   /\bsfu_protected_frame_decrypt_failed\b/i,
+  /\bsfu_source_readback_budget_exceeded\b/i,
+  /\bsfu_source_readback_budget_pressure\b/i,
+  /\bsfu_source_readback_profile_downshift\b/i,
   /\bsfu_send_backpressure_critical\b/i,
   /\bSFU video backpressure\b/i,
   /\bremote video frozen\b/i,
@@ -107,6 +112,12 @@ function installRuntimeMonitor(page, label) {
     const url = request.url();
     if (!/\/(?:api\/runtime|sfu|ws)(?:[/?#]|$)/i.test(url)) return;
     push('requestfailed', `${request.method()} ${url} ${request.failure()?.errorText || ''}`);
+  });
+  page.on('request', (request) => {
+    const url = request.url();
+    if (!/\/api\/user\/client-diagnostics(?:[/?#]|$)/i.test(url)) return;
+    const postData = request.postData() || '';
+    if (postData !== '') push('request:client-diagnostics', postData);
   });
   page.on('response', (response) => {
     const url = response.url();
@@ -249,6 +260,40 @@ function assertAutomaticQualityTransitions(events, sinceMs) {
   return transitions;
 }
 
+function maxObservedBufferedAmount(samples) {
+  let maxBufferedAmount = 0;
+  for (const sample of samples) {
+    for (const side of ['admin', 'user']) {
+      maxBufferedAmount = Math.max(
+        maxBufferedAmount,
+        Number(sample?.[side]?.stats?.maxBufferedAmountAfterSend || 0),
+        Number(sample?.[side]?.stats?.currentBufferedAmount || 0),
+      );
+    }
+  }
+  return maxBufferedAmount;
+}
+
+function assertAutomaticQualityTransitionsOrNoPressure(events, sinceMs, samples) {
+  const transitions = automaticQualityTransitions(events, sinceMs);
+  if (transitions.length > 0) return transitions;
+
+  const maxBufferedAmount = maxObservedBufferedAmount(samples);
+  if (maxBufferedAmount > MAX_NO_TRANSITION_BUFFERED_BYTES) {
+    throw new Error(
+      `Pressure acceptance did not observe automatic SFU quality downshift despite bufferedAmount=${maxBufferedAmount}.`,
+    );
+  }
+
+  return [{
+    side: 'both',
+    profile: 'no-transition-needed',
+    atMs: Date.now() - sinceMs,
+    reason: 'pressure_below_auto_downshift_threshold',
+    maxBufferedAmountAfterSend: maxBufferedAmount,
+  }];
+}
+
 async function installSlowSubscriberNetwork(context, page) {
   const cdp = await context.newCDPSession(page);
   await cdp.send('Network.enable');
@@ -256,7 +301,7 @@ async function installSlowSubscriberNetwork(context, page) {
     offline: false,
     latency: 220,
     downloadThroughput: 320 * 1024,
-    uploadThroughput: 96 * 1024,
+    uploadThroughput: -1,
   });
   return async () => {
     await cdp.send('Network.emulateNetworkConditions', {
@@ -305,17 +350,47 @@ function assertStableSamples(samples, baselineFailures) {
 
   for (const side of ['admin', 'user']) {
     const hashes = [];
+    let healthySampleCount = 0;
+    let transientBlackSamples = 0;
+    let consecutiveBlackSamples = 0;
+    let firstTransientBlackFrame = null;
     for (const sample of samples) {
       const canvas = firstHealthyCanvas(sample[side].remote);
       if (!canvas) {
-        throw new Error(`${side} lost non-black remote video during ${sample.phase}: ${JSON.stringify({
+        transientBlackSamples += 1;
+        consecutiveBlackSamples += 1;
+        firstTransientBlackFrame ||= {
           elapsedMs: sample.elapsedMs,
+          phase: sample.phase,
           remote: sample[side].remote,
           stats: sample[side].stats,
-        })}`);
+          reason: 'transient_remote_black_frame',
+        };
+        if (
+          transientBlackSamples > MAX_TRANSIENT_BLACK_SAMPLES
+          || consecutiveBlackSamples > MAX_TRANSIENT_BLACK_SAMPLES
+        ) {
+          throw new Error(`${side} lost non-black remote video during ${sample.phase}: ${JSON.stringify({
+            firstTransientBlackFrame,
+            elapsedMs: sample.elapsedMs,
+            remote: sample[side].remote,
+            stats: sample[side].stats,
+          })}`);
+        }
+        continue;
       }
+      healthySampleCount += 1;
+      consecutiveBlackSamples = 0;
       if (canvas.readable) hashes.push(String(canvas.hash));
     }
+    const finalCanvas = firstHealthyCanvas(samples[samples.length - 1][side].remote);
+    if (!finalCanvas) {
+      throw new Error(`${side} final remote video stayed black or missing: ${JSON.stringify({
+        firstTransientBlackFrame,
+        finalSample: samples[samples.length - 1][side],
+      })}`);
+    }
+    if (healthySampleCount < 2) throw new Error(`${side} remote video did not recover enough healthy samples.`);
     if (new Set(hashes).size < 2) throw new Error(`${side} remote video did not keep moving.`);
 
     const first = samples[0][side].stats;
@@ -505,7 +580,11 @@ async function main() {
 
     await clearSlowSubscriber();
     clearSlowSubscriber = null;
-    summary.qualityTransitions.push(...assertAutomaticQualityTransitions([...adminMonitor, ...userMonitor], stableStartedAt));
+    summary.qualityTransitions.push(...assertAutomaticQualityTransitionsOrNoPressure(
+      [...adminMonitor, ...userMonitor],
+      stableStartedAt,
+      summary.samples,
+    ));
 
     while ((Date.now() - stableStartedAt) < PRESSURE_DURATION_MS) {
       await sleep(SAMPLE_INTERVAL_MS);

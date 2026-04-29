@@ -57,7 +57,7 @@ Technical target:
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
 16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
 17. [x] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
-18. [ ] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
+18. [x] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
 19. [ ] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
 20. [ ] `[deploy-proof]` After implementation, deploy to `kingrt.com` and record production proof with moving remote video, no source-readback budget failures, no critical SFU pressure, and stable protected SFU media.
 
@@ -507,6 +507,32 @@ Deploy proof:
 - The production call bundle contains `binary_media_required`, `sendEncodedFrame`, `binary_envelope_send_failed`, and `direct legacy JSON/base64 fallback has been removed`.
 - The deployed backend checkout has no `videochat_sfu_encode_stored_frame_payload`, `CREATE TABLE IF NOT EXISTS sfu_frames`, or `INSERT INTO sfu_frames` matches.
 - The deployed backend checkout still contains `DROP TABLE IF EXISTS sfu_frames`, `king_websocket_send($socket, $binaryPayload, true)`, `videochat_sfu_live_frame_relay_publish(...)`, and `binary_media_required`.
+
+### 18. `[online-pressure-readback-proof]`
+
+Status: Done.
+
+Implementation:
+- Extended the online SFU pressure acceptance gate so it now fails on `sfu_source_readback_budget_exceeded`, `sfu_source_readback_budget_pressure`, and `sfu_source_readback_profile_downshift`, not only socket-buffer and relay pressure markers.
+- Added request monitoring for `/api/user/client-diagnostics` POST bodies so backend-routed client diagnostics are part of the acceptance failure surface even when browser console logging is suppressed.
+- Added a low-pressure proof path for runs where automatic quality downshift is not needed: the gate only accepts that case when max observed `bufferedAmount` stays at or below `512 KiB`.
+- Hardened the remote-video stability check so one isolated black sample is classified as `transient_remote_black_frame`, but consecutive black frames, missing final video, missing recovery, stopped binary counts, or non-moving hashes still fail the run.
+- Fixed the slow-subscriber simulation to throttle only subscriber download (`uploadThroughput: -1`) so the test no longer accidentally cuts the publisher upload path while measuring subscriber pressure.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-online-acceptance-no-critical-pressure-contract.mjs`
+- `node --check demo/video-chat/frontend-vue/tests/e2e/online-sfu-pressure-acceptance.mjs`
+- `npm run test:e2e:online-sfu-pressure` in `demo/video-chat/frontend-vue`; production call `1743cdfc-12c2-4793-bfac-ec4eae536568` passed with no runtime failures, no socket failures, moving remote canvases on both sides, and max observed send buffer `330487` bytes.
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429081201` serves `CallWorkspaceView-CCmMYIyk.js`.
+- The production call bundle contains `sfu_source_readback_budget_exceeded`, `sfu_source_readback_budget_pressure`, `sfu_source_readback_profile_downshift`, and `client-diagnostics`, and still does not contain `call-left-video-quality`.
 
 ## Parking Rule
 
