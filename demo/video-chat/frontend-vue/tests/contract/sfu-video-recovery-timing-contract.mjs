@@ -53,7 +53,13 @@ try {
   requireContains(runtimeHealth, "payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video')", 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
   requireContains(runtimeHealth, 'const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;', 'fresh receive/keyframe-wait bypasses the second-freeze delay');
   requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();', 'frozen video restart waits for sustained receive loss');
-  requireContains(runtimeHealth, 'if (shouldRestartFrozenVideo) {', 'frozen video reconnect is gated after staged recovery');
+  requireContains(runtimeHealth, 'function remoteVideoSocketRestartBackoffMs', 'hard SFU socket restart uses per-peer exponential backoff');
+  requireContains(runtimeHealth, 'function canRequestSfuSocketRestartForPeer', 'remote video restart checks the peer backoff gate');
+  requireContains(runtimeHealth, 'function requestSfuSocketRestartForPeer', 'remote video hard restart records peer restart state');
+  requireContains(runtimeHealth, 'peer.nextSfuSocketRestartAllowedAtMs = nowMs + restartBackoffMs;', 'remote video restart stores next allowed time');
+  requireContains(runtimeHealth, "eventType: 'sfu_remote_video_reconnect_gate'", 'never-started video restart gate is diagnosed separately');
+  requireContains(runtimeHealth, 'socket_restart_backoff_remaining_ms', 'remote video diagnostics expose restart backoff remaining time');
+  requireContains(runtimeHealth, 'sfu_socket_restart_count', 'remote video diagnostics expose peer socket restart count');
   requireContains(runtimeHealth, 'remote_quality_pressure_sent', 'remote freeze diagnostics include remote quality-pressure result');
   requireContains(runtimeHealth, 'socket_restart_deferred', 'remote freeze diagnostics expose deferred socket restart');
   requireContains(runtimeHealth, 'stalledAgeMs >= remoteVideoStallThresholdMs * 2', 'never-started video reconnect timing');
@@ -63,6 +69,8 @@ try {
   requireContains(socketLifecycle, 'full_keyframe_requested', 'remote pressure diagnostics record full-keyframe recovery');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
+  requireContains(frameDecode, 'peer.sfuSocketRestartCount = 0;', 'fresh decoded frames clear hard reconnect backoff');
+  requireContains(frameDecode, 'peer.nextSfuSocketRestartAllowedAtMs = 0;', 'fresh decoded frames clear next restart gate');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');
   requireContains(remoteCanvas, 'export function resizeCanvasPreservingFrame', 'remote decoder size switches preserve the visible frame');
   requireContains(remoteCanvas, 'snapshotCtx.drawImage(canvas, 0, 0);', 'remote canvas resize snapshots the visible frame before dimensions change');
@@ -77,6 +85,8 @@ try {
   requireContains(remotePeers, "'track_set_rollover'", 'track rollover resets remote continuity');
   requireContains(remotePeers, 'lastSfuFrameSequenceByTrack: {}', 'rollover clears stale SFU frame sequence continuity');
   requireContains(remotePeers, 'acceptedSfuCacheEpochByTrack: {}', 'rollover clears stale tile cache epoch continuity');
+  requireContains(remotePeers, 'sfuSocketRestartCount: 0', 'remote peer continuity starts with no hard reconnect debt');
+  requireContains(remotePeers, 'nextSfuSocketRestartAllowedAtMs: 0', 'remote peer continuity starts without a restart backoff gate');
   requireContains(remotePeers, 'Keep the last visible frame while waiting for the rollover keyframe.', 'rollover preserves the visible remote frame');
   requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');

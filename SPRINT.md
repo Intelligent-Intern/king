@@ -125,6 +125,27 @@ Technical target:
    - Added double-click fullscreen toggle: double-click a grid, mini, or main video to enter fullscreen; double-click the fullscreen video again to restore the previous layout.
    - Added contract coverage for crop math, fullscreen toggling, worker crop propagation, and CSS framing mode.
 
+6. [x] `[remote-video-reconnect-loop-backoff]` Stop repeated hard SFU reconnects during remote video recovery.
+
+   Scope:
+   - Keep fast recovery actions intact: resubscribe, full-keyframe request, and automatic sender quality pressure.
+   - Add per-remote-peer backoff for hard SFU socket restarts so stale `createdAtMs` or `lastFrameAtMs` cannot trigger a reconnect loop.
+   - Reset the hard-reconnect backoff as soon as a fresh decoded frame renders.
+   - Preserve backend diagnostics so the reason is visible without browser console screenshots.
+
+   Done when:
+   - A missing or frozen remote video can still recover automatically.
+   - Hard SFU socket restarts are gated per peer with increasing backoff instead of firing again from the same stale peer state.
+   - Successful remote rendering clears the backoff and returns the participant media state to live.
+   - Contracts prove the reconnect gate, diagnostics, and reset-on-render behavior.
+
+   Report:
+   - Root cause: after `remote_video_never_started`/`remote_video_frozen`, the peer kept its old timing fields, so the health timer could see the same peer as immediately eligible again after the global reconnect cooldown.
+   - Added per-peer restart state (`sfuSocketRestartCount`, `lastSfuSocketRestartAtMs`, `nextSfuSocketRestartAllowedAtMs`) and exponential backoff around hard socket restarts.
+   - Kept lightweight recovery fast: `sfu/subscribe`, full-keyframe request, and remote quality-pressure still run before a hard reconnect.
+   - Fresh rendered frames now clear the hard-reconnect debt.
+   - Verification: `node tests/contract/sfu-video-recovery-timing-contract.mjs`, `npm run test:contract:sfu`.
+
 ## Execution Order
 
 1. Finish `[socket-layer-state-wiring-hotfix]`.

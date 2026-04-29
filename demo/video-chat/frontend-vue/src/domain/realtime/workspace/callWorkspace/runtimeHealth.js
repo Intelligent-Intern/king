@@ -122,6 +122,45 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     return Math.max(remoteVideoFreezeThresholdMs * 3, remoteVideoStallThresholdMs * 2);
   }
 
+  function remoteVideoSocketRestartBackoffMs(attempt) {
+    const normalizedAttempt = Math.max(1, Math.floor(Number(attempt || 1)));
+    const baseMs = Math.max(remoteVideoReconnectThresholdMs(), remoteVideoStallThresholdMs * 3);
+    return Math.min(60_000, baseMs * (2 ** Math.min(3, normalizedAttempt - 1)));
+  }
+
+  function canRequestSfuSocketRestartForPeer(peer, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    const nextAllowedAtMs = Number(peer.nextSfuSocketRestartAllowedAtMs || 0);
+    return nextAllowedAtMs <= 0 || nowMs >= nextAllowedAtMs;
+  }
+
+  function sfuSocketRestartBackoffRemainingMs(peer, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return 0;
+    const nextAllowedAtMs = Number(peer.nextSfuSocketRestartAllowedAtMs || 0);
+    return nextAllowedAtMs > 0 ? Math.max(0, nextAllowedAtMs - nowMs) : 0;
+  }
+
+  function requestSfuSocketRestartForPeer(reason, peer, payload = {}, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    if (!canRequestSfuSocketRestartForPeer(peer, nowMs)) return false;
+
+    const restartAttempt = Math.max(1, Number(peer.sfuSocketRestartCount || 0) + 1);
+    const restartBackoffMs = remoteVideoSocketRestartBackoffMs(restartAttempt);
+    const restarted = restartSfuAfterVideoStall(reason, {
+      ...payload,
+      sfu_socket_restart_attempt: restartAttempt,
+      sfu_socket_restart_backoff_ms: restartBackoffMs,
+    });
+    if (!restarted) return false;
+
+    peer.sfuSocketRestartCount = restartAttempt;
+    peer.lastSfuSocketRestartAtMs = nowMs;
+    peer.nextSfuSocketRestartAllowedAtMs = nowMs + restartBackoffMs;
+    peer.stalledLoggedAtMs = nowMs;
+    setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+    return true;
+  }
+
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
     if (typeof sendSocketFrame !== 'function') return false;
     const targetUserId = Number(peer?.userId || 0);
@@ -186,6 +225,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         const receiveGapMs = lastReceivedFrameAtMs > 0 ? Math.max(0, nowMs - lastReceivedFrameAtMs) : frozenAgeMs;
         const receivingFreshFrames = lastReceivedFrameAtMs > 0 && receiveGapMs < remoteVideoFreezeThresholdMs;
         const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();
+        const socketRestartBackoffRemainingMs = sfuSocketRestartBackoffRemainingMs(peer, nowMs);
+        const canRestartFrozenVideo = shouldRestartFrozenVideo
+          && canRequestSfuSocketRestartForPeer(peer, nowMs);
         peer.stalledLoggedAtMs = nowMs;
         peer.freezeRecoveryCount = Number(peer.freezeRecoveryCount || 0) + 1;
         setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
@@ -255,6 +297,16 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);
           continue;
         }
+        retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
+        const socketRestarted = canRestartFrozenVideo
+          ? requestSfuSocketRestartForPeer('remote_video_frozen', peer, {
+            publisher_id: publisherId,
+            publisher_user_id: Number(peer.userId || 0),
+            frozen_age_ms: frozenAgeMs,
+            receive_gap_ms: receiveGapMs,
+            freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+          }, nowMs)
+          : false;
         captureClientDiagnostic({
           category: 'media',
           level: 'error',
@@ -272,7 +324,11 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
             remote_quality_pressure_sent: remoteQualityPressureSent,
-            socket_restart_deferred: !shouldRestartFrozenVideo,
+            socket_restart_attempted: socketRestarted,
+            socket_restart_deferred: shouldRestartFrozenVideo && !socketRestarted,
+            socket_restart_backoff_remaining_ms: socketRestartBackoffRemainingMs,
+            sfu_socket_restart_count: Number(peer.sfuSocketRestartCount || 0),
+            next_sfu_socket_restart_allowed_at_ms: Number(peer.nextSfuSocketRestartAllowedAtMs || 0),
             remote_video_reconnect_threshold_ms: remoteVideoReconnectThresholdMs(),
             remote_peer_count: remotePeersRef.value.size,
             sfu_connected: sfuConnected.value,
@@ -281,16 +337,6 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           },
           immediate: true,
         });
-        retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
-        if (shouldRestartFrozenVideo) {
-          restartSfuAfterVideoStall('remote_video_frozen', {
-            publisher_id: publisherId,
-            publisher_user_id: Number(peer.userId || 0),
-            frozen_age_ms: frozenAgeMs,
-            receive_gap_ms: receiveGapMs,
-            freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
-          });
-        }
         continue;
       }
 
@@ -303,6 +349,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       const stalledAgeMs = Math.max(0, nowMs - createdAtMs);
       peer.stallRecoveryCount = Number(peer.stallRecoveryCount || 0) + 1;
       setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);
+      const shouldRestartNeverStartedVideo = stalledAgeMs >= remoteVideoStallThresholdMs * 2;
+      const socketRestartBackoffRemainingMs = sfuSocketRestartBackoffRemainingMs(peer, nowMs);
+      const canRestartNeverStartedVideo = shouldRestartNeverStartedVideo
+        && canRequestSfuSocketRestartForPeer(peer, nowMs);
       const remoteQualityPressureSent = peer.stallRecoveryCount >= 2
         ? sendRemoteSfuVideoQualityPressure(peer, publisherId, 'sfu_remote_video_never_started', nowMs, {
           age_ms: stalledAgeMs,
@@ -350,11 +400,37 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       if (retrySfuSubscription(publisherId, peer, 'remote_video_never_started', nowMs)) {
         // The preceding backend diagnostic carries the stalled publisher details.
       }
-      if (stalledAgeMs >= remoteVideoStallThresholdMs * 2) {
-        restartSfuAfterVideoStall('remote_video_never_started', {
+      const socketRestarted = canRestartNeverStartedVideo
+        ? requestSfuSocketRestartForPeer('remote_video_never_started', peer, {
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),
           age_ms: stalledAgeMs,
+          stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+        }, nowMs)
+        : false;
+      if (shouldRestartNeverStartedVideo || socketRestartBackoffRemainingMs > 0) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: socketRestarted ? 'warning' : 'info',
+          eventType: 'sfu_remote_video_reconnect_gate',
+          code: 'sfu_remote_video_reconnect_gate',
+          message: 'Remote SFU video recovery gated hard socket reconnect behind per-peer backoff.',
+          payload: {
+            publisher_id: publisherId,
+            publisher_user_id: Number(peer.userId || 0),
+            age_ms: stalledAgeMs,
+            stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+            socket_restart_attempted: socketRestarted,
+            socket_restart_deferred: shouldRestartNeverStartedVideo && !socketRestarted,
+            socket_restart_backoff_remaining_ms: socketRestartBackoffRemainingMs,
+            sfu_socket_restart_count: Number(peer.sfuSocketRestartCount || 0),
+            next_sfu_socket_restart_allowed_at_ms: Number(peer.nextSfuSocketRestartAllowedAtMs || 0),
+            remote_video_reconnect_threshold_ms: remoteVideoReconnectThresholdMs(),
+            sfu_connected: sfuConnected.value,
+            connection_state: connectionState.value,
+            media_runtime_path: mediaRuntimePath.value,
+          },
+          immediate: socketRestarted,
         });
       }
     }
