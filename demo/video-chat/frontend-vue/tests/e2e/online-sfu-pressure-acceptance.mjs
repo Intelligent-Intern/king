@@ -318,6 +318,44 @@ async function activeCallWorkspaceAssets(page) {
     .map((name) => name.replace(/^.*\/assets\//, '/assets/')));
 }
 
+async function pageFailureSnapshot(page, sfuSocketStats) {
+  if (!page || page.isClosed?.()) return null;
+  const [remote, stats, assets, dom] = await Promise.all([
+    remoteVideoCanvases(page).catch((error) => ({ error: String(error?.message || error || '') })),
+    sfuSocketStats(page).catch((error) => ({ error: String(error?.message || error || '') })),
+    activeCallWorkspaceAssets(page).catch(() => []),
+    page.evaluate(() => ({
+      url: location.href,
+      remoteCanvasCount: document.querySelectorAll('#decoded-video-container canvas.remote-video, canvas.remote-video').length,
+      remotePeerSlots: document.querySelectorAll('.workspace-grid-video-slot, [data-publisher-id], [data-user-id]').length,
+      decodedContainerPresent: Boolean(document.querySelector('#decoded-video-container')),
+      workspacePresent: Boolean(document.querySelector('.workspace-stage, .workspace-main-video')),
+      bodyText: String(document.body?.innerText || '').slice(0, 800),
+    })).catch((error) => ({ error: String(error?.message || error || '') })),
+  ]);
+  return { remote, stats, assets, dom };
+}
+
+async function collectFailureDebug({
+  adminPage,
+  userPage,
+  adminMonitor,
+  userMonitor,
+  sfuSocketStats,
+  sinceMs,
+}) {
+  const [admin, user] = await Promise.all([
+    pageFailureSnapshot(adminPage, sfuSocketStats),
+    pageFailureSnapshot(userPage, sfuSocketStats),
+  ]);
+  return {
+    admin,
+    user,
+    runtimeFailures: runtimeFailures([...adminMonitor, ...userMonitor], sinceMs).slice(-20),
+    recentRuntimeEvents: [...adminMonitor, ...userMonitor].slice(-40),
+  };
+}
+
 async function main() {
   const origins = configureOnlineOrigins();
   const {
@@ -341,8 +379,11 @@ async function main() {
   const browser = await chromium.launch({ headless: true, ...launchOptions });
   const adminMonitor = [];
   const userMonitor = [];
+  const gateStartedAt = Date.now();
   let adminContext = null;
   let userContext = null;
+  let adminPage = null;
+  let userPage = null;
   let clearSlowSubscriber = null;
   const summary = {
     baseURL: origins.baseURL,
@@ -387,6 +428,8 @@ async function main() {
     );
     adminContext = admin.context;
     userContext = user.context;
+    adminPage = admin.page;
+    userPage = user.page;
     adminMonitor.push(...installRuntimeMonitor(admin.page, 'admin'));
     userMonitor.push(...installRuntimeMonitor(user.page, 'user'));
 
@@ -480,6 +523,16 @@ async function main() {
       sampleCount: summary.samples.length,
       finalSample: summary.samples[summary.samples.length - 1],
     }, null, 2));
+  } catch (error) {
+    summary.failureDebug = await collectFailureDebug({
+      adminPage,
+      userPage,
+      adminMonitor,
+      userMonitor,
+      sfuSocketStats,
+      sinceMs: gateStartedAt,
+    }).catch((debugError) => ({ error: String(debugError?.message || debugError || '') }));
+    throw error;
   } finally {
     await clearSlowSubscriber?.().catch(() => {});
     await Promise.allSettled([
