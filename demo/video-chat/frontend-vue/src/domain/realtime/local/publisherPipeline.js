@@ -421,13 +421,37 @@ export function createLocalPublisherPipelineHelpers({
       refs.encodeIntervalRef.value = setTimeout(runWlvcEncodeTick, Math.max(0, Math.round(delayMs)));
     };
 
+    const currentOpenSfuClient = () => {
+      const client = refs.sfuClientRef.value;
+      if (!client || !isSfuClientOpen() || typeof client.sendEncodedFrame !== 'function') return null;
+      return client;
+    };
+
+    const dropFrameAfterSfuClientLoss = (trace, timestamp) => {
+      handleWlvcFrameSendFailure(
+        getSfuClientBufferedAmount(),
+        videoTrack.id,
+        'sfu_client_unavailable_after_encode',
+        {
+          reason: 'sfu_client_unavailable_after_encode',
+          stage: 'sfu_client_send_ready',
+          source: 'publisher_pipeline',
+          transportPath: 'publisher_sfu_client',
+          message: 'SFU client disappeared before an encoded publisher frame could be sent.',
+          publisherFrameTraceId: trace?.id || '',
+          publisherPathTraceStages: trace?.stages?.join?.('>') || '',
+          timestamp,
+        },
+      );
+    };
+
     const runWlvcEncodeTick = async () => {
       const startedAtMs = highResolutionNowMs();
       try {
         if (!isWlvcRuntimePath()) return;
         if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
-        if (!refs.videoEncoderRef.value || !refs.sfuClientRef.value || !isSfuClientOpen()) return;
+        if (!refs.videoEncoderRef.value || !currentOpenSfuClient()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
@@ -743,10 +767,15 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (stopIfPipelineProfileChanged()) return;
-        const frameSent = await refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame);
+        const sendClient = currentOpenSfuClient();
+        if (!sendClient) {
+          dropFrameAfterSfuClientLoss(trace, timestamp);
+          return;
+        }
+        const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
         if (frameSent === false) {
           paceForcedKeyframeRecovery();
-          const sfuSendFailureDetails = refs.sfuClientRef.value?.getLastSendFailure?.() || null;
+          const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
             videoTrack.id,
