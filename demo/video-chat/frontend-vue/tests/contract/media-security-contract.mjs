@@ -440,13 +440,15 @@ try {
   assert.match(securityCoreSource, /if \(!\['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'\]\.includes\(asString\(header\.codec_id\)\)\) throw new Error\('unsupported_capability'\);/, 'protected-frame header validation must restrict codec identity to supported values');
 
   const sfuClientSource = read('../../src/lib/sfu/sfuClient.ts');
+  const sfuMessageHandlerSource = read('../../src/lib/sfu/sfuMessageHandler.ts');
   const sfuTypesSource = read('../../src/lib/sfu/sfuTypes.ts');
   const sfuFramePayloadSource = read('../../src/lib/sfu/framePayload.ts');
   assert.match(sfuTypesSource, /protectedFrame\?: string \| null/, 'SFU frame type must carry protected transport envelope');
   assert.match(sfuFramePayloadSource, /const protectedFrame = protectionMode === 'transport_only' \? null : arrayBufferToBase64Url\(payloadBytes\)/, 'binary SFU envelope decode must reconstruct protected transport envelopes');
   assert.match(sfuFramePayloadSource, /\.\.\.\(protectedFrame \? \{ protected_frame: protectedFrame \} : \{\}\)/, 'decoded binary SFU frame must surface protected_frame without JSON chunk transport');
-  assert.match(sfuClientSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
+  assert.match(sfuMessageHandlerSource, /protectedFrame: protectedFrame \|\| null/, 'SFU receiver must surface protected transport envelope');
   assert.doesNotMatch(sfuClientSource, /payload\.protected = frame\.protected/, 'SFU sender must not use ad-hoc protected metadata JSON for protected frames');
+  assert.doesNotMatch(sfuMessageHandlerSource, /payload\.protected = frame\.protected/, 'SFU receiver must not use ad-hoc protected metadata JSON for protected frames');
 
   process.stdout.write('[media-security-frontend-contract] PASS\n');
 } catch (error) {

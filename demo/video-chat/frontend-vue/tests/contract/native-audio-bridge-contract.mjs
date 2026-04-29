@@ -154,6 +154,11 @@ try {
   requireContains(mediaSecurityRuntime, "normalizedReason === 'native_audio_track_recovery_rejoin'", 'native audio quarantine can be released during explicit recovery rejoin');
   requireContains(mediaSecurityRuntime, "nativeAudioBridgeIsQuarantined(normalizedUserId)\n      && !shouldReleaseNativeAudioBridgeQuarantineForReason(reason)", 'native audio resync blocks immediate reattach while a peer is still quarantined');
   requireContains(mediaSecurityRuntime, 'clearNativeAudioBridgeQuarantine(normalizedUserId);', 'native audio resync clears quarantine only on allowed deterministic recovery reasons');
+  requireContains(peerFactory, 'ensureNativeAudioBridgeSecurityReady = async () => false', 'native peer factory can wait for media-security before classifying audio receiver attach failures');
+  requireContains(peerFactory, "setNativePeerAudioBridgeState(peer, 'waiting_security', '');", 'early native audio receiver tracks wait for security instead of failing audio');
+  requireContains(peerFactory, "ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')", 'early native audio receiver tracks force media-security readiness before retrying receiver attach');
+  requireContains(peerFactory, "recovery_reason: 'receiver_track_after_security_ready'", 'native audio receiver attach failure is reported only after a security-ready retry');
+  requireContains(nativeStack, 'ensureNativeAudioBridgeSecurityReady: callbacks.ensureNativeAudioBridgeSecurityReady,', 'native stack passes media-security readiness into peer factory');
   requireContains(nativeStack, 'shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n    streamHasLiveTrackKind', 'native audio recovery receives shouldUseNativeAudioBridge callback');
   requireContains(nativeStack, 'shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n  });', 'native peer lifecycle receives shouldUseNativeAudioBridge callback');
   requireContains(nativeStack, 'playNativePeerAudio: (...args) => nativeAudioBridgeRecovery?.playNativePeerAudio?.(...args)', 'native bridge runtime uses native-stack audio playback proxy');

@@ -7,6 +7,7 @@ export function createNativePeerFactory({
   createNativePeerAudioElement,
   createNativePeerVideoElement,
   currentUserId,
+  ensureNativeAudioBridgeSecurityReady = async () => false,
   ensureNativePeerConnectionRef,
   isNativeWebRtcRuntimePath,
   markParticipantActivity = () => {},
@@ -102,19 +103,87 @@ export function createNativePeerFactory({
       markParticipantActivity(normalizedTargetUserId, 'media_track');
       const trackKind = String(event?.track?.kind || '').trim().toLowerCase();
       const bypassProtectedAudio = trackKind === 'audio' && shouldBypassNativeAudioProtectionForPeer(normalizedTargetUserId);
+
+      const bindTrackAndPlayback = () => {
+        if (shouldUseNativeAudioBridge() && trackKind === 'video') {
+          return;
+        }
+        const incoming = event?.streams?.[0];
+        if (incoming instanceof MediaStream) {
+          for (const track of incoming.getTracks()) {
+            if (shouldUseNativeAudioBridge() && String(track?.kind || '').trim().toLowerCase() === 'video') continue;
+            if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
+              remoteStream.addTrack(track);
+              if (String(track?.kind || '').trim().toLowerCase() === 'video') {
+                track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+              }
+            }
+          }
+        } else if (event?.track) {
+          if (shouldUseNativeAudioBridge() && trackKind === 'video') return;
+          if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
+            remoteStream.addTrack(event.track);
+            if (trackKind === 'video') {
+              event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
+            }
+          }
+        }
+        if (shouldUseNativeAudioBridge() && trackKind === 'audio') {
+          clearNativePeerAudioTrackDeadline(peer);
+          resetNativeAudioTrackRecovery(normalizedTargetUserId);
+          setNativePeerAudioBridgeState(peer, 'track_received', '');
+          event?.track?.addEventListener?.('ended', () => {
+            setNativePeerAudioBridgeState(peer, 'waiting_track', '');
+            scheduleNativePeerAudioTrackDeadline(peer);
+          }, { once: true });
+        }
+        synchronizeNativePeerMediaElements(peer);
+        if (!shouldUseNativeAudioBridge()) {
+          bumpMediaRenderVersion();
+          renderNativeRemoteVideos();
+        }
+        if (peer.video instanceof HTMLVideoElement) {
+          peer.video.play().catch(() => {});
+        }
+        if (peer.audio instanceof HTMLAudioElement) {
+          void playNativePeerAudio(peer, 'remote_track');
+        }
+      };
+
       if ((trackKind === 'audio' || isNativeWebRtcRuntimePath()) && !bypassProtectedAudio) {
         const attached = attachMediaSecurityNativeReceiver(event?.receiver, normalizedTargetUserId, event?.track);
         if (!attached && shouldUseNativeAudioBridge() && trackKind === 'audio') {
-          clearNativePeerAudioTrackDeadline(peer);
-          reportNativeAudioBridgeFailure(
-            peer,
-            'native_audio_receiver_transform_failed',
-            nativeAudioBridgeFailureMessage(),
-            {
-              track_id: String(event?.track?.id || ''),
-              sender_user_id: normalizedTargetUserId,
-            },
-          );
+          setNativePeerAudioBridgeState(peer, 'waiting_security', '');
+          void ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')
+            .then((ready) => {
+              if (!ready) {
+                scheduleNativePeerAudioTrackDeadline(peer);
+                return;
+              }
+              const reattached = attachMediaSecurityNativeReceiver(
+                event?.receiver,
+                normalizedTargetUserId,
+                event?.track
+              );
+              if (reattached) {
+                bindTrackAndPlayback();
+                return;
+              }
+              clearNativePeerAudioTrackDeadline(peer);
+              reportNativeAudioBridgeFailure(
+                peer,
+                'native_audio_receiver_transform_failed',
+                nativeAudioBridgeFailureMessage(),
+                {
+                  track_id: String(event?.track?.id || ''),
+                  sender_user_id: normalizedTargetUserId,
+                  recovery_reason: 'receiver_track_after_security_ready',
+                },
+              );
+            })
+            .catch(() => {
+              scheduleNativePeerAudioTrackDeadline(peer);
+            });
           return;
         }
       }
@@ -123,49 +192,7 @@ export function createNativePeerFactory({
         resetNativeAudioTrackRecovery(normalizedTargetUserId);
         setNativePeerAudioBridgeState(peer, 'protected_frames_temporarily_disabled', '');
       }
-      if (shouldUseNativeAudioBridge() && trackKind === 'video') {
-        return;
-      }
-      const incoming = event?.streams?.[0];
-      if (incoming instanceof MediaStream) {
-        for (const track of incoming.getTracks()) {
-          if (shouldUseNativeAudioBridge() && String(track?.kind || '').trim().toLowerCase() === 'video') continue;
-          if (!remoteStream.getTracks().some((row) => row.id === track.id)) {
-            remoteStream.addTrack(track);
-            if (String(track?.kind || '').trim().toLowerCase() === 'video') {
-              track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
-            }
-          }
-        }
-      } else if (event?.track) {
-        if (shouldUseNativeAudioBridge() && trackKind === 'video') return;
-        if (!remoteStream.getTracks().some((row) => row.id === event.track.id)) {
-          remoteStream.addTrack(event.track);
-          if (trackKind === 'video') {
-            event.track.addEventListener?.('ended', bumpMediaRenderVersion, { once: true });
-          }
-        }
-      }
-      if (shouldUseNativeAudioBridge() && trackKind === 'audio') {
-        clearNativePeerAudioTrackDeadline(peer);
-        resetNativeAudioTrackRecovery(normalizedTargetUserId);
-        setNativePeerAudioBridgeState(peer, 'track_received', '');
-        event?.track?.addEventListener?.('ended', () => {
-          setNativePeerAudioBridgeState(peer, 'waiting_track', '');
-          scheduleNativePeerAudioTrackDeadline(peer);
-        }, { once: true });
-      }
-      synchronizeNativePeerMediaElements(peer);
-      if (!shouldUseNativeAudioBridge()) {
-        bumpMediaRenderVersion();
-        renderNativeRemoteVideos();
-      }
-      if (peer.video instanceof HTMLVideoElement) {
-        peer.video.play().catch(() => {});
-      }
-      if (peer.audio instanceof HTMLAudioElement) {
-        void playNativePeerAudio(peer, 'remote_track');
-      }
+      bindTrackAndPlayback();
     });
 
     pc.addEventListener('connectionstatechange', () => {

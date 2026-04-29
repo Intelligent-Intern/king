@@ -138,6 +138,7 @@ export function createCallWorkspaceNativeStack(options) {
     createNativePeerAudioElement: callbacks.createNativePeerAudioElement,
     createNativePeerVideoElement: callbacks.createNativePeerVideoElement,
     currentUserId: callbacks.currentUserId,
+    ensureNativeAudioBridgeSecurityReady: callbacks.ensureNativeAudioBridgeSecurityReady,
     ensureNativePeerConnectionRef: () => ensureNativePeerConnection,
     isNativeWebRtcRuntimePath: callbacks.isNativeWebRtcRuntimePath,
     markParticipantActivity: callbacks.markParticipantActivity,

@@ -55,7 +55,7 @@ Technical target:
 13. [ ] `[portrait-aspect-preservation]` Preserve portrait and rotated camera aspect ratios through VideoFrame, worker scaling, WLVC metadata, remote canvas render, mini strip, and grid layouts.
 14. [ ] `[background-tab-policy]` Handle minimized/background browser behavior explicitly: detect throttling, degrade to audio/status or low-FPS keepalive without pretending video is healthy.
 15. [x] `[processor-error-recovery]` Recover from `MediaStreamTrackProcessor`, worker, `VideoFrame`, and `OffscreenCanvas` failures by restarting only the capture pipeline first, not the whole SFU socket.
-16. [ ] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
+16. [x] `[media-security-unchanged]` Prove protected-media security remains unchanged: source pipeline replacement must still emit the same protected-frame envelope and key/session semantics.
 17. [ ] `[no-frame-persistence-regression]` Prove the new capture path still keeps SFU media on the live websocket path and does not persist video frames in SQLite or any backend database.
 18. [ ] `[online-pressure-readback-proof]` Extend online SFU pressure acceptance so it fails on `sfu_source_readback_budget_exceeded`, not only send-buffer or SFU relay pressure.
 19. [ ] `[diagnostic-surface]` Add clear client diagnostics for active capture backend, selected profile, source frame size/FPS, readback timing, dropped-source-frame count, and automatic quality transitions.
@@ -326,6 +326,31 @@ Deploy proof:
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429062611` served `CallWorkspaceView-B86v7ctS.js` with `publisher_video_frame_read_failed`, `OffscreenCanvas capture worker failed`, and the worker-side `closeFrameSource(source)` cleanup.
 - Production diagnostics for asset `20260429062611` no longer showed `wlvc_encode_frame_failed` in the queried recent window after the transferred-`VideoFrame` fallback fix.
+
+### 16. `[media-security-unchanged]`
+
+Status: Done.
+
+Implementation:
+- Updated the media-security contract to assert the current SFU receiver module still surfaces `protectedFrame: protectedFrame || null` and still rejects ad-hoc `payload.protected = frame.protected` metadata.
+- Kept WLVC/SFU publisher protection on the existing protected-frame envelope path; no frame persistence or plaintext fallback was added.
+- Passed media-security readiness into the native peer factory so native audio receiver tracks that arrive during rekeying enter `waiting_security` instead of immediately failing playback.
+- Retried native audio receiver transform attachment after `ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')`; `native_audio_receiver_transform_failed` is now emitted only after a security-ready retry fails.
+
+Verification:
+- `npm run test:contract:media-security` in `demo/video-chat/frontend-vue`
+- `npm run test:contract:native-audio-bridge` in `demo/video-chat/frontend-vue`
+- `npm run test:unit:native-audio-bridge` in `demo/video-chat/frontend-vue`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429062611` served `CallWorkspaceView-B86v7ctS.js` with `native_audio_receiver_track`, `receiver_track_after_security_ready`, and `protectedFrame:e||null`.
+- Production diagnostics after this deploy no longer showed the old `native_audio_receiver_transform_failed` race in the queried recent window; remaining `media_security_handshake_timeout` and `media_security_sender_key_not_ready` events are tracked separately because they are handshake churn, not a protected-frame contract regression.
 
 ## Parking Rule
 
