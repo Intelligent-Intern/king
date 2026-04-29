@@ -44,7 +44,7 @@ try {
     'copyTo must remain before worker fallback',
   );
   assert.ok(
-    sourceReadback.indexOf('captureWorkerReadback.readFrame({') < sourceReadback.indexOf('context.getImageData('),
+    sourceReadback.indexOf('captureWorkerReadback.readFrame({') < sourceReadback.indexOf('const imageData = context.getImageData('),
     'worker fallback must remain before DOM canvas fallback',
   );
 

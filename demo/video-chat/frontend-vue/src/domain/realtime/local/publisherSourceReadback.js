@@ -94,14 +94,9 @@ function zeroCopyCaptureGateRequired(sourceBackend, captureCapabilities = {}) {
   );
 }
 
-function videoFrameCopyWithinProfileCaptureBudget(copyFrameSize, videoProfile = {}) {
-  const frameWidth = positiveNumber(copyFrameSize?.frameWidth);
-  const frameHeight = positiveNumber(copyFrameSize?.frameHeight);
-  if (frameWidth <= 0 || frameHeight <= 0) return false;
-  const captureWidth = positiveNumber(videoProfile.captureWidth) || positiveNumber(videoProfile.frameWidth);
-  const captureHeight = positiveNumber(videoProfile.captureHeight) || positiveNumber(videoProfile.frameHeight);
-  if (captureWidth <= 0 || captureHeight <= 0) return true;
-  return frameWidth <= captureWidth * 1.1 && frameHeight <= captureHeight * 1.1;
+function sameFrameDimensions(a = {}, b = {}) {
+  return positiveNumber(a.frameWidth) === positiveNumber(b.frameWidth)
+    && positiveNumber(a.frameHeight) === positiveNumber(b.frameHeight);
 }
 
 function updateTraceSource(trace, sourceBackend, frameSize, videoTrack) {
@@ -122,7 +117,12 @@ function createDomCanvas(documentRef, frameSize) {
   canvas.width = frameSize.frameWidth;
   canvas.height = frameSize.frameHeight;
   const context = canvas.getContext('2d', { willReadFrequently: true });
-  if (!context || typeof context.drawImage !== 'function' || typeof context.getImageData !== 'function') {
+  if (
+    !context
+      || typeof context.drawImage !== 'function'
+      || typeof context.getImageData !== 'function'
+      || typeof context.putImageData !== 'function'
+  ) {
     throw new Error('publisher_source_readback_context_missing');
   }
   return { canvas, context };
@@ -152,6 +152,10 @@ export function createPublisherSourceReadbackController({
   let captureWorkerReadback = null;
   let captureWorkerDisabled = false;
   let lastDomCanvasReadbackAtMs = 0;
+  let copyScaleSourceCanvas = null;
+  let copyScaleSourceContext = null;
+  let copyScaleTargetCanvas = null;
+  let copyScaleTargetContext = null;
 
   function closeVideoFrameReader(reason = 'publisher_video_frame_reader_replaced') {
     const reader = videoFrameReader;
@@ -163,6 +167,7 @@ export function createPublisherSourceReadbackController({
 
   function shouldTryVideoFrameReader(nowMs = Date.now()) {
     return canUsePublisherVideoFrameSource(captureCapabilities)
+      && !(videoFrameCopyToDisabled && captureCapabilities.supportsVideoFrameCopyTo)
       && nowMs >= videoFrameReaderRetryAfterMs;
   }
 
@@ -221,6 +226,74 @@ export function createPublisherSourceReadbackController({
     captureWorkerDisabled = !captureWorkerReadback;
   }
 
+  function ensureCopyScaleSurface(kind, frameSize) {
+    const width = positiveNumber(frameSize?.frameWidth);
+    const height = positiveNumber(frameSize?.frameHeight);
+    if (width <= 0 || height <= 0) {
+      throw new Error('publisher_video_frame_copy_scale_size_missing');
+    }
+    if (kind === 'source') {
+      if (!copyScaleSourceCanvas || !copyScaleSourceContext) {
+        const created = createDomCanvas(documentRef, frameSize);
+        copyScaleSourceCanvas = created.canvas;
+        copyScaleSourceContext = created.context;
+      }
+      if (copyScaleSourceCanvas.width !== width) copyScaleSourceCanvas.width = width;
+      if (copyScaleSourceCanvas.height !== height) copyScaleSourceCanvas.height = height;
+      return { canvas: copyScaleSourceCanvas, context: copyScaleSourceContext };
+    }
+    if (!copyScaleTargetCanvas || !copyScaleTargetContext) {
+      const created = createDomCanvas(documentRef, frameSize);
+      copyScaleTargetCanvas = created.canvas;
+      copyScaleTargetContext = created.context;
+    }
+    if (copyScaleTargetCanvas.width !== width) copyScaleTargetCanvas.width = width;
+    if (copyScaleTargetCanvas.height !== height) copyScaleTargetCanvas.height = height;
+    return { canvas: copyScaleTargetCanvas, context: copyScaleTargetContext };
+  }
+
+  function scaleCopiedVideoFrameImageData({ imageData, sourceFrameSize, targetFrameSize, trace }) {
+    if (sameFrameDimensions(sourceFrameSize, targetFrameSize)) {
+      return {
+        imageData,
+        drawImageMs: 0,
+        readbackMs: 0,
+        readbackBytes: imageData?.data?.byteLength || 0,
+      };
+    }
+
+    const sourceSurface = ensureCopyScaleSurface('source', sourceFrameSize);
+    const targetSurface = ensureCopyScaleSurface('target', targetFrameSize);
+    sourceSurface.context.putImageData(imageData, 0, 0);
+
+    const drawStartedAtMs = highResolutionNowMs();
+    targetSurface.context.drawImage(
+      sourceSurface.canvas,
+      0,
+      0,
+      targetSurface.canvas.width,
+      targetSurface.canvas.height,
+    );
+    const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
+    markPublisherFrameTraceStage(trace, 'video_frame_copy_scale_draw_image', drawImageMs);
+
+    const readbackStartedAtMs = highResolutionNowMs();
+    const scaledImageData = targetSurface.context.getImageData(
+      0,
+      0,
+      targetSurface.canvas.width,
+      targetSurface.canvas.height,
+    );
+    const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
+    markPublisherFrameTraceStage(trace, 'video_frame_copy_scale_get_image_data', readbackMs);
+    return {
+      imageData: scaledImageData,
+      drawImageMs,
+      readbackMs,
+      readbackBytes: scaledImageData.data.byteLength,
+    };
+  }
+
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
     const reader = ensureVideoFrameReader('publisher_source_readback_tick');
     if (reader) {
@@ -269,45 +342,54 @@ export function createPublisherSourceReadbackController({
       const readbackBudgetMs = Math.max(1, Number(activeProfile.maxReadbackMs || 0));
       if (sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND && !videoFrameCopyToDisabled) {
         const copyFrameSize = resolveVideoFrameCopyFrameSize(source, frameSize) || frameSize;
-        if (videoFrameCopyWithinProfileCaptureBudget(copyFrameSize, activeProfile)) {
-          const copyStartedAtMs = highResolutionNowMs();
-          const copyResult = await copyVideoFrameToRgbaImageData({
-            frame: source,
-            frameSize: copyFrameSize,
-            ImageDataCtor: globalScope.ImageData,
+        const copyStartedAtMs = highResolutionNowMs();
+        const copyResult = await copyVideoFrameToRgbaImageData({
+          frame: source,
+          frameSize: copyFrameSize,
+          ImageDataCtor: globalScope.ImageData,
+        });
+        const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
+        if (copyResult.ok) {
+          markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
+          const scaledCopyResult = scaleCopiedVideoFrameImageData({
+            imageData: copyResult.imageData,
+            sourceFrameSize: copyFrameSize,
+            targetFrameSize: frameSize,
+            trace,
           });
-          const copyToMs = roundedStageMs(highResolutionNowMs() - copyStartedAtMs);
-          if (copyResult.ok) {
-            markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba', copyToMs);
-            if (copyToMs > readbackBudgetMs) {
-              return {
-                budgetExceeded: true,
-                details: sourceReadbackBudgetFailureDetails(trace, {
-                  stage: 'video_frame_copy_to_rgba',
-                  source: 'video_frame_copy_to_budget_exceeded',
-                  message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
-                  timestamp,
-                }),
-              };
-            }
+          const totalReadbackMs = roundedStageMs(copyToMs + scaledCopyResult.readbackMs);
+          if (scaledCopyResult.drawImageMs > drawBudgetMs || totalReadbackMs > readbackBudgetMs) {
             return {
-              imageData: copyResult.imageData,
-              frameSize: copyFrameSize,
-              drawImageMs: 0,
-              readbackMs: copyToMs,
-              drawBudgetMs,
-              readbackBudgetMs,
-              sourceBackend,
-              readbackMethod: 'video_frame_copy_to_rgba',
-              readbackBytes: copyResult.readbackBytes,
+              budgetExceeded: true,
+              details: sourceReadbackBudgetFailureDetails(trace, {
+                stage: 'video_frame_copy_to_rgba',
+                source: scaledCopyResult.drawImageMs > drawBudgetMs
+                  ? 'video_frame_copy_scale_draw_budget_exceeded'
+                  : 'video_frame_copy_to_budget_exceeded',
+                message: 'Publisher VideoFrame copyTo RGBA exceeded the active SFU profile budget before WLVC encode.',
+                timestamp,
+              }),
             };
           }
-          if (copyResult.fatal) {
-            videoFrameCopyToDisabled = true;
-            mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using canvas readback fallback', copyResult.reason, copyResult.error);
-          }
-        } else {
-          markPublisherFrameTraceStage(trace, 'video_frame_copy_profile_oversize', 0);
+          return {
+            imageData: scaledCopyResult.imageData,
+            frameSize,
+            drawImageMs: scaledCopyResult.drawImageMs,
+            readbackMs: totalReadbackMs,
+            drawBudgetMs,
+            readbackBudgetMs,
+            sourceBackend,
+            readbackMethod: sameFrameDimensions(copyFrameSize, frameSize)
+              ? 'video_frame_copy_to_rgba'
+              : 'video_frame_copy_to_rgba_scaled',
+            readbackBytes: scaledCopyResult.readbackBytes || copyResult.readbackBytes,
+          };
+        }
+        if (copyResult.fatal) {
+          videoFrameCopyToDisabled = true;
+          closeVideoFrameReader(String(copyResult.reason || 'publisher_video_frame_copy_to_rgba_failed'));
+          mediaDebugLog('[SFU] VideoFrame copyTo RGBA failed; using video element fallback', copyResult.reason, copyResult.error);
+          return null;
         }
       }
 
@@ -315,6 +397,7 @@ export function createPublisherSourceReadbackController({
         sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
           && captureWorkerReadback
           && !captureWorkerDisabled
+          && !captureCapabilities.supportsVideoFrameCopyTo
       ) {
         const workerStartedAtMs = highResolutionNowMs();
         const workerResult = await captureWorkerReadback.readFrame({

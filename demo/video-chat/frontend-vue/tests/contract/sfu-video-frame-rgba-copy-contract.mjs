@@ -37,10 +37,13 @@ try {
   requireContains(sourceReadback, 'copyVideoFrameToRgbaImageData({', 'source readback attempts VideoFrame copy before canvas fallback');
   requireContains(sourceReadback, 'const copyFrameSize = resolveVideoFrameCopyFrameSize(source, frameSize) || frameSize', 'source readback copies source dimensions before canvas fallback');
   requireContains(sourceReadback, 'video_frame_copy_to_rgba', 'source readback labels direct VideoFrame RGBA readback');
+  requireContains(sourceReadback, 'video_frame_copy_to_rgba_scaled', 'source readback scales copied VideoFrames into the active profile without transferring them');
+  requireContains(sourceReadback, 'video_frame_copy_scale_draw_image', 'source readback traces copied VideoFrame scale draw timing');
+  requireContains(sourceReadback, 'video_frame_copy_scale_get_image_data', 'source readback traces copied VideoFrame scale readback timing');
   requireContains(sourceReadback, 'video_frame_copy_to_budget_exceeded', 'source readback budgets VideoFrame copyTo');
   assert.ok(
-    sourceReadback.indexOf('copyVideoFrameToRgbaImageData({') < sourceReadback.indexOf('context.getImageData('),
-    'VideoFrame copyTo must run before canvas getImageData fallback',
+    sourceReadback.indexOf('copyVideoFrameToRgbaImageData({') < sourceReadback.indexOf('const imageData = context.getImageData('),
+    'VideoFrame copyTo must run before DOM canvas getImageData fallback',
   );
 
   requireContains(publisherFrameTrace, 'trace_video_frame_copy_to_rgba_ms', 'publisher trace exposes VideoFrame copyTo timing');
