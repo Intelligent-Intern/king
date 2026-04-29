@@ -42,7 +42,7 @@ Technical target:
 
 1. [x] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
 2. [x] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
-3. [ ] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
+3. [x] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
 4. [ ] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
 5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
@@ -113,6 +113,28 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429051000` served `CallWorkspaceView-CWQP-srz.js` with `supports_media_stream_track_processor`, `supports_video_frame_copy_to`, `supports_offscreen_canvas_transfer`, `supports_dom_canvas_fallback`, and `capture_backend`.
+
+### 3. `[capture-worker-boundary]`
+
+Status: Done.
+
+Implementation:
+- Added a dedicated publisher capture worker protocol with explicit init, readback, result, error, reset, and close messages plus transfer-list helpers.
+- Added a module-worker factory and capability gate for worker-backed publisher capture without importing Vue or workspace state.
+- Added the worker module that owns off-main-thread aspect-preserving scaling, `drawImage`, RGBA readback, timing reports, transferred readback buffers, and source-frame close handling.
+- Kept runtime hotpath activation out of this checkbox; the primary `VideoFrame` path and `OffscreenCanvas` fallback integration remain issues 4-6.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-capture-worker-boundary-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429051534` served `CallWorkspaceView-BjkUHtR9.js`; this checkbox deploys the worker boundary and contract proof, while runtime capture-path activation is tracked by issues 4-6.
 
 ### 9. `[quality-ui-removal-contract]`
 
