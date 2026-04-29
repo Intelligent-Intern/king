@@ -308,7 +308,8 @@ try {
     }
     videochat_realtime_sfu_assert(
         str_contains($sfuSubscriberBudgetSource, "'sfu_send_path' => 'direct_fanout'")
-        && str_contains($sfuBrokerReplaySource, "'sfu_send_path' => 'live_relay_poll'")
+        && str_contains($sfuBrokerReplaySource, "'live_relay_poll'")
+        && str_contains($sfuSubscriberBudgetSource, "'sfu_send_path' => \$sendPath")
         && str_contains($sfuGatewaySource, "'sfu_send_path' => 'live_relay_publish'"),
         'Every SFU frame send path must classify its live diagnostic send path'
     );

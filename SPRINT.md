@@ -80,7 +80,7 @@ Technical target:
    - Updated contracts so stable video status is backend-diagnostic based instead of console-log based, and so high-motion tests assert cadence-first behavior plus moving-chroma delta decode.
    - Verification: `npm run test:contract:sfu`, `npm run test:contract:wlvc`, `node tests/contract/wlvc-wasm-config-surface-contract.mjs`, `node tests/contract/call-layout-sidebar-controls-contract.mjs`, `npm run build`.
 
-3. [ ] `[sfu-replay-pacing-slow-subscriber-isolation]` Smooth SFU send/replay pressure without punishing healthy publishers.
+3. [x] `[sfu-replay-pacing-slow-subscriber-isolation]` Smooth SFU send/replay pressure without punishing healthy publishers.
 
    Scope:
    - Trace the backend SFU receive, live relay, bounded SQLite frame buffer, subscriber cursor, and replay loops for throughput stalls.
@@ -93,6 +93,14 @@ Technical target:
    - Slow subscriber simulations do not trigger healthy publisher downgrades or reconnect loops.
    - Replayed frames are bounded, ordered, and stale-frame-pruned.
    - Backend diagnostics identify the exact pressure station without browser console warnings.
+
+   Report:
+   - Added a budgeted replay sender shared by live relay and bounded SQLite replay so slow subscribers are cooled down before replay sends can burn request-loop time.
+   - Added replay-specific pacing limits: stricter send budget, capped replay batch size, stale-delta pruning, and pre-keyframe delta pruning so replay starts from the nearest useful keyframe instead of flooding old deltas.
+   - Kept bounded SQLite buffering intact as a short replay/backfill mechanism and left direct live fanout on the existing binary-required path.
+   - Added backend diagnostics for `sfu_frame_replay_stale_delta_pruned`, `sfu_frame_replay_pre_keyframe_delta_pruned`, `sfu_frame_replay_slow_subscriber_skipped`, and `sfu_frame_replay_slow_subscriber_isolated`, each tagged with the exact `sfu_send_path`.
+   - Kept `realtime_sfu_gateway.php` under the 800-line source target while threading the shared subscriber cooldown into live-relay and SQLite replay polls.
+   - Verification: `php -l` on changed PHP files, `npm run test:contract:sfu`, `php demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php` (local `pdo_sqlite` skip), `npm run build`.
 
 ## Execution Order
 

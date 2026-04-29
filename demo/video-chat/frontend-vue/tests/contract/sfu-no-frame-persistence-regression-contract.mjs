@@ -126,7 +126,8 @@ try {
   requireContains(relay, "@unlink($file);", 'live relay deletes expired transient files');
   requireContains(relay, "return '/dev/shm/king-videochat-sfu-live-relay';", 'live relay prefers memory-backed transient storage');
   requireContains(relay, 'function videochat_sfu_sqlite_frame_buffer_poll(', 'broker replay polls the bounded SQLite frame buffer');
-  requireContains(relay, "sfu_send_path' => 'sqlite_frame_buffer_poll'", 'SQLite frame-buffer replay labels its send path');
+  requireContains(relay, "videochat_sfu_send_replay_frames_to_subscriber(", 'broker replay uses bounded subscriber pacing');
+  requireContains(relay, "'sqlite_frame_buffer_poll'", 'SQLite frame-buffer replay labels its send path');
   requireContains(subscriberBudget, 'videochat_sfu_send_outbound_message($subClient[\'websocket\'], $frameForSubscriber', 'direct fanout sends live binary frames');
 
   requireContains(sfuClient, 'async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean>', 'client sends encoded frames live');
