@@ -43,7 +43,7 @@ Technical target:
 1. [x] `[readback-path-trace]` Trace the full publisher path from `getUserMedia` frame delivery through source readback, WLVC encode, protected-frame wrapping, binary SFU envelope, and socket send; record exact timing fields and failure reasons for each stage.
 2. [x] `[feature-detect-capture-pipeline]` Add a focused capability detector for `MediaStreamTrackProcessor`, `VideoFrame.copyTo`, `VideoFrame.close`, `OffscreenCanvas`, worker transfer support, and DOM-canvas fallback support.
 3. [x] `[capture-worker-boundary]` Create a dedicated publisher capture worker module that owns off-main-thread frame scaling/readback where browser support allows it, without importing Vue or workspace state.
-4. [ ] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
+4. [x] `[video-frame-primary-path]` Implement the primary `MediaStreamTrackProcessor` -> `VideoFrame` path so camera frames can be pulled without drawing the `<video>` element into a DOM canvas each frame.
 5. [ ] `[video-frame-rgba-copy]` Feed WLVC with normalized RGBA/I420-derived pixel buffers from `VideoFrame.copyTo` when available, avoiding `getImageData` on the main thread.
 6. [ ] `[offscreen-canvas-fallback]` Implement an `OffscreenCanvas` worker fallback for browsers that cannot copy `VideoFrame` planes directly but can move scaling/readback off the main thread.
 7. [ ] `[dom-canvas-last-resort]` Keep DOM canvas as the last-resort fallback only; cap it to conservative dimensions/FPS and label diagnostics as compatibility fallback instead of normal operation.
@@ -135,6 +135,28 @@ Deploy proof:
 - `demo/video-chat/scripts/deploy-smoke.sh` passed.
 - `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
 - Production asset version `20260429051534` served `CallWorkspaceView-BjkUHtR9.js`; this checkbox deploys the worker boundary and contract proof, while runtime capture-path activation is tracked by issues 4-6.
+
+### 4. `[video-frame-primary-path]`
+
+Status: Done.
+
+Implementation:
+- Added a `MediaStreamTrackProcessor` source reader that pulls `VideoFrame` objects directly from the camera track with timeout/fatal fallback handling and explicit `VideoFrame.close()` cleanup.
+- Added a publisher source-readback controller that chooses the `VideoFrame` source when browser capabilities allow it, falls back to DOM video canvas otherwise, and keeps source-readback budget checks before WLVC encode.
+- Moved direct DOM canvas readback out of `publisherPipeline.js`; the pipeline now reads via the source controller and no longer calls `ctx.drawImage(video, ...)` itself.
+- Extracted local stream lifecycle helpers so `publisherPipeline.js` shrank from 885 to 846 lines while adding the new capture path.
+
+Verification:
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-video-frame-primary-path-contract.mjs`
+- `npm run test:contract:sfu` in `demo/video-chat/frontend-vue`
+- `npm run build` in `demo/video-chat/frontend-vue`
+- `git diff --check`
+
+Deploy proof:
+- Deployed to `https://kingrt.com/`.
+- `demo/video-chat/scripts/deploy-smoke.sh` passed.
+- `https://api.kingrt.com/api/runtime` returned `{"service":"video-chat-backend-king-php","status":"ok"}`.
+- Production asset version `20260429052354` served `CallWorkspaceView-D-HLrmll.js` with `MediaStreamTrackProcessor`, `video_frame_processor_canvas_readback`, and `publisher_video_frame_read_timeout`.
 
 ### 9. `[quality-ui-removal-contract]`
 

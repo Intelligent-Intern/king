@@ -4,15 +4,20 @@ import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../li
 import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
 import {
+  stopRetiredLocalStreams,
+  uniqueLocalStreams,
+  unpublishSfuTracksForClient,
+} from './localStreamLifecycle';
+import {
   buildPublisherTransportStageMetrics,
   createPublisherFrameTrace,
   currentSfuCodecId,
   highResolutionNowMs,
   markPublisherFrameTraceStage,
-  publisherFrameFailureDetails,
   publisherFrameTraceMetrics,
   roundedStageMs,
 } from './publisherFrameTrace';
+import { createPublisherSourceReadbackController } from './publisherSourceReadback';
 import { resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
@@ -24,6 +29,8 @@ export function createLocalPublisherPipelineHelpers({
   refs,
   state,
 }) {
+  let activeSourceReadbackController = null;
+
   const {
     applyCallOutputPreferences,
     canProtectCurrentSfuTargets,
@@ -51,54 +58,8 @@ export function createLocalPublisherPipelineHelpers({
     stopSfuTrackAnnounceTimer,
   } = callbacks;
 
-  function uniqueLocalStreams(values) {
-    const out = [];
-    const seen = new Set();
-    for (const value of values) {
-      if (!(value instanceof MediaStream)) continue;
-      if (seen.has(value)) continue;
-      seen.add(value);
-      out.push(value);
-    }
-    return out;
-  }
-
   function unpublishSfuTracks(tracks) {
-    if (!refs.sfuClientRef.value || !Array.isArray(tracks)) return;
-    for (const track of tracks) {
-      if (!track?.id) continue;
-      try {
-        refs.sfuClientRef.value.unpublishTrack(track.id);
-      } catch {
-        // best-effort cleanup for stale tracks
-      }
-    }
-  }
-
-  function stopRetiredLocalStreams(retiredStreams, preservedStreams = []) {
-    const preserved = new Set();
-    const preservedTrackIds = new Set();
-    for (const stream of preservedStreams) {
-      if (stream instanceof MediaStream) {
-        preserved.add(stream);
-        for (const track of stream.getTracks()) {
-          if (track?.id) preservedTrackIds.add(track.id);
-        }
-      }
-    }
-
-    for (const stream of uniqueLocalStreams(retiredStreams)) {
-      if (!(stream instanceof MediaStream)) continue;
-      if (preserved.has(stream)) continue;
-      for (const track of stream.getTracks()) {
-        if (track?.id && preservedTrackIds.has(track.id)) continue;
-        try {
-          track.stop();
-        } catch {
-          // ignore stop failures during stream turnover
-        }
-      }
-    }
+    unpublishSfuTracksForClient(refs.sfuClientRef.value, tracks);
   }
 
   function clearLocalTrackRecoveryTimer() {
@@ -154,6 +115,10 @@ export function createLocalPublisherPipelineHelpers({
   }
 
   function stopLocalEncodingPipeline() {
+    if (activeSourceReadbackController) {
+      void activeSourceReadbackController.close();
+      activeSourceReadbackController = null;
+    }
     if (refs.encodeIntervalRef.value) {
       clearTimeout(refs.encodeIntervalRef.value);
       refs.encodeIntervalRef.value = null;
@@ -300,10 +265,14 @@ export function createLocalPublisherPipelineHelpers({
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
 
-    const canvas = document.createElement('canvas');
-    const initialFrameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
-    canvas.width = initialFrameSize.frameWidth; canvas.height = initialFrameSize.frameHeight;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const sourceReadbackController = createPublisherSourceReadbackController({
+      video,
+      videoTrack,
+      videoProfile,
+      mediaDebugLog,
+    });
+    activeSourceReadbackController = sourceReadbackController;
+    const initialFrameSize = sourceReadbackController.initialFrameSize || resolvePublisherFrameSize(video, videoProfile, videoTrack);
     let previousFullFrameImageData = null;
     let lastFullFrameSentAtMs = 0;
     let lastBackgroundSnapshotSentAtMs = 0;
@@ -481,7 +450,7 @@ export function createLocalPublisherPipelineHelpers({
         if (refs.sfuTransportState.wlvcBackpressureSkipCount > 0) {
           resetWlvcBackpressureCounters();
         }
-        if (video.readyState < 2 || !ctx) return;
+        if (video.readyState < 2) return;
 
         state.wlvcEncodeInFlight = true;
         const frameSize = resolvePublisherFrameSize(video, videoProfile, videoTrack);
@@ -494,45 +463,37 @@ export function createLocalPublisherPipelineHelpers({
           frameSize,
         });
         markPublisherFrameTraceStage(trace, 'get_user_media_frame_delivery', highResolutionNowMs() - startedAtMs);
-        const fullFrameEncoder = await ensureFullFrameEncoder(frameSize);
-        if (!fullFrameEncoder) {
-          mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
-          return;
-        }
-        if (canvas.width !== frameSize.frameWidth || canvas.height !== frameSize.frameHeight) {
-          canvas.width = frameSize.frameWidth;
-          canvas.height = frameSize.frameHeight;
-        }
-        const drawStartedAtMs = highResolutionNowMs();
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const drawImageMs = roundedStageMs(highResolutionNowMs() - drawStartedAtMs);
-        markPublisherFrameTraceStage(trace, 'dom_canvas_draw_image', drawImageMs);
-        const readbackStartedAtMs = highResolutionNowMs();
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const readbackMs = roundedStageMs(highResolutionNowMs() - readbackStartedAtMs);
-        markPublisherFrameTraceStage(trace, 'dom_canvas_get_image_data', readbackMs);
-        const drawBudgetMs = Math.max(1, Number(videoProfile.maxDrawImageMs || 0));
-        const readbackBudgetMs = Math.max(1, Number(videoProfile.maxReadbackMs || 0));
-        if (drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs) {
-          const readbackReason = drawImageMs > drawBudgetMs
-            ? 'canvas_draw_image_budget_exceeded'
-            : 'canvas_get_image_data_budget_exceeded';
+        const sourceReadback = await sourceReadbackController.readFrame({
+          trace,
+          timestamp,
+          videoProfile,
+          videoTrack,
+        });
+        if (!sourceReadback) return;
+        if (sourceReadback.budgetExceeded) {
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
             videoTrack.id,
             'sfu_source_readback_budget_exceeded',
-            publisherFrameFailureDetails(trace, {
-              reason: 'sfu_source_readback_budget_exceeded',
-              stage: 'dom_canvas_readback',
-              source: readbackReason,
-              message: 'Publisher source readback exceeded the active SFU profile budget before WLVC encode.',
-              transportPath: 'publisher_source_readback',
+            {
+              ...sourceReadback.details,
               bufferedAmount: getSfuClientBufferedAmount(),
-              payloadBytes: 0,
-              wirePayloadBytes: 0,
-              timestamp,
-            }),
+            },
           );
+          return;
+        }
+        const {
+          imageData,
+          frameSize: readbackFrameSize,
+          drawImageMs,
+          readbackMs,
+          drawBudgetMs,
+          readbackBudgetMs,
+        } = sourceReadback;
+        const frameSizeForMetrics = readbackFrameSize || frameSize;
+        const fullFrameEncoder = await ensureFullFrameEncoder(frameSizeForMetrics);
+        if (!fullFrameEncoder) {
+          mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
           return;
         }
         let frameImageData = imageData;
@@ -678,7 +639,7 @@ export function createLocalPublisherPipelineHelpers({
           trace,
           pipelineProfileId,
           videoProfile,
-          frameSize,
+          frameSize: frameSizeForMetrics,
           drawImageMs,
           readbackMs,
           encodeMs,

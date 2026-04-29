@@ -24,6 +24,9 @@ try {
   requireContains(publisherFrameTrace, 'publisher_frame_trace_id', 'publisher trace id metric');
   requireContains(publisherFrameTrace, 'publisher_path_trace_stages', 'publisher trace stage chain metric');
   requireContains(publisherFrameTrace, 'trace_get_user_media_frame_delivery_ms', 'getUserMedia delivery timing metric');
+  requireContains(publisherFrameTrace, 'trace_video_frame_processor_read_ms', 'VideoFrame processor read timing metric');
+  requireContains(publisherFrameTrace, 'trace_video_frame_canvas_draw_image_ms', 'VideoFrame canvas draw timing metric');
+  requireContains(publisherFrameTrace, 'trace_video_frame_canvas_get_image_data_ms', 'VideoFrame canvas readback timing metric');
   requireContains(publisherFrameTrace, 'trace_dom_canvas_draw_image_ms', 'DOM canvas draw timing metric');
   requireContains(publisherFrameTrace, 'trace_dom_canvas_get_image_data_ms', 'DOM canvas readback timing metric');
   requireContains(publisherFrameTrace, 'trace_wlvc_encode_ms', 'WLVC encode timing metric');
@@ -34,13 +37,18 @@ try {
   requireContains(publisherPipeline, "from './publisherFrameTrace'", 'publisher pipeline imports trace helper');
   requireContains(publisherPipeline, 'createPublisherFrameTrace({', 'publisher creates a frame trace before readback');
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'get_user_media_frame_delivery'", 'publisher records getUserMedia frame delivery timing');
-  requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'dom_canvas_draw_image'", 'publisher records DOM draw timing');
-  requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'dom_canvas_get_image_data'", 'publisher records canvas readback timing');
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'wlvc_encode'", 'publisher records WLVC encode timing');
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'protected_frame_wrap'", 'publisher records protected frame wrap timing');
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'protected_frame_skipped'", 'publisher records skipped protected wrap timing');
-  requireContains(publisherPipeline, 'publisherFrameFailureDetails(trace', 'publisher passes trace metrics into source-readback failures');
   requireContains(publisherPipeline, 'buildPublisherTransportStageMetrics({', 'publisher centralizes path trace metrics');
+
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
+  requireContains(sourceReadback, "markPublisherFrameTraceStage(trace, 'video_frame_processor_read'", 'source readback records VideoFrame processor timing');
+  requireContains(sourceReadback, "'video_frame_canvas_draw_image'", 'source readback records VideoFrame draw timing');
+  requireContains(sourceReadback, "'video_frame_canvas_get_image_data'", 'source readback records VideoFrame canvas readback timing');
+  requireContains(sourceReadback, "'dom_canvas_draw_image'", 'source readback records DOM fallback draw timing');
+  requireContains(sourceReadback, "'dom_canvas_get_image_data'", 'source readback records DOM fallback readback timing');
+  requireContains(sourceReadback, 'publisherFrameFailureDetails(trace', 'source readback passes trace metrics into source-readback failures');
 
   const framePayload = read('src/lib/sfu/framePayload.ts');
   requireContains(framePayload, 'publisher_frame_trace_id', 'frame payload preserves publisher trace id');

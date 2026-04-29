@@ -28,16 +28,18 @@ function readRepo(relativePath) {
 async function main() {
   const workspaceConfig = readFrontend('src/domain/realtime/workspace/config.js');
   const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
+  const sourceReadback = readFrontend('src/domain/realtime/local/publisherSourceReadback.js');
   const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
   const framePayload = readFrontend('src/lib/sfu/framePayload.ts');
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
   requireContains(workspaceConfig, 'maxDrawImageMs', 'profiles define drawImage budget');
   requireContains(workspaceConfig, 'maxReadbackMs', 'profiles define getImageData budget');
-  requireContains(publisherPipeline, 'drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs', 'publisher bounds source readback before encode');
-  requireContains(publisherPipeline, 'sfu_source_readback_budget_exceeded', 'publisher reports source readback budget pressure');
-  requireContains(publisherPipeline, 'canvas_get_image_data_budget_exceeded', 'publisher distinguishes getImageData pressure');
-  requireContains(publisherPipeline, 'publisher_source_readback', 'publisher reports source readback transport stage');
+  requireContains(publisherPipeline, 'sourceReadbackController.readFrame({', 'publisher reads source frames through source readback controller');
+  requireContains(sourceReadback, 'drawImageMs > drawBudgetMs || readbackMs > readbackBudgetMs', 'publisher bounds source readback before encode');
+  requireContains(sourceReadback, 'sfu_source_readback_budget_exceeded', 'publisher reports source readback budget pressure');
+  requireContains(sourceReadback, 'canvas_get_image_data_budget_exceeded', 'publisher distinguishes getImageData pressure');
+  requireContains(sourceReadback, 'publisher_source_readback', 'publisher reports source readback transport stage');
   requireContains(runtimeSwitching, "'sfu_source_readback_budget_exceeded'", 'readback pressure bypasses downgrade cooldown');
   requireContains(framePayload, 'budget_max_draw_image_ms', 'frame payload carries draw budget');
   requireContains(framePayload, 'budget_max_readback_ms', 'frame payload carries readback budget');
