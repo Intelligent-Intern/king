@@ -100,6 +100,8 @@ Technical target:
    - Added broker-only SQLite pragmas (`journal_mode=WAL`, `synchronous=OFF`, `temp_store=MEMORY`, bounded journal size) so persistent app DB durability is unchanged.
    - Added backend diagnostics for `sfu_broker_database_opened`, including broker path, main DB path, storage class, and effective pragmas.
    - Added contracts proving tmpfs compose wiring, no `sqlite::memory:` broker, and isolated broker pragmas.
+   - Production deploy check: `/sfu-buffer` is mounted as tmpfs in `videochat-backend-sfu-v1`, broker path is `/sfu-buffer/video-chat-sfu-broker.sqlite`, and `sfu_broker_database_opened` logs `broker_storage_class=ram_tmpfs`, `journal_mode=wal`, `synchronous=0`, `temp_store=2`.
+   - Verification: `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php`, `node tests/contract/sfu-no-frame-persistence-regression-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `docker compose -f demo/video-chat/docker-compose.v1.yml config`, `deploy-smoke`.
 
 4. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
 
