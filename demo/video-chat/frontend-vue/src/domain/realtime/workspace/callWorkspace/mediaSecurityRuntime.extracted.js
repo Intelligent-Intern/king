@@ -145,8 +145,12 @@ function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
 
 function canProtectCurrentSfuTargets() {
   const targetUserIds = mediaSecurityEligibleTargetIds();
-  if (targetUserIds.length <= 0) return false;
-  return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+  if (targetUserIds.length <= 0) return true;
+  const session = ensureMediaSecuritySession();
+  return targetUserIds.some((targetUserId) => (
+    session.canProtectForTargets([targetUserId])
+    && mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(targetUserId, session))
+  ));
 }
 
 function canProtectCurrentNativeTargets(targetUserIds) {

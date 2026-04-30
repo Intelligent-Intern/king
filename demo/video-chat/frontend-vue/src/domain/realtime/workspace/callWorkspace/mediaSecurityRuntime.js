@@ -309,7 +309,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
   function canProtectCurrentSfuTargets() {
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
     if (targetUserIds.length <= 0) return true;
-    return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+    const session = ensureMediaSecuritySession();
+    return targetUserIds.some((targetUserId) => (
+      session.canProtectForTargets([targetUserId])
+      && state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(targetUserId, session))
+    ));
   }
 
   function canProtectCurrentNativeTargets(targetUserIds) {

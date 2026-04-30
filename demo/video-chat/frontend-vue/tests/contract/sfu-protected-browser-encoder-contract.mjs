@@ -35,6 +35,7 @@ try {
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const security = read('src/domain/realtime/media/security.js');
   const securityCore = read('src/domain/realtime/media/securityCore.js');
+  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
@@ -108,6 +109,8 @@ try {
   requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_waiting_for_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
   requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'RGBA fallback publisher must resync keys while the publish security gate is closed');
   requireContains(publisherPipeline, "protect_frame_unavailable_waiting_for_security", 'RGBA fallback publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
+  requireContains(mediaSecurityRuntime, 'targetUserIds.some((targetUserId) => (', 'SFU publish gate must not blank ready receivers while one participant is still handshaking');
+  requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(targetUserId, session))', 'SFU publish gate must wait until the current sender key was signaled to at least one ready receiver');
   assert.equal(
     publisherPipeline.includes('sending transport-only frame'),
     false,
