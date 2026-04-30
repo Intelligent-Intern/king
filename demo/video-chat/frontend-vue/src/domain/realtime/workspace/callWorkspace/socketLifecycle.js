@@ -1,3 +1,5 @@
+import { shouldRequestSfuFullKeyframeForReason } from '../../sfu/recoveryReasons';
+
 export function createCallWorkspaceSocketHelpers({
   callbacks,
   constants,
@@ -134,7 +136,7 @@ export function createCallWorkspaceSocketHelpers({
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
       || primaryLayerRequested
-      || sourceReason === 'sfu_remote_video_decoder_waiting_keyframe';
+      || shouldRequestSfuFullKeyframeForReason(sourceReason);
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
         ...payloadBody,

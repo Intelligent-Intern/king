@@ -5,6 +5,7 @@ import {
   shouldDecodeRemoteFrame,
   shouldRenderRemoteFrame,
 } from './remoteRenderScheduler';
+import { shouldRequestSfuFullKeyframeForReason } from './recoveryReasons';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 
@@ -15,6 +16,10 @@ function positiveInteger(value, fallback = 0) {
 
 function normalizeChunkType(value) {
   return String(value || '').trim().toLowerCase() === 'keyframe' ? 'key' : 'delta';
+}
+
+function isBrowserKeyframe(frame) {
+  return String(frame?.type || '').trim().toLowerCase() === 'keyframe';
 }
 
 function normalizeVideoLayer(value) {
@@ -63,6 +68,34 @@ function closeBrowserDecoderState(decoderState) {
     decoderState.decoder?.close?.();
   } catch {
     // The decoder may already be closed after a browser error.
+  }
+}
+
+function isBrowserDecoderClosed(decoder) {
+  return String(decoder?.state || '').trim().toLowerCase() === 'closed';
+}
+
+function isBrowserDecoderConfigured(decoder) {
+  return String(decoder?.state || '').trim().toLowerCase() === 'configured';
+}
+
+function discardBrowserDecoderState(peer, frame, decoderState = null) {
+  if (!peer || typeof peer !== 'object') return;
+  const states = peer.browserVideoDecoderByLayer && typeof peer.browserVideoDecoderByLayer === 'object'
+    ? peer.browserVideoDecoderByLayer
+    : {};
+  const decoderKey = browserFrameDecoderKey(frame);
+  const state = decoderState || states[decoderKey] || null;
+  const decoder = state?.decoder || null;
+  if (state) closeBrowserDecoderState(state);
+  if (!state || states[decoderKey] === state || states[decoderKey]?.decoder === decoder) {
+    delete states[decoderKey];
+  }
+  if (peer.browserVideoDecoder === decoder) {
+    peer.browserVideoDecoder = null;
+    peer.browserVideoDecoderCodec = '';
+    peer.browserVideoDecoderWidth = 0;
+    peer.browserVideoDecoderHeight = 0;
   }
 }
 
@@ -116,6 +149,7 @@ export function closeProtectedBrowserVideoDecoders(peer) {
 function createBrowserVideoDecoder(peer, frame, {
   captureClientDiagnosticError,
   globalScope,
+  requestProtectedBrowserDecoderRecovery,
   renderBrowserVideoFrame,
 }) {
   const VideoDecoderCtor = globalScope.VideoDecoder;
@@ -128,6 +162,7 @@ function createBrowserVideoDecoder(peer, frame, {
     codec: PROTECTED_BROWSER_VIDEO_CODEC_ID,
     decoder: null,
     height,
+    needsKeyframe: true,
     pendingFrames: [],
     videoLayer,
     width,
@@ -149,20 +184,24 @@ function createBrowserVideoDecoder(peer, frame, {
     error(error) {
       captureClientDiagnosticError('sfu_browser_decoder_error', error, {
         codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        publisher_id: String(frame?.publisherId || ''),
+        publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+        track_id: String(frame?.trackId || ''),
+        video_layer: videoLayer,
         frame_width: width,
         frame_height: height,
       }, {
         code: 'sfu_browser_decoder_error',
       });
       peer.needsKeyframe = true;
+      discardBrowserDecoderState(peer, frame, decoderState);
+      requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decoder_error');
     },
   });
-  decoder.configure({
-    codec: 'vp8',
-    codedWidth: width,
-    codedHeight: height,
-    hardwareAcceleration: 'prefer-hardware',
-  });
+  // VP8 carries frame dimensions in the bitstream. Supplying coded dimensions
+  // for every adaptive layer makes some Chrome/WebCodecs builds reject otherwise
+  // valid streams after layer switches or mobile thumbnail frames.
+  decoder.configure({ codec: 'vp8' });
   decoderState.decoder = markRaw(decoder);
   return decoderState;
 }
@@ -177,6 +216,7 @@ function ensureBrowserVideoDecoder(peer, frame, options) {
   const existing = states[decoderKey];
   if (
     existing?.decoder
+      && isBrowserDecoderConfigured(existing.decoder)
       && existing.codec === PROTECTED_BROWSER_VIDEO_CODEC_ID
       && Number(existing.width || 0) === width
       && Number(existing.height || 0) === height
@@ -208,9 +248,34 @@ export function createRemoteBrowserEncodedVideoRenderer({
   bumpMediaRenderVersion,
   mediaRuntimePathRef,
   requestRemoteSfuLayerPreference,
+  sendRemoteSfuVideoQualityPressure,
   renderCallVideoLayout,
   globalScope = typeof globalThis !== 'undefined' ? globalThis : {},
 }) {
+  function requestProtectedBrowserDecoderRecovery(peer, frame, reason, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    if (typeof sendRemoteSfuVideoQualityPressure !== 'function') return false;
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    if (!shouldRequestSfuFullKeyframeForReason(normalizedReason)) return false;
+    const lastAtMs = Number(peer.lastProtectedBrowserDecoderRecoveryRequestAtMs || 0);
+    if (lastAtMs > 0 && (nowMs - lastAtMs) < 1000) return false;
+    const sent = sendRemoteSfuVideoQualityPressure(peer, frame?.publisherId, normalizedReason, nowMs, {
+      codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      frame_sequence: positiveInteger(frame?.frameSequence || 0, 0),
+      frame_timestamp: positiveInteger(frame?.timestamp || 0, 0),
+      frame_type: String(frame?.type || ''),
+      requested_action: 'force_full_keyframe',
+      request_full_keyframe: true,
+      requested_video_layer: 'primary',
+      track_id: String(frame?.trackId || ''),
+      video_layer: browserFrameVideoLayer(frame),
+    });
+    if (sent) {
+      peer.lastProtectedBrowserDecoderRecoveryRequestAtMs = nowMs;
+    }
+    return sent;
+  }
+
   function renderBrowserVideoFrame(peer, videoFrame, frame) {
     if (!peer || typeof peer !== 'object') return false;
     const canvas = peer.decodedCanvas;
@@ -292,6 +357,39 @@ export function createRemoteBrowserEncodedVideoRenderer({
     });
   }
 
+  function captureBrowserDecoderWaitingForKeyframe(peer, frame, reason, recoverySent, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return;
+    const decoderKey = browserFrameDecoderKey(frame);
+    const logKey = `browser_keyframe_wait:${decoderKey}`;
+    if (peer.lastProtectedBrowserDecoderWaitingKeyframeKey === logKey
+      && (nowMs - Number(peer.lastProtectedBrowserDecoderWaitingKeyframeAtMs || 0)) < 1000
+    ) {
+      return;
+    }
+    peer.lastProtectedBrowserDecoderWaitingKeyframeKey = logKey;
+    peer.lastProtectedBrowserDecoderWaitingKeyframeAtMs = nowMs;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_remote_video_decoder_waiting_keyframe',
+      code: 'sfu_remote_video_decoder_waiting_keyframe',
+      message: 'Remote browser-encoded SFU delta frame was dropped until a keyframe can initialize the decoder.',
+      payload: {
+        codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        publisher_id: String(frame?.publisherId || ''),
+        publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+        track_id: String(frame?.trackId || ''),
+        video_layer: browserFrameVideoLayer(frame),
+        frame_type: String(frame?.type || ''),
+        frame_sequence: positiveInteger(frame?.frameSequence || 0, 0),
+        frame_timestamp: positiveInteger(frame?.timestamp || 0, 0),
+        recovery_reason: String(reason || ''),
+        full_keyframe_recovery_sent: Boolean(recoverySent),
+        media_runtime_path: mediaRuntimePathRef.value,
+      },
+    });
+  }
+
   async function decodeProtectedBrowserEncodedVideoFrame(peer, frame, frameData) {
     if (!isProtectedBrowserEncodedVideoFrame(frame)) return false;
     if (typeof globalScope.VideoDecoder !== 'function' || typeof globalScope.EncodedVideoChunk !== 'function') {
@@ -311,13 +409,33 @@ export function createRemoteBrowserEncodedVideoRenderer({
       });
       return true;
     }
+    const states = ensureBrowserVideoDecoderState(peer);
+    const decoderKey = browserFrameDecoderKey(frame);
+    const existingDecoderState = states?.[decoderKey] || null;
+    const frameIsKeyframe = isBrowserKeyframe(frame);
+    const decoderNeedsKeyframe = Boolean(
+      peer.needsKeyframe
+        || !isBrowserDecoderConfigured(existingDecoderState?.decoder)
+        || existingDecoderState?.needsKeyframe
+    );
+    if (decoderNeedsKeyframe && !frameIsKeyframe) {
+      peer.needsKeyframe = true;
+      if (existingDecoderState) existingDecoderState.needsKeyframe = true;
+      const recoverySent = requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_remote_video_decoder_waiting_keyframe');
+      captureBrowserDecoderWaitingForKeyframe(peer, frame, 'decoder_requires_keyframe', recoverySent);
+      return true;
+    }
     const decoderState = ensureBrowserVideoDecoder(peer, frame, {
       captureClientDiagnosticError,
       globalScope,
+      requestProtectedBrowserDecoderRecovery,
       renderBrowserVideoFrame,
     });
     const decoder = decoderState?.decoder || null;
     if (!decoder) return true;
+    if (frameIsKeyframe) {
+      decoderState.needsKeyframe = false;
+    }
     try {
       const decodeDecision = shouldDecodeRemoteFrame(peer, frame, Number(decoder.decodeQueueSize || 0));
       if (!decodeDecision.decode) {
@@ -336,18 +454,17 @@ export function createRemoteBrowserEncodedVideoRenderer({
         decoderState.pendingFrames.pop();
       }
       peer.needsKeyframe = true;
-      try {
-        decoder.reset?.();
-      } catch {
-        // next keyframe will recreate decoder state if reset is unavailable
-      }
+      discardBrowserDecoderState(peer, frame, decoderState);
+      const recoverySent = requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decode_frame_failed');
       captureClientDiagnosticError('sfu_browser_decode_frame_failed', error, {
         codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         publisher_id: String(frame?.publisherId || ''),
         publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
         track_id: String(frame?.trackId || ''),
+        video_layer: browserFrameVideoLayer(frame),
         frame_type: String(frame?.type || ''),
         frame_timestamp: Number(frame?.timestamp || 0),
+        full_keyframe_recovery_sent: Boolean(recoverySent),
       }, {
         code: 'sfu_browser_decode_frame_failed',
       });

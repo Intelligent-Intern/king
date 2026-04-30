@@ -84,6 +84,7 @@ export function createSfuFrameDecodeHelpers({
     bumpMediaRenderVersion,
     mediaRuntimePathRef,
     renderCallVideoLayout,
+    sendRemoteSfuVideoQualityPressure,
     requestRemoteSfuLayerPreference: receiverFeedback.maybeSendReceiverLayerPreference,
   });
 
@@ -789,6 +790,13 @@ export function createSfuFrameDecodeHelpers({
         });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
+        if (errorCode === 'replay_detected') {
+          logDroppedRemoteSfuFrame(peer, publisherId, frame, 'protected_replay_detected', {
+            keyframe_required_after_recovery: false,
+            media_runtime_path: mediaRuntimePathRef.value,
+          });
+          return;
+        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
@@ -820,6 +828,13 @@ export function createSfuFrameDecodeHelpers({
       });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
+        if (errorCode === 'replay_detected') {
+          logDroppedRemoteSfuFrame(peer, publisherId, frame, 'protected_replay_detected', {
+            keyframe_required_after_recovery: false,
+            media_runtime_path: mediaRuntimePathRef.value,
+          });
+          return;
+        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,

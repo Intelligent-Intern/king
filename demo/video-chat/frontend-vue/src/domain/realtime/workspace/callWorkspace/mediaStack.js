@@ -2,6 +2,11 @@ import { createLocalPublisherPipelineHelpers } from '../../local/publisherPipeli
 import { createLocalMediaOrchestrationHelpers } from '../../local/mediaOrchestration';
 import { createSfuFrameDecodeHelpers } from '../../sfu/frameDecode';
 import { createSfuRemotePeerHelpers } from '../../sfu/remotePeers';
+import {
+  normalizeSfuRecoveryReason,
+  resolveSfuRecoveryRequestedAction,
+  shouldRequestSfuFullKeyframeForReason,
+} from '../../sfu/recoveryReasons';
 import { createCallWorkspaceRuntimeHealthHelpers } from './runtimeHealth';
 import { createCallWorkspaceVideoLayoutHelpers } from './videoLayout';
 import { createSfuTransportController } from './sfuTransport';
@@ -117,11 +122,9 @@ export function createCallWorkspaceMediaStack(options) {
       const targetUserId = Number(peer?.userId || 0);
       const localUserId = Number(refs.currentUserId.value || 0);
       if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
-      const normalizedReason = String(reason || 'sfu_receiver_feedback').trim().toLowerCase();
-      const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
-      const feedbackAction = String(
-        payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'),
-      ).trim().toLowerCase();
+      const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_receiver_feedback');
+      const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
+      const feedbackAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
       const sfuRecoverySent = refs.sfuClientRef.value
         && typeof refs.sfuClientRef.value.requestPublisherMediaRecovery === 'function'
         ? refs.sfuClientRef.value.requestPublisherMediaRecovery(String(publisherId || ''), {
@@ -140,6 +143,7 @@ export function createCallWorkspaceMediaStack(options) {
         type: 'call/media-quality-pressure',
         target_user_id: targetUserId,
         payload: {
+          ...payload,
           kind: 'sfu-video-quality-pressure',
           requested_action: feedbackAction,
           request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
@@ -147,7 +151,6 @@ export function createCallWorkspaceMediaStack(options) {
           publisher_id: String(publisherId || ''),
           requester_user_id: localUserId,
           media_runtime_path: refs.mediaRuntimePath.value,
-          ...payload,
         },
       });
     },

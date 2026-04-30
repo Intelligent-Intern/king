@@ -2,6 +2,11 @@ import {
   logSfuVideoRecoveryStatus,
   shouldExposeSfuVideoRecoveryAttempt,
 } from '../../sfu/videoConnectionStatus';
+import {
+  normalizeSfuRecoveryReason,
+  resolveSfuRecoveryRequestedAction,
+  shouldRequestSfuFullKeyframeForReason,
+} from '../../sfu/recoveryReasons';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
@@ -165,11 +170,9 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     const targetUserId = Number(peer?.userId || 0);
     const localUserId = Number(currentUserId.value || 0);
     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
-    const normalizedReason = String(reason || 'sfu_remote_video_frozen').trim().toLowerCase();
-    const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
-    const requestedAction = String(
-      payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'),
-    ).trim().toLowerCase();
+    const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_remote_video_frozen');
+    const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
+    const requestedAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
 
     const lastSentAtMs = Number(peer.lastQualityPressureSentAtMs || 0);
     const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
@@ -189,6 +192,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       type: 'call/media-quality-pressure',
       target_user_id: targetUserId,
         payload: {
+          ...payload,
           kind: 'sfu-video-quality-pressure',
           requested_action: requestedAction,
           request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
@@ -196,7 +200,6 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           publisher_id: String(publisherId || ''),
         requester_user_id: localUserId,
         media_runtime_path: mediaRuntimePath.value,
-        ...payload,
       },
     }));
     if (sent) {

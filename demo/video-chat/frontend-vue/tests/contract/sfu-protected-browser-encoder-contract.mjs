@@ -35,6 +35,7 @@ try {
   const securityCore = read('src/domain/realtime/media/securityCore.js');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+  const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.js');
   const packageJson = read('package.json');
   const backendSfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -70,24 +71,56 @@ try {
   requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig)', 'browser publisher must select a supported thumbnail WebCodecs config variant');
   requireContains(browserPublisher, "eventType: 'sfu_browser_encoder_capabilities_unavailable'", 'browser publisher must persist missing WebCodecs capabilities to backend diagnostics before fallback');
   requireContains(browserPublisher, "level: 'warning'", 'browser publisher WebCodecs fallback diagnostics must be stored server-side instead of disappearing as info-only events');
+  requireContains(browserPublisher, "eventType: 'sfu_publish_waiting_for_media_security'", 'browser publisher must persist media-security gate waits to backend diagnostics');
+  requireContains(browserPublisher, 'forceNextSecurityKeyframe = true', 'browser publisher must force a keyframe after media-security gates close');
+  requireContains(browserPublisher, 'remoteKeyframeRequestPending(timestamp)', 'browser publisher must honor receiver-requested full-keyframe recovery state');
+  requireContains(browserPublisher, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'browser publisher must clear receiver keyframe recovery once a primary keyframe was sent');
+  requireContains(browserPublisher, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'browser publisher must resync keys while the publish security gate is closed');
+  requireContains(browserPublisher, "protect_browser_encoded_frame_unavailable_waiting_for_security", 'browser publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
+  assert.equal(
+    browserPublisher.includes("hintMediaSecuritySync('protect_browser_encoded_frame_unavailable',"),
+    false,
+    'browser publisher must not continue a transport-only fallback when protected media is enabled',
+  );
 
   requireContains(publisherPipeline, "from './protectedBrowserVideoEncoder'", 'publisher pipeline imports browser encoder path');
   assert.ok(
     publisherPipeline.indexOf('maybeStartProtectedBrowserVideoEncoderPublisher({') < publisherPipeline.indexOf('createPublisherSourceReadbackController({'),
     'browser encoder path must be attempted before RGBA/WLVC source readback',
   );
+  requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_waiting_for_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
+  requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'RGBA fallback publisher must resync keys while the publish security gate is closed');
+  requireContains(publisherPipeline, "protect_frame_unavailable_waiting_for_security", 'RGBA fallback publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
+  assert.equal(
+    publisherPipeline.includes('sending transport-only frame'),
+    false,
+    'RGBA fallback publisher must not continue a transport-only fallback when protected media is enabled',
+  );
+  requireContains(mediaSecurityTargets, 'return targetUserIds;', 'SFU media-security target set must come from connected remote participants, not delayed publisher discovery');
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'browser encoder diagnostics are wired to backend telemetry');
 
   requireContains(browserRenderer, "PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8'", 'browser renderer recognizes browser encoded frames');
   requireContains(browserRenderer, 'new VideoDecoderCtor({', 'browser renderer creates WebCodecs decoder');
+  requireContains(browserRenderer, "decoder.configure({ codec: 'vp8' })", 'browser renderer must let VP8 bitstreams define dimensions instead of pinning unsupported layer configs');
   requireContains(browserRenderer, 'new globalScope.EncodedVideoChunk({', 'browser renderer feeds encoded chunks to WebCodecs');
   requireContains(browserRenderer, 'videoFrame?.close?.()', 'browser renderer deterministically closes decoded VideoFrames');
   requireContains(browserRenderer, 'noteSfuRemoteVideoFrameStable', 'browser renderer updates receiver liveness');
   requireContains(lifecycle, 'closeProtectedBrowserVideoDecoders(peer)', 'remote peer teardown closes all browser layer decoders');
   requireContains(browserRenderer, 'browserVideoDecoderByLayer', 'browser renderer keeps separate decoder state for primary and thumbnail layers');
   requireContains(browserRenderer, 'decoderState.pendingFrames.push(frame)', 'browser renderer queues per-chunk frame metadata until decoder output');
+  requireContains(browserRenderer, 'decoderNeedsKeyframe && !frameIsKeyframe', 'browser renderer must not initialize or recover WebCodecs with a delta frame');
+  requireContains(browserRenderer, 'isBrowserDecoderConfigured(existingDecoderState?.decoder)', 'browser renderer must not reuse unconfigured WebCodecs decoders after browser errors');
+  requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_remote_video_decoder_waiting_keyframe')", 'browser renderer asks for a full keyframe when only deltas arrive after subscription or reset');
+  requireContains(browserRenderer, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'browser renderer persists keyframe-wait drops to backend diagnostics');
+  requireContains(browserRenderer, 'discardBrowserDecoderState(peer, frame, decoderState)', 'browser renderer discards poisoned WebCodecs decoders after decode failures');
+  requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decode_frame_failed')", 'browser renderer asks publisher for a full keyframe after decode failures');
+  requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decoder_error')", 'browser renderer asks publisher for a full keyframe after decoder errors');
+  requireContains(browserRenderer, "requested_action: 'force_full_keyframe'", 'browser renderer sends explicit full-keyframe recovery action');
 
   requireContains(frameDecode, "from './remoteBrowserEncodedVideo'", 'frame decode imports browser renderer');
+  requireContains(frameDecode, 'sendRemoteSfuVideoQualityPressure,', 'browser renderer receives direct recovery signaling');
+  requireContains(frameDecode, "errorCode === 'replay_detected'", 'frame decode must treat protected replayed broker frames as stale drops, not decoder resets');
+  requireContains(frameDecode, "'protected_replay_detected'", 'frame decode must persist protected replay drops with an exact reason');
   assert.ok(
     frameDecode.indexOf('isProtectedBrowserEncodedVideoFrame(frame)') < frameDecode.indexOf('readWlvcFrameMetadata(frameData'),
     'browser encoded frames must bypass WLVC metadata/decode',

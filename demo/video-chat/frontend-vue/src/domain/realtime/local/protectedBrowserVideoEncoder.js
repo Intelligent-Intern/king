@@ -435,6 +435,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   let frameCount = 0;
   let thumbnailFrameCount = 0;
   let lastFrameSentDiagnosticAtMs = 0;
+  let lastSecurityGateDiagnosticAtMs = 0;
+  let forceNextSecurityKeyframe = false;
   let encoderError = null;
   let thumbnailEncoderError = null;
   let thumbnailEncoderDisabled = false;
@@ -551,6 +553,9 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     resolveProfileReadbackIntervalMs(videoProfile),
     { profileId: pipelineProfileId, trackId: videoTrack.id, codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID },
   );
+  const remoteKeyframeRequestPending = (timestamp = Date.now()) => (
+    timestamp < Number(refs.sfuTransportState?.wlvcRemoteKeyframeRequestUntilMs || 0)
+  );
   const scheduleNextTick = (delayMs = resolveActiveEncodeIntervalMs()) => {
     if (closed || !isWlvcRuntimePath()) {
       refs.encodeIntervalRef.value = null;
@@ -639,7 +644,20 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       cacheEpoch: 0,
     };
 
-    if (constants.protectedMediaEnabled && canProtectCurrentSfuTargets()) {
+    if (constants.protectedMediaEnabled) {
+      if (!canProtectCurrentSfuTargets()) {
+        forceNextSecurityKeyframe = true;
+        reportNonCriticalDrop('sfu_browser_encoder_security_gate_waiting', {
+          track_id: videoTrack.id,
+          video_layer: normalizedVideoLayer,
+        });
+        hintMediaSecuritySync('sfu_publish_security_gate_waiting_after_encode', {
+          track_id: videoTrack.id,
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+          codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        });
+        return true;
+      }
       try {
         const mediaSecurity = ensureMediaSecuritySession();
         const protectStartedAtMs = highResolutionNowMs();
@@ -693,12 +711,23 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           }
           throw securityError;
         }
-        hintMediaSecuritySync('protect_browser_encoded_frame_unavailable', {
+        forceNextSecurityKeyframe = true;
+        reportNonCriticalDrop(
+          critical
+            ? 'sfu_browser_encoder_security_gate_waiting_after_protect'
+            : 'sfu_browser_thumbnail_security_gate_waiting_after_protect',
+          {
+            error_name: String(securityError?.name || ''),
+            error_message: String(securityError?.message || ''),
+            video_layer: normalizedVideoLayer,
+          },
+        );
+        hintMediaSecuritySync('protect_browser_encoded_frame_unavailable_waiting_for_security', {
           track_id: videoTrack.id,
           media_runtime_path: refs.mediaRuntimePathRef.value,
           codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         });
-        outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
+        return true;
       }
     } else {
       markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
@@ -752,6 +781,31 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         return;
       }
       if (encodeInFlight || !currentOpenSfuClient() || shouldThrottleWlvcEncodeLoop()) return;
+      const timestamp = Date.now();
+      if (constants.protectedMediaEnabled && !canProtectCurrentSfuTargets()) {
+        forceNextSecurityKeyframe = true;
+        if ((timestamp - lastSecurityGateDiagnosticAtMs) >= 1000) {
+          lastSecurityGateDiagnosticAtMs = timestamp;
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'warning',
+            eventType: 'sfu_publish_waiting_for_media_security',
+            code: 'sfu_publish_waiting_for_media_security',
+            message: 'SFU video publishing is paused until media-security sender keys are active for the receiver set.',
+            payload: {
+              codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+              track_id: videoTrack.id,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+            },
+          });
+        }
+        hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
+          track_id: videoTrack.id,
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+          codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        });
+        return;
+      }
       const bufferedAmount = getSfuClientBufferedAmount();
       if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
         handleWlvcEncodeBackpressure(bufferedAmount, videoTrack.id);
@@ -759,7 +813,6 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       }
 
       encodeInFlight = true;
-      const timestamp = Date.now();
       const readStartedAtMs = highResolutionNowMs();
       const result = await reader.readFrame({
         timeoutMs: Math.max(600, resolveProfileReadbackIntervalMs(videoProfile) * 6),
@@ -782,7 +835,11 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       encodedChunks.length = 0;
       thumbnailEncodedChunks.length = 0;
-      const forceKeyframe = frameCount === 0 || (frameCount % Math.max(1, positiveInteger(videoProfile.keyFrameInterval, 1))) === 0;
+      const forceRemoteRecoveryKeyframe = remoteKeyframeRequestPending(timestamp);
+      const forceKeyframe = forceNextSecurityKeyframe
+        || forceRemoteRecoveryKeyframe
+        || frameCount === 0
+        || (frameCount % Math.max(1, positiveInteger(videoProfile.keyFrameInterval, 1))) === 0;
       const shouldEncodeThumbnail = !thumbnailEncoderDisabled && (
         thumbnailFrameCount === 0
         || forceKeyframe
@@ -824,7 +881,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       markPublisherFrameTraceStage(trace, 'browser_video_encode', encodeMs);
       frameCount += 1;
       for (const chunk of encodedChunks.splice(0)) {
-        await sendChunk({
+        const sentPrimaryChunk = await sendChunk({
           chunk,
           trace,
           timestamp,
@@ -834,6 +891,12 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           encoderConfig: config,
           critical: true,
         });
+        if (sentPrimaryChunk && forceKeyframe) {
+          forceNextSecurityKeyframe = false;
+          if (forceRemoteRecoveryKeyframe && refs.sfuTransportState) {
+            refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
+          }
+        }
       }
       if (shouldEncodeThumbnail && !thumbnailEncoderDisabled) {
         thumbnailFrameCount += 1;

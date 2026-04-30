@@ -35,14 +35,14 @@ export function createMediaSecurityTargetHelpers({
 
   function mediaSecurityEligibleTargetIds() {
     const targetUserIds = mediaSecurityTargetIds();
-    if (!sfuRuntimeEnabled || !isWlvcRuntimePath()) {
-      return targetUserIds;
-    }
-    const nowMs = Date.now();
-    return targetUserIds.filter((userId) => {
-      const firstSeenAtMs = Number(mediaSecuritySfuPublisherFirstSeenAtByUserId.get(userId) || 0);
-      return firstSeenAtMs > 0 && (nowMs - firstSeenAtMs) >= mediaSecuritySfuTargetSettleMs;
-    });
+    if (!sfuRuntimeEnabled || !isWlvcRuntimePath()) return targetUserIds;
+
+    // SFU receivers need sender keys even when their own camera is off or their
+    // publisher announcement is delayed. Publisher discovery is still tracked
+    // for diagnostics, but it must not gate the media-security participant set.
+    void mediaSecuritySfuPublisherFirstSeenAtByUserId;
+    void mediaSecuritySfuTargetSettleMs;
+    return targetUserIds;
   }
 
   function nativeAudioBridgeBlockedReason(targetUserIds = []) {

@@ -302,7 +302,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   function canProtectCurrentSfuTargets() {
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
-    if (targetUserIds.length <= 0) return false;
+    if (targetUserIds.length <= 0) return true;
     return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
   }
 

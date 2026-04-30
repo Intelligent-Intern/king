@@ -31,6 +31,7 @@ try {
   const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
   const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const template = read('src/domain/realtime/CallWorkspaceView.template.html');
@@ -49,8 +50,11 @@ try {
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
-  requireContains(runtimeHealth, 'const requestedAction = String(', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
-  requireContains(runtimeHealth, "payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video')", 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
+  requireContains(recoveryReasons, "'sfu_receiver_sequence_gap'", 'sequence gaps force full keyframe recovery');
+  requireContains(recoveryReasons, "'sfu_remote_video_never_started'", 'never-started video forces full keyframe recovery');
+  requireContains(recoveryReasons, "'sfu_browser_decode_frame_failed'", 'browser decoder failures force full keyframe recovery');
   requireContains(runtimeHealth, 'const shouldSendRemoteQualityPressure = receivingFreshFrames || peer.freezeRecoveryCount >= 2;', 'fresh receive/keyframe-wait bypasses the second-freeze delay');
   requireContains(runtimeHealth, 'const shouldRestartFrozenVideo = receiveGapMs >= remoteVideoReconnectThresholdMs();', 'frozen video restart waits for sustained receive loss');
   requireContains(runtimeHealth, 'function remoteVideoSocketRestartBackoffMs', 'hard SFU socket restart uses per-peer exponential backoff');
