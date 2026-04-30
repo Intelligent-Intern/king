@@ -67,7 +67,7 @@ Technical target:
    Report:
    - Implemented in this WIP branch.
 
-2. [ ] `[real-media-plane-contract]` Define the target media plane that replaces WebSocket whole-frame transport.
+2. [x] `[real-media-plane-contract]` Define the target media plane that replaces WebSocket whole-frame transport.
 
    Scope:
    - Add a contract/doc for the production media path:
@@ -86,6 +86,15 @@ Technical target:
    - The doc names required media-plane features: packet pacing, jitter buffer,
      keyframe request, NACK/PLI or equivalent, layer routing, receiver feedback,
      and per-subscriber quality choice.
+
+   Report:
+   - Added `documentation/dev/video-chat/real-media-plane-architecture.md` as
+     the target media-plane contract.
+   - Pinned WebSocket/TCP whole-frame relay as fallback/control-compatible only,
+     not the final video data plane.
+   - Added contract coverage so the sprint must keep packet/datagram pacing,
+     jitter buffering, keyframe/NACK/PLI recovery, per-subscriber layer routing,
+     backend diagnostics, and SQLite/live-relay fallback boundaries explicit.
 
 3. [ ] `[sfu-control-data-plane-split]` Split SFU control messages from media payload transport.
 

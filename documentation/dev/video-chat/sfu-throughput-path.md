@@ -4,6 +4,12 @@ This document is the sprint anchor for `full-path-throughput-analysis`.
 It names every hot media stage that can create `sfu_send_backpressure_critical`
 and lists the timing or byte measurement that must travel with a frame.
 
+The target architecture for replacing whole-frame WebSocket media relay is
+defined in
+[`real-media-plane-architecture.md`](./real-media-plane-architecture.md).
+This throughput path remains the fallback measurement map until that media
+plane is active.
+
 ## Correlation Contract
 
 Every sampled media frame must be tied together by:
