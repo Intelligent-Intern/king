@@ -53,6 +53,11 @@ try {
   requireContains(sfuTypes, 'onPublisherPressure?: (details: Record<string, unknown>) => void', 'SFU client exposes backend publisher pressure');
   requireContains(sfuMessageHandler, "case 'sfu/publisher-pressure':", 'SFU client handles backend publisher pressure');
   requireContains(sfuMessageHandler, "stage: 'sfu_ingress_latency_guard'", 'backend ingress latency pressure preserves exact stage');
+  assert.equal(
+    sfuMessageHandler.includes('msg.queueAgeMs ?? msg.queue_age_ms ?? msg.kingReceiveLatencyMs'),
+    false,
+    'publisher pressure queue age must not fall back to clock-sensitive King receive latency',
+  );
   requireContains(sfuLifecycle, 'onPublisherPressure: (details) => handleSfuPublisherPressure?.(details)', 'SFU lifecycle wires publisher pressure callback');
   requireContains(workspaceView, 'handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(', 'workspace routes SFU pressure into publisher backpressure controller');
   requireContains(publisherBackpressureController, "'sfu_ingress_latency_budget_exceeded'", 'publisher pressure can trigger automatic downshift for stale SFU ingress');

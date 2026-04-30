@@ -37,11 +37,35 @@ function videochat_sfu_frame_latency_budget_ms(array $frame): int
     return 900;
 }
 
+function videochat_sfu_frame_trusted_ingress_age_ms(array $frame): int
+{
+    return max(
+        0,
+        (int) ($frame['queued_age_ms'] ?? 0),
+        (int) ($frame['queue_age_ms'] ?? 0),
+        (int) ($frame['local_stage_elapsed_ms'] ?? 0)
+    );
+}
+
 function videochat_sfu_drop_stale_ingress_frame_if_needed(mixed $websocket, array $frame, string $roomId, string $publisherId): bool
 {
     $receiveLatencyMs = max(0, (int) ($frame['king_receive_latency_ms'] ?? 0));
+    $trustedIngressAgeMs = videochat_sfu_frame_trusted_ingress_age_ms($frame);
     $latencyBudgetMs = videochat_sfu_frame_latency_budget_ms($frame);
-    if ($receiveLatencyMs <= $latencyBudgetMs) {
+    if ($trustedIngressAgeMs <= $latencyBudgetMs || $trustedIngressAgeMs <= 0) {
+        if ($receiveLatencyMs > $latencyBudgetMs) {
+            videochat_sfu_log_runtime_event('sfu_frame_ingress_wall_clock_skew_observed', [
+                'room_id' => $roomId,
+                'publisher_id' => $publisherId,
+                'track_id' => (string) ($frame['track_id'] ?? ''),
+                'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+                'trusted_ingress_age_ms' => $trustedIngressAgeMs,
+                'clock_sensitive_receive_latency_ms' => $receiveLatencyMs,
+                'ingress_latency_budget_ms' => $latencyBudgetMs,
+                'sfu_send_path' => 'ingress_latency_guard',
+                ...videochat_sfu_transport_metric_fields($frame, 0),
+            ], 1000);
+        }
         return false;
     }
 
@@ -51,7 +75,9 @@ function videochat_sfu_drop_stale_ingress_frame_if_needed(mixed $websocket, arra
         'publisher_id' => $publisherId,
         'track_id' => $trackId,
         'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+        'trusted_ingress_age_ms' => $trustedIngressAgeMs,
         'king_receive_latency_ms' => $receiveLatencyMs,
+        'clock_sensitive_receive_latency_ms' => $receiveLatencyMs,
         'ingress_latency_budget_ms' => $latencyBudgetMs,
         'sfu_send_path' => 'ingress_latency_guard',
         ...videochat_sfu_transport_metric_fields($frame, 0),
@@ -62,7 +88,9 @@ function videochat_sfu_drop_stale_ingress_frame_if_needed(mixed $websocket, arra
         'track_id' => $trackId,
         'frame_sequence' => max(0, (int) ($frame['frame_sequence'] ?? 0)),
         'king_receive_latency_ms' => $receiveLatencyMs,
-        'queue_age_ms' => $receiveLatencyMs,
+        'clock_sensitive_receive_latency_ms' => $receiveLatencyMs,
+        'trusted_ingress_age_ms' => $trustedIngressAgeMs,
+        'queue_age_ms' => $trustedIngressAgeMs,
         'budget_max_queue_age_ms' => max(0, (int) ($frame['budget_max_queue_age_ms'] ?? 0)),
         'ingress_latency_budget_ms' => $latencyBudgetMs,
         'payload_bytes' => max(0, (int) ($frame['payload_bytes'] ?? 0)),
