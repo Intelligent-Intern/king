@@ -49,7 +49,7 @@ export function resolveBrowserEncoderBitrate(videoProfile, {
   const targetFrameRate = clampNumber(Number(frameRate || 0), 1, 30);
   const maxWireBytesPerSecond = positiveInteger(videoProfile?.maxWireBytesPerSecond, 0);
   const pixelsPerSecond = Math.max(1, targetWidth * targetHeight * targetFrameRate);
-  const bitsPerPixel = normalizedVideoLayer === 'thumbnail' ? 0.12 : 0.42;
+  const bitsPerPixel = normalizedVideoLayer === 'thumbnail' ? 0.11 : 0.38;
   const qualityBoundBitrate = Math.round(pixelsPerSecond * bitsPerPixel);
   const minBitrate = normalizedVideoLayer === 'thumbnail' ? 90_000 : 520_000;
   const maxBitrate = normalizedVideoLayer === 'thumbnail' ? 520_000 : 5_500_000;

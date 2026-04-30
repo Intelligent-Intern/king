@@ -14,6 +14,14 @@
         <h1>Video Call Management</h1>
       </div>
       <div class="actions">
+        <button
+          class="btn btn-danger"
+          type="button"
+          :disabled="!canDeleteAllCalls"
+          @click="deleteAllCalls"
+        >
+          {{ deleteAllCallsBusy ? 'Deleting calls...' : 'Alle Calls löschen' }}
+        </button>
         <button class="btn btn-cyan" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
       </div>
     </section>

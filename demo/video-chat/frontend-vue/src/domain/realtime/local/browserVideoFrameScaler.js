@@ -42,6 +42,23 @@ function buildVideoFrameInitFromSource(frame) {
   return init;
 }
 
+function buildRgbaVideoFrameInitFromSource(frame, width, height) {
+  return {
+    ...buildVideoFrameInitFromSource(frame),
+    format: 'RGBA',
+    codedWidth: width,
+    codedHeight: height,
+    visibleRect: {
+      x: 0,
+      y: 0,
+      width,
+      height,
+    },
+    displayWidth: width,
+    displayHeight: height,
+  };
+}
+
 export function createBrowserVideoFrameScaler({
   globalScope = typeof globalThis !== 'undefined' ? globalThis : {},
   errorPrefix = 'sfu_browser_video_frame',
@@ -112,7 +129,23 @@ export function createBrowserVideoFrameScaler({
       targetWidth,
       targetHeight,
     );
-    return new VideoFrameCtor(surface.canvas, buildVideoFrameInitFromSource(sourceFrame));
+    try {
+      return new VideoFrameCtor(surface.canvas, buildVideoFrameInitFromSource(sourceFrame));
+    } catch (canvasFrameError) {
+      if (typeof surface.context.getImageData !== 'function') {
+        throw canvasFrameError;
+      }
+
+      const imageData = surface.context.getImageData(0, 0, targetWidth, targetHeight);
+      try {
+        return new VideoFrameCtor(
+          imageData.data,
+          buildRgbaVideoFrameInitFromSource(sourceFrame, targetWidth, targetHeight),
+        );
+      } catch {
+        throw canvasFrameError;
+      }
+    }
   }
 
   return {

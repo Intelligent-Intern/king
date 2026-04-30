@@ -296,3 +296,60 @@ SQL
         ],
     ];
 }
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   deleted_count: int
+ * }
+ */
+function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole, array $payload): array
+{
+    if ($authUserId <= 0 || strtolower(trim($authRole)) !== 'admin') {
+        return [
+            'ok' => false,
+            'reason' => 'forbidden',
+            'errors' => [],
+            'deleted_count' => 0,
+        ];
+    }
+
+    $confirm = $payload['confirm'] ?? '';
+    if ($confirm !== 'delete_all_calls') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => [
+                'confirm' => 'must_equal_delete_all_calls',
+            ],
+            'deleted_count' => 0,
+        ];
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $count = (int) $pdo->query('SELECT COUNT(*) FROM calls')->fetchColumn();
+        $pdo->exec('DELETE FROM calls');
+        $pdo->commit();
+    } catch (Throwable) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'deleted_count' => 0,
+        ];
+    }
+
+    return [
+        'ok' => true,
+        'reason' => 'deleted',
+        'errors' => [],
+        'deleted_count' => $count,
+    ];
+}

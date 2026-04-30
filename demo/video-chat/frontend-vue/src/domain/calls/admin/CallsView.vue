@@ -200,6 +200,8 @@ const {
 const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
   ? 'Schedule video call'
   : 'New video call'));
+const deleteAllCallsBusy = ref(false);
+const canDeleteAllCalls = computed(() => !deleteAllCallsBusy.value && !loadingCalls.value);
 
 function openPrimaryCompose() {
   openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
@@ -337,6 +339,33 @@ async function loadCalendar({ background = false } = {}) {
     if (useBlockingLoadingState) {
       loadingCalendar.value = false;
     }
+  }
+}
+
+async function deleteAllCalls() {
+  if (!canDeleteAllCalls.value) return;
+  const confirmed = window.confirm('Alle Video Calls wirklich löschen? Das entfernt auch Teilnehmer, Einladungen und Call-Verlauf.');
+  if (!confirmed) return;
+
+  clearNotice();
+  deleteAllCallsBusy.value = true;
+  try {
+    const payload = await apiRequest('/api/calls', {
+      method: 'DELETE',
+      body: {
+        confirm: 'delete_all_calls',
+      },
+    });
+    const deletedCount = Math.max(0, Number(payload?.result?.deleted_count || 0));
+    pagination.page = 1;
+    setNotice('ok', deletedCount === 1 ? '1 call deleted.' : `${deletedCount} calls deleted.`);
+    publishAdminSync('calls', 'all_calls_deleted');
+    publishAdminSync('overview', 'all_calls_deleted');
+    await Promise.all([loadCalls(), loadCalendar()]);
+  } catch (error) {
+    setNotice('error', error instanceof Error ? error.message : 'Could not delete all calls.');
+  } finally {
+    deleteAllCallsBusy.value = false;
   }
 }
 

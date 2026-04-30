@@ -224,9 +224,59 @@ function videochat_handle_call_routes(
             ]);
         }
 
+        if ($method === 'DELETE') {
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'calls_delete_all_invalid_request_body', 'Call bulk-delete payload must be a JSON object.', [
+                    'reason' => $decodeError,
+                ]);
+            }
+
+            try {
+                $pdo = $openDatabase();
+                $deleteResult = videochat_delete_all_calls(
+                    $pdo,
+                    $authenticatedUserId,
+                    $authenticatedUserRole,
+                    $payload
+                );
+            } catch (Throwable) {
+                return $errorResponse(500, 'calls_delete_all_failed', 'Could not delete all calls.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            $deleteReason = (string) ($deleteResult['reason'] ?? 'internal_error');
+            if (!(bool) ($deleteResult['ok'] ?? false)) {
+                if ($deleteReason === 'validation_failed') {
+                    return $errorResponse(422, 'calls_delete_all_validation_failed', 'Call bulk-delete payload failed validation.', [
+                        'fields' => is_array($deleteResult['errors'] ?? null) ? $deleteResult['errors'] : [],
+                    ]);
+                }
+                if ($deleteReason === 'forbidden') {
+                    return $errorResponse(403, 'calls_forbidden', 'Only admins can delete all calls.', [
+                        'reason' => 'admin_required',
+                    ]);
+                }
+
+                return $errorResponse(500, 'calls_delete_all_failed', 'Could not delete all calls.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'all_deleted',
+                    'deleted_count' => (int) ($deleteResult['deleted_count'] ?? 0),
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
         if ($method !== 'POST') {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/calls.', [
-                'allowed_methods' => ['GET', 'POST'],
+            return $errorResponse(405, 'method_not_allowed', 'Use GET, POST, or DELETE for /api/calls.', [
+                'allowed_methods' => ['GET', 'POST', 'DELETE'],
             ]);
         }
 

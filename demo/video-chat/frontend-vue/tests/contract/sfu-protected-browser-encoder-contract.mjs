@@ -28,6 +28,7 @@ try {
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
   const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.js');
+  const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
   const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
   const framePayload = read('src/lib/sfu/framePayload.ts');
@@ -70,6 +71,8 @@ try {
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
   assert.equal(browserPublisher.includes('getImageData('), false, 'browser publisher must not use canvas getImageData');
   requireContains(browserPublisher, 'createBrowserVideoFrameScaler', 'browser publisher keeps WebCodecs frame scaling isolated from RGBA readback');
+  requireContains(browserFrameScaler, 'buildRgbaVideoFrameInitFromSource', 'browser frame scaler keeps a non-WebGL RGBA VideoFrame fallback for legacy graphics stacks');
+  requireContains(browserFrameScaler, 'new VideoFrameCtor(\n          imageData.data,', 'browser frame scaler falls back when canvas-backed VideoFrame construction fails');
   requireContains(browserEncoderConfig, 'export function resolveBrowserEncoderBitrate(videoProfile, {', 'browser publisher must bound WebCodecs bitrate from resolution and frame rate, not raw wire budget');
   assert.equal(browserEncoderConfig.includes('Math.floor((maxWireBytesPerSecond || 1_500_000) * 8 * 0.62)'), false, 'browser publisher must not feed absurd wire-budget bitrates into WebCodecs configuration');
   requireContains(browserEncoderConfig, 'function browserEncoderConfigVariants(config)', 'browser publisher must probe hardware/software WebCodecs config variants before falling back');
