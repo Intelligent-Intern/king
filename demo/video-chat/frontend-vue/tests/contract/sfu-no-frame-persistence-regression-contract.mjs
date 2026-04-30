@@ -83,6 +83,7 @@ try {
   const migrations = read('../backend-king-php/support/database_migrations.php');
   const compose = read('../docker-compose.v1.yml');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
+  const mediaTransport = read('src/lib/sfu/mediaTransport.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
 
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_publishers', 'SFU bootstrap persists publisher metadata');
@@ -145,7 +146,8 @@ try {
   requireContains(subscriberBudget, 'videochat_sfu_send_outbound_message($subClient[\'websocket\'], $frameForSubscriber', 'direct fanout sends live binary frames');
 
   requireContains(sfuClient, 'async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean>', 'client sends encoded frames live');
-  requireContains(sfuClient, 'this.ws.send(encoded)', 'client sends binary envelope through WebSocket');
+  requireContains(sfuClient, 'this.mediaTransport.sendBinaryFrame(encoded)', 'client sends binary envelope through media transport abstraction');
+  requireContains(mediaTransport, 'socket.send(payload)', 'WebSocket fallback media transport performs the actual binary send');
   requireContains(sfuClient, 'binary_media_required: true', 'client marks binary-required media');
   requireContains(sfuClient, 'direct legacy JSON/base64 fallback has been removed', 'client has no legacy JSON media fallback');
   requireContains(publisherPipeline, 'const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);', 'publisher pipeline sends frames to live SFU client');
