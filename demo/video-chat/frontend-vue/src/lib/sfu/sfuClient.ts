@@ -728,8 +728,8 @@ export class SFUClient {
       return false
     }
     const postDrainQueueAgeMs = Math.max(queuedAgeMs, Date.now() - Math.max(0, Number(prepared.senderSentAtMs || 0)))
+    metrics.queued_age_ms = postDrainQueueAgeMs
     if (queueAgeBudgetMs > 0 && postDrainQueueAgeMs > queueAgeBudgetMs) {
-      metrics.queued_age_ms = postDrainQueueAgeMs
       this.reportFrameSendDiagnostic(
         'sfu_frame_send_aborted',
         'warning',
@@ -793,6 +793,10 @@ export class SFUClient {
       return false
     }
     const envelopeStartedAtMs = highResolutionNowMs()
+    prepared.metrics = {
+      ...prepared.metrics,
+      ...metrics,
+    }
     const encoded = encodeSfuBinaryFrameEnvelope(prepared)
     const binaryEnvelopeEncodeMs = roundedTransportStageMs(highResolutionNowMs() - envelopeStartedAtMs)
     let sendMetrics = appendSfuPublisherTraceStage(

@@ -42,6 +42,7 @@ try {
   requireContains(framePayload, 'budget_max_encoded_bytes_per_frame', 'frame payload encoded byte budget metric');
   requireContains(framePayload, 'budget_max_wire_bytes_per_second', 'frame payload wire byte budget metric');
   requireContains(framePayload, 'budget_max_queue_age_ms', 'frame payload queue age budget metric');
+  requireContains(framePayload, 'queued_age_ms', 'frame payload preserves measured outbound queue age');
   requireContains(framePayload, 'budget_max_buffered_bytes', 'frame payload buffered bytes budget metric');
   requireContains(framePayload, 'transportMetrics: normalizeTransportMetrics', 'binary envelope preserves stage transport metrics');
 
@@ -61,6 +62,8 @@ try {
   requireContains(sendFailureDetails, 'source: String(details.source ||', 'sfu client persists exact send source on failure');
   requireContains(sendFailureDetails, 'retryAfterMs: Math.max(0, Number(details.retryAfterMs || 0))', 'sfu client persists retry-after pacing on failure');
   requireContains(sfuClient, 'metrics.send_drain_ms = drain.waitedMs', 'sfu client records send-drain timing');
+  requireContains(sfuClient, 'metrics.queued_age_ms = postDrainQueueAgeMs', 'sfu client stamps post-drain queue age before binary encode');
+  requireContains(sfuClient, 'prepared.metrics = {\n      ...prepared.metrics,\n      ...metrics,', 'sfu client writes fresh queue age into binary envelope metadata before encode');
   requireContains(sfuClient, 'sfu_queue_age_budget_exceeded', 'sfu client enforces queue-age budget before send');
   requireContains(sfuClient, 'sfu_buffer_budget_exceeded', 'sfu client enforces websocket buffered budget before critical pressure');
 
@@ -94,6 +97,7 @@ try {
   requireContains(backendStore, 'selection_tile_ratio', 'backend selected tile ratio metric');
   requireContains(backendStore, 'selection_mask_guided', 'backend matte-guided metric');
   requireContains(backendStore, 'videochat_sfu_extract_stage_transport_metadata', 'backend normalizes stage transport metadata');
+  requireContains(backendStore, "'queued_age_ms' => ['queued_age_ms', 'queuedAgeMs']", 'backend preserves client-measured queue age metric');
   requireContains(backendStore, 'king_receive_latency_ms', 'backend preserves King receive latency metric');
   requireContains(backendStore, 'subscriber_send_latency_ms', 'backend preserves subscriber send latency metric');
   requireContains(backendStore, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'backend bounded SQLite frame buffer table');
@@ -104,6 +108,12 @@ try {
   requireContains(backendGateway, 'stampKingReceiveMetrics', 'gateway stamps King receive latency per frame');
   requireContains(backendGateway, 'king_fanout_latency_ms', 'gateway records fanout latency per frame');
   requireContains(backendGateway, 'videochat_sfu_insert_frame', 'gateway writes frames to bounded SQLite buffer');
+
+  const backendSubscriberBudget = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
+  requireContains(backendSubscriberBudget, 'function videochat_sfu_frame_trusted_ingress_age_ms', 'backend uses client-measured ingress age instead of wall-clock latency for stale drops');
+  requireContains(backendSubscriberBudget, "'trusted_ingress_age_ms' => $trustedIngressAgeMs", 'backend logs trusted ingress age');
+  requireContains(backendSubscriberBudget, "'clock_sensitive_receive_latency_ms' => $receiveLatencyMs", 'backend keeps wall-clock latency as diagnostic only');
+  requireContains(backendSubscriberBudget, "'queue_age_ms' => $trustedIngressAgeMs", 'publisher pressure reports trusted queue age, not clock-skewed latency');
 
   process.stdout.write('[sfu-transport-metrics-contract] PASS\n');
 } catch (error) {

@@ -659,6 +659,8 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'budget_max_keyframe_bytes_per_frame' => ['budget_max_keyframe_bytes_per_frame', 'budgetMaxKeyframeBytesPerFrame'],
         'budget_max_wire_bytes_per_second' => ['budget_max_wire_bytes_per_second', 'budgetMaxWireBytesPerSecond'],
         'budget_max_queue_age_ms' => ['budget_max_queue_age_ms', 'budgetMaxQueueAgeMs'],
+        'queued_age_ms' => ['queued_age_ms', 'queuedAgeMs'],
+        'queue_age_ms' => ['queue_age_ms', 'queueAgeMs'],
         'budget_max_buffered_bytes' => ['budget_max_buffered_bytes', 'budgetMaxBufferedBytes'],
         'budget_payload_soft_limit_bytes' => ['budget_payload_soft_limit_bytes', 'budgetPayloadSoftLimitBytes'],
         'budget_min_keyframe_retry_ms' => ['budget_min_keyframe_retry_ms', 'budgetMinKeyframeRetryMs'],

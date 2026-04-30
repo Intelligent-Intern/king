@@ -251,6 +251,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_max_keyframe_bytes_per_frame', source.budget_max_keyframe_bytes_per_frame ?? source.budgetMaxKeyframeBytesPerFrame],
     ['budget_max_wire_bytes_per_second', source.budget_max_wire_bytes_per_second ?? source.budgetMaxWireBytesPerSecond],
     ['budget_max_queue_age_ms', source.budget_max_queue_age_ms ?? source.budgetMaxQueueAgeMs],
+    ['queued_age_ms', source.queued_age_ms ?? source.queuedAgeMs],
+    ['queue_age_ms', source.queue_age_ms ?? source.queueAgeMs],
     ['budget_max_buffered_bytes', source.budget_max_buffered_bytes ?? source.budgetMaxBufferedBytes],
     ['budget_payload_soft_limit_bytes', source.budget_payload_soft_limit_bytes ?? source.budgetPayloadSoftLimitBytes],
     ['budget_min_keyframe_retry_ms', source.budget_min_keyframe_retry_ms ?? source.budgetMinKeyframeRetryMs],
