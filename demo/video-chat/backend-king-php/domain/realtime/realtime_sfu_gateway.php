@@ -43,27 +43,6 @@ function videochat_sfu_log_runtime_event(string $code, array $context = [], int 
     error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : $code));
 }
 
-/**
- * @param array<string, mixed> $roomState
- * @return array<int, array<string, mixed>>
- */
-function videochat_sfu_room_subscriber_targets(array $roomState, string $excludeClientId = ''): array
-{
-    $targets = [];
-    foreach (($roomState['subscribers'] ?? []) as $subscriberClientId => $subscriber) {
-        if ((string) $subscriberClientId === $excludeClientId) {
-            continue;
-        }
-        if (!is_array($subscriber) || !array_key_exists('websocket', $subscriber)) {
-            continue;
-        }
-        $subscriber['client_id'] = (string) $subscriberClientId;
-        $targets[] = $subscriber;
-    }
-
-    return $targets;
-}
-
 function videochat_sfu_broker_database_path(): string
 {
     $configuredPath = trim((string) (getenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH') ?: ''));
@@ -234,6 +213,7 @@ function videochat_handle_sfu_routes(
         'room_id' => $roomId,
         'role' => $role,
         'tracks' => [],
+        'layer_preferences' => [],
     ];
     if ($role === 'publisher') {
         $sfuRooms[$roomId]['publishers'][$clientId] = &$sfuClients[$clientId];
@@ -370,6 +350,7 @@ function videochat_handle_sfu_routes(
             $payloadChars = $actualPayloadCharsForFrame;
         }
         $chunkCount = max(1, (int) ($msg['chunk_count'] ?? ($msg['chunkCount'] ?? 1)));
+        $payloadBytes = videochat_sfu_transport_payload_bytes($msg, $protectedFrame, $dataBinary);
         $frameId = trim((string) ($msg['frame_id'] ?? ($msg['frameId'] ?? '')));
         $activeSfuDatabase = $ensureBrokerDatabase();
         if ($activeSfuDatabase instanceof PDO) {
@@ -414,6 +395,7 @@ function videochat_handle_sfu_routes(
             'protocol_version' => $frameProtocolVersion,
             'frame_sequence' => $frameSequence,
             'sender_sent_at_ms' => $senderSentAtMs,
+            'payload_bytes' => $payloadBytes,
             'payload_chars' => $payloadChars,
             'chunk_count' => $chunkCount,
         ], videochat_sfu_normalize_frame_transport_metadata($msg));
@@ -493,7 +475,8 @@ function videochat_handle_sfu_routes(
                     (string) $clientId,
                     array_keys($sfuRooms[$roomId]['publishers'] ?? []),
                     $sqliteFrameBufferCursor,
-                    $slowSubscriberVideoBlockedUntilMsByClient
+                    $slowSubscriberVideoBlockedUntilMsByClient,
+                    $sfuClients[$clientId] ?? []
                 );
                 if (videochat_sfu_now_ms() >= $nextBrokerCleanupMs) {
                     videochat_sfu_cleanup_stale_presence($activeSfuDatabase);
@@ -521,7 +504,8 @@ function videochat_handle_sfu_routes(
                     array_keys($sfuRooms[$roomId]['publishers'] ?? []),
                     $liveFrameRelayCursor,
                     $liveFrameRelaySeenFiles,
-                    $slowSubscriberVideoBlockedUntilMsByClient
+                    $slowSubscriberVideoBlockedUntilMsByClient,
+                    $sfuClients[$clientId] ?? []
                 );
                 if (videochat_sfu_now_ms() >= $nextLiveFrameRelayCleanupMs) {
                     videochat_sfu_live_frame_relay_cleanup_room($roomId);
@@ -671,6 +655,13 @@ function videochat_handle_sfu_routes(
                             'publisher_name' => $userName,
                             'tracks' => array_values($sfuClients[$clientId]['tracks']),
                         ]));
+                    }
+                    break;
+
+                case 'sfu/layer-preference':
+                    $ack = videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg);
+                    if ($ack !== []) {
+                        king_websocket_send($websocket, json_encode($ack));
                     }
                     break;
 
