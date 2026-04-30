@@ -170,6 +170,25 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
       break
     }
 
+    case 'sfu/publisher-pressure':
+      callbacks.onPublisherPressure?.({
+        reason: stringField(msg.reason, msg.code, 'sfu_publisher_pressure'),
+        trackId: stringField(msg.trackId, msg.track_id),
+        track_id: stringField(msg.trackId, msg.track_id),
+        queueAgeMs: Math.max(0, Number(msg.queueAgeMs ?? msg.queue_age_ms ?? msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
+        queue_age_ms: Math.max(0, Number(msg.queueAgeMs ?? msg.queue_age_ms ?? msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
+        budgetMaxQueueAgeMs: Math.max(0, Number(msg.budgetMaxQueueAgeMs ?? msg.budget_max_queue_age_ms ?? 0)),
+        budget_max_queue_age_ms: Math.max(0, Number(msg.budgetMaxQueueAgeMs ?? msg.budget_max_queue_age_ms ?? 0)),
+        kingReceiveLatencyMs: Math.max(0, Number(msg.kingReceiveLatencyMs ?? msg.king_receive_latency_ms ?? 0)),
+        payloadBytes: Math.max(0, Number(msg.payloadBytes ?? msg.payload_bytes ?? 0)),
+        retryAfterMs: Math.max(0, Number(msg.retryAfterMs ?? msg.retry_after_ms ?? 0)),
+        stage: 'sfu_ingress_latency_guard',
+        source: 'king_sfu_gateway',
+        transportPath: 'binary_envelope',
+        message: 'King SFU dropped a stale ingress frame and requested publisher backpressure recovery.',
+      })
+      break
+
     case 'sfu/error':
       reportClientDiagnostic({
         category: 'media',

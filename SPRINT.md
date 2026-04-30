@@ -71,6 +71,8 @@ Technical target:
    - Preserved measured `payload_bytes` when the SFU gateway creates broker frames, so protected frames are budgeted by actual bytes instead of falling back to a too-small record cap.
    - Added SFU websocket `sfu/layer-preference` control messages and server-side subscriber preference state.
    - Routed direct fanout, SQLite replay, and live-relay replay through subscriber-aware layer decisions so thumbnail/grid receivers cannot force the publisher profile down for fullscreen/main receivers.
+   - Added an SFU ingress latency guard: frames that already exceed their queue budget when King receives them are dropped before SQLite/live-relay/direct-fanout, and the publisher gets `sfu/publisher-pressure` so automatic quality recovery runs from backend evidence.
+   - Replay now prunes stale frames for all frame types, not only stale deltas, so `live_relay_poll` cannot keep shipping multi-second-old keyframes under pressure.
    - Verification: `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `php -l` on touched PHP modules, `git diff --check`.
 
 3. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.

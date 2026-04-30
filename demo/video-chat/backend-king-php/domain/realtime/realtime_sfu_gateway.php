@@ -326,6 +326,7 @@ function videochat_handle_sfu_routes(
         &$nextBrokerOpenAttemptMs,
         &$nextBrokerFramePresenceTouchMs,
         &$slowSubscriberVideoBlockedUntilMsByClient,
+        $websocket,
         $ensureBrokerDatabase
     ): void {
         $trackId = $msg['track_id'] ?? $msg['trackId'] ?? '';
@@ -416,6 +417,9 @@ function videochat_handle_sfu_routes(
             $outboundFrame['data_base64'] = $dataBase64;
         } else {
             $outboundFrame['data'] = $frameData;
+        }
+        if (videochat_sfu_drop_stale_ingress_frame_if_needed($websocket, $outboundFrame, $roomId, (string) $clientId)) {
+            return;
         }
         $relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);
         if ($activeSfuDatabase instanceof PDO && !videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame)) {
