@@ -140,6 +140,7 @@ try {
   requireContains(browserRenderer, "requested_codec_id: 'wlvc_sfu'", 'browser renderer names the interoperable WLVC codec target');
   requireContains(mediaStack, 'shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {})', 'receiver feedback uses websocket signaling for codec compatibility fallback instead of SFU-only recovery rows');
   requireContains(mediaStack, 'payload?.publisher_user_id', 'receiver feedback can target the publisher user id before remote peer hydration');
+  requireContains(mediaStack, 'const socketRecoverySent = Number.isInteger(targetUserId)', 'receiver recovery must send user-socket fallback even when SFU publisher-id routing accepts the request');
   assert.ok(
     mediaStack.indexOf('requestPublisherMediaRecovery') < mediaStack.indexOf('const targetUserId = Number('),
     'SFU publisher recovery by publisher id must run before socket fallback requires a hydrated peer user id',

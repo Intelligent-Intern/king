@@ -50,6 +50,8 @@ try {
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
+  requireContains(runtimeHealth, 'const socketRecoverySent = typeof sendSocketFrame ===', 'remote freeze recovery sends user-socket fallback alongside SFU publisher-id recovery');
+  requireContains(runtimeHealth, 'const sent = Boolean(sfuRecoverySent || socketRecoverySent);', 'remote freeze recovery does not short-circuit stale publisher-id routes');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');

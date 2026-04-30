@@ -188,20 +188,21 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       })
       : false;
 
-    const sent = sfuRecoverySent || (typeof sendSocketFrame === 'function' && sendSocketFrame({
+    const socketRecoverySent = typeof sendSocketFrame === 'function' && sendSocketFrame({
       type: 'call/media-quality-pressure',
       target_user_id: targetUserId,
-        payload: {
-          ...payload,
-          kind: 'sfu-video-quality-pressure',
-          requested_action: requestedAction,
-          request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
-          reason: normalizedReason,
-          publisher_id: String(publisherId || ''),
+      payload: {
+        ...payload,
+        kind: 'sfu-video-quality-pressure',
+        requested_action: requestedAction,
+        request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
+        reason: normalizedReason,
+        publisher_id: String(publisherId || ''),
         requester_user_id: localUserId,
         media_runtime_path: mediaRuntimePath.value,
       },
-    }));
+    });
+    const sent = Boolean(sfuRecoverySent || socketRecoverySent);
     if (sent) {
       peer.lastQualityPressureSentAtMs = nowMs;
       peer.lastQualityPressureReason = String(reason || '').trim();
