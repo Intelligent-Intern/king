@@ -22,7 +22,10 @@ function read(relativePath) {
 async function main() {
   const packageJson = read('package.json');
   const schedulerSource = read('src/domain/realtime/sfu/remoteRenderScheduler.js');
+  const workspaceTemplate = read('src/domain/realtime/CallWorkspaceView.template.html');
+  const fullscreenToggle = read('src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.js');
   const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
   const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
@@ -41,9 +44,18 @@ async function main() {
   requireContains(schedulerSource, '[REMOTE_RENDER_SURFACE_ROLES.MINI]: 100', 'mini thumbnails have bounded render cadence');
 
   requireContains(videoLayout, "from '../../sfu/remoteRenderScheduler'", 'layout imports render surface role helper');
+  requireContains(workspaceTemplate, 'workspace-video-fullscreen-overlay', 'workspace template exposes fixed fullscreen overlay');
+  requireContains(workspaceTemplate, 'id="workspace-fullscreen-video-slot"', 'workspace template exposes fullscreen render slot');
+  requireContains(workspaceTemplate, '@click.stop="closeVideoFullscreen"', 'workspace fullscreen overlay exits on direct click');
+  requireContains(fullscreenToggle, 'fullscreenVideoUserId.value = normalizedUserId', 'fullscreen toggle opens local overlay instead of mutating shared layout');
+  requireContains(fullscreenToggle, 'fullscreenVideoUserId.value = 0', 'fullscreen toggle closes local overlay');
+  assert.equal(fullscreenToggle.includes("sendLayoutCommand('layout/mode'"), false, 'fullscreen must not broadcast a shared layout-mode change');
+  requireContains(mediaStack, 'fullscreenVideoUserId: () => refs.fullscreenVideoUserId.value', 'media stack passes fullscreen overlay state into layout helper');
+  requireContains(videoLayout, "document.getElementById('workspace-fullscreen-video-slot')", 'layout mounts fullscreen media into dedicated overlay slot');
+  requireContains(videoLayout, 'if (userId === activeFullscreenUserId)', 'layout avoids duplicate thumbnail mounts while fullscreen is active');
   requireContains(videoLayout, 'role: REMOTE_RENDER_SURFACE_ROLES.GRID', 'grid slots mark remote render role');
   requireContains(videoLayout, 'role: REMOTE_RENDER_SURFACE_ROLES.MINI', 'mini slots mark remote render role');
-  requireContains(videoLayout, 'REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN', 'main-only layout marks fullscreen render role');
+  requireContains(videoLayout, 'REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN', 'fullscreen overlay marks fullscreen render role');
   requireContains(videoLayout, 'applyRemoteVideoSurfaceRole(node', 'mount path binds role before DOM replacement');
 
   requireContains(frameDecode, "from './remoteRenderScheduler'", 'WLVC decoder imports render scheduler');
@@ -112,4 +124,3 @@ main().catch((error) => {
   }
   fail('unknown failure');
 });
-

@@ -237,6 +237,7 @@ export function createLocalPublisherPipelineHelpers({
       video.autoplay = true;
       refs.localVideoElement.value = video;
     }
+    video.dataset.callLocalPreview = '1';
     video.srcObject = new MediaStream([videoTrack]);
     const container = document.getElementById('local-video-container');
     if (container && video.parentElement !== container) {

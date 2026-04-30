@@ -388,6 +388,7 @@ export function createCallWorkspaceMediaStack(options) {
       applyCallOutputPreferences: callbacks.applyCallOutputPreferences,
       bumpMediaRenderVersion,
       currentLayoutMode: () => refs.currentLayoutMode.value,
+      fullscreenVideoUserId: () => refs.fullscreenVideoUserId.value,
       gridVideoParticipants: () => refs.gridVideoParticipants.value,
       gridVideoSlotId: constants.gridVideoSlotId,
       hasRenderableMediaForParticipant: callbacks.hasRenderableMediaForParticipant,

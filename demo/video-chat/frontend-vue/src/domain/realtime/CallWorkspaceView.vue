@@ -434,6 +434,7 @@ const nativeAudioBridgeQuarantineByUserId = new Map();
 let mediaSecurityHandshakeWatchdogTimer = null;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
+const fullscreenVideoUserId = ref(0);
 const pendingSfuRemotePeerInitializers = new Map();
 const remoteFrameActivityLastByUserId = new Map();
 const sfuConnected = ref(false);
@@ -1212,6 +1213,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     currentUserId,
     desiredRoomId,
     encodeIntervalRef,
+    fullscreenVideoUserId,
     gridVideoParticipants: liveGridVideoParticipants,
     isSocketOnline,
     localFilteredStreamRef,
@@ -1718,6 +1720,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   currentUserId,
   desiredRoomId,
   formatTimestamp,
+  fullscreenVideoUserId,
   gridVideoSlotId,
   hangupCall: (...args) => hangupCall(...args),
   initials,
@@ -1858,6 +1861,7 @@ const {
   clearChatUnread,
   clearModerationSyncTimer,
   clearReactionQueueTimer,
+  closeVideoFullscreen,
   compactMiniStripToggleLabel,
   confirmStillInCall,
   currentCallLayoutSidebarControls,

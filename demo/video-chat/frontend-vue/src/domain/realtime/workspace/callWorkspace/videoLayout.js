@@ -11,6 +11,7 @@ export function createCallWorkspaceVideoLayoutHelpers({
     applyCallOutputPreferences,
     bumpMediaRenderVersion,
     currentLayoutMode,
+    fullscreenVideoUserId,
     gridVideoParticipants,
     gridVideoSlotId,
     hasRenderableMediaForParticipant,
@@ -136,6 +137,25 @@ export function createCallWorkspaceVideoLayoutHelpers({
     }
   }
 
+  function mountFullscreenVideoNode(assignedNodes) {
+    const normalizedUserId = Number(fullscreenVideoUserId?.() || 0);
+    const target = document.getElementById('workspace-fullscreen-video-slot');
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || !(target instanceof HTMLElement)) {
+      clearUnassignedChildren(target, assignedNodes);
+      return 0;
+    }
+    const node = mediaNodeForUserId(normalizedUserId);
+    if (!mountVideoNode(target, node, assignedNodes, {
+      role: REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN,
+      userId: normalizedUserId,
+      visibleParticipantCount: 1,
+    })) {
+      clearUnassignedChildren(target, assignedNodes);
+      return normalizedUserId;
+    }
+    return normalizedUserId;
+  }
+
   function mountRemotePeerFallback(peer, assignedNodes) {
     if (!peer || typeof peer !== 'object') return;
     const node = remotePeerMediaNode(peer);
@@ -167,6 +187,7 @@ export function createCallWorkspaceVideoLayoutHelpers({
   function renderCallVideoLayout() {
     if (typeof document === 'undefined') return;
     const assignedNodes = new Set();
+    const activeFullscreenUserId = mountFullscreenVideoNode(assignedNodes);
     const localContainer = document.getElementById('local-video-container');
     const remoteContainer = document.getElementById('remote-video-container');
     if (currentLayoutMode() === 'grid') {
@@ -175,6 +196,10 @@ export function createCallWorkspaceVideoLayoutHelpers({
       for (const participant of participants) {
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(gridVideoSlotId(userId));
+        if (userId === activeFullscreenUserId) {
+          clearUnassignedChildren(slot, assignedNodes);
+          continue;
+        }
         const node = mediaNodeForUserId(userId);
         if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId, visibleParticipantCount })) {
           clearUnassignedChildren(slot, assignedNodes);
@@ -188,13 +213,13 @@ export function createCallWorkspaceVideoLayoutHelpers({
       const miniParticipants = miniVideoParticipants();
       const visibleParticipantCount = 1 + miniParticipants.length;
 
-      if (primaryUserId === refs.currentUserId.value) {
+      if (primaryUserId !== activeFullscreenUserId && primaryUserId === refs.currentUserId.value) {
         mountVideoNode(localContainer, primaryNode, assignedNodes, {
           role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
           userId: primaryUserId,
           visibleParticipantCount,
         });
-      } else {
+      } else if (primaryUserId !== activeFullscreenUserId) {
         mountVideoNode(remoteContainer, primaryNode, assignedNodes, {
           role: currentLayoutMode() === 'main_only' ? REMOTE_RENDER_SURFACE_ROLES.FULLSCREEN : REMOTE_RENDER_SURFACE_ROLES.MAIN,
           userId: primaryUserId,
@@ -205,6 +230,10 @@ export function createCallWorkspaceVideoLayoutHelpers({
       for (const participant of miniParticipants) {
         const userId = Number(participant?.userId || 0);
         const slot = document.getElementById(miniVideoSlotId(userId));
+        if (userId === activeFullscreenUserId) {
+          clearUnassignedChildren(slot, assignedNodes);
+          continue;
+        }
         const node = mediaNodeForUserId(userId);
         if (!mountVideoNode(slot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.MINI, userId, visibleParticipantCount })) {
           clearUnassignedChildren(slot, assignedNodes);

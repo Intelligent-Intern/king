@@ -250,9 +250,74 @@
 
 .video-container :deep([data-call-video-framing-mode="cover"]),
 .workspace-grid-video-slot :deep([data-call-video-framing-mode="cover"]),
-.workspace-mini-video-slot :deep([data-call-video-framing-mode="cover"]) {
+.workspace-mini-video-slot :deep([data-call-video-framing-mode="cover"]),
+.workspace-fullscreen-video-slot :deep([data-call-video-framing-mode="cover"]) {
   object-fit: cover !important;
   object-position: center center !important;
+}
+
+.workspace-video-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  overflow: hidden;
+  background: var(--color-0b1324);
+  cursor: zoom-out;
+}
+
+.workspace-fullscreen-video-slot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--color-000000);
+  contain: strict;
+}
+
+.workspace-fullscreen-video-slot :deep(video),
+.workspace-fullscreen-video-slot :deep(canvas) {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  display: block !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  image-rendering: auto;
+  background: var(--color-000000);
+}
+
+.workspace-fullscreen-video-slot :deep(video[data-call-local-preview="1"]) {
+  transform: scaleX(-1);
+}
+
+.workspace-fullscreen-video-status-overlay {
+  z-index: 2;
+  pointer-events: none;
+}
+
+.workspace-fullscreen-close {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-rgba-255-255-255-0-18);
+  border-radius: 0;
+  background: var(--color-rgba-8-20-43-0-94);
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.workspace-fullscreen-close:hover {
+  background: var(--color-rgba-255-255-255-0-15);
 }
 
 .video-container.remote {
