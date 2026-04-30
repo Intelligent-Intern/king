@@ -37,6 +37,10 @@ import {
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
 import { buildSfuSendFailureDetails } from './sendFailureDetails'
 import {
+  SFU_CONTROL_TRANSPORT_WEBSOCKET,
+  SfuWebSocketFallbackMediaTransport,
+} from './mediaTransport'
+import {
   appendSfuPublisherTraceStage,
   buildSfuFrameTransportSample,
   highResolutionNowMs,
@@ -114,9 +118,14 @@ export class SFUClient {
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
   private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
   private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
+  private mediaTransport: SfuWebSocketFallbackMediaTransport
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
+    this.mediaTransport = new SfuWebSocketFallbackMediaTransport({
+      getSocket: () => this.ws,
+      getBufferedAmount: () => this.getWebSocketBufferedAmount(),
+    })
     this.outboundFrameQueue = new SfuOutboundFrameQueue({
       canSend: () => this.isOpen(),
       sendPreparedFrame: (prepared, queuedAgeMs) => this.sendPreparedEncodedFrame(prepared, queuedAgeMs),
@@ -781,11 +790,11 @@ export class SFUClient {
   }
 
   private sendBinaryFrame(prepared: PreparedSfuOutboundFramePayload, metrics: Record<string, unknown>): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.mediaTransport.isOpen()) {
       this.recordSendFailure(prepared, {
         reason: 'socket_not_open',
         stage: 'send_binary_envelope',
-        source: 'websocket',
+        source: 'media_transport',
         message: 'Binary envelope send was attempted while the SFU websocket was not open.',
         transportPath: 'binary_envelope',
         bufferedAmount: this.getWebSocketBufferedAmount(),
@@ -820,13 +829,26 @@ export class SFUClient {
       return false
     }
     try {
-      const socketSendStartedAtMs = highResolutionNowMs()
-      this.ws.send(encoded)
-      const websocketSendMs = roundedTransportStageMs(highResolutionNowMs() - socketSendStartedAtMs)
+      const sendResult = this.mediaTransport.sendBinaryFrame(encoded)
+      if (!sendResult.ok) {
+        this.recordSendFailure(prepared, {
+          reason: sendResult.errorCode || 'media_transport_send_failed',
+          stage: 'send_binary_envelope',
+          source: 'media_transport',
+          message: 'SFU media transport failed while sending an encoded binary frame envelope.',
+          transportPath: sendResult.transportPath,
+          bufferedAmount: sendResult.bufferedAmount,
+        })
+        return false
+      }
+      const websocketSendMs = roundedTransportStageMs(sendResult.sendMs)
       sendMetrics = appendSfuPublisherTraceStage(
         {
           ...sendMetrics,
           websocket_send_ms: websocketSendMs,
+          media_transport_send_ms: websocketSendMs,
+          media_transport: sendResult.transportPath,
+          control_transport: SFU_CONTROL_TRANSPORT_WEBSOCKET,
         },
         'browser_websocket_send',
         websocketSendMs,
@@ -845,7 +867,9 @@ export class SFUClient {
         binary_continuation_required: binaryContinuationRequired,
         binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
         application_media_chunking: false,
-        websocket_buffered_amount: this.getWebSocketBufferedAmount(),
+        media_transport: sendResult.transportPath,
+        control_transport: SFU_CONTROL_TRANSPORT_WEBSOCKET,
+        websocket_buffered_amount: sendResult.bufferedAmount,
       }
       this.reportFrameSendPressureIfNeeded(samplePayload)
       this.reportFrameTransportSampleIfNeeded(samplePayload)

@@ -43,6 +43,16 @@ function videochat_sfu_log_runtime_event(string $code, array $context = [], int 
     error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : $code));
 }
 
+function videochat_sfu_control_transport_id(): string
+{
+    return 'websocket_sfu_control';
+}
+
+function videochat_sfu_fallback_media_transport_id(): string
+{
+    return 'websocket_binary_media_fallback';
+}
+
 function videochat_sfu_broker_database_path(): string
 {
     $configuredPath = trim((string) (getenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH') ?: ''));
@@ -327,6 +337,9 @@ function videochat_handle_sfu_routes(
         'name' => $userName,
         'room_id' => $roomId,
         'runtime' => videochat_realtime_runtime_descriptor(),
+        'control_transport' => videochat_sfu_control_transport_id(),
+        'media_transport' => videochat_sfu_fallback_media_transport_id(),
+        'media_transport_role' => 'fallback_until_real_media_plane',
         'server_time' => time(),
     ]));
 
@@ -457,6 +470,8 @@ function videochat_handle_sfu_routes(
             'payload_bytes' => $payloadBytes,
             'payload_chars' => $payloadChars,
             'chunk_count' => $chunkCount,
+            'control_transport' => videochat_sfu_control_transport_id(),
+            'media_transport' => videochat_sfu_fallback_media_transport_id(),
         ], videochat_sfu_normalize_frame_transport_metadata($msg));
         $fanoutStartedAtMs = videochat_sfu_now_ms();
         $kingReceiveAtMs = max(0, (int) ($outboundFrame['king_receive_at_ms'] ?? 0));

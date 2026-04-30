@@ -620,6 +620,8 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'publisher_browser_encoder_config_codec' => ['publisher_browser_encoder_config_codec', 'publisherBrowserEncoderConfigCodec'],
         'publisher_browser_encoder_hardware_acceleration' => ['publisher_browser_encoder_hardware_acceleration', 'publisherBrowserEncoderHardwareAcceleration'],
         'publisher_browser_encoder_latency_mode' => ['publisher_browser_encoder_latency_mode', 'publisherBrowserEncoderLatencyMode'],
+        'control_transport' => ['control_transport', 'controlTransport'],
+        'media_transport' => ['media_transport', 'mediaTransport'],
     ];
     foreach ($stringFields as $target => $keys) {
         foreach ($keys as $key) {

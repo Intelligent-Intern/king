@@ -96,7 +96,7 @@ Technical target:
      jitter buffering, keyframe/NACK/PLI recovery, per-subscriber layer routing,
      backend diagnostics, and SQLite/live-relay fallback boundaries explicit.
 
-3. [ ] `[sfu-control-data-plane-split]` Split SFU control messages from media payload transport.
+3. [x] `[sfu-control-data-plane-split]` Split SFU control messages from media payload transport.
 
    Scope:
    - Keep `/sfu` WebSocket for auth, join, publish, subscribe, layer preference,
@@ -111,6 +111,16 @@ Technical target:
      real-media-plane implementation seam.
    - Backend route code separates control handling from payload fanout.
    - Diagnostics identify `control_transport` and `media_transport` separately.
+
+   Report:
+   - Added a frontend `SfuWebSocketFallbackMediaTransport` abstraction so binary
+     frame send no longer calls the socket directly from the SFU client hot path.
+   - Added explicit `websocket_sfu_control` and
+     `websocket_binary_media_fallback` identifiers in client and backend
+     diagnostics.
+   - Backend welcome/frame metadata now marks WebSocket binary media as
+     `fallback_until_real_media_plane`, preserving room/admission control while
+     separating it from the future media data plane.
 
 4. [ ] `[packet-layer-sfu-forwarder]` Replace whole-frame fanout with packet/layer forwarding semantics.
 
