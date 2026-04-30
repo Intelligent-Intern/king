@@ -93,7 +93,7 @@ services:
       VIDEOCHAT_KING_WS_WORKERS: "${VIDEOCHAT_V1_SFU_WORKERS:-8}"
       VIDEOCHAT_KING_WS_PATH: /sfu
       VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite
-      VIDEOCHAT_KING_SFU_BROKER_DB_PATH: /data/video-chat-sfu-broker.sqlite
+      VIDEOCHAT_KING_SFU_BROKER_DB_PATH: "${VIDEOCHAT_KING_SFU_BROKER_DB_PATH:-/sfu-buffer/video-chat-sfu-broker.sqlite}"
       VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"
       VIDEOCHAT_STUN_URIS: "${VIDEOCHAT_STUN_URIS:-}"
       VIDEOCHAT_TURN_URIS: "${VIDEOCHAT_TURN_URIS:-}"
@@ -112,6 +112,8 @@ services:
       - "${VIDEOCHAT_V1_BACKEND_SFU_BIND:-0.0.0.0}:${VIDEOCHAT_V1_BACKEND_SFU_PORT:-18082}:18080"
     volumes:
       - videochat-v1-sqlite:/data
+    tmpfs:
+      - /sfu-buffer:rw,noexec,nosuid,nodev,size=${VIDEOCHAT_V1_SFU_BROKER_TMPFS_SIZE:-256m},mode=1777
     restart: unless-stopped
 
   videochat-turn-v1:

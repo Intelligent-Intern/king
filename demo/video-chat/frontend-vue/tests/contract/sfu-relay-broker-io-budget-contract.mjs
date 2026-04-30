@@ -47,6 +47,11 @@ try {
   requireContains(store, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');
   requireContains(store, 'strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)', 'oversized SQLite frame records are rejected before insert');
   requireContains(store, 'videochat_sfu_trim_frame_buffer_room($pdo, $normalizedRoomId)', 'SQLite frame buffer trims room rows');
+  requireContains(gateway, 'function videochat_sfu_configure_broker_database', 'SFU broker has isolated SQLite configuration');
+  requireContains(gateway, "PRAGMA journal_mode = WAL", 'SFU broker uses WAL on tmpfs');
+  requireContains(gateway, "PRAGMA synchronous = OFF", 'SFU broker disables durable sync only for ephemeral media replay');
+  requireContains(gateway, "PRAGMA temp_store = MEMORY", 'SFU broker keeps temp storage in memory');
+  requireContains(gateway, "sfu_broker_database_opened", 'SFU broker emits runtime storage diagnostics');
 
   process.stdout.write('[sfu-relay-broker-io-budget-contract] PASS\n');
 } catch (error) {

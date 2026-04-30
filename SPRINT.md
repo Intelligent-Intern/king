@@ -79,7 +79,7 @@ Technical target:
    - Production check after deploy: `sfu_frame_ingress_stale_dropped=0`, `sfu_ingress_latency_budget_exceeded=0`, `sfu_browser_encoder_frame_failed=0`; only `sfu_frame_ingress_wall_clock_skew_observed` remains, with trusted `queued_age_ms` at 1-5ms and clock-sensitive receive latency around 2.6s.
    - Verification: `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `php -l` on touched PHP modules, `git diff --check`.
 
-3. [ ] `[sfu-frame-buffer-tmpfs-broker]` Move the short-lived SFU frame buffer to RAM-backed storage.
+3. [x] `[sfu-frame-buffer-tmpfs-broker]` Move the short-lived SFU frame buffer to RAM-backed storage.
 
    Scope:
    - Keep the main `VIDEOCHAT_KING_DB_PATH` persistent on `/data/video-chat.sqlite` for users, calls, sessions, room state, and operational recovery.
@@ -95,7 +95,11 @@ Technical target:
    - Contracts prove the broker path is tmpfs-backed in compose and that `sqlite::memory:` is not used for multi-worker SFU replay.
 
    Report:
-   - Proposed next performance improvement after the clock-skew/backpressure fix.
+   - Moved only `VIDEOCHAT_KING_SFU_BROKER_DB_PATH` to `/sfu-buffer/video-chat-sfu-broker.sqlite` in production compose.
+   - Added a bounded Docker tmpfs mount for `/sfu-buffer` on the SFU worker service while leaving `VIDEOCHAT_KING_DB_PATH` on `/data/video-chat.sqlite`.
+   - Added broker-only SQLite pragmas (`journal_mode=WAL`, `synchronous=OFF`, `temp_store=MEMORY`, bounded journal size) so persistent app DB durability is unchanged.
+   - Added backend diagnostics for `sfu_broker_database_opened`, including broker path, main DB path, storage class, and effective pragmas.
+   - Added contracts proving tmpfs compose wiring, no `sqlite::memory:` broker, and isolated broker pragmas.
 
 4. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
 
