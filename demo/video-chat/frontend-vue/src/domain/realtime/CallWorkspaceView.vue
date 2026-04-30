@@ -1336,6 +1336,12 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     currentUserId: () => currentUserId.value,
     deleteSfuRemotePeer,
     handleSFUEncodedFrame,
+    handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(
+      getSfuClientBufferedAmount(),
+      String(details?.trackId || details?.track_id || ''),
+      String(details?.reason || 'sfu_publisher_pressure'),
+      details,
+    ),
     isWlvcRuntimePath: () => isWlvcRuntimePath(),
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,

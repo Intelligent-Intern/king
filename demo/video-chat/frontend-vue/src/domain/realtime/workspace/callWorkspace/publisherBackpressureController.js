@@ -76,6 +76,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const budgetSendFailure = [
     'send_buffer_drain_timeout',
     'sfu_buffer_budget_exceeded',
+    'sfu_ingress_latency_budget_exceeded',
     'sfu_projected_buffer_budget_exceeded',
     'sfu_wire_rate_budget_exceeded',
   ].includes(reason);

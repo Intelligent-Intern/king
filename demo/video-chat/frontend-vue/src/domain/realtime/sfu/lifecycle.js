@@ -11,6 +11,7 @@ export function createSfuLifecycleHelpers({
     currentUserId,
     deleteSfuRemotePeer,
     handleSFUEncodedFrame,
+    handleSfuPublisherPressure,
     isWlvcRuntimePath,
     maybeFallbackToNativeRuntime,
     mediaDebugLog,
@@ -135,6 +136,7 @@ export function createSfuLifecycleHelpers({
         setTimeout(() => requestSfuConnect(), 2000);
       },
       onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
+      onPublisherPressure: (details) => handleSfuPublisherPressure?.(details),
     });
 
     refs.sfuClientRef.value.connect(

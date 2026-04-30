@@ -24,6 +24,7 @@ try {
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
   const binaryPayload = read('../backend-king-php/domain/realtime/realtime_sfu_binary_payload.php');
+  const subscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_record_bytes(array $frame): int', 'live relay has a per-record byte budget');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_room_bytes(): int', 'live relay has a room byte budget');
@@ -36,6 +37,10 @@ try {
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'hot path sends JSON-safe relay copy');
   requireContains(gateway, "'payload_bytes' => $payloadBytes", 'SFU broker frames preserve measured protected payload bytes');
   requireContains(gateway, 'videochat_sfu_transport_payload_bytes($msg, $protectedFrame, $dataBinary)', 'SFU gateway derives payload bytes before broker budgeting');
+  requireContains(gateway, 'videochat_sfu_drop_stale_ingress_frame_if_needed($websocket, $outboundFrame, $roomId, (string) $clientId)', 'SFU gateway drops stale ingress frames before relay fanout');
+  requireContains(subscriberBudget, 'function videochat_sfu_frame_latency_budget_ms(array $frame): int', 'SFU latency budget is shared by ingress and replay');
+  requireContains(subscriberBudget, "type' => 'sfu/publisher-pressure'", 'SFU stale ingress guard feeds publisher pressure');
+  requireContains(subscriberBudget, 'sfu_frame_replay_stale_frame_pruned', 'SFU replay prunes stale frames, not only stale deltas');
   requireContains(binaryPayload, 'function videochat_sfu_transport_payload_bytes(array $frame', 'shared payload-byte helper protects relay/broker budgets');
   requireContains(store, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
   requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');

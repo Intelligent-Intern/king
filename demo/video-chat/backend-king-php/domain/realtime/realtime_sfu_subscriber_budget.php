@@ -27,6 +27,51 @@ function videochat_sfu_subscriber_replay_max_batch_frames(): int
     return 4;
 }
 
+function videochat_sfu_frame_latency_budget_ms(array $frame): int
+{
+    $queueBudgetMs = max(0, (int) ($frame['budget_max_queue_age_ms'] ?? 0));
+    if ($queueBudgetMs > 0) {
+        return max(450, min(1200, $queueBudgetMs * 2));
+    }
+
+    return 900;
+}
+
+function videochat_sfu_drop_stale_ingress_frame_if_needed(mixed $websocket, array $frame, string $roomId, string $publisherId): bool
+{
+    $receiveLatencyMs = max(0, (int) ($frame['king_receive_latency_ms'] ?? 0));
+    $latencyBudgetMs = videochat_sfu_frame_latency_budget_ms($frame);
+    if ($receiveLatencyMs <= $latencyBudgetMs) {
+        return false;
+    }
+
+    $trackId = (string) ($frame['track_id'] ?? '');
+    videochat_sfu_log_runtime_event('sfu_frame_ingress_stale_dropped', [
+        'room_id' => $roomId,
+        'publisher_id' => $publisherId,
+        'track_id' => $trackId,
+        'frame_type' => (string) ($frame['frame_type'] ?? 'delta'),
+        'king_receive_latency_ms' => $receiveLatencyMs,
+        'ingress_latency_budget_ms' => $latencyBudgetMs,
+        'sfu_send_path' => 'ingress_latency_guard',
+        ...videochat_sfu_transport_metric_fields($frame, 0),
+    ], 1000);
+    videochat_presence_send_frame($websocket, [
+        'type' => 'sfu/publisher-pressure',
+        'reason' => 'sfu_ingress_latency_budget_exceeded',
+        'track_id' => $trackId,
+        'frame_sequence' => max(0, (int) ($frame['frame_sequence'] ?? 0)),
+        'king_receive_latency_ms' => $receiveLatencyMs,
+        'queue_age_ms' => $receiveLatencyMs,
+        'budget_max_queue_age_ms' => max(0, (int) ($frame['budget_max_queue_age_ms'] ?? 0)),
+        'ingress_latency_budget_ms' => $latencyBudgetMs,
+        'payload_bytes' => max(0, (int) ($frame['payload_bytes'] ?? 0)),
+        'retry_after_ms' => 300,
+    ]);
+
+    return true;
+}
+
 function videochat_sfu_normalize_video_layer_preference(mixed $value, string $fallback = 'primary'): string
 {
     $normalized = strtolower(trim((string) $value));
@@ -194,6 +239,7 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
     }
 
     $pruned = [];
+    $staleFrameCount = 0;
     $staleDeltaCount = 0;
     $preKeyframeDeltaCount = 0;
     $layerPrunedCount = 0;
@@ -204,6 +250,10 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
         $isDelta = videochat_sfu_frame_is_delta($frame);
         $trackKey = videochat_sfu_frame_replay_track_key($frame);
         $ageMs = videochat_sfu_frame_replay_age_ms($frame);
+        if ($ageMs > videochat_sfu_frame_latency_budget_ms($frame)) {
+            $staleFrameCount++;
+            continue;
+        }
         if ($isDelta && $ageMs > videochat_sfu_subscriber_replay_delta_max_age_ms()) {
             $staleDeltaCount++;
             continue;
@@ -224,6 +274,14 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
         }
     }
 
+    if ($staleFrameCount > 0) {
+        videochat_sfu_log_runtime_event('sfu_frame_replay_stale_frame_pruned', [
+            'room_id' => $roomId,
+            'subscriber_id' => $subscriberId,
+            'sfu_send_path' => $sendPath,
+            'stale_frame_count' => $staleFrameCount,
+        ], 1000);
+    }
     if ($staleDeltaCount > 0) {
         videochat_sfu_log_runtime_event('sfu_frame_replay_stale_delta_pruned', [
             'room_id' => $roomId,

@@ -123,4 +123,5 @@ export interface SFUClientCallbacks {
   onConnected?:    () => void
   onDisconnect:    () => void
   onEncodedFrame?: (frame: SFUEncodedFrame) => void
+  onPublisherPressure?: (details: Record<string, unknown>) => void
 }

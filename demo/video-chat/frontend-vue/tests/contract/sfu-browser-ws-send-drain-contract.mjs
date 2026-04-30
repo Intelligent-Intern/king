@@ -21,8 +21,12 @@ function read(relativePath) {
 
 try {
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
+  const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const outboundFrameBudget = read('src/lib/sfu/outboundFrameBudget.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
+  const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.js');
+  const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
 
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'client has an explicit low-water send resume target');
   requireContains(outboundFrameBudget, 'export const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 160', 'client does not hide media behind a 500ms browser drain wait');
@@ -46,6 +50,12 @@ try {
   requireContains(sfuClient, 'post_drain_outbound_frame_queue_budget', 'client reports the exact post-drain stale-frame stage');
   requireContains(sfuClient, 'private send(msg: object): boolean', 'control messages keep a direct send path');
   requireContains(sfuClient, 'this.ws.send(JSON.stringify(msg))', 'control messages bypass the media frame queue');
+  requireContains(sfuTypes, 'onPublisherPressure?: (details: Record<string, unknown>) => void', 'SFU client exposes backend publisher pressure');
+  requireContains(sfuMessageHandler, "case 'sfu/publisher-pressure':", 'SFU client handles backend publisher pressure');
+  requireContains(sfuMessageHandler, "stage: 'sfu_ingress_latency_guard'", 'backend ingress latency pressure preserves exact stage');
+  requireContains(sfuLifecycle, 'onPublisherPressure: (details) => handleSfuPublisherPressure?.(details)', 'SFU lifecycle wires publisher pressure callback');
+  requireContains(workspaceView, 'handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(', 'workspace routes SFU pressure into publisher backpressure controller');
+  requireContains(publisherBackpressureController, "'sfu_ingress_latency_budget_exceeded'", 'publisher pressure can trigger automatic downshift for stale SFU ingress');
   requireContains(sfuTypes, 'sendDrainTargetBytes', 'transport samples expose drain target');
   requireContains(sfuTypes, 'sendDrainMaxWaitMs', 'transport samples expose drain wait budget');
   assert.equal(
