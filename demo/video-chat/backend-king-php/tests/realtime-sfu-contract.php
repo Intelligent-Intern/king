@@ -291,6 +291,7 @@ try {
         'SFU direct fanout binary-required diagnostics should be wired'
     );
     $sfuStoreSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
+    $sfuFrameBufferSource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_frame_buffer.php');
     $sfuBrokerReplaySource = (string) file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_broker_replay.php');
     foreach ([
         'sfu_frame_binary_send_sample',
@@ -343,11 +344,18 @@ try {
     );
     videochat_realtime_sfu_assert(
         str_contains($sfuStoreSource, 'CREATE TABLE IF NOT EXISTS sfu_frames')
-        && str_contains($sfuStoreSource, 'INSERT INTO sfu_frames')
+        && str_contains($sfuStoreSource, "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';")
+        && str_contains($sfuFrameBufferSource, 'INSERT INTO sfu_frames')
         && str_contains($sfuStoreSource, 'function videochat_sfu_decode_stored_frame_payload(')
         && str_contains($sfuGatewaySource, 'videochat_sfu_insert_frame')
         && str_contains($sfuBrokerReplaySource, 'videochat_sfu_sqlite_frame_buffer_poll'),
         'SFU media frames must use the bounded SQLite frame buffer for cross-worker replay'
+    );
+    videochat_realtime_sfu_assert(
+        str_contains($sfuFrameBufferSource, 'function videochat_sfu_frame_buffer_max_room_bytes(): int')
+        && str_contains($sfuFrameBufferSource, 'function videochat_sfu_frame_buffer_select_age_biased_eviction_rows(')
+        && str_contains($sfuFrameBufferSource, 'sfu_frame_buffer_age_biased_eviction'),
+        'SFU bounded SQLite frame buffer must enforce age-biased row and byte pressure with diagnostics'
     );
     videochat_realtime_sfu_assert(
         function_exists('videochat_sfu_live_frame_relay_publish')
@@ -725,6 +733,35 @@ try {
     );
     videochat_realtime_sfu_assert(!(bool) ($invalidChunkCommand['ok'] ?? true), 'JSON SFU chunk command must fail closed');
     videochat_realtime_sfu_assert((string) ($invalidChunkCommand['error'] ?? '') === 'binary_media_required', 'JSON SFU chunk command rejection reason mismatch');
+
+    $ageBiasedEvictionRows = videochat_sfu_frame_buffer_select_age_biased_eviction_rows(
+        [
+            ['frame_row_id' => 10, 'created_at_ms' => 1000, 'record_bytes' => 300],
+            ['frame_row_id' => 11, 'created_at_ms' => 2000, 'record_bytes' => 900],
+            ['frame_row_id' => 12, 'created_at_ms' => 3000, 'record_bytes' => 300],
+            ['frame_row_id' => 13, 'created_at_ms' => 3900, 'record_bytes' => 300],
+        ],
+        3,
+        1200,
+        4000
+    );
+    videochat_realtime_sfu_assert(
+        $ageBiasedEvictionRows === [10, 11],
+        'SFU frame-buffer eviction must prefer old pressure before newer frames'
+    );
+    $freshnessGraceEvictionRows = videochat_sfu_frame_buffer_select_age_biased_eviction_rows(
+        [
+            ['frame_row_id' => 20, 'created_at_ms' => 3900, 'record_bytes' => 900],
+            ['frame_row_id' => 21, 'created_at_ms' => 3950, 'record_bytes' => 900],
+        ],
+        1,
+        900,
+        4000
+    );
+    videochat_realtime_sfu_assert(
+        $freshnessGraceEvictionRows === [20],
+        'SFU frame-buffer eviction must still converge under pressure while keeping newest frames last'
+    );
 
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[realtime-sfu-contract] SKIP: pdo_sqlite is not available for persistence relay checks\n");

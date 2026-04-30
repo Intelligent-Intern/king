@@ -116,6 +116,7 @@ export function createSfuRemotePeerHelpers({
       lastSfuFrameSequenceByTrack: {},
       lastSfuFrameTimestampByTrack: {},
       lastSfuFrameDropLoggedAtMs: 0,
+      remoteJitterBufferByTrack: {},
       remoteRenderStateByTrack: {},
     };
   }
@@ -314,6 +315,7 @@ export function createSfuRemotePeerHelpers({
           ? { ...existingPeer.lastSfuFrameTimestampByTrack }
           : {}),
         lastSfuFrameDropLoggedAtMs: continuityReset ? continuityReset.lastSfuFrameDropLoggedAtMs : Number(existingPeer.lastSfuFrameDropLoggedAtMs || 0),
+        remoteJitterBufferByTrack: continuityReset ? continuityReset.remoteJitterBufferByTrack : {},
         remoteRenderStateByTrack: continuityReset ? continuityReset.remoteRenderStateByTrack : (existingPeer.remoteRenderStateByTrack && typeof existingPeer.remoteRenderStateByTrack === 'object'
           ? { ...existingPeer.remoteRenderStateByTrack }
           : {}),
@@ -421,6 +423,7 @@ export function createSfuRemotePeerHelpers({
       lastSfuFrameSequenceByTrack: {},
       lastSfuFrameTimestampByTrack: {},
       lastSfuFrameDropLoggedAtMs: 0,
+      remoteJitterBufferByTrack: {},
       remoteRenderStateByTrack: {},
     };
     setSfuRemotePeer(publisherId, peer);

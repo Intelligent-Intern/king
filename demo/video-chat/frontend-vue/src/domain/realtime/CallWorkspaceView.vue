@@ -1351,6 +1351,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     publishLocalTracks: (...args) => publishLocalTracks(...args),
     publishLocalTracksToSfuIfReady: (...args) => publishLocalTracksToSfuIfReady(...args),
     renderCallVideoLayout: () => renderCallVideoLayout(),
+    requestWlvcFullFrameKeyframe: (...args) => requestWlvcFullFrameKeyframe(...args),
     requestSfuConnect: () => initSFU(),
     resetWlvcBackpressureCounters,
     scheduleMediaSecurityParticipantSync,

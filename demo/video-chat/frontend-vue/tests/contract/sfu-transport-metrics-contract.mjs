@@ -89,6 +89,7 @@ try {
   requireContains(frameDecode, 'receiver_render_latency_ms', 'receiver render sample includes render latency');
 
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const backendFrameBuffer = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_frame_buffer.php');
   requireContains(backendStore, 'function videochat_sfu_transport_metric_fields', 'backend transport metric helper');
   requireContains(backendStore, 'transport_frame_kind', 'backend transport frame kind metric');
   requireContains(backendStore, 'legacy_base64_overhead_bytes', 'backend legacy base64 overhead metric');
@@ -101,8 +102,10 @@ try {
   requireContains(backendStore, 'king_receive_latency_ms', 'backend preserves King receive latency metric');
   requireContains(backendStore, 'subscriber_send_latency_ms', 'backend preserves subscriber send latency metric');
   requireContains(backendStore, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'backend bounded SQLite frame buffer table');
-  requireContains(backendStore, 'INSERT INTO sfu_frames', 'backend bounded SQLite frame buffer insert');
-  requireContains(backendStore, 'sqlite_buffer_age_ms', 'backend reports SQLite frame-buffer age metric');
+  requireContains(backendStore, "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';", 'backend SFU store delegates bounded frame-buffer runtime');
+  requireContains(backendFrameBuffer, 'INSERT INTO sfu_frames', 'backend bounded SQLite frame buffer insert');
+  requireContains(backendFrameBuffer, 'sqlite_buffer_age_ms', 'backend reports SQLite frame-buffer age metric');
+  requireContains(backendFrameBuffer, 'sfu_frame_buffer_age_biased_eviction', 'backend reports frame-buffer eviction pressure');
 
   const backendGateway = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   requireContains(backendGateway, 'stampKingReceiveMetrics', 'gateway stamps King receive latency per frame');

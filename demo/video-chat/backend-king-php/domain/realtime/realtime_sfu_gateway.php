@@ -43,6 +43,16 @@ function videochat_sfu_log_runtime_event(string $code, array $context = [], int 
     error_log('[video-chat][sfu] ' . (is_string($encoded) && $encoded !== '' ? $encoded : $code));
 }
 
+function videochat_sfu_control_transport_id(): string
+{
+    return 'websocket_sfu_control';
+}
+
+function videochat_sfu_fallback_media_transport_id(): string
+{
+    return 'websocket_binary_media_fallback';
+}
+
 function videochat_sfu_broker_database_path(): string
 {
     $configuredPath = trim((string) (getenv('VIDEOCHAT_KING_SFU_BROKER_DB_PATH') ?: ''));
@@ -327,6 +337,9 @@ function videochat_handle_sfu_routes(
         'name' => $userName,
         'room_id' => $roomId,
         'runtime' => videochat_realtime_runtime_descriptor(),
+        'control_transport' => videochat_sfu_control_transport_id(),
+        'media_transport' => videochat_sfu_fallback_media_transport_id(),
+        'media_transport_role' => 'fallback_until_real_media_plane',
         'server_time' => time(),
     ]));
 
@@ -358,6 +371,7 @@ function videochat_handle_sfu_routes(
     $liveFrameRelayCursor = '';
     $liveFrameRelaySeenFiles = [];
     $sqliteFrameBufferCursor = 0;
+    $recoveryRequestCursor = 0;
     $slowSubscriberVideoBlockedUntilMsByClient = [];
     $nextBrokerPollMs = 0;
     $nextLiveFrameRelayPollMs = 0;
@@ -457,6 +471,8 @@ function videochat_handle_sfu_routes(
             'payload_bytes' => $payloadBytes,
             'payload_chars' => $payloadChars,
             'chunk_count' => $chunkCount,
+            'control_transport' => videochat_sfu_control_transport_id(),
+            'media_transport' => videochat_sfu_fallback_media_transport_id(),
         ], videochat_sfu_normalize_frame_transport_metadata($msg));
         $fanoutStartedAtMs = videochat_sfu_now_ms();
         $kingReceiveAtMs = max(0, (int) ($outboundFrame['king_receive_at_ms'] ?? 0));
@@ -540,8 +556,16 @@ function videochat_handle_sfu_routes(
                     $slowSubscriberVideoBlockedUntilMsByClient,
                     $sfuClients[$clientId] ?? []
                 );
+                videochat_sfu_poll_recovery_requests(
+                    $activeSfuDatabase,
+                    $websocket,
+                    $roomId,
+                    (string) $clientId,
+                    $recoveryRequestCursor
+                );
                 if (videochat_sfu_now_ms() >= $nextBrokerCleanupMs) {
                     videochat_sfu_cleanup_stale_presence($activeSfuDatabase);
+                    videochat_sfu_cleanup_recovery_requests($activeSfuDatabase);
                     $nextBrokerCleanupMs = videochat_sfu_now_ms() + 5000;
                 }
             } catch (Throwable $error) {
@@ -724,6 +748,60 @@ function videochat_handle_sfu_routes(
                     $ack = videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg);
                     if ($ack !== []) {
                         king_websocket_send($websocket, json_encode($ack));
+                    }
+                    break;
+
+                case 'sfu/media-recovery-request':
+                    $publisherId = trim((string) ($msg['publisher_id'] ?? ($msg['publisherId'] ?? '')));
+                    if ($publisherId === '' || $publisherId === (string) $clientId) {
+                        king_websocket_send($websocket, json_encode([
+                            'type' => 'sfu/error',
+                            'room_id' => $roomId,
+                            'error' => 'invalid_media_recovery_target',
+                            'command_type' => 'sfu/media-recovery-request',
+                        ]));
+                        break;
+                    }
+                    $recoveryRequest = videochat_sfu_normalize_media_recovery_request(
+                        $roomId,
+                        $publisherId,
+                        (string) $clientId,
+                        $userIdString,
+                        $msg
+                    );
+                    if (isset($sfuRooms[$roomId]['publishers'][$publisherId], $sfuClients[$publisherId]['websocket'])) {
+                        king_websocket_send($sfuClients[$publisherId]['websocket'], json_encode($recoveryRequest));
+                        videochat_sfu_log_runtime_event('sfu_media_recovery_request_routed', [
+                            'room_id' => $roomId,
+                            'publisher_id' => $publisherId,
+                            'requester_id' => (string) $clientId,
+                            'track_id' => (string) ($recoveryRequest['track_id'] ?? ''),
+                            'reason' => (string) ($recoveryRequest['reason'] ?? ''),
+                            'requested_action' => (string) ($recoveryRequest['requested_action'] ?? ''),
+                            'request_full_keyframe' => !empty($recoveryRequest['request_full_keyframe']),
+                            'route' => 'direct_worker',
+                        ], 1000);
+                        break;
+                    }
+                    $activeSfuDatabase = $ensureBrokerDatabase();
+                    if ($activeSfuDatabase instanceof PDO && videochat_sfu_insert_recovery_request($activeSfuDatabase, $recoveryRequest)) {
+                        videochat_sfu_log_runtime_event('sfu_media_recovery_request_routed', [
+                            'room_id' => $roomId,
+                            'publisher_id' => $publisherId,
+                            'requester_id' => (string) $clientId,
+                            'track_id' => (string) ($recoveryRequest['track_id'] ?? ''),
+                            'reason' => (string) ($recoveryRequest['reason'] ?? ''),
+                            'requested_action' => (string) ($recoveryRequest['requested_action'] ?? ''),
+                            'request_full_keyframe' => !empty($recoveryRequest['request_full_keyframe']),
+                            'route' => 'sqlite_broker',
+                        ], 1000);
+                    } else {
+                        videochat_sfu_log_runtime_event('sfu_media_recovery_request_dropped', [
+                            'room_id' => $roomId,
+                            'publisher_id' => $publisherId,
+                            'requester_id' => (string) $clientId,
+                            'reason' => (string) ($recoveryRequest['reason'] ?? ''),
+                        ], 1000);
                     }
                     break;
 

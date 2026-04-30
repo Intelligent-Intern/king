@@ -37,7 +37,12 @@ import {
 import { SfuOutboundFrameQueue } from './outboundFrameQueue'
 import { buildSfuSendFailureDetails } from './sendFailureDetails'
 import {
+  SFU_CONTROL_TRANSPORT_WEBSOCKET,
+  SfuWebSocketFallbackMediaTransport,
+} from './mediaTransport'
+import {
   appendSfuPublisherTraceStage,
+  buildSfuEndToEndPerformancePayload,
   buildSfuFrameTransportSample,
   highResolutionNowMs,
   roundedTransportStageMs,
@@ -114,9 +119,14 @@ export class SFUClient {
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
   private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
   private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
+  private mediaTransport: SfuWebSocketFallbackMediaTransport
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
+    this.mediaTransport = new SfuWebSocketFallbackMediaTransport({
+      getSocket: () => this.ws,
+      getBufferedAmount: () => this.getWebSocketBufferedAmount(),
+    })
     this.outboundFrameQueue = new SfuOutboundFrameQueue({
       canSend: () => this.isOpen(),
       sendPreparedFrame: (prepared, queuedAgeMs) => this.sendPreparedEncodedFrame(prepared, queuedAgeMs),
@@ -340,6 +350,35 @@ export class SFUClient {
       reason: stringField(details.reason),
       render_surface_role: stringField(details.render_surface_role, details.renderSurfaceRole),
       visible_participant_count: Math.max(0, Number(details.visible_participant_count || details.visibleParticipantCount || 0)),
+      frame_sequence: Math.max(0, Number(details.frame_sequence || details.frameSequence || 0)),
+    })
+  }
+
+  requestPublisherMediaRecovery(publisherId: string, details: Record<string, unknown> = {}): boolean {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return false
+    const requestedVideoLayer = stringField(details.requested_video_layer, details.requestedVideoLayer).toLowerCase()
+    const requestedAction = stringField(
+      details.requested_action,
+      details.requestedAction,
+      'force_full_keyframe',
+    ).toLowerCase()
+    return this.send({
+      type: 'sfu/media-recovery-request',
+      publisher_id: normalizedPublisherId,
+      track_id: stringField(details.track_id, details.trackId),
+      reason: stringField(details.reason, 'sfu_receiver_media_recovery').toLowerCase(),
+      requested_action: requestedAction,
+      request_full_keyframe: Boolean(details.request_full_keyframe || details.requestFullKeyframe)
+        || requestedAction === 'force_full_keyframe'
+        || requestedVideoLayer === 'primary',
+      requested_video_layer: requestedVideoLayer === 'primary' || requestedVideoLayer === 'thumbnail'
+        ? requestedVideoLayer
+        : '',
+      requested_video_quality_profile: stringField(
+        details.requested_video_quality_profile,
+        details.requestedVideoQualityProfile,
+      ).toLowerCase(),
       frame_sequence: Math.max(0, Number(details.frame_sequence || details.frameSequence || 0)),
     })
   }
@@ -781,11 +820,11 @@ export class SFUClient {
   }
 
   private sendBinaryFrame(prepared: PreparedSfuOutboundFramePayload, metrics: Record<string, unknown>): boolean {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+    if (!this.mediaTransport.isOpen()) {
       this.recordSendFailure(prepared, {
         reason: 'socket_not_open',
         stage: 'send_binary_envelope',
-        source: 'websocket',
+        source: 'media_transport',
         message: 'Binary envelope send was attempted while the SFU websocket was not open.',
         transportPath: 'binary_envelope',
         bufferedAmount: this.getWebSocketBufferedAmount(),
@@ -820,13 +859,26 @@ export class SFUClient {
       return false
     }
     try {
-      const socketSendStartedAtMs = highResolutionNowMs()
-      this.ws.send(encoded)
-      const websocketSendMs = roundedTransportStageMs(highResolutionNowMs() - socketSendStartedAtMs)
+      const sendResult = this.mediaTransport.sendBinaryFrame(encoded)
+      if (!sendResult.ok) {
+        this.recordSendFailure(prepared, {
+          reason: sendResult.errorCode || 'media_transport_send_failed',
+          stage: 'send_binary_envelope',
+          source: 'media_transport',
+          message: 'SFU media transport failed while sending an encoded binary frame envelope.',
+          transportPath: sendResult.transportPath,
+          bufferedAmount: sendResult.bufferedAmount,
+        })
+        return false
+      }
+      const websocketSendMs = roundedTransportStageMs(sendResult.sendMs)
       sendMetrics = appendSfuPublisherTraceStage(
         {
           ...sendMetrics,
           websocket_send_ms: websocketSendMs,
+          media_transport_send_ms: websocketSendMs,
+          media_transport: sendResult.transportPath,
+          control_transport: SFU_CONTROL_TRANSPORT_WEBSOCKET,
         },
         'browser_websocket_send',
         websocketSendMs,
@@ -845,7 +897,9 @@ export class SFUClient {
         binary_continuation_required: binaryContinuationRequired,
         binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
         application_media_chunking: false,
-        websocket_buffered_amount: this.getWebSocketBufferedAmount(),
+        media_transport: sendResult.transportPath,
+        control_transport: SFU_CONTROL_TRANSPORT_WEBSOCKET,
+        websocket_buffered_amount: sendResult.bufferedAmount,
       }
       this.reportFrameSendPressureIfNeeded(samplePayload)
       this.reportFrameTransportSampleIfNeeded(samplePayload)
@@ -1015,6 +1069,7 @@ export class SFUClient {
       'Sampled SFU frame transport metrics for the active media path.',
       {
         ...payload,
+        ...buildSfuEndToEndPerformancePayload(payload, sample),
         wire_vs_payload_ratio: sample.wireVsPayloadRatio,
       },
     )

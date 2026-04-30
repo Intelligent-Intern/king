@@ -199,6 +199,39 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
       })
       break
 
+    case 'sfu/publisher-recovery-request':
+      callbacks.onPublisherPressure?.({
+        reason: stringField(msg.reason, msg.code, 'sfu_publisher_recovery_request'),
+        trackId: stringField(msg.trackId, msg.track_id),
+        track_id: stringField(msg.trackId, msg.track_id),
+        requesterId: stringField(msg.requesterId, msg.requester_id),
+        requester_id: stringField(msg.requesterId, msg.requester_id),
+        requesterUserId: stringField(msg.requesterUserId, msg.requester_user_id),
+        requester_user_id: stringField(msg.requesterUserId, msg.requester_user_id),
+        requestedAction: stringField(msg.requestedAction, msg.requested_action),
+        requested_action: stringField(msg.requestedAction, msg.requested_action),
+        requestFullKeyframe: Boolean(msg.requestFullKeyframe ?? msg.request_full_keyframe),
+        request_full_keyframe: Boolean(msg.requestFullKeyframe ?? msg.request_full_keyframe),
+        requestedVideoLayer: stringField(msg.requestedVideoLayer, msg.requested_video_layer),
+        requested_video_layer: stringField(msg.requestedVideoLayer, msg.requested_video_layer),
+        requestedVideoQualityProfile: stringField(
+          msg.requestedVideoQualityProfile,
+          msg.requested_video_quality_profile,
+        ),
+        requested_video_quality_profile: stringField(
+          msg.requestedVideoQualityProfile,
+          msg.requested_video_quality_profile,
+        ),
+        frameSequence: Math.max(0, Number(msg.frameSequence ?? msg.frame_sequence ?? 0)),
+        frame_sequence: Math.max(0, Number(msg.frameSequence ?? msg.frame_sequence ?? 0)),
+        stage: 'sfu_media_recovery_request',
+        source: 'king_sfu_gateway',
+        transportPath: stringField(msg.mediaTransport, msg.media_transport, 'websocket_binary_media_fallback'),
+        controlTransport: stringField(msg.controlTransport, msg.control_transport, 'websocket_sfu_control'),
+        message: 'A remote SFU receiver requested publisher-side media recovery without restarting the socket.',
+      })
+      break
+
     case 'sfu/error':
       reportClientDiagnostic({
         category: 'media',

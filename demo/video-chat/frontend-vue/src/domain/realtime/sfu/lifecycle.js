@@ -21,6 +21,7 @@ export function createSfuLifecycleHelpers({
     publishLocalTracks,
     publishLocalTracksToSfuIfReady,
     renderCallVideoLayout,
+    requestWlvcFullFrameKeyframe,
     requestSfuConnect,
     resetWlvcBackpressureCounters,
     scheduleMediaSecurityParticipantSync,
@@ -136,7 +137,7 @@ export function createSfuLifecycleHelpers({
         setTimeout(() => requestSfuConnect(), 2000);
       },
       onEncodedFrame: (frame) => handleSFUEncodedFrame(frame),
-      onPublisherPressure: (details) => handleSfuPublisherPressure?.(details),
+      onPublisherPressure: (details) => handleSfuPublisherPressureMessage(details),
     });
 
     refs.sfuClientRef.value.connect(
@@ -145,6 +146,19 @@ export function createSfuLifecycleHelpers({
       socketCallId,
     );
     refs.sfuConnected.value = false;
+  }
+
+  function handleSfuPublisherPressureMessage(details = {}) {
+    const requestedAction = String(details?.requested_action || details?.requestedAction || '').trim().toLowerCase();
+    const requestFullKeyframe = Boolean(details?.request_full_keyframe || details?.requestFullKeyframe)
+      || requestedAction === 'force_full_keyframe';
+    if (requestFullKeyframe && typeof requestWlvcFullFrameKeyframe === 'function') {
+      return requestWlvcFullFrameKeyframe(String(details?.reason || 'sfu_publisher_recovery_request'), {
+        ...details,
+        senderUserId: Number(details?.requester_user_id || details?.requesterUserId || 0),
+      });
+    }
+    return handleSfuPublisherPressure?.(details);
   }
 
   function teardownRemotePeer(peer) {

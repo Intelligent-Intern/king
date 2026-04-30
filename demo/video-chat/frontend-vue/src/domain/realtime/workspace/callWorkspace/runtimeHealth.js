@@ -162,7 +162,6 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
-    if (typeof sendSocketFrame !== 'function') return false;
     const targetUserId = Number(peer?.userId || 0);
     const localUserId = Number(currentUserId.value || 0);
     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
@@ -176,7 +175,17 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
     if (lastSentAtMs > 0 && (nowMs - lastSentAtMs) < minIntervalMs) return false;
 
-    const sent = sendSocketFrame({
+    const sfuRecoverySent = sfuClientRef.value
+      && typeof sfuClientRef.value.requestPublisherMediaRecovery === 'function'
+      ? sfuClientRef.value.requestPublisherMediaRecovery(String(publisherId || ''), {
+        ...payload,
+        requested_action: requestedAction,
+        request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
+        reason: normalizedReason,
+      })
+      : false;
+
+    const sent = sfuRecoverySent || (typeof sendSocketFrame === 'function' && sendSocketFrame({
       type: 'call/media-quality-pressure',
       target_user_id: targetUserId,
         payload: {
@@ -189,7 +198,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         media_runtime_path: mediaRuntimePath.value,
         ...payload,
       },
-    });
+    }));
     if (sent) {
       peer.lastQualityPressureSentAtMs = nowMs;
       peer.lastQualityPressureReason = String(reason || '').trim();

@@ -61,7 +61,8 @@ async function main() {
   requireContains(browserRenderer, 'requestRemoteSfuLayerPreference', 'browser decoder path sends layer preference after accepted render');
 
   requireContains(mediaStack, 'setSubscriberLayerPreference', 'receiver layer preference goes to the SFU socket');
-  requireContains(mediaStack, "requestedAction === 'prefer_primary_video_layer' || requestedAction === 'prefer_thumbnail_video_layer'", 'pure layer preference does not force global publisher pressure');
+  requireContains(mediaStack, "requestedAction === 'prefer_thumbnail_video_layer'", 'thumbnail layer preference remains a pure subscriber-route change');
+  requireContains(mediaStack, 'requestPublisherMediaRecovery', 'primary/fullscreen layer preference can request publisher keyframe recovery without socket reconnect');
   requireContains(sfuClient, "type: 'sfu/layer-preference'", 'SFU client sends server-authoritative subscriber layer preference');
   requireContains(sfuStore, "'sfu/layer-preference'", 'SFU backend accepts layer preference control frames');
   requireContains(sfuGateway, 'videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg)', 'SFU gateway stores subscriber layer preference server-side');

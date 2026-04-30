@@ -19,6 +19,15 @@ import {
   markRemoteFrameRendered,
   shouldRenderRemoteFrame,
 } from './remoteRenderScheduler';
+import {
+  bufferRemoteFrameForJitter,
+  popExpiredRemoteJitterFrame,
+  popNextRemoteJitterFrame,
+  remoteJitterBufferSize,
+  remoteJitterTrackKey,
+  REMOTE_SFU_JITTER_BUFFER_HOLD_MS,
+  shouldBufferRemoteFrameForJitter,
+} from './remoteJitterBuffer';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -392,6 +401,9 @@ export function createSfuFrameDecodeHelpers({
           publisher_user_id: String(frame?.publisherUserId || ''),
           track_id: String(frame?.trackId || ''),
           frame_sequence: normalizeSfuFrameNumber(frame?.frameSequence),
+          sfu_performance_report_schema: 'sfu_end_to_end_v1',
+          media_path_phase: 'receiver_render',
+          first_over_budget_stage: receiverRenderLatencyMs >= 900 ? 'receiver_render' : 'within_budget',
           outgoing_video_quality_profile: String(frame?.outgoingVideoQualityProfile || ''),
           receiver_render_latency_ms: receiverRenderLatencyMs,
           king_receive_latency_ms: Math.max(0, Number(frame?.kingReceiveLatencyMs || 0)),
@@ -517,6 +529,90 @@ export function createSfuFrameDecodeHelpers({
   function invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, reason = 'unknown') {
     const trackKey = sfuFrameTrackStateKey(frame);
     invalidateRemoteSfuTrackCache(peer, trackKey, `protected_frame_decrypt_failed:${reason}`);
+  }
+
+  function scheduleRemoteJitterBufferRelease(publisherId, peer, trackKey) {
+    const state = peer?.remoteJitterBufferByTrack?.[trackKey];
+    if (!state || state.timer || !state.framesBySequence || state.framesBySequence.size < 1) return;
+    state.timer = setTimeout(() => {
+      state.timer = null;
+      const expiredFrame = popExpiredRemoteJitterFrame(peer, trackKey, Date.now());
+      if (!expiredFrame) {
+        scheduleRemoteJitterBufferRelease(publisherId, peer, trackKey);
+        return;
+      }
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'sfu_receiver_jitter_buffer_release',
+        code: 'sfu_receiver_jitter_buffer_release',
+        message: 'Receiver jitter buffer released a held SFU frame after the reorder window expired.',
+        payload: {
+          publisher_id: publisherId,
+          publisher_user_id: Number(expiredFrame?.publisherUserId || peer?.userId || 0),
+          track_id: String(expiredFrame?.trackId || ''),
+          frame_sequence: normalizeSfuFrameNumber(expiredFrame?.frameSequence),
+          release_reason: 'hold_window_expired',
+          jitter_buffer_size: remoteJitterBufferSize(peer, trackKey),
+          jitter_hold_ms: REMOTE_SFU_JITTER_BUFFER_HOLD_MS,
+          media_runtime_path: mediaRuntimePathRef.value,
+        },
+      });
+      void decodeSfuFrameForPeer(publisherId, peer, expiredFrame, { fromJitterBuffer: true });
+    }, REMOTE_SFU_JITTER_BUFFER_HOLD_MS);
+  }
+
+  function maybeBufferRemoteFrameForJitter(publisherId, peer, frame) {
+    const nowMs = Date.now();
+    const decision = shouldBufferRemoteFrameForJitter(peer, frame, nowMs);
+    if (!decision.buffer) return false;
+    if (!bufferRemoteFrameForJitter(peer, frame, decision, nowMs)) return false;
+    const trackKey = String(decision.trackKey || remoteJitterTrackKey(frame));
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'sfu_receiver_jitter_buffer_hold',
+      code: 'sfu_receiver_jitter_buffer_hold',
+      message: 'Receiver jitter buffer held a slightly future SFU frame while waiting for missing sequence frames.',
+      payload: {
+        publisher_id: publisherId,
+        publisher_user_id: Number(frame?.publisherUserId || peer?.userId || 0),
+        track_id: String(frame?.trackId || ''),
+        frame_sequence: normalizeSfuFrameNumber(frame?.frameSequence),
+        last_frame_sequence: normalizeSfuFrameNumber(decision.lastSequence),
+        missing_frame_count: normalizeSfuFrameNumber(decision.missingFrameCount),
+        jitter_buffer_size: remoteJitterBufferSize(peer, trackKey),
+        jitter_hold_ms: REMOTE_SFU_JITTER_BUFFER_HOLD_MS,
+        media_runtime_path: mediaRuntimePathRef.value,
+      },
+    });
+    scheduleRemoteJitterBufferRelease(publisherId, peer, trackKey);
+    return true;
+  }
+
+  function drainRemoteJitterBuffer(publisherId, peer, frame) {
+    const trackKey = remoteJitterTrackKey(frame);
+    const nextFrame = popNextRemoteJitterFrame(peer, trackKey);
+    if (!nextFrame) {
+      scheduleRemoteJitterBufferRelease(publisherId, peer, trackKey);
+      return;
+    }
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'sfu_receiver_jitter_buffer_drain',
+      code: 'sfu_receiver_jitter_buffer_drain',
+      message: 'Receiver jitter buffer drained an in-order SFU frame without forcing media reconnect.',
+      payload: {
+        publisher_id: publisherId,
+        publisher_user_id: Number(nextFrame?.publisherUserId || peer?.userId || 0),
+        track_id: String(nextFrame?.trackId || ''),
+        frame_sequence: normalizeSfuFrameNumber(nextFrame?.frameSequence),
+        jitter_buffer_size: remoteJitterBufferSize(peer, trackKey),
+        media_runtime_path: mediaRuntimePathRef.value,
+      },
+    });
+    void decodeSfuFrameForPeer(publisherId, peer, nextFrame, { fromJitterBuffer: true });
   }
 
   function shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame) {
@@ -651,7 +747,7 @@ export function createSfuFrameDecodeHelpers({
     return shouldDropRemoteSfuFrameForCacheEpoch(peer, publisherId, frame);
   }
 
-  async function decodeSfuFrameForPeer(publisherId, peer, frame) {
+  async function decodeSfuFrameForPeer(publisherId, peer, frame, options = {}) {
     if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) return;
     peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
     peer.lastReceivedFrameAtMs = Date.now();
@@ -659,7 +755,11 @@ export function createSfuFrameDecodeHelpers({
     if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
       markRemoteFrameActivity(publisherUserId);
     }
+    if (!options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
+      return;
+    }
     if (shouldDropRemoteSfuFrameForContinuity(publisherId, peer, frame)) {
+      drainRemoteJitterBuffer(publisherId, peer, frame);
       return;
     }
 
@@ -801,6 +901,7 @@ export function createSfuFrameDecodeHelpers({
         if (renderDecodedSfuFrame(peer, decoded, frame) && frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
           peer.needsKeyframe = false;
         }
+        drainRemoteJitterBuffer(publisherId, peer, frame);
       } else {
         peer.needsKeyframe = true;
         captureClientDiagnostic({
@@ -839,6 +940,7 @@ export function createSfuFrameDecodeHelpers({
             if (frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
               peer.needsKeyframe = false;
             }
+            drainRemoteJitterBuffer(publisherId, peer, frame);
             return;
           }
         } catch {
