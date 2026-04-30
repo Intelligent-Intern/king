@@ -149,7 +149,7 @@ Technical target:
      `force_full_keyframe` into the existing WLVC full-frame keyframe path, so
      normal freezes now have a targeted recovery path before reconnect.
 
-5. [ ] `[native-render-and-jitter-buffer]` Stop treating canvas repaint as the primary receiver media runtime.
+5. [x] `[native-render-and-jitter-buffer]` Stop treating canvas repaint as the primary receiver media runtime.
 
    Scope:
    - Move receiver recovery toward jitter-buffered frame ordering and native
@@ -162,6 +162,17 @@ Technical target:
    - Reconnect is no longer the primary response to normal media jitter.
    - Receiver can smooth short gaps without resetting publisher/subscriber state.
    - Online probes verify moving video cadence, not just non-black pixels.
+
+   Report:
+   - Added a bounded receiver jitter buffer for small sequence gaps: up to 8
+     frames, 90 ms hold window, and a maximum reorder gap of 3 frames.
+   - The decoder now holds slightly future deltas before continuity drop,
+     drains them once missing frames arrive, and only releases to normal
+     keyframe recovery after the hold window expires.
+   - Diagnostics now report `sfu_receiver_jitter_buffer_hold`,
+     `sfu_receiver_jitter_buffer_drain`, and
+     `sfu_receiver_jitter_buffer_release` so receiver jitter can be separated
+     from encoder/network pressure.
 
 6. [ ] `[end-to-end-media-pressure-observability]` Add full-path performance logging and gates.
 
