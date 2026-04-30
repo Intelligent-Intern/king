@@ -37,6 +37,9 @@ try {
   const securityCore = read('src/domain/realtime/media/securityCore.js');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
   const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.js');
   const packageJson = read('package.json');
   const backendSfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
@@ -69,6 +72,8 @@ try {
   requireContains(browserPublisher, 'onProtectedBrowserEncoderFailure(error)', 'browser publisher reports fatal browser encoder errors');
   requireContains(browserPublisher, 'maybeStartProtectedBrowserVideoEncoderPublisher', 'browser publisher exposes compatibility fallback startup gate');
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
+  requireContains(sfuTransport, 'sfuBrowserEncoderCompatibilityDisabledUntilMs', 'SFU transport state tracks receiver-forced browser encoder compatibility fallback');
+  requireContains(browserPublisher, 'sfuBrowserEncoderCompatibilityDisabledUntilMs', 'browser publisher honors receiver-forced compatibility fallback state');
   assert.equal(browserPublisher.includes('getImageData('), false, 'browser publisher must not use canvas getImageData');
   requireContains(browserPublisher, 'createBrowserVideoFrameScaler', 'browser publisher keeps WebCodecs frame scaling isolated from RGBA readback');
   requireContains(browserFrameScaler, 'buildRgbaVideoFrameInitFromSource', 'browser frame scaler keeps a non-WebGL RGBA VideoFrame fallback for legacy graphics stacks');
@@ -128,6 +133,13 @@ try {
   requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decode_frame_failed')", 'browser renderer asks publisher for a full keyframe after decode failures');
   requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decoder_error')", 'browser renderer asks publisher for a full keyframe after decoder errors');
   requireContains(browserRenderer, "requested_action: 'force_full_keyframe'", 'browser renderer sends explicit full-keyframe recovery action');
+  requireContains(recoveryReasons, "SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION = 'prefer_compatibility_video_codec'", 'receiver feedback declares a compatibility codec recovery action');
+  requireContains(browserRenderer, 'requestProtectedBrowserCompatibilityFallback(peer, frame, reason', 'browser renderer can request publisher-side WLVC fallback when WebCodecs decode is unavailable');
+  requireContains(browserRenderer, 'requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION', 'browser renderer sends explicit compatibility codec action');
+  requireContains(browserRenderer, "requested_codec_id: 'wlvc_sfu'", 'browser renderer names the interoperable WLVC codec target');
+  requireContains(mediaStack, 'shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {})', 'receiver feedback uses websocket signaling for codec compatibility fallback instead of SFU-only recovery rows');
+  requireContains(socketLifecycle, 'shouldRequestSfuCompatibilityCodecFallback(requestedAction, payloadBody || {})', 'publisher socket lifecycle recognizes receiver codec compatibility requests');
+  requireContains(lifecycle, 'shouldRequestSfuCompatibilityCodecFallback(requestedAction, details)', 'publisher SFU recovery path recognizes receiver codec compatibility requests');
 
   requireContains(frameDecode, "from './remoteBrowserEncodedVideo'", 'frame decode imports browser renderer');
   requireContains(frameDecode, 'sendRemoteSfuVideoQualityPressure,', 'browser renderer receives direct recovery signaling');

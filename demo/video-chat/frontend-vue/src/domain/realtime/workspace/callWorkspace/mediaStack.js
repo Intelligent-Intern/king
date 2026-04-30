@@ -5,6 +5,7 @@ import { createSfuRemotePeerHelpers } from '../../sfu/remotePeers';
 import {
   normalizeSfuRecoveryReason,
   resolveSfuRecoveryRequestedAction,
+  shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 import { createCallWorkspaceRuntimeHealthHelpers } from './runtimeHealth';
@@ -125,7 +126,9 @@ export function createCallWorkspaceMediaStack(options) {
       const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_receiver_feedback');
       const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
       const feedbackAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
-      const sfuRecoverySent = refs.sfuClientRef.value
+      const compatibilityCodecRequested = shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {});
+      const sfuRecoverySent = !compatibilityCodecRequested
+        && refs.sfuClientRef.value
         && typeof refs.sfuClientRef.value.requestPublisherMediaRecovery === 'function'
         ? refs.sfuClientRef.value.requestPublisherMediaRecovery(String(publisherId || ''), {
           ...payload,

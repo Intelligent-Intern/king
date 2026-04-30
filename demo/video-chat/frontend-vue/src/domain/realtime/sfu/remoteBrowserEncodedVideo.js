@@ -5,7 +5,11 @@ import {
   shouldDecodeRemoteFrame,
   shouldRenderRemoteFrame,
 } from './remoteRenderScheduler';
-import { shouldRequestSfuFullKeyframeForReason } from './recoveryReasons';
+import {
+  SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+  normalizeSfuRecoveryReason,
+  shouldRequestSfuFullKeyframeForReason,
+} from './recoveryReasons';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 
@@ -149,6 +153,7 @@ export function closeProtectedBrowserVideoDecoders(peer) {
 function createBrowserVideoDecoder(peer, frame, {
   captureClientDiagnosticError,
   globalScope,
+  requestProtectedBrowserCompatibilityFallback,
   requestProtectedBrowserDecoderRecovery,
   renderBrowserVideoFrame,
 }) {
@@ -196,6 +201,7 @@ function createBrowserVideoDecoder(peer, frame, {
       peer.needsKeyframe = true;
       discardBrowserDecoderState(peer, frame, decoderState);
       requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decoder_error');
+      requestProtectedBrowserCompatibilityFallback?.(peer, frame, 'sfu_browser_decoder_error');
     },
   });
   // VP8 carries frame dimensions in the bitstream. Supplying coded dimensions
@@ -272,6 +278,31 @@ export function createRemoteBrowserEncodedVideoRenderer({
     });
     if (sent) {
       peer.lastProtectedBrowserDecoderRecoveryRequestAtMs = nowMs;
+    }
+    return sent;
+  }
+
+  function requestProtectedBrowserCompatibilityFallback(peer, frame, reason, nowMs = Date.now()) {
+    if (!peer || typeof peer !== 'object') return false;
+    if (typeof sendRemoteSfuVideoQualityPressure !== 'function') return false;
+    const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_browser_decoder_incompatible');
+    const lastAtMs = Number(peer.lastProtectedBrowserCompatibilityFallbackRequestAtMs || 0);
+    if (lastAtMs > 0 && (nowMs - lastAtMs) < 8000) return false;
+    const sent = sendRemoteSfuVideoQualityPressure(peer, frame?.publisherId, normalizedReason, nowMs, {
+      codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      frame_sequence: positiveInteger(frame?.frameSequence || 0, 0),
+      frame_timestamp: positiveInteger(frame?.timestamp || 0, 0),
+      frame_type: String(frame?.type || ''),
+      incompatible_codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+      requested_codec_id: 'wlvc_sfu',
+      requested_video_layer: 'primary',
+      request_full_keyframe: true,
+      track_id: String(frame?.trackId || ''),
+      video_layer: browserFrameVideoLayer(frame),
+    });
+    if (sent) {
+      peer.lastProtectedBrowserCompatibilityFallbackRequestAtMs = nowMs;
     }
     return sent;
   }
@@ -394,6 +425,11 @@ export function createRemoteBrowserEncodedVideoRenderer({
     if (!isProtectedBrowserEncodedVideoFrame(frame)) return false;
     if (typeof globalScope.VideoDecoder !== 'function' || typeof globalScope.EncodedVideoChunk !== 'function') {
       peer.needsKeyframe = true;
+      const compatibilityFallbackSent = requestProtectedBrowserCompatibilityFallback(
+        peer,
+        frame,
+        'sfu_browser_decoder_unavailable',
+      );
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -404,6 +440,9 @@ export function createRemoteBrowserEncodedVideoRenderer({
           codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
           publisher_id: String(frame?.publisherId || ''),
           track_id: String(frame?.trackId || ''),
+          requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+          requested_codec_id: 'wlvc_sfu',
+          compatibility_fallback_sent: Boolean(compatibilityFallbackSent),
         },
         immediate: true,
       });
@@ -428,6 +467,7 @@ export function createRemoteBrowserEncodedVideoRenderer({
     const decoderState = ensureBrowserVideoDecoder(peer, frame, {
       captureClientDiagnosticError,
       globalScope,
+      requestProtectedBrowserCompatibilityFallback,
       requestProtectedBrowserDecoderRecovery,
       renderBrowserVideoFrame,
     });
@@ -456,6 +496,11 @@ export function createRemoteBrowserEncodedVideoRenderer({
       peer.needsKeyframe = true;
       discardBrowserDecoderState(peer, frame, decoderState);
       const recoverySent = requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decode_frame_failed');
+      const compatibilityFallbackSent = requestProtectedBrowserCompatibilityFallback(
+        peer,
+        frame,
+        'sfu_browser_decode_frame_failed',
+      );
       captureClientDiagnosticError('sfu_browser_decode_frame_failed', error, {
         codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         publisher_id: String(frame?.publisherId || ''),
@@ -465,6 +510,9 @@ export function createRemoteBrowserEncodedVideoRenderer({
         frame_type: String(frame?.type || ''),
         frame_timestamp: Number(frame?.timestamp || 0),
         full_keyframe_recovery_sent: Boolean(recoverySent),
+        compatibility_fallback_sent: Boolean(compatibilityFallbackSent),
+        requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+        requested_codec_id: 'wlvc_sfu',
       }, {
         code: 'sfu_browser_decode_frame_failed',
       });

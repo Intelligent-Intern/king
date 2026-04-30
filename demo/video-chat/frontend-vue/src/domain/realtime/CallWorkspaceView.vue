@@ -1382,7 +1382,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     mediaRuntimePath,
     pendingSfuRemotePeerInitializers,
     remotePeersRef,
-    sessionState,
+    sessionState, sfuTransportState,
     sfuClientRef,
     sfuConnected,
     shouldConnectSfu,

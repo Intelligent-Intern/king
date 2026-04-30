@@ -1,4 +1,5 @@
 import { closeProtectedBrowserVideoDecoders } from './remoteBrowserEncodedVideo';
+import { shouldRequestSfuCompatibilityCodecFallback } from './recoveryReasons';
 
 export function createSfuLifecycleHelpers({
   callbacks,
@@ -162,8 +163,46 @@ export function createSfuLifecycleHelpers({
 
   function handleSfuPublisherPressureMessage(details = {}) {
     const requestedAction = String(details?.requested_action || details?.requestedAction || '').trim().toLowerCase();
+    const compatibilityCodecRequested = shouldRequestSfuCompatibilityCodecFallback(requestedAction, details);
     const requestFullKeyframe = Boolean(details?.request_full_keyframe || details?.requestFullKeyframe)
-      || requestedAction === 'force_full_keyframe';
+      || requestedAction === 'force_full_keyframe'
+      || compatibilityCodecRequested;
+    if (compatibilityCodecRequested) {
+      const nowMs = Date.now();
+      if (refs.sfuTransportState && typeof refs.sfuTransportState === 'object') {
+        refs.sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs = Math.max(
+          Number(refs.sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+          nowMs + 60000,
+        );
+        refs.sfuTransportState.sfuBrowserEncoderCompatibilityLastRequestedAtMs = nowMs;
+        refs.sfuTransportState.sfuBrowserEncoderCompatibilityRequestedByUserId = Number(details?.requester_user_id || details?.requesterUserId || 0);
+        refs.sfuTransportState.sfuBrowserEncoderCompatibilityReason = String(details?.reason || requestedAction || '');
+      }
+      if (requestFullKeyframe && typeof requestWlvcFullFrameKeyframe === 'function') {
+        requestWlvcFullFrameKeyframe(String(details?.reason || 'sfu_browser_encoder_compatibility_fallback'), {
+          ...details,
+          senderUserId: Number(details?.requester_user_id || details?.requesterUserId || 0),
+        });
+      }
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_browser_encoder_compatibility_fallback_requested',
+        code: 'sfu_browser_encoder_compatibility_fallback_requested',
+        message: 'A receiver requested the WLVC compatibility codec, so the publisher will leave the browser WebCodecs encoder path.',
+        payload: {
+          ...details,
+          compatibility_disabled_until_ms: Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+          requested_action: requestedAction,
+        },
+        immediate: true,
+      });
+      if (typeof stopLocalEncodingPipeline === 'function') {
+        stopLocalEncodingPipeline();
+      }
+      scheduleLocalTrackPublish();
+      return true;
+    }
     if (requestFullKeyframe && typeof requestWlvcFullFrameKeyframe === 'function') {
       return requestWlvcFullFrameKeyframe(String(details?.reason || 'sfu_publisher_recovery_request'), {
         ...details,

@@ -925,10 +925,14 @@ export function createCallWorkspaceMediaSecurityRuntime({
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)
       ) {
+        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';
+        if (shouldForceRekeyAfterSignalFailure) {
+          session.markPeerRemoved?.(normalizedSenderUserId);
+        }
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
         state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
-        scheduleMediaSecurityParticipantSync('signal_failed_reconnect');
+        scheduleMediaSecurityParticipantSync('signal_failed_reconnect', shouldForceRekeyAfterSignalFailure);
         startMediaSecurityHandshakeWatchdog();
       }
       captureClientDiagnosticError('media_security_signal_failed', error, {

@@ -473,6 +473,13 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   const remoteKeyframeRequestPending = (timestamp = Date.now()) => (
     timestamp < Number(refs.sfuTransportState?.wlvcRemoteKeyframeRequestUntilMs || 0)
   );
+  const browserEncoderCompatibilityDisabledUntilMs = () => Math.max(
+    0,
+    Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+  );
+  const browserEncoderCompatibilityFallbackActive = (timestamp = Date.now()) => (
+    timestamp < browserEncoderCompatibilityDisabledUntilMs()
+  );
   const scheduleNextTick = (delayMs = resolveActiveEncodeIntervalMs()) => {
     if (closed || !isWlvcRuntimePath()) {
       refs.encodeIntervalRef.value = null;
@@ -744,6 +751,29 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         await close('protected_browser_video_profile_changed');
         return;
       }
+      if (browserEncoderCompatibilityFallbackActive()) {
+        const error = new Error('sfu_browser_encoder_compatibility_fallback_requested');
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_browser_encoder_compatibility_fallback',
+          code: 'sfu_browser_encoder_compatibility_fallback',
+          message: 'Protected browser encoder switched to the WLVC compatibility publisher after a receiver reported WebCodecs decode incompatibility.',
+          payload: {
+            codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+            compatibility_disabled_until_ms: browserEncoderCompatibilityDisabledUntilMs(),
+            compatibility_reason: String(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityReason || ''),
+            compatibility_requested_by_user_id: Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityRequestedByUserId || 0),
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            outgoing_video_quality_profile: String(videoProfile?.id || ''),
+            track_id: videoTrack.id,
+          },
+          immediate: true,
+        });
+        await close('protected_browser_video_compatibility_fallback_requested');
+        onProtectedBrowserEncoderFailure(error);
+        return;
+      }
       if (encodeInFlight || !currentOpenSfuClient() || shouldThrottleWlvcEncodeLoop()) return;
       const timestamp = Date.now();
       if (constants.protectedMediaEnabled && !canProtectCurrentSfuTargets()) {
@@ -983,8 +1013,37 @@ export async function maybeStartProtectedBrowserVideoEncoderPublisher({
   restartPublisher,
   gate,
 }) {
+  const nowMs = Date.now();
+  const compatibilityDisabledUntilMs = Math.max(
+    0,
+    Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+  );
+  if (nowMs < compatibilityDisabledUntilMs) {
+    if (gate && typeof gate === 'object') {
+      const lastDiagnosticAtMs = Number(gate.lastCompatibilityFallbackDiagnosticAtMs || 0);
+      if (nowMs - lastDiagnosticAtMs >= 2000) {
+        gate.lastCompatibilityFallbackDiagnosticAtMs = nowMs;
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_browser_encoder_compatibility_fallback',
+          code: 'sfu_browser_encoder_compatibility_fallback',
+          message: 'Protected browser encoder is disabled while a connected receiver requires the WLVC compatibility codec.',
+          payload: {
+            codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+            compatibility_disabled_until_ms: compatibilityDisabledUntilMs,
+            compatibility_reason: String(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityReason || ''),
+            compatibility_requested_by_user_id: Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityRequestedByUserId || 0),
+            outgoing_video_quality_profile: String(videoProfile?.id || ''),
+            track_id: String(videoTrack?.id || ''),
+          },
+        });
+      }
+    }
+    return null;
+  }
   const disabledUntilMs = Number(gate?.disabledUntilMs || 0);
-  if (Date.now() < disabledUntilMs) return null;
+  if (nowMs < disabledUntilMs) return null;
   return createProtectedBrowserVideoEncoderPublisher({
     videoTrack,
     videoProfile,
