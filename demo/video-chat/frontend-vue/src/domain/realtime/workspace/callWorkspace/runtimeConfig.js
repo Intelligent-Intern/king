@@ -58,7 +58,7 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
 export const SFU_AUTO_QUALITY_RECOVERY_NEXT = Object.freeze({
   rescue: 'realtime',
   realtime: 'balanced',
-  balanced: 'quality',
+  balanced: '',
 });
 export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;

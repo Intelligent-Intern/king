@@ -165,6 +165,24 @@ async function main() {
     readbackBudgetMs: 10,
   }), false, 'recent downshift cooldown blocks upward recovery');
 
+  const balancedCeilingState = baseTransportState();
+  balancedCeilingState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
+  const balancedCeilingController = createController(createPublisherBackpressureController, {
+    callMediaPrefs: { outgoingVideoQualityProfile: 'balanced' },
+    state: balancedCeilingState,
+    probeSfuVideoQualityAfterStableReadback: () => {
+      throw new Error('balanced is the automatic stability ceiling and must not probe quality');
+    },
+  });
+  assert.equal(balancedCeilingController.noteWlvcSourceReadbackSuccess({
+    nowMs,
+    drawImageMs: 4,
+    readbackMs: 5,
+    drawBudgetMs: 10,
+    readbackBudgetMs: 10,
+  }), false, 'automatic recovery stops at balanced instead of probing quality');
+  assert.equal(balancedCeilingState.wlvcSourceReadbackStableStartedAtMs, 0, 'balanced ceiling clears the recovery window');
+
   const fallbackState = baseTransportState();
   fallbackState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
   const fallbackCalls = [];

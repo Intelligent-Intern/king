@@ -185,9 +185,8 @@ export function createCallWorkspaceSocketHelpers({
       } else if (primaryLayerRequested) {
         upgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_primary_layer_requested', {
           direction: 'up',
-          bypassQualityRecoveryCooldown: true,
           requested_video_layer: 'primary',
-          requested_video_quality_profile: requestedVideoQualityProfile || 'quality',
+          requested_video_quality_profile: requestedVideoQualityProfile || 'balanced',
         });
       } else if (thumbnailLayerRequested) {
         if (primaryLayerActive) {

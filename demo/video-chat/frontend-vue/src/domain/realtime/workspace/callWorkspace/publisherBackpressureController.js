@@ -366,6 +366,10 @@ export function createPublisherBackpressureController({
       Number(state.sfuAutoQualityRecoveryLastAtMs || 0),
     );
     if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) return false;
+    if (String(callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase() === 'balanced') {
+      resetWlvcSourceReadbackRecoveryWindow();
+      return false;
+    }
 
     const probed = qualityRecoveryProbe('sfu_source_readback_recovered', {
       stable_window_ms: SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,

@@ -44,7 +44,7 @@ async function main() {
   requireContains(adaptiveLayers, 'SFU_ADAPTIVE_LAYER_PREFERENCES', 'adaptive layer helper declares canonical layer preferences');
   requireContains(adaptiveLayers, "'prefer_primary_video_layer'", 'primary layer request is explicit');
   requireContains(adaptiveLayers, "'prefer_thumbnail_video_layer'", 'thumbnail layer request is explicit');
-  requireContains(adaptiveLayers, "[SFU_ADAPTIVE_LAYER_PREFERENCES.PRIMARY]: 'quality'", 'primary layer targets the best automatic profile');
+  requireContains(adaptiveLayers, "[SFU_ADAPTIVE_LAYER_PREFERENCES.PRIMARY]: 'balanced'", 'primary layer targets the highest stable automatic profile');
   requireContains(adaptiveLayers, "[SFU_ADAPTIVE_LAYER_PREFERENCES.THUMBNAIL]: 'realtime'", 'thumbnail layer remains usable instead of rescue-only');
   requireContains(adaptiveLayers, 'visibleParticipantCountForPeer', 'layer decisions can keep two-person grid quality high');
   requireContains(adaptiveLayers, 'REMOTE_RENDER_SURFACE_ROLES.GRID', 'grid role participates in automatic layer selection');
@@ -82,10 +82,10 @@ async function main() {
   requireContains(socketLifecycle, 'sfuRemotePrimaryLayerRequestedUntilMs', 'publisher protects active primary layer from thumbnail downshift');
   requireContains(socketLifecycle, 'ignoredThumbnailRequest', 'publisher ignores thumbnail downshift while a primary request is active');
   requireContains(socketLifecycle, "direction: 'up'", 'primary layer request triggers automatic upshift');
-  requireContains(socketLifecycle, "requested_video_quality_profile: requestedVideoQualityProfile || 'quality'", 'primary layer asks for quality profile');
+  requireContains(socketLifecycle, "requested_video_quality_profile: requestedVideoQualityProfile || 'balanced'", 'primary layer asks for the stable balanced profile');
   requireContains(socketLifecycle, "requested_video_quality_profile: requestedVideoQualityProfile || 'realtime'", 'thumbnail layer asks for realtime profile');
 
-  requireContains(runtimeSwitching, 'bypassQualityRecoveryCooldown', 'targeted primary request bypasses normal slow recovery cooldown');
+  requireContains(runtimeSwitching, 'bypassQualityRecoveryCooldown', 'fullscreen recovery can explicitly bypass normal slow recovery cooldown');
   requireContains(runtimeSwitching, 'requestedProfileForDirection', 'profile switcher can jump to requested automatic layer profile');
   requireContains(runtimeSwitching, "'sfu_remote_thumbnail_layer_requested'", 'thumbnail pressure has explicit downgrade reason');
   requireContains(sfuTransport, 'sfuRemotePrimaryLayerRequestedUntilMs', 'transport state stores primary layer TTL');
@@ -112,7 +112,7 @@ async function main() {
   assert.equal(
     adaptiveModule.sfuLayerPreferenceForRemoteSurfaceRole('grid', { visibleParticipantCount: 2 }),
     'primary',
-    'two-person grid must keep primary quality instead of thumbnail-only video',
+    'two-person grid must keep the primary layer instead of thumbnail-only video',
   );
   assert.equal(
     adaptiveModule.sfuLayerPreferenceForRemoteSurfaceRole('grid', { visibleParticipantCount: 4 }),
@@ -123,6 +123,11 @@ async function main() {
     adaptiveModule.buildSfuLayerPreferencePayload({ layerPreference: 'primary', renderSurfaceRole: 'main' }).requested_action,
     'prefer_primary_video_layer',
     'primary payload must use the primary layer action',
+  );
+  assert.equal(
+    adaptiveModule.buildSfuLayerPreferencePayload({ layerPreference: 'primary', renderSurfaceRole: 'main' }).requested_video_quality_profile,
+    'balanced',
+    'primary payload must target balanced instead of forcing quality under live pressure',
   );
   assert.equal(
     adaptiveModule.buildSfuLayerPreferencePayload({ layerPreference: 'thumbnail', renderSurfaceRole: 'mini' }).requested_video_quality_profile,
