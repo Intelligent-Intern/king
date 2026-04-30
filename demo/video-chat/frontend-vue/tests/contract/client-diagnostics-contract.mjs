@@ -48,6 +48,8 @@ requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote 
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
 requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'expected signaling failures enter recovery path');
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId);', 'target_not_in_room prunes unreachable peer locally');
+requireContains(socketLifecycle, 'const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);', 'media-security publish failures keep roster stable during cross-worker key retries');
+requireContains(socketLifecycle, "normalizedError === 'target_not_in_room' && !failedMediaSecuritySignal", 'media-security target_not_in_room must not evict a participant before the room snapshot catches up');
 requireContains(socketLifecycle, 'void sendMediaSecuritySync(true);', 'media-security target_not_in_room forces reconnect rekey');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');

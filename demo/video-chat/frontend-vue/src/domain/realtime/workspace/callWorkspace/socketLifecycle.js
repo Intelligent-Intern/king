@@ -97,13 +97,14 @@ export function createCallWorkspaceSocketHelpers({
     const normalizedTargetUserId = Number(failedTargetUserId || 0);
     const normalizedError = String(signalingError || '').trim().toLowerCase();
     const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
+    const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);
 
-    if (targetIsKnown && normalizedError === 'target_not_in_room') {
+    if (targetIsKnown && normalizedError === 'target_not_in_room' && !failedMediaSecuritySignal) {
       removeParticipantLocallyAfterHangup(normalizedTargetUserId);
     }
 
     requestRoomSnapshot();
-    if (mediaSecuritySignalTypes.includes(failedCommandType)) {
+    if (failedMediaSecuritySignal) {
       setTimeout(() => {
         void sendMediaSecuritySync(true);
       }, 500);
