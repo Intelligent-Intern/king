@@ -80,6 +80,7 @@ try {
   const relay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
   const subscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
   const migrations = read('../backend-king-php/support/database_migrations.php');
+  const compose = read('../docker-compose.v1.yml');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
 
@@ -106,6 +107,14 @@ try {
   requireContains(gateway, '$processFramePayload($stampKingReceiveMetrics($msg));', 'gateway routes decoded frames through live processor');
   requireContains(gateway, "case 'sfu/frame-chunk':", 'gateway rejects JSON frame chunks');
   requireContains(gateway, "'error' => 'binary_media_required'", 'gateway JSON frame chunk rejection reason');
+  requireContains(compose, 'VIDEOCHAT_KING_DB_PATH: /data/video-chat.sqlite', 'persistent application database stays on /data');
+  requireContains(compose, 'VIDEOCHAT_KING_SFU_BROKER_DB_PATH: "${VIDEOCHAT_KING_SFU_BROKER_DB_PATH:-/sfu-buffer/video-chat-sfu-broker.sqlite}"', 'SFU broker defaults to tmpfs path');
+  requireContains(compose, 'tmpfs:', 'SFU service mounts tmpfs for broker replay');
+  requireContains(compose, '/sfu-buffer:rw,noexec,nosuid,nodev,size=${VIDEOCHAT_V1_SFU_BROKER_TMPFS_SIZE:-256m},mode=1777', 'SFU broker tmpfs mount is bounded and non-executable');
+  requireContains(gateway, 'function videochat_sfu_broker_storage_class', 'SFU broker exposes storage class diagnostics');
+  requireContains(gateway, "'broker_storage_class' => videochat_sfu_broker_storage_class", 'SFU broker logs storage class diagnostics');
+  requireContains(gateway, "return 'ram_tmpfs';", 'SFU broker recognizes RAM-backed tmpfs paths');
+  requireNotContains(gateway, 'sqlite::memory:', 'SFU broker must not use per-connection sqlite memory DB');
 
   const processFrameStart = gateway.indexOf('$processFramePayload = static function');
   const processFrameEnd = gateway.indexOf('while (true)', processFrameStart);

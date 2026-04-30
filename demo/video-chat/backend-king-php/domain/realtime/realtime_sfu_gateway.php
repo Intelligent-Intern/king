@@ -58,13 +58,71 @@ function videochat_sfu_broker_database_path(): string
     return dirname($mainDatabasePath) . '/video-chat-sfu-broker.sqlite';
 }
 
+function videochat_sfu_broker_storage_class(string $brokerDatabasePath): string
+{
+    $normalizedPath = str_replace('\\', '/', $brokerDatabasePath);
+    if (str_starts_with($normalizedPath, '/sfu-buffer/')
+        || $normalizedPath === '/sfu-buffer'
+        || str_starts_with($normalizedPath, '/dev/shm/')
+        || $normalizedPath === '/dev/shm'
+        || str_starts_with($normalizedPath, '/run/shm/')
+        || $normalizedPath === '/run/shm'
+    ) {
+        return 'ram_tmpfs';
+    }
+
+    return 'persistent_file';
+}
+
+function videochat_sfu_read_broker_pragma(PDO $pdo, string $pragmaName): string
+{
+    if (!in_array($pragmaName, ['journal_mode', 'synchronous', 'temp_store'], true)) {
+        return '';
+    }
+
+    try {
+        $statement = $pdo->query('PRAGMA ' . $pragmaName);
+        if ($statement === false) {
+            return '';
+        }
+        $value = $statement->fetchColumn();
+        return is_scalar($value) ? (string) $value : '';
+    } catch (Throwable) {
+        return '';
+    }
+}
+
+function videochat_sfu_configure_broker_database(PDO $pdo, string $brokerDatabasePath, string $mainDatabasePath): void
+{
+    $pdo->exec('PRAGMA busy_timeout = 1000');
+    $pdo->exec('PRAGMA journal_mode = WAL');
+    $pdo->exec('PRAGMA synchronous = OFF');
+    $pdo->exec('PRAGMA temp_store = MEMORY');
+    $pdo->exec('PRAGMA journal_size_limit = 1048576');
+
+    videochat_sfu_log_runtime_event(
+        'sfu_broker_database_opened',
+        [
+            'broker_db_path' => $brokerDatabasePath,
+            'main_db_path' => $mainDatabasePath,
+            'broker_storage_class' => videochat_sfu_broker_storage_class($brokerDatabasePath),
+            'broker_journal_mode' => videochat_sfu_read_broker_pragma($pdo, 'journal_mode'),
+            'broker_synchronous' => videochat_sfu_read_broker_pragma($pdo, 'synchronous'),
+            'broker_temp_store' => videochat_sfu_read_broker_pragma($pdo, 'temp_store'),
+        ],
+        60000
+    );
+}
+
 function videochat_sfu_open_broker_database(callable $openDatabase): PDO
 {
     $brokerDatabasePath = videochat_sfu_broker_database_path();
     $mainDatabasePath = trim((string) (getenv('VIDEOCHAT_KING_DB_PATH') ?: ''));
 
     if ($brokerDatabasePath !== '' && $brokerDatabasePath !== $mainDatabasePath) {
-        return videochat_open_sqlite_pdo($brokerDatabasePath);
+        $brokerDatabase = videochat_open_sqlite_pdo($brokerDatabasePath);
+        videochat_sfu_configure_broker_database($brokerDatabase, $brokerDatabasePath, $mainDatabasePath);
+        return $brokerDatabase;
     }
 
     return $openDatabase();
