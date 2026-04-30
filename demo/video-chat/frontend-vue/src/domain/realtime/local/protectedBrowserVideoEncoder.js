@@ -32,6 +32,10 @@ function evenInteger(value, fallback = 2) {
   return Math.max(2, Math.floor(normalized / 2) * 2);
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function normalizeVideoLayer(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
@@ -41,6 +45,84 @@ function normalizeVideoLayer(value) {
 
 function normalizedFrameKind(value) {
   return String(value || '').trim().toLowerCase() === 'key' ? 'keyframe' : 'delta';
+}
+
+function resolveThumbnailDimensions(sourceWidth, sourceHeight) {
+  const normalizedWidth = positiveInteger(sourceWidth, 0);
+  const normalizedHeight = positiveInteger(sourceHeight, 0);
+  if (normalizedWidth <= 0 || normalizedHeight <= 0) {
+    return { width: 0, height: 0 };
+  }
+  const longestEdge = Math.max(normalizedWidth, normalizedHeight);
+  const scale = clampNumber(Math.min(0.5, 320 / longestEdge), 0.2, 0.5);
+  return {
+    width: evenInteger(Math.max(2, Math.round(normalizedWidth * scale)), normalizedWidth),
+    height: evenInteger(Math.max(2, Math.round(normalizedHeight * scale)), normalizedHeight),
+  };
+}
+
+function buildVideoFrameInitFromSource(frame) {
+  const init = {};
+  const timestamp = Number(frame?.timestamp);
+  const duration = Number(frame?.duration);
+  if (Number.isFinite(timestamp) && timestamp >= 0) init.timestamp = timestamp;
+  if (Number.isFinite(duration) && duration > 0) init.duration = duration;
+  return init;
+}
+
+function createBrowserThumbnailFrameScaler({
+  globalScope = typeof globalThis !== 'undefined' ? globalThis : {},
+} = {}) {
+  const VideoFrameCtor = functionRef(globalScope.VideoFrame);
+  const OffscreenCanvasCtor = functionRef(globalScope.OffscreenCanvas);
+  const documentRef = globalScope?.document || null;
+  let canvas = null;
+  let context = null;
+
+  function ensureCanvas(width, height) {
+    const targetWidth = evenInteger(width, width);
+    const targetHeight = evenInteger(height, height);
+    if (!canvas) {
+      if (typeof OffscreenCanvasCtor === 'function') {
+        canvas = new OffscreenCanvasCtor(targetWidth, targetHeight);
+      } else if (documentRef && typeof documentRef.createElement === 'function') {
+        canvas = documentRef.createElement('canvas');
+      } else {
+        throw new Error('sfu_browser_thumbnail_canvas_unavailable');
+      }
+      context = canvas?.getContext?.('2d', {
+        alpha: false,
+        desynchronized: true,
+      }) || null;
+      if (!context || typeof context.drawImage !== 'function') {
+        throw new Error('sfu_browser_thumbnail_canvas_context_unavailable');
+      }
+    }
+    if (canvas.width !== targetWidth) canvas.width = targetWidth;
+    if (canvas.height !== targetHeight) canvas.height = targetHeight;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    return { canvas, context, width: targetWidth, height: targetHeight };
+  }
+
+  function createScaledFrame(sourceFrame, { width, height }) {
+    if (typeof VideoFrameCtor !== 'function') {
+      throw new Error('sfu_browser_thumbnail_video_frame_unavailable');
+    }
+    const targetWidth = evenInteger(width, width);
+    const targetHeight = evenInteger(height, height);
+    if (targetWidth <= 0 || targetHeight <= 0) {
+      throw new Error('sfu_browser_thumbnail_dimensions_invalid');
+    }
+    const surface = ensureCanvas(targetWidth, targetHeight);
+    surface.context.clearRect(0, 0, targetWidth, targetHeight);
+    surface.context.drawImage(sourceFrame, 0, 0, targetWidth, targetHeight);
+    return new VideoFrameCtor(surface.canvas, buildVideoFrameInitFromSource(sourceFrame));
+  }
+
+  return {
+    createScaledFrame,
+  };
 }
 
 function copyEncodedChunkToArrayBuffer(chunk) {
@@ -119,6 +201,9 @@ function buildBrowserEncoderConfig(videoProfile, { videoLayer = 'primary' } = {}
     };
   }
   if (normalizedVideoLayer === 'thumbnail') {
+    const thumbnailDimensions = resolveThumbnailDimensions(sourceWidth, sourceHeight);
+    width = thumbnailDimensions.width;
+    height = thumbnailDimensions.height;
     frameRate = Math.max(4, Math.min(8, Math.floor(frameRate * 0.5)));
     bitrate = Math.max(90_000, Math.min(380_000, Math.floor(bitrate * 0.28)));
   }
@@ -276,6 +361,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   const thumbnailCadence = Math.max(1, Math.round(
     Math.max(1, Number(config.framerate || 1)) / Math.max(1, Number(thumbnailConfig.framerate || 1)),
   ));
+  const thumbnailFrameScaler = createBrowserThumbnailFrameScaler({ globalScope });
   const disableThumbnailEncoder = (reason, error) => {
     if (thumbnailEncoderDisabled) return;
     thumbnailEncoderDisabled = true;
@@ -622,16 +708,22 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       );
       const thumbnailForceKeyframe = thumbnailFrameCount === 0 || forceKeyframe;
       const encodeStartedAtMs = highResolutionNowMs();
+      let thumbnailFrame = null;
       try {
         encoder.encode(result.frame, { keyFrame: forceKeyframe });
         if (shouldEncodeThumbnail) {
           try {
-            thumbnailEncoder.encode(result.frame, { keyFrame: thumbnailForceKeyframe });
+            thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame, {
+              width: thumbnailConfig.width,
+              height: thumbnailConfig.height,
+            });
+            thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });
           } catch (thumbnailEncodeError) {
             disableThumbnailEncoder('sfu_browser_thumbnail_encode_failed', thumbnailEncodeError);
           }
         }
       } finally {
+        closePublisherVideoFrame(thumbnailFrame);
         closePublisherVideoFrame(result.frame);
       }
       await encoder.flush();
