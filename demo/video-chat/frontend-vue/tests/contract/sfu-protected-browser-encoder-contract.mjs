@@ -47,12 +47,15 @@ try {
   requireContains(browserPublisher, 'globalScope.EncodedVideoChunk', 'browser publisher gates on encoded chunk support');
   requireContains(browserPublisher, 'createPublisherVideoFrameSourceReader({', 'browser publisher reads camera VideoFrames directly');
   requireContains(browserPublisher, 'encoder.encode(result.frame', 'browser publisher encodes VideoFrame without RGBA conversion');
+  requireContains(browserPublisher, 'thumbnailEncoder.encode(result.frame', 'browser publisher encodes thumbnail VideoFrame without RGBA conversion');
   requireContains(browserPublisher, 'closePublisherVideoFrame(result.frame)', 'browser publisher deterministically closes source VideoFrames');
   requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
   requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
   requireContains(browserPublisher, 'mediaSecurity.protectFrame({', 'browser publisher keeps King protected media envelopes');
   requireContains(browserPublisher, 'sendClient.sendEncodedFrame(outgoingFrame)', 'browser publisher still uses SFU binary frame sender');
   requireContains(browserPublisher, 'publisher_browser_encoder_codec', 'browser publisher emits backend telemetry for encoder path');
+  requireContains(browserPublisher, 'publisher_browser_encoder_layer', 'browser publisher emits backend telemetry for encoder layer');
+  requireContains(browserPublisher, 'publisher_browser_encoder_thumbnail_enabled: true', 'browser publisher reports dual encoder activation');
   requireContains(browserPublisher, 'onProtectedBrowserEncoderFailure(error)', 'browser publisher reports fatal browser encoder errors');
   requireContains(browserPublisher, 'maybeStartProtectedBrowserVideoEncoderPublisher', 'browser publisher exposes compatibility fallback startup gate');
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');

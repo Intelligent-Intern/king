@@ -628,6 +628,16 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
     if ($recovery !== '' && preg_match('/^[A-Za-z0-9_.:-]{1,96}$/', $recovery) === 1) {
         $metadata['budget_expected_recovery'] = $recovery;
     }
+    $frameVideoLayer = videochat_sfu_normalize_frame_video_layer($frame['video_layer'] ?? ($frame['videoLayer'] ?? ''));
+    if ($frameVideoLayer !== '') {
+        $metadata['video_layer'] = $frameVideoLayer;
+        $metadata['selected_video_layer'] = videochat_sfu_normalize_frame_video_layer(
+            $frame['selected_video_layer'] ?? ($frame['selectedVideoLayer'] ?? $frameVideoLayer)
+        ) ?: $frameVideoLayer;
+        $metadata['publisher_browser_encoder_layer'] = videochat_sfu_normalize_frame_video_layer(
+            $frame['publisher_browser_encoder_layer'] ?? ($frame['publisherBrowserEncoderLayer'] ?? $frameVideoLayer)
+        ) ?: $frameVideoLayer;
+    }
     $stringFields = [
         'publisher_readback_method' => ['publisher_readback_method', 'publisherReadbackMethod'],
         'publisher_browser_encoder_codec' => ['publisher_browser_encoder_codec', 'publisherBrowserEncoderCodec'],

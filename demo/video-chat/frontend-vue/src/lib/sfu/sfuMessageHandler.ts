@@ -20,6 +20,15 @@ function integerField(fallback: number, ...values: any[]): number {
   return fallback
 }
 
+function videoLayerField(...values: any[]): 'primary' | 'thumbnail' | '' {
+  for (const value of values) {
+    const normalized = stringField(value).trim().toLowerCase()
+    if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail'
+    if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary'
+  }
+  return ''
+}
+
 export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg: any): void {
   const { callbacks, inboundFrameAssembler, roomId, subscribe } = ctx
 
@@ -121,6 +130,7 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
           senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
           codecId: stringField(msg.codecId, msg.codec_id),
           runtimeId: stringField(msg.runtimeId, msg.runtime_id),
+          videoLayer: videoLayerField(msg.videoLayer, msg.video_layer),
           outgoingVideoQualityProfile: stringField(
             msg.outgoingVideoQualityProfile,
             msg.outgoing_video_quality_profile,

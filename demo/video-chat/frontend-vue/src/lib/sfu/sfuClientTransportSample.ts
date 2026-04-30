@@ -47,6 +47,7 @@ export function buildSfuFrameTransportSample(
     frameType: String(payload.frame_type || ''),
     frameSequence: Math.max(0, Number(payload.frame_sequence || 0)),
     chunkCount: Math.max(1, Number(payload.chunk_count || 1)),
+    videoLayer: String(payload.video_layer || ''),
     outgoingVideoQualityProfile: String(payload.outgoing_video_quality_profile || ''),
     selectedVideoQualityProfile: String(payload.selected_video_quality_profile || payload.outgoing_video_quality_profile || ''),
     activeCaptureBackend: String(payload.active_capture_backend || payload.publisher_source_backend || ''),
