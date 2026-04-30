@@ -174,12 +174,8 @@ export function createNativeBridgeRuntimeHelpers({
     if (trackKind === 'audio' && shouldBypassNativeAudioProtectionForPeer(normalizedSenderUserId)) {
       return false;
     }
-    if (
-      Number.isInteger(normalizedSenderUserId)
-      && normalizedSenderUserId > 0
-      && !session.canProtectNativeForTargets([normalizedSenderUserId])
-    ) {
-      return false;
+    if (Number.isInteger(normalizedSenderUserId) && normalizedSenderUserId > 0) {
+      void session.ensureReady?.();
     }
     try {
       if (attachMediaSecurityNativeReceiverBase(session, receiver, normalizedSenderUserId, track)) {
@@ -196,8 +192,6 @@ export function createNativeBridgeRuntimeHelpers({
     if (!peer?.pc || !shouldMaintainNativePeerConnections()) return false;
     const senderUserId = Number(peer.userId || 0);
     if (!Number.isInteger(senderUserId) || senderUserId <= 0 || senderUserId === currentUserId()) return false;
-    const session = ensureMediaSecuritySession();
-    if (!session.canProtectNativeForTargets([senderUserId])) return false;
 
     let attachedAny = false;
     const receivers = typeof peer.pc.getReceivers === 'function' ? peer.pc.getReceivers() : [];

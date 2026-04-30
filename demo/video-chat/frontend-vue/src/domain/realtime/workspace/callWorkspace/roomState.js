@@ -152,6 +152,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
 
     for (const peer of remotePeersRef.value.values()) {
       mergeLiveMediaPeerIntoRoster(aggregate, peer, {
+        allowMissingSnapshotSupplement: !hasRealtimeRoomSync.value,
         currentUserId: currentUserId.value,
         callParticipantRoles,
         source: 'sfu',
@@ -160,6 +161,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
 
     for (const peer of nativePeerConnectionsRef.value.values()) {
       mergeLiveMediaPeerIntoRoster(aggregate, peer, {
+        allowMissingSnapshotSupplement: !hasRealtimeRoomSync.value,
         currentUserId: currentUserId.value,
         callParticipantRoles,
         source: 'native',

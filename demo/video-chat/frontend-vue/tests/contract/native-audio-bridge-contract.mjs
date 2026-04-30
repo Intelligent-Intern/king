@@ -164,6 +164,12 @@ try {
   requireContains(peerFactory, "setNativePeerAudioBridgeState(peer, 'waiting_security', '');", 'early native audio receiver tracks wait for security instead of failing audio');
   requireContains(peerFactory, "ensureNativeAudioBridgeSecurityReady(peer, 'native_audio_receiver_track')", 'early native audio receiver tracks force media-security readiness before retrying receiver attach');
   requireContains(peerFactory, "recovery_reason: 'receiver_track_after_security_ready'", 'native audio receiver attach failure is reported only after a security-ready retry');
+  requireContains(bridgeRuntime, 'void session.ensureReady?.();', 'native audio receiver transforms start session initialization before keys arrive');
+  assert.equal(
+    bridgeRuntime.includes('&& !session.canProtectNativeForTargets([normalizedSenderUserId])'),
+    false,
+    'native receiver transform attachment must not wait until receiver keys are active because Chrome can reject late createEncodedStreams calls',
+  );
   requireContains(nativeStack, 'ensureNativeAudioBridgeSecurityReady: callbacks.ensureNativeAudioBridgeSecurityReady,', 'native stack passes media-security readiness into peer factory');
   requireContains(nativeStack, 'shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n    streamHasLiveTrackKind', 'native audio recovery receives shouldUseNativeAudioBridge callback');
   requireContains(nativeStack, 'shouldMaintainNativePeerConnections: callbacks.shouldMaintainNativePeerConnections,\n    shouldUseNativeAudioBridge: callbacks.shouldUseNativeAudioBridge,\n  });', 'native peer lifecycle receives shouldUseNativeAudioBridge callback');
