@@ -120,9 +120,7 @@ export function createCallWorkspaceMediaStack(options) {
           return true;
         }
       }
-      const targetUserId = Number(peer?.userId || 0);
       const localUserId = Number(refs.currentUserId.value || 0);
-      if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
       const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_receiver_feedback');
       const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
       const feedbackAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
@@ -141,6 +139,14 @@ export function createCallWorkspaceMediaStack(options) {
         })
         : false;
       if (sfuRecoverySent || sfuLayerPreferenceSent) return true;
+
+      const targetUserId = Number(
+        peer?.userId
+        || payload?.publisher_user_id
+        || payload?.publisherUserId
+        || 0
+      );
+      if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
       if (typeof callbacks.sendSocketFrame !== 'function') return false;
       return callbacks.sendSocketFrame({
         type: 'call/media-quality-pressure',

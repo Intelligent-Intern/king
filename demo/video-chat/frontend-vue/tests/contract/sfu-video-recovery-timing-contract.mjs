@@ -28,6 +28,7 @@ try {
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
   const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
@@ -71,6 +72,9 @@ try {
   requireContains(socketLifecycle, "downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')", 'remote quality pressure lowers sender outgoing quality');
   requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'remote keyframe wait is routed into publisher full-frame keyframe recovery');
   requireContains(socketLifecycle, 'full_keyframe_requested', 'remote pressure diagnostics record full-keyframe recovery');
+  requireContains(receiverFeedback, 'function receiverFeedbackTargetUserId(peer, payload = {})', 'receiver feedback can target frame publisher before peer hydration');
+  requireContains(receiverFeedback, 'payload?.publisher_user_id', 'receiver feedback socket fallback preserves publisher user id');
+  requireContains(receiverFeedback, 'publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0)', 'keyframe feedback carries frame publisher user id');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
   requireContains(frameDecode, 'peer.sfuSocketRestartCount = 0;', 'fresh decoded frames clear hard reconnect backoff');
