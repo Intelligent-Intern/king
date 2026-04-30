@@ -79,7 +79,25 @@ Technical target:
    - Production check after deploy: `sfu_frame_ingress_stale_dropped=0`, `sfu_ingress_latency_budget_exceeded=0`, `sfu_browser_encoder_frame_failed=0`; only `sfu_frame_ingress_wall_clock_skew_observed` remains, with trusted `queued_age_ms` at 1-5ms and clock-sensitive receive latency around 2.6s.
    - Verification: `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `php -l` on touched PHP modules, `git diff --check`.
 
-3. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
+3. [ ] `[sfu-frame-buffer-tmpfs-broker]` Move the short-lived SFU frame buffer to RAM-backed storage.
+
+   Scope:
+   - Keep the main `VIDEOCHAT_KING_DB_PATH` persistent on `/data/video-chat.sqlite` for users, calls, sessions, room state, and operational recovery.
+   - Move only `VIDEOCHAT_KING_SFU_BROKER_DB_PATH` to a Docker `tmpfs` mount, for example `/sfu-buffer/video-chat-sfu-broker.sqlite`, because `sfu_frames` is a seconds-long replay buffer, not durable product data.
+   - Do not use `sqlite::memory:` for the SFU broker: separate PHP/SFU workers need a shared broker database, so an in-memory per-connection database would break cross-worker replay.
+   - Apply broker-only SQLite pragmas suitable for ephemeral media replay (`journal_mode=WAL`, `synchronous=OFF` or equivalent bounded-risk setting, `temp_store=MEMORY`) without weakening persistent application DB durability.
+   - Keep bounded TTL, row caps, cleanup, SQLite replay, live relay, binary envelopes, and media-security metadata intact.
+
+   Done when:
+   - Production SFU workers share the same RAM-backed broker path and no longer write frame replay records to the persistent Docker volume.
+   - Persistent call/user/session SQLite stays on `/data` and backup/restore semantics are unchanged.
+   - SFU diagnostics expose the broker path/storage class so we can verify RAM-backed replay in production logs.
+   - Contracts prove the broker path is tmpfs-backed in compose and that `sqlite::memory:` is not used for multi-worker SFU replay.
+
+   Report:
+   - Proposed next performance improvement after the clock-skew/backpressure fix.
+
+4. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
 
    Scope:
    - Keep one camera source and one media-security session, but produce separate encoded outputs for primary and thumbnail profiles.
@@ -94,7 +112,7 @@ Technical target:
    Report:
    - Proposed next improvement.
 
-4. [ ] `[online-video-quality-regression-probes]` Add automated online probes for blockiness, frame lifecycle, and console cleanliness.
+5. [ ] `[online-video-quality-regression-probes]` Add automated online probes for blockiness, frame lifecycle, and console cleanliness.
 
    Scope:
    - Extend production E2E to detect repeated `VideoFrame was garbage collected without being closed`, websocket handler exceptions, and critical SFU pressure logs.
@@ -109,7 +127,7 @@ Technical target:
    Report:
    - Proposed next improvement.
 
-5. [x] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
+6. [x] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
 
    Scope:
    - Add automatic layout-aware region-of-interest framing before the publisher encode step: when the target tile is portrait, zoom the camera frame until the portrait viewport is filled and crop the left/right landscape margins.
@@ -136,7 +154,7 @@ Technical target:
    - Added double-click fullscreen toggle: double-click a grid, mini, or main video to enter fullscreen; double-click the fullscreen video again to restore the previous layout.
    - Added contract coverage for crop math, fullscreen toggling, worker crop propagation, and CSS framing mode.
 
-6. [x] `[remote-video-reconnect-loop-backoff]` Stop repeated hard SFU reconnects during remote video recovery.
+7. [x] `[remote-video-reconnect-loop-backoff]` Stop repeated hard SFU reconnects during remote video recovery.
 
    Scope:
    - Keep fast recovery actions intact: resubscribe, full-keyframe request, and automatic sender quality pressure.
@@ -157,7 +175,7 @@ Technical target:
    - Fresh rendered frames now clear the hard-reconnect debt.
    - Verification: `node tests/contract/sfu-video-recovery-timing-contract.mjs`, `npm run test:contract:sfu`.
 
-7. [x] `[remote-wlvc-tile-deblocking]` Smooth visible WLVC tile and block artifacts on remote canvases.
+8. [x] `[remote-wlvc-tile-deblocking]` Smooth visible WLVC tile and block artifacts on remote canvases.
 
    Scope:
    - Keep the current canvas resolution and automatic quality control intact.
@@ -176,7 +194,7 @@ Technical target:
    - Kept high-quality full frames untouched unless they are selective tile composites.
    - Verification: `node tests/contract/sfu-selective-tile-runtime-contract.mjs`.
 
-8. [x] `[room-leave-roster-video-prune]` Remove departed participants from roster and video layout immediately.
+9. [x] `[room-leave-roster-video-prune]` Remove departed participants from roster and video layout immediately.
 
    Scope:
    - Treat `room/left` as an authoritative local prune signal, not only as a reason to poll a snapshot.
