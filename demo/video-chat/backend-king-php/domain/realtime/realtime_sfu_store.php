@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/realtime_sfu_binary_payload.php';
 require_once __DIR__ . '/realtime_sfu_frame_buffer.php';
 require_once __DIR__ . '/realtime_sfu_iibin.php';
+require_once __DIR__ . '/realtime_sfu_recovery_requests.php';
 require_once __DIR__ . '/realtime_sfu_subscriber_budget.php';
 
 function videochat_sfu_now_ms(): int
@@ -173,6 +174,7 @@ SQL
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sfu_frames_room_row ON sfu_frames(room_id, frame_row_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sfu_frames_room_created ON sfu_frames(room_id, created_at_ms)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sfu_frames_room_publisher ON sfu_frames(room_id, publisher_id, frame_row_id)');
+    videochat_sfu_bootstrap_recovery_requests($pdo);
 }
 
 function videochat_sfu_table_has_column(PDO $pdo, string $tableName, string $columnName): bool
@@ -1161,7 +1163,7 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
-    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
+    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/media-recovery-request', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
         return [
             'ok' => false,
             'type' => $type,

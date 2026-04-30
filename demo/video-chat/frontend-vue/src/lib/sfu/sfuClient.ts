@@ -353,6 +353,35 @@ export class SFUClient {
     })
   }
 
+  requestPublisherMediaRecovery(publisherId: string, details: Record<string, unknown> = {}): boolean {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return false
+    const requestedVideoLayer = stringField(details.requested_video_layer, details.requestedVideoLayer).toLowerCase()
+    const requestedAction = stringField(
+      details.requested_action,
+      details.requestedAction,
+      'force_full_keyframe',
+    ).toLowerCase()
+    return this.send({
+      type: 'sfu/media-recovery-request',
+      publisher_id: normalizedPublisherId,
+      track_id: stringField(details.track_id, details.trackId),
+      reason: stringField(details.reason, 'sfu_receiver_media_recovery').toLowerCase(),
+      requested_action: requestedAction,
+      request_full_keyframe: Boolean(details.request_full_keyframe || details.requestFullKeyframe)
+        || requestedAction === 'force_full_keyframe'
+        || requestedVideoLayer === 'primary',
+      requested_video_layer: requestedVideoLayer === 'primary' || requestedVideoLayer === 'thumbnail'
+        ? requestedVideoLayer
+        : '',
+      requested_video_quality_profile: stringField(
+        details.requested_video_quality_profile,
+        details.requestedVideoQualityProfile,
+      ).toLowerCase(),
+      frame_sequence: Math.max(0, Number(details.frame_sequence || details.frameSequence || 0)),
+    })
+  }
+
   unpublishTrack(trackId: string): void {
     this.send({ type: 'sfu/unpublish', track_id: trackId })
   }

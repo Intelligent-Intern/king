@@ -96,8 +96,9 @@ export function createCallWorkspaceMediaStack(options) {
           : (requestedVideoLayer === 'thumbnail' ? 'prefer_thumbnail_video_layer' : '')),
       ).trim().toLowerCase();
       const isLayerPreference = requestedVideoLayer === 'primary' || requestedVideoLayer === 'thumbnail';
+      let sfuLayerPreferenceSent = false;
       if (isLayerPreference) {
-        const sfuLayerPreferenceSent = refs.sfuClientRef.value
+        sfuLayerPreferenceSent = refs.sfuClientRef.value
           && typeof refs.sfuClientRef.value.setSubscriberLayerPreference === 'function'
           ? refs.sfuClientRef.value.setSubscriberLayerPreference(String(publisherId || ''), {
             ...payload,
@@ -108,12 +109,11 @@ export function createCallWorkspaceMediaStack(options) {
           : false;
         if (
           sfuLayerPreferenceSent
-          && (requestedAction === 'prefer_primary_video_layer' || requestedAction === 'prefer_thumbnail_video_layer')
+          && requestedAction === 'prefer_thumbnail_video_layer'
         ) {
           return true;
         }
       }
-      if (typeof callbacks.sendSocketFrame !== 'function') return false;
       const targetUserId = Number(peer?.userId || 0);
       const localUserId = Number(refs.currentUserId.value || 0);
       if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
@@ -122,6 +122,20 @@ export function createCallWorkspaceMediaStack(options) {
       const feedbackAction = String(
         payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'),
       ).trim().toLowerCase();
+      const sfuRecoverySent = refs.sfuClientRef.value
+        && typeof refs.sfuClientRef.value.requestPublisherMediaRecovery === 'function'
+        ? refs.sfuClientRef.value.requestPublisherMediaRecovery(String(publisherId || ''), {
+          ...payload,
+          requested_action: requestedAction || feedbackAction,
+          request_full_keyframe: Boolean(payload?.request_full_keyframe)
+            || requestFullKeyframe
+            || requestedVideoLayer === 'primary',
+          requested_video_layer: requestedVideoLayer,
+          reason: normalizedReason,
+        })
+        : false;
+      if (sfuRecoverySent || sfuLayerPreferenceSent) return true;
+      if (typeof callbacks.sendSocketFrame !== 'function') return false;
       return callbacks.sendSocketFrame({
         type: 'call/media-quality-pressure',
         target_user_id: targetUserId,

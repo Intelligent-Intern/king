@@ -122,7 +122,7 @@ Technical target:
      `fallback_until_real_media_plane`, preserving room/admission control while
      separating it from the future media data plane.
 
-4. [ ] `[packet-layer-sfu-forwarder]` Replace whole-frame fanout with packet/layer forwarding semantics.
+4. [x] `[packet-layer-sfu-forwarder]` Replace whole-frame fanout with packet/layer forwarding semantics.
 
    Scope:
    - Model primary/thumbnail/fullscreen layers as independently routable media
@@ -137,6 +137,17 @@ Technical target:
      reconnect.
    - Fullscreen subscriber quality is isolated from mini/grid subscribers.
    - Backend diagnostics show per-subscriber media layer and recovery actions.
+
+   Report:
+   - Added `sfu/media-recovery-request` on the SFU control plane so a receiver
+     can request publisher-side keyframe/layer recovery without restarting the
+     media socket.
+   - King routes recovery control directly when publisher and receiver are in
+     the same worker, and falls back to a bounded SQLite broker table for
+     cross-worker publisher delivery.
+   - Publisher clients consume `sfu/publisher-recovery-request` and route
+     `force_full_keyframe` into the existing WLVC full-frame keyframe path, so
+     normal freezes now have a targeted recovery path before reconnect.
 
 5. [ ] `[native-render-and-jitter-buffer]` Stop treating canvas repaint as the primary receiver media runtime.
 
