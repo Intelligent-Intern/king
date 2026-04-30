@@ -866,7 +866,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
         mediaSecurityStateVersion.value += 1;
         if (accepted) {
-          await sendMediaSecurityHello(normalizedSenderUserId);
+          await sendMediaSecurityHello(normalizedSenderUserId, true);
           await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
           if (remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)) {
             scheduleMediaSecurityParticipantSync('hello_accepted');
