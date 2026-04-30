@@ -48,6 +48,8 @@ try {
   requireContains(browserPublisher, 'createPublisherVideoFrameSourceReader({', 'browser publisher reads camera VideoFrames directly');
   requireContains(browserPublisher, 'encoder.encode(result.frame', 'browser publisher encodes VideoFrame without RGBA conversion');
   requireContains(browserPublisher, 'closePublisherVideoFrame(result.frame)', 'browser publisher deterministically closes source VideoFrames');
+  requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
+  requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
   requireContains(browserPublisher, 'mediaSecurity.protectFrame({', 'browser publisher keeps King protected media envelopes');
   requireContains(browserPublisher, 'sendClient.sendEncodedFrame(outgoingFrame)', 'browser publisher still uses SFU binary frame sender');
   requireContains(browserPublisher, 'publisher_browser_encoder_codec', 'browser publisher emits backend telemetry for encoder path');
@@ -84,6 +86,11 @@ try {
   requireContains(securityCore, "'webcodecs_vp8'", 'protected header validator allows browser codec id');
   requireContains(backendSfuStore, "'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8'", 'backend SFU store preserves browser codec id');
   requireContains(backendSfuStore, 'publisher_browser_encoder_codec', 'backend SFU store preserves browser encoder telemetry');
+  requireContains(
+    read('src/domain/realtime/local/publisherFrameTrace.js'),
+    'if (!Array.isArray(trace.stages)) trace.stages = [];',
+    'publisher trace stage marker must not crash hand-built browser encoder traces',
+  );
 
   requireContains(browserPublisher, 'supportsVideoEncoder: Boolean(VideoEncoderCtor)', 'browser publisher exposes VideoEncoder capability flag');
   requireContains(browserPublisher, 'supportsVideoDecoder: Boolean(VideoDecoderCtor)', 'browser publisher exposes VideoDecoder capability flag');

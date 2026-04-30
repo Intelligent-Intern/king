@@ -455,6 +455,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         sourceTrackWidth: config.width,
         sourceTrackHeight: config.height,
         sourceTrackFrameRate: Number(videoProfile.captureFrameRate || 0),
+        stages: [],
+        stageMetrics: {},
       };
       markPublisherFrameTraceStage(trace, 'video_frame_processor_read', highResolutionNowMs() - readStartedAtMs);
       encodedChunks.length = 0;

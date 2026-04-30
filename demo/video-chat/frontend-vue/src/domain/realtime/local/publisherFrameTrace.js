@@ -79,6 +79,8 @@ export function createPublisherFrameTrace({
 
 export function markPublisherFrameTraceStage(trace, stageId, stageMs) {
   if (!trace || typeof trace !== 'object') return;
+  if (!Array.isArray(trace.stages)) trace.stages = [];
+  if (!trace.stageMetrics || typeof trace.stageMetrics !== 'object') trace.stageMetrics = {};
   const normalizedStageId = normalizeTraceStageId(stageId);
   const normalizedStageMs = roundedStageMs(stageMs);
   trace.stages.push(normalizedStageId);
