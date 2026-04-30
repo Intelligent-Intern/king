@@ -50,7 +50,8 @@ requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'ex
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId);', 'target_not_in_room prunes unreachable peer locally');
 requireContains(socketLifecycle, 'const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);', 'media-security publish failures keep roster stable during cross-worker key retries');
 requireContains(socketLifecycle, "normalizedError === 'target_not_in_room' && !failedMediaSecuritySignal", 'media-security target_not_in_room must not evict a participant before the room snapshot catches up');
-requireContains(socketLifecycle, 'void sendMediaSecuritySync(true);', 'media-security target_not_in_room forces reconnect rekey');
+requireContains(socketLifecycle, "const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room';", 'media-security target_not_in_room retries without rotating keys during cross-worker presence races');
+requireContains(socketLifecycle, 'void sendMediaSecuritySync(shouldForceMediaSecurityRekey);', 'media-security publish failures retry through the normal sync path');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');

@@ -105,8 +105,9 @@ export function createCallWorkspaceSocketHelpers({
 
     requestRoomSnapshot();
     if (failedMediaSecuritySignal) {
+      const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room';
       setTimeout(() => {
-        void sendMediaSecuritySync(true);
+        void sendMediaSecuritySync(shouldForceMediaSecurityRekey);
       }, 500);
       return;
     }

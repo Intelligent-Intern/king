@@ -383,6 +383,30 @@ export function createCallWorkspaceMediaSecurityRuntime({
     ].join(':');
   }
 
+  function incomingMediaSecurityHelloResponseKey(senderUserId, payloadBody, session) {
+    const payload = payloadBody && typeof payloadBody === 'object' ? payloadBody : {};
+    return [
+      activeRoomId.value,
+      currentMediaSecurityRuntimePath(),
+      Number(senderUserId || 0),
+      Number(payload.epoch || 0),
+      String(payload.sender_key_id || ''),
+      String(payload.device_id || ''),
+      String(payload.public_key || ''),
+      String(payload.hybrid_public_key || ''),
+      Number(session?.epoch || 0),
+      String(session?.senderKeyId || ''),
+      'hello-response',
+    ].join(':');
+  }
+
+  function shouldForceReplyToIncomingMediaSecurityHello(senderUserId, payloadBody, session) {
+    const key = incomingMediaSecurityHelloResponseKey(senderUserId, payloadBody, session);
+    if (state.mediaSecurityHelloSignalsSent.has(key)) return false;
+    state.mediaSecurityHelloSignalsSent.add(key);
+    return true;
+  }
+
   function clearMediaSecuritySignalCaches() {
     state.mediaSecurityHelloSignalsSent.clear();
     state.mediaSecuritySenderKeySignalsSent.clear();
@@ -866,8 +890,13 @@ export function createCallWorkspaceMediaSecurityRuntime({
         const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
         mediaSecurityStateVersion.value += 1;
         if (accepted) {
-          await sendMediaSecurityHello(normalizedSenderUserId, true);
-          await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
+          const forceReply = shouldForceReplyToIncomingMediaSecurityHello(
+            normalizedSenderUserId,
+            payloadBody || {},
+            session,
+          );
+          await sendMediaSecurityHello(normalizedSenderUserId, forceReply);
+          await sendMediaSecuritySenderKey(normalizedSenderUserId, forceReply);
           if (remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)) {
             scheduleMediaSecurityParticipantSync('hello_accepted');
           }
