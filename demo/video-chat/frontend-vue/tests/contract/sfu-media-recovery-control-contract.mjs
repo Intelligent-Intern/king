@@ -41,7 +41,9 @@ function main() {
   requireContains(lifecycle, 'handleSfuPublisherPressureMessage', 'publisher lifecycle handles recovery pressure centrally');
   requireContains(lifecycle, 'requestWlvcFullFrameKeyframe', 'routed publisher recovery can force a full-frame keyframe');
   requireContains(lifecycle, "requestWlvcFullFrameKeyframe('sfu_socket_connected'", 'SFU reconnect resets publisher media generation with a keyframe before replay resumes');
+  requireContains(lifecycle, 'stopLocalEncodingPipeline();', 'SFU disconnect stops stale browser encoders before reconnect');
   requireContains(workspace, 'requestWlvcFullFrameKeyframe: (...args) => requestWlvcFullFrameKeyframe(...args)', 'workspace wires publisher keyframe recovery into SFU lifecycle');
+  requireContains(workspace, 'stopLocalEncodingPipeline,', 'workspace wires publisher encoder teardown into SFU lifecycle');
 
   requireContains(sfuStore, "'sfu/media-recovery-request'", 'backend admits media recovery control frames');
   requireContains(sfuStore, 'videochat_sfu_bootstrap_recovery_requests($pdo)', 'broker recovery table is part of SFU bootstrap');

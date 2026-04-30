@@ -1361,6 +1361,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     setSfuRemotePeer,
     sfuTrackListHasVideo,
     sfuTrackRows,
+    stopLocalEncodingPipeline,
     teardownSfuRemotePeers: (...args) => teardownSfuRemotePeers(...args),
   },
   constants: {

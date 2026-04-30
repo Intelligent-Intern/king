@@ -30,6 +30,7 @@ export function createSfuLifecycleHelpers({
     setSfuRemotePeer,
     sfuTrackListHasVideo,
     sfuTrackRows,
+    stopLocalEncodingPipeline,
     teardownSfuRemotePeers,
   } = callbacks;
 
@@ -83,6 +84,9 @@ export function createSfuLifecycleHelpers({
         const hadActiveConnection = refs.sfuConnected.value;
         refs.sfuConnected.value = false;
         state.localTracksPublishedToSfu = false;
+        if (typeof stopLocalEncodingPipeline === 'function') {
+          stopLocalEncodingPipeline();
+        }
         stopSfuTrackAnnounceTimer();
         refs.sfuClientRef.value = null;
         if (refs.isManualSocketClose()) {
