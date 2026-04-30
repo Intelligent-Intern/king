@@ -47,8 +47,10 @@ try {
   requireContains(browserPublisher, 'globalScope.EncodedVideoChunk', 'browser publisher gates on encoded chunk support');
   requireContains(browserPublisher, 'createPublisherVideoFrameSourceReader({', 'browser publisher reads camera VideoFrames directly');
   requireContains(browserPublisher, 'encoder.encode(result.frame', 'browser publisher encodes VideoFrame without RGBA conversion');
-  requireContains(browserPublisher, 'thumbnailEncoder.encode(result.frame', 'browser publisher encodes thumbnail VideoFrame without RGBA conversion');
+  requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'browser publisher creates a scaled thumbnail VideoFrame without RGBA readback');
+  requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame', 'browser publisher encodes the scaled thumbnail VideoFrame');
   requireContains(browserPublisher, 'closePublisherVideoFrame(result.frame)', 'browser publisher deterministically closes source VideoFrames');
+  requireContains(browserPublisher, 'closePublisherVideoFrame(thumbnailFrame)', 'browser publisher deterministically closes scaled thumbnail VideoFrames');
   requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
   requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
   requireContains(browserPublisher, 'mediaSecurity.protectFrame({', 'browser publisher keeps King protected media envelopes');
@@ -60,7 +62,7 @@ try {
   requireContains(browserPublisher, 'maybeStartProtectedBrowserVideoEncoderPublisher', 'browser publisher exposes compatibility fallback startup gate');
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
   assert.equal(browserPublisher.includes('getImageData('), false, 'browser publisher must not use canvas getImageData');
-  assert.equal(browserPublisher.includes('drawImage('), false, 'browser publisher must not use canvas drawImage');
+  requireContains(browserPublisher, 'createBrowserThumbnailFrameScaler', 'browser publisher keeps thumbnail scaling isolated from the primary WebCodecs path');
 
   requireContains(publisherPipeline, "from './protectedBrowserVideoEncoder'", 'publisher pipeline imports browser encoder path');
   assert.ok(
@@ -74,7 +76,9 @@ try {
   requireContains(browserRenderer, 'new globalScope.EncodedVideoChunk({', 'browser renderer feeds encoded chunks to WebCodecs');
   requireContains(browserRenderer, 'videoFrame?.close?.()', 'browser renderer deterministically closes decoded VideoFrames');
   requireContains(browserRenderer, 'noteSfuRemoteVideoFrameStable', 'browser renderer updates receiver liveness');
-  requireContains(lifecycle, 'peer.browserVideoDecoder.close()', 'remote peer teardown closes browser decoder');
+  requireContains(lifecycle, 'closeProtectedBrowserVideoDecoders(peer)', 'remote peer teardown closes all browser layer decoders');
+  requireContains(browserRenderer, 'browserVideoDecoderByLayer', 'browser renderer keeps separate decoder state for primary and thumbnail layers');
+  requireContains(browserRenderer, 'decoderState.pendingFrames.push(frame)', 'browser renderer queues per-chunk frame metadata until decoder output');
 
   requireContains(frameDecode, "from './remoteBrowserEncodedVideo'", 'frame decode imports browser renderer');
   assert.ok(

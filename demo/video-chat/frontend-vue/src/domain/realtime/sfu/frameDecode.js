@@ -7,7 +7,11 @@ import {
 } from './wlvcFrameMetadata';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
 import { createSfuReceiverFeedback } from './receiverFeedback';
-import { createRemoteBrowserEncodedVideoRenderer, isProtectedBrowserEncodedVideoFrame } from './remoteBrowserEncodedVideo';
+import {
+  createRemoteBrowserEncodedVideoRenderer,
+  isProtectedBrowserEncodedVideoFrame,
+  resetProtectedBrowserVideoDecoders,
+} from './remoteBrowserEncodedVideo';
 import {
   clearCanvas,
   putImageDataOntoCanvas,
@@ -83,8 +87,17 @@ export function createSfuFrameDecodeHelpers({
     requestRemoteSfuLayerPreference: receiverFeedback.maybeSendReceiverLayerPreference,
   });
 
+  function normalizeRemoteFrameVideoLayer(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
+    if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
+    return '';
+  }
+
   function sfuFrameTrackStateKey(frame) {
-    return String(frame?.trackId || '').trim() || 'default';
+    const trackId = String(frame?.trackId || '').trim() || 'default';
+    const videoLayer = normalizeRemoteFrameVideoLayer(frame?.videoLayer || frame?.video_layer);
+    return videoLayer !== '' ? `${trackId}:${videoLayer}` : trackId;
   }
 
   function markRemoteFrameActivity(publisherUserId) {
@@ -491,7 +504,7 @@ export function createSfuFrameDecodeHelpers({
       // patch decoder state is also rebuilt from the next clean base
     }
     try {
-      peer.browserVideoDecoder?.reset?.();
+      resetProtectedBrowserVideoDecoders(peer);
     } catch {
       // browser decoder state is rebuilt from the next clean keyframe
     }
@@ -518,7 +531,7 @@ export function createSfuFrameDecodeHelpers({
         // the next full-frame keyframe can rebuild full-frame decoder state
       }
       try {
-        peer.browserVideoDecoder?.reset?.();
+        resetProtectedBrowserVideoDecoders(peer, frame);
       } catch {
         // the next browser keyframe can rebuild WebCodecs decoder state
       }

@@ -58,7 +58,9 @@ try {
     false,
     'publisher pressure queue age must not fall back to clock-sensitive King receive latency',
   );
-  requireContains(sfuLifecycle, 'onPublisherPressure: (details) => handleSfuPublisherPressure?.(details)', 'SFU lifecycle wires publisher pressure callback');
+  requireContains(sfuLifecycle, 'onPublisherPressure: (details) => handleSfuPublisherPressureMessage(details)', 'SFU lifecycle wires publisher pressure through the recovery-aware callback');
+  requireContains(sfuLifecycle, 'function handleSfuPublisherPressureMessage(details = {})', 'SFU lifecycle keeps a dedicated publisher pressure handler');
+  requireContains(sfuLifecycle, 'return handleSfuPublisherPressure?.(details)', 'SFU lifecycle forwards normal publisher pressure into the backpressure controller');
   requireContains(workspaceView, 'handleSfuPublisherPressure: (details = {}) => handleWlvcFrameSendFailure(', 'workspace routes SFU pressure into publisher backpressure controller');
   requireContains(publisherBackpressureController, "'sfu_ingress_latency_budget_exceeded'", 'publisher pressure can trigger automatic downshift for stale SFU ingress');
   requireContains(sfuTypes, 'sendDrainTargetBytes', 'transport samples expose drain target');

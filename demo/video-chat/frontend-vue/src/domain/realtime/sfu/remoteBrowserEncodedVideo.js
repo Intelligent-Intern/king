@@ -17,6 +17,24 @@ function normalizeChunkType(value) {
   return String(value || '').trim().toLowerCase() === 'keyframe' ? 'key' : 'delta';
 }
 
+function normalizeVideoLayer(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
+  if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
+  return '';
+}
+
+function browserFrameVideoLayer(frame) {
+  return normalizeVideoLayer(frame?.videoLayer || frame?.video_layer) || 'primary';
+}
+
+function browserFrameDecoderKey(frame) {
+  return [
+    String(frame?.trackId || '').trim() || 'default',
+    browserFrameVideoLayer(frame),
+  ].join(':');
+}
+
 function browserFrameDimension(frame, fieldName, fallback) {
   return positiveInteger(
     frame?.[fieldName]
@@ -30,6 +48,71 @@ export function isProtectedBrowserEncodedVideoFrame(frame) {
   return String(frame?.codecId || frame?.codec_id || '').trim().toLowerCase() === PROTECTED_BROWSER_VIDEO_CODEC_ID;
 }
 
+function ensureBrowserVideoDecoderState(peer) {
+  if (!peer || typeof peer !== 'object') return null;
+  if (!peer.browserVideoDecoderByLayer || typeof peer.browserVideoDecoderByLayer !== 'object') {
+    peer.browserVideoDecoderByLayer = {};
+  }
+  return peer.browserVideoDecoderByLayer;
+}
+
+function closeBrowserDecoderState(decoderState) {
+  if (!decoderState || typeof decoderState !== 'object') return;
+  decoderState.pendingFrames = [];
+  try {
+    decoderState.decoder?.close?.();
+  } catch {
+    // The decoder may already be closed after a browser error.
+  }
+}
+
+export function resetProtectedBrowserVideoDecoders(peer, frame = null) {
+  if (!peer || typeof peer !== 'object') return;
+  const states = peer.browserVideoDecoderByLayer && typeof peer.browserVideoDecoderByLayer === 'object'
+    ? peer.browserVideoDecoderByLayer
+    : {};
+  const keys = frame ? [browserFrameDecoderKey(frame)] : Object.keys(states);
+  for (const key of keys) {
+    const decoderState = states[key];
+    if (!decoderState || typeof decoderState !== 'object') continue;
+    decoderState.pendingFrames = [];
+    try {
+      decoderState.decoder?.reset?.();
+    } catch {
+      // The next keyframe can rebuild this layer.
+    }
+  }
+  if (!frame) {
+    try {
+      peer.browserVideoDecoder?.reset?.();
+    } catch {
+      // Backward-compatible alias reset is best-effort.
+    }
+  }
+}
+
+export function closeProtectedBrowserVideoDecoders(peer) {
+  if (!peer || typeof peer !== 'object') return;
+  const states = peer.browserVideoDecoderByLayer && typeof peer.browserVideoDecoderByLayer === 'object'
+    ? peer.browserVideoDecoderByLayer
+    : {};
+  for (const decoderState of Object.values(states)) {
+    closeBrowserDecoderState(decoderState);
+  }
+  if (peer.browserVideoDecoder && !Object.values(states).some((state) => state?.decoder === peer.browserVideoDecoder)) {
+    try {
+      peer.browserVideoDecoder.close();
+    } catch {
+      // Backward-compatible alias cleanup is best-effort.
+    }
+  }
+  peer.browserVideoDecoderByLayer = {};
+  peer.browserVideoDecoder = null;
+  peer.browserVideoDecoderCodec = '';
+  peer.browserVideoDecoderWidth = 0;
+  peer.browserVideoDecoderHeight = 0;
+}
+
 function createBrowserVideoDecoder(peer, frame, {
   captureClientDiagnosticError,
   globalScope,
@@ -40,11 +123,21 @@ function createBrowserVideoDecoder(peer, frame, {
 
   const width = browserFrameDimension(frame, 'frameWidth', positiveInteger(peer?.frameWidth, 640));
   const height = browserFrameDimension(frame, 'frameHeight', positiveInteger(peer?.frameHeight, 360));
+  const videoLayer = browserFrameVideoLayer(frame);
+  const decoderState = {
+    codec: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+    decoder: null,
+    height,
+    pendingFrames: [],
+    videoLayer,
+    width,
+  };
   let decoder = null;
   decoder = new VideoDecoderCtor({
     output(videoFrame) {
+      const outputFrame = decoderState.pendingFrames.shift() || frame;
       try {
-        renderBrowserVideoFrame(peer, videoFrame, frame);
+        renderBrowserVideoFrame(peer, videoFrame, outputFrame);
       } finally {
         try {
           videoFrame?.close?.();
@@ -70,31 +163,41 @@ function createBrowserVideoDecoder(peer, frame, {
     codedHeight: height,
     hardwareAcceleration: 'prefer-hardware',
   });
-  peer.browserVideoDecoder = markRaw(decoder);
-  peer.browserVideoDecoderCodec = PROTECTED_BROWSER_VIDEO_CODEC_ID;
-  peer.browserVideoDecoderWidth = width;
-  peer.browserVideoDecoderHeight = height;
-  return decoder;
+  decoderState.decoder = markRaw(decoder);
+  return decoderState;
 }
 
 function ensureBrowserVideoDecoder(peer, frame, options) {
   if (!peer || typeof peer !== 'object') return null;
   const width = browserFrameDimension(frame, 'frameWidth', positiveInteger(peer.frameWidth, 640));
   const height = browserFrameDimension(frame, 'frameHeight', positiveInteger(peer.frameHeight, 360));
+  const states = ensureBrowserVideoDecoderState(peer);
+  if (!states) return null;
+  const decoderKey = browserFrameDecoderKey(frame);
+  const existing = states[decoderKey];
   if (
-    peer.browserVideoDecoder
-      && peer.browserVideoDecoderCodec === PROTECTED_BROWSER_VIDEO_CODEC_ID
-      && Number(peer.browserVideoDecoderWidth || 0) === width
-      && Number(peer.browserVideoDecoderHeight || 0) === height
+    existing?.decoder
+      && existing.codec === PROTECTED_BROWSER_VIDEO_CODEC_ID
+      && Number(existing.width || 0) === width
+      && Number(existing.height || 0) === height
   ) {
-    return peer.browserVideoDecoder;
+    peer.browserVideoDecoder = existing.decoder;
+    peer.browserVideoDecoderCodec = PROTECTED_BROWSER_VIDEO_CODEC_ID;
+    peer.browserVideoDecoderWidth = width;
+    peer.browserVideoDecoderHeight = height;
+    return existing;
   }
-  try {
-    peer.browserVideoDecoder?.close?.();
-  } catch {
-    // A stale decoder can be replaced on the next keyframe.
+  if (existing) {
+    closeBrowserDecoderState(existing);
   }
-  return createBrowserVideoDecoder(peer, frame, options);
+  const next = createBrowserVideoDecoder(peer, frame, options);
+  if (!next) return null;
+  states[decoderKey] = next;
+  peer.browserVideoDecoder = next.decoder;
+  peer.browserVideoDecoderCodec = PROTECTED_BROWSER_VIDEO_CODEC_ID;
+  peer.browserVideoDecoderWidth = width;
+  peer.browserVideoDecoderHeight = height;
+  return next;
 }
 
 export function createRemoteBrowserEncodedVideoRenderer({
@@ -208,11 +311,12 @@ export function createRemoteBrowserEncodedVideoRenderer({
       });
       return true;
     }
-    const decoder = ensureBrowserVideoDecoder(peer, frame, {
+    const decoderState = ensureBrowserVideoDecoder(peer, frame, {
       captureClientDiagnosticError,
       globalScope,
       renderBrowserVideoFrame,
     });
+    const decoder = decoderState?.decoder || null;
     if (!decoder) return true;
     try {
       const decodeDecision = shouldDecodeRemoteFrame(peer, frame, Number(decoder.decodeQueueSize || 0));
@@ -225,8 +329,12 @@ export function createRemoteBrowserEncodedVideoRenderer({
         timestamp: Math.max(0, Number(frame?.timestamp || Date.now())) * 1000,
         data: new Uint8Array(frameData || new ArrayBuffer(0)),
       });
+      decoderState.pendingFrames.push(frame);
       decoder.decode(chunk);
     } catch (error) {
+      if (decoderState?.pendingFrames?.length > 0) {
+        decoderState.pendingFrames.pop();
+      }
       peer.needsKeyframe = true;
       try {
         decoder.reset?.();

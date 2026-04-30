@@ -90,8 +90,17 @@ function normalizePositiveInteger(value, fallback = 0) {
   return Number.isFinite(normalized) && normalized > 0 ? Math.floor(normalized) : fallback;
 }
 
+function normalizeRemoteFrameVideoLayer(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
+  if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
+  return '';
+}
+
 function remoteFrameTrackKey(frame) {
-  return String(frame?.trackId || '').trim() || 'default';
+  const trackId = String(frame?.trackId || '').trim() || 'default';
+  const videoLayer = normalizeRemoteFrameVideoLayer(frame?.videoLayer || frame?.video_layer);
+  return videoLayer !== '' ? `${trackId}:${videoLayer}` : trackId;
 }
 
 function isRemoteKeyframe(frame) {

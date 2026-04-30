@@ -1,3 +1,5 @@
+import { closeProtectedBrowserVideoDecoders } from './remoteBrowserEncodedVideo';
+
 export function createSfuLifecycleHelpers({
   callbacks,
   constants,
@@ -172,9 +174,7 @@ export function createSfuLifecycleHelpers({
     if (peer.patchDecoder) {
       try { peer.patchDecoder.destroy(); } catch {}
     }
-    if (peer.browserVideoDecoder) {
-      try { peer.browserVideoDecoder.close(); } catch {}
-    }
+    closeProtectedBrowserVideoDecoders(peer);
     if (peer.video instanceof HTMLElement) {
       peer.video.remove();
     }
