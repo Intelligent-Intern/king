@@ -155,6 +155,17 @@ async function main() {
     wireBudgetDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
     'wire-rate budget send failures downshift immediately before browser buffering can become critical',
   );
+  const repeatedIngressLagDecision = decidePublisherBackpressureAction({
+    kind: 'send_failure',
+    reason: 'sfu_ingress_latency_budget_exceeded',
+    bufferedAmount: 0,
+    queueAgeMs: 2700,
+    sendFailureCount: 2,
+  }, pressureConfig);
+  assert.ok(
+    repeatedIngressLagDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART),
+    'repeated server-confirmed ingress latency must restart the publisher socket even when browser bufferedAmount is zero',
+  );
 
   const throttleState = {
     wlvcBackpressureSkipCount: 0,
@@ -262,6 +273,57 @@ async function main() {
     1,
     'receiver keyframe-wait pressure increments the explicit full-frame keyframe request counter',
   );
+
+  const rescueState = {
+    wlvcBackpressurePauseUntilMs: 0,
+    wlvcFrameSendFailureLastLogAtMs: Date.now(),
+    wlvcFrameSendFailureCount: 0,
+    wlvcFrameSendFailureFirstAtMs: 0,
+    sfuVideoRecoveryLastAtMs: 0,
+  };
+  const rescueDiagnostics = [];
+  let rescueRestarts = 0;
+  const rescueController = createPublisherBackpressureController({
+    callMediaPrefs: { outgoingVideoQualityProfile: 'rescue' },
+    captureClientDiagnostic: (diagnostic) => rescueDiagnostics.push(diagnostic),
+    downgradeSfuVideoQualityAfterEncodePressure: () => false,
+    getMediaRuntimePath: () => 'wlvc_wasm',
+    getRemotePeerCount: () => 1,
+    getShouldConnectSfu: () => true,
+    onRestartSfu: () => {
+      rescueRestarts += 1;
+    },
+    resetWlvcEncoderAfterDroppedEncodedFrame: () => {},
+    sfuAutoQualityDowngradeBackpressureWindowMs: 1000,
+    sfuAutoQualityDowngradeSendFailureThreshold: 2,
+    sfuAutoQualityDowngradeSkipThreshold: 2,
+    sfuBackpressureLogCooldownMs: 999999,
+    sfuConnectRetryDelayMs: 10,
+    sfuConnected: { value: true },
+    sfuVideoRecoveryReconnectCooldownMs: 0,
+    sfuWlvcBackpressureHardResetAfterMs: 3000,
+    sfuWlvcBackpressureMaxPauseMs: 2500,
+    sfuWlvcBackpressureMinPauseMs: 350,
+    sfuWlvcEncodeFailureThreshold: 18,
+    sfuWlvcSendBufferCriticalBytes: 2400,
+    sfuWlvcSendBufferHighWaterBytes: 1200,
+    sfuWlvcSendBufferLowWaterBytes: 600,
+    state: rescueState,
+  });
+  rescueController.handleWlvcFrameSendFailure(0, 'track-ingress', 'sfu_ingress_latency_budget_exceeded', {
+    reason: 'sfu_ingress_latency_budget_exceeded',
+    stage: 'sfu_ingress_latency_guard',
+    queueAgeMs: 2700,
+    budgetMaxQueueAgeMs: 260,
+    kingReceiveLatencyMs: 2700,
+    retryAfterMs: 500,
+    bufferedAmount: 0,
+  });
+  const rescueReconnect = rescueDiagnostics.find((diagnostic) => diagnostic.eventType === 'sfu_video_reconnect_after_stall');
+  assert.equal(rescueRestarts, 1, 'rescue profile ingress lag must restart the stale publisher socket');
+  assert.equal(rescueState.wlvcFrameSendFailureCount, 0, 'successful ingress-lag restart clears the send failure streak');
+  assert.equal(rescueReconnect?.payload?.reason, 'sfu_ingress_latency_budget_exceeded', 'restart diagnostics must preserve the server ingress-lag reason');
+  assert.equal(rescueReconnect?.payload?.king_receive_latency_ms, 2700, 'restart diagnostics must expose measured King ingress latency');
 
   const receiverDecision = decidePublisherBackpressureAction({
     kind: 'receiver_feedback',

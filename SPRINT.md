@@ -73,6 +73,7 @@ Technical target:
    - Routed direct fanout, SQLite replay, and live-relay replay through subscriber-aware layer decisions so thumbnail/grid receivers cannot force the publisher profile down for fullscreen/main receivers.
    - Added an SFU ingress latency guard: frames that already exceed their queue budget when King receives them are dropped before SQLite/live-relay/direct-fanout, and the publisher gets `sfu/publisher-pressure` so automatic quality recovery runs from backend evidence.
    - Replay now prunes stale frames for all frame types, not only stale deltas, so `live_relay_poll` cannot keep shipping multi-second-old keyframes under pressure.
+   - Production log check after deploy showed the remaining backpressure was browser/WebSocket ingress lag: even Rescue frames reached King about 2.6s late with `buffered=0`. The publisher controller now treats repeated `sfu_ingress_latency_budget_exceeded` as a stuck transport and hard-restarts the SFU socket when Rescue cannot downshift further.
    - Verification: `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `php -l` on touched PHP modules, `git diff --check`.
 
 3. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
