@@ -4,6 +4,8 @@ ROOT_DIR = File.expand_path("../..", __dir__)
 
 PACKAGE_SCRIPT = "infra/scripts/package-release.sh"
 PACKAGE_VERIFIER = "infra/scripts/verify-release-package.sh"
+RELEASE_UPGRADE_CHECK = "infra/scripts/check-release-upgrade.sh"
+PERSISTENCE_MIGRATION_CHECK = "infra/scripts/check-persistence-migration.sh"
 
 PROVENANCE_HASH_KEYS = %w[
   lsquic_bootstrap_lock_sha256
@@ -55,6 +57,8 @@ end
 
 package_script = read_repo(PACKAGE_SCRIPT)
 package_verifier = read_repo(PACKAGE_VERIFIER)
+release_upgrade_check = read_repo(RELEASE_UPGRADE_CHECK)
+persistence_migration_check = read_repo(PERSISTENCE_MIGRATION_CHECK)
 
 require_literal(package_script, "'http3_stack' => [", "package HTTP/3 stack manifest section")
 require_literal(package_script, "'transport' => 'lsquic'", "package LSQUIC transport manifest value")
@@ -80,9 +84,14 @@ TOP_LEVEL_PROVENANCE_KEYS.each do |component, provenance_key|
 end
 
 require_literal(package_verifier, "$assertLegacyHttp3Free($manifest, 'manifest');", "manifest legacy HTTP/3 exclusion scan")
+require_literal(package_verifier, "--allow-legacy-http3-metadata", "explicit previous-release legacy HTTP/3 compatibility option")
+require_literal(package_verifier, "if (!$allowLegacyHttp3Metadata)", "default release verification keeps legacy HTTP/3 metadata forbidden")
+require_literal(package_verifier, "is_array($provenance) && $manifestHasLegacyHttp3Metadata", "legacy HTTP/3 provenance bypass is scoped to explicit compatibility archives")
 require_literal(package_verifier, "array_keys($dependencyProvenance) !== $expectedComponents", "exact dependency component list gate")
 require_literal(package_verifier, "Manifest dependency provenance component list is invalid.", "dependency component list failure")
 require_literal(package_verifier, "Manifest dependency provenance hash does not match top-level provenance", "dependency hash binding failure")
+require_literal(release_upgrade_check, "verify_args+=(--allow-missing-provenance --allow-legacy-http3-metadata)", "upgrade/downgrade checks allow legacy previous-release HTTP/3 manifests only through explicit verifier flag")
+require_literal(persistence_migration_check, "verify_args+=(--allow-missing-provenance --allow-legacy-http3-metadata)", "persistence migration checks allow legacy previous-release HTTP/3 manifests only through explicit verifier flag")
 
 LEGACY_HTTP3_TOKENS.each do |token|
   fail_check("#{PACKAGE_SCRIPT} contains legacy HTTP/3 token #{token}") if package_script.downcase.include?(token.downcase)
