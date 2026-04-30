@@ -9,6 +9,9 @@
         "status": { "type": "string", "enum": ["ok"] },
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       },
+      "optional": {
+        "asset_version": { "type": "string", "pattern": "/^[A-Za-z0-9._-]{1,80}$/" }
+      },
       "allow_additional": false
     },
     "runtime_admin_detail": {

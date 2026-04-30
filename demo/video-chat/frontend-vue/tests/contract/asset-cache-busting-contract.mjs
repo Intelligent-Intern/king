@@ -46,6 +46,8 @@ try {
   assert.ok(assetVersionSupport.includes("const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);"), 'asset version helper must understand websocket invalidation frames');
   assert.ok(assetVersionSupport.includes("query.set('asset_version', BUILD_VERSION);"), 'asset version helper must append the frontend build version to websocket queries');
   assert.ok(assetVersionSupport.includes("closeReason !== 'asset_version_mismatch'"), 'asset version helper must react to websocket close reasons from stale builds');
+  assert.ok(assetVersionSupport.includes('handleAssetVersionConnectionFailure'), 'asset version helper must probe runtime after pre-open websocket failures');
+  assert.ok(assetVersionSupport.includes("fetchBackend('/api/runtime'"), 'asset version helper must probe the public runtime endpoint for stale pre-open sockets');
   assert.ok(assetVersionSupport.includes('handleAssetLoadFailure'), 'asset version helper must expose dynamic import asset failure recovery');
   assert.ok(assetVersionSupport.includes('failed to fetch dynamically imported module'), 'asset version helper must detect stale dynamic import failures');
   assert.ok(assetVersionSupport.includes('ASSET_LOAD_FAILURE_RELOAD_STORAGE_KEY'), 'asset version helper must prevent stale chunk reload loops');
@@ -61,6 +63,12 @@ try {
   const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/api.js'));
   assert.ok(workspaceApi.includes('appendAssetVersionQuery'), 'call workspace websocket URLs must advertise the current asset version');
 
+  const workspaceSocketLifecycle = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.js'));
+  assert.ok(workspaceSocketLifecycle.includes('failOverAfterAssetVersionProbe'), 'call workspace websocket must probe live asset version before failover on pre-open failure');
+
+  const sfuClient = readUtf8(path.join(frontendRoot, 'src/lib/sfu/sfuClient.ts'));
+  assert.ok(sfuClient.includes('failToNextCandidateAfterAssetVersionProbe'), 'SFU websocket must probe live asset version before failover on pre-open failure');
+
   const compose = readUtf8(path.join(repoVideoChatRoot, 'docker-compose.v1.yml'));
   assert.ok(compose.includes('VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"'), 'compose builds must forward the asset version');
   assert.ok(compose.includes('VIDEOCHAT_PRODUCTION_SOURCEMAPS: "${VIDEOCHAT_PRODUCTION_SOURCEMAPS:-}"'), 'compose builds must forward the sourcemap mode');
@@ -75,6 +83,9 @@ try {
   const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));
   assert.ok(edge.includes("'X-KingRT-Asset-Version'"), 'edge must expose the asset version header on static responses');
   assert.ok(edge.includes('use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion)'), 'edge static handler must capture the asset version for response headers');
+
+  const runtimeModule = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/http/module_runtime.php'));
+  assert.ok(runtimeModule.includes("$payload['asset_version'] = $assetVersion;"), 'public runtime endpoint must expose current asset version for stale websocket failure recovery');
 
   const realtimeAssetVersion = readUtf8(path.join(repoVideoChatRoot, 'backend-king-php/domain/realtime/realtime_asset_version.php'));
   assert.ok(realtimeAssetVersion.includes("'type' => 'assets/invalidate'"), 'realtime asset version helper must expose an assets invalidation frame');

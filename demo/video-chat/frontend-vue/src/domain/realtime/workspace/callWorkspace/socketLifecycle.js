@@ -27,6 +27,7 @@ export function createCallWorkspaceSocketHelpers({
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
+    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleMediaSecuritySignal,
@@ -687,6 +688,23 @@ export function createCallWorkspaceSocketHelpers({
         connectWithOriginAt(originIndex + 1);
       };
 
+      const failOverAfterAssetVersionProbe = () => {
+        const assetVersionProbe = typeof handleAssetVersionConnectionFailure === 'function'
+          ? handleAssetVersionConnectionFailure()
+          : false;
+        if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
+          assetVersionProbe.then((handled) => {
+            if (handled) return;
+            failOverToNextOrigin();
+          }).catch(() => {
+            failOverToNextOrigin();
+          });
+          return;
+        }
+        if (assetVersionProbe) return;
+        failOverToNextOrigin();
+      };
+
       socket.addEventListener('open', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) {
           try {
@@ -732,7 +750,7 @@ export function createCallWorkspaceSocketHelpers({
       socket.addEventListener('error', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (!opened) {
-          failOverToNextOrigin();
+          failOverAfterAssetVersionProbe();
           return;
         }
         refs.connectionState.value = 'retrying';
@@ -770,7 +788,7 @@ export function createCallWorkspaceSocketHelpers({
           return;
         }
         if (!opened) {
-          failOverToNextOrigin();
+          failOverAfterAssetVersionProbe();
           return;
         }
 

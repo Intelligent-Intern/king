@@ -21,6 +21,7 @@ import {
   setCallOutgoingVideoQualityProfile,
 } from './media/preferences';
 import {
+  handleAssetVersionConnectionFailure,
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
@@ -1569,6 +1570,7 @@ const {
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
+    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleMediaSecuritySignal,
