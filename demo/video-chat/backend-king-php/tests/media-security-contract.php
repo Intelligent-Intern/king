@@ -148,7 +148,7 @@ try {
             $publicFields[] = (string) $field['name'];
         }
     }
-    videochat_media_security_assert_contains_all($publicFields, ['magic', 'version', 'runtime_path', 'track_kind', 'frame_kind', 'kex_suite', 'media_suite', 'epoch', 'sender_key_id', 'sequence', 'nonce', 'aad_length', 'ciphertext_length', 'tag_length'], 'protected frame public fields');
+    videochat_media_security_assert_contains_all($publicFields, ['magic', 'version', 'runtime_path', 'codec_id', 'track_kind', 'frame_kind', 'kex_suite', 'media_suite', 'epoch', 'sender_key_id', 'sequence', 'nonce', 'aad_length', 'ciphertext_length', 'tag_length'], 'protected frame public fields');
 
     $relayForbidden = (array) (($frame['relay_visibility'] ?? [])['forbidden_to_sfu'] ?? []);
     videochat_media_security_assert_contains_all($relayForbidden, ['raw_media_key', 'private_key', 'shared_secret', 'plaintext_frame', 'decoded_audio', 'decoded_video'], 'relay forbidden fields');

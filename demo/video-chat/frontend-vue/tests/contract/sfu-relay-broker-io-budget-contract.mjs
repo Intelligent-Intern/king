@@ -44,12 +44,15 @@ try {
   requireContains(subscriberBudget, 'sfu_frame_replay_stale_frame_pruned', 'SFU replay prunes stale frames, not only stale deltas');
   requireContains(binaryPayload, 'function videochat_sfu_transport_payload_bytes(array $frame', 'shared payload-byte helper protects relay/broker budgets');
   requireContains(store, "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';", 'SFU store delegates frame-buffer ownership to helper');
+  requireContains(store, "'codec_id' => true", 'protected frame metadata admits codec-bound security headers');
+  requireContains(store, "['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown']", 'protected frame metadata validates supported codec identities');
   requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
   requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');
   requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_room_bytes(): int', 'SQLite frame buffer has a per-room byte budget');
   requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_select_age_biased_eviction_rows(', 'SQLite frame buffer has age-biased eviction selection');
   requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');
   requireContains(frameBuffer, 'strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)', 'oversized SQLite frame records are rejected before insert');
+  requireContains(gateway, "'insert_error' => $frameBufferInsertError !== '' ? $frameBufferInsertError : 'unknown'", 'SQLite frame insert diagnostics include the exact rejection stage');
   requireContains(frameBuffer, 'videochat_sfu_trim_frame_buffer_room($pdo, $normalizedRoomId)', 'SQLite frame buffer trims room rows');
   requireContains(frameBuffer, 'sfu_frame_buffer_age_biased_eviction', 'SQLite frame buffer emits age-biased eviction diagnostics');
   requireContains(gateway, 'function videochat_sfu_configure_broker_database', 'SFU broker has isolated SQLite configuration');

@@ -129,7 +129,7 @@ try {
   requireContains(frameHotPath, 'videochat_sfu_upsert_publisher(', 'frame hotpath only refreshes publisher presence');
   requireContains(frameHotPath, 'videochat_sfu_touch_track(', 'frame hotpath only refreshes track presence');
   requireContains(frameHotPath, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'frame hotpath uses JSON-safe relay copy');
-  requireContains(frameHotPath, 'videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame)', 'frame hotpath writes JSON-safe frame copy to bounded SQLite buffer');
+  requireContains(frameHotPath, 'videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame, $frameBufferInsertError)', 'frame hotpath writes JSON-safe frame copy to bounded SQLite buffer with diagnostics');
   requireContains(frameHotPath, 'videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)', 'frame hotpath publishes to live relay');
   requireContains(frameHotPath, 'videochat_sfu_direct_fanout_frame(', 'frame hotpath keeps direct live fanout');
   assert.equal(/\$activeSfuDatabase->(?:prepare|exec|query)\s*\(/.test(frameHotPath), false, 'frame hotpath must not write frame payload SQL directly');
