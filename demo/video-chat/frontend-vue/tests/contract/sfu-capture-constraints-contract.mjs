@@ -22,7 +22,9 @@ function read(relativePath) {
 
 async function main() {
   const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
+  const localMediaPermissionPolicy = read('src/domain/realtime/local/localMediaPermissionPolicy.js');
   const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
+  const workspaceConfig = read('src/domain/realtime/workspace/config.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
@@ -42,6 +44,13 @@ async function main() {
   requireContains(captureProfileConstraints, 'sfu_capture_track_constraints_enforced', 'capture profile constraints report successful track enforcement');
   requireContains(captureProfileConstraints, 'sfu_capture_track_constraints_failed', 'capture profile constraints report failed track enforcement');
   requireContains(mediaOrchestration, 'frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate }', 'local media constraints cap capture FPS to automatic profile');
+  requireContains(workspaceConfig, 'export const SFU_CONNECT_MAX_RETRIES = 8;', 'SFU connect retries survive transient weak-network websocket failures');
+  requireContains(localMediaPermissionPolicy, 'LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS = 30_000', 'local media permission denial has a bounded retry cooldown');
+  requireContains(localMediaPermissionPolicy, "name === 'NotAllowedError'", 'local media permission policy detects macOS/browser permission denial');
+  requireContains(mediaOrchestration, 'function enterReceiveOnlyLocalMediaMode', 'local media permission denial can enter receive-only mode');
+  requireContains(mediaOrchestration, "eventType: 'local_media_receive_only_mode'", 'receive-only local media mode is reported to backend diagnostics');
+  requireContains(mediaOrchestration, 'localMediaPermissionRetryAfterMs = Date.now() + LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS', 'permission-denied local media retries are cooled down instead of spinning');
+  requireContains(mediaOrchestration, 'return isLocalMediaPermissionDeniedError(error);', 'permission-denied local media failures keep the participant connected receive-only');
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'strict')", 'strict local media acquisition enforces capture constraints after browser selection');
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'loose_retry')", 'loose local media retry enforces capture constraints after browser selection');
   requireContains(mediaOrchestration, "await enforceSfuVideoCaptureProfile(stream, 'boolean_fallback')", 'boolean getUserMedia fallback still enforces capture constraints after browser selection');

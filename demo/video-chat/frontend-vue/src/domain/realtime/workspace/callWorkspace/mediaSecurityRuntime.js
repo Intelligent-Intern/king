@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
+import { mergeMediaSecurityParticipantIds } from './mediaSecurityParticipantSet';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -516,6 +517,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
+        requestRoomSnapshot();
         startMediaSecurityHandshakeWatchdog();
         scheduleMediaSecurityParticipantSync('sender_key_participant_mismatch', true);
         await sendMediaSecurityHello(normalizedTargetId, true);
@@ -895,10 +897,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
     try {
       if (type === 'media-security/hello') {
-        const marked = session.markParticipantSet([
-          ...remoteMediaSecurityTargetIds(),
+        const marked = session.markParticipantSet(mergeMediaSecurityParticipantIds(
+          session,
+          remoteMediaSecurityTargetIds(),
           normalizedSenderUserId,
-        ]);
+        ));
         if (marked.changed) {
           clearMediaSecuritySignalCaches();
           mediaSecurityStateVersion.value += 1;
@@ -949,6 +952,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
         state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
+        requestRoomSnapshot();
         scheduleMediaSecurityParticipantSync('signal_failed_reconnect', shouldForceRekeyAfterSignalFailure);
         startMediaSecurityHandshakeWatchdog();
       }
