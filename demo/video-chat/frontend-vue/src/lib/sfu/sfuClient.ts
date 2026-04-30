@@ -42,6 +42,7 @@ import {
 } from './mediaTransport'
 import {
   appendSfuPublisherTraceStage,
+  buildSfuEndToEndPerformancePayload,
   buildSfuFrameTransportSample,
   highResolutionNowMs,
   roundedTransportStageMs,
@@ -1068,6 +1069,7 @@ export class SFUClient {
       'Sampled SFU frame transport metrics for the active media path.',
       {
         ...payload,
+        ...buildSfuEndToEndPerformancePayload(payload, sample),
         wire_vs_payload_ratio: sample.wireVsPayloadRatio,
       },
     )

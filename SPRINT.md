@@ -174,7 +174,7 @@ Technical target:
      `sfu_receiver_jitter_buffer_release` so receiver jitter can be separated
      from encoder/network pressure.
 
-6. [ ] `[end-to-end-media-pressure-observability]` Add full-path performance logging and gates.
+6. [x] `[end-to-end-media-pressure-observability]` Add full-path performance logging and gates.
 
    Scope:
    - Preserve correlation by `frame_sequence`, publisher, track, layer, profile,
@@ -190,6 +190,17 @@ Technical target:
      final symptom.
    - The report per issue has enough evidence to compare quality/performance
      before and after deploy.
+
+   Report:
+   - Added `sfu_end_to_end_v1` performance payloads to sampled publisher-send
+     diagnostics with capture, encode, payload, queue, browser buffer, King
+     latency, fanout, and subscriber-send fields.
+   - Added `first_over_budget_stage` resolution for source readback, encoded
+     payload, outbound queue age, browser send buffer, and subscriber send
+     pressure.
+   - Receiver render samples now use the same report schema and mark
+     `receiver_render` as the first pressure stage when render latency crosses
+     the existing receiver lag threshold.
 
 ## Execution Order
 

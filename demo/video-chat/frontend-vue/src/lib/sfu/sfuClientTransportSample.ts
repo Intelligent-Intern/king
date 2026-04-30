@@ -76,3 +76,58 @@ export function buildSfuFrameTransportSample(
     timestampUnixMs: nowMs,
   }
 }
+
+export function resolveSfuFirstOverBudgetStage(
+  payload: Record<string, unknown>,
+  sample: SfuFrameTransportSample,
+): string {
+  const sourceReadbackBudgetMs = Math.max(0, Number(payload.source_readback_budget_ms || payload.readback_budget_ms || 0))
+  if (sourceReadbackBudgetMs > 0 && sample.sourceReadbackMs > sourceReadbackBudgetMs) return 'source_readback'
+  if (sample.budgetMaxEncodedBytesPerFrame > 0 && sample.payloadBytes > sample.budgetMaxEncodedBytesPerFrame) return 'encoded_payload'
+  if (sample.budgetMaxQueueAgeMs > 0 && sample.queuedAgeMs > sample.budgetMaxQueueAgeMs) return 'outbound_queue_age'
+  if (sample.budgetMaxBufferedBytes > 0 && sample.websocketBufferedAmount > sample.budgetMaxBufferedBytes) return 'browser_send_buffer'
+  const subscriberSendLatencyMs = Math.max(0, Number(payload.subscriber_send_latency_ms || 0))
+  if (subscriberSendLatencyMs > 0 && sample.budgetMaxQueueAgeMs > 0 && subscriberSendLatencyMs > sample.budgetMaxQueueAgeMs) return 'subscriber_send'
+  return 'within_budget'
+}
+
+export function buildSfuEndToEndPerformancePayload(
+  payload: Record<string, unknown>,
+  sample: SfuFrameTransportSample,
+): Record<string, unknown> {
+  return {
+    sfu_performance_report_schema: 'sfu_end_to_end_v1',
+    media_path_phase: 'publisher_send',
+    first_over_budget_stage: resolveSfuFirstOverBudgetStage(payload, sample),
+    active_capture_backend: sample.activeCaptureBackend,
+    selected_video_quality_profile: sample.selectedVideoQualityProfile,
+    outgoing_video_quality_profile: sample.outgoingVideoQualityProfile,
+    video_layer: sample.videoLayer,
+    frame_sequence: sample.frameSequence,
+    source_frame_width: sample.sourceFrameWidth,
+    source_frame_height: sample.sourceFrameHeight,
+    source_frame_rate: sample.sourceFrameRate,
+    source_readback_ms: sample.sourceReadbackMs,
+    source_readback_budget_ms: Math.max(0, Number(payload.source_readback_budget_ms || payload.readback_budget_ms || 0)),
+    encode_ms: sample.encodeMs,
+    payload_bytes: sample.payloadBytes,
+    wire_payload_bytes: sample.wirePayloadBytes,
+    wire_overhead_bytes: sample.wireOverheadBytes,
+    wire_vs_payload_ratio: sample.wireVsPayloadRatio,
+    queued_age_ms: sample.queuedAgeMs,
+    websocket_buffered_amount: sample.websocketBufferedAmount,
+    king_receive_latency_ms: Math.max(0, Number(payload.king_receive_latency_ms || 0)),
+    king_fanout_latency_ms: Math.max(0, Number(payload.king_fanout_latency_ms || 0)),
+    subscriber_send_latency_ms: Math.max(0, Number(payload.subscriber_send_latency_ms || 0)),
+    binary_envelope_encode_ms: sample.binaryEnvelopeEncodeMs,
+    websocket_send_ms: sample.websocketSendMs,
+    media_transport: String(payload.media_transport || ''),
+    control_transport: String(payload.control_transport || ''),
+    publisher_path_trace_stages: sample.publisherPathTraceStages,
+    budget_max_encoded_bytes_per_frame: sample.budgetMaxEncodedBytesPerFrame,
+    budget_max_queue_age_ms: sample.budgetMaxQueueAgeMs,
+    budget_max_buffered_bytes: sample.budgetMaxBufferedBytes,
+    dropped_source_frame_count: sample.droppedSourceFrameCount,
+    automatic_quality_transition_count: sample.automaticQualityTransitionCount,
+  }
+}
