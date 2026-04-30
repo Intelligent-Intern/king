@@ -76,6 +76,7 @@ const migrationPath = path.join(backendRoot, 'support/database_migrations.php');
 
 try {
   const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const frameBuffer = read('../backend-king-php/domain/realtime/realtime_sfu_frame_buffer.php');
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   const relay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
   const subscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
@@ -89,12 +90,16 @@ try {
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_frames', 'SFU bootstrap creates bounded frame buffer table');
   requireContains(store, 'frame_row_id INTEGER PRIMARY KEY AUTOINCREMENT', 'SFU frame buffer has monotonic cursor rows');
   requireContains(store, 'payload_json TEXT NOT NULL', 'SFU frame buffer stores JSON-safe frame payloads');
-  requireContains(store, 'function videochat_sfu_frame_buffer_ttl_ms(): int', 'SFU frame buffer has a short TTL');
-  requireContains(store, 'return 2500;', 'SFU frame buffer keeps frame records short-lived');
-  requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SFU frame buffer has a room row cap');
+  requireContains(store, "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';", 'SFU store loads focused frame-buffer helper');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_ttl_ms(): int', 'SFU frame buffer has a short TTL');
+  requireContains(frameBuffer, 'return 2500;', 'SFU frame buffer keeps frame records short-lived');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SFU frame buffer has a room row cap');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_room_bytes(): int', 'SFU frame buffer has a room byte cap');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_select_age_biased_eviction_rows(', 'SFU frame buffer has age-biased eviction');
+  requireContains(frameBuffer, 'sfu_frame_buffer_age_biased_eviction', 'SFU frame buffer reports eviction diagnostics');
   requireContains(store, 'function videochat_sfu_decode_stored_frame_payload', 'SFU frame buffer decodes stored payloads before replay');
-  requireContains(store, 'function videochat_sfu_insert_frame', 'SFU frame buffer has one insert helper');
-  requireContains(store, 'function videochat_sfu_fetch_buffered_frames', 'SFU frame buffer has one replay helper');
+  requireContains(frameBuffer, 'function videochat_sfu_insert_frame', 'SFU frame buffer has one insert helper');
+  requireContains(frameBuffer, 'function videochat_sfu_fetch_buffered_frames', 'SFU frame buffer has one replay helper');
   requireContains(migrations, "'name' => '0020_drop_legacy_sfu_frame_persistence'", 'migration keeps legacy frame persistence removal');
   requireContains(migrations, "'DROP TABLE IF EXISTS sfu_frames'", 'migration drops legacy sfu_frames table');
   requireNotContains(store, 'videochat_sfu_encode_stored_frame_payload', 'legacy stored frame helper');

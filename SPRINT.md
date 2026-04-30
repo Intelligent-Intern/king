@@ -6,226 +6,157 @@ Purpose:
 - Completion evidence belongs in `READYNESS_TRACKER.md`.
 
 Sprint rule:
-- Keep only issues that directly increase online video-call fullscreen quality and throughput on the protected SFU media path.
-- Do not weaken King v1 contracts to make capture, encoding, buffering, transport, or rendering cheaper.
-- Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in focused helpers/modules.
-- Keep media-security, binary SFU envelopes, bounded SQLite frame buffering, live relay, receiver feedback, and online pressure contracts intact.
-- Video quality must stay automatic; there must be no user-facing quality selector in the call UI.
-- Layout-driven portrait framing must be applied before encode when possible; do not fake portrait video by stretching a landscape frame in CSS.
+- This sprint must close the architecture gap between the current protected SFU
+  app-frame relay and a smooth video-call media path.
+- Do not weaken media-security, room/admission, binary envelope, diagnostics, or
+  automatic quality contracts to get temporary throughput.
+- Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in
+  focused helpers/modules.
+- Video quality stays automatic. No user-facing quality selector.
+- Debugging must be backend-routed and structured enough to identify the first
+  over-budget stage without browser-console screenshots.
 
-## Sprint: Video Call SFU Layer State Wiring
+## Sprint: Video Call Real Media Path Architecture
 
 Sprint branch:
-- `hotfix/video-call-sfu-layer-state-wiring`
+- `sprint/video-call-real-media-path-architecture`
 
 PR target:
 - `development/1.0.7-beta`
 
-Deployed baseline:
-- `development/1.0.7-beta` includes the fullscreen quality path with protected browser encoder support, fullscreen-aware rendering, and automatic SFU layer preference signaling.
-
 Production symptom:
-- Production bundle `CallWorkspaceView-VElCjgkt.js` throws `Cannot set properties of undefined (setting 'sfuRemoteLayerPreferenceLastAtMs')` inside the websocket message handler when an adaptive SFU layer preference arrives.
-- The crash stops subsequent signaling handling and can break the call even though media transport is otherwise connected.
+- Video quality and smoothness regress under protected SFU load: repeated hard
+  reconnects, blocky frames, and slow frame turnover even after local profile
+  and thumbnail fixes.
+- The current hot path still behaves like application message relay:
+  browser-encoded frames enter WebSocket/TCP, pass through King PHP relay,
+  bounded SQLite/live relay replay, browser-side decode, and canvas render.
 
 Technical target:
-- Wire adaptive SFU layer state into the socket lifecycle helper and keep the helper defensive so missing isolated-test refs cannot crash runtime signaling.
-- Keep the adaptive layer contract intact: quality remains automatic, receiver feedback remains backend-routed, and primary-layer requests still protect fullscreen/main quality.
-- Record the next improvements that can materially raise quality beyond this hotfix.
+- Make the sprint explicit: the correct target is a real media plane shape,
+  not another round of queue-threshold tuning.
+- Until the dedicated media plane lands, make every remaining WebSocket/SFU
+  fallback buffer bounded, age-biased, observable, and incapable of runaway
+  memory/disk growth.
+- Add a deployment-quality diagnostics surface that tells us whether pressure
+  starts at capture, encode, browser send, King receive, broker/fanout, receiver
+  decode, or render.
 
 ## Active Issues
 
-1. [x] `[socket-layer-state-wiring-hotfix]` Fix adaptive SFU layer preference socket crash.
+1. [x] `[sfu-bounded-age-biased-frame-buffer]` Make the SFU broker buffer bounded by age, rows, and bytes.
 
    Scope:
-   - Inject `sfuTransportState` into `createCallWorkspaceSocketHelpers`.
-   - Add a defensive socket-lifecycle fallback state so adaptive layer messages cannot throw if a test harness or future caller omits optional refs.
-   - Extend the adaptive layer contract to prove the wiring exists and is guarded.
+   - Extract frame-buffer ownership out of the oversized SFU store into a
+     focused helper.
+   - Keep the short-lived SQLite broker buffer, but enforce row and room-byte
+     bounds on every insert.
+   - Evict age-biased: stale frames first, then oldest frames before newer
+     frames, with a small freshness grace so the newest live frame is protected
+     whenever possible.
+   - Emit backend diagnostics with evicted rows, bytes, before/after pressure,
+     oldest age, and max bounds.
 
    Done when:
-   - `call/media-quality-pressure` with `prefer_primary_video_layer` or `prefer_thumbnail_video_layer` no longer crashes the websocket handler.
-   - The primary-layer TTL and thumbnail-ignore behavior still use the shared SFU transport state in the real app.
-   - Contract tests fail if the socket helper loses `sfuTransportState` wiring again.
+   - `sfu_frames` cannot grow beyond the per-room row or byte budget between
+     cleanup intervals.
+   - Eviction is deterministic and age-biased, not random and not only
+     opportunistic cleanup.
+   - Contracts prove the helper, byte cap, eviction policy, and diagnostics.
 
    Report:
-   - Added `sfuTransportState` to the socket lifecycle helper refs in `CallWorkspaceView.vue`.
-   - Added `sfuTransportStateForSocketLifecycle()` with a local fallback state to prevent websocket-handler crashes in omitted-ref contexts.
-   - Extended `sfu-adaptive-quality-layers-contract.mjs` to pin both real app injection and defensive helper behavior.
-   - Verification: `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `git diff --check`.
+   - Implemented in this WIP branch.
 
-2. [x] `[server-authoritative-subscriber-layer-routing]` Move layer choice from global publisher profile pressure to per-subscriber SFU routing.
+2. [ ] `[real-media-plane-contract]` Define the target media plane that replaces WebSocket whole-frame transport.
 
    Scope:
-   - Add subscriber layer preference state to the SFU websocket session.
-   - Filter direct fanout by subscriber preference so thumbnail receivers cannot force the fullscreen receiver down.
-   - Preserve SQLite buffering, binary envelopes, and media-security metadata.
+   - Add a contract/doc for the production media path:
+     `MediaStreamTrack -> encoder -> packet/datagram media transport -> SFU
+     packet/layer forwarder -> jitter buffer/keyframe/layer recovery -> native
+     renderer`.
+   - Keep app-level protected media metadata and room/admission controls.
+   - Make WebSocket an SFU control/signaling path, not the long-term video data
+     plane.
+   - Decide the implementation route: King RTP/SRTP/RTCP, WebTransport/QUIC
+     datagrams, or a King-native media datagram primitive, with fallback rules.
 
    Done when:
-   - A subscriber in mini/grid can receive low-cost frames while a fullscreen subscriber keeps primary frames from the same publisher.
-   - Slow-subscriber isolation remains intact and diagnostics show which layer each subscriber received.
-   - Backend and frontend contracts prove layer preferences are server-authoritative, not just local UI hints.
+   - Contracts fail if the active sprint tries to bless WebSocket/TCP
+     `bufferedAmount` as the final video congestion-control layer.
+   - The doc names required media-plane features: packet pacing, jitter buffer,
+     keyframe request, NACK/PLI or equivalent, layer routing, receiver feedback,
+     and per-subscriber quality choice.
 
-   Report:
-   - Root cause found in production logs: high `king_receive_latency_ms` showed frames were already seconds old before the SFU received them; repeated `sfu_frame_sqlite_buffer_insert_failed` showed the bounded SQLite replay buffer was being bypassed; most cross-worker frames then arrived through `live_relay_poll`, adding latency and replay churn.
-   - Added post-drain stale-frame rejection in the SFU client, so frames that age past their profile queue budget while waiting for websocket backpressure are dropped before `WebSocket.send`.
-   - Preserved measured `payload_bytes` when the SFU gateway creates broker frames, so protected frames are budgeted by actual bytes instead of falling back to a too-small record cap.
-   - Added SFU websocket `sfu/layer-preference` control messages and server-side subscriber preference state.
-   - Routed direct fanout, SQLite replay, and live-relay replay through subscriber-aware layer decisions so thumbnail/grid receivers cannot force the publisher profile down for fullscreen/main receivers.
-   - Added an SFU ingress latency guard: frames that already exceed their queue budget when King receives them are dropped before SQLite/live-relay/direct-fanout, and the publisher gets `sfu/publisher-pressure` so automatic quality recovery runs from backend evidence.
-   - Replay now prunes stale frames for all frame types, not only stale deltas, so `live_relay_poll` cannot keep shipping multi-second-old keyframes under pressure.
-   - Production log check after deploy showed the remaining backpressure was browser/WebSocket ingress lag: even Rescue frames reached King about 2.6s late with `buffered=0`. The publisher controller now treats repeated `sfu_ingress_latency_budget_exceeded` as a stuck transport and hard-restarts the SFU socket when Rescue cannot downshift further.
-   - Follow-up production diagnostics found the WebCodecs publisher crashed on trace telemetry (`trace.stages.push` with a hand-built trace). Browser-encoder traces now initialize stage state and the trace marker self-heals missing fields instead of killing the media path.
-   - Follow-up production diagnostics after that fix showed the actual browser queue age was 0-1ms while King still measured about 2.6s via `king_receive_latency_ms`; that was client/server wall-clock skew, not real websocket backpressure. The client now writes post-drain `queued_age_ms` into the binary envelope, and the SFU ingress guard drops only from trusted client-measured age while keeping wall-clock latency diagnostic-only.
-   - Production check after deploy: `sfu_frame_ingress_stale_dropped=0`, `sfu_ingress_latency_budget_exceeded=0`, `sfu_browser_encoder_frame_failed=0`; only `sfu_frame_ingress_wall_clock_skew_observed` remains, with trusted `queued_age_ms` at 1-5ms and clock-sensitive receive latency around 2.6s.
-   - Verification: `node tests/contract/sfu-browser-ws-send-drain-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `node tests/contract/sfu-adaptive-quality-layers-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `php -l` on touched PHP modules, `git diff --check`.
-
-3. [x] `[sfu-frame-buffer-tmpfs-broker]` Move the short-lived SFU frame buffer to RAM-backed storage.
+3. [ ] `[sfu-control-data-plane-split]` Split SFU control messages from media payload transport.
 
    Scope:
-   - Keep the main `VIDEOCHAT_KING_DB_PATH` persistent on `/data/video-chat.sqlite` for users, calls, sessions, room state, and operational recovery.
-   - Move only `VIDEOCHAT_KING_SFU_BROKER_DB_PATH` to a Docker `tmpfs` mount, for example `/sfu-buffer/video-chat-sfu-broker.sqlite`, because `sfu_frames` is a seconds-long replay buffer, not durable product data.
-   - Do not use `sqlite::memory:` for the SFU broker: separate PHP/SFU workers need a shared broker database, so an in-memory per-connection database would break cross-worker replay.
-   - Apply broker-only SQLite pragmas suitable for ephemeral media replay (`journal_mode=WAL`, `synchronous=OFF` or equivalent bounded-risk setting, `temp_store=MEMORY`) without weakening persistent application DB durability.
-   - Keep bounded TTL, row caps, cleanup, SQLite replay, live relay, binary envelopes, and media-security metadata intact.
+   - Keep `/sfu` WebSocket for auth, join, publish, subscribe, layer preference,
+     diagnostics, and recovery controls.
+   - Introduce an explicit media payload interface behind the client and backend
+     so the data plane can move off WebSocket without touching UI/runtime code.
+   - Preserve current binary envelope compatibility while making it a fallback
+     transport, not the architecture target.
 
    Done when:
-   - Production SFU workers share the same RAM-backed broker path and no longer write frame replay records to the persistent Docker volume.
-   - Persistent call/user/session SQLite stays on `/data` and backup/restore semantics are unchanged.
-   - SFU diagnostics expose the broker path/storage class so we can verify RAM-backed replay in production logs.
-   - Contracts prove the broker path is tmpfs-backed in compose and that `sqlite::memory:` is not used for multi-worker SFU replay.
+   - Client code has a media transport abstraction with WebSocket fallback and a
+     real-media-plane implementation seam.
+   - Backend route code separates control handling from payload fanout.
+   - Diagnostics identify `control_transport` and `media_transport` separately.
 
-   Report:
-   - Moved only `VIDEOCHAT_KING_SFU_BROKER_DB_PATH` to `/sfu-buffer/video-chat-sfu-broker.sqlite` in production compose.
-   - Added a bounded Docker tmpfs mount for `/sfu-buffer` on the SFU worker service while leaving `VIDEOCHAT_KING_DB_PATH` on `/data/video-chat.sqlite`.
-   - Added broker-only SQLite pragmas (`journal_mode=WAL`, `synchronous=OFF`, `temp_store=MEMORY`, bounded journal size) so persistent app DB durability is unchanged.
-   - Added backend diagnostics for `sfu_broker_database_opened`, including broker path, main DB path, storage class, and effective pragmas.
-   - Added contracts proving tmpfs compose wiring, no `sqlite::memory:` broker, and isolated broker pragmas.
-   - Production deploy check: `/sfu-buffer` is mounted as tmpfs in `videochat-backend-sfu-v1`, broker path is `/sfu-buffer/video-chat-sfu-broker.sqlite`, and `sfu_broker_database_opened` logs `broker_storage_class=ram_tmpfs`, `journal_mode=wal`, `synchronous=0`, `temp_store=2`.
-   - Verification: `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php`, `node tests/contract/sfu-no-frame-persistence-regression-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `docker compose -f demo/video-chat/docker-compose.v1.yml config`, `deploy-smoke`.
-
-4. [x] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
+4. [ ] `[packet-layer-sfu-forwarder]` Replace whole-frame fanout with packet/layer forwarding semantics.
 
    Scope:
-   - Keep one camera source and one media-security session, but produce separate encoded outputs for primary and thumbnail profiles.
-   - Prefer browser `VideoEncoder` for both layers where available; keep WLVC fallback bounded.
-   - Tie layer selection to backend subscriber routing instead of forcing one global publisher profile.
+   - Model primary/thumbnail/fullscreen layers as independently routable media
+     streams.
+   - Forward per-subscriber layers without forcing publisher global downshift.
+   - Add keyframe request and layer-switch control messages that do not hard
+     restart the SFU socket.
+   - Keep slow-subscriber isolation and room/admission security.
 
    Done when:
-   - Fullscreen quality is no longer capped by thumbnail/grid delivery.
-   - Thumbnail streams do not trigger primary stream source-readback or wire-rate pressure.
-   - Contracts prove deterministic `VideoFrame`/chunk closure for both layers.
+   - A frozen receiver requests keyframe/layer recovery before any hard
+     reconnect.
+   - Fullscreen subscriber quality is isolated from mini/grid subscribers.
+   - Backend diagnostics show per-subscriber media layer and recovery actions.
 
-   Report:
-   - Added explicit `video_layer` metadata to SFU outbound payloads, binary envelope metadata, transport samples, inbound frame handling, and backend replay metadata.
-   - The browser WebCodecs publisher now configures a primary VP8 encoder and a lower-rate thumbnail VP8 encoder from the same direct `VideoFrame` source. The source `VideoFrame` is closed only after both encoders have consumed it.
-   - Thumbnail frames are marked non-critical: thumbnail payload/send pressure is logged through diagnostics and does not call the primary stream pressure/downshift handlers.
-   - The backend SFU router now prefers explicit frame-layer routing before legacy thumbnail cadence: thumbnail subscribers prune primary frames, primary/fullscreen subscribers prune thumbnail frames, and legacy WLVC single-layer frames keep the old cadence fallback.
-   - Added contract coverage for dual-layer publishing, metadata preservation, subscriber-side layer pruning, and deterministic no-`drawImage`/no-`getImageData` browser encode path.
-   - Production deploy check: `deploy.sh deploy` completed and `deploy-smoke` passed for frontend/API/lobby websocket/SFU websocket routing.
-   - Verification: `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`, `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php`, `node tests/contract/sfu-dual-video-layer-routing-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `deploy-smoke`.
-
-5. [ ] `[online-video-quality-regression-probes]` Add automated online probes for blockiness, frame lifecycle, and console cleanliness.
+5. [ ] `[native-render-and-jitter-buffer]` Stop treating canvas repaint as the primary receiver media runtime.
 
    Scope:
-   - Extend production E2E to detect repeated `VideoFrame was garbage collected without being closed`, websocket handler exceptions, and critical SFU pressure logs.
-   - Add a canvas/video visual quality probe that catches extreme macroblocking or 2-participant grid over-downshift.
-   - Send all relevant warnings into backend diagnostics instead of browser console-only output.
+   - Move receiver recovery toward jitter-buffered frame ordering and native
+     playback/render where available.
+   - Keep canvas only for effects/compositing or fallback rendering.
+   - Make render diagnostics report decode delay, dropped stale frames, frame
+     ordering gaps, and final displayed frame cadence.
 
    Done when:
-   - A deployed build fails smoke/acceptance if the websocket handler throws, remote video stops rendering, or `VideoFrame` lifecycle warnings recur.
-   - Two-participant calls assert primary-layer quality instead of accepting thumbnail-level output.
-   - The report includes backend diagnostic IDs for failures instead of requiring browser console screenshots.
+   - Reconnect is no longer the primary response to normal media jitter.
+   - Receiver can smooth short gaps without resetting publisher/subscriber state.
+   - Online probes verify moving video cadence, not just non-black pixels.
 
-   Report:
-   - Proposed next improvement.
-
-6. [x] `[client-side-portrait-roi-crop-before-encode]` Encode the visible portrait crop instead of transmitting unused landscape side bands.
+6. [ ] `[end-to-end-media-pressure-observability]` Add full-path performance logging and gates.
 
    Scope:
-   - Add automatic layout-aware region-of-interest framing before the publisher encode step: when the target tile is portrait, zoom the camera frame until the portrait viewport is filled and crop the left/right landscape margins.
-   - Apply the crop in the capture/composition pipeline before `VideoEncoder` or WLVC encode, not as receiver-only CSS, so fewer pixels go over the SFU path and the remaining visible area can use higher effective quality.
-   - Preserve correct aspect ratio and avoid stretching for portrait camera sources, landscape camera sources, fullscreen, mini-video, and grid tiles.
-   - Treat fullscreen as a first-class framing target: fullscreen landscape should keep full-width detail, fullscreen portrait should crop/zoom intentionally without desktop stretching.
-   - Toggle fullscreen by double-clicking a video tile; a second double-click on the fullscreen video exits fullscreen and restores the previous grid/mini framing target.
-   - Treat every mini-video as a square framing target with client-side crop/zoom, no rounded visual masking, and no transport of unused side bands.
-   - Keep quality automatic; the UI may expose framing affordances later, but this sprint must not add a manual quality selector.
+   - Preserve correlation by `frame_sequence`, publisher, track, layer, profile,
+     and transport generation.
+   - Emit backend-routed samples for capture, encode, queue, send, King receive,
+     broker/fanout, subscriber send, receiver decode, and render.
+   - Keep console clean: browser warnings become structured diagnostics where
+     the app can catch them.
 
    Done when:
-   - A landscape camera rendered into a portrait tile is center-cropped before encode and does not transmit the discarded side bands.
-   - A portrait camera stays portrait without desktop stretching or horizontal overfill.
-   - Fullscreen playback selects the correct landscape or portrait crop and remains sharp instead of falling back to thumbnail framing.
-   - Double-clicking a video enters fullscreen for that participant, and double-clicking again exits without breaking the SFU layer preference state.
-   - Mini-video thumbnails are square, crop/zoom correctly, and do not distort the source aspect ratio.
-   - The receiver sees the intended crop with sharper visible detail at the same or lower wire budget.
-   - Contracts cover the crop math for landscape-to-portrait, portrait-to-portrait, fullscreen landscape, fullscreen portrait, and square mini-video cases.
-
-   Report:
-   - Added layout-derived framing metadata (`contain`/`cover` plus target aspect ratio) to mounted video surfaces.
-   - Added client-side source crop math before publisher encode, including DOM canvas, OffscreenCanvas worker, and VideoFrame copy-scale readback paths.
-   - Mini-videos are square crop/zoom targets; portrait/square main or fullscreen surfaces crop before encode when the surface aspect demands it.
-   - Added double-click fullscreen toggle: double-click a grid, mini, or main video to enter fullscreen; double-click the fullscreen video again to restore the previous layout.
-   - Added contract coverage for crop math, fullscreen toggling, worker crop propagation, and CSS framing mode.
-
-7. [x] `[remote-video-reconnect-loop-backoff]` Stop repeated hard SFU reconnects during remote video recovery.
-
-   Scope:
-   - Keep fast recovery actions intact: resubscribe, full-keyframe request, and automatic sender quality pressure.
-   - Add per-remote-peer backoff for hard SFU socket restarts so stale `createdAtMs` or `lastFrameAtMs` cannot trigger a reconnect loop.
-   - Reset the hard-reconnect backoff as soon as a fresh decoded frame renders.
-   - Preserve backend diagnostics so the reason is visible without browser console screenshots.
-
-   Done when:
-   - A missing or frozen remote video can still recover automatically.
-   - Hard SFU socket restarts are gated per peer with increasing backoff instead of firing again from the same stale peer state.
-   - Successful remote rendering clears the backoff and returns the participant media state to live.
-   - Contracts prove the reconnect gate, diagnostics, and reset-on-render behavior.
-
-   Report:
-   - Root cause: after `remote_video_never_started`/`remote_video_frozen`, the peer kept its old timing fields, so the health timer could see the same peer as immediately eligible again after the global reconnect cooldown.
-   - Added per-peer restart state (`sfuSocketRestartCount`, `lastSfuSocketRestartAtMs`, `nextSfuSocketRestartAllowedAtMs`) and exponential backoff around hard socket restarts.
-   - Kept lightweight recovery fast: `sfu/subscribe`, full-keyframe request, and remote quality-pressure still run before a hard reconnect.
-   - Fresh rendered frames now clear the hard-reconnect debt.
-   - Verification: `node tests/contract/sfu-video-recovery-timing-contract.mjs`, `npm run test:contract:sfu`.
-
-8. [x] `[remote-wlvc-tile-deblocking]` Smooth visible WLVC tile and block artifacts on remote canvases.
-
-   Scope:
-   - Keep the current canvas resolution and automatic quality control intact.
-   - Add a lightweight receiver-side deblocking pass after remote SFU frame compositing.
-   - Target selective tile composites and lower-quality WLVC full frames, where block edges are visible in large desktop tiles.
-   - Preserve original detail by blending a small blur over the decoded canvas instead of replacing it with a blurred-only image.
-
-   Done when:
-   - Large remote canvas tiles no longer show harsh checker/tile boundaries from WLVC quantization or selective patch seams.
-   - The smoothing path runs after `tile_foreground` / `background_snapshot` composition and after low-quality full-frame decode.
-   - Contract coverage pins the deblocking helper and decode integration.
-
-   Report:
-   - Added `softDeblockDecodedCanvas()` with scratch-canvas reuse, small blur radius, and alpha blending.
-   - Applied the deblock pass after remote frame composition in the SFU decode path.
-   - Kept high-quality full frames untouched unless they are selective tile composites.
-   - Verification: `node tests/contract/sfu-selective-tile-runtime-contract.mjs`.
-
-9. [x] `[room-leave-roster-video-prune]` Remove departed participants from roster and video layout immediately.
-
-   Scope:
-   - Treat `room/left` as an authoritative local prune signal, not only as a reason to poll a snapshot.
-   - Remove the departed participant from roster state, SFU remote peers, native peer connection state, pinned/muted/control state, and activity state.
-   - After backend leave/disconnect cleanup, broadcast a fresh per-viewer room snapshot so stale DB presence cannot re-add the departed participant.
-
-   Done when:
-   - Clicking leave removes that user from other clients' participant list and video tiles immediately.
-   - The grid recomputes from the remaining connected participants so another participant can move into the freed visible slot.
-   - Room snapshots after leave/disconnect are emitted only after call-presence DB cleanup.
-
-   Report:
-   - `room/left` now calls the same local cleanup path as `call/hangup` before requesting a snapshot backfill.
-   - Backend leave/disconnect paths remember the previous room, remove DB presence, mark `left_at`, then broadcast an authoritative room snapshot to remaining participants.
-   - Verification: `node tests/contract/call-room-leave-cleanup-contract.mjs`, `php demo/video-chat/backend-king-php/tests/realtime-room-leave-snapshot-contract.php`.
+   - Production smoke can report where pressure starts.
+   - Critical pressure logs include the first over-budget stage, not only the
+     final symptom.
+   - The report per issue has enough evidence to compare quality/performance
+     before and after deploy.
 
 ## Execution Order
 
-1. Finish `[socket-layer-state-wiring-hotfix]`.
-2. Deploy the hotfix and verify production smoke.
-3. Open PR to `development/1.0.7-beta`.
-4. Use the proposed issues as the next quality-hardening sprint after this hotfix is merged.
+1. Close `[sfu-bounded-age-biased-frame-buffer]` first because it prevents
+   fallback buffer runaway while the media plane is rebuilt.
+2. Close `[real-media-plane-contract]` before further tuning so the sprint cannot
+   drift into threshold-only fixes.
+3. Implement the control/data split and packet/layer forwarder.
+4. Replace receiver recovery/render assumptions.
+5. Deploy only when the branch is complete enough to prove smooth video cadence
+   and clean backend diagnostics.

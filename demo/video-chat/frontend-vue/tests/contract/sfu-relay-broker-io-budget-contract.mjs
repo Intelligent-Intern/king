@@ -23,6 +23,7 @@ try {
   const relay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const frameBuffer = read('../backend-king-php/domain/realtime/realtime_sfu_frame_buffer.php');
   const binaryPayload = read('../backend-king-php/domain/realtime/realtime_sfu_binary_payload.php');
   const subscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 
@@ -42,11 +43,15 @@ try {
   requireContains(subscriberBudget, "type' => 'sfu/publisher-pressure'", 'SFU stale ingress guard feeds publisher pressure');
   requireContains(subscriberBudget, 'sfu_frame_replay_stale_frame_pruned', 'SFU replay prunes stale frames, not only stale deltas');
   requireContains(binaryPayload, 'function videochat_sfu_transport_payload_bytes(array $frame', 'shared payload-byte helper protects relay/broker budgets');
-  requireContains(store, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
-  requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');
-  requireContains(store, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');
-  requireContains(store, 'strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)', 'oversized SQLite frame records are rejected before insert');
-  requireContains(store, 'videochat_sfu_trim_frame_buffer_room($pdo, $normalizedRoomId)', 'SQLite frame buffer trims room rows');
+  requireContains(store, "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';", 'SFU store delegates frame-buffer ownership to helper');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_max_room_bytes(): int', 'SQLite frame buffer has a per-room byte budget');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_select_age_biased_eviction_rows(', 'SQLite frame buffer has age-biased eviction selection');
+  requireContains(frameBuffer, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');
+  requireContains(frameBuffer, 'strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)', 'oversized SQLite frame records are rejected before insert');
+  requireContains(frameBuffer, 'videochat_sfu_trim_frame_buffer_room($pdo, $normalizedRoomId)', 'SQLite frame buffer trims room rows');
+  requireContains(frameBuffer, 'sfu_frame_buffer_age_biased_eviction', 'SQLite frame buffer emits age-biased eviction diagnostics');
   requireContains(gateway, 'function videochat_sfu_configure_broker_database', 'SFU broker has isolated SQLite configuration');
   requireContains(gateway, "PRAGMA journal_mode = WAL", 'SFU broker uses WAL on tmpfs');
   requireContains(gateway, "PRAGMA synchronous = OFF", 'SFU broker disables durable sync only for ephemeral media replay');
