@@ -73,8 +73,8 @@ async function main() {
   requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_delta_cadence', 'thumbnail subscribers cannot force primary receivers down');
   requireContains(sfuBrokerReplay, '$subscriber = []', 'cross-worker replay receives subscriber state for layer routing');
 
-  requireContains(mediaStack, 'payload?.requested_action || (requestFullKeyframe ? ', 'media stack preserves explicit adaptive layer actions');
-  requireContains(runtimeHealth, 'payload?.requested_action || (requestFullKeyframe ? ', 'runtime health preserves explicit adaptive layer actions');
+  requireContains(mediaStack, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'media stack preserves explicit adaptive layer actions');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'runtime health preserves explicit adaptive layer actions');
   requireContains(socketLifecycle, 'prefer_primary_video_layer', 'publisher handles primary layer requests');
   requireContains(socketLifecycle, 'prefer_thumbnail_video_layer', 'publisher handles thumbnail layer requests');
   requireContains(socketLifecycle, 'function sfuTransportStateForSocketLifecycle()', 'socket lifecycle guards adaptive layer state wiring');

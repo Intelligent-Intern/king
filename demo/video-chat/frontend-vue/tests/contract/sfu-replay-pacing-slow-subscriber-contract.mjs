@@ -32,11 +32,13 @@ try {
   requireContains(helper, 'function videochat_sfu_subscriber_replay_delta_max_age_ms(): int', 'replay stale delta age helper');
   requireContains(helper, 'function videochat_sfu_subscriber_replay_max_batch_frames(): int', 'replay batch cap helper');
   requireContains(helper, 'function videochat_sfu_prune_replay_frames_for_subscriber(', 'replay stale/keyframe pruning helper');
+  requireContains(helper, 'function videochat_sfu_prioritize_replay_keyframes_for_subscriber(', 'replay prioritizes keyframes before deltas for reconnecting subscribers');
   requireContains(helper, 'videochat_sfu_frame_replay_age_ms($frame)', 'replay pruning uses frame age');
   requireContains(helper, 'videochat_sfu_frame_is_delta($frame)', 'replay pruning distinguishes deltas from keyframes');
   requireContains(helper, '$index < $firstKeyframeIndexByTrack[$trackKey]', 'replay drops deltas before available keyframes');
   requireContains(helper, 'sfu_frame_replay_stale_delta_pruned', 'stale replay delta diagnostic');
   requireContains(helper, 'sfu_frame_replay_pre_keyframe_delta_pruned', 'pre-keyframe replay delta diagnostic');
+  requireContains(helper, 'sfu_frame_replay_keyframe_prioritized', 'keyframe-first replay diagnostic');
   requireContains(helper, 'function videochat_sfu_send_replay_frames_to_subscriber(', 'budgeted replay send helper');
   requireContains(helper, 'sfu_frame_replay_slow_subscriber_skipped', 'replay slow subscriber skip diagnostic');
   requireContains(helper, 'sfu_frame_replay_slow_subscriber_isolated', 'replay slow subscriber isolation diagnostic');

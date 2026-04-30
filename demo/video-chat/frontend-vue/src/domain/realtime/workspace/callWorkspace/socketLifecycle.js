@@ -1,3 +1,8 @@
+import {
+  shouldRequestSfuCompatibilityCodecFallback,
+  shouldRequestSfuFullKeyframeForReason,
+} from '../../sfu/recoveryReasons';
+
 export function createCallWorkspaceSocketHelpers({
   callbacks,
   constants,
@@ -25,6 +30,7 @@ export function createCallWorkspaceSocketHelpers({
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
+    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleMediaSecuritySignal,
@@ -58,6 +64,10 @@ export function createCallWorkspaceSocketHelpers({
     reconnectDelayMs,
   } = constants;
   const fallbackSfuTransportState = {
+    sfuBrowserEncoderCompatibilityDisabledUntilMs: 0,
+    sfuBrowserEncoderCompatibilityLastRequestedAtMs: 0,
+    sfuBrowserEncoderCompatibilityReason: '',
+    sfuBrowserEncoderCompatibilityRequestedByUserId: 0,
     sfuRemotePrimaryLayerRequestedUntilMs: 0,
     sfuRemoteLayerPreferenceLastAtMs: 0,
     sfuRemoteLayerPreferenceLastAction: '',
@@ -94,15 +104,17 @@ export function createCallWorkspaceSocketHelpers({
     const normalizedTargetUserId = Number(failedTargetUserId || 0);
     const normalizedError = String(signalingError || '').trim().toLowerCase();
     const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
+    const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);
 
-    if (targetIsKnown && normalizedError === 'target_not_in_room') {
+    if (targetIsKnown && normalizedError === 'target_not_in_room' && !failedMediaSecuritySignal) {
       removeParticipantLocallyAfterHangup(normalizedTargetUserId);
     }
 
     requestRoomSnapshot();
-    if (mediaSecuritySignalTypes.includes(failedCommandType)) {
+    if (failedMediaSecuritySignal) {
+      const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room';
       setTimeout(() => {
-        void sendMediaSecuritySync(true);
+        void sendMediaSecuritySync(shouldForceMediaSecurityRekey);
       }, 500);
       return;
     }
@@ -122,10 +134,21 @@ export function createCallWorkspaceSocketHelpers({
     const sourceReason = String(payloadBody?.reason || '').trim().toLowerCase();
     const requestedVideoLayer = String(payloadBody?.requested_video_layer || '').trim().toLowerCase();
     const requestedVideoQualityProfile = String(payloadBody?.requested_video_quality_profile || '').trim().toLowerCase();
+    const compatibilityCodecRequested = shouldRequestSfuCompatibilityCodecFallback(requestedAction, payloadBody || {});
     const primaryLayerRequested = requestedAction === 'prefer_primary_video_layer' || requestedVideoLayer === 'primary';
     const thumbnailLayerRequested = requestedAction === 'prefer_thumbnail_video_layer' || requestedVideoLayer === 'thumbnail';
     const primaryLayerPreferenceTtlMs = 12000;
     const sfuTransportState = sfuTransportStateForSocketLifecycle();
+    if (compatibilityCodecRequested) {
+      const disableUntilMs = nowMs + 60000;
+      sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs = Math.max(
+        Number(sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+        disableUntilMs,
+      );
+      sfuTransportState.sfuBrowserEncoderCompatibilityLastRequestedAtMs = nowMs;
+      sfuTransportState.sfuBrowserEncoderCompatibilityRequestedByUserId = senderUserId;
+      sfuTransportState.sfuBrowserEncoderCompatibilityReason = sourceReason || requestedAction;
+    }
     if (primaryLayerRequested) {
       sfuTransportState.sfuRemotePrimaryLayerRequestedUntilMs = nowMs + primaryLayerPreferenceTtlMs;
     }
@@ -133,8 +156,9 @@ export function createCallWorkspaceSocketHelpers({
     sfuTransportState.sfuRemoteLayerPreferenceLastAction = requestedAction;
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
+      || compatibilityCodecRequested
       || primaryLayerRequested
-      || sourceReason === 'sfu_remote_video_decoder_waiting_keyframe';
+      || shouldRequestSfuFullKeyframeForReason(sourceReason);
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
         ...payloadBody,
@@ -146,7 +170,10 @@ export function createCallWorkspaceSocketHelpers({
     let upgraded = false;
     let ignoredThumbnailRequest = false;
     if (typeof downgradeSfuVideoQualityAfterEncodePressure === 'function') {
-      if (primaryLayerRequested) {
+      if (compatibilityCodecRequested) {
+        // Codec compatibility is handled by the publisher pipeline switching
+        // away from WebCodecs; quality profile changes are a separate signal.
+      } else if (primaryLayerRequested) {
         upgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_primary_layer_requested', {
           direction: 'up',
           bypassQualityRecoveryCooldown: true,
@@ -180,6 +207,8 @@ export function createCallWorkspaceSocketHelpers({
         source_reason: sourceReason,
         source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
         full_keyframe_requested: forcedFullKeyframe,
+        compatibility_codec_requested: compatibilityCodecRequested,
+        compatibility_disabled_until_ms: Number(sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
         primary_layer_active: primaryLayerActive,
         ignored_thumbnail_request: ignoredThumbnailRequest,
         downgraded,
@@ -685,6 +714,23 @@ export function createCallWorkspaceSocketHelpers({
         connectWithOriginAt(originIndex + 1);
       };
 
+      const failOverAfterAssetVersionProbe = () => {
+        const assetVersionProbe = typeof handleAssetVersionConnectionFailure === 'function'
+          ? handleAssetVersionConnectionFailure()
+          : false;
+        if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
+          assetVersionProbe.then((handled) => {
+            if (handled) return;
+            failOverToNextOrigin();
+          }).catch(() => {
+            failOverToNextOrigin();
+          });
+          return;
+        }
+        if (assetVersionProbe) return;
+        failOverToNextOrigin();
+      };
+
       socket.addEventListener('open', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) {
           try {
@@ -730,7 +776,7 @@ export function createCallWorkspaceSocketHelpers({
       socket.addEventListener('error', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (!opened) {
-          failOverToNextOrigin();
+          failOverAfterAssetVersionProbe();
           return;
         }
         refs.connectionState.value = 'retrying';
@@ -768,7 +814,7 @@ export function createCallWorkspaceSocketHelpers({
           return;
         }
         if (!opened) {
-          failOverToNextOrigin();
+          failOverAfterAssetVersionProbe();
           return;
         }
 

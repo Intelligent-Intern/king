@@ -116,6 +116,44 @@
           </div>
         </article>
 
+        <section
+          v-if="fullscreenVideoUserId > 0"
+          class="workspace-video-fullscreen-overlay"
+          role="dialog"
+          aria-modal="true"
+          tabindex="0"
+          title="Exit fullscreen"
+          aria-label="Exit fullscreen video"
+          @click.stop="closeVideoFullscreen"
+          @keyup.enter.stop.prevent="closeVideoFullscreen"
+          @keyup.esc.stop.prevent="closeVideoFullscreen"
+          @keyup.space.stop.prevent="closeVideoFullscreen"
+        >
+          <div
+            id="workspace-fullscreen-video-slot"
+            class="workspace-fullscreen-video-slot"
+            :data-user-id="fullscreenVideoUserId"
+          ></div>
+          <div
+            v-if="showParticipantMediaOverlay(fullscreenVideoUserId)"
+            class="workspace-video-status-overlay workspace-fullscreen-video-status-overlay"
+            :class="`state-${participantMediaStatusState(fullscreenVideoUserId)}`"
+            aria-live="polite"
+          >
+            <span class="workspace-video-status-spinner" aria-hidden="true"></span>
+            <span class="workspace-video-status-label">{{ participantMediaStatusLabel(fullscreenVideoUserId) }}</span>
+          </div>
+          <button
+            class="workspace-fullscreen-close"
+            type="button"
+            title="Exit fullscreen"
+            aria-label="Exit fullscreen video"
+            @click.stop="closeVideoFullscreen"
+          >
+            X
+          </button>
+        </section>
+
         <button
           v-if="showLeftSidebarRestoreButton"
           class="show-sidebar-overlay show-left-sidebar-overlay workspace-show-left-btn"

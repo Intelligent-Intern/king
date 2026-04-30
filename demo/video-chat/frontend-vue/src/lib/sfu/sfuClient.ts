@@ -14,6 +14,7 @@ import {
 } from '../../support/backendOrigin'
 import {
   appendAssetVersionQuery,
+  handleAssetVersionConnectionFailure,
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion'
@@ -209,6 +210,20 @@ export class SFUClient {
       this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
     }
 
+    const failToNextCandidateAfterAssetVersionProbe = (): void => {
+      const assetVersionProbe = handleAssetVersionConnectionFailure()
+      if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
+        assetVersionProbe.then((handled) => {
+          if (handled) return
+          failToNextCandidate()
+        }).catch(() => {
+          failToNextCandidate()
+        })
+        return
+      }
+      failToNextCandidate()
+    }
+
     ws.onopen = () => {
       if (generation !== this.connectGeneration) {
         try { ws.close() } catch {}
@@ -246,7 +261,7 @@ export class SFUClient {
       if (generation !== this.connectGeneration) return
       if (handleAssetVersionSocketClose(event)) return
       if (!opened) {
-        failToNextCandidate()
+        failToNextCandidateAfterAssetVersionProbe()
         return
       }
       if (this.ws === ws) {
@@ -273,7 +288,7 @@ export class SFUClient {
     ws.onerror = () => {
       if (generation !== this.connectGeneration) return
       if (!opened) {
-        failToNextCandidate()
+        failToNextCandidateAfterAssetVersionProbe()
         return
       }
       try {

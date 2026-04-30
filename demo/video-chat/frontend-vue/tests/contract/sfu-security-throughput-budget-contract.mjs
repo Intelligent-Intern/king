@@ -41,6 +41,8 @@ async function main() {
   requireContains(runtimeSwitching, "'sfu_protected_media_budget_pressure'", 'protected overhead pressure bypasses downgrade cooldown');
   requireContains(frameDecode, 'keyframe_required_after_recovery: true', 'wrong-key protected decrypt recovery requires fresh keyframe');
   requireContains(frameDecode, 'shouldRecoverMediaSecurityFromFrameError(error)', 'protected decrypt errors trigger handshake recovery');
+  requireContains(frameDecode, 'sfu_protected_frame_waiting_for_media_security', 'protected receiver waits during rekey instead of decoding with stale keys');
+  requireContains(frameDecode, "receiverFeedback.maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, 'sfu_protected_frame_decrypt_failed'", 'protected decrypt failures request a fresh publisher keyframe');
 
   const alice = createMediaSecuritySession({ callId: 'call-budget', roomId: 'room-budget', userId: 101 });
   const bob = createMediaSecuritySession({ callId: 'call-budget', roomId: 'room-budget', userId: 202 });

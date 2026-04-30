@@ -65,6 +65,20 @@ export function createSfuReceiverFeedback({
       missing_frame_count: Math.round(missingFrames),
       frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
       subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
+      requested_action: 'force_full_keyframe',
+      request_full_keyframe: true,
+      ...extraPayload,
+    });
+  }
+
+  function maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, reason, extraPayload = {}) {
+    const nowMs = Date.now();
+    return maybeSendReceiverFeedback(peer, publisherId, String(reason || 'sfu_receiver_keyframe_required'), nowMs, {
+      frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
+      subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
+      requested_action: 'force_full_keyframe',
+      request_full_keyframe: true,
+      requested_video_layer: 'primary',
       ...extraPayload,
     });
   }
@@ -108,6 +122,7 @@ export function createSfuReceiverFeedback({
   }
 
   return {
+    maybeSendReceiverKeyframeFeedback,
     maybeSendReceiverLayerPreference,
     maybeSendReceiverRenderLagFeedback,
     maybeSendReceiverSequenceGapFeedback,

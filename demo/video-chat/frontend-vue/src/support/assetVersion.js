@@ -1,3 +1,5 @@
+import { fetchBackend } from './backendFetch';
+
 const BUILD_VERSION = String(import.meta.env.VIDEOCHAT_ASSET_VERSION || '').trim();
 const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);
 const VERSION_SIGNAL_TYPES = new Set([
@@ -19,6 +21,7 @@ const ASSET_LOAD_FAILURE_PATTERNS = [
 ];
 
 let assetReloadPending = false;
+let runtimeAssetVersionProbeInFlight = null;
 
 function liveAssetVersionFromPayload(payload) {
   if (!payload || typeof payload !== 'object') return '';
@@ -118,6 +121,35 @@ export function handleAssetVersionSocketClose(event) {
   }
 
   return hardReload();
+}
+
+export async function handleAssetVersionConnectionFailure() {
+  if (import.meta.env.DEV || BUILD_VERSION === '') return false;
+  if (assetReloadPending) return true;
+  if (runtimeAssetVersionProbeInFlight) return runtimeAssetVersionProbeInFlight;
+
+  runtimeAssetVersionProbeInFlight = fetchBackend('/api/runtime', {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+    cache: 'no-store',
+    networkRetryCount: 1,
+    retryOnNetworkError: false,
+    serialize: false,
+    timeoutMs: 2500,
+  })
+    .then(async ({ response }) => {
+      if (!response?.ok) return false;
+      const payload = await response.json();
+      const liveAssetVersion = liveAssetVersionFromPayload(payload);
+      if (liveAssetVersion === '' || liveAssetVersion === BUILD_VERSION) return false;
+      return hardReload();
+    })
+    .catch(() => false)
+    .finally(() => {
+      runtimeAssetVersionProbeInFlight = null;
+    });
+
+  return runtimeAssetVersionProbeInFlight;
 }
 
 export function handleAssetLoadFailure(error, payload = {}) {

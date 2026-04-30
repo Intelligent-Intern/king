@@ -277,6 +277,41 @@ function videochat_sfu_frame_is_delta(array $frame): bool
 }
 
 /**
+ * @param array<int, array{index: int, track_key: string, is_delta: bool, frame: array<string, mixed>}> $frames
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_prioritize_replay_keyframes_for_subscriber(array $frames): array
+{
+    $selectedIndexes = [];
+    $selectedKeyframeByTrack = [];
+    $prioritized = [];
+
+    foreach ($frames as $entry) {
+        $trackKey = (string) ($entry['track_key'] ?? ':');
+        $entryIndex = (int) ($entry['index'] ?? -1);
+        if ($entryIndex < 0 || $trackKey === ':' || (bool) ($entry['is_delta'] ?? true)) {
+            continue;
+        }
+        if (isset($selectedKeyframeByTrack[$trackKey])) {
+            continue;
+        }
+        $selectedKeyframeByTrack[$trackKey] = true;
+        $selectedIndexes[$entryIndex] = true;
+        $prioritized[] = $entry['frame'];
+    }
+
+    foreach ($frames as $entry) {
+        $entryIndex = (int) ($entry['index'] ?? -1);
+        if ($entryIndex >= 0 && isset($selectedIndexes[$entryIndex])) {
+            continue;
+        }
+        $prioritized[] = $entry['frame'];
+    }
+
+    return $prioritized;
+}
+
+/**
  * @param array<int, array<string, mixed>> $frames
  * @return array<int, array<string, mixed>>
  */
@@ -298,7 +333,7 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
         }
     }
 
-    $pruned = [];
+    $eligibleFrames = [];
     $staleFrameCount = 0;
     $staleDeltaCount = 0;
     $preKeyframeDeltaCount = 0;
@@ -328,10 +363,24 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
             continue;
         }
 
-        $pruned[] = $frame;
-        if (count($pruned) >= videochat_sfu_subscriber_replay_max_batch_frames()) {
-            break;
-        }
+        $eligibleFrames[] = [
+            'index' => (int) $index,
+            'track_key' => $trackKey,
+            'is_delta' => $isDelta,
+            'frame' => $frame,
+        ];
+    }
+
+    $prioritizedFrames = videochat_sfu_prioritize_replay_keyframes_for_subscriber($eligibleFrames);
+    $pruned = array_slice($prioritizedFrames, 0, videochat_sfu_subscriber_replay_max_batch_frames());
+    if ($eligibleFrames !== [] && $prioritizedFrames !== [] && $prioritizedFrames !== array_column($eligibleFrames, 'frame')) {
+        videochat_sfu_log_runtime_event('sfu_frame_replay_keyframe_prioritized', [
+            'room_id' => $roomId,
+            'subscriber_id' => $subscriberId,
+            'sfu_send_path' => $sendPath,
+            'eligible_frame_count' => count($eligibleFrames),
+            'replay_frame_count' => count($pruned),
+        ], 1000);
     }
 
     if ($staleFrameCount > 0) {

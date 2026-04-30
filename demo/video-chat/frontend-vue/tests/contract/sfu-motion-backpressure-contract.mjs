@@ -168,10 +168,10 @@ async function main() {
         },
       },
       {
-        rescue: { captureFrameRate: 10, encodeIntervalMs: 167, frameQuality: 42 },
-        realtime: { captureFrameRate: 14, encodeIntervalMs: 125, frameQuality: 46 },
-        balanced: { captureFrameRate: 18, encodeIntervalMs: 100, frameQuality: 52 },
-        quality: { captureFrameRate: 24, encodeIntervalMs: 83, frameQuality: 60 },
+        rescue: { captureFrameRate: 9, encodeIntervalMs: 184, frameQuality: 38 },
+        realtime: { captureFrameRate: 13, encodeIntervalMs: 138, frameQuality: 41 },
+        balanced: { captureFrameRate: 16, encodeIntervalMs: 111, frameQuality: 47 },
+        quality: { captureFrameRate: 22, encodeIntervalMs: 92, frameQuality: 54 },
       },
       'SFU profiles must keep visible two-person grid quality above low-resolution rescue blocks',
     );

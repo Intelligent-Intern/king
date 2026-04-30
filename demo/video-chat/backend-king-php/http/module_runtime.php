@@ -12,13 +12,19 @@ declare(strict_types=1);
  */
 function videochat_public_runtime_health_payload(array $runtimePayload): array
 {
-    return [
+    $payload = [
         'service' => is_string($runtimePayload['service'] ?? null)
             ? $runtimePayload['service']
             : 'video-chat-backend-king-php',
         'status' => 'ok',
         'time' => is_string($runtimePayload['time'] ?? null) ? $runtimePayload['time'] : gmdate('c'),
     ];
+    $assetVersion = trim((string) (getenv('VIDEOCHAT_ASSET_VERSION') ?: ''));
+    if ($assetVersion !== '') {
+        $payload['asset_version'] = $assetVersion;
+    }
+
+    return $payload;
 }
 
 function videochat_handle_runtime_routes(

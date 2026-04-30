@@ -39,6 +39,8 @@ function assertAspectClose(actualWidth, actualHeight, sourceWidth, sourceHeight,
 async function main() {
   const packageJson = read('package.json');
   const videoFrameSizing = read('src/domain/realtime/local/videoFrameSizing.js');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
+  const browserVideoFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.js');
   const captureWorker = read('src/domain/realtime/local/publisherCaptureWorker.js');
   const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
   const framePayload = read('src/lib/sfu/framePayload.ts');
@@ -49,6 +51,11 @@ async function main() {
 
   requireContains(packageJson, 'sfu-portrait-aspect-preservation-contract.mjs', 'SFU contract suite includes portrait preservation proof');
   requireContains(videoFrameSizing, 'source_contain', 'publisher frame sizing preserves source aspect');
+  requireContains(browserPublisher, 'resolveBrowserEncoderFrameSize(videoProfile, sourceFrame)', 'browser WebCodecs publisher sizes from source VideoFrame orientation');
+  requireContains(browserPublisher, 'buildBrowserEncoderConfig(videoProfile, { videoLayer: \'primary\', frameSize })', 'browser WebCodecs primary config must use source-oriented frame size');
+  requireContains(browserPublisher, 'primaryFrame = primaryFrameScaler.createScaledFrame(result.frame', 'browser WebCodecs publisher must not feed portrait frames into a landscape encoder config');
+  requireContains(browserVideoFrameScaler, 'videoFrameSourceDimensions(frame)', 'browser WebCodecs scaler exposes source VideoFrame dimensions');
+  requireContains(browserVideoFrameScaler, 'surface.context.drawImage(', 'browser WebCodecs scaler frames portrait/cropped media before encode');
   requireContains(captureWorker, 'sourceAspectRatio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'worker returns source aspect ratio');
   requireContains(captureWorker, 'aspectMode: frameSize.aspectMode', 'worker returns aspect mode');
   requireContains(publisherFrameTrace, 'source_aspect_ratio: Number(frameSize.sourceAspectRatio.toFixed(6))', 'publisher transport metrics keep aspect ratio');

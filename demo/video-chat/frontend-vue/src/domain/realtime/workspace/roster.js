@@ -44,6 +44,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
 
   const currentUserId = Number(options.currentUserId || 0);
   const callParticipantRoles = options.callParticipantRoles || {};
+  const allowMissingSnapshotSupplement = options.allowMissingSnapshotSupplement === true;
   const peerUserId = Number(peer?.userId || 0);
   if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId) return;
 
@@ -52,6 +53,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
   const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || peer?.callRole || 'participant');
   const existing = aggregate.get(peerUserId);
   if (existing) {
+    if (!allowMissingSnapshotSupplement && Number(existing.connections || 0) <= 0) return;
     existing.connections = Math.max(1, Number(existing.connections || 0));
     if (String(existing.displayName || '').trim() === '') {
       existing.displayName = displayName;
@@ -60,6 +62,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     existing.mediaPeerSource = source;
     return;
   }
+  if (!allowMissingSnapshotSupplement) return;
 
   aggregate.set(peerUserId, {
     userId: peerUserId,

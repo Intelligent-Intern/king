@@ -237,6 +237,7 @@ export function createLocalPublisherPipelineHelpers({
       video.autoplay = true;
       refs.localVideoElement.value = video;
     }
+    video.dataset.callLocalPreview = '1';
     video.srcObject = new MediaStream([videoTrack]);
     const container = document.getElementById('local-video-container');
     if (container && video.parentElement !== container) {
@@ -290,6 +291,8 @@ export function createLocalPublisherPipelineHelpers({
     let selectiveTileCacheEpoch = 0;
     let forcedKeyframeRecoveryPending = false;
     let keyframeRetryBlockedUntilMs = 0;
+    let securityGateWasClosed = false;
+    let lastSecurityGateDiagnosticAtMs = 0;
     let fullFrameEncoderWidth = 0;
     let fullFrameEncoderHeight = 0;
     let fullFrameEncoderQuality = 0;
@@ -302,6 +305,7 @@ export function createLocalPublisherPipelineHelpers({
       selectiveTileCacheEpoch += 1;
       forcedKeyframeRecoveryPending = false;
       keyframeRetryBlockedUntilMs = 0;
+      securityGateWasClosed = false;
       if (refs.videoPatchEncoderRef.value) {
         try {
           refs.videoPatchEncoderRef.value.destroy?.();
@@ -460,7 +464,7 @@ export function createLocalPublisherPipelineHelpers({
           return;
         }
         const timestamp = Date.now();
-        const remoteKeyframeRequestPending = timestamp < Number(refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs || 0);
+        const remoteKeyframeRequestPending = securityGateWasClosed || timestamp < Number(refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs || 0);
         const keyframeRetryDelayMs = Math.max(
           resolveProfileReadbackIntervalMs(videoProfile),
           Number(videoProfile.minKeyframeRetryMs || 0),
@@ -474,6 +478,25 @@ export function createLocalPublisherPipelineHelpers({
         }
         if (refs.sfuTransportState.wlvcBackpressureSkipCount > 0) {
           resetWlvcBackpressureCounters();
+        }
+        if (constants.protectedMediaEnabled && !canProtectCurrentSfuTargets()) {
+          securityGateWasClosed = true;
+          previousFullFrameImageData = null;
+          if ((timestamp - lastSecurityGateDiagnosticAtMs) >= 1000) {
+            lastSecurityGateDiagnosticAtMs = timestamp;
+            captureClientDiagnostic('sfu_publish_waiting_for_media_security', {
+              track_id: videoTrack.id,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+              codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
+              profile: pipelineProfileId,
+            });
+          }
+          hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
+            track_id: videoTrack.id,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
+          });
+          return;
         }
         if (video.readyState < 2) return;
 
@@ -716,7 +739,19 @@ export function createLocalPublisherPipelineHelpers({
           }),
         };
 
-        if (constants.protectedMediaEnabled && canProtectCurrentSfuTargets()) {
+        if (constants.protectedMediaEnabled) {
+          if (!canProtectCurrentSfuTargets()) {
+            securityGateWasClosed = true;
+            previousFullFrameImageData = null;
+            markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
+            hintMediaSecuritySync('sfu_publish_security_gate_waiting_after_encode', {
+              track_id: videoTrack.id,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+              codec_id: outgoingFrame.codecId,
+            });
+            return;
+          }
           try {
             const mediaSecurity = ensureMediaSecuritySession();
             const protectStartedAtMs = highResolutionNowMs();
@@ -748,25 +783,26 @@ export function createLocalPublisherPipelineHelpers({
             if (!shouldSendTransportOnlySfuFrame(securityError)) {
               throw securityError;
             }
-            mediaDebugLog('[MediaSecurity] protected SFU frame unavailable; sending transport-only frame', securityError);
-            hintMediaSecuritySync('protect_frame_unavailable', {
+            securityGateWasClosed = true;
+            previousFullFrameImageData = null;
+            markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+            hintMediaSecuritySync('protect_frame_unavailable_waiting_for_security', {
               track_id: videoTrack.id,
               media_runtime_path: refs.mediaRuntimePathRef.value,
+              codec_id: outgoingFrame.codecId,
+              error_name: String(securityError?.name || ''),
+              error_message: String(securityError?.message || ''),
             });
             outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
+            return;
           }
         } else {
           markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
           outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
-          hintMediaSecuritySync(
-            constants.protectedMediaEnabled
-              ? 'peer_handshake_not_ready'
-              : 'protected_frames_temporarily_disabled',
-            {
-              track_id: videoTrack.id,
-              media_runtime_path: refs.mediaRuntimePathRef.value,
-            }
-          );
+          hintMediaSecuritySync('protected_frames_temporarily_disabled', {
+            track_id: videoTrack.id,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+          });
         }
 
         if (stopIfPipelineProfileChanged()) return;
@@ -805,6 +841,7 @@ export function createLocalPublisherPipelineHelpers({
             selectiveTileCacheEpoch = outgoingCacheEpoch;
             forcedKeyframeRecoveryPending = false;
             keyframeRetryBlockedUntilMs = 0;
+            securityGateWasClosed = false;
             refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
           }
           lastFullFrameSentAtMs = timestamp;

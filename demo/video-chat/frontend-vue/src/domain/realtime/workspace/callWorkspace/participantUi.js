@@ -26,6 +26,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     currentUserId,
     desiredRoomId,
     formatTimestamp,
+    fullscreenVideoUserId,
     gridVideoSlotId,
     hangupCall,
     initials,
@@ -1251,16 +1252,11 @@ function sendLayoutCommand(type, payload = {}) {
   });
 }
 
-const { toggleVideoFullscreen } = createVideoFullscreenToggle({
+const { closeVideoFullscreen, toggleVideoFullscreen } = createVideoFullscreenToggle({
   callLayoutState,
-  currentLayoutMode,
+  fullscreenVideoUserId,
   nextTick,
-  normalizeCallLayoutMode,
-  primaryVideoUserId,
   renderCallVideoLayout,
-  replaceNumericArray,
-  sendLayoutCommand,
-  syncCallLayoutSidebarControls,
 });
 
 function setCallLayoutMode(mode) {
@@ -1690,6 +1686,7 @@ let pingTimer = null;
     describePeerControlState,
     detachAloneIdleActivityListeners,
     emitReaction,
+    closeVideoFullscreen,
     ensureAloneIdleWatchTimer,
     evaluateAloneIdlePrompt,
     consumeQueuedModerationSyncEntries,

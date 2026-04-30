@@ -7,7 +7,11 @@ import {
 } from './wlvcFrameMetadata';
 import { noteSfuRemoteVideoFrameStable } from './videoConnectionStatus';
 import { createSfuReceiverFeedback } from './receiverFeedback';
-import { createRemoteBrowserEncodedVideoRenderer, isProtectedBrowserEncodedVideoFrame } from './remoteBrowserEncodedVideo';
+import {
+  createRemoteBrowserEncodedVideoRenderer,
+  isProtectedBrowserEncodedVideoFrame,
+  resetProtectedBrowserVideoDecoders,
+} from './remoteBrowserEncodedVideo';
 import {
   clearCanvas,
   putImageDataOntoCanvas,
@@ -80,11 +84,21 @@ export function createSfuFrameDecodeHelpers({
     bumpMediaRenderVersion,
     mediaRuntimePathRef,
     renderCallVideoLayout,
+    sendRemoteSfuVideoQualityPressure,
     requestRemoteSfuLayerPreference: receiverFeedback.maybeSendReceiverLayerPreference,
   });
 
+  function normalizeRemoteFrameVideoLayer(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
+    if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
+    return '';
+  }
+
   function sfuFrameTrackStateKey(frame) {
-    return String(frame?.trackId || '').trim() || 'default';
+    const trackId = String(frame?.trackId || '').trim() || 'default';
+    const videoLayer = normalizeRemoteFrameVideoLayer(frame?.videoLayer || frame?.video_layer);
+    return videoLayer !== '' ? `${trackId}:${videoLayer}` : trackId;
   }
 
   function markRemoteFrameActivity(publisherUserId) {
@@ -491,7 +505,7 @@ export function createSfuFrameDecodeHelpers({
       // patch decoder state is also rebuilt from the next clean base
     }
     try {
-      peer.browserVideoDecoder?.reset?.();
+      resetProtectedBrowserVideoDecoders(peer);
     } catch {
       // browser decoder state is rebuilt from the next clean keyframe
     }
@@ -518,7 +532,7 @@ export function createSfuFrameDecodeHelpers({
         // the next full-frame keyframe can rebuild full-frame decoder state
       }
       try {
-        peer.browserVideoDecoder?.reset?.();
+        resetProtectedBrowserVideoDecoders(peer, frame);
       } catch {
         // the next browser keyframe can rebuild WebCodecs decoder state
       }
@@ -529,6 +543,50 @@ export function createSfuFrameDecodeHelpers({
   function invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, reason = 'unknown') {
     const trackKey = sfuFrameTrackStateKey(frame);
     invalidateRemoteSfuTrackCache(peer, trackKey, `protected_frame_decrypt_failed:${reason}`);
+  }
+
+  function mediaSecurityTelemetrySnapshot() {
+    try {
+      return ensureMediaSecuritySession()?.telemetrySnapshot?.('wlvc_sfu') || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function shouldWaitForMediaSecurityBeforeProtectedDecrypt(publisherId, peer, frame, publisherUserId) {
+    if (!frame?.protectedFrame && !(frame?.protected && typeof frame.protected === 'object')) return false;
+    const snapshot = mediaSecurityTelemetrySnapshot();
+    const securityState = String(snapshot?.security_state || '').trim().toLowerCase();
+    if (securityState === '' || securityState === 'media_e2ee_active' || securityState === 'active') return false;
+
+    peer.needsKeyframe = true;
+    const nowMs = Date.now();
+    if ((nowMs - Number(peer.lastProtectedFrameSecurityWaitAtMs || 0)) >= 1000) {
+      peer.lastProtectedFrameSecurityWaitAtMs = nowMs;
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_protected_frame_waiting_for_media_security',
+        code: 'sfu_protected_frame_waiting_for_media_security',
+        message: 'Protected SFU frame was held while media security was not active; receiver requested a fresh keyframe after sync.',
+        payload: {
+          publisher_id: publisherId,
+          publisher_user_id: publisherUserId,
+          track_id: frame?.trackId,
+          frame_type: frame?.type,
+          frame_timestamp: frame?.timestamp,
+          security_state: securityState,
+          media_runtime_path: mediaRuntimePathRef.value,
+          request_full_keyframe: true,
+        },
+      });
+    }
+    receiverFeedback.maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, 'sfu_protected_frame_waiting_for_media_security', {
+      drop_reason: 'media_security_not_active',
+      security_state: securityState,
+    });
+    recoverMediaSecurityForPublisher(publisherUserId);
+    return true;
   }
 
   function scheduleRemoteJitterBufferRelease(publisherId, peer, trackKey) {
@@ -764,6 +822,9 @@ export function createSfuFrameDecodeHelpers({
     }
 
     let frameData = frame.data;
+    if (shouldWaitForMediaSecurityBeforeProtectedDecrypt(publisherId, peer, frame, publisherUserId)) {
+      return;
+    }
     if (frame?.protectedFrame) {
       try {
         frameData = await ensureMediaSecuritySession().decryptProtectedFrameEnvelope({
@@ -776,6 +837,13 @@ export function createSfuFrameDecodeHelpers({
         });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
+        if (errorCode === 'replay_detected') {
+          logDroppedRemoteSfuFrame(peer, publisherId, frame, 'protected_replay_detected', {
+            keyframe_required_after_recovery: false,
+            media_runtime_path: mediaRuntimePathRef.value,
+          });
+          return;
+        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
@@ -789,6 +857,9 @@ export function createSfuFrameDecodeHelpers({
           code: 'sfu_protected_frame_decrypt_failed',
         });
         invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, errorCode);
+        receiverFeedback.maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, 'sfu_protected_frame_decrypt_failed', {
+          drop_reason: errorCode,
+        });
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
           recoverMediaSecurityForPublisher(publisherUserId);
         }
@@ -807,6 +878,13 @@ export function createSfuFrameDecodeHelpers({
       });
       } catch (error) {
         const errorCode = String(error?.message || '').trim() || 'unknown';
+        if (errorCode === 'replay_detected') {
+          logDroppedRemoteSfuFrame(peer, publisherId, frame, 'protected_replay_detected', {
+            keyframe_required_after_recovery: false,
+            media_runtime_path: mediaRuntimePathRef.value,
+          });
+          return;
+        }
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
@@ -820,6 +898,9 @@ export function createSfuFrameDecodeHelpers({
           code: 'sfu_protected_frame_decrypt_failed',
         });
         invalidateRemoteSfuTrackAfterProtectedDecryptFailure(peer, frame, errorCode);
+        receiverFeedback.maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, 'sfu_protected_frame_decrypt_failed', {
+          drop_reason: errorCode,
+        });
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
           recoverMediaSecurityForPublisher(publisherUserId);
         }

@@ -21,6 +21,7 @@ import {
   setCallOutgoingVideoQualityProfile,
 } from './media/preferences';
 import {
+  handleAssetVersionConnectionFailure,
   handleAssetVersionSocketClose,
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
@@ -434,6 +435,7 @@ const nativeAudioBridgeQuarantineByUserId = new Map();
 let mediaSecurityHandshakeWatchdogTimer = null;
 const localTracksRef = ref([]);
 const remotePeersRef = ref(new Map());
+const fullscreenVideoUserId = ref(0);
 const pendingSfuRemotePeerInitializers = new Map();
 const remoteFrameActivityLastByUserId = new Map();
 const sfuConnected = ref(false);
@@ -1212,6 +1214,7 @@ const mediaStack = createCallWorkspaceMediaStack({
     currentUserId,
     desiredRoomId,
     encodeIntervalRef,
+    fullscreenVideoUserId,
     gridVideoParticipants: liveGridVideoParticipants,
     isSocketOnline,
     localFilteredStreamRef,
@@ -1358,6 +1361,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     setSfuRemotePeer,
     sfuTrackListHasVideo,
     sfuTrackRows,
+    stopLocalEncodingPipeline,
     teardownSfuRemotePeers: (...args) => teardownSfuRemotePeers(...args),
   },
   constants: {
@@ -1378,7 +1382,7 @@ resetBackgroundRuntimeMetrics = resetBackgroundRuntimeMetricsHelper; restartSfuA
     mediaRuntimePath,
     pendingSfuRemotePeerInitializers,
     remotePeersRef,
-    sessionState,
+    sessionState, sfuTransportState,
     sfuClientRef,
     sfuConnected,
     shouldConnectSfu,
@@ -1567,6 +1571,7 @@ const {
     ensureRoomBuckets,
     extractErrorMessage,
     fetchBackend,
+    handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
     handleMediaSecuritySignal,
@@ -1718,6 +1723,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   currentUserId,
   desiredRoomId,
   formatTimestamp,
+  fullscreenVideoUserId,
   gridVideoSlotId,
   hangupCall: (...args) => hangupCall(...args),
   initials,
@@ -1858,6 +1864,7 @@ const {
   clearChatUnread,
   clearModerationSyncTimer,
   clearReactionQueueTimer,
+  closeVideoFullscreen,
   compactMiniStripToggleLabel,
   confirmStillInCall,
   currentCallLayoutSidebarControls,

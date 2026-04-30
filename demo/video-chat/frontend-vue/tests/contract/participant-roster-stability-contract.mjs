@@ -108,18 +108,33 @@ try {
   );
   assert.match(
     liveMediaPeerMergeBody,
+    /allowMissingSnapshotSupplement = options\.allowMissingSnapshotSupplement === true/,
+    'live media peer roster merge must require an explicit pre-snapshot supplement gate'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
+    /if \(!allowMissingSnapshotSupplement && Number\(existing\.connections \|\| 0\) <= 0\) return;/,
+    'live media peers must not revive server rows that the synced room snapshot marks disconnected'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
+    /if \(!allowMissingSnapshotSupplement\) return;/,
+    'live media peers must not invent missing participants after realtime room sync is authoritative'
+  );
+  assert.match(
+    liveMediaPeerMergeBody,
     /aggregate\.set\(peerUserId, \{[\s\S]*connections: 1,[\s\S]*mediaPeerSource:/,
-    'backend-confirmed live media peers may supplement a missing snapshot row'
+    'pre-snapshot live media peers may temporarily supplement a missing snapshot row'
   );
   assert.match(
     roomStateSource,
-    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'sfu',[\s\S]*\}\);/,
-    'SFU remote peers must supplement the call roster so decoded canvases get a layout slot'
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*allowMissingSnapshotSupplement: !hasRealtimeRoomSync\.value,[\s\S]*source: 'sfu',[\s\S]*\}\);/,
+    'SFU remote peers may only supplement the roster before the authoritative room snapshot arrives'
   );
   assert.match(
     roomStateSource,
-    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*source: 'native',[\s\S]*\}\);/,
-    'native WebRTC peers must supplement the call roster so remote videos get a layout slot'
+    /mergeLiveMediaPeerIntoRoster\(aggregate, peer, \{[\s\S]*allowMissingSnapshotSupplement: !hasRealtimeRoomSync\.value,[\s\S]*source: 'native',[\s\S]*\}\);/,
+    'native WebRTC peers may only supplement the roster before the authoritative room snapshot arrives'
   );
 
   process.stdout.write('[participant-roster-stability-contract] PASS\n');

@@ -52,7 +52,8 @@ function videochat_runtime_public_safety_assert_public_payload(array $payload, s
 {
     $keys = array_keys($payload);
     sort($keys);
-    videochat_runtime_public_safety_assert($keys === ['service', 'status', 'time'], "{$path} must stay on the public health allow-list");
+    videochat_runtime_public_safety_assert($keys === ['asset_version', 'service', 'status', 'time'], "{$path} must stay on the public health allow-list");
+    videochat_runtime_public_safety_assert((string) ($payload['asset_version'] ?? '') === '20260430060000', "{$path} asset version mismatch");
     videochat_runtime_public_safety_assert((string) ($payload['service'] ?? '') === 'video-chat-backend-king-php', "{$path} service mismatch");
     videochat_runtime_public_safety_assert((string) ($payload['status'] ?? '') === 'ok', "{$path} status mismatch");
 
@@ -131,6 +132,7 @@ $runtimeEnvelope = static function (): array {
 };
 
 foreach (['/health', '/api/runtime'] as $path) {
+    putenv('VIDEOCHAT_ASSET_VERSION=20260430060000');
     $response = videochat_handle_runtime_routes($path, 'GET', $jsonResponse, $runtimeEnvelope, '/ws');
     videochat_runtime_public_safety_assert(is_array($response), "{$path} should be handled");
     videochat_runtime_public_safety_assert((int) ($response['status'] ?? 0) === 200, "{$path} should return 200");
