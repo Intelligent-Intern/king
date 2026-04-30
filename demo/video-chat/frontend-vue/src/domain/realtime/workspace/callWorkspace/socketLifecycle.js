@@ -106,13 +106,22 @@ export function createCallWorkspaceSocketHelpers({
     const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
     const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);
 
-    if (targetIsKnown && normalizedError === 'target_not_in_room' && !failedMediaSecuritySignal) {
-      removeParticipantLocallyAfterHangup(normalizedTargetUserId);
+    const shouldPruneTargetNotInRoom = targetIsKnown && normalizedError === 'target_not_in_room';
+    const prunedTargetNotInRoom = shouldPruneTargetNotInRoom
+      ? removeParticipantLocallyAfterHangup(normalizedTargetUserId)
+      : false;
+
+    if (shouldPruneTargetNotInRoom && failedMediaSecuritySignal && typeof requestWlvcFullFrameKeyframe === 'function') {
+      requestWlvcFullFrameKeyframe('media_security_target_not_in_room_pruned', {
+        requested_action: 'force_full_keyframe',
+        request_full_keyframe: true,
+        target_user_id: normalizedTargetUserId,
+      });
     }
 
     requestRoomSnapshot();
     if (failedMediaSecuritySignal) {
-      const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room';
+      const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;
       setTimeout(() => {
         void sendMediaSecuritySync(shouldForceMediaSecurityRekey);
       }, 500);
