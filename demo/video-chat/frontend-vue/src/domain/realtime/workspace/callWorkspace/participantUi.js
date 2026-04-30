@@ -1253,6 +1253,7 @@ function sendLayoutCommand(type, payload = {}) {
 }
 
 const { closeVideoFullscreen, toggleVideoFullscreen } = createVideoFullscreenToggle({
+  callLayoutState,
   fullscreenVideoUserId,
   nextTick,
   renderCallVideoLayout,

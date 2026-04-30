@@ -83,6 +83,9 @@ try {
   requireContains(browserPublisher, "eventType: 'sfu_publish_waiting_for_media_security'", 'browser publisher must persist media-security gate waits to backend diagnostics');
   requireContains(browserPublisher, 'forceNextSecurityKeyframe = true', 'browser publisher must force a keyframe after media-security gates close');
   requireContains(browserPublisher, 'remoteKeyframeRequestPending(timestamp)', 'browser publisher must honor receiver-requested full-keyframe recovery state');
+  requireContains(browserPublisher, "eventType: 'sfu_browser_keyframe_required_delta_dropped'", 'browser publisher must not send a delta when a reconnect/recovery keyframe is required');
+  requireContains(browserPublisher, "const encodedFrameType = actualEncodedFrameType", 'browser publisher must not relabel browser delta chunks as keyframes');
+  requireContains(browserPublisher, "new Error('sfu_browser_encoder_keyframe_unavailable')", 'browser publisher must fall back when WebCodecs cannot produce recovery keyframes');
   requireContains(browserPublisher, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'browser publisher must clear receiver keyframe recovery once a primary keyframe was sent');
   requireContains(browserPublisher, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'browser publisher must resync keys while the publish security gate is closed');
   requireContains(browserPublisher, "protect_browser_encoded_frame_unavailable_waiting_for_security", 'browser publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');

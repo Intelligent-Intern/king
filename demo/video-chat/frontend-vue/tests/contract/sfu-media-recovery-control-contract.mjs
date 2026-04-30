@@ -40,6 +40,7 @@ function main() {
   requireContains(runtimeHealth, 'requestPublisherMediaRecovery', 'runtime stall health uses SFU control recovery before socket fallback');
   requireContains(lifecycle, 'handleSfuPublisherPressureMessage', 'publisher lifecycle handles recovery pressure centrally');
   requireContains(lifecycle, 'requestWlvcFullFrameKeyframe', 'routed publisher recovery can force a full-frame keyframe');
+  requireContains(lifecycle, "requestWlvcFullFrameKeyframe('sfu_socket_connected'", 'SFU reconnect resets publisher media generation with a keyframe before replay resumes');
   requireContains(workspace, 'requestWlvcFullFrameKeyframe: (...args) => requestWlvcFullFrameKeyframe(...args)', 'workspace wires publisher keyframe recovery into SFU lifecycle');
 
   requireContains(sfuStore, "'sfu/media-recovery-request'", 'backend admits media recovery control frames');

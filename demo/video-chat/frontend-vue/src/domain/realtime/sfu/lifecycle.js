@@ -70,6 +70,12 @@ export function createSfuLifecycleHelpers({
         refs.sfuConnected.value = true;
         state.sfuConnectRetryCount = 0;
         resetWlvcBackpressureCounters();
+        if (typeof requestWlvcFullFrameKeyframe === 'function') {
+          requestWlvcFullFrameKeyframe('sfu_socket_connected', {
+            requested_action: 'force_full_keyframe',
+            request_full_keyframe: true,
+          });
+        }
         startSfuTrackAnnounceTimer();
         scheduleLocalTrackPublish();
       },

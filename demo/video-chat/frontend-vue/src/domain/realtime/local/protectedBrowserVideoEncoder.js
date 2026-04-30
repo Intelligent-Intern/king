@@ -231,6 +231,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   let lastFrameSentDiagnosticAtMs = 0;
   let lastSecurityGateDiagnosticAtMs = 0;
   let forceNextSecurityKeyframe = false;
+  let primaryKeyframeMissCount = 0;
+  let primaryKeyframeMissDiagnosticAtMs = 0;
   let encoderError = null;
   let thumbnailEncoderError = null;
   let thumbnailEncoderDisabled = false;
@@ -507,7 +509,50 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       });
     };
     const encodedPayloadBytes = positiveInteger(chunk?.data?.byteLength, 0);
-    const encodedFrameType = forceKeyframe || chunk.type === 'keyframe' ? 'keyframe' : 'delta';
+    const actualEncodedFrameType = chunk.type === 'keyframe' ? 'keyframe' : 'delta';
+    if (forceKeyframe && actualEncodedFrameType !== 'keyframe') {
+      if (!critical) {
+        reportNonCriticalDrop('sfu_browser_thumbnail_keyframe_required_delta_dropped', {
+          encoded_payload_bytes: encodedPayloadBytes,
+          frame_type: actualEncodedFrameType,
+        });
+        return true;
+      }
+
+      primaryKeyframeMissCount += 1;
+      forceNextSecurityKeyframe = true;
+      const nowMs = Date.now();
+      if (
+        primaryKeyframeMissCount <= 3
+        || (nowMs - primaryKeyframeMissDiagnosticAtMs) >= 1000
+      ) {
+        primaryKeyframeMissDiagnosticAtMs = nowMs;
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_browser_keyframe_required_delta_dropped',
+          code: 'sfu_browser_keyframe_required_delta_dropped',
+          message: 'Browser encoder emitted a delta while SFU recovery required a keyframe; frame was dropped before transport.',
+          payload: {
+            codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+            video_layer: normalizedVideoLayer,
+            track_id: videoTrack.id,
+            encoded_payload_bytes: encodedPayloadBytes,
+            frame_type: actualEncodedFrameType,
+            keyframe_miss_count: primaryKeyframeMissCount,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+          },
+          immediate: primaryKeyframeMissCount <= 3,
+        });
+      }
+      if (primaryKeyframeMissCount >= 3) {
+        const error = new Error('sfu_browser_encoder_keyframe_unavailable');
+        await close('protected_browser_video_keyframe_unavailable');
+        onProtectedBrowserEncoderFailure(error);
+      }
+      return false;
+    }
+    const encodedFrameType = actualEncodedFrameType;
     const maxEncodedPayloadBytes = Math.max(1, positiveInteger(
       encodedFrameType === 'keyframe'
         ? videoProfile.maxKeyframeBytesPerFrame
@@ -680,6 +725,10 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         sfuSendFailureDetails,
       );
       return false;
+    }
+    if (critical && encodedFrameType === 'keyframe') {
+      primaryKeyframeMissCount = 0;
+      primaryKeyframeMissDiagnosticAtMs = 0;
     }
     resetWlvcFrameSendFailureCounters();
     if (getSfuClientBufferedAmount() < constants.sendBufferHighWaterBytes) {
