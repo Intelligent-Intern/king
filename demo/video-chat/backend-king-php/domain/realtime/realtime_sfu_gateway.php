@@ -496,13 +496,15 @@ function videochat_handle_sfu_routes(
             return;
         }
         $relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);
-        if ($activeSfuDatabase instanceof PDO && !videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame)) {
+        $frameBufferInsertError = '';
+        if ($activeSfuDatabase instanceof PDO && !videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame, $frameBufferInsertError)) {
             videochat_sfu_log_runtime_event('sfu_frame_sqlite_buffer_insert_failed', [
                 'room_id' => $roomId,
                 'publisher_id' => (string) $clientId,
                 'track_id' => (string) $trackId,
                 'frame_type' => (string) $frameType,
                 'protection_mode' => (string) $protectionMode,
+                'insert_error' => $frameBufferInsertError !== '' ? $frameBufferInsertError : 'unknown',
                 'sfu_send_path' => 'sqlite_frame_buffer_insert',
                 'worker_pid' => getmypid(),
                 ...videochat_sfu_transport_metric_fields($relayFrame, 0),

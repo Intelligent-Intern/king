@@ -377,6 +377,7 @@ try {
         'magic' => 'KPMF',
         'version' => 1,
         'runtime_path' => 'wlvc_sfu',
+        'codec_id' => 'webcodecs_vp8',
         'track_kind' => 'video',
         'frame_kind' => 'delta',
         'kex_suite' => 'x25519_hkdf_sha256_v1',
@@ -682,6 +683,17 @@ try {
         (string) ($decodedProtectedBinaryPayload['protected_frame'] ?? '') === $protectedFrame
         && (string) ($decodedProtectedBinaryPayload['protection_mode'] ?? '') === 'required',
         'protected binary SFU frame envelope must preserve protected payload and required mode'
+    );
+    $storedProtectedFrame = videochat_sfu_decode_stored_frame_payload(json_encode(array_merge($decodedProtectedBinaryPayload, [
+        'type' => 'sfu/frame',
+        'publisher_id' => 'publisher-a',
+        'codec_id' => 'webcodecs_vp8',
+        'runtime_id' => 'wlvc_sfu',
+    ]), JSON_UNESCAPED_SLASHES));
+    videochat_realtime_sfu_assert(
+        (string) ($storedProtectedFrame['protected_frame'] ?? '') === $protectedFrame
+        && (string) ($storedProtectedFrame['codec_id'] ?? '') === 'webcodecs_vp8',
+        'SQLite SFU frame buffer must accept protected WebCodecs frames with codec-bound security metadata'
     );
     videochat_realtime_sfu_assert(
         (int) ($decodedProtectedBinaryPayload['payload_chars'] ?? 0) === strlen($protectedFrame),

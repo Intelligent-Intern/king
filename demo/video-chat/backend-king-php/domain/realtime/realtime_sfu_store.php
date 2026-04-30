@@ -899,6 +899,7 @@ function videochat_sfu_normalize_protected_metadata(mixed $metadata): array
         'magic' => true,
         'version' => true,
         'runtime_path' => true,
+        'codec_id' => true,
         'track_kind' => true,
         'frame_kind' => true,
         'kex_suite' => true,
@@ -921,6 +922,13 @@ function videochat_sfu_normalize_protected_metadata(mixed $metadata): array
             return ['ok' => false, 'metadata' => [], 'error' => 'invalid_protected_metadata'];
         }
         $normalized[$field] = $value;
+    }
+    if (array_key_exists('codec_id', $normalized)) {
+        $codecId = strtolower(trim((string) $normalized['codec_id']));
+        if (!in_array($codecId, ['webrtc_native', 'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown'], true)) {
+            return ['ok' => false, 'metadata' => [], 'error' => 'unsupported_capability'];
+        }
+        $normalized['codec_id'] = $codecId;
     }
 
     if ($normalized !== []) {

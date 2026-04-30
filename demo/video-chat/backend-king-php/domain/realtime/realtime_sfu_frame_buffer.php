@@ -286,11 +286,13 @@ SQL
     ];
 }
 
-function videochat_sfu_insert_frame(PDO $pdo, string $roomId, string $publisherId, array $frame): bool
+function videochat_sfu_insert_frame(PDO $pdo, string $roomId, string $publisherId, array $frame, ?string &$error = null): bool
 {
+    $error = '';
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
     $normalizedPublisherId = trim($publisherId);
     if ($normalizedRoomId === '' || $normalizedPublisherId === '') {
+        $error = 'invalid_room_or_publisher';
         return false;
     }
 
@@ -300,10 +302,12 @@ function videochat_sfu_insert_frame(PDO $pdo, string $roomId, string $publisherI
     $storedFrame['publisher_id'] = (string) ($storedFrame['publisher_id'] ?? $normalizedPublisherId);
     $encoded = json_encode($storedFrame, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($encoded) || $encoded === '' || strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)) {
+        $error = 'record_budget_exceeded';
         return false;
     }
 
     if (videochat_sfu_decode_stored_frame_payload($encoded) === []) {
+        $error = 'stored_payload_decode_failed';
         return false;
     }
 

@@ -40,6 +40,7 @@ function require_order(string $path, string $before, string $after): void
 
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
 $store = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php';
+$frameBuffer = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_frame_buffer.php';
 $brokerReplay = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_broker_replay.php';
 $context = 'demo/video-chat/backend-king-php/domain/realtime/realtime_call_context.php';
 $runtimeContract = 'demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php';
@@ -91,14 +92,21 @@ $storeNeedles = [
     '\'protected_frame_too_large\'',
     '$payload[\'room_id\'] = $normalizedBoundRoomId;',
     'function videochat_sfu_decode_stored_frame_payload(',
-    'function videochat_sfu_insert_frame(',
-    'function videochat_sfu_fetch_buffered_frames(',
     'CREATE TABLE IF NOT EXISTS sfu_frames',
-    'INSERT INTO sfu_frames',
     "require_once __DIR__ . '/realtime_sfu_broker_replay.php';",
+    "require_once __DIR__ . '/realtime_sfu_frame_buffer.php';",
 ];
 foreach ($storeNeedles as $needle) {
     require_contains($store, $needle);
+}
+
+$frameBufferNeedles = [
+    'function videochat_sfu_insert_frame(',
+    'function videochat_sfu_fetch_buffered_frames(',
+    'INSERT INTO sfu_frames',
+];
+foreach ($frameBufferNeedles as $needle) {
+    require_contains($frameBuffer, $needle);
 }
 
 $brokerReplayNeedles = [
