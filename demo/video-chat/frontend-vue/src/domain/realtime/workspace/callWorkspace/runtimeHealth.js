@@ -224,9 +224,17 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       const stalledLoggedAtMs = Number(peer.stalledLoggedAtMs || 0);
       const lastFrameAtMs = Number(peer.lastFrameAtMs || 0);
       const lastReceivedFrameAtMs = Number(peer.lastReceivedFrameAtMs || 0);
+      const lastDecodedFrameAtMs = Number(peer.lastDecodedFrameAtMs || 0);
       if (createdAtMs <= 0) continue;
 
       if (frameCount > 0) {
+        const decodedGapMs = lastDecodedFrameAtMs > 0 ? Math.max(0, nowMs - lastDecodedFrameAtMs) : Number.POSITIVE_INFINITY;
+        if (decodedGapMs < remoteVideoFreezeThresholdMs) {
+          if (String(peer.mediaConnectionState || '') !== 'live' || String(peer.mediaConnectionMessage || '') !== '') {
+            setRemoteVideoStatus(peer, 'live', '', nowMs);
+          }
+          continue;
+        }
         if (lastFrameAtMs <= 0 || (nowMs - lastFrameAtMs) < remoteVideoFreezeThresholdMs) {
           continue;
         }
@@ -260,6 +268,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
               frame_count: frameCount,
               received_frame_count: Number(peer.receivedFrameCount || 0),
+              decoded_frame_gap_ms: Number.isFinite(decodedGapMs) ? decodedGapMs : 0,
+              last_decoded_frame_skip_reason: String(peer.lastDecodedFrameSkipReason || ''),
             }
           )
           : false;
@@ -296,6 +306,8 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               track_count: trackCount,
               frame_count: frameCount,
               received_frame_count: Number(peer.receivedFrameCount || 0),
+              decoded_frame_gap_ms: Number.isFinite(decodedGapMs) ? decodedGapMs : 0,
+              last_decoded_frame_skip_reason: String(peer.lastDecodedFrameSkipReason || ''),
               frozen_age_ms: frozenAgeMs,
               receive_gap_ms: receiveGapMs,
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),

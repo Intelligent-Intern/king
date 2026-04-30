@@ -79,6 +79,8 @@ try {
   requireContains(receiverFeedback, 'publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0)', 'keyframe feedback carries frame publisher user id');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
+  requireContains(frameDecode, 'peer.lastDecodedFrameAtMs = renderedAtMs;', 'decoded-but-throttled frames keep remote health fresh');
+  requireContains(runtimeHealth, 'decodedGapMs < remoteVideoFreezeThresholdMs', 'remote health does not reset decoders while fresh frames are decoded but render-throttled');
   requireContains(frameDecode, 'peer.sfuSocketRestartCount = 0;', 'fresh decoded frames clear hard reconnect backoff');
   requireContains(frameDecode, 'peer.nextSfuSocketRestartAllowedAtMs = 0;', 'fresh decoded frames clear next restart gate');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');

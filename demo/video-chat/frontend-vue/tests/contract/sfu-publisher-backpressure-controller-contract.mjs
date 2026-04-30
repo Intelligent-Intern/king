@@ -62,6 +62,8 @@ async function main() {
   requireContains(publisherSendPath, "'sfu_client_unavailable_after_encode'", 'publisher reports SFU client loss after encode as send-path recovery, not encode failure');
   requireContains(publisherPipeline, 'const sendClient = currentOpenSfuClient();', 'publisher rechecks SFU client immediately before sending an encoded frame');
   requireContains(publisherPipeline, 'sendClient.sendEncodedFrame(outgoingFrame)', 'publisher sends through a stable local client reference');
+  requireContains(publisherPipeline, "reason: 'sfu_frame_send_pressure'", 'publisher reacts to post-send websocket pressure before the hard high-water gate');
+  requireContains(publisherBackpressureController, "'sfu_frame_send_pressure'", 'controller downshifts on soft post-send pressure');
   assert.equal(
     publisherPipeline.includes('refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame)'),
     false,
@@ -154,6 +156,16 @@ async function main() {
   assert.ok(
     wireBudgetDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
     'wire-rate budget send failures downshift immediately before browser buffering can become critical',
+  );
+  const postSendPressureDecision = decidePublisherBackpressureAction({
+    kind: 'send_failure',
+    reason: 'sfu_frame_send_pressure',
+    bufferedAmount: 2_100_000,
+    sendFailureCount: 1,
+  }, pressureConfig);
+  assert.ok(
+    postSendPressureDecision.actions.includes(PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT),
+    'post-send websocket pressure downshifts before video disappears behind a full browser buffer',
   );
   const repeatedIngressLagDecision = decidePublisherBackpressureAction({
     kind: 'send_failure',

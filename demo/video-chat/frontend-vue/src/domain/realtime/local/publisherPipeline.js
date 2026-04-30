@@ -829,7 +829,40 @@ export function createLocalPublisherPipelineHelpers({
           );
           return;
         }
-        if (getSfuClientBufferedAmount() < constants.sendBufferHighWaterBytes) {
+        const postSendBufferedAmount = getSfuClientBufferedAmount();
+        const postSendPressureBytes = Math.max(
+          2 * 1024 * 1024,
+          Math.floor(Math.max(
+            Number(videoProfile.maxBufferedBytes || 0),
+            Number(constants.sendBufferHighWaterBytes || 0),
+          ) * 0.5),
+        );
+        if (postSendBufferedAmount >= postSendPressureBytes) {
+          paceForcedKeyframeRecovery();
+          handleWlvcFrameSendFailure(
+            postSendBufferedAmount,
+            videoTrack.id,
+            'sfu_frame_send_pressure',
+            {
+              reason: 'sfu_frame_send_pressure',
+              stage: 'browser_websocket_post_send_pressure',
+              source: 'websocket_buffered_amount',
+              message: 'Encoded SFU frame was sent, but websocket buffering crossed the soft pressure budget.',
+              transportPath: 'binary_envelope',
+              bufferedAmount: postSendBufferedAmount,
+              payloadBytes: encodedPayloadBytes,
+              wirePayloadBytes: Number(outgoingFrame.transportMetrics?.wire_payload_bytes || 0),
+              chunkCount: Number(outgoingFrame.transportMetrics?.chunk_count || 0),
+              publisherFrameTraceId: String(outgoingFrame.transportMetrics?.publisher_frame_trace_id || ''),
+              publisherPathTraceStages: String(outgoingFrame.transportMetrics?.publisher_path_trace_stages || ''),
+              encodeMs,
+              drawImageMs,
+              readbackMs,
+            },
+          );
+          return;
+        }
+        if (postSendBufferedAmount < constants.sendBufferHighWaterBytes) {
           resetWlvcBackpressureCounters();
         }
         resetWlvcFrameSendFailureCounters();

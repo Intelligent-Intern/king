@@ -293,7 +293,18 @@ export function createSfuFrameDecodeHelpers({
     const ctx = canvas.getContext('2d');
     if (!ctx) return false;
     const renderDecision = shouldRenderRemoteFrame(peer, frame, renderedAtMs);
+    peer.lastDecodedFrameAtMs = renderedAtMs;
+    peer.lastDecodedFrameSequence = Math.max(
+      Number(peer.lastDecodedFrameSequence || 0),
+      normalizeSfuFrameNumber(frame?.frameSequence),
+    );
+    peer.lastDecodedFrameTimestamp = Math.max(
+      Number(peer.lastDecodedFrameTimestamp || 0),
+      normalizeSfuFrameNumber(frame?.timestamp),
+    );
     if (!renderDecision.render) {
+      peer.lastDecodedFrameSkippedAtMs = renderedAtMs;
+      peer.lastDecodedFrameSkipReason = String(renderDecision.reason || '');
       if (
         (renderedAtMs - Number(peer.lastSfuRenderSkipTelemetryAtMs || 0)) >= 2000
       ) {
