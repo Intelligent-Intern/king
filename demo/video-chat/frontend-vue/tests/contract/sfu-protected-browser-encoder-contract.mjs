@@ -63,6 +63,13 @@ try {
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
   assert.equal(browserPublisher.includes('getImageData('), false, 'browser publisher must not use canvas getImageData');
   requireContains(browserPublisher, 'createBrowserThumbnailFrameScaler', 'browser publisher keeps thumbnail scaling isolated from the primary WebCodecs path');
+  requireContains(browserPublisher, 'function resolveBrowserEncoderBitrate(videoProfile, {', 'browser publisher must bound WebCodecs bitrate from resolution and frame rate, not raw wire budget');
+  assert.equal(browserPublisher.includes('Math.floor((maxWireBytesPerSecond || 1_500_000) * 8 * 0.62)'), false, 'browser publisher must not feed absurd wire-budget bitrates into WebCodecs configuration');
+  requireContains(browserPublisher, 'function browserEncoderConfigVariants(config)', 'browser publisher must probe hardware/software WebCodecs config variants before falling back');
+  requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedPrimaryConfig)', 'browser publisher must select a supported primary WebCodecs config variant');
+  requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig)', 'browser publisher must select a supported thumbnail WebCodecs config variant');
+  requireContains(browserPublisher, "eventType: 'sfu_browser_encoder_capabilities_unavailable'", 'browser publisher must persist missing WebCodecs capabilities to backend diagnostics before fallback');
+  requireContains(browserPublisher, "level: 'warning'", 'browser publisher WebCodecs fallback diagnostics must be stored server-side instead of disappearing as info-only events');
 
   requireContains(publisherPipeline, "from './protectedBrowserVideoEncoder'", 'publisher pipeline imports browser encoder path');
   assert.ok(

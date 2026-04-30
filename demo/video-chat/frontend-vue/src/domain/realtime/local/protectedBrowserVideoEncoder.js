@@ -61,6 +61,32 @@ function resolveThumbnailDimensions(sourceWidth, sourceHeight) {
   };
 }
 
+function resolveBrowserEncoderBitrate(videoProfile, {
+  videoLayer = 'primary',
+  width = 0,
+  height = 0,
+  frameRate = 12,
+} = {}) {
+  const normalizedVideoLayer = normalizeVideoLayer(videoLayer) || 'primary';
+  const targetWidth = positiveInteger(width, 0);
+  const targetHeight = positiveInteger(height, 0);
+  const targetFrameRate = clampNumber(Number(frameRate || 0), 1, 30);
+  const maxWireBytesPerSecond = positiveInteger(videoProfile?.maxWireBytesPerSecond, 0);
+  const pixelsPerSecond = Math.max(1, targetWidth * targetHeight * targetFrameRate);
+  const bitsPerPixel = normalizedVideoLayer === 'thumbnail' ? 0.12 : 0.42;
+  const qualityBoundBitrate = Math.round(pixelsPerSecond * bitsPerPixel);
+  const minBitrate = normalizedVideoLayer === 'thumbnail' ? 90_000 : 520_000;
+  const maxBitrate = normalizedVideoLayer === 'thumbnail' ? 520_000 : 5_500_000;
+  const wireBudgetBitrate = maxWireBytesPerSecond > 0
+    ? Math.max(minBitrate, Math.floor(maxWireBytesPerSecond * 8 * 0.38))
+    : maxBitrate;
+  return clampNumber(
+    Math.max(minBitrate, qualityBoundBitrate),
+    minBitrate,
+    Math.min(maxBitrate, wireBudgetBitrate),
+  );
+}
+
 function buildVideoFrameInitFromSource(frame) {
   const init = {};
   const timestamp = Number(frame?.timestamp);
@@ -187,14 +213,12 @@ function buildBrowserEncoderConfig(videoProfile, { videoLayer = 'primary' } = {}
   let width = sourceWidth;
   let height = sourceHeight;
   let frameRate = Math.max(1, Number(videoProfile?.captureFrameRate || videoProfile?.readbackFrameRate || 12));
-  const maxWireBytesPerSecond = positiveInteger(videoProfile?.maxWireBytesPerSecond, 0);
-  let bitrate = Math.max(220_000, Math.floor((maxWireBytesPerSecond || 1_500_000) * 8 * 0.62));
   if (sourceWidth <= 0 || sourceHeight <= 0) {
     return {
       codec: 'vp8',
       width: 0,
       height: 0,
-      bitrate,
+      bitrate: resolveBrowserEncoderBitrate(videoProfile, { videoLayer: normalizedVideoLayer, width: 0, height: 0, frameRate }),
       framerate: frameRate,
       latencyMode: 'realtime',
       hardwareAcceleration: 'prefer-hardware',
@@ -205,17 +229,56 @@ function buildBrowserEncoderConfig(videoProfile, { videoLayer = 'primary' } = {}
     width = thumbnailDimensions.width;
     height = thumbnailDimensions.height;
     frameRate = Math.max(4, Math.min(8, Math.floor(frameRate * 0.5)));
-    bitrate = Math.max(90_000, Math.min(380_000, Math.floor(bitrate * 0.28)));
   }
   return {
     codec: 'vp8',
     width: evenInteger(width, sourceWidth),
     height: evenInteger(height, sourceHeight),
-    bitrate,
+    bitrate: resolveBrowserEncoderBitrate(videoProfile, {
+      videoLayer: normalizedVideoLayer,
+      width,
+      height,
+      frameRate,
+    }),
     framerate: frameRate,
     latencyMode: 'realtime',
     hardwareAcceleration: 'prefer-hardware',
   };
+}
+
+function browserEncoderConfigVariants(config) {
+  const variants = [];
+  const seen = new Set();
+  const add = (candidate) => {
+    const normalized = Object.fromEntries(
+      Object.entries(candidate).filter(([, value]) => value !== undefined && value !== ''),
+    );
+    const key = JSON.stringify(normalized);
+    if (seen.has(key)) return;
+    seen.add(key);
+    variants.push(normalized);
+  };
+  add(config);
+  for (const hardwareAcceleration of ['prefer-software', 'no-preference', 'prefer-hardware', undefined]) {
+    add({ ...config, hardwareAcceleration });
+  }
+  for (const hardwareAcceleration of ['prefer-software', 'no-preference', undefined]) {
+    add({ ...config, latencyMode: undefined, hardwareAcceleration });
+  }
+  return variants;
+}
+
+async function resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, config) {
+  if (typeof VideoEncoderCtor?.isConfigSupported !== 'function') return config;
+  for (const candidate of browserEncoderConfigVariants(config)) {
+    try {
+      const result = await VideoEncoderCtor.isConfigSupported(candidate);
+      if (result?.supported) return result.config || candidate;
+    } catch {
+      // Try the next WebCodecs configuration variant before falling back to WLVC.
+    }
+  }
+  return null;
 }
 
 async function isBrowserEncoderConfigSupported(VideoEncoderCtor, config) {
@@ -302,30 +365,49 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   const currentSfuVideoProfile = callbacks.currentSfuVideoProfile || (() => videoProfile);
   const onProtectedBrowserEncoderFailure = callbacks.onProtectedBrowserEncoderFailure || (() => {});
 
-  if (!canAttemptProtectedBrowserVideoEncoder(capabilities)) return null;
-
-  const VideoEncoderCtor = globalScope.VideoEncoder;
-  const config = buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary' });
-  const thumbnailConfig = buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail' });
-  if (config.width <= 0 || config.height <= 0) return null;
-  const primaryConfigSupported = await isBrowserEncoderConfigSupported(VideoEncoderCtor, config);
-  const thumbnailConfigSupported = await isBrowserEncoderConfigSupported(VideoEncoderCtor, thumbnailConfig);
-  if (!primaryConfigSupported || !thumbnailConfigSupported) {
+  if (!canAttemptProtectedBrowserVideoEncoder(capabilities)) {
     captureClientDiagnostic({
       category: 'media',
-      level: 'info',
-      eventType: 'sfu_browser_encoder_unsupported',
-      code: 'sfu_browser_encoder_unsupported',
-      message: 'Browser WebCodecs encoder path was unavailable for the active SFU profile.',
+      level: 'warning',
+      eventType: 'sfu_browser_encoder_capabilities_unavailable',
+      code: 'sfu_browser_encoder_capabilities_unavailable',
+      message: 'Browser WebCodecs encoder path is missing required APIs; publisher will fall back to the compatibility path.',
       payload: {
         ...protectedBrowserVideoCapabilityDiagnosticPayload(capabilities),
-        requested_codec: config.codec,
-        frame_width: config.width,
-        frame_height: config.height,
-        primary_config_supported: primaryConfigSupported,
-        thumbnail_config_supported: thumbnailConfigSupported,
-        thumbnail_frame_width: thumbnailConfig.width,
-        thumbnail_frame_height: thumbnailConfig.height,
+        track_id: String(videoTrack?.id || ''),
+        outgoing_video_quality_profile: String(videoProfile?.id || ''),
+      },
+    });
+    return null;
+  }
+
+  const VideoEncoderCtor = globalScope.VideoEncoder;
+  const requestedPrimaryConfig = buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary' });
+  const requestedThumbnailConfig = buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail' });
+  if (requestedPrimaryConfig.width <= 0 || requestedPrimaryConfig.height <= 0) return null;
+  const config = await resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedPrimaryConfig);
+  const thumbnailConfig = await resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig);
+  if (!config || !thumbnailConfig) {
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_browser_encoder_unsupported',
+      code: 'sfu_browser_encoder_unsupported',
+      message: 'Browser WebCodecs encoder path rejected every bounded encoder configuration; publisher will fall back to the compatibility path.',
+      payload: {
+        ...protectedBrowserVideoCapabilityDiagnosticPayload(capabilities),
+        requested_codec: requestedPrimaryConfig.codec,
+        frame_width: requestedPrimaryConfig.width,
+        frame_height: requestedPrimaryConfig.height,
+        requested_bitrate: requestedPrimaryConfig.bitrate,
+        requested_frame_rate: requestedPrimaryConfig.framerate,
+        primary_config_supported: Boolean(config),
+        thumbnail_config_supported: Boolean(thumbnailConfig),
+        thumbnail_frame_width: requestedThumbnailConfig.width,
+        thumbnail_frame_height: requestedThumbnailConfig.height,
+        thumbnail_bitrate: requestedThumbnailConfig.bitrate,
+        thumbnail_frame_rate: requestedThumbnailConfig.framerate,
+        outgoing_video_quality_profile: String(videoProfile?.id || ''),
       },
     });
     return null;

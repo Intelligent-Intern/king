@@ -57,6 +57,42 @@ export function createCallWorkspaceMediaSecurityRuntime({
     return 'wlvc_sfu';
   }
 
+  function normalizeRemoteMediaSecurityUserId(userId) {
+    const normalizedUserId = Number(userId || 0);
+    if (
+      !Number.isInteger(normalizedUserId)
+      || normalizedUserId <= 0
+      || normalizedUserId === currentUserId.value
+    ) {
+      return 0;
+    }
+    return normalizedUserId;
+  }
+
+  function remoteMediaSecurityEligibleTargetIds() {
+    const seen = new Set();
+    const userIds = [];
+    for (const userId of mediaSecurityEligibleTargetIds()) {
+      const normalizedUserId = normalizeRemoteMediaSecurityUserId(userId);
+      if (normalizedUserId <= 0 || seen.has(normalizedUserId)) continue;
+      seen.add(normalizedUserId);
+      userIds.push(normalizedUserId);
+    }
+    return userIds;
+  }
+
+  function remoteMediaSecurityTargetIds() {
+    const seen = new Set();
+    const userIds = [];
+    for (const userId of mediaSecurityTargetIds()) {
+      const normalizedUserId = normalizeRemoteMediaSecurityUserId(userId);
+      if (normalizedUserId <= 0 || seen.has(normalizedUserId)) continue;
+      seen.add(normalizedUserId);
+      userIds.push(normalizedUserId);
+    }
+    return userIds;
+  }
+
   function clearMediaSecurityResyncTimer() {
     if (state.mediaSecurityResyncTimer !== null) {
       clearTimeout(state.mediaSecurityResyncTimer);
@@ -86,7 +122,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   async function checkMediaSecurityHandshakeTimeouts() {
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
-    const targetIds = mediaSecurityEligibleTargetIds();
+    const targetIds = remoteMediaSecurityEligibleTargetIds();
     if (targetIds.length <= 0) return;
 
     const session = ensureMediaSecuritySession();
@@ -147,7 +183,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   function scheduleMediaSecurityParticipantSync(reason = 'unspecified', forceRekey = false) {
     if (!isSocketOnline.value || currentUserId.value <= 0) return;
-    if (mediaSecurityEligibleTargetIds().length <= 0) return;
+    if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
 
     state.mediaSecurityResyncForceRekey = state.mediaSecurityResyncForceRekey || Boolean(forceRekey);
     if (state.mediaSecurityResyncTimer !== null) return;
@@ -157,7 +193,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const shouldForceRekey = state.mediaSecurityResyncForceRekey;
       state.mediaSecurityResyncForceRekey = false;
       if (!isSocketOnline.value || currentUserId.value <= 0) return;
-      if (mediaSecurityEligibleTargetIds().length <= 0) return;
+      if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
       mediaDebugLog('[MediaSecurity] scheduled participant sync', { reason, forceRekey: shouldForceRekey });
       void syncMediaSecurityWithParticipants(shouldForceRekey);
     }, 0);
@@ -214,7 +250,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   const nativeAudioSecurityBannerMessage = computed(() => {
     mediaSecurityStateVersion.value;
-    const targetUserIds = mediaSecurityTargetIds();
+    const targetUserIds = remoteMediaSecurityTargetIds();
     if (targetUserIds.length <= 0) return '';
     const blockedReason = nativeAudioBridgeBlockedReason(targetUserIds);
     if (blockedReason !== '') return blockedReason;
@@ -256,7 +292,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       message: 'Media security sync was requested to recover SFU frame delivery.',
       payload: {
         reason: String(reason || 'unspecified'),
-        target_user_ids: mediaSecurityEligibleTargetIds(),
+        target_user_ids: remoteMediaSecurityEligibleTargetIds(),
         media_runtime_path: mediaRuntimePath.value,
         ...extraPayload,
       },
@@ -265,7 +301,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   function canProtectCurrentSfuTargets() {
-    const targetUserIds = mediaSecurityEligibleTargetIds();
+    const targetUserIds = remoteMediaSecurityEligibleTargetIds();
     if (targetUserIds.length <= 0) return false;
     return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
   }
@@ -273,9 +309,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
   function canProtectCurrentNativeTargets(targetUserIds) {
     const normalizedTargetUserIds = Array.isArray(targetUserIds)
       ? targetUserIds
-      : mediaSecurityTargetIds();
-    if (normalizedTargetUserIds.length <= 0) return false;
-    return ensureMediaSecuritySession().canProtectNativeForTargets(normalizedTargetUserIds);
+      : remoteMediaSecurityTargetIds();
+    const remoteTargetUserIds = normalizedTargetUserIds
+      .map((userId) => normalizeRemoteMediaSecurityUserId(userId))
+      .filter((userId, index, userIds) => userId > 0 && userIds.indexOf(userId) === index);
+    if (remoteTargetUserIds.length <= 0) return false;
+    return ensureMediaSecuritySession().canProtectNativeForTargets(remoteTargetUserIds);
   }
 
   function shouldUseNativeAudioBridge() {
@@ -354,6 +393,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   async function sendMediaSecurityHello(targetUserId, force = false) {
     if (!isSocketOnline.value) return false;
+    const normalizedTargetId = normalizeRemoteMediaSecurityUserId(targetUserId);
+    if (normalizedTargetId <= 0) return false;
     const session = ensureMediaSecuritySession();
     const ready = await session.ensureReady();
     if (!ready) {
@@ -365,16 +406,16 @@ export function createCallWorkspaceMediaSecurityRuntime({
         code: 'media_security_hello_not_ready',
         message: 'Media security hello could not be built because the local media-security session is not ready.',
         payload: {
-          target_user_id: Number(targetUserId || 0),
+          target_user_id: normalizedTargetId,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
       });
       return false;
     }
-    const key = mediaSecurityHelloSignalKey(targetUserId, session);
+    const key = mediaSecurityHelloSignalKey(normalizedTargetId, session);
     if (!force && state.mediaSecurityHelloSignalsSent.has(key)) return true;
-    const signal = await session.buildHelloSignal(targetUserId, currentMediaSecurityRuntimePath());
+    const signal = await session.buildHelloSignal(normalizedTargetId, currentMediaSecurityRuntimePath());
     if (!signal) {
       captureClientDiagnostic({
         category: 'media',
@@ -383,7 +424,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         code: 'media_security_hello_skipped',
         message: 'Media security hello could not be built for the remote participant.',
         payload: {
-          target_user_id: Number(targetUserId || 0),
+          target_user_id: normalizedTargetId,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
@@ -392,7 +433,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     }
     if (sendSocketFrame(signal)) {
       state.mediaSecurityHelloSignalsSent.add(key);
-      state.mediaSecurityHelloSentAtByUserId.set(Number(targetUserId || 0), Date.now());
+      state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
       startMediaSecurityHandshakeWatchdog();
       return true;
     }
@@ -403,7 +444,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       code: 'media_security_hello_send_failed',
       message: 'Media security hello could not be sent over the realtime websocket.',
       payload: {
-        target_user_id: Number(targetUserId || 0),
+        target_user_id: normalizedTargetId,
         media_runtime_path: mediaRuntimePath.value,
         security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
       },
@@ -414,7 +455,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
   async function sendMediaSecuritySenderKey(targetUserId, force = false) {
     if (!isSocketOnline.value) return false;
-    const normalizedTargetId = Number(targetUserId || 0);
+    const normalizedTargetId = normalizeRemoteMediaSecurityUserId(targetUserId);
+    if (normalizedTargetId <= 0) return false;
     const session = ensureMediaSecuritySession();
     const ready = await session.ensureReady();
     if (!ready) {
@@ -426,27 +468,27 @@ export function createCallWorkspaceMediaSecurityRuntime({
         code: 'media_security_sender_key_skipped',
         message: 'Media security sender key generation is not ready yet.',
         payload: {
-          target_user_id: Number(targetUserId || 0),
+          target_user_id: normalizedTargetId,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
       });
       return false;
     }
-    const key = mediaSecuritySenderKeySignalKey(targetUserId, session);
+    const key = mediaSecuritySenderKeySignalKey(normalizedTargetId, session);
     if (!force && state.mediaSecuritySenderKeySignalsSent.has(key)) return true;
     let signal = null;
     try {
-      signal = await session.buildSenderKeySignal(targetUserId);
+      signal = await session.buildSenderKeySignal(normalizedTargetId);
     } catch (error) {
       const errorCode = String(error?.message || '').trim().toLowerCase();
       if (errorCode === 'participant_set_mismatch') {
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
-        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(targetUserId, session));
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
         startMediaSecurityHandshakeWatchdog();
-        await sendMediaSecurityHello(targetUserId, true);
+        await sendMediaSecurityHello(normalizedTargetId, true);
         captureClientDiagnostic({
           category: 'media',
           level: 'warning',
@@ -480,7 +522,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         code: 'media_security_sender_key_not_ready',
         message: 'Media security sender key could not be built for the remote participant.',
         payload: {
-          target_user_id: Number(targetUserId || 0),
+          target_user_id: normalizedTargetId,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
@@ -498,7 +540,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       code: 'media_security_sender_key_send_failed',
       message: 'Media security sender key could not be sent over the realtime websocket.',
       payload: {
-        target_user_id: Number(targetUserId || 0),
+        target_user_id: normalizedTargetId,
         media_runtime_path: mediaRuntimePath.value,
         security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
       },
@@ -512,7 +554,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecuritySyncInFlight = true;
     try {
       const session = ensureMediaSecuritySession();
-      const eligibleTargetUserIds = mediaSecurityEligibleTargetIds();
+      const eligibleTargetUserIds = remoteMediaSecurityEligibleTargetIds();
       if (eligibleTargetUserIds.length <= 0) {
         mediaSecurityStateVersion.value += 1;
         return;
@@ -536,8 +578,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
     } catch (error) {
       mediaDebugLog('[MediaSecurity] sync failed', error);
       captureClientDiagnosticError('media_security_sync_failed', error, {
-        target_user_ids: mediaSecurityTargetIds(),
-        eligible_target_user_ids: mediaSecurityEligibleTargetIds(),
+        target_user_ids: remoteMediaSecurityTargetIds(),
+        eligible_target_user_ids: remoteMediaSecurityEligibleTargetIds(),
         media_runtime_path: mediaRuntimePath.value,
       }, {
         code: 'media_security_sync_failed',
@@ -807,14 +849,14 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   async function handleMediaSecuritySignal(type, senderUserId, payloadBody) {
-    const normalizedSenderUserId = Number(senderUserId || 0);
-    if (!Number.isInteger(normalizedSenderUserId) || normalizedSenderUserId <= 0) return;
+    const normalizedSenderUserId = normalizeRemoteMediaSecurityUserId(senderUserId);
+    if (normalizedSenderUserId <= 0) return;
     const session = ensureMediaSecuritySession();
 
     try {
       if (type === 'media-security/hello') {
         const marked = session.markParticipantSet([
-          ...mediaSecurityTargetIds(),
+          ...remoteMediaSecurityTargetIds(),
           normalizedSenderUserId,
         ]);
         if (marked.changed) {
@@ -826,7 +868,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         if (accepted) {
           await sendMediaSecurityHello(normalizedSenderUserId);
           await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
-          if (mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
+          if (remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)) {
             scheduleMediaSecurityParticipantSync('hello_accepted');
           }
           resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'hello_accepted');
@@ -843,7 +885,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
           state.mediaSecurityHandshakeRetryCountByUserId.delete(normalizedSenderUserId);
           resyncNativeAudioBridgePeerAfterSecurityReady(normalizedSenderUserId, 'sender_key_accepted');
         }
-        if (!accepted && mediaSecurityTargetIds().includes(normalizedSenderUserId)) {
+        if (!accepted && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)) {
           scheduleMediaSecurityParticipantSync('sender_key_pending');
         }
       }
@@ -852,7 +894,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       const errorCode = String(error?.message || error || '').trim().toLowerCase();
       if (
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
-        && mediaSecurityTargetIds().includes(normalizedSenderUserId)
+        && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)
       ) {
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
