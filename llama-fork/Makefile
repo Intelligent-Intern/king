@@ -1566,10 +1566,10 @@ tests/test-tokenizer-1-spm: tests/test-tokenizer-1-spm.cpp \
 	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 # Test for voltron transport (FILE backend)
-	tests/test-voltron-transport: tests/test-voltron-transport.cpp include/voltron_transport.h \
+tests/test-voltron-transport: tests/test-voltron-transport.cpp include/voltron_transport.h \
  $(OBJ_ALL)
 	$(CXX) $(CXXFLAGS) -c $< -o $(call GET_OBJ_FILE, $<)
-	$(CXX) $(CXXFLAGS) $(filter-out %.h $<,$^) src/voltron_transport.o $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(OBJ_ALL) $(call GET_OBJ_FILE, $<) -o $@ $(LDFLAGS)
 
 tests/test-rope: tests/test-rope.cpp ggml/src/ggml.o \
 	$(OBJ_GGML)
