@@ -17,6 +17,7 @@ export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
 export type SfuChunkField = 'data_base64_chunk' | 'protected_frame_chunk'
 export type SfuCodecId = 'wlvc_wasm' | 'wlvc_ts' | 'webcodecs_vp8' | 'wlvc_unknown'
 export type SfuRuntimeId = 'wlvc_sfu' | 'webrtc_native' | 'unknown_runtime'
+export type SfuVideoLayer = 'primary' | 'thumbnail'
 
 export interface SfuOutboundFrameInput {
   publisherId: string
@@ -32,6 +33,7 @@ export interface SfuOutboundFrameInput {
   senderSentAtMs?: number
   codecId?: SfuCodecId | string | null
   runtimeId?: SfuRuntimeId | string | null
+  videoLayer?: SfuVideoLayer | string | null
   tilePatch?: SfuTilePatchMetadata | null
   transportMetrics?: Record<string, unknown>
 }
@@ -55,6 +57,7 @@ export interface PreparedSfuOutboundFramePayload {
   senderSentAtMs: number
   codecId: string
   runtimeId: string
+  videoLayer: SfuVideoLayer | ''
   tilePatch: SfuTilePatchMetadata | null
 }
 
@@ -66,6 +69,7 @@ export interface DecodedSfuBinaryFrameEnvelope {
   dataBase64: string | null
   codecId: string
   runtimeId: string
+  videoLayer: SfuVideoLayer | ''
   tilePatch: SfuTilePatchMetadata | null
 }
 
@@ -88,7 +92,15 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
   const runtimeId = normalizeRuntimeId(frame.runtimeId)
   payload.codec_id = codecId
   payload.runtime_id = runtimeId
-  const transportMetrics = normalizeTransportMetrics(frame.transportMetrics)
+  const videoLayer = normalizeVideoLayer(
+    frame.videoLayer
+      ?? frame.transportMetrics?.video_layer
+      ?? frame.transportMetrics?.videoLayer,
+  )
+  const transportMetrics = normalizeTransportMetrics(videoLayer !== ''
+    ? { ...(frame.transportMetrics || {}), video_layer: videoLayer }
+    : frame.transportMetrics)
+  if (videoLayer !== '') payload.video_layer = videoLayer
   Object.assign(payload, transportMetrics)
   const tilePatch = normalizeTilePatchMetadata(frame.tilePatch || frame)
   Object.assign(payload, flattenTilePatchMetadata(tilePatch))
@@ -152,6 +164,7 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     senderSentAtMs,
     codecId,
     runtimeId,
+    videoLayer,
     tilePatch,
     metrics: {
       protocol_version: SFU_FRAME_PROTOCOL_VERSION,
@@ -162,6 +175,7 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       sender_sent_at_ms: senderSentAtMs,
       codec_id: codecId,
       runtime_id: runtimeId,
+      ...(videoLayer !== '' ? { video_layer: videoLayer } : {}),
       protection_mode: protectionMode,
       ...transportMetrics,
       raw_byte_length: rawByteLength,
@@ -217,6 +231,9 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const browserEncoderConfigCodec = String(source.publisher_browser_encoder_config_codec ?? source.publisherBrowserEncoderConfigCodec ?? '').trim()
   const browserEncoderHardwareAcceleration = String(source.publisher_browser_encoder_hardware_acceleration ?? source.publisherBrowserEncoderHardwareAcceleration ?? '').trim()
   const browserEncoderLatencyMode = String(source.publisher_browser_encoder_latency_mode ?? source.publisherBrowserEncoderLatencyMode ?? '').trim()
+  const videoLayer = normalizeVideoLayer(source.video_layer ?? source.videoLayer)
+  const selectedVideoLayer = normalizeVideoLayer(source.selected_video_layer ?? source.selectedVideoLayer ?? videoLayer)
+  const browserEncoderLayer = normalizeVideoLayer(source.publisher_browser_encoder_layer ?? source.publisherBrowserEncoderLayer ?? videoLayer)
   const metrics: Record<string, unknown> = {
     selection_tile_count: selectionTileCount,
     selection_total_tile_count: selectionTotalTileCount,
@@ -239,6 +256,9 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   if (browserEncoderConfigCodec !== '') metrics.publisher_browser_encoder_config_codec = browserEncoderConfigCodec
   if (browserEncoderHardwareAcceleration !== '') metrics.publisher_browser_encoder_hardware_acceleration = browserEncoderHardwareAcceleration
   if (browserEncoderLatencyMode !== '') metrics.publisher_browser_encoder_latency_mode = browserEncoderLatencyMode
+  if (videoLayer !== '') metrics.video_layer = videoLayer
+  if (selectedVideoLayer !== '') metrics.selected_video_layer = selectedVideoLayer
+  if (browserEncoderLayer !== '') metrics.publisher_browser_encoder_layer = browserEncoderLayer
 
   const integerFields: Array<[string, unknown]> = [
     ['capture_width', source.capture_width ?? source.captureWidth],
@@ -450,6 +470,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   const payloadBytes = bytes.slice(offset, offset + payloadByteLength).buffer
   const tilePatch = parseTilePatchMetadataJson(metadataJson)
   const { codecId, runtimeId, transportMetrics } = parseSfuEnvelopeMetadata(metadataJson)
+  const videoLayer = normalizeVideoLayer(transportMetrics.video_layer ?? transportMetrics.videoLayer)
 
   const protectedFrame = protectionMode === 'transport_only' ? null : arrayBufferToBase64Url(payloadBytes)
   const dataBase64 = null
@@ -462,6 +483,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
     dataBase64,
     codecId,
     runtimeId,
+    videoLayer,
     tilePatch,
     payload: {
       type: 'sfu/frame',
@@ -476,6 +498,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
       sender_sent_at_ms: senderSentAtMs,
       codec_id: codecId,
       runtime_id: runtimeId,
+      ...(videoLayer !== '' ? { video_layer: videoLayer } : {}),
       payload_bytes: payloadByteLength,
       payload_chars: payloadChars,
       chunk_count: 1,
@@ -545,6 +568,13 @@ function normalizeRuntimeId(value: unknown): string {
   const normalized = String(value || '').trim().toLowerCase()
   if (normalized === 'wlvc_sfu' || normalized === 'webrtc_native') return normalized
   return 'unknown_runtime'
+}
+
+export function normalizeVideoLayer(value: unknown): SfuVideoLayer | '' {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail'
+  if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary'
+  return ''
 }
 
 function serializeSfuEnvelopeMetadata(input: {

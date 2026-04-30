@@ -103,7 +103,7 @@ Technical target:
    - Production deploy check: `/sfu-buffer` is mounted as tmpfs in `videochat-backend-sfu-v1`, broker path is `/sfu-buffer/video-chat-sfu-broker.sqlite`, and `sfu_broker_database_opened` logs `broker_storage_class=ram_tmpfs`, `journal_mode=wal`, `synchronous=0`, `temp_store=2`.
    - Verification: `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php`, `node tests/contract/sfu-no-frame-persistence-regression-contract.mjs`, `node tests/contract/sfu-relay-broker-io-budget-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `docker compose -f demo/video-chat/docker-compose.v1.yml config`, `deploy-smoke`.
 
-4. [ ] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
+4. [x] `[dual-encoder-primary-thumbnail-publish]` Publish separate protected primary and thumbnail streams from one camera capture.
 
    Scope:
    - Keep one camera source and one media-security session, but produce separate encoded outputs for primary and thumbnail profiles.
@@ -116,7 +116,13 @@ Technical target:
    - Contracts prove deterministic `VideoFrame`/chunk closure for both layers.
 
    Report:
-   - Proposed next improvement.
+   - Added explicit `video_layer` metadata to SFU outbound payloads, binary envelope metadata, transport samples, inbound frame handling, and backend replay metadata.
+   - The browser WebCodecs publisher now configures a primary VP8 encoder and a lower-rate thumbnail VP8 encoder from the same direct `VideoFrame` source. The source `VideoFrame` is closed only after both encoders have consumed it.
+   - Thumbnail frames are marked non-critical: thumbnail payload/send pressure is logged through diagnostics and does not call the primary stream pressure/downshift handlers.
+   - The backend SFU router now prefers explicit frame-layer routing before legacy thumbnail cadence: thumbnail subscribers prune primary frames, primary/fullscreen subscribers prune thumbnail frames, and legacy WLVC single-layer frames keep the old cadence fallback.
+   - Added contract coverage for dual-layer publishing, metadata preservation, subscriber-side layer pruning, and deterministic no-`drawImage`/no-`getImageData` browser encode path.
+   - Production deploy check: `deploy.sh deploy` completed and `deploy-smoke` passed for frontend/API/lobby websocket/SFU websocket routing.
+   - Verification: `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`, `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php`, `node tests/contract/sfu-dual-video-layer-routing-contract.mjs`, `npm run test:contract:sfu`, `npm run build`, `deploy-smoke`.
 
 5. [ ] `[online-video-quality-regression-probes]` Add automated online probes for blockiness, frame lifecycle, and console cleanliness.
 

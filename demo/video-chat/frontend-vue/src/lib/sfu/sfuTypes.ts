@@ -31,6 +31,7 @@ export interface SFUEncodedFrame {
   senderSentAtMs?: number
   codecId?: string
   runtimeId?: string
+  videoLayer?: 'primary' | 'thumbnail' | string | null
   outgoingVideoQualityProfile?: string
   kingReceiveLatencyMs?: number
   kingFanoutLatencyMs?: number
@@ -88,6 +89,7 @@ export interface SfuFrameTransportSample {
   frameType: string
   frameSequence: number
   chunkCount: number
+  videoLayer: string
   outgoingVideoQualityProfile: string
   selectedVideoQualityProfile: string
   activeCaptureBackend: string

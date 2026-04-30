@@ -66,6 +66,9 @@ async function main() {
   requireContains(sfuStore, "'sfu/layer-preference'", 'SFU backend accepts layer preference control frames');
   requireContains(sfuGateway, 'videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg)', 'SFU gateway stores subscriber layer preference server-side');
   requireContains(sfuSubscriberBudget, 'videochat_sfu_subscriber_frame_route_decision', 'SFU server routes frames by subscriber preference');
+  requireContains(sfuSubscriberBudget, 'videochat_sfu_normalize_frame_video_layer', 'SFU server recognizes explicit dual video layer metadata');
+  requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_primary_layer_pruned', 'thumbnail subscribers prune explicit primary layer frames');
+  requireContains(sfuSubscriberBudget, 'primary_subscriber_thumbnail_layer_pruned', 'primary subscribers prune explicit thumbnail layer frames');
   requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_delta_cadence', 'thumbnail subscribers cannot force primary receivers down');
   requireContains(sfuBrokerReplay, '$subscriber = []', 'cross-worker replay receives subscriber state for layer routing');
 

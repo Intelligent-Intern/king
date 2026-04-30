@@ -112,6 +112,18 @@ function videochat_sfu_normalize_video_layer_preference(mixed $value, string $fa
     return $fallback === 'thumbnail' ? 'thumbnail' : 'primary';
 }
 
+function videochat_sfu_normalize_frame_video_layer(mixed $value): string
+{
+    $normalized = strtolower(trim((string) $value));
+    if ($normalized === 'thumbnail' || $normalized === 'thumb' || $normalized === 'mini') {
+        return 'thumbnail';
+    }
+    if ($normalized === 'primary' || $normalized === 'main' || $normalized === 'fullscreen') {
+        return 'primary';
+    }
+    return '';
+}
+
 /**
  * @param array<string, mixed> $roomState
  * @return array<int, array<string, mixed>>
@@ -194,6 +206,26 @@ function videochat_sfu_apply_subscriber_layer_preference(array &$subscriber, arr
 function videochat_sfu_subscriber_frame_route_decision(array $subscriber, array $frame): array
 {
     $layerPreference = videochat_sfu_subscriber_layer_preference($subscriber, $frame);
+    $frameVideoLayer = videochat_sfu_normalize_frame_video_layer($frame['video_layer'] ?? ($frame['videoLayer'] ?? ''));
+    if ($frameVideoLayer !== '') {
+        if ($layerPreference === 'thumbnail' && $frameVideoLayer !== 'thumbnail') {
+            return [
+                'send' => false,
+                'layer_preference' => $layerPreference,
+                'drop_reason' => 'thumbnail_subscriber_primary_layer_pruned',
+            ];
+        }
+        if ($layerPreference !== 'thumbnail' && $frameVideoLayer === 'thumbnail') {
+            return [
+                'send' => false,
+                'layer_preference' => $layerPreference,
+                'drop_reason' => 'primary_subscriber_thumbnail_layer_pruned',
+            ];
+        }
+
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+
     if ($layerPreference !== 'thumbnail') {
         return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
     }
