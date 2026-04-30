@@ -80,6 +80,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     'sfu_projected_buffer_budget_exceeded',
     'sfu_wire_rate_budget_exceeded',
   ].includes(reason);
+  const serverIngressLatencyExceeded = reason === 'sfu_ingress_latency_budget_exceeded';
 
   if (kind === 'pre_encode_buffer') {
     if (socketHigh) {
@@ -104,7 +105,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
-    if (socketCritical) {
+    if (socketCritical || (serverIngressLatencyExceeded && sendFailureCount >= sendFailureThreshold)) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
     }
   } else if (kind === 'source_readback_failure') {
@@ -668,13 +669,19 @@ export function createPublisherBackpressureController({
     const sustainedBackpressureMs = state.wlvcFrameSendFailureFirstAtMs > 0
       ? Math.max(0, nowMs - state.wlvcFrameSendFailureFirstAtMs)
       : 0;
+    const currentProfile = String(callMediaPrefs.outgoingVideoQualityProfile || '');
+    const queueAgeMs = Math.max(0, Number(details?.queueAgeMs ?? details?.queue_age_ms ?? 0));
+    const budgetMaxQueueAgeMs = Math.max(0, Number(details?.budgetMaxQueueAgeMs ?? details?.budget_max_queue_age_ms ?? 0));
+    const kingReceiveLatencyMs = Math.max(0, Number(details?.kingReceiveLatencyMs ?? details?.king_receive_latency_ms ?? 0));
+    const serverIngressLatencyExceeded = normalizedReason.trim().toLowerCase() === 'sfu_ingress_latency_budget_exceeded'
+      || String(details?.stage || '').trim().toLowerCase() === 'sfu_ingress_latency_guard';
     const decision = decide({
       kind: 'send_failure',
       reason: normalizedReason,
       bufferedAmount: normalizedBuffered,
       sendFailureCount: state.wlvcFrameSendFailureCount,
       sustainedBackpressureMs,
-      queueAgeMs: details?.queueAgeMs,
+      queueAgeMs,
       payloadBytes: details?.payloadBytes,
     });
     if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)) {
@@ -683,13 +690,25 @@ export function createPublisherBackpressureController({
         return;
       }
     }
-    if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)) {
-      restartSfuAfterVideoStall('sfu_send_buffer_stuck', {
+    const restartServerIngressLag = serverIngressLatencyExceeded && currentProfile === 'rescue';
+    const restartReason = restartServerIngressLag
+      ? 'sfu_ingress_latency_budget_exceeded'
+      : 'sfu_send_buffer_stuck';
+    if (
+      decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)
+      || restartServerIngressLag
+    ) {
+      if (restartSfuAfterVideoStall(restartReason, {
         buffered_amount: normalizedBuffered,
         send_failure_count: state.wlvcFrameSendFailureCount,
         sustained_backpressure_ms: sustainedBackpressureMs,
-        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
-      });
+        queue_age_ms: queueAgeMs,
+        budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+        king_receive_latency_ms: kingReceiveLatencyMs,
+        outgoing_video_quality_profile: currentProfile,
+      })) {
+        resetWlvcFrameSendFailureCounters();
+      }
     }
 
     if ((nowMs - state.wlvcFrameSendFailureLastLogAtMs) < sfuBackpressureLogCooldownMs) {
@@ -736,6 +755,9 @@ export function createPublisherBackpressureController({
         track_id: String(trackId || ''),
         outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
         media_runtime_path: getMediaRuntimePath(),
+        queue_age_ms: queueAgeMs,
+        budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+        king_receive_latency_ms: kingReceiveLatencyMs,
         queue_length: Math.max(0, Number(details?.queueLength || 0)),
         queue_payload_chars: Math.max(0, Number(details?.queuePayloadChars || 0)),
         active_payload_chars: Math.max(0, Number(details?.activePayloadChars || 0)),
