@@ -89,13 +89,37 @@ export function createCallWorkspaceMediaStack(options) {
     remotePeersRef: refs.remotePeersRef,
     sendMediaSecurityHello: callbacks.sendMediaSecurityHello,
     sendRemoteSfuVideoQualityPressure: (peer, publisherId, reason, nowMs, payload = {}) => {
+      const requestedVideoLayer = String(payload?.requested_video_layer || '').trim().toLowerCase();
+      const requestedAction = String(
+        payload?.requested_action || (requestedVideoLayer === 'primary'
+          ? 'prefer_primary_video_layer'
+          : (requestedVideoLayer === 'thumbnail' ? 'prefer_thumbnail_video_layer' : '')),
+      ).trim().toLowerCase();
+      const isLayerPreference = requestedVideoLayer === 'primary' || requestedVideoLayer === 'thumbnail';
+      if (isLayerPreference) {
+        const sfuLayerPreferenceSent = refs.sfuClientRef.value
+          && typeof refs.sfuClientRef.value.setSubscriberLayerPreference === 'function'
+          ? refs.sfuClientRef.value.setSubscriberLayerPreference(String(publisherId || ''), {
+            ...payload,
+            requested_video_layer: requestedVideoLayer,
+            requested_action: requestedAction,
+            reason,
+          })
+          : false;
+        if (
+          sfuLayerPreferenceSent
+          && (requestedAction === 'prefer_primary_video_layer' || requestedAction === 'prefer_thumbnail_video_layer')
+        ) {
+          return true;
+        }
+      }
       if (typeof callbacks.sendSocketFrame !== 'function') return false;
       const targetUserId = Number(peer?.userId || 0);
       const localUserId = Number(refs.currentUserId.value || 0);
       if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
       const normalizedReason = String(reason || 'sfu_receiver_feedback').trim().toLowerCase();
       const requestFullKeyframe = normalizedReason === 'sfu_remote_video_decoder_waiting_keyframe';
-      const requestedAction = String(
+      const feedbackAction = String(
         payload?.requested_action || (requestFullKeyframe ? 'force_full_keyframe' : 'downgrade_outgoing_video'),
       ).trim().toLowerCase();
       return callbacks.sendSocketFrame({
@@ -103,7 +127,7 @@ export function createCallWorkspaceMediaStack(options) {
         target_user_id: targetUserId,
         payload: {
           kind: 'sfu-video-quality-pressure',
-          requested_action: requestedAction,
+          requested_action: feedbackAction,
           request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
           reason: normalizedReason,
           publisher_id: String(publisherId || ''),

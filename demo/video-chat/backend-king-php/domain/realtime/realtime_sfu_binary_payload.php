@@ -24,6 +24,19 @@ function videochat_sfu_transport_payload_chars(string $dataBase64, string $dataB
     return $dataBinary !== '' ? videochat_sfu_base64url_encoded_length(strlen($dataBinary)) : strlen($dataBase64);
 }
 
+function videochat_sfu_transport_payload_bytes(array $frame, string $protectedFrame = '', string $dataBinary = ''): int
+{
+    $payloadBytes = max(0, (int) ($frame['payload_bytes'] ?? ($frame['payloadBytes'] ?? 0)));
+    if ($payloadBytes > 0) {
+        return $payloadBytes;
+    }
+    if ($protectedFrame !== '' && function_exists('videochat_sfu_base64url_decode_strict')) {
+        $protectedBytes = videochat_sfu_base64url_decode_strict($protectedFrame);
+        return is_string($protectedBytes) ? strlen($protectedBytes) : 0;
+    }
+    return $dataBinary !== '' ? strlen($dataBinary) : 0;
+}
+
 /**
  * @return array<string, mixed>
  */

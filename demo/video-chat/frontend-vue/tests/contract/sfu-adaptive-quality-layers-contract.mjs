@@ -32,7 +32,12 @@ async function main() {
   const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
+  const sfuGateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
+  const sfuStore = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const sfuSubscriberBudget = read('../backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
+  const sfuBrokerReplay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
 
   requireContains(packageJson, 'sfu-adaptive-quality-layers-contract.mjs', 'SFU contract suite includes adaptive layer proof');
 
@@ -54,6 +59,15 @@ async function main() {
   requireContains(receiverFeedback, '`sfu_receiver_${layerPreference}_layer_preference`', 'receiver feedback reason preserves requested layer');
   requireContains(frameDecode, 'receiverFeedback.maybeSendReceiverLayerPreference', 'WLVC receiver sends layer preference after accepted render');
   requireContains(browserRenderer, 'requestRemoteSfuLayerPreference', 'browser decoder path sends layer preference after accepted render');
+
+  requireContains(mediaStack, 'setSubscriberLayerPreference', 'receiver layer preference goes to the SFU socket');
+  requireContains(mediaStack, "requestedAction === 'prefer_primary_video_layer' || requestedAction === 'prefer_thumbnail_video_layer'", 'pure layer preference does not force global publisher pressure');
+  requireContains(sfuClient, "type: 'sfu/layer-preference'", 'SFU client sends server-authoritative subscriber layer preference');
+  requireContains(sfuStore, "'sfu/layer-preference'", 'SFU backend accepts layer preference control frames');
+  requireContains(sfuGateway, 'videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg)', 'SFU gateway stores subscriber layer preference server-side');
+  requireContains(sfuSubscriberBudget, 'videochat_sfu_subscriber_frame_route_decision', 'SFU server routes frames by subscriber preference');
+  requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_delta_cadence', 'thumbnail subscribers cannot force primary receivers down');
+  requireContains(sfuBrokerReplay, '$subscriber = []', 'cross-worker replay receives subscriber state for layer routing');
 
   requireContains(mediaStack, 'payload?.requested_action || (requestFullKeyframe ? ', 'media stack preserves explicit adaptive layer actions');
   requireContains(runtimeHealth, 'payload?.requested_action || (requestFullKeyframe ? ', 'runtime health preserves explicit adaptive layer actions');

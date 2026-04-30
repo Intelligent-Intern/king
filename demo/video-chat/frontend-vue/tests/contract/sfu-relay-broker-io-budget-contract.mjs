@@ -23,6 +23,7 @@ try {
   const relay = read('../backend-king-php/domain/realtime/realtime_sfu_broker_replay.php');
   const gateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
   const store = read('../backend-king-php/domain/realtime/realtime_sfu_store.php');
+  const binaryPayload = read('../backend-king-php/domain/realtime/realtime_sfu_binary_payload.php');
 
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_record_bytes(array $frame): int', 'live relay has a per-record byte budget');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_room_bytes(): int', 'live relay has a room byte budget');
@@ -33,6 +34,9 @@ try {
   requireContains(relay, '$keptBytes -= max(0, (int) ($oldest[\'bytes\'] ?? 0));', 'cleanup drains aggregate byte accounting');
   requireContains(relay, 'videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)', 'publish path uses bounded cleanup cadence');
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'hot path sends JSON-safe relay copy');
+  requireContains(gateway, "'payload_bytes' => $payloadBytes", 'SFU broker frames preserve measured protected payload bytes');
+  requireContains(gateway, 'videochat_sfu_transport_payload_bytes($msg, $protectedFrame, $dataBinary)', 'SFU gateway derives payload bytes before broker budgeting');
+  requireContains(binaryPayload, 'function videochat_sfu_transport_payload_bytes(array $frame', 'shared payload-byte helper protects relay/broker budgets');
   requireContains(store, 'function videochat_sfu_frame_buffer_max_record_bytes(array $frame): int', 'SQLite frame buffer has a per-record byte budget');
   requireContains(store, 'function videochat_sfu_frame_buffer_max_rows_per_room(): int', 'SQLite frame buffer has a per-room row budget');
   requireContains(store, 'function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): bool', 'SQLite frame buffer cleanup is rate-limited per room');

@@ -327,6 +327,23 @@ export class SFUClient {
     this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })
   }
 
+  setSubscriberLayerPreference(publisherId: string, details: Record<string, unknown> = {}): boolean {
+    const normalizedPublisherId = stringField(publisherId)
+    if (normalizedPublisherId === '') return false
+    const requestedLayer = stringField(details.requested_video_layer, details.requestedVideoLayer).toLowerCase()
+    if (requestedLayer !== 'primary' && requestedLayer !== 'thumbnail') return false
+    return this.send({
+      type: 'sfu/layer-preference',
+      publisher_id: normalizedPublisherId,
+      track_id: stringField(details.track_id, details.trackId),
+      requested_video_layer: requestedLayer,
+      reason: stringField(details.reason),
+      render_surface_role: stringField(details.render_surface_role, details.renderSurfaceRole),
+      visible_participant_count: Math.max(0, Number(details.visible_participant_count || details.visibleParticipantCount || 0)),
+      frame_sequence: Math.max(0, Number(details.frame_sequence || details.frameSequence || 0)),
+    })
+  }
+
   unpublishTrack(trackId: string): void {
     this.send({ type: 'sfu/unpublish', track_id: trackId })
   }
@@ -705,6 +722,30 @@ export class SFUClient {
         stage: 'post_drain_generation_guard',
         source: 'profile_switch_actuator',
         message: 'Encoded SFU frame became stale while waiting for websocket backpressure to drain.',
+        transportPath: 'binary_envelope',
+        bufferedAmount: this.getWebSocketBufferedAmount(),
+      })
+      return false
+    }
+    const postDrainQueueAgeMs = Math.max(queuedAgeMs, Date.now() - Math.max(0, Number(prepared.senderSentAtMs || 0)))
+    if (queueAgeBudgetMs > 0 && postDrainQueueAgeMs > queueAgeBudgetMs) {
+      metrics.queued_age_ms = postDrainQueueAgeMs
+      this.reportFrameSendDiagnostic(
+        'sfu_frame_send_aborted',
+        'warning',
+        'SFU frame send dropped a stale encoded frame after websocket backpressure drain.',
+        {
+          ...metrics,
+          buffered_amount: this.getWebSocketBufferedAmount(),
+          abort_reason: 'sfu_queue_age_budget_exceeded_after_drain',
+        },
+        true,
+      )
+      this.recordSendFailure(prepared, {
+        reason: 'sfu_queue_age_budget_exceeded_after_drain',
+        stage: 'post_drain_outbound_frame_queue_budget',
+        source: 'outbound_frame_queue',
+        message: 'Encoded SFU frame aged past its profile queue budget while waiting for websocket backpressure to drain.',
         transportPath: 'binary_envelope',
         bufferedAmount: this.getWebSocketBufferedAmount(),
       })

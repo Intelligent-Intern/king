@@ -27,6 +27,129 @@ function videochat_sfu_subscriber_replay_max_batch_frames(): int
     return 4;
 }
 
+function videochat_sfu_normalize_video_layer_preference(mixed $value, string $fallback = 'primary'): string
+{
+    $normalized = strtolower(trim((string) $value));
+    if ($normalized === 'thumbnail' || $normalized === 'thumb' || $normalized === 'mini') {
+        return 'thumbnail';
+    }
+    if ($normalized === 'primary' || $normalized === 'main' || $normalized === 'fullscreen') {
+        return 'primary';
+    }
+    return $fallback === 'thumbnail' ? 'thumbnail' : 'primary';
+}
+
+/**
+ * @param array<string, mixed> $roomState
+ * @return array<int, array<string, mixed>>
+ */
+function videochat_sfu_room_subscriber_targets(array $roomState, string $excludeClientId = ''): array
+{
+    $targets = [];
+    foreach (($roomState['subscribers'] ?? []) as $subscriberClientId => $subscriber) {
+        if ((string) $subscriberClientId === $excludeClientId) {
+            continue;
+        }
+        if (!is_array($subscriber) || !array_key_exists('websocket', $subscriber)) {
+            continue;
+        }
+        $subscriber['client_id'] = (string) $subscriberClientId;
+        $targets[] = $subscriber;
+    }
+
+    return $targets;
+}
+
+function videochat_sfu_subscriber_layer_preference(array $subscriber, array $frame): string
+{
+    $preferences = is_array($subscriber['layer_preferences'] ?? null) ? $subscriber['layer_preferences'] : [];
+    $publisherId = trim((string) ($frame['publisher_id'] ?? ''));
+    $trackId = trim((string) ($frame['track_id'] ?? ''));
+    $candidateKeys = [];
+    if ($publisherId !== '' && $trackId !== '') {
+        $candidateKeys[] = $publisherId . ':' . $trackId;
+    }
+    if ($publisherId !== '') {
+        $candidateKeys[] = $publisherId;
+    }
+    $candidateKeys[] = '*';
+
+    foreach ($candidateKeys as $key) {
+        $preference = $preferences[$key] ?? null;
+        if (!is_array($preference)) {
+            continue;
+        }
+        return videochat_sfu_normalize_video_layer_preference($preference['requested_video_layer'] ?? 'primary');
+    }
+
+    return 'primary';
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_sfu_apply_subscriber_layer_preference(array &$subscriber, array $msg): array
+{
+    $publisherId = trim((string) ($msg['publisher_id'] ?? ($msg['publisherId'] ?? '')));
+    if ($publisherId === '') {
+        return [];
+    }
+    $trackId = trim((string) ($msg['track_id'] ?? ($msg['trackId'] ?? '')));
+    $requestedVideoLayer = videochat_sfu_normalize_video_layer_preference(
+        $msg['requested_video_layer'] ?? ($msg['requestedVideoLayer'] ?? 'primary')
+    );
+    $preferenceKey = $trackId !== '' ? $publisherId . ':' . $trackId : $publisherId;
+    $subscriber['layer_preferences'][$preferenceKey] = [
+        'requested_video_layer' => $requestedVideoLayer,
+        'updated_at_ms' => videochat_sfu_now_ms(),
+        'reason' => (string) ($msg['reason'] ?? ''),
+        'render_surface_role' => (string) ($msg['render_surface_role'] ?? ($msg['renderSurfaceRole'] ?? '')),
+    ];
+
+    return [
+        'type' => 'sfu/layer-preference-ack',
+        'publisher_id' => $publisherId,
+        'track_id' => $trackId,
+        'requested_video_layer' => $requestedVideoLayer,
+        'server_time' => time(),
+    ];
+}
+
+/**
+ * @return array{send: bool, layer_preference: string, drop_reason: string}
+ */
+function videochat_sfu_subscriber_frame_route_decision(array $subscriber, array $frame): array
+{
+    $layerPreference = videochat_sfu_subscriber_layer_preference($subscriber, $frame);
+    if ($layerPreference !== 'thumbnail') {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+
+    $layoutMode = strtolower(trim((string) ($frame['layout_mode'] ?? 'full_frame')));
+    if ($layoutMode === 'tile_foreground' || $layoutMode === 'background_snapshot') {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+    if (!videochat_sfu_frame_is_delta($frame)) {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+
+    $sequence = max(0, (int) ($frame['frame_sequence'] ?? 0));
+    if ($sequence <= 0) {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+    $profile = strtolower(trim((string) ($frame['outgoing_video_quality_profile'] ?? '')));
+    $cadence = in_array($profile, ['quality', 'balanced'], true) ? 3 : 2;
+    if (($sequence % $cadence) === 0) {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
+
+    return [
+        'send' => false,
+        'layer_preference' => $layerPreference,
+        'drop_reason' => 'thumbnail_subscriber_delta_cadence',
+    ];
+}
+
 function videochat_sfu_frame_replay_age_ms(array $frame): int
 {
     return max(
@@ -56,7 +179,8 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
     array $frames,
     string $roomId,
     string $subscriberId,
-    string $sendPath
+    string $sendPath,
+    array $subscriber = []
 ): array {
     $firstKeyframeIndexByTrack = [];
     foreach ($frames as $index => $frame) {
@@ -72,6 +196,7 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
     $pruned = [];
     $staleDeltaCount = 0;
     $preKeyframeDeltaCount = 0;
+    $layerPrunedCount = 0;
     foreach ($frames as $index => $frame) {
         if (!is_array($frame)) {
             continue;
@@ -85,6 +210,11 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
         }
         if ($isDelta && isset($firstKeyframeIndexByTrack[$trackKey]) && $index < $firstKeyframeIndexByTrack[$trackKey]) {
             $preKeyframeDeltaCount++;
+            continue;
+        }
+        $routeDecision = videochat_sfu_subscriber_frame_route_decision($subscriber, $frame);
+        if (!(bool) ($routeDecision['send'] ?? true)) {
+            $layerPrunedCount++;
             continue;
         }
 
@@ -111,6 +241,14 @@ function videochat_sfu_prune_replay_frames_for_subscriber(
             'pre_keyframe_delta_count' => $preKeyframeDeltaCount,
         ], 1000);
     }
+    if ($layerPrunedCount > 0) {
+        videochat_sfu_log_runtime_event('sfu_frame_replay_layer_preference_pruned', [
+            'room_id' => $roomId,
+            'subscriber_id' => $subscriberId,
+            'sfu_send_path' => $sendPath,
+            'layer_pruned_count' => $layerPrunedCount,
+        ], 1000);
+    }
 
     return $pruned;
 }
@@ -125,10 +263,11 @@ function videochat_sfu_send_replay_frames_to_subscriber(
     string $roomId,
     string $subscriberId,
     string $sendPath,
-    array &$slowSubscriberBlockedUntilMs
+    array &$slowSubscriberBlockedUntilMs,
+    array $subscriber = []
 ): int {
     $sentCount = 0;
-    $framesToSend = videochat_sfu_prune_replay_frames_for_subscriber($frames, $roomId, $subscriberId, $sendPath);
+    $framesToSend = videochat_sfu_prune_replay_frames_for_subscriber($frames, $roomId, $subscriberId, $sendPath, $subscriber);
     foreach ($framesToSend as $frame) {
         $nowMs = videochat_sfu_now_ms();
         $blockedUntilMs = (int) ($slowSubscriberBlockedUntilMs[$subscriberId] ?? 0);
@@ -209,6 +348,19 @@ function videochat_sfu_direct_fanout_frame(
         unset($slowSubscriberBlockedUntilMs[$subscriberId]);
 
         $frameForSubscriber = $outboundFrame;
+        $routeDecision = videochat_sfu_subscriber_frame_route_decision($subClient, $frameForSubscriber);
+        if (!(bool) ($routeDecision['send'] ?? true)) {
+            videochat_sfu_log_runtime_event('sfu_frame_direct_fanout_layer_preference_pruned', [
+                'room_id' => $roomId,
+                'publisher_id' => $publisherId,
+                'subscriber_id' => $subscriberId,
+                'sfu_send_path' => 'direct_fanout',
+                'requested_video_layer' => (string) ($routeDecision['layer_preference'] ?? ''),
+                'drop_reason' => (string) ($routeDecision['drop_reason'] ?? ''),
+                ...videochat_sfu_transport_metric_fields($frameForSubscriber, 0),
+            ], 1000);
+            continue;
+        }
         $subscriberSendStartedAtMs = videochat_sfu_now_ms();
         $frameForSubscriber['subscriber_send_latency_ms'] = max(0, $subscriberSendStartedAtMs - $fanoutStartedAtMs);
         $sendOk = videochat_sfu_send_outbound_message($subClient['websocket'], $frameForSubscriber, [

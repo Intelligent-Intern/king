@@ -314,7 +314,8 @@ function videochat_sfu_live_frame_relay_poll(
     array $localPublisherIds,
     string &$cursor,
     array &$seenFrameFiles,
-    array &$slowSubscriberBlockedUntilMs
+    array &$slowSubscriberBlockedUntilMs,
+    array $subscriber = []
 ): int {
     $frames = videochat_sfu_live_frame_relay_read(
         $roomId,
@@ -339,7 +340,8 @@ function videochat_sfu_live_frame_relay_poll(
         $roomId,
         $clientId,
         'live_relay_poll',
-        $slowSubscriberBlockedUntilMs
+        $slowSubscriberBlockedUntilMs,
+        $subscriber
     );
 }
 
@@ -353,7 +355,8 @@ function videochat_sfu_sqlite_frame_buffer_poll(
     string $clientId,
     array $localPublisherIds,
     int &$cursor,
-    array &$slowSubscriberBlockedUntilMs
+    array &$slowSubscriberBlockedUntilMs,
+    array $subscriber = []
 ): int {
     $frames = videochat_sfu_fetch_buffered_frames(
         $pdo,
@@ -378,7 +381,8 @@ function videochat_sfu_sqlite_frame_buffer_poll(
         $roomId,
         $clientId,
         'sqlite_frame_buffer_poll',
-        $slowSubscriberBlockedUntilMs
+        $slowSubscriberBlockedUntilMs,
+        $subscriber
     );
 }
 
