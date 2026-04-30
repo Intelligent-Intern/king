@@ -38,7 +38,7 @@ export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 10 * 1024 * 1024;
 export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 350;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2500;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
-export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'quality';
+export const DEFAULT_SFU_VIDEO_QUALITY_PROFILE = 'realtime';
 export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   rescue: Object.freeze({
     maxEncodedBytesPerFrame: 2048 * 1024,

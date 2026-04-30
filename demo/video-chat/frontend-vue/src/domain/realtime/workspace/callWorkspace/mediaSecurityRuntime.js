@@ -300,6 +300,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
     void syncMediaSecurityWithParticipants();
   }
 
+  function queueMediaSecuritySyncAfterInFlight(forceRekey = false) {
+    state.mediaSecuritySyncPending = true;
+    state.mediaSecuritySyncPendingForceRekey = Boolean(state.mediaSecuritySyncPendingForceRekey || forceRekey);
+  }
+
   function canProtectCurrentSfuTargets() {
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
     if (targetUserIds.length <= 0) return true;
@@ -512,6 +517,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecuritySenderKeySignalsSent.delete(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
         startMediaSecurityHandshakeWatchdog();
+        scheduleMediaSecurityParticipantSync('sender_key_participant_mismatch', true);
         await sendMediaSecurityHello(normalizedTargetId, true);
         captureClientDiagnostic({
           category: 'media',
@@ -574,7 +580,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   async function syncMediaSecurityWithParticipants(forceRekey = false) {
-    if (state.mediaSecuritySyncInFlight || !isSocketOnline.value || currentUserId.value <= 0) return;
+    if (!isSocketOnline.value || currentUserId.value <= 0) return;
+    if (state.mediaSecuritySyncInFlight) {
+      queueMediaSecuritySyncAfterInFlight(forceRekey);
+      return;
+    }
     state.mediaSecuritySyncInFlight = true;
     try {
       const session = ensureMediaSecuritySession();
@@ -611,6 +621,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       });
     } finally {
       state.mediaSecuritySyncInFlight = false;
+      if (state.mediaSecuritySyncPending) {
+        const shouldForceRekey = Boolean(state.mediaSecuritySyncPendingForceRekey);
+        state.mediaSecuritySyncPending = false;
+        state.mediaSecuritySyncPendingForceRekey = false;
+        scheduleMediaSecurityParticipantSync('pending_after_inflight', shouldForceRekey);
+      }
     }
   }
 
@@ -886,6 +902,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         if (marked.changed) {
           clearMediaSecuritySignalCaches();
           mediaSecurityStateVersion.value += 1;
+          scheduleMediaSecurityParticipantSync('hello_participant_set_changed', true);
         }
         const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
         mediaSecurityStateVersion.value += 1;
@@ -925,8 +942,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)
       ) {
-        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';
-        if (shouldForceRekeyAfterSignalFailure) {
+        const shouldForceRekeyAfterSignalFailure = true;
+        if (errorCode === 'downgrade_attempt') {
           session.markPeerRemoved?.(normalizedSenderUserId);
         }
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));

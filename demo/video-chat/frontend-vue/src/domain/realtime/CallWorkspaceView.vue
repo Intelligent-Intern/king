@@ -418,6 +418,8 @@ let wlvcEncodeInFlight = false;
 const sfuTransportState = createSfuTransportState();
 let mediaSecuritySyncInFlight = false;
 let mediaSecuritySyncHintLastAtMs = 0;
+let mediaSecuritySyncPending = false;
+let mediaSecuritySyncPendingForceRekey = false;
 let mediaSecurityResyncTimer = null;
 let mediaSecurityResyncForceRekey = false;
 const mediaSecurityHelloSignalsSent = new Set();
@@ -894,6 +896,8 @@ const {
 const mediaSecurityRuntimeState = {
   mediaSecuritySyncInFlight,
   mediaSecuritySyncHintLastAtMs,
+  mediaSecuritySyncPending,
+  mediaSecuritySyncPendingForceRekey,
   mediaSecurityResyncTimer,
   mediaSecurityResyncForceRekey,
   mediaSecurityHelloSignalsSent,
