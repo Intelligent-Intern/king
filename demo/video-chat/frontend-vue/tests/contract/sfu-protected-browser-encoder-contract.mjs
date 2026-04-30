@@ -27,6 +27,7 @@ function readRepo(relativePath) {
 try {
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
   const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
+  const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
   const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
   const framePayload = read('src/lib/sfu/framePayload.ts');
@@ -47,10 +48,15 @@ try {
   requireContains(browserPublisher, 'globalScope.VideoDecoder', 'browser publisher gates on receiver decode support');
   requireContains(browserPublisher, 'globalScope.EncodedVideoChunk', 'browser publisher gates on encoded chunk support');
   requireContains(browserPublisher, 'createPublisherVideoFrameSourceReader({', 'browser publisher reads camera VideoFrames directly');
-  requireContains(browserPublisher, 'encoder.encode(result.frame', 'browser publisher encodes VideoFrame without RGBA conversion');
+  requireContains(browserPublisher, 'resolveBrowserEncoderFrameSize(videoProfile, sourceFrame)', 'browser publisher derives encoder dimensions from the actual source VideoFrame');
+  requireContains(browserEncoderConfig, 'resolveFramedFrameSizeFromDimensions', 'browser encoder config reuses portrait/cover frame sizing policy');
+  requireContains(browserPublisher, 'videoFrameSourceDimensions(result.frame)', 'browser publisher observes real VideoFrame orientation before encode');
+  requireContains(browserPublisher, 'encoder.encode(primaryFrame || result.frame', 'browser publisher encodes a source-aspect VideoFrame without RGBA conversion');
+  requireContains(browserPublisher, 'primaryFrame = primaryFrameScaler.createScaledFrame(result.frame', 'browser publisher scales portrait sources into a matching WebCodecs frame before encode');
   requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'browser publisher creates a scaled thumbnail VideoFrame without RGBA readback');
   requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame', 'browser publisher encodes the scaled thumbnail VideoFrame');
   requireContains(browserPublisher, 'closePublisherVideoFrame(result.frame)', 'browser publisher deterministically closes source VideoFrames');
+  requireContains(browserPublisher, 'closePublisherVideoFrame(primaryFrame)', 'browser publisher deterministically closes scaled primary VideoFrames');
   requireContains(browserPublisher, 'closePublisherVideoFrame(thumbnailFrame)', 'browser publisher deterministically closes scaled thumbnail VideoFrames');
   requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
   requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
@@ -63,10 +69,10 @@ try {
   requireContains(browserPublisher, 'maybeStartProtectedBrowserVideoEncoderPublisher', 'browser publisher exposes compatibility fallback startup gate');
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
   assert.equal(browserPublisher.includes('getImageData('), false, 'browser publisher must not use canvas getImageData');
-  requireContains(browserPublisher, 'createBrowserThumbnailFrameScaler', 'browser publisher keeps thumbnail scaling isolated from the primary WebCodecs path');
-  requireContains(browserPublisher, 'function resolveBrowserEncoderBitrate(videoProfile, {', 'browser publisher must bound WebCodecs bitrate from resolution and frame rate, not raw wire budget');
-  assert.equal(browserPublisher.includes('Math.floor((maxWireBytesPerSecond || 1_500_000) * 8 * 0.62)'), false, 'browser publisher must not feed absurd wire-budget bitrates into WebCodecs configuration');
-  requireContains(browserPublisher, 'function browserEncoderConfigVariants(config)', 'browser publisher must probe hardware/software WebCodecs config variants before falling back');
+  requireContains(browserPublisher, 'createBrowserVideoFrameScaler', 'browser publisher keeps WebCodecs frame scaling isolated from RGBA readback');
+  requireContains(browserEncoderConfig, 'export function resolveBrowserEncoderBitrate(videoProfile, {', 'browser publisher must bound WebCodecs bitrate from resolution and frame rate, not raw wire budget');
+  assert.equal(browserEncoderConfig.includes('Math.floor((maxWireBytesPerSecond || 1_500_000) * 8 * 0.62)'), false, 'browser publisher must not feed absurd wire-budget bitrates into WebCodecs configuration');
+  requireContains(browserEncoderConfig, 'function browserEncoderConfigVariants(config)', 'browser publisher must probe hardware/software WebCodecs config variants before falling back');
   requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedPrimaryConfig)', 'browser publisher must select a supported primary WebCodecs config variant');
   requireContains(browserPublisher, 'resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig)', 'browser publisher must select a supported thumbnail WebCodecs config variant');
   requireContains(browserPublisher, "eventType: 'sfu_browser_encoder_capabilities_unavailable'", 'browser publisher must persist missing WebCodecs capabilities to backend diagnostics before fallback');

@@ -223,6 +223,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const publisherSourceBackend = String(source.publisher_source_backend ?? source.publisherSourceBackend ?? '').trim()
   const publisherTraceProfile = String(source.publisher_trace_profile ?? source.publisherTraceProfile ?? '').trim()
   const publisherAspectMode = String(source.publisher_aspect_mode ?? source.publisherAspectMode ?? '').trim()
+  const publisherFramingMode = String(source.publisher_framing_mode ?? source.publisherFramingMode ?? '').trim()
   const sourceTrackReadyState = String(source.source_track_ready_state ?? source.sourceTrackReadyState ?? '').trim()
   const activeCaptureBackend = String(source.active_capture_backend ?? source.activeCaptureBackend ?? publisherSourceBackend).trim()
   const selectedVideoQualityProfile = String(source.selected_video_quality_profile ?? source.selectedVideoQualityProfile ?? profile).trim().toLowerCase()
@@ -248,6 +249,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   if (publisherSourceBackend !== '') metrics.publisher_source_backend = publisherSourceBackend
   if (publisherTraceProfile !== '') metrics.publisher_trace_profile = publisherTraceProfile
   if (publisherAspectMode !== '') metrics.publisher_aspect_mode = publisherAspectMode
+  if (publisherFramingMode !== '') metrics.publisher_framing_mode = publisherFramingMode
   if (sourceTrackReadyState !== '') metrics.source_track_ready_state = sourceTrackReadyState
   if (activeCaptureBackend !== '') metrics.active_capture_backend = activeCaptureBackend
   if (selectedVideoQualityProfile !== '') metrics.selected_video_quality_profile = selectedVideoQualityProfile
@@ -265,6 +267,8 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['capture_height', source.capture_height ?? source.captureHeight],
     ['frame_width', source.frame_width ?? source.frameWidth],
     ['frame_height', source.frame_height ?? source.frameHeight],
+    ['profile_frame_width', source.profile_frame_width ?? source.profileFrameWidth],
+    ['profile_frame_height', source.profile_frame_height ?? source.profileFrameHeight],
     ['encoded_payload_bytes', source.encoded_payload_bytes ?? source.encodedPayloadBytes],
     ['max_payload_bytes', source.max_payload_bytes ?? source.maxPayloadBytes],
     ['budget_max_encoded_bytes_per_frame', source.budget_max_encoded_bytes_per_frame ?? source.budgetMaxEncodedBytesPerFrame],
@@ -305,6 +309,12 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['send_drain_ms', source.send_drain_ms ?? source.sendDrainMs],
     ['source_track_frame_rate', source.source_track_frame_rate ?? source.sourceTrackFrameRate],
     ['source_frame_rate', source.source_frame_rate ?? source.sourceFrameRate],
+    ['source_aspect_ratio', source.source_aspect_ratio ?? source.sourceAspectRatio],
+    ['source_crop_x', source.source_crop_x ?? source.sourceCropX],
+    ['source_crop_y', source.source_crop_y ?? source.sourceCropY],
+    ['source_crop_width', source.source_crop_width ?? source.sourceCropWidth],
+    ['source_crop_height', source.source_crop_height ?? source.sourceCropHeight],
+    ['publisher_target_aspect_ratio', source.publisher_target_aspect_ratio ?? source.publisherTargetAspectRatio],
     ['source_draw_image_ms', source.source_draw_image_ms ?? source.sourceDrawImageMs],
     ['source_draw_image_budget_ms', source.source_draw_image_budget_ms ?? source.sourceDrawImageBudgetMs],
     ['source_readback_ms', source.source_readback_ms ?? source.sourceReadbackMs],

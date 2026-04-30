@@ -39,13 +39,13 @@ try {
 
   requireContains(packageJson, 'sfu-dual-video-layer-routing-contract.mjs', 'SFU contract suite includes dual layer routing proof');
 
-  requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary' })", 'browser publisher builds a primary encoder config');
-  requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail' })", 'browser publisher builds a thumbnail encoder config');
-  requireContains(browserPublisher, 'const thumbnailEncoder = new VideoEncoderCtor({', 'browser publisher creates a second thumbnail encoder');
+  requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary', frameSize })", 'browser publisher builds a primary encoder config from source-oriented frame size');
+  requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail', frameSize })", 'browser publisher builds a thumbnail encoder config from source-oriented frame size');
+  requireContains(browserPublisher, 'const createThumbnailEncoder = () => new VideoEncoderCtor({', 'browser publisher creates a second thumbnail encoder');
   requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'thumbnail encoder receives a scaled VideoFrame derived from the direct source frame');
   requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });', 'thumbnail encoder consumes the scaled VideoFrame before close');
   assert.ok(
-    browserPublisher.indexOf('encoder.encode(result.frame, { keyFrame: forceKeyframe });')
+    browserPublisher.indexOf('encoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });')
       < browserPublisher.indexOf('closePublisherVideoFrame(result.frame)'),
     'primary encode must happen before source VideoFrame close',
   );
