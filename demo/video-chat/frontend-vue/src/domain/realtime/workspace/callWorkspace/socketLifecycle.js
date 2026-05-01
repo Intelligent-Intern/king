@@ -3,6 +3,8 @@ import {
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 
+const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5000;
+
 export function createCallWorkspaceSocketHelpers({
   callbacks,
   constants,
@@ -722,18 +724,25 @@ export function createCallWorkspaceSocketHelpers({
       let opened = false;
       let failedOver = false;
       let failoverAfterClose = false;
+      let negotiationTimer = null;
+      const clearNegotiationTimer = () => {
+        if (negotiationTimer === null) return;
+        clearTimeout(negotiationTimer);
+        negotiationTimer = null;
+      };
       const connectNextOrigin = () => {
         connectWithOriginAt(originIndex + 1);
       };
 
-      const failOverToNextOrigin = () => {
+      const failOverToNextOrigin = (closeReason = 'failover') => {
         if (failedOver) return;
         failedOver = true;
+        clearNegotiationTimer();
         if (refs.socketRef.value === socket) {
           refs.socketRef.value = null;
         }
         try {
-          socket.close(1000, 'failover');
+          socket.close(1000, closeReason);
         } catch {
           // ignore
         }
@@ -769,6 +778,7 @@ export function createCallWorkspaceSocketHelpers({
 
       socket.addEventListener('open', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) {
+          clearNegotiationTimer();
           try {
             socket.close(1000, 'stale_connect');
           } catch {
@@ -778,6 +788,7 @@ export function createCallWorkspaceSocketHelpers({
         }
 
         opened = true;
+        clearNegotiationTimer();
         finishConnectInFlight();
         const isReconnectOpen = refs.reconnectAttempt.value > 0;
         refs.reconnectAttempt.value = 0;
@@ -824,6 +835,7 @@ export function createCallWorkspaceSocketHelpers({
       socket.addEventListener('close', (event) => {
         if (generation !== state.connectGeneration) return;
 
+        clearNegotiationTimer();
         clearPingTimer();
         refs.clearMediaSecurityHandshakeWatchdog();
         if (refs.socketRef.value === socket) {
@@ -868,6 +880,25 @@ export function createCallWorkspaceSocketHelpers({
         refs.connectionReason.value = closeReason || 'socket_closed';
         scheduleReconnect();
       });
+
+      negotiationTimer = setTimeout(() => {
+        if (generation !== state.connectGeneration || state.manualSocketClose) return;
+        if (opened || failedOver) return;
+        refs.connectionState.value = 'retrying';
+        refs.connectionReason.value = 'socket_negotiation_timeout';
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'websocket_negotiation_timeout',
+          code: 'websocket_negotiation_timeout',
+          message: 'Realtime websocket negotiation timed out before the browser opened the socket.',
+          payload: {
+            origin: socketOrigin,
+            negotiation_timeout_ms: WEBSOCKET_NEGOTIATION_TIMEOUT_MS,
+          },
+        });
+        failOverToNextOrigin('negotiation_timeout');
+      }, WEBSOCKET_NEGOTIATION_TIMEOUT_MS);
     };
 
     connectWithOriginAt(0);
