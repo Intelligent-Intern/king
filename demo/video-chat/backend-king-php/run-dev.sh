@@ -118,9 +118,14 @@ start_backend() {
   local bind_port="$2"
   local worker_count
   worker_count="$(worker_count_for_mode "${mode}")"
+  local reuseport_value="${KING_HTTP1_ENABLE_REUSEPORT:-}"
+  if [[ -z "${reuseport_value}" && "${worker_count}" -gt 1 ]]; then
+    reuseport_value="1"
+  fi
 
   local worker_index=1
   while (( worker_index <= worker_count )); do
+    KING_HTTP1_ENABLE_REUSEPORT="${reuseport_value}" \
     VIDEOCHAT_KING_PORT="${bind_port}" \
     VIDEOCHAT_KING_SERVER_MODE="${mode}" \
     VIDEOCHAT_KING_WORKER_INDEX="${worker_index}" \
@@ -131,6 +136,9 @@ start_backend() {
   done
 
   echo "[video-chat][king-php-backend] started ${worker_count} worker(s) in ${mode} mode on port ${bind_port}"
+  if [[ "${reuseport_value}" == "1" && "${worker_count}" -gt 1 ]]; then
+    echo "[video-chat][king-php-backend] enabled SO_REUSEPORT for trusted ${mode} worker group"
+  fi
 }
 
 normalized_mode_override="$(echo "${SERVER_MODE_OVERRIDE}" | tr '[:upper:]' '[:lower:]' | xargs || true)"
