@@ -252,14 +252,6 @@ function automaticQualityTransitions(events, sinceMs) {
     }));
 }
 
-function assertAutomaticQualityTransitions(events, sinceMs) {
-  const transitions = automaticQualityTransitions(events, sinceMs);
-  if (transitions.length === 0) {
-    throw new Error('Pressure acceptance did not observe automatic SFU quality downshift.');
-  }
-  return transitions;
-}
-
 function maxObservedBufferedAmount(samples) {
   let maxBufferedAmount = 0;
   for (const sample of samples) {

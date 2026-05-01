@@ -262,7 +262,7 @@ async function installMediaDeviceShim(context, {
 export async function installOutgoingVideoQualityPreference(context, profile = 'quality') {
   await context.addInitScript(({ key, qualityProfile }) => {
     const previousRaw = localStorage.getItem(key);
-    let previous = {};
+    let previous;
     try {
       previous = previousRaw ? JSON.parse(previousRaw) : {};
     } catch {

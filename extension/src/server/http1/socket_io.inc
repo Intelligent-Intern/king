@@ -242,9 +242,6 @@ static zend_result king_server_http1_open_listener_socket(
 
     for (cursor = results; cursor != NULL; cursor = cursor->ai_next) {
         int reuse_addr = 1;
-#ifdef SO_REUSEPORT
-        int reuse_port = 1;
-#endif
 
         listener_fd = socket(cursor->ai_family, cursor->ai_socktype, cursor->ai_protocol);
         if (listener_fd < 0) {
@@ -258,16 +255,6 @@ static zend_result king_server_http1_open_listener_socket(
             &reuse_addr,
             sizeof(reuse_addr)
         );
-
-#ifdef SO_REUSEPORT
-        (void) setsockopt(
-            listener_fd,
-            SOL_SOCKET,
-            SO_REUSEPORT,
-            &reuse_port,
-            sizeof(reuse_port)
-        );
-#endif
 
         if (bind(listener_fd, cursor->ai_addr, cursor->ai_addrlen) == 0) {
             if (listen(listener_fd, SOMAXCONN) == 0) {

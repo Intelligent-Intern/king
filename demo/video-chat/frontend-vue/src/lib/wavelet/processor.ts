@@ -46,7 +46,6 @@ export class VideoFrameProcessor {
   private decoder: WaveletVideoDecoder
   private kalman: VideoKalmanFilter
   private frameCount: number
-  private lastFrameTime: number
   private metrics: FrameMetrics[]
 
   constructor(config: Partial<VideoProcessorConfig> = {}) {
@@ -63,7 +62,6 @@ export class VideoFrameProcessor {
       measurementNoise: 0.1,
     })
     this.frameCount = 0
-    this.lastFrameTime = performance.now()
     this.metrics = []
   }
 
@@ -96,7 +94,6 @@ export class VideoFrameProcessor {
     }
 
     this.frameCount++
-    this.lastFrameTime = startTime
 
     return {
       frame: new ImageData(
@@ -141,20 +138,6 @@ export class VideoFrameProcessor {
     }
 
     return grayscale
-  }
-
-  private grayscaleToImageData(grayscale: Float32Array, width: number, height: number): ImageData {
-    const data = new Uint8ClampedArray(width * height * 4)
-    
-    for (let i = 0; i < grayscale.length; i++) {
-      const gray = Math.max(0, Math.min(255, Math.round(grayscale[i])))
-      data[i * 4] = gray
-      data[i * 4 + 1] = gray
-      data[i * 4 + 2] = gray
-      data[i * 4 + 3] = 255
-    }
-
-    return new ImageData(data, width, height)
   }
 
   private estimatePSNR(compressionRatio: number): number {

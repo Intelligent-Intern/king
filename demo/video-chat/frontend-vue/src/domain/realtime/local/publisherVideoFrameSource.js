@@ -101,7 +101,7 @@ export function createPublisherVideoFrameSourceReader({
     const timeoutPromise = new Promise((resolve) => {
       timeoutId = setTimeout(() => resolve({ timeout: true }), positiveTimeoutMs(timeoutMs));
     });
-    let result = null;
+    let result;
     try {
       result = await Promise.race([readPromise, timeoutPromise]);
     } catch {

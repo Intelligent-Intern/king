@@ -2,11 +2,9 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
   const {
     activeCallId,
     activeRoomId,
-    activeTab,
     apiRequest,
     buildFileAttachmentDraft,
     buildTextAttachmentDraft,
-    captureClientDiagnosticError,
     chatAttachmentDraftToBase64,
     chatAttachmentDragActive,
     chatAttachmentError,
@@ -16,15 +14,12 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     chatDraft,
     chatEmojiTrayOpen,
     chatInputRef,
-    chatListRef,
     chatSending,
-    chatUnreadByRoom,
     chatUtf8ByteLength,
     connectSocket,
     connectionState,
     currentUserId,
     ensureRoomBuckets,
-    extractErrorMessage,
     isChatTextInlineAllowed,
     isSocketOnline,
     markParticipantActivity,
@@ -33,7 +28,6 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     normalizeRole,
     normalizeRoomId,
     reconnectAttempt,
-    rightSidebarCollapsed,
     sanitizeChatAttachmentName,
     sendSocketFrame,
     sessionState,
@@ -228,7 +222,7 @@ async function uploadChatAttachmentDraft(draft) {
   }
 
   const timeoutMs = chatAttachmentUploadTimeoutMs(draft);
-  let payload = null;
+  let payload;
   try {
     payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
       method: 'POST',
@@ -366,7 +360,7 @@ async function sendChatMessage() {
 
   const clientMessageId = `client_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`;
   chatSending.value = true;
-  let attachments = [];
+  let attachments;
   try {
     attachments = hasAttachments ? await uploadChatAttachmentDrafts() : [];
   } catch (error) {
