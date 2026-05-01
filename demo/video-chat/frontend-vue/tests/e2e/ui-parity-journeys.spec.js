@@ -36,7 +36,7 @@ async function fetchStoredSession(email, password) {
     body: JSON.stringify({ email, password }),
   });
 
-  let payload = null;
+  let payload;
   try {
     payload = await response.json();
   } catch {

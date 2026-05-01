@@ -55,7 +55,6 @@ export interface RTCStatsSummary {
 export class RTCStatsMonitor {
   private peerConnection: RTCPeerConnection | null = null
   private statsHistory: RTCStats[] = []
-  private lastStats: RTCStats | null = null
   private lastTimestamp: number = 0
   private lastBytesSent: number = 0
   private lastBytesReceived: number = 0
@@ -253,7 +252,6 @@ export class RTCStatsMonitor {
         this.statsHistory.shift()
       }
 
-      this.lastStats = rtcStats
       this.lastTimestamp = currentTimestamp || now
 
       const summary = this.getSummary()
@@ -375,7 +373,6 @@ export class RTCStatsMonitor {
 
   reset(): void {
     this.statsHistory = []
-    this.lastStats = null
     this.lastTimestamp = 0
     this.lastBytesSent = 0
     this.lastBytesReceived = 0

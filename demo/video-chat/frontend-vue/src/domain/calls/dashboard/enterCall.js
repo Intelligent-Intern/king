@@ -247,7 +247,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
   }
 
   function handleEnterAdmissionSocketMessage(event) {
-    let payload = null;
+    let payload;
     try {
       payload = JSON.parse(String(event.data || ''));
     } catch {

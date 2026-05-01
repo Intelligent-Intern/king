@@ -120,10 +120,10 @@ async function handleReadback(payload = {}) {
   if (!source) throw new Error('publisher_capture_worker_source_missing');
   const startedAtMs = highResolutionNowMs();
 
-  let drawImageMs = 0;
-  let readbackMs = 0;
-  let imageData = null;
-  let frameSize = null;
+  let drawImageMs;
+  let readbackMs;
+  let imageData;
+  let frameSize;
   try {
     frameSize = resolveWorkerFrameSize(source, payload);
     const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);

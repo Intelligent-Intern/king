@@ -576,9 +576,3 @@ function integerField(fallback: number, ...values: any[]): number {
   }
   return fallback
 }
-
-function normalizeUnitFloat(value: unknown, fallback: number): number {
-  const normalized = Number(value)
-  if (!Number.isFinite(normalized)) return fallback
-  return Math.max(0, Math.min(1, normalized))
-}

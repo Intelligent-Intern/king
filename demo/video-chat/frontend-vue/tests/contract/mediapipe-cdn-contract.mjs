@@ -21,8 +21,17 @@ function assertFile(file) {
 }
 
 function assertNoJsdelivrAssetSource(source, label) {
-  const jsdelivrHostPattern = /(^|[^A-Za-z0-9.-])cdn\.jsdelivr\.net(?=[:/?#'"`]|$)/;
-  assert.ok(!jsdelivrHostPattern.test(source), `${label} must not load jsDelivr assets`);
+  const externalUrlPattern = /(?:https?:)?\/\/[^\s'"`<>)]+/g;
+  for (const match of source.matchAll(externalUrlPattern)) {
+    const urlText = match[0].startsWith('//') ? `https:${match[0]}` : match[0];
+    let url;
+    try {
+      url = new URL(urlText);
+    } catch {
+      continue;
+    }
+    assert.notEqual(url.hostname, 'cdn.jsdelivr.net', `${label} must not load jsDelivr assets`);
+  }
 }
 
 try {

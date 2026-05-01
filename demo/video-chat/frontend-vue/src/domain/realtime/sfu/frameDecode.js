@@ -124,7 +124,7 @@ export function createSfuFrameDecodeHelpers({
       return true;
     }
 
-    let nextDecoder = null;
+    let nextDecoder;
     try {
       nextDecoder = await createHybridDecoder({
         width: nextWidth,
@@ -179,7 +179,7 @@ export function createSfuFrameDecodeHelpers({
       return true;
     }
 
-    let nextDecoder = null;
+    let nextDecoder;
     try {
       nextDecoder = await createHybridDecoder({
         width: nextWidth,
@@ -344,7 +344,7 @@ export function createSfuFrameDecodeHelpers({
       ? decoded.height
       : Number(existingTrackRenderState?.height || canvas.height || peer.frameHeight || sfuFrameHeight);
     const trackRenderState = ensureRemoteSfuTrackRenderLayers(peer, trackKey, targetWidth, targetHeight);
-    let rendered = false;
+    let rendered;
     if (layoutMode === 'tile_foreground' || layoutMode === 'background_snapshot') {
       if (
         trackRenderState.width < 1

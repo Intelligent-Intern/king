@@ -439,8 +439,9 @@ namespace {
      * Binds a real TCP socket, accepts exactly one request, materializes one
      * `King\Session` snapshot over the accepted socket, invokes the handler,
      * writes one HTTP/1 response when no websocket upgrade takes ownership,
-     * and then closes the listener/session. This is the narrow v1 wire leaf
-     * for real server-side websocket upgrade verification.
+     * and then closes the listener/session. The listener keeps exclusive bind
+     * semantics and does not opt into same-UID TCP port sharing. This is the
+     * narrow v1 wire leaf for real server-side websocket upgrade verification.
      * @param mixed $config
      */
     function king_http1_server_listen_once(string $host, int $port, mixed $config, callable $handler): bool {}

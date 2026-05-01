@@ -31,13 +31,13 @@ async function probeWlvcWasm() {
       encoder = await createWasmEncoder({ width: 64, height: 64, quality: 60, keyFrameInterval: 2 });
       encoderOk = Boolean(encoder);
     } catch {
-      encoderOk = false;
+      // Keep the default failed state.
     }
     try {
       decoder = await createWasmDecoder({ width: 64, height: 64, quality: 60 });
       decoderOk = Boolean(decoder);
     } catch {
-      decoderOk = false;
+      // Keep the default failed state.
     }
 
     let reason = 'wlvc_wasm_probe_failed';

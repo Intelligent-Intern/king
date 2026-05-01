@@ -210,14 +210,11 @@ function sessionHeaders() {
 }
 
 async function readJsonResponse(response) {
-  let payload = null;
   try {
-    payload = await response.json();
+    return await response.json();
   } catch {
-    payload = null;
+    return null;
   }
-
-  return payload;
 }
 
 function normalizeAuthErrorState(reason, message, clearState = false) {

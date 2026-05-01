@@ -26,7 +26,7 @@ export function normalizeMarketplaceWebsite(rawWebsite) {
 
 export function createAdminMarketplaceApi({ router }) {
   return async function apiRequest(path, { method = 'GET', query = null, body = null } = {}, allowRefreshRetry = true) {
-    let response = null;
+    let response;
     try {
       const result = await fetchBackend(path, {
         method,
@@ -43,7 +43,7 @@ export function createAdminMarketplaceApi({ router }) {
       throw new Error(message);
     }
 
-    let payload = null;
+    let payload;
     try {
       payload = await response.json();
     } catch {

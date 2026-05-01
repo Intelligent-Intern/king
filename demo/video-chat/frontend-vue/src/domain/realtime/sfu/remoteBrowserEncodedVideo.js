@@ -75,10 +75,6 @@ function closeBrowserDecoderState(decoderState) {
   }
 }
 
-function isBrowserDecoderClosed(decoder) {
-  return String(decoder?.state || '').trim().toLowerCase() === 'closed';
-}
-
 function isBrowserDecoderConfigured(decoder) {
   return String(decoder?.state || '').trim().toLowerCase() === 'configured';
 }
@@ -172,8 +168,7 @@ function createBrowserVideoDecoder(peer, frame, {
     videoLayer,
     width,
   };
-  let decoder = null;
-  decoder = new VideoDecoderCtor({
+  const decoder = new VideoDecoderCtor({
     output(videoFrame) {
       const outputFrame = decoderState.pendingFrames.shift() || frame;
       try {

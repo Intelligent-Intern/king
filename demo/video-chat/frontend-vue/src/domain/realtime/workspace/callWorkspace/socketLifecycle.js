@@ -275,7 +275,7 @@ export function createCallWorkspaceSocketHelpers({
   }
 
   function handleSocketMessage(event) {
-    let payload = null;
+    let payload;
     try {
       payload = JSON.parse(String(event.data || ''));
     } catch {

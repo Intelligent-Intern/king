@@ -276,7 +276,7 @@ export class MediaSecuritySession {
       return false;
     }
 
-    let selectedKexSuite = '';
+    let selectedKexSuite;
     try {
       selectedKexSuite = selectKexSuite(this.capabilityPayload(capability.runtime_path), capability, this.kexPolicy);
     } catch {

@@ -26,16 +26,7 @@ export function shouldExposeSfuVideoRecoveryAttempt(attempt) {
     );
 }
 
-export function logSfuVideoRecoveryStatus(label, {
-  ageMs = 0,
-  attempt = 0,
-  localUserId = 0,
-  peer,
-  publisherId = '',
-  receiveGapMs = 0,
-  runtime = '',
-  state = 'unstable',
-}) {
+export function logSfuVideoRecoveryStatus() {
   // Recovery status is reported through runtimeHealth backend diagnostics.
 }
 

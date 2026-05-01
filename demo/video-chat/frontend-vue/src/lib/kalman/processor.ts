@@ -51,11 +51,9 @@ export class WebRTCVideoProcessor {
   private canvas: OffscreenCanvas
   private ctx: OffscreenCanvasRenderingContext2D
   private videoTrack: MediaStreamTrack | null = null
-  private processor: ScriptProcessorNode | AudioWorkletNode | null = null
   private frameRate: number = 30
   private lastFrameTime: number = 0
   private animationFrameId: number | null = null
-  private stream: MediaStream | null = null
   private statsInterval: number | null = null
   private metricsCallback: ((metrics: QualityMetrics) => void) | null = null
 
@@ -73,7 +71,6 @@ export class WebRTCVideoProcessor {
   }
 
   async initialize(stream: MediaStream): Promise<MediaStream> {
-    this.stream = stream
     const videoTrack = stream.getVideoTracks()[0]
     if (!videoTrack) {
       throw new Error('No video track in stream')
@@ -96,8 +93,6 @@ export class WebRTCVideoProcessor {
     if (!this.config.enabled) return
 
     this.metricsCallback = onMetrics || null
-    let lastEncodedFrame: EnhancedFrame | null = null
-
     const processFrame = async (timestamp: number) => {
       if (timestamp - this.lastFrameTime < 1000 / this.frameRate) {
         this.animationFrameId = requestAnimationFrame(processFrame)
@@ -108,7 +103,6 @@ export class WebRTCVideoProcessor {
       const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height)
 
       const enhanced = this.enhancer.encodeFrame(imageData, timestamp)
-      lastEncodedFrame = enhanced
 
       if (onFrame) {
         onFrame(enhanced)
@@ -212,7 +206,6 @@ export class WebRTCVideoProcessor {
 
   destroy(): void {
     this.stopProcessing()
-    this.stream = null
     this.videoTrack = null
     this.enhancer.reset()
   }

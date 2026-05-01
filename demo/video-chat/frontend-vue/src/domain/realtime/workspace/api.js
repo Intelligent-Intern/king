@@ -36,7 +36,7 @@ export function buildApiRequestError(payload, fallbackMessage, responseStatus = 
 }
 
 export async function apiRequest(path, { method = 'GET', query = null, body = null, timeoutMs = undefined } = {}) {
-  let response = null;
+  let response;
   try {
     const result = await fetchBackend(path, {
       method,
@@ -57,7 +57,7 @@ export async function apiRequest(path, { method = 'GET', query = null, body = nu
     throw new Error(message);
   }
 
-  let payload = null;
+  let payload;
   try {
     payload = await response.json();
   } catch {

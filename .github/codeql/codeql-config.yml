@@ -1,0 +1,5 @@
+name: King CodeQL quality analysis
+
+paths-ignore:
+  - demo/video-chat/frontend-vue/public/cdn/vendor/**
+  - demo/video-chat/frontend-vue/src/lib/wasm/wlvc.js
