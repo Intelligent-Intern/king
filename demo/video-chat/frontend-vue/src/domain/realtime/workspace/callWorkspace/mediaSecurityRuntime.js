@@ -546,7 +546,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     }
     const key = mediaSecuritySenderKeySignalKey(normalizedTargetId, session);
     if (!force && state.mediaSecuritySenderKeySignalsSent.has(key)) return true;
-    let signal = null;
+    let signal;
     try {
       signal = await session.buildSenderKeySignal(normalizedTargetId);
     } catch (error) {

@@ -172,8 +172,7 @@ function createBrowserVideoDecoder(peer, frame, {
     videoLayer,
     width,
   };
-  let decoder = null;
-  decoder = new VideoDecoderCtor({
+  const decoder = new VideoDecoderCtor({
     output(videoFrame) {
       const outputFrame = decoderState.pendingFrames.shift() || frame;
       try {

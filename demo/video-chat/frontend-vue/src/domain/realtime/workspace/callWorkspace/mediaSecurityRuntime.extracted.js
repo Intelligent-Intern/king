@@ -390,7 +390,7 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
   }
   const key = mediaSecuritySenderKeySignalKey(targetUserId, session);
   if (!force && mediaSecuritySenderKeySignalsSent.has(key)) return true;
-  let signal = null;
+  let signal;
   try {
     signal = await session.buildSenderKeySignal(targetUserId);
   } catch (error) {
