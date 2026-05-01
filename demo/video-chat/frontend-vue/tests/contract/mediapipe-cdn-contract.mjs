@@ -20,14 +20,19 @@ function assertFile(file) {
   return stat.size;
 }
 
+function assertNoJsdelivrAssetSource(source, label) {
+  const jsdelivrHostPattern = /(^|[^A-Za-z0-9.-])cdn\.jsdelivr\.net(?=[:/?#'"`]|$)/;
+  assert.ok(!jsdelivrHostPattern.test(source), `${label} must not load jsDelivr assets`);
+}
+
 try {
   const backend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendMediapipe.js'));
-  assert.ok(!backend.includes('cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation'), 'MediaPipe backend must not load jsDelivr assets');
+  assertNoJsdelivrAssetSource(backend, 'MediaPipe backend');
   assert.ok(backend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'MediaPipe backend must support deploy-time CDN origin');
   assert.ok(backend.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'MediaPipe backend must use the vendored CDN path');
 
   const tfjsBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendTfjs.js'));
-  assert.ok(!tfjsBackend.includes('cdn.jsdelivr.net'), 'TensorFlow fallback backend must not load jsDelivr assets');
+  assertNoJsdelivrAssetSource(tfjsBackend, 'TensorFlow fallback backend');
   assert.ok(tfjsBackend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'TensorFlow fallback backend must support deploy-time CDN origin');
   assert.ok(tfjsBackend.includes('/cdn/vendor/tensorflow/'), 'TensorFlow fallback backend must use the vendored CDN path');
 
