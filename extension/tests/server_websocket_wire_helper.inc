@@ -2,7 +2,7 @@
 
 /* Test helper for starting the on-wire HTTP/1/WebSocket one-shot listener harness. */
 
-function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null): array
+function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null, array $env = []): array
 {
     if ($fixedPort !== null) {
         $port = $fixedPort;
@@ -45,10 +45,16 @@ function king_server_websocket_wire_start_server(string $mode, int $iterations =
 
     $command = implode(' ', $commandParts);
 
+    $processEnv = null;
+    if ($env !== []) {
+        $baseEnv = getenv();
+        $processEnv = is_array($baseEnv) ? array_merge($baseEnv, $env) : $env;
+    }
+
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
-    ], $pipes);
+    ], $pipes, null, $processEnv);
 
     if (!is_resource($process)) {
         @unlink($capture);
