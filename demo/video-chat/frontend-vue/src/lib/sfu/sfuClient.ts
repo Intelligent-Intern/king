@@ -1028,11 +1028,27 @@ export class SFUClient {
 
   private reportFrameSendPressureIfNeeded(payload: Record<string, unknown>): void {
     const chunkCount = Number(payload.chunk_count || 0)
-    const bufferedAmount = Number(payload.buffered_amount || 0)
-    if (
-      chunkCount < SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS
-      && bufferedAmount < SFU_FRAME_CHUNK_BACKPRESSURE_BYTES
-    ) {
+    const bufferedAmount = Math.max(
+      0,
+      Number(payload.buffered_amount || 0),
+      Number(payload.websocket_buffered_amount || 0),
+    )
+    const wirePayloadBytes = Math.max(
+      0,
+      Number(payload.wire_payload_bytes || 0),
+      Number(payload.projected_binary_envelope_bytes || 0),
+    )
+    const applicationMediaChunking = payload.application_media_chunking !== false
+      && String(payload.application_media_chunking || '').trim().toLowerCase() !== 'false'
+    const binaryContinuationRequired = payload.binary_continuation_required === true
+      || String(payload.binary_continuation_required || '').trim().toLowerCase() === 'true'
+    const legacyChunkPressure = applicationMediaChunking
+      && chunkCount >= SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS
+    const binaryEnvelopePressure = !applicationMediaChunking
+      && binaryContinuationRequired
+      && wirePayloadBytes >= SFU_FRAME_CHUNK_BACKPRESSURE_BYTES
+    const bufferedPressure = bufferedAmount >= SFU_FRAME_CHUNK_BACKPRESSURE_BYTES
+    if (!legacyChunkPressure && !binaryEnvelopePressure && !bufferedPressure) {
       return
     }
 
@@ -1045,7 +1061,16 @@ export class SFUClient {
       'sfu_frame_send_pressure',
       'warning',
       'SFU frame send is under pressure from large chunked payloads or websocket buffering.',
-      payload,
+      {
+        ...payload,
+        pressure_reason: bufferedPressure
+          ? 'browser_websocket_buffer'
+          : (binaryEnvelopePressure ? 'binary_envelope_large_payload' : 'legacy_application_chunking'),
+        application_media_chunking: applicationMediaChunking,
+        binary_continuation_required: binaryContinuationRequired,
+        wire_payload_bytes: wirePayloadBytes,
+        buffered_amount: bufferedAmount,
+      },
     )
   }
 

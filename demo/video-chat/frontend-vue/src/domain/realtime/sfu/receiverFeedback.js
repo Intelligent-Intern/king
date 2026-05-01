@@ -15,6 +15,15 @@ function normalizePositiveNumber(value, fallback = 0) {
   return Math.max(0, normalized);
 }
 
+function receiverFeedbackTargetUserId(peer, payload = {}) {
+  return normalizePositiveNumber(
+    peer?.userId
+      || payload?.publisher_user_id
+      || payload?.publisherUserId
+      || 0
+  );
+}
+
 export function createSfuReceiverFeedback({
   currentUserId,
   mediaRuntimePathRef,
@@ -25,7 +34,7 @@ export function createSfuReceiverFeedback({
     if (typeof sendRemoteSfuVideoQualityPressure !== 'function') return false;
 
     const localUserId = normalizePositiveNumber(typeof currentUserId === 'function' ? currentUserId() : 0);
-    const targetUserId = normalizePositiveNumber(peer.userId || 0);
+    const targetUserId = receiverFeedbackTargetUserId(peer, payload);
     if (targetUserId <= 0 || targetUserId === localUserId) return false;
 
     const lastSentAtMs = normalizePositiveNumber(peer.lastReceiverFeedbackPressureSentAtMs || 0);
@@ -48,6 +57,7 @@ export function createSfuReceiverFeedback({
     if (renderLatencyMs < RECEIVER_RENDER_LAG_PRESSURE_MS) return false;
     const nowMs = Date.now();
     return maybeSendReceiverFeedback(peer, publisherId, 'sfu_receiver_render_lag', nowMs, {
+      publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0),
       receiver_render_latency_ms: Math.round(renderLatencyMs),
       frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
       subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
@@ -62,6 +72,7 @@ export function createSfuReceiverFeedback({
     if (missingFrames <= 0) return false;
     const nowMs = Date.now();
     return maybeSendReceiverFeedback(peer, publisherId, 'sfu_receiver_sequence_gap', nowMs, {
+      publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0),
       missing_frame_count: Math.round(missingFrames),
       frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
       subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
@@ -74,6 +85,7 @@ export function createSfuReceiverFeedback({
   function maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, reason, extraPayload = {}) {
     const nowMs = Date.now();
     return maybeSendReceiverFeedback(peer, publisherId, String(reason || 'sfu_receiver_keyframe_required'), nowMs, {
+      publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0),
       frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
       subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
       requested_action: 'force_full_keyframe',

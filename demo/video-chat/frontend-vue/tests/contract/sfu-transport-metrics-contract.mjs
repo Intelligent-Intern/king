@@ -53,6 +53,11 @@ try {
   requireContains(sfuClient, "transport_path: 'binary_envelope'", 'sfu client binary transport path metric');
   requireContains(sfuClient, 'binaryContinuationRequired', 'sfu client records binary continuation state');
   requireContains(sfuClient, 'binary_continuation_threshold_bytes: SFU_BINARY_CONTINUATION_THRESHOLD_BYTES', 'sfu client exact binary continuation threshold metric');
+  requireContains(sfuClient, 'const applicationMediaChunking = payload.application_media_chunking !== false', 'sfu client gates legacy chunk pressure on active application chunking');
+  requireContains(sfuClient, 'const binaryEnvelopePressure = !applicationMediaChunking', 'sfu client separates binary envelope pressure from legacy chunk pressure');
+  requireContains(sfuClient, 'wirePayloadBytes >= SFU_FRAME_CHUNK_BACKPRESSURE_BYTES', 'sfu client requires real binary envelope wire pressure before warning');
+  requireContains(sfuClient, 'const bufferedPressure = bufferedAmount >= SFU_FRAME_CHUNK_BACKPRESSURE_BYTES', 'sfu client keeps real websocket buffered pressure warnings');
+  requireContains(sfuClient, '!legacyChunkPressure && !binaryEnvelopePressure && !bufferedPressure', 'sfu client suppresses false binary pressure warnings');
   assert.ok(
     !sfuClient.includes('this.sendChunkedFramePayload(prepared.payload, prepared.chunkField'),
     'sfu client must not route outbound media through legacy chunked JSON before binary envelope send',

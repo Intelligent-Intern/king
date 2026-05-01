@@ -267,6 +267,7 @@ export function createRemoteBrowserEncodedVideoRenderer({
     if (lastAtMs > 0 && (nowMs - lastAtMs) < 1000) return false;
     const sent = sendRemoteSfuVideoQualityPressure(peer, frame?.publisherId, normalizedReason, nowMs, {
       codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      publisher_user_id: positiveInteger(frame?.publisherUserId || peer?.userId || 0, 0),
       frame_sequence: positiveInteger(frame?.frameSequence || 0, 0),
       frame_timestamp: positiveInteger(frame?.timestamp || 0, 0),
       frame_type: String(frame?.type || ''),
@@ -290,6 +291,7 @@ export function createRemoteBrowserEncodedVideoRenderer({
     if (lastAtMs > 0 && (nowMs - lastAtMs) < 8000) return false;
     const sent = sendRemoteSfuVideoQualityPressure(peer, frame?.publisherId, normalizedReason, nowMs, {
       codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+      publisher_user_id: positiveInteger(frame?.publisherUserId || peer?.userId || 0, 0),
       frame_sequence: positiveInteger(frame?.frameSequence || 0, 0),
       frame_timestamp: positiveInteger(frame?.timestamp || 0, 0),
       frame_type: String(frame?.type || ''),

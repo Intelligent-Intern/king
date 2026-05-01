@@ -28,6 +28,7 @@ try {
   const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
   const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
   const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
@@ -49,6 +50,8 @@ try {
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
+  requireContains(runtimeHealth, 'const socketRecoverySent = typeof sendSocketFrame ===', 'remote freeze recovery sends user-socket fallback alongside SFU publisher-id recovery');
+  requireContains(runtimeHealth, 'const sent = Boolean(sfuRecoverySent || socketRecoverySent);', 'remote freeze recovery does not short-circuit stale publisher-id routes');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
@@ -71,8 +74,13 @@ try {
   requireContains(socketLifecycle, "downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')", 'remote quality pressure lowers sender outgoing quality');
   requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'remote keyframe wait is routed into publisher full-frame keyframe recovery');
   requireContains(socketLifecycle, 'full_keyframe_requested', 'remote pressure diagnostics record full-keyframe recovery');
+  requireContains(receiverFeedback, 'function receiverFeedbackTargetUserId(peer, payload = {})', 'receiver feedback can target frame publisher before peer hydration');
+  requireContains(receiverFeedback, 'payload?.publisher_user_id', 'receiver feedback socket fallback preserves publisher user id');
+  requireContains(receiverFeedback, 'publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0)', 'keyframe feedback carries frame publisher user id');
 
   requireContains(frameDecode, "peer.mediaConnectionState = 'live';", 'fresh decoded frames clear recovery status');
+  requireContains(frameDecode, 'peer.lastDecodedFrameAtMs = renderedAtMs;', 'decoded-but-throttled frames keep remote health fresh');
+  requireContains(runtimeHealth, 'decodedGapMs < remoteVideoFreezeThresholdMs', 'remote health does not reset decoders while fresh frames are decoded but render-throttled');
   requireContains(frameDecode, 'peer.sfuSocketRestartCount = 0;', 'fresh decoded frames clear hard reconnect backoff');
   requireContains(frameDecode, 'peer.nextSfuSocketRestartAllowedAtMs = 0;', 'fresh decoded frames clear next restart gate');
   requireContains(frameDecode, 'bumpMediaRenderVersion();', 'status changes trigger Vue media rerender');

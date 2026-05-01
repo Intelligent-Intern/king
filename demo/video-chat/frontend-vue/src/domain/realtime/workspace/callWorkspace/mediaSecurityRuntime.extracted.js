@@ -145,8 +145,8 @@ function hintMediaSecuritySync(reason = 'unspecified', extraPayload = {}) {
 
 function canProtectCurrentSfuTargets() {
   const targetUserIds = mediaSecurityEligibleTargetIds();
-  if (targetUserIds.length <= 0) return false;
-  return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+  if (targetUserIds.length <= 0) return true;
+  return currentSfuSenderKeySignaledTargetIds(targetUserIds).length > 0;
 }
 
 function canProtectCurrentNativeTargets(targetUserIds) {
@@ -207,6 +207,47 @@ function mediaSecuritySenderKeySignalKey(targetUserId, session) {
     String(session?.senderKeyId || ''),
     'sender-key',
   ].join(':');
+}
+
+function mediaSecurityParticipantIdsFromSignature(signature) {
+  return String(signature || '')
+    .split(',')
+    .map((userId) => Number(userId || 0))
+    .filter((userId) => Number.isInteger(userId) && userId > 0);
+}
+
+function mediaSecurityParticipantSetDelta(previousUserIds, nextUserIds) {
+  const previous = new Set(Array.isArray(previousUserIds) ? previousUserIds : []);
+  const next = new Set(Array.isArray(nextUserIds) ? nextUserIds : []);
+  return {
+    added: Array.from(next).filter((userId) => !previous.has(userId)),
+    removed: Array.from(previous).filter((userId) => !next.has(userId)),
+  };
+}
+
+function currentSfuSenderKeySignaledTargetIds(targetUserIds = mediaSecurityEligibleTargetIds()) {
+  const session = ensureMediaSecuritySession();
+  return (Array.isArray(targetUserIds) ? targetUserIds : [])
+    .map((userId) => Number(userId || 0))
+    .filter((userId, index, userIds) => (
+      Number.isInteger(userId)
+      && userId > 0
+      && userId !== currentUserId.value
+      && userIds.indexOf(userId) === index
+      && mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))
+    ));
+}
+
+function shouldForceRekeyForParticipantSetDelta(delta, requestedForceRekey = false) {
+  if (requestedForceRekey) return true;
+  return Array.isArray(delta?.removed) && delta.removed.length > 0;
+}
+
+function shouldForceRekeyAfterSenderKeyMiss(targetUserId) {
+  const normalizedTargetId = Number(targetUserId || 0);
+  const remainingSignaledTargetIds = currentSfuSenderKeySignaledTargetIds()
+    .filter((signaledTargetId) => signaledTargetId !== normalizedTargetId);
+  return remainingSignaledTargetIds.length <= 0;
 }
 
 function clearMediaSecuritySignalCaches() {
@@ -360,6 +401,10 @@ async function sendMediaSecuritySenderKey(targetUserId, force = false) {
       mediaSecuritySenderKeySignalsSent.delete(key);
       mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
       startMediaSecurityHandshakeWatchdog();
+      scheduleMediaSecurityParticipantSync(
+        'sender_key_participant_mismatch',
+        shouldForceRekeyAfterSenderKeyMiss(normalizedTargetId),
+      );
       await sendMediaSecurityHello(targetUserId, true);
       captureClientDiagnostic({
         category: 'media',
@@ -431,9 +476,12 @@ async function syncMediaSecurityWithParticipants(forceRekey = false) {
       mediaSecurityStateVersion.value += 1;
       return;
     }
+    const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
     const marked = session.markParticipantSet(eligibleTargetUserIds);
+    const participantDelta = mediaSecurityParticipantSetDelta(previousUserIds, marked.userIds);
     mediaSecurityStateVersion.value += 1;
-    if (forceRekey || marked.changed) {
+    const shouldRotateSenderKey = shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey);
+    if (shouldRotateSenderKey) {
       clearMediaSecuritySignalCaches();
       const ready = await session.ensureReady();
       if (!ready) {

@@ -120,9 +120,7 @@ export function createCallWorkspaceMediaStack(options) {
           return true;
         }
       }
-      const targetUserId = Number(peer?.userId || 0);
       const localUserId = Number(refs.currentUserId.value || 0);
-      if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
       const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_receiver_feedback');
       const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
       const feedbackAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
@@ -140,9 +138,19 @@ export function createCallWorkspaceMediaStack(options) {
           reason: normalizedReason,
         })
         : false;
-      if (sfuRecoverySent || sfuLayerPreferenceSent) return true;
-      if (typeof callbacks.sendSocketFrame !== 'function') return false;
-      return callbacks.sendSocketFrame({
+      if (sfuLayerPreferenceSent && !requestFullKeyframe && !compatibilityCodecRequested) return true;
+
+      const targetUserId = Number(
+        peer?.userId
+        || payload?.publisher_user_id
+        || payload?.publisherUserId
+        || 0
+      );
+      const socketRecoverySent = Number.isInteger(targetUserId)
+        && targetUserId > 0
+        && targetUserId !== localUserId
+        && typeof callbacks.sendSocketFrame === 'function'
+        ? callbacks.sendSocketFrame({
         type: 'call/media-quality-pressure',
         target_user_id: targetUserId,
         payload: {
@@ -155,7 +163,9 @@ export function createCallWorkspaceMediaStack(options) {
           requester_user_id: localUserId,
           media_runtime_path: refs.mediaRuntimePath.value,
         },
-      });
+      })
+        : false;
+      return Boolean(sfuRecoverySent || socketRecoverySent || sfuLayerPreferenceSent);
     },
     sfuFrameHeight: constants.sfuFrameHeight,
     sfuFrameQuality: constants.sfuFrameQuality,

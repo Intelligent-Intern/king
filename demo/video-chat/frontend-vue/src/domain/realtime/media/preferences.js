@@ -6,7 +6,7 @@ import {
 import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstraints';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
-const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 3;
+const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
 
 function clampVolume(value) {
   const numeric = Number(value);

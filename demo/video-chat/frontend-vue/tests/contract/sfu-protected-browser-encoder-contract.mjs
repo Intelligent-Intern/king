@@ -35,6 +35,7 @@ try {
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const security = read('src/domain/realtime/media/security.js');
   const securityCore = read('src/domain/realtime/media/securityCore.js');
+  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
@@ -108,6 +109,9 @@ try {
   requireContains(publisherPipeline, "captureClientDiagnostic('sfu_publish_waiting_for_media_security'", 'RGBA fallback publisher must persist media-security gate waits to backend diagnostics');
   requireContains(publisherPipeline, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'RGBA fallback publisher must resync keys while the publish security gate is closed');
   requireContains(publisherPipeline, "protect_frame_unavailable_waiting_for_security", 'RGBA fallback publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
+  requireContains(mediaSecurityRuntime, 'return currentSfuSenderKeySignaledTargetIds(targetUserIds).length > 0;', 'SFU publish gate must not require every receiver to finish a bidirectional handshake');
+  requireContains(mediaSecurityRuntime, 'state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))', 'SFU publish gate must wait until the current sender key was signaled to at least one ready receiver');
+  requireContains(mediaSecurityRuntime, 'shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey)', 'participant joins must not force a global sender-key cache reset while existing receivers can still decrypt video');
   assert.equal(
     publisherPipeline.includes('sending transport-only frame'),
     false,
@@ -129,6 +133,7 @@ try {
   requireContains(browserRenderer, 'isBrowserDecoderConfigured(existingDecoderState?.decoder)', 'browser renderer must not reuse unconfigured WebCodecs decoders after browser errors');
   requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_remote_video_decoder_waiting_keyframe')", 'browser renderer asks for a full keyframe when only deltas arrive after subscription or reset');
   requireContains(browserRenderer, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'browser renderer persists keyframe-wait drops to backend diagnostics');
+  requireContains(browserRenderer, 'publisher_user_id: positiveInteger(frame?.publisherUserId || peer?.userId || 0, 0)', 'browser renderer carries publisher user id into keyframe recovery before peer hydration');
   requireContains(browserRenderer, 'discardBrowserDecoderState(peer, frame, decoderState)', 'browser renderer discards poisoned WebCodecs decoders after decode failures');
   requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decode_frame_failed')", 'browser renderer asks publisher for a full keyframe after decode failures');
   requireContains(browserRenderer, "requestProtectedBrowserDecoderRecovery(peer, frame, 'sfu_browser_decoder_error')", 'browser renderer asks publisher for a full keyframe after decoder errors');
@@ -138,6 +143,12 @@ try {
   requireContains(browserRenderer, 'requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION', 'browser renderer sends explicit compatibility codec action');
   requireContains(browserRenderer, "requested_codec_id: 'wlvc_sfu'", 'browser renderer names the interoperable WLVC codec target');
   requireContains(mediaStack, 'shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {})', 'receiver feedback uses websocket signaling for codec compatibility fallback instead of SFU-only recovery rows');
+  requireContains(mediaStack, 'payload?.publisher_user_id', 'receiver feedback can target the publisher user id before remote peer hydration');
+  requireContains(mediaStack, 'const socketRecoverySent = Number.isInteger(targetUserId)', 'receiver recovery must send user-socket fallback even when SFU publisher-id routing accepts the request');
+  assert.ok(
+    mediaStack.indexOf('requestPublisherMediaRecovery') < mediaStack.indexOf('const targetUserId = Number('),
+    'SFU publisher recovery by publisher id must run before socket fallback requires a hydrated peer user id',
+  );
   requireContains(socketLifecycle, 'shouldRequestSfuCompatibilityCodecFallback(requestedAction, payloadBody || {})', 'publisher socket lifecycle recognizes receiver codec compatibility requests');
   requireContains(lifecycle, 'shouldRequestSfuCompatibilityCodecFallback(requestedAction, details)', 'publisher SFU recovery path recognizes receiver codec compatibility requests');
 

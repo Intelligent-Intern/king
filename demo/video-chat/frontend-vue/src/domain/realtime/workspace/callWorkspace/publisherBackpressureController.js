@@ -76,6 +76,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const budgetSendFailure = [
     'send_buffer_drain_timeout',
     'sfu_buffer_budget_exceeded',
+    'sfu_frame_send_pressure',
     'sfu_ingress_latency_budget_exceeded',
     'sfu_projected_buffer_budget_exceeded',
     'sfu_wire_rate_budget_exceeded',
@@ -365,6 +366,10 @@ export function createPublisherBackpressureController({
       Number(state.sfuAutoQualityRecoveryLastAtMs || 0),
     );
     if ((nowMs - lastQualityChangeAtMs) < SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS) return false;
+    if (String(callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase() === 'balanced') {
+      resetWlvcSourceReadbackRecoveryWindow();
+      return false;
+    }
 
     const probed = qualityRecoveryProbe('sfu_source_readback_recovered', {
       stable_window_ms: SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,

@@ -43,6 +43,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     'sfu_remote_video_decoder_waiting_keyframe',
     'sfu_remote_video_frozen',
     'sfu_buffer_budget_exceeded',
+    'sfu_frame_send_pressure',
     'sfu_projected_buffer_budget_exceeded',
     'sfu_send_backpressure',
     'sfu_send_backpressure_critical',

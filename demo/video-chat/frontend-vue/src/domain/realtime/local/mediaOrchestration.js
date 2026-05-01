@@ -1,8 +1,6 @@
 import { buildOptionalCallAudioCaptureConstraints } from '../media/audioCaptureConstraints';
-import {
-  applySfuVideoProfileConstraintsToStream,
-  reportSfuLocalCaptureSettings,
-} from './sfuCaptureProfileConstraints';
+import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings } from './sfuCaptureProfileConstraints';
+import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -28,9 +26,7 @@ export function createLocalMediaOrchestrationHelpers({
     syncNativePeerLocalTracks,
     sendNativeOffer,
   } = callbacks;
-  const captureDiagnostic = typeof captureClientDiagnostic === 'function'
-    ? captureClientDiagnostic
-    : () => {};
+  const captureDiagnostic = typeof captureClientDiagnostic === 'function' ? captureClientDiagnostic : () => {};
 
   const localPublisherCallbacks = callbacks.localPublisher && typeof callbacks.localPublisher === 'object'
     ? callbacks.localPublisher
@@ -71,6 +67,7 @@ export function createLocalMediaOrchestrationHelpers({
   const unpublishSfuTracks = typeof localPublisherCallbacks.unpublishSfuTracks === 'function'
     ? localPublisherCallbacks.unpublishSfuTracks
     : () => {};
+  let localMediaPermissionRetryAfterMs = 0;
 
   function buildLocalMediaConstraints() {
     const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -146,6 +143,24 @@ export function createLocalMediaOrchestrationHelpers({
       || name === 'OverconstrainedError'
       || name === 'NotReadableError'
       || name === 'AbortError';
+  }
+
+  function enterReceiveOnlyLocalMediaMode(reason = 'local_media_unavailable') {
+    const receiveOnlyStream = new MediaStream();
+    refs.localRawStreamRef.value = receiveOnlyStream;
+    refs.localFilteredStreamRef.value = receiveOnlyStream;
+    refs.localStreamRef.value = receiveOnlyStream;
+    refs.localTracksRef.value = [];
+    state.localTracksPublishedToSfu = true;
+    stopLocalEncodingPipeline(); clearLocalPreviewElement();
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'local_media_receive_only_mode',
+      code: 'local_media_receive_only_mode',
+      message: 'Local camera or microphone capture is unavailable; the participant stays connected in receive-only mode.',
+      payload: { reason: String(reason || 'local_media_unavailable'), media_runtime_path: refs.mediaRuntimePathRef.value },
+    });
   }
 
   async function acquireLocalMediaStreamWithFallback() {
@@ -526,6 +541,10 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   async function publishLocalTracks() {
+    if (localMediaPermissionRetryAfterMs > Date.now()) {
+      if (!(refs.localStreamRef.value instanceof MediaStream)) enterReceiveOnlyLocalMediaMode('permission_denied_cooldown');
+      return true;
+    }
     if (refs.localStreamRef.value instanceof MediaStream) {
       publishLocalTracksToSfuIfReady();
       if (isWlvcRuntimePath()) {
@@ -584,14 +603,15 @@ export function createLocalMediaOrchestrationHelpers({
       return true;
     } catch (error) {
       callbacks.mediaDebugLog('[SFU] Failed to get user media:', error);
+      if (isLocalMediaPermissionDeniedError(error)) {
+        localMediaPermissionRetryAfterMs = Date.now() + LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS;
+        enterReceiveOnlyLocalMediaMode('permission_denied');
+      }
       captureClientDiagnosticError('local_user_media_failed', error, {
         media_runtime_path: refs.mediaRuntimePathRef.value,
         sfu_runtime_enabled: constants.sfuRuntimeEnabled,
-      }, {
-        code: 'local_user_media_failed',
-        immediate: true,
-      });
-      return false;
+      }, { code: 'local_user_media_failed', immediate: true });
+      return isLocalMediaPermissionDeniedError(error);
     }
   }
 

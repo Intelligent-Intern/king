@@ -1,5 +1,6 @@
 import { computed } from 'vue';
 import { reportNativeAudioBridgeFailure as reportNativeAudioBridgeFailureEvent } from '../../native/audioBridgeFailureReporter';
+import { mergeMediaSecurityParticipantIds } from './mediaSecurityParticipantSet';
 
 export function createCallWorkspaceMediaSecurityRuntime({
   callbacks,
@@ -300,10 +301,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
     void syncMediaSecurityWithParticipants();
   }
 
+  function queueMediaSecuritySyncAfterInFlight(forceRekey = false) {
+    state.mediaSecuritySyncPending = true;
+    state.mediaSecuritySyncPendingForceRekey = Boolean(state.mediaSecuritySyncPendingForceRekey || forceRekey);
+  }
+
   function canProtectCurrentSfuTargets() {
     const targetUserIds = remoteMediaSecurityEligibleTargetIds();
     if (targetUserIds.length <= 0) return true;
-    return ensureMediaSecuritySession().canProtectForTargets(targetUserIds);
+    return currentSfuSenderKeySignaledTargetIds(targetUserIds).length > 0;
   }
 
   function canProtectCurrentNativeTargets(targetUserIds) {
@@ -381,6 +387,45 @@ export function createCallWorkspaceMediaSecurityRuntime({
       String(session?.senderKeyId || ''),
       'sender-key',
     ].join(':');
+  }
+
+  function mediaSecurityParticipantIdsFromSignature(signature) {
+    return String(signature || '')
+      .split(',')
+      .map((userId) => Number(userId || 0))
+      .filter((userId) => Number.isInteger(userId) && userId > 0);
+  }
+
+  function mediaSecurityParticipantSetDelta(previousUserIds, nextUserIds) {
+    const previous = new Set(Array.isArray(previousUserIds) ? previousUserIds : []);
+    const next = new Set(Array.isArray(nextUserIds) ? nextUserIds : []);
+    return {
+      added: Array.from(next).filter((userId) => !previous.has(userId)),
+      removed: Array.from(previous).filter((userId) => !next.has(userId)),
+    };
+  }
+
+  function currentSfuSenderKeySignaledTargetIds(targetUserIds = remoteMediaSecurityEligibleTargetIds()) {
+    const session = ensureMediaSecuritySession();
+    return (Array.isArray(targetUserIds) ? targetUserIds : [])
+      .map((userId) => normalizeRemoteMediaSecurityUserId(userId))
+      .filter((userId, index, userIds) => (
+        userId > 0
+        && userIds.indexOf(userId) === index
+        && state.mediaSecuritySenderKeySignalsSent.has(mediaSecuritySenderKeySignalKey(userId, session))
+      ));
+  }
+
+  function shouldForceRekeyForParticipantSetDelta(delta, requestedForceRekey = false) {
+    if (requestedForceRekey) return true;
+    return Array.isArray(delta?.removed) && delta.removed.length > 0;
+  }
+
+  function shouldForceRekeyAfterSenderKeyMiss(targetUserId) {
+    const normalizedTargetId = Number(targetUserId || 0);
+    const remainingSignaledTargetIds = currentSfuSenderKeySignaledTargetIds()
+      .filter((signaledTargetId) => signaledTargetId !== normalizedTargetId);
+    return remainingSignaledTargetIds.length <= 0;
   }
 
   function incomingMediaSecurityHelloResponseKey(senderUserId, payloadBody, session) {
@@ -511,7 +556,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(key);
         state.mediaSecurityHelloSentAtByUserId.set(normalizedTargetId, Date.now());
+        requestRoomSnapshot();
         startMediaSecurityHandshakeWatchdog();
+        scheduleMediaSecurityParticipantSync(
+          'sender_key_participant_mismatch',
+          shouldForceRekeyAfterSenderKeyMiss(normalizedTargetId),
+        );
         await sendMediaSecurityHello(normalizedTargetId, true);
         captureClientDiagnostic({
           category: 'media',
@@ -574,7 +624,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   async function syncMediaSecurityWithParticipants(forceRekey = false) {
-    if (state.mediaSecuritySyncInFlight || !isSocketOnline.value || currentUserId.value <= 0) return;
+    if (!isSocketOnline.value || currentUserId.value <= 0) return;
+    if (state.mediaSecuritySyncInFlight) {
+      queueMediaSecuritySyncAfterInFlight(forceRekey);
+      return;
+    }
     state.mediaSecuritySyncInFlight = true;
     try {
       const session = ensureMediaSecuritySession();
@@ -583,9 +637,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
         mediaSecurityStateVersion.value += 1;
         return;
       }
+      const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
       const marked = session.markParticipantSet(eligibleTargetUserIds);
+      const participantDelta = mediaSecurityParticipantSetDelta(previousUserIds, marked.userIds);
       mediaSecurityStateVersion.value += 1;
-      if (forceRekey || marked.changed) {
+      const shouldRotateSenderKey = shouldForceRekeyForParticipantSetDelta(participantDelta, forceRekey);
+      if (shouldRotateSenderKey) {
         clearMediaSecuritySignalCaches();
         const ready = await session.ensureReady();
         if (!ready) {
@@ -611,6 +668,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       });
     } finally {
       state.mediaSecuritySyncInFlight = false;
+      if (state.mediaSecuritySyncPending) {
+        const shouldForceRekey = Boolean(state.mediaSecuritySyncPendingForceRekey);
+        state.mediaSecuritySyncPending = false;
+        state.mediaSecuritySyncPendingForceRekey = false;
+        scheduleMediaSecurityParticipantSync('pending_after_inflight', shouldForceRekey);
+      }
     }
   }
 
@@ -879,13 +942,20 @@ export function createCallWorkspaceMediaSecurityRuntime({
 
     try {
       if (type === 'media-security/hello') {
-        const marked = session.markParticipantSet([
-          ...remoteMediaSecurityTargetIds(),
+        const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
+        const marked = session.markParticipantSet(mergeMediaSecurityParticipantIds(
+          session,
+          remoteMediaSecurityTargetIds(),
           normalizedSenderUserId,
-        ]);
+        ));
+        const participantDelta = mediaSecurityParticipantSetDelta(previousUserIds, marked.userIds);
         if (marked.changed) {
-          clearMediaSecuritySignalCaches();
           mediaSecurityStateVersion.value += 1;
+          const shouldForceRekey = shouldForceRekeyForParticipantSetDelta(participantDelta, false);
+          if (shouldForceRekey) {
+            clearMediaSecuritySignalCaches();
+          }
+          scheduleMediaSecurityParticipantSync('hello_participant_set_changed', shouldForceRekey);
         }
         const accepted = await session.handleHelloSignal(normalizedSenderUserId, payloadBody || {});
         mediaSecurityStateVersion.value += 1;
@@ -925,13 +995,15 @@ export function createCallWorkspaceMediaSecurityRuntime({
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)
       ) {
-        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';
-        if (shouldForceRekeyAfterSignalFailure) {
+        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt'
+          || shouldForceRekeyAfterSenderKeyMiss(normalizedSenderUserId);
+        if (errorCode === 'downgrade_attempt') {
           session.markPeerRemoved?.(normalizedSenderUserId);
         }
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
         state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
+        requestRoomSnapshot();
         scheduleMediaSecurityParticipantSync('signal_failed_reconnect', shouldForceRekeyAfterSignalFailure);
         startMediaSecurityHandshakeWatchdog();
       }
