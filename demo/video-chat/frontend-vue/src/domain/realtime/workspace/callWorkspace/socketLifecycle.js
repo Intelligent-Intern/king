@@ -3,7 +3,7 @@ import {
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 
-const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5000;
+const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function createCallWorkspaceSocketHelpers({
   callbacks,
