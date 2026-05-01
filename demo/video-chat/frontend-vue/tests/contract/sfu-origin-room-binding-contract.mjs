@@ -44,12 +44,12 @@ try {
   requireContains(sfuClient, 'if (this.connectAttemptInFlight) return', 'SFU client refuses duplicate pending websocket connect attempts');
   requireContains(sfuClient, 'this.connectAttemptInFlight = false\n      this.disconnectNotified = false', 'SFU client clears pending handshake only after socket open');
   requireContains(sfuClient, 'Browsers follow pre-open errors with close; wait for that terminal', 'SFU client waits for close before origin failover');
-  requireContains(sfuClient, 'const SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5000', 'SFU client bounds pending websocket negotiation to 5s');
+  requireContains(sfuClient, 'const SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000', 'SFU client bounds pending websocket negotiation to 5 minutes');
   requireContains(sfuClient, "failToNextCandidateAfterSocketClose('negotiation_timeout')", 'SFU client closes timed-out websocket negotiation before failover');
   requireContains(socketLifecycle, 'if (state.connectInFlight && !state.manualSocketClose) return;', 'workspace websocket refuses duplicate pending connect attempts');
   requireContains(socketLifecycle, 'state.connectInFlight = true;', 'workspace websocket opens a single-flight gate during handshake');
   requireContains(socketLifecycle, 'The browser will emit close after a failed handshake', 'workspace websocket waits for close before origin failover');
-  requireContains(socketLifecycle, 'const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5000;', 'workspace websocket bounds pending negotiation to 5s');
+  requireContains(socketLifecycle, 'const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;', 'workspace websocket bounds pending negotiation to 5 minutes');
   requireContains(socketLifecycle, "refs.connectionReason.value = 'socket_negotiation_timeout';", 'workspace websocket reports timed-out negotiation');
   requireContains(socketLifecycle, "failOverToNextOrigin('negotiation_timeout')", 'workspace websocket closes timed-out negotiation before failover');
 
