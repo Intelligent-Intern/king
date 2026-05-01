@@ -2,12 +2,15 @@ function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
   const sanitized = String(rawOrigin || '').trim();
   if (sanitized === '') return '';
   const normalizedFallbackPort = String(fallbackPort || '').trim();
+  const hasExplicitScheme = /^[a-z]+:\/\//i.test(sanitized);
 
-  const candidate = /^[a-z]+:\/\//i.test(sanitized) ? sanitized : `http://${sanitized}`;
+  const candidate = hasExplicitScheme ? sanitized : `http://${sanitized}`;
 
   try {
     const parsed = new URL(candidate);
     if (
+      !hasExplicitScheme
+      &&
       normalizedFallbackPort !== ''
       && parsed.port === ''
       && ['http:', 'https:', 'ws:', 'wss:'].includes(parsed.protocol)
@@ -34,6 +37,19 @@ function normalizeExplicitOrigin(rawOrigin, fallbackPort = '') {
 let preferredBackendOrigin = '';
 let preferredBackendWebSocketOrigin = '';
 let preferredBackendSfuOrigin = '';
+
+function parseBooleanEnv(value, fallback = false) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') {
+    return true;
+  }
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') {
+    return false;
+  }
+  return fallback;
+}
+
+const allowInsecureWebSockets = parseBooleanEnv(import.meta.env.VITE_VIDEOCHAT_ALLOW_INSECURE_WS, false);
 
 function hasExplicitBackendOriginConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
@@ -156,6 +172,62 @@ function isLoopbackHost(hostname) {
   return false;
 }
 
+function isSecureOriginProtocol(protocol) {
+  const value = String(protocol || '').trim().toLowerCase();
+  return value === 'https:' || value === 'wss:';
+}
+
+function isInsecureOriginProtocol(protocol) {
+  const value = String(protocol || '').trim().toLowerCase();
+  return value === 'http:' || value === 'ws:';
+}
+
+export function isOriginAllowedForWebSocket(origin) {
+  try {
+    const parsed = new URL(String(origin || '').trim());
+    if (isSecureOriginProtocol(parsed.protocol)) {
+      return true;
+    }
+    if (!isInsecureOriginProtocol(parsed.protocol)) {
+      return false;
+    }
+    return allowInsecureWebSockets || isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function buildWebSocketUrl(origin, path, query = null) {
+  const rawOrigin = String(origin || '').trim();
+  if (rawOrigin === '') return null;
+
+  try {
+    const parsed = new URL(rawOrigin);
+    const normalizedPath = String(path || '/').startsWith('/') ? String(path || '/') : `/${String(path || '')}`;
+    if (isSecureOriginProtocol(parsed.protocol)) {
+      parsed.protocol = 'wss:';
+    } else if (isInsecureOriginProtocol(parsed.protocol)) {
+      if (!isOriginAllowedForWebSocket(parsed.toString())) {
+        return null;
+      }
+      parsed.protocol = 'ws:';
+    } else {
+      return null;
+    }
+
+    parsed.pathname = normalizedPath;
+    parsed.search = '';
+    parsed.hash = '';
+    if (query instanceof URLSearchParams) {
+      parsed.search = query.toString();
+    }
+
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
 export function resolveBackendOriginCandidates() {
   const primary = resolveBackendOrigin();
   const candidates = [primary];
@@ -188,6 +260,7 @@ export function resolveBackendOriginCandidates() {
 function pushUniqueCandidate(candidates, origin) {
   const normalized = normalizeExplicitOrigin(origin);
   if (normalized === '') return;
+  if (!isOriginAllowedForWebSocket(normalized)) return;
   if (!candidates.includes(normalized)) {
     candidates.push(normalized);
   }
@@ -226,6 +299,10 @@ export function resolveBackendSfuOriginCandidates() {
   pushUniqueCandidate(candidates, primarySfuOrigin);
   appendLoopbackHostVariant(candidates, primarySfuOrigin);
 
+  if (hasExplicitBackendSfuConfig()) {
+    return candidates;
+  }
+
   const websocketOrigin = resolveBackendWebSocketOrigin();
   pushUniqueCandidate(candidates, websocketOrigin);
   appendLoopbackHostVariant(candidates, websocketOrigin);
@@ -233,10 +310,6 @@ export function resolveBackendSfuOriginCandidates() {
   const backendOrigin = resolveBackendOrigin();
   pushUniqueCandidate(candidates, backendOrigin);
   appendLoopbackHostVariant(candidates, backendOrigin);
-
-  if (hasExplicitBackendSfuConfig()) {
-    return candidates;
-  }
 
   return candidates;
 }

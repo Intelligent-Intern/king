@@ -9,12 +9,6 @@
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Whether optional quiche build paths were configured */
-#undef HAVE_KING_QUICHE
-
-/* Define to 1 if you have the `quiche' library (-lquiche). */
-#undef HAVE_LIBQUICHE
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 

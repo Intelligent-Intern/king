@@ -1,5 +1,5 @@
 --TEST--
-King Config OO setters honor override policy and reads stay inside the active parity slice
+King Config OO setters honor override policy and exposes QUIC inventory reads
 --INI--
 king.transport_cc_algorithm=cubic
 --FILE--
@@ -7,6 +7,7 @@ king.transport_cc_algorithm=cubic
 $config = new King\Config();
 
 var_dump($config->get('quic.cc_algorithm'));
+var_dump($config->get('quic.pacing_enable'));
 
 try {
     $config->set('quic.cc_algorithm', 'bbr');
@@ -16,17 +17,9 @@ try {
     var_dump($e->getMessage());
 }
 
-try {
-    $config->get('quic.pacing_enable');
-    echo "no-exception-2\n";
-} catch (Throwable $e) {
-    var_dump(get_class($e));
-    var_dump($e->getMessage());
-}
 ?>
 --EXPECTF--
 string(5) "cubic"
+bool(true)
 string(21) "King\RuntimeException"
 string(%d) "Configuration override is disabled by system policy."
-string(24) "InvalidArgumentException"
-string(%d) "Config::get() does not yet expose runtime key 'quic.pacing_enable' outside the active OO parity slice."

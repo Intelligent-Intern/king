@@ -8,7 +8,10 @@
  *
  * JavaScript usage:
  *   const Module = await createWLVCModule();
- *   const enc = new Module.Encoder({ width: 640, height: 480, quality: 60 });
+ *   const enc = new Module.Encoder(
+ *     640, 480, 60, 30,
+ *     3, 0, 0, 0, true
+ *   );
  *   const rgba = new Uint8Array(...);
  *   const out = enc.encode(rgba, timestamp_us);
  *   // out is a Uint8Array view of the encoded frame
@@ -23,13 +26,54 @@ using namespace emscripten;
 using namespace wlvc;
 
 // ---------------------------------------------------------------------------
+// Helper: create codec configs from JS constructor args
+// ---------------------------------------------------------------------------
+
+static EncoderConfig make_encoder_config(int w, int h, int quality, int key_interval,
+                                         int levels, int wavelet_type, int color_space,
+                                         int entropy_coding, bool motion_estimation) {
+    EncoderConfig cfg;
+    cfg.width = w;
+    cfg.height = h;
+    cfg.quality = quality;
+    cfg.key_frame_interval = key_interval;
+    cfg.levels = levels;
+    cfg.wavelet_type = static_cast<WaveletType>(wavelet_type);
+    cfg.color_space = static_cast<ColorSpace>(color_space);
+    cfg.entropy_coding = static_cast<EntropyMode>(entropy_coding);
+    cfg.motion_estimation = motion_estimation;
+    return cfg;
+}
+
+static DecoderConfig make_decoder_config(int w, int h, int quality, int levels,
+                                         int wavelet_type, int color_space,
+                                         int entropy_coding) {
+    DecoderConfig cfg;
+    cfg.width = w;
+    cfg.height = h;
+    cfg.quality = quality;
+    cfg.levels = levels;
+    cfg.wavelet_type = static_cast<WaveletType>(wavelet_type);
+    cfg.color_space = static_cast<ColorSpace>(color_space);
+    cfg.entropy_coding = static_cast<EntropyMode>(entropy_coding);
+    return cfg;
+}
+
+// ---------------------------------------------------------------------------
 // Encoder wrapper
 // ---------------------------------------------------------------------------
 
 class EncoderJS {
 public:
-    EncoderJS(int w, int h, int quality, int key_interval)
-        : enc_({ w, h, quality, key_interval, kDefaultLevels })
+    EncoderJS(int w, int h, int quality, int key_interval,
+              int levels = kDefaultLevels,
+              int wavelet_type = kHaar,
+              int color_space = kYUV,
+              int entropy_coding = kRLE,
+              bool motion_estimation = true)
+        : enc_(make_encoder_config(
+            w, h, quality, key_interval, levels, wavelet_type, color_space, entropy_coding, motion_estimation
+        ))
         , out_buf_(enc_.max_encoded_bytes())
     {}
 
@@ -43,12 +87,7 @@ public:
         // Copy JS typed array → WASM heap
         const auto len = rgba_js["byteLength"].as<unsigned>();
         std::vector<uint8_t> rgba(len);
-        val memory = val::module_property("HEAPU8");
-        val memoryView = rgba_js["constructor"].new_(
-            memory["buffer"],
-            reinterpret_cast<uintptr_t>(rgba.data()),
-            len
-        );
+        val memoryView = val(typed_memory_view(len, rgba.data()));
         memoryView.call<void>("set", rgba_js);
 
         const int n = enc_.encode(rgba.data(), timestamp_us,
@@ -73,8 +112,14 @@ private:
 
 class DecoderJS {
 public:
-    DecoderJS(int w, int h, int quality)
-        : dec_({ w, h, quality, kDefaultLevels })
+    DecoderJS(int w, int h, int quality,
+              int levels = kDefaultLevels,
+              int wavelet_type = kHaar,
+              int color_space = kYUV,
+              int entropy_coding = kRLE)
+        : dec_(make_decoder_config(
+            w, h, quality, levels, wavelet_type, color_space, entropy_coding
+        ))
         , rgba_out_(w * h * 4)
     {}
 
@@ -86,12 +131,7 @@ public:
     val decode(val enc_js) {
         const auto len = enc_js["byteLength"].as<unsigned>();
         std::vector<uint8_t> enc(len);
-        val memory = val::module_property("HEAPU8");
-        val memoryView = enc_js["constructor"].new_(
-            memory["buffer"],
-            reinterpret_cast<uintptr_t>(enc.data()),
-            len
-        );
+        val memoryView = val(typed_memory_view(len, enc.data()));
         memoryView.call<void>("set", enc_js);
 
         const int ret = dec_.decode(enc.data(), static_cast<int>(len),
@@ -130,22 +170,13 @@ public:
     void process(val samples_js) {
         const auto len = samples_js["length"].as<unsigned>();
         std::vector<float> samples(len);
-        val memory = val::module_property("HEAPF32");
-        val memoryView = samples_js["constructor"].new_(
-            memory["buffer"],
-            reinterpret_cast<uintptr_t>(samples.data()),
-            len
-        );
+        val memoryView = val(typed_memory_view(len, samples.data()));
         memoryView.call<void>("set", samples_js);
 
         proc_->process_interleaved(samples.data(), static_cast<int>(len / 2));
 
         // Write back
-        val dest = val::global("Float32Array").new_(
-            memory["buffer"],
-            reinterpret_cast<uintptr_t>(samples.data()),
-            len
-        );
+        val dest = val(typed_memory_view(len, samples.data()));
         samples_js.call<void>("set", dest);
     }
 
@@ -161,12 +192,12 @@ private:
 
 EMSCRIPTEN_BINDINGS(wlvc_module) {
     class_<EncoderJS>("Encoder")
-        .constructor<int, int, int, int>()
+        .constructor<int, int, int, int, int, int, int, int, bool>()
         .function("encode", &EncoderJS::encode)
         .function("reset",  &EncoderJS::reset);
 
     class_<DecoderJS>("Decoder")
-        .constructor<int, int, int>()
+        .constructor<int, int, int, int, int, int, int>()
         .function("decode", &DecoderJS::decode)
         .function("reset",  &DecoderJS::reset);
 

@@ -1,14 +1,29 @@
 --TEST--
-King HTTP/3 one-shot listener accepts real direct and dispatcher clients, invokes the handler, writes the response, and closes cleanly
+King HTTP/3 LSQUIC one-shot listener accepts real direct and dispatcher clients, invokes the handler, writes the response, and closes cleanly
 --SKIPIF--
 <?php
 if (trim((string) shell_exec('command -v openssl')) === '') {
     echo "skip openssl is required for the on-wire HTTP/3 fixture";
+    return;
 }
 
-$library = getenv('KING_QUICHE_LIBRARY');
+$library = getenv('KING_LSQUIC_LIBRARY');
 if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
+    echo "skip KING_LSQUIC_LIBRARY must point at a prebuilt liblsquic runtime";
+    return;
+}
+
+if (!extension_loaded('king')) {
+    echo "skip king extension is required";
+    return;
+}
+
+ob_start();
+phpinfo(INFO_MODULES);
+$moduleInfo = (string) ob_get_clean();
+if (!str_contains($moduleInfo, 'runtime-loaded LSQUIC')) {
+    echo "skip king extension must be built with KING_HTTP3_BACKEND_LSQUIC";
+    return;
 }
 ?>
 --INI--
@@ -45,7 +60,7 @@ try {
         ),
         static fn (array $response) => $response['status'] === 201
             && $response['protocol'] === 'http/3'
-            && $response['transport_backend'] === 'quiche_h3'
+            && $response['transport_backend'] === 'lsquic_h3'
             && $response['response_complete'] === true
             && ($response['headers']['x-reply-mode'] ?? null) === 'wire-h3'
             && ($response['headers']['content-type'] ?? null) === 'text/plain'
@@ -73,7 +88,7 @@ try {
         ),
         static fn (array $response) => $response['status'] === 201
             && $response['protocol'] === 'http/3'
-            && $response['transport_backend'] === 'quiche_h3'
+            && $response['transport_backend'] === 'lsquic_h3'
             && $response['response_complete'] === true
             && ($response['headers']['x-reply-mode'] ?? null) === 'wire-h3'
             && ($response['headers']['content-type'] ?? null) === 'text/plain'
@@ -148,14 +163,14 @@ var_dump($dispatcherCapture['post_stats']['transport_has_socket']);
 --EXPECTF--
 int(201)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 string(7) "wire-h3"
 string(10) "text/plain"
 string(13) "reply:payload"
 int(201)
 string(6) "http/3"
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 bool(true)
 string(7) "wire-h3"
 string(10) "text/plain"
@@ -173,12 +188,12 @@ localhost:%d
 string(7) "wire-h3"
 bool(true)
 bool(true)
-string(19) "server_http3_socket"
+string(26) "server_http3_lsquic_socket"
 string(2) "h3"
 string(3) "udp"
 bool(true)
 string(6) "closed"
-string(19) "server_http3_socket"
+string(26) "server_http3_lsquic_socket"
 string(2) "h3"
 bool(false)
 bool(true)
@@ -194,11 +209,11 @@ localhost:%d
 string(7) "wire-h3"
 bool(true)
 bool(true)
-string(19) "server_http3_socket"
+string(26) "server_http3_lsquic_socket"
 string(2) "h3"
 string(3) "udp"
 bool(true)
 string(6) "closed"
-string(19) "server_http3_socket"
+string(26) "server_http3_lsquic_socket"
 string(2) "h3"
 bool(false)

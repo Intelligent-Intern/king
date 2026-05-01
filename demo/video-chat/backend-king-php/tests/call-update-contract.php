@@ -51,25 +51,25 @@ SQL
     )->fetchColumn();
     videochat_call_update_assert($userUserId > 0, 'expected seeded user user');
 
-    $moderatorRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'moderator' LIMIT 1")->fetchColumn();
-    videochat_call_update_assert($moderatorRoleId > 0, 'expected moderator role');
-    $moderatorPassword = password_hash('moderator123', PASSWORD_DEFAULT);
-    videochat_call_update_assert(is_string($moderatorPassword) && $moderatorPassword !== '', 'moderator password hash failed');
-    $createModerator = $pdo->prepare(
+    $userRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    videochat_call_update_assert($userRoleId > 0, 'expected user role');
+    $participantPassword = password_hash('participant123', PASSWORD_DEFAULT);
+    videochat_call_update_assert(is_string($participantPassword) && $participantPassword !== '', 'participant password hash failed');
+    $createParticipant = $pdo->prepare(
         <<<'SQL'
 INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
 VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
 SQL
     );
-    $createModerator->execute([
-        ':email' => 'moderator-update-call@intelligent-intern.com',
-        ':display_name' => 'Moderator Update Call',
-        ':password_hash' => $moderatorPassword,
-        ':role_id' => $moderatorRoleId,
+    $createParticipant->execute([
+        ':email' => 'participant-update-call@intelligent-intern.com',
+        ':display_name' => 'Participant Update Call',
+        ':password_hash' => $participantPassword,
+        ':role_id' => $userRoleId,
         ':updated_at' => gmdate('c'),
     ]);
     $moderatorUserId = (int) $pdo->lastInsertId();
-    videochat_call_update_assert($moderatorUserId > 0, 'expected inserted moderator user');
+    videochat_call_update_assert($moderatorUserId > 0, 'expected inserted participant user');
 
     $created = videochat_create_call($pdo, $adminUserId, [
         'room_id' => 'lobby',
@@ -84,6 +84,31 @@ SQL
     videochat_call_update_assert($created['ok'] === true, 'setup create should succeed');
     $callId = (string) (($created['call'] ?? [])['id'] ?? '');
     videochat_call_update_assert($callId !== '', 'setup call id should be non-empty');
+    $originalRoomId = (string) (($created['call'] ?? [])['room_id'] ?? '');
+    videochat_call_update_assert($originalRoomId !== '', 'setup call room id should be non-empty');
+
+    $roomMutationUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', [
+        'room_id' => 'lobby',
+        'title' => 'Room Mutation Attempt',
+    ]);
+    videochat_call_update_assert($roomMutationUpdate['ok'] === false, 'room_id update should fail');
+    videochat_call_update_assert($roomMutationUpdate['reason'] === 'validation_failed', 'room_id update reason mismatch');
+    videochat_call_update_assert(
+        (string) (($roomMutationUpdate['errors'] ?? [])['room_id'] ?? '') === 'immutable_for_call',
+        'room_id update immutable error mismatch'
+    );
+    $roomMutationRowQuery = $pdo->prepare('SELECT room_id, title FROM calls WHERE id = :id LIMIT 1');
+    $roomMutationRowQuery->execute([':id' => $callId]);
+    $roomMutationRow = $roomMutationRowQuery->fetch();
+    videochat_call_update_assert(is_array($roomMutationRow), 'room mutation call row should exist');
+    videochat_call_update_assert(
+        (string) ($roomMutationRow['room_id'] ?? '') === $originalRoomId,
+        'room_id update must not change the call room'
+    );
+    videochat_call_update_assert(
+        (string) ($roomMutationRow['title'] ?? '') === 'Before Update',
+        'room_id update must not partially update title'
+    );
 
     $emptyUpdate = videochat_update_call($pdo, $callId, $adminUserId, 'admin', []);
     videochat_call_update_assert($emptyUpdate['ok'] === false, 'empty update payload should fail');
@@ -110,15 +135,11 @@ SQL
     videochat_call_update_assert($forbiddenUpdate['ok'] === false, 'non-owner user update should fail');
     videochat_call_update_assert($forbiddenUpdate['reason'] === 'forbidden', 'non-owner user update reason mismatch');
 
-    $moderatorUpdate = videochat_update_call($pdo, $callId, $moderatorUserId, 'moderator', [
-        'title' => 'Edited by Moderator',
+    $participantUpdate = videochat_update_call($pdo, $callId, $moderatorUserId, 'user', [
+        'title' => 'Participant Should Not Edit',
     ]);
-    videochat_call_update_assert($moderatorUpdate['ok'] === true, 'moderator update should succeed');
-    videochat_call_update_assert($moderatorUpdate['reason'] === 'updated', 'moderator update reason mismatch');
-    videochat_call_update_assert(
-        (string) (($moderatorUpdate['call'] ?? [])['title'] ?? '') === 'Edited by Moderator',
-        'moderator update title mismatch'
-    );
+    videochat_call_update_assert($participantUpdate['ok'] === false, 'non-owner participant update should fail');
+    videochat_call_update_assert($participantUpdate['reason'] === 'forbidden', 'non-owner participant update reason mismatch');
 
     $personalLinkByUser = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
         'link_kind' => 'personal',
@@ -180,6 +201,36 @@ SQL
         ((($ownerUpdate['invite_dispatch'] ?? [])['explicit_action_required'] ?? null) === true),
         'owner update should require explicit invite action'
     );
+
+    $userOwnedCall = videochat_create_call($pdo, $userUserId, [
+        'title' => 'User Owned Admin Transfer',
+        'starts_at' => '2026-06-10T13:00:00Z',
+        'ends_at' => '2026-06-10T14:00:00Z',
+        'internal_participant_user_ids' => [$moderatorUserId],
+    ]);
+    videochat_call_update_assert($userOwnedCall['ok'] === true, 'user-owned call setup should succeed');
+    $userOwnedCallId = (string) (($userOwnedCall['call'] ?? [])['id'] ?? '');
+    videochat_call_update_assert($userOwnedCallId !== '', 'user-owned call id should be non-empty');
+    $adminOwnerTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $userOwnedCallId,
+        $moderatorUserId,
+        'owner',
+        $adminUserId,
+        'admin'
+    );
+    videochat_call_update_assert($adminOwnerTransfer['ok'] === true, 'admin should transfer owner role on any call');
+    videochat_call_update_assert($adminOwnerTransfer['reason'] === 'updated', 'admin owner transfer reason mismatch');
+    $transferredOwnerUserId = (int) $pdo->query(
+        "SELECT owner_user_id FROM calls WHERE id = " . $pdo->quote($userOwnedCallId) . " LIMIT 1"
+    )->fetchColumn();
+    videochat_call_update_assert($transferredOwnerUserId === $moderatorUserId, 'admin owner transfer should update calls.owner_user_id');
+    $previousOwnerRoleQuery = $pdo->prepare('SELECT call_role FROM call_participants WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
+    $previousOwnerRoleQuery->execute([
+        ':call_id' => $userOwnedCallId,
+        ':user_id' => $userUserId,
+    ]);
+    videochat_call_update_assert((string) $previousOwnerRoleQuery->fetchColumn() === 'participant', 'admin owner transfer should demote previous owner participant row');
 
     $callRowQuery = $pdo->prepare('SELECT title, access_mode, starts_at, ends_at FROM calls WHERE id = :id LIMIT 1');
     $callRowQuery->execute([':id' => $callId]);
@@ -246,7 +297,7 @@ SQL
         'updated participants should retain owner'
     );
     videochat_call_update_assert(
-        (string) ($participants[1]['email'] ?? '') === 'moderator-update-call@intelligent-intern.com',
+        (string) ($participants[1]['email'] ?? '') === 'participant-update-call@intelligent-intern.com',
         'updated participants should include new internal participant'
     );
     videochat_call_update_assert(

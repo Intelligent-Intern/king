@@ -252,6 +252,13 @@ try {
         'invalid login error code mismatch'
     );
 
+    $getLogin = $dispatch('GET', '/api/auth/login');
+    videochat_integration_http_assert((int) ($getLogin['status'] ?? 0) === 405, 'GET login should be rejected');
+    videochat_integration_http_assert(
+        (string) ((videochat_integration_http_decode($getLogin)['error'] ?? [])['code'] ?? '') === 'method_not_allowed',
+        'GET login error code mismatch'
+    );
+
     $missingSession = $dispatch('GET', '/api/auth/session');
     videochat_integration_http_assert((int) ($missingSession['status'] ?? 0) === 401, 'missing auth/session call should fail closed');
     videochat_integration_http_assert(

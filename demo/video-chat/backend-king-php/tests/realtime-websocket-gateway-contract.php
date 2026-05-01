@@ -267,6 +267,12 @@ try {
     );
     videochat_realtime_websocket_gateway_assert($authCallCount === 0, 'auth callback must not run for missing upgrade header');
 
+    $moduleSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
+    videochat_realtime_websocket_gateway_assert(
+        is_string($moduleSource) && !str_contains($moduleSource, 'videochat_lobby_queue_connection_for_room('),
+        'websocket attach must not queue pending admission automatically'
+    );
+
     fwrite(STDOUT, "[realtime-websocket-gateway-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {

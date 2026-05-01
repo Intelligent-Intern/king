@@ -16,6 +16,10 @@ Environment variables:
   CFLAGS         Extra C compiler flags appended to the profile defaults
   CPPFLAGS       Extra preprocessor flags appended to the profile defaults
   LDFLAGS        Extra linker flags appended to the profile defaults
+  KING_LSQUIC_RUNTIME_PREFIX
+                 Existing LSQUIC runtime prefix to use for HTTP/3 builds.
+  KING_LSQUIC_RUNTIME_BUILD=1
+                 Build the pinned LSQUIC runtime before configuring King.
 EOF
 }
 
@@ -39,10 +43,8 @@ esac
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-QUICHE_DIR="${ROOT_DIR}/quiche"
-QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
-TOOLCHAIN_LOCK_SCRIPT="${SCRIPT_DIR}/toolchain-lock.sh"
-TOOLCHAIN_LOCK_FILE="${SCRIPT_DIR}/toolchain.lock"
+LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
+LSQUIC_RUNTIME_SCRIPT="${SCRIPT_DIR}/build-lsquic-runtime.sh"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 JOBS="${JOBS:-$(nproc)}"
@@ -52,9 +54,6 @@ BASE_CPPFLAGS="${CPPFLAGS:-}"
 BASE_LDFLAGS="${LDFLAGS:-}"
 BASE_CC="${CC:-}"
 BASE_CXX="${CXX:-}"
-export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
-export CARGO_HOME="${CARGO_HOME:-${ROOT_DIR}/.cargo}"
-mkdir -p "${CARGO_HOME}"
 
 profile_cc=""
 profile_cxx=""
@@ -62,11 +61,10 @@ profile_cflags=""
 profile_cppflags="${BASE_CPPFLAGS}"
 profile_ldflags="${BASE_LDFLAGS}"
 sanitizer_kind=""
-cargo_target="release"
-cargo_args=(--release)
+lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-}"
 declare -a PHPIZE_GENERATED_RELATIVE_PATHS=()
+declare -a CONFIGURE_ENV=()
 PHPIZE_SNAPSHOT_DIR=""
-PINNED_RUST_TOOLCHAIN=""
 
 trim_ascii_whitespace() {
     local value="$1"
@@ -99,64 +97,6 @@ load_phpize_generated_relative_paths() {
 
         PHPIZE_GENERATED_RELATIVE_PATHS+=("${normalized_line#extension/}")
     done < "${PHPIZE_GENERATED_LIST}"
-}
-
-load_pinned_toolchain_version() {
-    if [[ ! -f "${TOOLCHAIN_LOCK_FILE}" ]]; then
-        echo "Missing toolchain lock file: ${TOOLCHAIN_LOCK_FILE}" >&2
-        exit 1
-    fi
-
-    # shellcheck source=/dev/null
-    source "${TOOLCHAIN_LOCK_FILE}"
-
-    if [[ -z "${KING_RUST_TOOLCHAIN_VERSION:-}" ]]; then
-        echo "KING_RUST_TOOLCHAIN_VERSION is empty in ${TOOLCHAIN_LOCK_FILE}." >&2
-        exit 1
-    fi
-
-    PINNED_RUST_TOOLCHAIN="${KING_RUST_TOOLCHAIN_VERSION}"
-}
-
-activate_pinned_rust_toolchain() {
-    local rustup_bin=""
-    local rustc_version=""
-    local cargo_version=""
-    local toolchain_installed=0
-
-    if [[ -z "${PINNED_RUST_TOOLCHAIN}" ]]; then
-        return 1
-    fi
-
-    rustup_bin="$(command -v rustup || true)"
-    if [[ -z "${rustup_bin}" ]]; then
-        return 1
-    fi
-
-    if [[ ":${PATH}:" != *":${HOME}/.cargo/bin:"* && -d "${HOME}/.cargo/bin" ]]; then
-        export PATH="${HOME}/.cargo/bin:${PATH}"
-    fi
-
-    if rustup toolchain list --installed 2>/dev/null | awk '{print $1}' | grep -Fq "${PINNED_RUST_TOOLCHAIN}"; then
-        toolchain_installed=1
-    fi
-
-    if [[ "${toolchain_installed}" -ne 1 ]]; then
-        echo "Installing pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN} via rustup." >&2
-        rustup toolchain install "${PINNED_RUST_TOOLCHAIN}" --profile minimal
-    fi
-
-    export RUSTUP_TOOLCHAIN="${PINNED_RUST_TOOLCHAIN}"
-
-    rustc_version="$(rustc --version 2>/dev/null | awk '{print $2}')"
-    cargo_version="$(cargo --version 2>/dev/null | awk '{print $2}')"
-
-    if [[ "${rustc_version}" != "${PINNED_RUST_TOOLCHAIN}" || "${cargo_version}" != "${PINNED_RUST_TOOLCHAIN}" ]]; then
-        return 1
-    fi
-
-    echo "Activated pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
-    return 0
 }
 
 snapshot_phpize_generated_files() {
@@ -290,8 +230,6 @@ case "${PROFILE}" in
         profile_cc="${BASE_CC:-cc}"
         profile_cxx="${BASE_CXX:-c++}"
         profile_cflags="-O0 -g3"
-        cargo_target="debug"
-        cargo_args=()
         ;;
     asan)
         profile_cc="${BASE_CC:-clang}"
@@ -403,60 +341,60 @@ apply_pkg_config_curl_cppflags() {
     fi
 }
 
+resolve_lsquic_runtime_prefix() {
+    if [[ "${KING_LSQUIC_RUNTIME_BUILD:-0}" == "1" ]]; then
+        "${LSQUIC_RUNTIME_SCRIPT}"
+        lsquic_runtime_prefix="${KING_LSQUIC_RUNTIME_PREFIX:-${ROOT_DIR}/.cache/king/lsquic/runtime/prefix}"
+    fi
+
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        return 0
+    fi
+
+    KING_LSQUIC_RUNTIME_PREFIX="${lsquic_runtime_prefix}" "${LSQUIC_RUNTIME_SCRIPT}" --verify-current
+}
+
+stage_lsquic_runtime() {
+    local runtime_library=""
+    local runtime_metadata=""
+
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        return 0
+    fi
+
+    runtime_library="${lsquic_runtime_prefix}/lib/liblsquic.so"
+    runtime_metadata="${lsquic_runtime_prefix}/king-lsquic-runtime.env"
+
+    mkdir -p "${PROFILE_DIR}/runtime"
+    install -m 0644 "${runtime_library}" "${PROFILE_DIR}/runtime/liblsquic.so"
+    if [[ -f "${runtime_metadata}" ]]; then
+        install -m 0644 "${runtime_metadata}" "${PROFILE_DIR}/runtime/king-lsquic-runtime.env"
+    fi
+}
+
 validate_curl_headers
 apply_pkg_config_curl_cppflags
+resolve_lsquic_runtime_prefix
 
-load_pinned_toolchain_version
-if ! bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust; then
-    if ! activate_pinned_rust_toolchain; then
-        echo "Unable to activate pinned Rust toolchain ${PINNED_RUST_TOOLCHAIN}." >&2
-        exit 1
-    fi
-    bash "${TOOLCHAIN_LOCK_SCRIPT}" --verify-rust
-fi
 if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
-    "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
+    "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
-    # CI checkouts may not contain a pre-populated quiche tree (for example
-    # when no gitlink-backed submodule is present in the fetched tree). Fall
-    # back to deterministic bootstrap from the pinned lock in that case.
-    if [[ -d "${QUICHE_DIR}" ]] && git -C "${QUICHE_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        if ! "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-current; then
-            echo "Pinned quiche checkout verification failed; bootstrapping pinned checkout." >&2
-            "${QUICHE_BOOTSTRAP_SCRIPT}"
-        fi
-    else
-        echo "Pinned quiche checkout is missing in CI; bootstrapping pinned checkout." >&2
-        "${QUICHE_BOOTSTRAP_SCRIPT}"
+    # CI checkouts may not contain the generated source cache. Rebuild it from
+    # the deterministic lock whenever the local cache is missing or stale. A
+    # downloaded LSQUIC runtime artifact already carries matching lock metadata.
+    if [[ -z "${lsquic_runtime_prefix}" ]] && ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
+        echo "Pinned LSQUIC source cache is missing in CI; bootstrapping pinned source cache." >&2
+        "${LSQUIC_BOOTSTRAP_SCRIPT}"
     fi
 else
-    "${QUICHE_BOOTSTRAP_SCRIPT}"
+    if [[ -z "${lsquic_runtime_prefix}" ]]; then
+        "${LSQUIC_BOOTSTRAP_SCRIPT}"
+    fi
 fi
 
 echo "Building King profile: ${PROFILE}"
 echo "Compiler: ${profile_cc}"
 echo "Jobs: ${JOBS}"
-
-cargo fetch \
-    --locked \
-    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml"
-
-cargo fetch \
-    --locked \
-    --manifest-path "${QUICHE_DIR}/apps/Cargo.toml"
-
-cargo build \
-    --manifest-path "${QUICHE_DIR}/quiche/Cargo.toml" \
-    --package quiche \
-    "${cargo_args[@]}" \
-    --locked \
-    --features ffi
-
-cargo build \
-    --manifest-path "${QUICHE_DIR}/apps/Cargo.toml" \
-    "${cargo_args[@]}" \
-    --locked \
-    --bin quiche-server
 
 load_phpize_generated_relative_paths
 snapshot_phpize_generated_files
@@ -471,20 +409,30 @@ fi
 phpize --clean >/dev/null 2>&1 || true
 phpize
 
-env \
-    CC="${profile_cc}" \
-    CXX="${profile_cxx}" \
-    CFLAGS="${profile_cflags}" \
-    CPPFLAGS="${profile_cppflags}" \
-    LDFLAGS="${profile_ldflags}" \
-    ./configure --enable-king
+CONFIGURE_ENV=(
+    CC="${profile_cc}"
+    CXX="${profile_cxx}"
+    CFLAGS="${profile_cflags}"
+    CPPFLAGS="${profile_cppflags}"
+    LDFLAGS="${profile_ldflags}"
+)
+
+if [[ -n "${lsquic_runtime_prefix}" ]]; then
+    CONFIGURE_ENV+=(
+        KING_LSQUIC_INCLUDE_DIR="${lsquic_runtime_prefix}/include/lsquic"
+        KING_LSQUIC_LIBRARY_DIR="${lsquic_runtime_prefix}/lib"
+        KING_BORINGSSL_CFLAGS="-DKING_BORINGSSL_STATIC_LINK=1"
+        KING_BORINGSSL_LIBS="-Wl,--exclude-libs,ALL ${lsquic_runtime_prefix}/boringssl/lib/libssl.a ${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a -lstdc++"
+    )
+fi
+
+env "${CONFIGURE_ENV[@]}" ./configure --enable-king
 
 make -j"${JOBS}"
 
 mkdir -p "${PROFILE_DIR}"
 cp "${EXT_DIR}/modules/king.so" "${PROFILE_DIR}/king.so"
-cp "${QUICHE_DIR}/target/${cargo_target}/libquiche.so" "${PROFILE_DIR}/libquiche.so"
-cp "${QUICHE_DIR}/target/${cargo_target}/quiche-server" "${PROFILE_DIR}/quiche-server"
+stage_lsquic_runtime
 
 if [[ -n "${sanitizer_kind}" ]]; then
     compiler_bin="${profile_cc%% *}"

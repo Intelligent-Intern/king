@@ -1,0 +1,41 @@
+{
+  "contract_name": "king-model-inference-service-graph",
+  "contract_version": "1.0.0",
+  "contract_scope": "Optional graph-aware metadata layer on top of the S-batch semantic discovery core. Closes readiness tracker bullets W.8 (graph-aware metadata + relationship traversal) and W.9 (public contract boundary between core semantic discovery and optional graph integrations).",
+  "boundary": {
+    "core_surface": {
+      "paths": ["POST /api/discover", "POST /api/tools/discover", "POST /api/tools/pick"],
+      "authoritative_ranking": "cosine similarity over service_embeddings / tool_embeddings plus optional BM25 fusion with alpha",
+      "guarantee": "Any /api/discover call WITHOUT the optional graph_expand field produces identical output (bytes and ranking) to pre-G-batch behaviour. The core result set is never re-ordered by the graph layer."
+    },
+    "optional_extension": {
+      "trigger": "request.graph_expand is present on POST /api/discover",
+      "shape": {
+        "edge_types": "optional array<string> (0..16 items, each 1..64 chars, regex [a-z][a-z0-9_.-]*); null/omitted = any edge type",
+        "max_hops": "optional int in [1, 2]; default 1; hard-capped at 2 for demo scale"
+      },
+      "effect": "After the core scorer returns its ranked results, the server walks outgoing service_edges from each top-N service_id, collects unique neighbor service_ids (seeds excluded), and appends them to the response under `expanded` with source=\"graph_expand\" and semantic_score=null. Neighbors never mutate or re-rank the authoritative `results` array."
+    }
+  },
+  "edge_envelope": {
+    "edge_id": {"type": "int", "required": true, "note": "AUTOINCREMENT primary key"},
+    "from_service_id": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+    "to_service_id": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+    "edge_type": {"type": "string", "min_length": 1, "max_length": 64, "pattern": "/^[a-z][a-z0-9_.-]*$/", "required": true},
+    "attributes": {"type": "object", "required": false, "default": {}},
+    "created_at": {"type": "rfc3339", "required": true}
+  },
+  "expanded_entry_shape": {
+    "service_id": "string",
+    "service_type": "string|null",
+    "source": "graph_expand",
+    "semantic_score": "null",
+    "descriptor": "service-descriptor|null"
+  },
+  "honesty_rules": [
+    "The graph layer stores directional edges only. Undirected relationships must be modeled as two edges (A→B, B→A) with matching edge_type if the caller wants symmetric traversal.",
+    "Edge weight / scoring is NOT implemented. Traversal is a plain BFS bounded by max_hops and a fixed visit budget (512) to prevent runaway expansion.",
+    "The demo does not ship a seeded graph — callers register their own edges via a future admin endpoint or directly against the service_edges table. Edge registration via HTTP is a future hardening leaf; out of scope for #G-batch.",
+    "This extension does NOT close MoE / expert-routing fences (tracker V.5). Expert routing is a semantically different problem (token-level routing inside the model) and stays fenced."
+  ]
+}

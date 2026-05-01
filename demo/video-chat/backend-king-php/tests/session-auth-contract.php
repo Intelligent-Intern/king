@@ -37,27 +37,6 @@ SQL
     $adminUserId = (int) $adminUserQuery->fetchColumn();
     videochat_test_assert($adminUserId > 0, 'expected seeded admin user in sqlite bootstrap');
 
-    $moderatorRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'moderator' LIMIT 1")->fetchColumn();
-    videochat_test_assert($moderatorRoleId > 0, 'expected moderator role in sqlite bootstrap');
-
-    $moderatorPasswordHash = password_hash('moderator123', PASSWORD_DEFAULT);
-    videochat_test_assert(is_string($moderatorPasswordHash) && $moderatorPasswordHash !== '', 'failed to hash moderator password');
-    $createModerator = $pdo->prepare(
-        <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, 'active', '24h', 'dark', :updated_at)
-SQL
-    );
-    $createModerator->execute([
-        ':email' => 'moderator-contract@intelligent-intern.com',
-        ':display_name' => 'Moderator Contract',
-        ':password_hash' => $moderatorPasswordHash,
-        ':role_id' => $moderatorRoleId,
-        ':updated_at' => gmdate('c'),
-    ]);
-    $moderatorUserId = (int) $pdo->lastInsertId();
-    videochat_test_assert($moderatorUserId > 0, 'expected contract moderator user to be inserted');
-
     $standardUserQuery = $pdo->prepare(
         <<<'SQL'
 SELECT users.id
@@ -71,6 +50,23 @@ SQL
     $standardUserQuery->execute();
     $standardUserId = (int) $standardUserQuery->fetchColumn();
     videochat_test_assert($standardUserId > 0, 'expected seeded standard user in sqlite bootstrap');
+
+    $userRoleId = (int) $pdo->query("SELECT id FROM roles WHERE slug = 'user' LIMIT 1")->fetchColumn();
+    videochat_test_assert($userRoleId > 0, 'expected user role in sqlite bootstrap');
+    $createGuestUser = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, updated_at)
+VALUES(:email, :display_name, NULL, :role_id, 'active', '24h', 'dark', :updated_at)
+SQL
+    );
+    $createGuestUser->execute([
+        ':email' => 'guest+sessionauthcontract@videochat.local',
+        ':display_name' => 'Guest Session Auth Contract',
+        ':role_id' => $userRoleId,
+        ':updated_at' => gmdate('c'),
+    ]);
+    $guestUserId = (int) $pdo->lastInsertId();
+    videochat_test_assert($guestUserId > 0, 'expected contract guest user to be inserted');
 
     $insertSession = $pdo->prepare(
         <<<'SQL'
@@ -109,15 +105,15 @@ SQL
         ':revoked_at' => null,
     ]);
     $insertSession->execute([
-        ':id' => 'sess_moderator_contract',
-        ':user_id' => $moderatorUserId,
+        ':id' => 'sess_user_contract',
+        ':user_id' => $standardUserId,
         ':issued_at' => gmdate('c', $now - 30),
         ':expires_at' => gmdate('c', $now + 3600),
         ':revoked_at' => null,
     ]);
     $insertSession->execute([
-        ':id' => 'sess_user_contract',
-        ':user_id' => $standardUserId,
+        ':id' => 'sess_guest_contract',
+        ':user_id' => $guestUserId,
         ':issued_at' => gmdate('c', $now - 30),
         ':expires_at' => gmdate('c', $now + 3600),
         ':revoked_at' => null,
@@ -142,6 +138,14 @@ SQL
     );
     videochat_test_assert($restValid['ok'] === true, 'REST auth should pass with valid Bearer token');
     videochat_test_assert((string) ($restValid['user']['role'] ?? '') === 'admin', 'REST auth user role should be admin');
+    videochat_test_assert((string) ($restValid['user']['account_type'] ?? '') === 'account', 'REST auth account user type mismatch');
+    videochat_test_assert((bool) ($restValid['user']['is_guest'] ?? true) === false, 'REST auth account guest flag mismatch');
+
+    $guestValid = videochat_validate_session_token($pdo, 'sess_guest_contract');
+    videochat_test_assert($guestValid['ok'] === true, 'guest session should validate');
+    videochat_test_assert((string) ($guestValid['user']['role'] ?? '') === 'user', 'guest session role should remain user');
+    videochat_test_assert((string) ($guestValid['user']['account_type'] ?? '') === 'guest', 'guest session account type mismatch');
+    videochat_test_assert((bool) ($guestValid['user']['is_guest'] ?? false) === true, 'guest session flag mismatch');
 
     $restRevoked = videochat_authenticate_request(
         $pdo,
@@ -192,18 +196,6 @@ SQL
     videochat_test_assert($restNowRevoked['ok'] === false, 'revoked session must fail auth checks');
     videochat_test_assert($restNowRevoked['reason'] === 'revoked_session', 'revoked session auth reason mismatch');
 
-    $restModerator = videochat_authenticate_request(
-        $pdo,
-        [
-            'method' => 'GET',
-            'uri' => '/api/auth/session',
-            'headers' => ['Authorization' => 'Bearer sess_moderator_contract'],
-        ],
-        'rest'
-    );
-    videochat_test_assert($restModerator['ok'] === true, 'moderator session should authenticate');
-    videochat_test_assert((string) ($restModerator['user']['role'] ?? '') === 'moderator', 'moderator role mismatch after auth');
-
     $restUser = videochat_authenticate_request(
         $pdo,
         [
@@ -219,12 +211,8 @@ SQL
     $adminRbac = videochat_authorize_role_for_path((array) ($restValid['user'] ?? []), '/api/admin/ping');
     videochat_test_assert($adminRbac['ok'] === true, 'admin should pass admin RBAC path');
 
-    $moderatorAdminRbac = videochat_authorize_role_for_path((array) ($restModerator['user'] ?? []), '/api/admin/ping');
-    videochat_test_assert($moderatorAdminRbac['ok'] === false, 'moderator should fail admin RBAC path');
-    videochat_test_assert($moderatorAdminRbac['reason'] === 'role_not_allowed', 'moderator/admin RBAC reason mismatch');
-
-    $moderatorModerationRbac = videochat_authorize_role_for_path((array) ($restModerator['user'] ?? []), '/api/moderation/ping');
-    videochat_test_assert($moderatorModerationRbac['ok'] === true, 'moderator should pass moderation RBAC path');
+    $adminModerationRbac = videochat_authorize_role_for_path((array) ($restValid['user'] ?? []), '/api/moderation/ping');
+    videochat_test_assert($adminModerationRbac['ok'] === true, 'admin should pass moderation RBAC path');
 
     $userModerationRbac = videochat_authorize_role_for_path((array) ($restUser['user'] ?? []), '/api/moderation/ping');
     videochat_test_assert($userModerationRbac['ok'] === false, 'user should fail moderation RBAC path');

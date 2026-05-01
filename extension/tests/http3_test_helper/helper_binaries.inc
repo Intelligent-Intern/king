@@ -1,189 +1,50 @@
 <?php
 
-function king_http3_failure_peer_binary(): string
+function king_http3_helper_binary(string $helperName): string
 {
     $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
-    $template = KING_HTTP3_TESTS_DIR . '/http3_failure_peer.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-failure-peer.rs';
-    $binary = $root . '/quiche/target/release/king-http3-failure-peer';
-
-    if (trim((string) shell_exec('command -v cargo')) === '') {
-        throw new RuntimeException('cargo is required to build the HTTP/3 failure peer helper');
+    $outputDir = getenv('KING_HTTP3_TEST_HELPER_OUTPUT_DIR');
+    if (!is_string($outputDir) || $outputDir === '') {
+        $outputDir = $root . '/.cache/king/http3-test-helpers';
     }
 
-    if (!is_file($template)) {
-        throw new RuntimeException('missing tracked HTTP/3 failure peer template');
-    }
-
-    $templateContents = file_get_contents($template);
-    if (!is_string($templateContents) || $templateContents === '') {
-        throw new RuntimeException('failed to read tracked HTTP/3 failure peer template');
-    }
-
-    $currentSource = is_file($source) ? file_get_contents($source) : false;
-    if (!is_string($currentSource) || $currentSource !== $templateContents) {
-        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
-            throw new RuntimeException('failed to synchronize tracked HTTP/3 failure peer source');
-        }
-    }
-
-    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
+    $binary = $outputDir . '/bin/' . $helperName;
+    if (is_executable($binary)) {
         return $binary;
     }
 
-    $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-failure-peer 2>&1',
-        escapeshellarg($manifest)
-    );
+    $script = $root . '/infra/scripts/build-http3-test-helpers.sh';
+    if (!is_file($script) || !is_executable($script)) {
+        throw new RuntimeException('missing repo-owned HTTP/3 C helper build script');
+    }
 
+    $command = escapeshellarg($script) . ' build 2>&1';
     exec($command, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($binary)) {
+    if ($exitCode !== 0 || !is_executable($binary)) {
         throw new RuntimeException(
-            "failed to build HTTP/3 failure peer helper:\n" . implode("\n", $output)
+            "failed to build HTTP/3 C/LSQUIC helper {$helperName}:\n" . implode("\n", $output)
         );
     }
 
     return $binary;
+}
+
+function king_http3_failure_peer_binary(): string
+{
+    return king_http3_helper_binary('king-http3-failure-peer');
 }
 
 function king_http3_delayed_body_client_binary(): string
 {
-    $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
-    $template = KING_HTTP3_TESTS_DIR . '/http3_delayed_body_client.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-delayed-body-client.rs';
-    $binary = $root . '/quiche/target/release/king-http3-delayed-body-client';
-
-    if (trim((string) shell_exec('command -v cargo')) === '') {
-        throw new RuntimeException('cargo is required to build the HTTP/3 delayed body client helper');
-    }
-
-    if (!is_file($template)) {
-        throw new RuntimeException('missing tracked HTTP/3 delayed body client template');
-    }
-
-    $templateContents = file_get_contents($template);
-    if (!is_string($templateContents) || $templateContents === '') {
-        throw new RuntimeException('failed to read tracked HTTP/3 delayed body client template');
-    }
-
-    $currentSource = is_file($source) ? file_get_contents($source) : false;
-    if (!is_string($currentSource) || $currentSource !== $templateContents) {
-        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
-            throw new RuntimeException('failed to synchronize tracked HTTP/3 delayed body client source');
-        }
-    }
-
-    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
-        return $binary;
-    }
-
-    $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-delayed-body-client 2>&1',
-        escapeshellarg($manifest)
-    );
-
-    exec($command, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($binary)) {
-        throw new RuntimeException(
-            "failed to build HTTP/3 delayed body client helper:\n" . implode("\n", $output)
-        );
-    }
-
-    return $binary;
+    return king_http3_helper_binary('king-http3-delayed-body-client');
 }
 
 function king_http3_abort_client_binary(): string
 {
-    $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
-    $template = KING_HTTP3_TESTS_DIR . '/http3_abort_client.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-abort-client.rs';
-    $binary = $root . '/quiche/target/release/king-http3-abort-client';
-
-    if (trim((string) shell_exec('command -v cargo')) === '') {
-        throw new RuntimeException('cargo is required to build the HTTP/3 abort client helper');
-    }
-
-    if (!is_file($template)) {
-        throw new RuntimeException('missing tracked HTTP/3 abort client template');
-    }
-
-    $templateContents = file_get_contents($template);
-    if (!is_string($templateContents) || $templateContents === '') {
-        throw new RuntimeException('failed to read tracked HTTP/3 abort client template');
-    }
-
-    $currentSource = is_file($source) ? file_get_contents($source) : false;
-    if (!is_string($currentSource) || $currentSource !== $templateContents) {
-        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
-            throw new RuntimeException('failed to synchronize tracked HTTP/3 abort client source');
-        }
-    }
-
-    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
-        return $binary;
-    }
-
-    $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-abort-client 2>&1',
-        escapeshellarg($manifest)
-    );
-
-    exec($command, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($binary)) {
-        throw new RuntimeException(
-            "failed to build HTTP/3 abort client helper:\n" . implode("\n", $output)
-        );
-    }
-
-    return $binary;
+    return king_http3_helper_binary('king-http3-abort-client');
 }
 
 function king_http3_multi_peer_binary(): string
 {
-    $root = dirname(dirname(KING_HTTP3_TESTS_DIR));
-    $template = KING_HTTP3_TESTS_DIR . '/http3_multi_peer.rs';
-    $manifest = $root . '/quiche/apps/Cargo.toml';
-    $source = $root . '/quiche/apps/src/bin/king-http3-multi-peer.rs';
-    $binary = $root . '/quiche/target/release/king-http3-multi-peer';
-
-    if (trim((string) shell_exec('command -v cargo')) === '') {
-        throw new RuntimeException('cargo is required to build the HTTP/3 multi peer helper');
-    }
-
-    if (!is_file($template)) {
-        throw new RuntimeException('missing tracked HTTP/3 multi peer template');
-    }
-
-    $templateContents = file_get_contents($template);
-    if (!is_string($templateContents) || $templateContents === '') {
-        throw new RuntimeException('failed to read tracked HTTP/3 multi peer template');
-    }
-
-    $currentSource = is_file($source) ? file_get_contents($source) : false;
-    if (!is_string($currentSource) || $currentSource !== $templateContents) {
-        if (file_put_contents($source, $templateContents) !== strlen($templateContents)) {
-            throw new RuntimeException('failed to synchronize tracked HTTP/3 multi peer source');
-        }
-    }
-
-    if (is_file($binary) && filemtime($binary) >= max(filemtime($source), filemtime($template))) {
-        return $binary;
-    }
-
-    $command = sprintf(
-        'cargo build --manifest-path %s -p quiche_apps --release --locked --no-default-features --bin king-http3-multi-peer 2>&1',
-        escapeshellarg($manifest)
-    );
-
-    exec($command, $output, $exitCode);
-    if ($exitCode !== 0 || !is_file($binary)) {
-        throw new RuntimeException(
-            "failed to build HTTP/3 multi peer helper:\n" . implode("\n", $output)
-        );
-    }
-
-    return $binary;
+    return king_http3_helper_binary('king-http3-multi-peer');
 }

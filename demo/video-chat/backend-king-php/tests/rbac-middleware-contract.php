@@ -300,6 +300,16 @@ try {
     $runtimeOpenBody = videochat_rbac_middleware_decode_body($runtimeOpen);
     videochat_rbac_middleware_assert((int) ($runtimeOpen['status'] ?? 0) === 200, 'public runtime endpoint should remain accessible without auth');
     videochat_rbac_middleware_assert((string) ($runtimeOpenBody['service'] ?? '') === 'video-chat-backend-king-php', 'runtime payload mismatch');
+    videochat_rbac_middleware_assert(!array_key_exists('database', $runtimeOpenBody), 'public runtime endpoint must not expose database details');
+    videochat_rbac_middleware_assert(!array_key_exists('auth', $runtimeOpenBody), 'public runtime endpoint must not expose auth details');
+
+    $userAdminRuntimeDenied = $dispatch('GET', '/api/admin/runtime', 'sess_rbac_user');
+    videochat_rbac_middleware_assert((int) ($userAdminRuntimeDenied['status'] ?? 0) === 403, 'user should be forbidden from admin runtime diagnostics');
+
+    $adminRuntimeAllowed = $dispatch('GET', '/api/admin/runtime', 'sess_rbac_admin');
+    $adminRuntimeAllowedBody = videochat_rbac_middleware_decode_body($adminRuntimeAllowed);
+    videochat_rbac_middleware_assert((int) ($adminRuntimeAllowed['status'] ?? 0) === 200, 'admin should access runtime diagnostics');
+    videochat_rbac_middleware_assert(array_key_exists('runtime', $adminRuntimeAllowedBody), 'admin runtime diagnostics should include runtime details');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[rbac-middleware-contract] PASS\n");

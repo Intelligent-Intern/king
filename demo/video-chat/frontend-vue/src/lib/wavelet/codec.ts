@@ -10,12 +10,13 @@
  *  • Simple, self-contained binary format that the decoder can read
  *    without band-size guessing.
  *  • Temporal residual coding on the Y channel for delta frames.
+ *  • Header v2 metadata for wavelet/color/entropy configuration.
  */
 
 // ─── Binary format ──────────────────────────────────────────────────────────
 // Inner payload (FrameData.data):
 //   [0..3]   magic  0x574C5643 ("WLVC")
-//   [4]      version = 1
+//   [4]      version = 2
 //   [5]      frame_type: 0 = key, 1 = delta
 //   [6]      quality (1–100)
 //   [7]      levels (DWT depth)
@@ -24,13 +25,23 @@
 //   [12..15] Y channel encoded byte count (uint32)
 //   [16..19] U channel encoded byte count (uint32)
 //   [20..23] V channel encoded byte count (uint32)
-//   [24..27] uvW (uint16) | uvH (uint16)
-//   [28+]    Y_data | U_data | V_data
+//   [24..25] uvW (uint16)
+//   [26..27] uvH (uint16)
+//   [28]     wavelet_type (0=haar, 1=db4, 2=cdf97)
+//   [29]     color_space (0=yuv, 1=rgb)
+//   [30]     entropy_coding (0=rle, 1=arithmetic, 2=none)
+//   [31]     flags: bit0=motion_estimation, bit1=blur_background, bit2=chroma_temporal_residual
+//   [32]     blur_radius (0=off; reserved for higher-level pipeline use)
+//   [33+]    Y_data | U_data | V_data
 //
 // Each channel: uint32 n_values | uint32 n_pairs | (int16 val, uint16 count)×n_pairs
 
 const MAGIC = 0x574C5643  // "WLVC"
-const HEADER_BYTES = 28
+const HEADER_BYTES_V1 = 28
+const HEADER_BYTES_V2 = 33
+const CURRENT_HEADER_BYTES = HEADER_BYTES_V2
+const CURRENT_CODEC_VERSION = 2
+const FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL = 1 << 2
 
 // ─── Haar 1D lifting — in-place ─────────────────────────────────────────────
 
@@ -232,6 +243,15 @@ export interface WaveletCodecConfig {
   keyFrameInterval: number
 }
 
+export const DEFAULT_CODEC_CONFIG: Required<WaveletCodecConfig> = {
+  waveletType: 'haar',
+  levels: 3,
+  quality: 75,
+  colorSpace: 'yuv',
+  entropyCoding: 'rle',
+  keyFrameInterval: 30,
+}
+
 export interface FrameData {
   type: 'keyframe' | 'delta'
   timestamp: number
@@ -250,109 +270,188 @@ export interface DecodedFrame {
   colorSpace?: PredefinedColorSpace
 }
 
-const LEVELS = 3
-
 // ─── Encoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoEncoder {
-  private quality: number
-  private keyFrameInterval: number
+  private config: Required<WaveletCodecConfig>
   private frameCount = 0
   private previousY: Float32Array | null = null
+  private previousU: Float32Array | null = null
+  private previousV: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
-    this.quality           = config.quality          ?? 75
-    this.keyFrameInterval  = config.keyFrameInterval ?? 30
+    this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
+  }
+
+  getConfig(): Required<WaveletCodecConfig> {
+    return { ...this.config }
+  }
+
+  setConfig(config: Partial<WaveletCodecConfig>): void {
+    this.config = { ...this.config, ...config }
   }
 
   setQuality(quality: number): void {
-    this.quality = Math.max(1, Math.min(100, quality))
+    this.config.quality = Math.max(1, Math.min(100, quality))
   }
 
   encodeFrame(imageData: ImageData, timestamp: number): FrameData {
     const { width: w, height: h, data: px } = imageData
-    const isKey = this.frameCount % this.keyFrameInterval === 0
+    const isKey = this.frameCount % this.config.keyFrameInterval === 0
     this.frameCount++
 
-    // ── Chroma-subsampled YUV 4:2:0 ──────────────────────────────────────
-    const uvW = w >> 1, uvH = h >> 1
-    const Y   = new Float32Array(w * h)
-    const U   = new Float32Array(uvW * uvH)
-    const V   = new Float32Array(uvW * uvH)
+    const { colorSpace, entropyCoding, levels, quality, waveletType } = this.config
 
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        const i = (row * w + col) * 4
-        const r = px[i], g = px[i + 1], b = px[i + 2]
-        // Center Y at 0 for signed wavelet coefficients
-        Y[row * w + col] = 0.299 * r + 0.587 * g + 0.114 * b - 128.0
+    const uvW = colorSpace === 'yuv' ? (w >> 1) : w
+    const uvH = colorSpace === 'yuv' ? (h >> 1) : h
+    let Y: Float32Array
+    let U: Float32Array
+    let V: Float32Array
+
+    if (colorSpace === 'yuv') {
+      Y = new Float32Array(w * h)
+      U = new Float32Array(uvW * uvH)
+      V = new Float32Array(uvW * uvH)
+
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const i = (row * w + col) * 4
+          const r = px[i]
+          const g = px[i + 1]
+          const b = px[i + 2]
+          Y[row * w + col] = 0.299 * r + 0.587 * g + 0.114 * b - 128.0
+        }
+      }
+      for (let row = 0; row < uvH; row++) {
+        for (let col = 0; col < uvW; col++) {
+          const i = (row * 2 * w + col * 2) * 4
+          const r = px[i]
+          const g = px[i + 1]
+          const b = px[i + 2]
+          U[row * uvW + col] = -0.147 * r - 0.289 * g + 0.436 * b
+          V[row * uvW + col] = 0.615 * r - 0.515 * g - 0.100 * b
+        }
+      }
+    } else {
+      Y = new Float32Array(w * h)
+      U = new Float32Array(w * h)
+      V = new Float32Array(w * h)
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const i = (row * w + col) * 4
+          const idx = row * w + col
+          Y[idx] = px[i]
+          U[idx] = px[i + 1]
+          V[idx] = px[i + 2]
+        }
       }
     }
-    for (let row = 0; row < uvH; row++) {
-      for (let col = 0; col < uvW; col++) {
-        const i = (row * 2 * w + col * 2) * 4
-        const r = px[i], g = px[i + 1], b = px[i + 2]
-        U[row * uvW + col] = -0.147 * r - 0.289 * g + 0.436 * b
-        V[row * uvW + col] =  0.615 * r - 0.515 * g - 0.100 * b
-      }
-    }
 
-    // ── Temporal residual on Y (delta frames only) ────────────────────────
+    // ── Temporal residuals (delta frames only) ────────────────────────────
     let yEnc: Float32Array
+    let uEnc: Float32Array
+    let vEnc: Float32Array
+    const useChromaTemporalResidual = !isKey
+      && this.previousU instanceof Float32Array
+      && this.previousV instanceof Float32Array
+      && this.previousU.length === U.length
+      && this.previousV.length === V.length
     if (!isKey && this.previousY) {
       yEnc = new Float32Array(Y.length)
       for (let k = 0; k < Y.length; k++) yEnc[k] = Y[k] - this.previousY[k]
     } else {
       yEnc = Y
     }
+    if (useChromaTemporalResidual) {
+      uEnc = new Float32Array(U.length)
+      vEnc = new Float32Array(V.length)
+      for (let k = 0; k < U.length; k++) uEnc[k] = U[k] - this.previousU![k]
+      for (let k = 0; k < V.length; k++) vEnc[k] = V[k] - this.previousV![k]
+    } else {
+      uEnc = U
+      vEnc = V
+    }
 
     // ── Forward DWT ───────────────────────────────────────────────────────
-    dwtFwd2D(yEnc, w, h, LEVELS)
-    dwtFwd2D(U,    uvW, uvH, LEVELS)
-    dwtFwd2D(V,    uvW, uvH, LEVELS)
+    dwtFwd2D(yEnc, w, h, levels)
+    dwtFwd2D(uEnc, uvW, uvH, levels)
+    dwtFwd2D(vEnc, uvW, uvH, levels)
 
     // ── Quantise ──────────────────────────────────────────────────────────
-    const yQ = quantize2D(yEnc, w,   h,   LEVELS, this.quality)
-    const uQ = quantize2D(U,    uvW, uvH, LEVELS, this.quality)
-    const vQ = quantize2D(V,    uvW, uvH, LEVELS, this.quality)
+    const yQ = quantize2D(yEnc, w, h, levels, quality)
+    const uQ = quantize2D(uEnc, uvW, uvH, levels, quality)
+    const vQ = quantize2D(vEnc, uvW, uvH, levels, quality)
 
     // ── Closed-loop reference update ──────────────────────────────────────
     // Reconstruct exactly what the decoder will produce, so encoder and
     // decoder share the same previousY. This eliminates temporal drift.
-    const yRec = dequantize2D(yQ, w, h, LEVELS, this.quality)
-    dwtInv2D(yRec, w, h, LEVELS)
+    const yRec = dequantize2D(yQ, w, h, levels, quality)
+    dwtInv2D(yRec, w, h, levels)
     if (!isKey && this.previousY) {
       for (let k = 0; k < yRec.length; k++) yRec[k] += this.previousY[k]
     }
     this.previousY = yRec
+    const uRec = dequantize2D(uQ, uvW, uvH, levels, quality)
+    const vRec = dequantize2D(vQ, uvW, uvH, levels, quality)
+    dwtInv2D(uRec, uvW, uvH, levels)
+    dwtInv2D(vRec, uvW, uvH, levels)
+    if (useChromaTemporalResidual && this.previousU && this.previousV) {
+      for (let k = 0; k < uRec.length; k++) uRec[k] += this.previousU[k]
+      for (let k = 0; k < vRec.length; k++) vRec[k] += this.previousV[k]
+    }
+    this.previousU = uRec
+    this.previousV = vRec
 
-    // ── RLE encode ────────────────────────────────────────────────────────
-    const yRle = rleEncode(yQ)
-    const uRle = rleEncode(uQ)
-    const vRle = rleEncode(vQ)
+    let yData: Uint8Array
+    let uData: Uint8Array
+    let vData: Uint8Array
+
+    switch (entropyCoding) {
+      case 'none':
+        yData = new Uint8Array(yQ.buffer.slice(0))
+        uData = new Uint8Array(uQ.buffer.slice(0))
+        vData = new Uint8Array(vQ.buffer.slice(0))
+        break
+      case 'arithmetic':
+      case 'rle':
+      default:
+        yData = rleEncode(yQ)
+        uData = rleEncode(uQ)
+        vData = rleEncode(vQ)
+        break
+    }
 
     // ── Pack payload ──────────────────────────────────────────────────────
-    const totalBytes = HEADER_BYTES + yRle.byteLength + uRle.byteLength + vRle.byteLength
+    const totalBytes = CURRENT_HEADER_BYTES + yData.byteLength + uData.byteLength + vData.byteLength
     const buf  = new ArrayBuffer(totalBytes)
     const view = new DataView(buf)
     const body = new Uint8Array(buf)
 
+    const waveletMap: Record<WaveletType, number> = { haar: 0, db4: 1, cdf97: 2 }
+    const colorMap: Record<WaveletCodecConfig['colorSpace'], number> = { yuv: 0, rgb: 1 }
+    const entropyMap: Record<WaveletCodecConfig['entropyCoding'], number> = { rle: 0, arithmetic: 1, none: 2 }
+
     view.setUint32(0,  MAGIC, false)
-    view.setUint8 (4,  1)                           // version
+    view.setUint8 (4, CURRENT_CODEC_VERSION)
     view.setUint8 (5,  isKey ? 0 : 1)              // frame type
-    view.setUint8 (6,  this.quality)
-    view.setUint8 (7,  LEVELS)
+    view.setUint8 (6, quality)
+    view.setUint8 (7, levels)
     view.setUint16(8,  w,   false)
     view.setUint16(10, h,   false)
-    view.setUint32(12, yRle.byteLength, false)
-    view.setUint32(16, uRle.byteLength, false)
-    view.setUint32(20, vRle.byteLength, false)
+    view.setUint32(12, yData.byteLength, false)
+    view.setUint32(16, uData.byteLength, false)
+    view.setUint32(20, vData.byteLength, false)
     view.setUint16(24, uvW, false)
     view.setUint16(26, uvH, false)
+    view.setUint8 (28, waveletMap[waveletType] ?? 0)
+    view.setUint8 (29, colorMap[colorSpace] ?? 0)
+    view.setUint8 (30, entropyMap[entropyCoding] ?? 0)
+    view.setUint8 (31, useChromaTemporalResidual ? FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL : 0)
+    view.setUint8 (32, 0)
 
-    body.set(yRle, HEADER_BYTES)
-    body.set(uRle, HEADER_BYTES + yRle.byteLength)
-    body.set(vRle, HEADER_BYTES + yRle.byteLength + uRle.byteLength)
+    body.set(yData, CURRENT_HEADER_BYTES)
+    body.set(uData, CURRENT_HEADER_BYTES + yData.byteLength)
+    body.set(vData, CURRENT_HEADER_BYTES + yData.byteLength + uData.byteLength)
 
     return {
       type:      isKey ? 'keyframe' : 'delta',
@@ -360,35 +459,57 @@ export class WaveletVideoEncoder {
       width:     w,
       height:    h,
       data:      buf,
-      quality:   this.quality,
+      quality,
     }
   }
 
   reset(): void {
     this.frameCount = 0
     this.previousY  = null
+    this.previousU  = null
+    this.previousV  = null
+  }
+
+  destroy(): void {
+    this.reset()
   }
 }
 
 // ─── Decoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoDecoder {
-  private quality: number
+  private config: Required<WaveletCodecConfig>
   private previousY: Float32Array | null = null
+  private previousU: Float32Array | null = null
+  private previousV: Float32Array | null = null
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
-    this.quality = config.quality ?? 75
+    this.config = { ...DEFAULT_CODEC_CONFIG, ...config }
+  }
+
+  getConfig(): Required<WaveletCodecConfig> {
+    return { ...this.config }
+  }
+
+  setConfig(config: Partial<WaveletCodecConfig>): void {
+    this.config = { ...this.config, ...config }
   }
 
   setQuality(quality: number): void {
-    this.quality = Math.max(1, Math.min(100, quality))
+    this.config.quality = Math.max(1, Math.min(100, quality))
   }
 
   decodeFrame(frameData: FrameData): DecodedFrame {
     const view = new DataView(frameData.data)
 
-    if (view.byteLength < HEADER_BYTES || view.getUint32(0, false) !== MAGIC) {
+    if (view.byteLength < HEADER_BYTES_V1 || view.getUint32(0, false) !== MAGIC) {
       throw new Error('[WaveletDecoder] Invalid frame: bad magic')
+    }
+
+    const version = view.getUint8(4)
+    const headerBytes = version >= 2 ? HEADER_BYTES_V2 : HEADER_BYTES_V1
+    if (view.byteLength < headerBytes) {
+      throw new Error('[WaveletDecoder] Invalid frame: short header')
     }
 
     const isKey   = view.getUint8(5) === 0
@@ -401,7 +522,11 @@ export class WaveletVideoDecoder {
     const vBytes  = view.getUint32(20, false)
     const uvW     = view.getUint16(24, false)
     const uvH     = view.getUint16(26, false)
+    const colorSpace = version >= 2 && view.getUint8(29) === 1 ? 'rgb' : 'yuv'
+    const entropyCoding = version >= 2 ? view.getUint8(30) : 0
+    const flags = version >= 2 ? view.getUint8(31) : 0
 
+    const HEADER_BYTES = headerBytes
     const payload = new Uint8Array(frameData.data)
     const yRle    = payload.subarray(HEADER_BYTES, HEADER_BYTES + yBytes)
     const uRle    = payload.subarray(HEADER_BYTES + yBytes, HEADER_BYTES + yBytes + uBytes)
@@ -412,10 +537,25 @@ export class WaveletVideoDecoder {
     }
     const vRle    = payload.subarray(vStart, vEnd)
 
-    // ── Decode channels ───────────────────────────────────────────────────
-    const yQ = rleDecode(yRle)
-    const uQ = rleDecode(uRle)
-    const vQ = rleDecode(vRle)
+    let decodedYQ: Int16Array
+    let decodedUQ: Int16Array
+    let decodedVQ: Int16Array
+    if (entropyCoding === 2) {
+      decodedYQ = new Int16Array(yRle.buffer.slice(yRle.byteOffset, yRle.byteOffset + yRle.byteLength))
+      decodedUQ = new Int16Array(uRle.buffer.slice(uRle.byteOffset, uRle.byteOffset + uRle.byteLength))
+      decodedVQ = new Int16Array(vRle.buffer.slice(vRle.byteOffset, vRle.byteOffset + vRle.byteLength))
+    } else {
+      const yDecoded = rleDecode(yRle)
+      const uDecoded = rleDecode(uRle)
+      const vQ = rleDecode(vRle)
+      decodedYQ = yDecoded
+      decodedUQ = uDecoded
+      decodedVQ = vQ
+    }
+
+    const yQ = decodedYQ
+    const uQ = decodedUQ
+    const vQ = decodedVQ
 
     // ── Dequantise ────────────────────────────────────────────────────────
     const Y = dequantize2D(yQ, w,   h,   levels, quality)
@@ -431,24 +571,48 @@ export class WaveletVideoDecoder {
     if (!isKey && this.previousY) {
       for (let k = 0; k < Y.length; k++) Y[k] += this.previousY[k]
     }
+    const hasChromaTemporalResidual = (flags & FRAME_FLAG_CHROMA_TEMPORAL_RESIDUAL) !== 0
+    if (
+      !isKey
+      && hasChromaTemporalResidual
+      && this.previousU instanceof Float32Array
+      && this.previousV instanceof Float32Array
+      && this.previousU.length === U.length
+      && this.previousV.length === V.length
+    ) {
+      for (let k = 0; k < U.length; k++) U[k] += this.previousU[k]
+      for (let k = 0; k < V.length; k++) V[k] += this.previousV[k]
+    }
     this.previousY = Y.slice()  // save reconstructed Y for next delta
+    this.previousU = U.slice()
+    this.previousV = V.slice()
 
     // ── YUV → RGBA ────────────────────────────────────────────────────────
     const rgba = new Uint8ClampedArray(w * h * 4)
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        const yi  = row * w + col
-        const uvi = (row >> 1) * uvW + (col >> 1)
-
-        const y = Y[yi] + 128.0
-        const u = U[uvi]
-        const v = V[uvi]
-
-        const pi = yi * 4
-        rgba[pi]     = Math.max(0, Math.min(255, y + 1.13983 * v))
-        rgba[pi + 1] = Math.max(0, Math.min(255, y - 0.39465 * u - 0.58060 * v))
-        rgba[pi + 2] = Math.max(0, Math.min(255, y + 2.03211 * u))
+    if (colorSpace === 'rgb') {
+      for (let i = 0; i < w * h; i++) {
+        const pi = i * 4
+        rgba[pi] = Math.max(0, Math.min(255, Y[i]))
+        rgba[pi + 1] = Math.max(0, Math.min(255, U[i]))
+        rgba[pi + 2] = Math.max(0, Math.min(255, V[i]))
         rgba[pi + 3] = 255
+      }
+    } else {
+      for (let row = 0; row < h; row++) {
+        for (let col = 0; col < w; col++) {
+          const yi  = row * w + col
+          const uvi = (row >> 1) * uvW + (col >> 1)
+
+          const y = Y[yi] + 128.0
+          const u = U[uvi]
+          const v = V[uvi]
+
+          const pi = yi * 4
+          rgba[pi]     = Math.max(0, Math.min(255, y + 1.13983 * v))
+          rgba[pi + 1] = Math.max(0, Math.min(255, y - 0.39465 * u - 0.58060 * v))
+          rgba[pi + 2] = Math.max(0, Math.min(255, y + 2.03211 * u))
+          rgba[pi + 3] = 255
+        }
       }
     }
 
@@ -457,6 +621,12 @@ export class WaveletVideoDecoder {
 
   reset(): void {
     this.previousY = null
+    this.previousU = null
+    this.previousV = null
+  }
+
+  destroy(): void {
+    this.reset()
   }
 }
 

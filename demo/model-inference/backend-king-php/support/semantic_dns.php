@@ -22,6 +22,11 @@ function model_inference_semantic_dns_register(
     $gpu = (array) ($profile['gpu'] ?? []);
     $capabilities = (array) ($profile['capabilities'] ?? []);
 
+    $quantizations = array_values(array_filter(
+        array_map('strval', (array) ($capabilities['supports_quantizations'] ?? [])),
+        static fn (string $q): bool => $q !== ''
+    ));
+
     return king_semantic_dns_register_service([
         'service_id' => $nodeId,
         'service_name' => 'king-model-inference',
@@ -39,7 +44,7 @@ function model_inference_semantic_dns_register(
             'vram_total_bytes' => (int) ($gpu['vram_total_bytes'] ?? 0),
             'vram_free_bytes' => (int) ($gpu['vram_free_bytes'] ?? 0),
             'supports_streaming' => (bool) ($capabilities['supports_streaming'] ?? true),
-            'supports_quantizations' => (array) ($capabilities['supports_quantizations'] ?? []),
+            'supports_quantizations' => implode(',', $quantizations),
             'supports_embedding' => (bool) ($capabilities['supports_embedding'] ?? false),
             'supports_retrieval' => (bool) ($capabilities['supports_retrieval'] ?? false),
             'supports_rag' => (bool) ($capabilities['supports_rag'] ?? false),

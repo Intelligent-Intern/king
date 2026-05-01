@@ -58,22 +58,23 @@ installed PHP versions.
 
 ## What King Expects From PIE
 
-King is not only `king.so`. The active runtime also needs the bundled QUIC
-artifacts. That means the PIE package shape for King does all of this
-in one install:
+King is not only `king.so`. The source package also carries the pinned
+LSQUIC/BoringSSL provenance that describes the HTTP/3 replacement stack. That
+means the PIE package shape for King does all of this in one install:
 
 - build the extension from `extension/`
-- compile the bundled QUIC runtime with Cargo and Rust (mandatory)
 - install `king.so`
-- install `libquiche.so`
-- install `quiche-server`
+- keep the HTTP/3 dependency pins traceable through
+  `infra/scripts/lsquic-bootstrap.lock`
+- support extended HTTP/3 linking through `pkg-config` or explicit
+  `KING_LSQUIC_*` / `KING_BORINGSSL_*` environment overrides
 
 This is why King uses a pre-packaged source asset instead of pretending that
 the default repository ZIP is enough.
 
 This is also why a casual "just publish it to PECL" answer would be too loose.
-King needs the extension and the runtime artifacts to travel together, so the
-installer story has to be explicit and honest.
+King needs the extension and LSQUIC/BoringSSL provenance to travel together, so
+the installer story has to be explicit and honest.
 
 ## User Install Shape
 
@@ -89,26 +90,22 @@ After the matching tag is available in GitHub Releases, users can use the same
 command for PIE installation.
 
 PIE then enters the King build path under `extension/`, runs `phpize`,
-`./configure`, `make`, and `make install`, and the King build hook compiles and
-installs the QUIC runtime artifacts beside the extension by default.
+`./configure`, `make`, and `make install`. No Rust or Cargo toolchain is
+required for this PIE path.
 
-If a build runs in CI/non-interactive mode and your Rust toolchain is missing or
-outdated (including lockfile-v4 readers), set:
-
-```bash
-KING_QUICHE_TOOLCHAIN_CONFIRM=yes pie install intelligent-intern/king-ext
-```
-
-for automatic in-script upgrade attempts (which also installs `nightly` when needed
-for lockfile-v4 compatibility), or:
+If you want the optional extended HTTP/3 LSQUIC/BoringSSL link on a developer
+machine, pass it through the same portable path contract used by the repository
+build:
 
 ```bash
-KING_QUICHE_TOOLCHAIN_CONFIRM=no pie install intelligent-intern/king-ext
+export PKG_CONFIG_PATH="/path/to/lsquic/lib/pkgconfig:/path/to/boringssl/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+pie install intelligent-intern/king-ext
 ```
 
-to fail fast with clear instructions.
-
-Default behavior (if the variable is unset) is interactive `prompt` mode.
+or use explicit `KING_LSQUIC_CFLAGS`, `KING_LSQUIC_LIBS`,
+`KING_BORINGSSL_CFLAGS`, and `KING_BORINGSSL_LIBS` values. Do not bake local
+package-manager paths into the source package. Homebrew/Cellar paths must stay
+local and must be passed only through environment variables or `pkg-config`.
 
 Depending on the target PHP installation and how PIE configures it, you may
 also need to enable the extension explicitly in `php.ini`:
@@ -130,9 +127,8 @@ the host has:
 - `autoconf`
 - `make`
 - a C compiler
-- `cargo` and `rustc` (always, because Quiche is a mandatory runtime component)
-- `KING_QUICHE_TOOLCHAIN_CONFIRM` (`prompt`, `yes`, or `no`) for installer automation
 - libcurl development headers and libraries
+- `pkg-config` when using system-provided LSQUIC/BoringSSL packages
 
 King currently excludes Windows from this first PIE path. The current v1 target
 is Linux source installs first, then broader packaging later.

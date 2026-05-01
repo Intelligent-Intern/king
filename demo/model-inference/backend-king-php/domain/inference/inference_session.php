@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/llama_cpp_worker.php';
+require_once __DIR__ . '/chat_messages.php';
 
 /**
  * Per-process inference session: owns the llama.cpp worker cache + is
@@ -121,6 +122,16 @@ final class InferenceSession
         if (isset($sampling['seed']) && is_int($sampling['seed'])) {
             $body['seed'] = (int) $sampling['seed'];
         }
+        // T-3: repetition penalties — plumb only when non-zero so legacy
+        // tests and callers that don't set them see identical payloads.
+        $freq = (float) ($sampling['frequency_penalty'] ?? 0.0);
+        $pres = (float) ($sampling['presence_penalty'] ?? 0.0);
+        if ($freq !== 0.0) {
+            $body['frequency_penalty'] = $freq;
+        }
+        if ($pres !== 0.0) {
+            $body['presence_penalty'] = $pres;
+        }
         $jsonBody = json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
         if (!is_string($jsonBody)) {
             throw new RuntimeException('failed to encode chat completion request body');
@@ -175,20 +186,15 @@ final class InferenceSession
 
     /**
      * Build the OpenAI-style messages array from the validated envelope.
-     * Always shapes as {system?, user}. Future roles (assistant, tool)
-     * belong to a multi-turn leaf.
+     * Delegates to `model_inference_build_chat_messages()` so the HTTP
+     * session and the WS stream share a single resolution rule.
      *
      * @param array<string, mixed> $validatedEnvelope
      * @return array<int, array{role: string, content: string}>
      */
     public function buildMessages(array $validatedEnvelope): array
     {
-        $messages = [];
-        if (isset($validatedEnvelope['system']) && is_string($validatedEnvelope['system']) && $validatedEnvelope['system'] !== '') {
-            $messages[] = ['role' => 'system', 'content' => $validatedEnvelope['system']];
-        }
-        $messages[] = ['role' => 'user', 'content' => (string) ($validatedEnvelope['prompt'] ?? '')];
-        return $messages;
+        return model_inference_build_chat_messages($validatedEnvelope);
     }
 
     /**

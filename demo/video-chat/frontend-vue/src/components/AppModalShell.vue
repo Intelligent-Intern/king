@@ -1,0 +1,288 @@
+<template>
+  <div
+    v-bind="rootAttrs"
+    :class="rootClass"
+    :hidden="!open"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="titleId || undefined"
+    :aria-label="!titleId ? ariaLabel || title : undefined"
+  >
+    <div :class="backdropClass" @click="$emit('close')"></div>
+    <div :class="['app-modal-dialog', dialogClass]">
+      <header :class="headerClass">
+        <div :class="headerLeftClass">
+          <slot name="header-prefix">
+            <img v-if="showLogo" :class="logoClass" :src="logoSrc" alt="" />
+          </slot>
+          <div class="app-modal-title-block">
+            <slot name="title">
+              <h4 :id="titleId || undefined" :class="titleClass">{{ title }}</h4>
+              <p v-if="subtitle" :class="subtitleClass">{{ subtitle }}</p>
+            </slot>
+          </div>
+        </div>
+        <slot name="close">
+          <AppIconButton
+            :icon="closeIcon"
+            :aria-label="closeLabel"
+            @click="$emit('close')"
+          />
+        </slot>
+      </header>
+
+      <div :class="bodyClass">
+        <slot name="body" />
+      </div>
+      <slot name="after-body" />
+      <footer v-if="$slots.footer" :class="footerClass">
+        <slot name="footer" />
+      </footer>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { computed, useAttrs } from 'vue';
+import AppIconButton from './AppIconButton.vue';
+
+defineOptions({ inheritAttrs: false });
+
+const props = defineProps({
+  open: {
+    type: Boolean,
+    default: false,
+  },
+  title: {
+    type: String,
+    default: '',
+  },
+  subtitle: {
+    type: String,
+    default: '',
+  },
+  ariaLabel: {
+    type: String,
+    default: '',
+  },
+  titleId: {
+    type: String,
+    default: '',
+  },
+  rootClassName: {
+    type: String,
+    default: 'calls-modal',
+  },
+  backdropClass: {
+    type: String,
+    default: 'calls-modal-backdrop',
+  },
+  dialogClass: {
+    type: String,
+    default: 'calls-modal-dialog',
+  },
+  headerClass: {
+    type: String,
+    default: 'calls-modal-header calls-modal-header-enter',
+  },
+  headerLeftClass: {
+    type: String,
+    default: 'calls-modal-header-enter-left',
+  },
+  logoClass: {
+    type: String,
+    default: 'calls-modal-header-enter-logo',
+  },
+  titleClass: {
+    type: String,
+    default: 'calls-enter-title',
+  },
+  subtitleClass: {
+    type: String,
+    default: '',
+  },
+  bodyClass: {
+    type: String,
+    default: 'calls-modal-body',
+  },
+  footerClass: {
+    type: String,
+    default: 'calls-modal-footer',
+  },
+  logoSrc: {
+    type: String,
+    default: '/assets/orgas/kingrt/logo.svg',
+  },
+  closeIcon: {
+    type: String,
+    default: '/assets/orgas/kingrt/icons/cancel.png',
+  },
+  closeLabel: {
+    type: String,
+    default: 'Close modal',
+  },
+  showLogo: {
+    type: Boolean,
+    default: true,
+  },
+});
+
+defineEmits(['close']);
+
+const attrs = useAttrs();
+const rootAttrs = computed(() => {
+  const { class: _class, ...rest } = attrs;
+  return rest;
+});
+const rootClass = computed(() => [props.rootClassName, attrs.class]);
+</script>
+
+<style scoped>
+.calls-modal,
+.users-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.calls-modal {
+  z-index: 70;
+  padding: 12px;
+}
+
+.users-modal {
+  z-index: 30;
+}
+
+.calls-modal[hidden],
+.users-modal[hidden] {
+  display: none;
+}
+
+.calls-modal-backdrop,
+.users-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--color-rgba-5-12-23-0-72);
+}
+
+.app-modal-dialog {
+  position: relative;
+  z-index: 1;
+  display: grid;
+}
+
+.calls-modal-dialog {
+  --calls-enter-dialog-padding: 12px;
+  gap: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-surface-strong);
+  box-shadow: 0 6px 14px var(--color-rgba-0-0-0-0-28);
+  padding: var(--calls-enter-dialog-padding);
+}
+
+.users-modal-dialog {
+  --users-modal-padding: 16px;
+  width: min(980px, calc(100vw - 24px));
+  max-height: min(94vh, 980px);
+  overflow: auto;
+  gap: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--color-10203b);
+  padding: var(--users-modal-padding);
+}
+
+.calls-modal-header,
+.users-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.calls-modal-header {
+  gap: 10px;
+}
+
+.users-modal-head {
+  gap: 12px;
+}
+
+.calls-modal-header h4,
+.users-modal-head h4 {
+  margin: 5px 0 0;
+}
+
+.calls-modal-header h4 {
+  font-size: 17px;
+}
+
+.calls-modal-header .calls-enter-title {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.calls-modal-header-enter {
+  margin: calc(var(--calls-enter-dialog-padding) * -1) calc(var(--calls-enter-dialog-padding) * -1) 0;
+  padding: 10px;
+  border: 0;
+  background: var(--brand-bg);
+}
+
+.users-modal-head-brand {
+  margin: calc(var(--users-modal-padding) * -1) calc(var(--users-modal-padding) * -1) 0;
+  padding: 10px;
+  background: var(--brand-bg);
+}
+
+.calls-modal-header-enter-left,
+.users-modal-head-left {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.calls-modal-header-enter-left > div,
+.app-modal-title-block {
+  min-width: 0;
+}
+
+.calls-modal-header-enter-logo,
+.users-modal-head-logo {
+  width: auto;
+  height: 24px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.calls-modal-body,
+.users-modal-body,
+.users-avatar-modal-body {
+  display: grid;
+}
+
+.calls-modal-body {
+  gap: 10px;
+}
+
+.users-modal-body {
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.users-avatar-modal-body {
+  gap: 12px;
+}
+
+.calls-modal-footer,
+.users-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+</style>

@@ -81,6 +81,7 @@ function model_inference_transcript_from_http(
         'model' => $responseEnvelope['model'] ?? [],
         'prompt' => (string) ($validatedRequest['prompt'] ?? ''),
         'system' => $validatedRequest['system'] ?? null,
+        'messages' => $validatedRequest['messages'] ?? null,
         'sampling' => $validatedRequest['sampling'] ?? [],
         'completion' => $responseEnvelope['completion'] ?? [],
         'recorded_at' => gmdate('c'),
@@ -111,6 +112,7 @@ function model_inference_transcript_from_ws(
         ],
         'prompt' => (string) ($validatedRequest['prompt'] ?? ''),
         'system' => $validatedRequest['system'] ?? null,
+        'messages' => $validatedRequest['messages'] ?? null,
         'sampling' => $validatedRequest['sampling'] ?? [],
         'completion' => [
             'text' => (string) ($streamSummary['concatenated_text'] ?? ''),

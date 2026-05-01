@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_management.php';
+
 /**
  * @return array{
  *   ok: bool,
@@ -91,6 +93,14 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
  *     status: string,
  *     starts_at: string,
  *     ends_at: string,
+ *     schedule: array{
+ *       timezone: string,
+ *       date: string,
+ *       starts_at_local: string,
+ *       ends_at_local: string,
+ *       duration_minutes: int,
+ *       all_day: bool
+ *     },
  *     cancelled_at: ?string,
  *     cancel_reason: ?string,
  *     cancel_message: ?string,
@@ -196,6 +206,10 @@ SELECT
     {$effectiveStatusSql} AS effective_status,
     calls.starts_at,
     calls.ends_at,
+    calls.schedule_timezone,
+    calls.schedule_date,
+    calls.schedule_duration_minutes,
+    calls.schedule_all_day,
     calls.cancelled_at,
     calls.cancel_reason,
     calls.cancel_message,
@@ -264,6 +278,7 @@ SQL;
             'status' => (string) ($row['effective_status'] ?? ''),
             'starts_at' => (string) ($row['starts_at'] ?? ''),
             'ends_at' => (string) ($row['ends_at'] ?? ''),
+            'schedule' => videochat_call_schedule_from_row($row),
             'cancelled_at' => is_string($row['cancelled_at'] ?? null) ? (string) $row['cancelled_at'] : null,
             'cancel_reason' => is_string($row['cancel_reason'] ?? null) ? (string) $row['cancel_reason'] : null,
             'cancel_message' => is_string($row['cancel_message'] ?? null) ? (string) $row['cancel_message'] : null,

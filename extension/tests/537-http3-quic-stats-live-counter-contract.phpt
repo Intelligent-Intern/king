@@ -2,18 +2,10 @@
 King HTTP/3 stats fields stay tied to live QUIC counters and peer-observed request state
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required for the HTTP/3 ticket test server";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+king_http3_skipif_require_c_helpers();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -35,7 +27,7 @@ $assertClean = static function (string $label, array $response, array $capture, 
     var_dump($label);
     var_dump($response['status'] === 200);
     var_dump($response['body'] === $expectedBody);
-    var_dump($response['transport_backend'] === 'quiche_h3');
+    var_dump($response['transport_backend'] === 'lsquic_h3');
     var_dump($response['response_complete'] === true);
     var_dump($response['body_bytes'] === strlen($expectedBody));
     var_dump(($response['header_bytes'] ?? 0) > 0);

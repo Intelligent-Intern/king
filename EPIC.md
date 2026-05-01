@@ -1,115 +1,64 @@
 # King Program EPIC
 
-> This file is intentionally short.
-> It is the stable charter for King v1, not the moving roadmap.
-> All concrete remaining work, including strategic ordering, now lives in
-> `ISSUES.md`.
+This file is the stable charter for King v1. It is not the backlog.
 
 ## Purpose
 
-King is meant to ship as one coherent native systems runtime for PHP rather
-than a bag of partially wired helper surfaces.
+King ships as one coherent native systems runtime for PHP, not as disconnected helper surfaces.
 
-King v1 is the end-state contract for this line, not an MVP, demo slice, or
-"good enough for now" milestone.
-
-`EPIC.md` now exists only to hold the parts of that goal that should stay
-stable while execution moves:
-
-- the product boundary
-- the non-negotiable engineering rules
-- the release-level exit criteria
-
-If a statement is a live priority, a current leaf, or a decomposed task, it no
-longer belongs here.
+King v1 is the end-state contract for this line. It is not an MVP, demo slice, or temporary release shape.
 
 ## Product Boundary
 
-King v1 is only real when the exported surface behaves like one system:
+King v1 is real only when the exported surface behaves like one system:
 
-- transport, client, and server paths share coherent lifecycle semantics
-- procedural and OO APIs are parallel surfaces over the same native kernels
-- control-plane subsystems are stateful, policy-driven, and restart-aware
-- routing, load-balancing, and DNS surfaces are either backed by real kernels or explicitly excluded from the v1 contract
-- operational surfaces describe real live behavior rather than static snapshots
-- build, packaging, tests, and docs describe the same system
+- transport, client, and server paths share lifecycle semantics;
+- procedural and OO APIs are parallel surfaces over the same native kernels;
+- control-plane subsystems are stateful, policy-driven, and restart-aware;
+- routing, load-balancing, DNS, telemetry, storage, and orchestration are backed by real runtime behavior or explicitly outside v1;
+- build, packaging, tests, and docs describe the same system.
 
 ## Non-Negotiables
 
-- native runtime first, wrappers second
-- one kernel, multiple API surfaces
-- explicit ownership, teardown, and failure semantics
-- no capability claim without build and test proof
-- no permanent doc drift between target, verified state, and open work
-- no simulated or local-only behavior presented as fully real
-- no shrinking of an intended shared, remote, persistent, or otherwise stronger
-  contract just because the correct implementation is harder; any real scope
-  reduction requires explicit product approval, not engineering convenience
+- Native runtime first, wrappers second.
+- One kernel, multiple API surfaces.
+- Explicit ownership, teardown, and failure semantics.
+- No capability claim without code and verification.
+- No documentation drift between target, verified state, and open work.
+- No simulated or local-only behavior presented as fully real.
+- No weakening of an intended shared, remote, persistent, or stronger contract without explicit product approval.
 
-## Strategic Pillars
+## Release Train
 
-### 1. Runtime Truth
+Current release train: `1.0.7-beta`.
 
-Config, session, transport, server, and data-plane behavior must be backed by
-real kernels with explicit lifecycle and error contracts.
-
-### 2. Wire Truth
-
-Anything claimed as a transport or listener capability must be verified on-wire
-against real peers, not only through local runtime shims.
-
-### 3. Durable Control Plane
-
-MCP, orchestration, storage, routing, load-balancing, and DNS must survive restart, failure, and
-process boundaries honestly. Local-only convenience is not enough.
-
-### 4. Operational Truth
-
-Telemetry, autoscaling, admin, readiness, drain, and recovery behavior must be
-observable, bounded, and failure-aware under degraded conditions.
-
-### 5. Release Truth
-
-Build, bootstrap, packaging, compatibility, and sanitizer/soak coverage must be
-deterministic enough that release confidence does not depend on one lucky local
-machine.
+Everything in `BACKLOG.md` except MarketView/trading future work is intended for the current `1.0.7-beta` line unless explicitly reprioritized.
 
 ## Exit Criteria
 
-King can only be treated as a truly finished v1 line when all of the following
-are true:
+King can be treated as a finished v1 line only when:
 
-- every exported capability is either fully real and verified or removed from the public surface
-- wire-facing claims are backed by on-wire verification
-- restart, recovery, and lifecycle semantics are explicit and test-backed
-- build and packaging paths are deterministic on clean hosts
-- compatibility and persisted-state guarantees are written down and validated
-- `PROJECT_ASSESSMENT.md` has no material caveats left for the shipped surface
-- `ISSUES.md` no longer carries open v1 blockers
+- every exported capability is fully real and verified, or removed from the public surface;
+- wire-facing claims are backed by on-wire verification;
+- restart, recovery, lifecycle, security, and compatibility semantics are test-backed;
+- build and packaging paths are deterministic on clean hosts;
+- persisted-state upgrade/downgrade behavior is validated;
+- `BACKLOG.md` has no open v1 blockers;
+- `SPRINT.md` is empty;
+- `READYNESS_TRACKER.md` records the completed proof.
 
 ## Document Model
 
-Use the root documents like this:
+- `README.md`: product overview and install entrypoint.
+- `EPIC.md`: stable charter and release exit criteria.
+- `BACKLOG.md`: all open work, split into release batches.
+- `SPRINT.md`: active branch scope only.
+- `READYNESS_TRACKER.md`: completion log only.
+- `CONTRIBUTE`: workflow rules.
+- `documentation/`: developer and subsystem docs.
 
-- `README.md`
-  stable product description
-- `EPIC.md`
-  stable charter and exit criteria
-- `ISSUES.md`
-  single moving roadmap and execution queue
-- `PROJECT_ASSESSMENT.md`
-  verified implementation state and current caveats
-- `CONTRIBUTE`
-  workflow and change discipline
+## Change Rule
 
-## When To Change This File
+Update this file only for product boundary, non-negotiables, release train, exit criteria, or document model changes.
 
-Only update `EPIC.md` when one of these changes:
-
-- the product boundary
-- the non-negotiable engineering rules
-- the release-level exit criteria
-- the document model itself
-
-If the change is a priority shift, a new task, a split leaf, or a current
-blocker, it belongs in `ISSUES.md` instead.
+Put priorities, batches, and decomposed work into `BACKLOG.md` or `SPRINT.md`.

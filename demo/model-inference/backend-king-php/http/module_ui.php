@@ -19,33 +19,48 @@ function model_inference_handle_ui_routes(
     callable $jsonResponse,
     callable $errorResponse
 ): ?array {
+    // A-7c: /ui/* is the browser-UI namespace. /ui/login is the
+    // dedicated login page; /ui (with or without a trailing slash) is
+    // the chat app. Keeping both under the same prefix matches the
+    // rest of the demo and keeps the root path reserved for API +
+    // health surfaces.
+    if ($path === '/ui/login' || $path === '/ui/login/') {
+        return model_inference_ui_serve_static(
+            $method, __DIR__ . '/../public/login.html', $errorResponse
+        );
+    }
     if ($path !== '/ui' && $path !== '/ui/') {
         return null;
     }
+    return model_inference_ui_serve_static(
+        $method, __DIR__ . '/../public/chat.html', $errorResponse
+    );
+}
+
+/**
+ * Shared one-shot static-file helper. Keeps /ui and /login on the same
+ * simple read-from-disk path so both benefit from the same cache-busting
+ * + security headers without spreading a mini asset pipeline across the
+ * codebase.
+ */
+function model_inference_ui_serve_static(string $method, string $file, callable $errorResponse): array
+{
     if ($method !== 'GET' && $method !== 'HEAD') {
         return $errorResponse(405, 'method_not_allowed', 'GET required.', [
-            'path' => $path,
-            'method' => $method,
-            'allowed' => ['GET', 'HEAD'],
+            'method' => $method, 'allowed' => ['GET', 'HEAD'],
         ]);
     }
-
-    $file = __DIR__ . '/../public/chat.html';
     if (!is_file($file)) {
-        return $errorResponse(500, 'internal_server_error', 'Chat UI asset is missing.', [
-            'field' => 'public/chat.html',
-            'reason' => 'not_found',
+        return $errorResponse(500, 'internal_server_error', 'UI asset is missing.', [
+            'field' => basename($file), 'reason' => 'not_found',
         ]);
     }
-
     $body = @file_get_contents($file);
     if ($body === false) {
-        return $errorResponse(500, 'internal_server_error', 'Chat UI asset could not be read.', [
-            'field' => 'public/chat.html',
-            'reason' => 'read_failed',
+        return $errorResponse(500, 'internal_server_error', 'UI asset could not be read.', [
+            'field' => basename($file), 'reason' => 'read_failed',
         ]);
     }
-
     return [
         'status' => 200,
         'headers' => [

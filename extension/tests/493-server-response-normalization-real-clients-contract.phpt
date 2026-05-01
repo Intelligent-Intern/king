@@ -2,14 +2,9 @@
 King server one-shot listeners normalize handler responses into stable client-visible headers across real HTTP/1, HTTP/2, and HTTP/3 clients
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the on-wire HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
 ?>
 --INI--
 king.security_allow_config_override=1

@@ -157,7 +157,9 @@ session state.
 | `defineEnum(string $name, array $values)` | Registers one enum definition. |
 | `defineSchema(string $name, array $fields)` | Registers one schema definition. |
 | `encode(string $schema, mixed $data)` | Encodes data with a named schema. |
+| `encodeBatch(string $schema, array $records)` | Encodes a bounded list of same-schema records and fails the whole batch on the first invalid record. |
 | `decode(string $schema, string $data, bool|string|array $decodeAsObject = false)` | Decodes binary data with a named schema. |
+| `decodeBatch(string $schema, array $records, bool|string|array $decodeAsObject = false)` | Decodes a bounded list of same-schema binary records with the same object-hydration modes as single-record decode. |
 | `isDefined(string $name)` | Checks whether a schema or enum exists. |
 | `isSchemaDefined(string $schema)` | Checks whether a schema exists. |
 | `isEnumDefined(string $name)` | Checks whether an enum exists. |

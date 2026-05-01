@@ -10,7 +10,7 @@ declare(strict_types=1);
  * transport, routing, failover, telemetry — while llama.cpp is the real
  * execution engine behind the King-native inference contract. That is a
  * deliberate scope fence (tracker sections V and Z) and is called out in
- * demo/model-inference/README.md.
+ * documentation/dev/model-inference.md.
  *
  * Lifecycle states:
  *   stopped   — no process active; start() transitions to starting

@@ -27,16 +27,13 @@ function buildStoredSession(payload) {
 }
 
 async function fetchStoredSession(email, password) {
-  const params = new URLSearchParams({
-    email,
-    password,
-  });
-
-  const response = await fetch(`${backendOrigin}/api/auth/login?${params.toString()}`, {
-    method: 'GET',
+  const response = await fetch(`${backendOrigin}/api/auth/login`, {
+    method: 'POST',
     headers: {
       accept: 'application/json',
+      'content-type': 'application/json',
     },
+    body: JSON.stringify({ email, password }),
   });
 
   let payload = null;

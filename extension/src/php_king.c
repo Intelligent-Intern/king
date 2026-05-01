@@ -10,7 +10,7 @@
  *
  * RUNTIME STATUS:
  * - MINIT wires all config modules and registers their INI directives
- * - No quiche_config created (no quiche dependency)
+ * - No legacy QUIC backend config is created during MINIT
  * - Exception classes register in the correct hierarchy
  * - The first OO class entries now include active Config/Session wrappers
  *   over the same Runtime resource runtime; broader method parity and the

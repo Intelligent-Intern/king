@@ -1,0 +1,213 @@
+:root {
+  --bg-shell: var(--color-0b1324);
+  --bg-pane: var(--color-182c4d);
+  --brand-bg: var(--color-0b1324);
+  --bg-surface: var(--color-003c93);
+  --bg-surface-strong: var(--color-0c1c33);
+  --bg-input: var(--color-d8dadd);
+  --bg-action: var(--color-0b1324);
+  --bg-action-hover: var(--color-5696ef);
+  --bg-row: var(--color-2a569f);
+  --bg-row-hover: var(--color-163260);
+  --line: var(--color-09111e);
+  --text-main: var(--color-edf3ff);
+  --text-muted: var(--color-8490a1);
+  --ok: var(--color-177f22);
+  --wait: var(--color-8d9500);
+  --danger: var(--color-ff0000);
+
+  --bg-sidebar: var(--color-0b1324);
+  --bg-main: var(--color-0b1324);
+  --bg-tab: var(--color-003c93);
+  --bg-tab-hover: var(--bg-action-hover);
+  --bg-tab-active: var(--bg-row);
+  --bg-ui-chrome: var(--color-3d5f98);
+  --bg-ui-chrome-active: var(--bg-row);
+  --bg-icon: var(--bg-action);
+  --bg-icon-active: var(--bg-action-hover);
+  --border-subtle: var(--line);
+  --text-primary: var(--text-main);
+  --text-secondary: var(--color-c6d4eb);
+  --text-dim: var(--color-5e6d86);
+  --warn: var(--color-4d5011);
+  --brand-cyan: var(--color-1482be);
+  --brand-cyan-hover: var(--color-1a96d8);
+  --brand-cyan-active: var(--color-0f6ea8);
+  --action-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(8%) saturate(176%) hue-rotate(180deg) brightness(94%) contrast(89%);
+  /* Canonical color tokens: use these instead of hardcoded literals */
+  --color-000000: #000000;
+  --color-003c93: #003c93;
+  --color-08111f: #08111f;
+  --color-09111e: #09111e;
+  --color-091a35: #091a35;
+  --color-0a1322: #0a1322;
+  --color-0b1323: #0b1323;
+  --color-0b1324: #0b1324;
+  --color-0b1424: #0b1424;
+  --color-0c1c33: #0c1c33;
+  --color-0c1f41: #0c1f41;
+  --color-0d1e36: #0d1e36;
+  --color-0f1a2c: #0f1a2c;
+  --color-0f1d34: #0f1d34;
+  --color-0f1f37: #0f1f37;
+  --color-0f6ea8: #0f6ea8;
+  --color-10203b: #10203b;
+  --color-11213a: #11213a;
+  --color-112b55: #112b55;
+  --color-11661a: #11661a;
+  --color-122033: #122033;
+  --color-12233f: #12233f;
+  --color-122340: #122340;
+  --color-122d59: #122d59;
+  --color-132542: #132542;
+  --color-132745: #132745;
+  --color-133262: #133262;
+  --color-14452b: #14452b;
+  --color-1482be: #1482be;
+  --color-152a49: #152a49;
+  --color-15305a: #15305a;
+  --color-153665: #153665;
+  --color-162e51: #162e51;
+  --color-163260: #163260;
+  --color-177f22: #177f22;
+  --color-182c4d: #182c4d;
+  --color-1a96d8: #1a96d8;
+  --color-1b427a: #1b427a;
+  --color-1c437a: #1c437a;
+  --color-1d3f70: #1d3f70;
+  --color-1e3b66: #1e3b66;
+  --color-1f1808: #1f1808;
+  --color-1f4f31: #1f4f31;
+  --color-1f9d2c: #1f9d2c;
+  --color-213a63: #213a63;
+  --color-21508f: #21508f;
+  --color-23354c: #23354c;
+  --color-233753: #233753;
+  --color-24497f: #24497f;
+  --color-25569a: #25569a;
+  --color-2a569f: #2a569f;
+  --color-2a5aa0: #2a5aa0;
+  --color-2b63ac: #2b63ac;
+  --color-2d63b3: #2d63b3;
+  --color-2e65b3: #2e65b3;
+  --color-311922: #311922;
+  --color-331616: #331616;
+  --color-36506e: #36506e;
+  --color-3d5f98: #3d5f98;
+  --color-3f79d6: #3f79d6;
+  --color-4d5011: #4d5011;
+  --color-4f1e2e: #4f1e2e;
+  --color-4f1f1f: #4f1f1f;
+  --color-4f5a6b: #4f5a6b;
+  --color-5696ef: #5696ef;
+  --color-5e6d86: #5e6d86;
+  --color-617082: #617082;
+  --color-6b1f1f: #6b1f1f;
+  --color-6f86b0: #6f86b0;
+  --color-7c1010: #7c1010;
+  --color-7f8ea7: #7f8ea7;
+  --color-7f9cc8: #7f9cc8;
+  --color-8490a1: #8490a1;
+  --color-8d9500: #8d9500;
+  --color-8f4a58: #8f4a58;
+  --color-94add3: #94add3;
+  --color-a81a1a: #a81a1a;
+  --color-bdf6cf: #bdf6cf;
+  --color-c0d1ef: #c0d1ef;
+  --color-c6d4eb: #c6d4eb;
+  --color-c7d7f2: #c7d7f2;
+  --color-c91f1f: #c91f1f;
+  --color-c9d5ea: #c9d5ea;
+  --color-c9d9f4: #c9d9f4;
+  --color-cc0000: #cc0000;
+  --color-d8dadd: #d8dadd;
+  --color-e03232: #e03232;
+  --color-e6f0ff: #e6f0ff;
+  --color-e8f0ff: #e8f0ff;
+  --color-edf3ff: #edf3ff;
+  --color-f1f5ff: #f1f5ff;
+  --color-f1f6ff: #f1f6ff;
+  --color-f7f7f7: #f7f7f7;
+  --color-ff0000: #ff0000;
+  --color-ff7878: #ff7878;
+  --color-ff9f9f: #ff9f9f;
+  --color-ffb5b5: #ffb5b5;
+  --color-ffba50: #ffba50;
+  --color-ffc56a: #ffc56a;
+  --color-ffd1dc: #ffd1dc;
+  --color-ffd7db: #ffd7db;
+  --color-ffe9c2: #ffe9c2;
+  --color-ffffff: #ffffff;
+  --color-rgba-0-0-0-0-26: rgba(0, 0, 0, 0.26);
+  --color-rgba-0-0-0-0-28: rgba(0, 0, 0, 0.28);
+  --color-rgba-0-0-0-0-35: rgba(0, 0, 0, 0.35);
+  --color-rgba-0-0-0-0-42: rgba(0, 0, 0, 0.42);
+  --color-rgba-0-0-0-0-75: rgba(0, 0, 0, 0.75);
+  --color-rgba-11-19-36-0-78: rgba(11, 19, 36, 0.78);
+  --color-rgba-12-28-53-0-64: rgba(12, 28, 53, 0.64);
+  --color-rgba-180-180-180-0-95: rgba(180, 180, 180, 0.95);
+  --color-rgba-20-130-190-0-06: rgba(20, 130, 190, 0.06);
+  --color-rgba-20-130-190-0-75: rgba(20, 130, 190, 0.75);
+  --color-rgba-20-130-190-0-9: rgba(20, 130, 190, 0.9);
+  --color-rgba-213-40-40-0-92: rgba(213, 40, 40, 0.92);
+  --color-rgba-225-58-58-0-96: rgba(225, 58, 58, 0.96);
+  --color-rgba-233-242-255-0-92: rgba(233, 242, 255, 0.92);
+  --color-rgba-239-68-68-0-75: rgba(239, 68, 68, 0.75);
+  --color-rgba-255-180-180-0-95: rgba(255, 180, 180, 0.95);
+  --color-rgba-255-188-90-0-55: rgba(255, 188, 90, 0.55);
+  --color-rgba-255-255-255-0-15: rgba(255, 255, 255, 0.15);
+  --color-rgba-5-12-23-0-35: rgba(5, 12, 23, 0.35);
+  --color-rgba-5-12-23-0-72: rgba(5, 12, 23, 0.72);
+  --color-rgba-8-20-43-0-94: rgba(8, 20, 43, 0.94);
+  --color-rgba-9-17-30-0-56: rgba(9, 17, 30, 0.56);
+
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-shell);
+  color: var(--text-primary);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-162e51) var(--color-09111e);
+}
+
+*::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--color-09111e);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-162e51);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-5696ef);
+}

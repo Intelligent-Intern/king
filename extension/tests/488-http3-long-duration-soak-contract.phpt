@@ -2,23 +2,10 @@
 King HTTP/3 runtime survives repeated mixed-load bursts and keeps later healthy sessions clean
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$server = getenv('KING_QUICHE_SERVER');
-if (!is_string($server) || $server === '' || !is_executable($server)) {
-    echo "skip KING_QUICHE_SERVER must point at a prebuilt quiche-server binary";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required for the HTTP/3 multi peer helper";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+king_http3_skipif_require_c_helpers();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -163,8 +150,8 @@ bool(true)
 int(200)
 string(20) "stable-direct-http3
 "
-string(9) "quiche_h3"
+string(9) "lsquic_h3"
 int(200)
 string(22) "stable-dispatch-http3
 "
-string(9) "quiche_h3"
+string(9) "lsquic_h3"

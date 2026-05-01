@@ -1,0 +1,68 @@
+{
+  "contract_name": "king-video-chat-protected-media-transport-envelope",
+  "contract_version": "v1.0.0",
+  "purpose": "Carries an opaque protected media frame through JSON websocket transports without exposing plaintext-oriented byte arrays.",
+  "layers": {
+    "codec_frame": "king-video-chat-wlvc-frame or browser encoded WebRTC frame",
+    "protected_media_frame": "king-video-chat-protected-media-frame",
+    "transport_envelope": "king-video-chat-protected-media-transport-envelope"
+  },
+  "json_carriage": {
+    "field": "protected_frame",
+    "encoding": "base64url",
+    "plaintext_data_field_allowed_when_present": false,
+    "legacy_data_field_allowed_only_in_state": "transport_only",
+    "required_mode_plaintext_fallback_allowed": false
+  },
+  "binary_layout": {
+    "magic_ascii": "KPMF",
+    "version": 1,
+    "prefix_bytes": 8,
+    "header_length_offset": 4,
+    "header_length_encoding": "u32_be",
+    "header_encoding": "stable_json_utf8",
+    "ciphertext_encoding": "raw_bytes"
+  },
+  "bounds": {
+    "min_total_bytes": 80,
+    "max_header_bytes": 4096,
+    "max_ciphertext_bytes": 16777216,
+    "max_total_bytes": 16781320
+  },
+  "sfu_visibility": {
+    "json_fields": [
+      "type",
+      "publisher_id",
+      "publisher_user_id",
+      "track_id",
+      "timestamp",
+      "frame_type",
+      "protection_mode",
+      "protected_frame"
+    ],
+    "forbidden_json_fields_when_protected": [
+      "data",
+      "protected",
+      "raw_media_key",
+      "private_key",
+      "shared_secret",
+      "plaintext_frame",
+      "decoded_audio",
+      "decoded_video"
+    ],
+    "sfu_parse_purpose": "bounds and relay-visible header validation only; never decryption"
+  },
+  "parse_failures": [
+    "missing_protected_frame",
+    "malformed_protected_frame",
+    "protected_frame_too_large",
+    "protected_frame_data_conflict",
+    "protected_frame_required",
+    "forbidden_protected_metadata"
+  ],
+  "compatibility": {
+    "transport_only_legacy_data_array_allowed": true,
+    "protected_or_required_mode_legacy_data_array_allowed": false,
+    "required_mode_plaintext_fallback_allowed": false
+  }
+}

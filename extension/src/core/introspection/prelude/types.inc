@@ -104,37 +104,3 @@ static zend_always_inline const char *king_safe_string(const char *value)
 {
     return value != NULL ? value : "";
 }
-
-
-
-static uint32_t king_proto_float_to_bits(float value)
-{
-    uint32_t bits;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
-static float king_proto_bits_to_float(uint32_t bits)
-{
-    float value;
-
-    memcpy(&value, &bits, sizeof(value));
-    return value;
-}
-
-static uint64_t king_proto_double_to_bits(double value)
-{
-    uint64_t bits;
-
-    memcpy(&bits, &value, sizeof(bits));
-    return bits;
-}
-
-static double king_proto_bits_to_double(uint64_t bits)
-{
-    double value;
-
-    memcpy(&value, &bits, sizeof(value));
-    return value;
-}

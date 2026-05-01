@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/error_envelope.php';
+
 function videochat_presence_state_init(): array
 {
     return [
@@ -178,6 +180,8 @@ function videochat_presence_room_participants(array $state, string $roomId): arr
 
 function videochat_presence_send_frame(mixed $socket, array $payload, ?callable $sender = null): bool
 {
+    $payload = videochat_realtime_normalize_error_frame($payload);
+
     if ($sender !== null) {
         try {
             return $sender($socket, $payload) === true;
@@ -226,7 +230,12 @@ function videochat_presence_send_room_snapshot(
                     $normalized = strtolower(trim($role));
                     return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
                 })((string) ($connection['call_role'] ?? 'participant')),
+                'effective_call_role' => (static function (string $role): string {
+                    $normalized = strtolower(trim($role));
+                    return in_array($normalized, ['owner', 'moderator', 'participant'], true) ? $normalized : 'participant';
+                })((string) ($connection['effective_call_role'] ?? ($connection['call_role'] ?? 'participant'))),
                 'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
+                'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
             ],
             'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
             'time' => gmdate('c'),

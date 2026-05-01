@@ -36,6 +36,12 @@ SQL
     )->fetchColumn();
     videochat_session_logout_assert($adminUserId > 0, 'expected seeded admin user');
 
+    $ownerLanding = $pdo->prepare('UPDATE users SET post_logout_landing_url = :url WHERE id = :id');
+    $ownerLanding->execute([
+        ':url' => '/call-goodbye?from=logout-contract',
+        ':id' => $adminUserId,
+    ]);
+
     $insertSession = $pdo->prepare(
         <<<'SQL'
 INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
@@ -175,6 +181,10 @@ SQL
     videochat_session_logout_assert(
         (int) (($logoutPayload['result'] ?? [])['websocket_disconnects'] ?? -1) === 0,
         'logout payload websocket_disconnects should remain deterministic for non-resource sockets'
+    );
+    videochat_session_logout_assert(
+        (string) (($logoutPayload['result'] ?? [])['post_logout_landing_url'] ?? '') === '/call-goodbye?from=logout-contract',
+        'logout payload should include configured post_logout_landing_url'
     );
 
     videochat_session_logout_assert(

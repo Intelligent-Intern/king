@@ -18,8 +18,8 @@ import { debugWarn } from '../../support/debugLogs.js'
 
 // Dynamic import of the Emscripten-generated module
 type WLVCModule = {
-  Encoder: new (w: number, h: number, quality: number, keyInterval: number) => WasmEncoder
-  Decoder: new (w: number, h: number, quality: number) => WasmDecoder
+  Encoder: new (...args: any[]) => WasmEncoder
+  Decoder: new (...args: any[]) => WasmDecoder
   AudioProcessor: new (sampleRate: number, gateThresh: number, compThresh: number) => WasmAudioProcessor
 }
 
@@ -50,6 +50,7 @@ function isBindingMismatchError(error: unknown, className: string): boolean {
 
 let wasmModule: WLVCModule | null = null
 let loadPromise: Promise<WLVCModule | null> | null = null
+const WASM_MIME_CACHE_BUSTER = 'application-wasm-20260421'
 
 /**
  * Load the WASM module (singleton, cached across calls).
@@ -65,7 +66,9 @@ async function loadWasmModule(): Promise<WLVCModule | null> {
       wasmModule = await createModule({
         locateFile: (path: string) => {
           if (path.endsWith('.wasm')) {
-            return new URL('./wlvc.wasm', import.meta.url).href
+            const url = new URL('./wlvc.wasm', import.meta.url)
+            url.searchParams.set('v', WASM_MIME_CACHE_BUSTER)
+            return url.href
           }
           return path
         },
@@ -84,17 +87,91 @@ async function loadWasmModule(): Promise<WLVCModule | null> {
 // Encoder wrapper
 // ---------------------------------------------------------------------------
 
+export type WasmWaveletType = WaveletCodecConfig['waveletType']
+export type WasmEntropyMode = WaveletCodecConfig['entropyCoding']
+export type WasmColorSpace = WaveletCodecConfig['colorSpace']
+
+const waveletToNum: Record<WasmWaveletType, number> = { haar: 0, db4: 1, cdf97: 2 }
+const entropyToNum: Record<WasmEntropyMode, number> = { rle: 0, arithmetic: 1, none: 2 }
+const colorToNum: Record<WasmColorSpace, number> = { yuv: 0, rgb: 1 }
+
+export interface WasmCodecConfig extends Partial<WaveletCodecConfig> {
+  width: number
+  height: number
+  dwtLevels?: number
+  motionEstimation?: boolean
+}
+
+function usesOnlyLegacyWasmConfig(config: Required<WasmCodecConfig>): boolean {
+  return (
+    config.dwtLevels === 3 &&
+    config.waveletType === 'haar' &&
+    config.colorSpace === 'yuv' &&
+    config.entropyCoding === 'rle' &&
+    config.motionEstimation === true
+  )
+}
+
+function createAdvancedEncoder(moduleRef: WLVCModule, config: Required<WasmCodecConfig>): WasmEncoder {
+  return new moduleRef.Encoder(
+    config.width,
+    config.height,
+    config.quality,
+    config.keyFrameInterval,
+    config.dwtLevels,
+    waveletToNum[config.waveletType],
+    colorToNum[config.colorSpace],
+    entropyToNum[config.entropyCoding],
+    config.motionEstimation
+  )
+}
+
+function createLegacyEncoder(moduleRef: WLVCModule, config: Required<WasmCodecConfig>): WasmEncoder {
+  return new moduleRef.Encoder(
+    config.width,
+    config.height,
+    config.quality,
+    config.keyFrameInterval
+  )
+}
+
+function createAdvancedDecoder(moduleRef: WLVCModule, config: Required<WasmCodecConfig>): WasmDecoder {
+  return new moduleRef.Decoder(
+    config.width,
+    config.height,
+    config.quality,
+    config.dwtLevels,
+    waveletToNum[config.waveletType],
+    colorToNum[config.colorSpace],
+    entropyToNum[config.entropyCoding]
+  )
+}
+
+function createLegacyDecoder(moduleRef: WLVCModule, config: Required<WasmCodecConfig>): WasmDecoder {
+  return new moduleRef.Decoder(
+    config.width,
+    config.height,
+    config.quality
+  )
+}
+
 export class WasmWaveletVideoEncoder {
   private encoder: WasmEncoder | null = null
   private moduleRef: WLVCModule | null = null
-  private config: Required<Pick<WaveletCodecConfig, 'quality' | 'keyFrameInterval'>> & { width: number; height: number }
+  private config: Required<WasmCodecConfig>
+  private usingAdvancedSurface = false
 
-  constructor(config: Partial<WaveletCodecConfig> & { width: number; height: number }) {
+  constructor(config: WasmCodecConfig) {
     this.config = {
       width: config.width,
       height: config.height,
       quality: config.quality ?? 75,
-      keyFrameInterval: config.keyFrameInterval ?? 2,
+      keyFrameInterval: config.keyFrameInterval ?? 30,
+      dwtLevels: config.dwtLevels ?? 3,
+      waveletType: config.waveletType ?? 'haar',
+      colorSpace: config.colorSpace ?? 'yuv',
+      entropyCoding: config.entropyCoding ?? 'rle',
+      motionEstimation: config.motionEstimation ?? true,
     }
   }
 
@@ -103,13 +180,19 @@ export class WasmWaveletVideoEncoder {
     if (!mod) return false
 
     this.moduleRef = mod
-    this.encoder = new mod.Encoder(
-      this.config.width,
-      this.config.height,
-      this.config.quality,
-      this.config.keyFrameInterval
-    )
-    return true
+    try {
+      this.encoder = createAdvancedEncoder(mod, this.config)
+      this.usingAdvancedSurface = true
+      return true
+    } catch (error) {
+      if (usesOnlyLegacyWasmConfig(this.config)) {
+        this.encoder = createLegacyEncoder(mod, this.config)
+        this.usingAdvancedSurface = false
+        return true
+      }
+      debugWarn('[WASM Codec] Advanced encoder surface unavailable; falling back to TypeScript codec', error)
+      return false
+    }
   }
 
   private recreateEncoder(): boolean {
@@ -119,13 +202,31 @@ export class WasmWaveletVideoEncoder {
     } catch {
       // ignore stale encoder cleanup failures
     }
-    this.encoder = new this.moduleRef.Encoder(
-      this.config.width,
-      this.config.height,
-      this.config.quality,
-      this.config.keyFrameInterval
-    )
-    return true
+    try {
+      if (this.usingAdvancedSurface) {
+        this.encoder = new this.moduleRef.Encoder(
+          this.config.width,
+          this.config.height,
+          this.config.quality,
+          this.config.keyFrameInterval,
+          this.config.dwtLevels,
+          waveletToNum[this.config.waveletType],
+          colorToNum[this.config.colorSpace],
+          entropyToNum[this.config.entropyCoding],
+          this.config.motionEstimation
+        )
+      } else {
+        this.encoder = new this.moduleRef.Encoder(
+          this.config.width,
+          this.config.height,
+          this.config.quality,
+          this.config.keyFrameInterval
+        )
+      }
+      return true
+    } catch {
+      return false
+    }
   }
 
   encodeFrame(imageData: ImageData, timestamp: number): FrameData {
@@ -184,13 +285,20 @@ export class WasmWaveletVideoEncoder {
 export class WasmWaveletVideoDecoder {
   private decoder: WasmDecoder | null = null
   private moduleRef: WLVCModule | null = null
-  private config: Required<Pick<WaveletCodecConfig, 'quality'>> & { width: number; height: number }
+  private config: Required<WasmCodecConfig>
+  private usingAdvancedSurface = false
 
-  constructor(config: Partial<WaveletCodecConfig> & { width: number; height: number }) {
+  constructor(config: WasmCodecConfig) {
     this.config = {
       width: config.width,
       height: config.height,
       quality: config.quality ?? 75,
+      keyFrameInterval: config.keyFrameInterval ?? 30,
+      dwtLevels: config.dwtLevels ?? 3,
+      waveletType: config.waveletType ?? 'haar',
+      colorSpace: config.colorSpace ?? 'yuv',
+      entropyCoding: config.entropyCoding ?? 'rle',
+      motionEstimation: config.motionEstimation ?? true,
     }
   }
 
@@ -199,8 +307,19 @@ export class WasmWaveletVideoDecoder {
     if (!mod) return false
 
     this.moduleRef = mod
-    this.decoder = new mod.Decoder(this.config.width, this.config.height, this.config.quality)
-    return true
+    try {
+      this.decoder = createAdvancedDecoder(mod, this.config)
+      this.usingAdvancedSurface = true
+      return true
+    } catch (error) {
+      if (usesOnlyLegacyWasmConfig(this.config)) {
+        this.decoder = createLegacyDecoder(mod, this.config)
+        this.usingAdvancedSurface = false
+        return true
+      }
+      debugWarn('[WASM Codec] Advanced decoder surface unavailable; falling back to TypeScript codec', error)
+      return false
+    }
   }
 
   private recreateDecoder(): boolean {
@@ -210,8 +329,24 @@ export class WasmWaveletVideoDecoder {
     } catch {
       // ignore stale decoder cleanup failures
     }
-    this.decoder = new this.moduleRef.Decoder(this.config.width, this.config.height, this.config.quality)
-    return true
+    try {
+      if (this.usingAdvancedSurface) {
+        this.decoder = new this.moduleRef.Decoder(
+          this.config.width,
+          this.config.height,
+          this.config.quality,
+          this.config.dwtLevels,
+          waveletToNum[this.config.waveletType],
+          colorToNum[this.config.colorSpace],
+          entropyToNum[this.config.entropyCoding]
+        )
+      } else {
+        this.decoder = new this.moduleRef.Decoder(this.config.width, this.config.height, this.config.quality)
+      }
+      return true
+    } catch {
+      return false
+    }
   }
 
   decodeFrame(frameData: FrameData): DecodedFrame {
@@ -266,7 +401,7 @@ export class WasmWaveletVideoDecoder {
 // ---------------------------------------------------------------------------
 
 export async function createWasmEncoder(
-  config: Partial<WaveletCodecConfig> & { width: number; height: number }
+  config: WasmCodecConfig
 ): Promise<WasmWaveletVideoEncoder | null> {
   const encoder = new WasmWaveletVideoEncoder(config)
   const ok = await encoder.init()
@@ -274,7 +409,7 @@ export async function createWasmEncoder(
 }
 
 export async function createWasmDecoder(
-  config: Partial<WaveletCodecConfig> & { width: number; height: number }
+  config: WasmCodecConfig
 ): Promise<WasmWaveletVideoDecoder | null> {
   const decoder = new WasmWaveletVideoDecoder(config)
   const ok = await decoder.init()
@@ -287,7 +422,7 @@ export async function createWasmDecoder(
 
 import { createEncoder as createTsEncoder, createDecoder as createTsDecoder } from '../wavelet/codec.js'
 
-export async function createHybridEncoder(config: Partial<WaveletCodecConfig> & { width: number; height: number }) {
+export async function createHybridEncoder(config: WasmCodecConfig) {
   const wasm = await createWasmEncoder(config)
   if (wasm) {
     return wasm
@@ -295,7 +430,7 @@ export async function createHybridEncoder(config: Partial<WaveletCodecConfig> & 
   return createTsEncoder(config)
 }
 
-export async function createHybridDecoder(config: Partial<WaveletCodecConfig> & { width: number; height: number }) {
+export async function createHybridDecoder(config: WasmCodecConfig) {
   const wasm = await createWasmDecoder(config)
   if (wasm) {
     return wasm

@@ -20,8 +20,7 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
-QUICHE_DIR="${KING_QUICHE_DIR:-${ROOT_DIR}/quiche}"
-QUICHE_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-quiche.sh"
+LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 PROFILE_DIR="${EXT_DIR}/build/profiles/release"
 DEFAULT_OUTPUT_DIR="${ROOT_DIR}/dist"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
@@ -120,6 +119,41 @@ sha256_file() {
     sha256sum "${path}" | awk '{print $1}'
 }
 
+metadata_value() {
+    local key="$1"
+    local path="$2"
+    sed -n "s/^${key}=\"\\(.*\\)\"$/\\1/p" "${path}" | head -n 1
+}
+
+lsquic_runtime_dir_has_pinned_runtime() {
+    local runtime_dir="$1"
+    local runtime_library="${runtime_dir}/liblsquic.so"
+    local runtime_metadata="${runtime_dir}/king-lsquic-runtime.env"
+    local expected_lock_sha=""
+    local actual_lock_sha=""
+    local actual_library_sha=""
+
+    [[ -f "${runtime_library}" ]] || return 1
+    [[ -f "${runtime_metadata}" ]] || return 1
+
+    expected_lock_sha="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
+    actual_lock_sha="$(metadata_value KING_LSQUIC_RUNTIME_LOCK_SHA256 "${runtime_metadata}")"
+    actual_library_sha="$(metadata_value KING_LSQUIC_RUNTIME_LIBRARY_SHA256 "${runtime_metadata}")"
+
+    [[ "${actual_lock_sha}" == "${expected_lock_sha}" ]] || return 1
+    [[ -n "${actual_library_sha}" ]] || return 1
+    [[ "${actual_library_sha}" == "$(sha256_file "${runtime_library}")" ]] || return 1
+}
+
+release_profile_has_pinned_lsquic_runtime() {
+    lsquic_runtime_dir_has_pinned_runtime "${PROFILE_DIR}/runtime"
+}
+
+release_env_has_pinned_lsquic_runtime() {
+    [[ -n "${KING_LSQUIC_RUNTIME_PREFIX:-}" ]] || return 1
+    lsquic_runtime_dir_has_pinned_runtime "${KING_LSQUIC_RUNTIME_PREFIX}"
+}
+
 resolve_version() {
     sed -n 's/^#  define PHP_KING_VERSION[[:space:]]*"\(.*\)"/\1/p' "${EXT_DIR}/include/php_king.h" | head -n 1
 }
@@ -194,19 +228,17 @@ ensure_release_git_lock_state() {
         exit 1
     fi
 
-    if [[ ! -f "${SCRIPT_DIR}/quiche-bootstrap.lock" ]]; then
-        echo "Missing pinned quiche lock file: ${SCRIPT_DIR}/quiche-bootstrap.lock" >&2
+    if [[ ! -f "${SCRIPT_DIR}/lsquic-bootstrap.lock" ]]; then
+        echo "Missing pinned LSQUIC lock file: ${SCRIPT_DIR}/lsquic-bootstrap.lock" >&2
         exit 1
     fi
 
-    if [[ ! -x "${QUICHE_BOOTSTRAP_SCRIPT}" ]]; then
-        echo "Missing executable bootstrap script: ${QUICHE_BOOTSTRAP_SCRIPT}" >&2
+    if [[ ! -x "${LSQUIC_BOOTSTRAP_SCRIPT}" ]]; then
+        echo "Missing executable bootstrap script: ${LSQUIC_BOOTSTRAP_SCRIPT}" >&2
         exit 1
     fi
 
     for required_lock in \
-        "${SCRIPT_DIR}/toolchain.lock" \
-        "${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
         "${SCRIPT_DIR}/phpize-generated-files.list"
     do
         if [[ ! -f "${required_lock}" ]]; then
@@ -216,25 +248,26 @@ ensure_release_git_lock_state() {
     done
 
     if [[ "${CI:-}" == "true" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-lock
+        "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-lock
 
-        # CI checkouts may not contain a pre-populated quiche tree (for example
-        # when no gitlink-backed submodule is present in the fetched tree). Fall
-        # back to deterministic bootstrap from the pinned lock in that case.
-        if [[ -d "${QUICHE_DIR}" ]] && git -C "${QUICHE_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            if ! "${QUICHE_BOOTSTRAP_SCRIPT}" --verify-current; then
-                echo "Pinned quiche checkout verification failed; bootstrapping pinned checkout." >&2
-                "${QUICHE_BOOTSTRAP_SCRIPT}"
-            fi
-        else
-            echo "Pinned quiche checkout is missing in CI; bootstrapping pinned checkout." >&2
-            "${QUICHE_BOOTSTRAP_SCRIPT}"
+        # CI package jobs normally receive the pinned runtime artifact from the
+        # lsquic-runtime job. When that staged runtime matches the lock, do not
+        # rehydrate the source cache from GitHub during packaging.
+        if release_profile_has_pinned_lsquic_runtime || release_env_has_pinned_lsquic_runtime; then
+            return 0
+        fi
+
+        # CI checkouts may not contain the generated source cache. Rebuild it
+        # from the deterministic lock only when no verified runtime is staged.
+        if ! "${LSQUIC_BOOTSTRAP_SCRIPT}" --verify-current; then
+            echo "Pinned LSQUIC source cache is missing in CI; bootstrapping pinned source cache." >&2
+            "${LSQUIC_BOOTSTRAP_SCRIPT}"
         fi
 
         return 0
     fi
 
-    "${QUICHE_BOOTSTRAP_SCRIPT}"
+    "${LSQUIC_BOOTSTRAP_SCRIPT}"
 }
 
 VERSION="$(resolve_version)"
@@ -256,9 +289,7 @@ GIT_COMMIT="$(resolve_git_commit)"
 SOURCE_DATE_EPOCH="$(resolve_source_epoch)"
 SOURCE_DIRTY="$(resolve_dirty_state)"
 BUILD_REF="git.${GIT_SHORT}"
-PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/quiche-bootstrap.lock")"
-PROVENANCE_TOOLCHAIN_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/toolchain.lock")"
-PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/quiche-workspace.Cargo.lock")"
+PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="$(sha256_file "${SCRIPT_DIR}/lsquic-bootstrap.lock")"
 
 if [[ "${SOURCE_DIRTY}" == "1" ]]; then
     BUILD_REF="${BUILD_REF}.dirty"
@@ -268,16 +299,25 @@ PACKAGE_BASENAME="king-${VERSION}-${BUILD_REF}-${OS_NAME}-${ARCH_NAME}-phpapi-${
 
 ensure_release_git_lock_state
 
+build_release_profile() {
+    local -a build_env=()
+
+    if [[ -z "${KING_LSQUIC_RUNTIME_PREFIX:-}" && ! -f "${PROFILE_DIR}/runtime/liblsquic.so" ]]; then
+        build_env+=(KING_LSQUIC_RUNTIME_BUILD="${KING_LSQUIC_RUNTIME_BUILD:-1}")
+    fi
+
+    env "${build_env[@]}" "${SCRIPT_DIR}/build-profile.sh" release
+}
+
 require_release_profile() {
     local missing=0
     local required_files=(
         "${PROFILE_DIR}/king.so"
-        "${PROFILE_DIR}/libquiche.so"
-        "${PROFILE_DIR}/quiche-server"
+        "${PROFILE_DIR}/runtime/liblsquic.so"
     )
 
     if [[ "${REBUILD}" == "1" ]]; then
-        "${SCRIPT_DIR}/build-profile.sh" release
+        build_release_profile
         return 0
     fi
 
@@ -289,7 +329,7 @@ require_release_profile() {
     done
 
     if [[ "${missing}" == "1" ]]; then
-        "${SCRIPT_DIR}/build-profile.sh" release
+        build_release_profile
     fi
 }
 
@@ -308,8 +348,7 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Contents
 
 - \`modules/king.so\`
-- \`runtime/libquiche.so\`
-- \`runtime/quiche-server\`
+- \`runtime/liblsquic.so\`
 - \`bin/smoke.sh\`
 - \`bin/smoke.php\`
 - \`manifest.json\`
@@ -318,16 +357,8 @@ Platform: \`${OS_NAME}/${ARCH_NAME}\`
 ## Install
 
 1. Copy \`modules/king.so\` into your PHP extension directory or reference it by absolute path.
-2. Keep \`runtime/libquiche.so\` and \`runtime/quiche-server\` together with the extension package.
-3. Export the runtime paths before loading the extension:
-
-\`\`\`bash
-export KING_QUICHE_LIBRARY=/path/to/runtime/libquiche.so
-export KING_QUICHE_SERVER=/path/to/runtime/quiche-server
-export LD_LIBRARY_PATH=/path/to/runtime:\${LD_LIBRARY_PATH}
-\`\`\`
-
-4. Enable the extension in PHP:
+2. Keep \`runtime/liblsquic.so\` readable and set \`KING_LSQUIC_LIBRARY\` to its absolute path when using HTTP/3.
+3. Enable the extension in PHP:
 
 \`\`\`ini
 extension=/absolute/path/to/modules/king.so
@@ -357,9 +388,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 PHP_BIN="${PHP_BIN:-php}"
-
-export KING_QUICHE_LIBRARY="${KING_QUICHE_LIBRARY:-${PACKAGE_DIR}/runtime/libquiche.so}"
-export KING_QUICHE_SERVER="${KING_QUICHE_SERVER:-${PACKAGE_DIR}/runtime/quiche-server}"
+export KING_LSQUIC_LIBRARY="${KING_LSQUIC_LIBRARY:-${PACKAGE_DIR}/runtime/liblsquic.so}"
 export LD_LIBRARY_PATH="${PACKAGE_DIR}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 exec "${PHP_BIN}" \
@@ -390,13 +419,80 @@ generate_manifest() {
     PKG_OS="${OS_NAME}" \
     PKG_ARCH="${ARCH_NAME}" \
     PKG_PHP_API="${PHP_API}" \
-    PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256}" \
-    PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256="${PROVENANCE_TOOLCHAIN_LOCK_SHA256}" \
-    PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256="${PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256}" \
+    PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256="${PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256}" \
+    PKG_LSQUIC_BOOTSTRAP_LOCK_PATH="${SCRIPT_DIR}/lsquic-bootstrap.lock" \
     php <<'PHP' > "${package_root}/manifest.json"
 <?php
 $root = getenv('PKG_ROOT');
+$lockPath = getenv('PKG_LSQUIC_BOOTSTRAP_LOCK_PATH');
 $files = [];
+
+if (!is_string($lockPath) || $lockPath === '' || !is_file($lockPath)) {
+    fwrite(STDERR, "Missing LSQUIC bootstrap lock path for release manifest.\n");
+    exit(1);
+}
+
+$lockValues = [];
+foreach (file($lockPath, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+    if (preg_match('/^([A-Z0-9_]+)="([^"]*)"$/', $line, $matches) === 1) {
+        $lockValues[$matches[1]] = $matches[2];
+    }
+}
+
+$readLock = static function (string $key) use ($lockValues): string {
+    $value = $lockValues[$key] ?? null;
+    if (!is_string($value) || $value === '') {
+        fwrite(STDERR, "Missing LSQUIC bootstrap lock value: {$key}\n");
+        exit(1);
+    }
+
+    return $value;
+};
+
+$dependencyProvenance = [
+    'lsquic' => [
+        'name' => 'LSQUIC',
+        'repo_url' => $readLock('KING_LSQUIC_REPO_URL'),
+        'version' => $readLock('KING_LSQUIC_TAG'),
+        'commit' => $readLock('KING_LSQUIC_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LICENSE_FILES')) ?: [],
+    ],
+    'boringssl' => [
+        'name' => 'BoringSSL',
+        'repo_url' => $readLock('KING_LSQUIC_BORINGSSL_REPO_URL'),
+        'version' => $readLock('KING_LSQUIC_BORINGSSL_TAG'),
+        'commit' => $readLock('KING_LSQUIC_BORINGSSL_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: [],
+    ],
+    'ls-qpack' => [
+        'name' => 'ls-qpack',
+        'path' => $readLock('KING_LSQUIC_LS_QPACK_PATH'),
+        'repo_url' => $readLock('KING_LSQUIC_LS_QPACK_REPO_URL'),
+        'version' => 'gitlink',
+        'commit' => $readLock('KING_LSQUIC_LS_QPACK_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: [],
+    ],
+    'ls-hpack' => [
+        'name' => 'ls-hpack',
+        'path' => $readLock('KING_LSQUIC_LS_HPACK_PATH'),
+        'repo_url' => $readLock('KING_LSQUIC_LS_HPACK_REPO_URL'),
+        'version' => 'gitlink',
+        'commit' => $readLock('KING_LSQUIC_LS_HPACK_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: [],
+    ],
+];
 
 foreach ([
     'SHA256SUMS',
@@ -404,8 +500,7 @@ foreach ([
     'bin/smoke.sh',
     'docs/INSTALL.md',
     'modules/king.so',
-    'runtime/libquiche.so',
-    'runtime/quiche-server',
+    'runtime/liblsquic.so',
 ] as $relative) {
     $full = $root . DIRECTORY_SEPARATOR . $relative;
     $files[$relative] = [
@@ -429,11 +524,33 @@ $manifest = [
         'arch' => getenv('PKG_ARCH'),
         'php_api' => getenv('PKG_PHP_API'),
     ],
-    'provenance' => [
-        'quiche_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_BOOTSTRAP_LOCK_SHA256'),
-        'toolchain_lock_sha256' => getenv('PKG_PROVENANCE_TOOLCHAIN_LOCK_SHA256'),
-        'quiche_workspace_lock_sha256' => getenv('PKG_PROVENANCE_QUICHE_WORKSPACE_LOCK_SHA256'),
+    'artifacts' => [
+        'modules/king.so' => [
+            'kind' => 'php_extension_module',
+            'provides' => ['king'],
+            'http3_stack' => 'lsquic-boringssl',
+        ],
+        'runtime/liblsquic.so' => [
+            'kind' => 'http3_transport_runtime',
+            'provides' => ['lsquic'],
+            'tls' => 'boringssl',
+        ],
     ],
+    'http3_stack' => [
+        'transport' => 'lsquic',
+        'tls' => 'boringssl',
+        'bootstrap_lock' => 'infra/scripts/lsquic-bootstrap.lock',
+        'bootstrap_script' => 'infra/scripts/bootstrap-lsquic.sh',
+        'components' => array_keys($dependencyProvenance),
+    ],
+    'provenance' => [
+        'lsquic_bootstrap_lock_sha256' => getenv('PKG_PROVENANCE_LSQUIC_BOOTSTRAP_LOCK_SHA256'),
+        'lsquic_archive_sha256' => $dependencyProvenance['lsquic']['archive_sha256'],
+        'boringssl_archive_sha256' => $dependencyProvenance['boringssl']['archive_sha256'],
+        'ls_qpack_archive_sha256' => $dependencyProvenance['ls-qpack']['archive_sha256'],
+        'ls_hpack_archive_sha256' => $dependencyProvenance['ls-hpack']['archive_sha256'],
+    ],
+    'dependency_provenance' => $dependencyProvenance,
     'files' => $files,
 ];
 
@@ -451,8 +568,7 @@ write_inner_checksums() {
             bin/smoke.sh \
             docs/INSTALL.md \
             modules/king.so \
-            runtime/libquiche.so \
-            runtime/quiche-server \
+            runtime/liblsquic.so \
         > SHA256SUMS
     )
 }
@@ -474,8 +590,7 @@ package_once() {
         "${package_root}/runtime"
 
     install -m 0644 "${PROFILE_DIR}/king.so" "${package_root}/modules/king.so"
-    install -m 0644 "${PROFILE_DIR}/libquiche.so" "${package_root}/runtime/libquiche.so"
-    install -m 0755 "${PROFILE_DIR}/quiche-server" "${package_root}/runtime/quiche-server"
+    install -m 0644 "${PROFILE_DIR}/runtime/liblsquic.so" "${package_root}/runtime/liblsquic.so"
 
     generate_smoke_script "${package_root}/bin/smoke.sh"
     install_runtime_smoke_script "${package_root}/bin/smoke.php"

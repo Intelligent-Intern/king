@@ -11,6 +11,7 @@
 
 #include <php.h>
 #include <stdint.h>
+#include <string.h>
 #include <zend_hash.h>
 #include <zend_smart_str.h>
 
@@ -111,11 +112,22 @@ zend_result king_iibin_encode(
     zval *data,
     smart_str *encoded_out
 );
+zend_result king_iibin_encode_batch(
+    zend_string *schema_name,
+    zval *records,
+    zval *encoded_records
+);
 zend_result king_iibin_decode(
     zend_string *schema_name,
     zend_string *binary_data,
     zval *decode_mode,
     zval *decoded_result
+);
+zend_result king_iibin_decode_batch(
+    zend_string *schema_name,
+    zval *binary_records,
+    zval *decode_mode,
+    zval *decoded_records
 );
 bool king_iibin_is_defined(zend_string *name);
 bool king_iibin_is_schema_defined(zend_string *schema_name);
@@ -133,34 +145,56 @@ extern const zend_function_entry king_iibin_class_methods[];
 
 /* --- Wire Helpers --- */
 
+#define KING_IIBIN_BATCH_MAX_RECORDS 65536
+#define KING_PROTO_VARINT_MAX_BYTES 10
+
 static inline void king_proto_encode_varint(smart_str *buf, uint64_t value) {
-    unsigned char temp_buf[10];
-    int i = 0;
-    do {
-        temp_buf[i] = (unsigned char)(value & 0x7FU);
-        value >>= 7;
-        if (value > 0) {
-            temp_buf[i] |= 0x80U;
-        }
-        i++;
-    } while (value > 0 && i < 10);
-    smart_str_appendl(buf, (char*)temp_buf, i);
+    unsigned char temp[KING_PROTO_VARINT_MAX_BYTES];
+    size_t len;
+
+#if defined(__GNUC__) || defined(__clang__)
+    unsigned int bits = 64U - (unsigned int) __builtin_clzll(value | 1ULL);
+    len = (size_t) ((bits + 6U) / 7U);
+#else
+    len = 1;
+    uint64_t length_value = value;
+    while (length_value >= 0x80U && len < KING_PROTO_VARINT_MAX_BYTES) {
+        length_value >>= 7;
+        len++;
+    }
+#endif
+
+    temp[0] = (unsigned char)((value & 0x7FU) | 0x80U);
+    temp[1] = (unsigned char)(((value >> 7) & 0x7FU) | 0x80U);
+    temp[2] = (unsigned char)(((value >> 14) & 0x7FU) | 0x80U);
+    temp[3] = (unsigned char)(((value >> 21) & 0x7FU) | 0x80U);
+    temp[4] = (unsigned char)(((value >> 28) & 0x7FU) | 0x80U);
+    temp[5] = (unsigned char)(((value >> 35) & 0x7FU) | 0x80U);
+    temp[6] = (unsigned char)(((value >> 42) & 0x7FU) | 0x80U);
+    temp[7] = (unsigned char)(((value >> 49) & 0x7FU) | 0x80U);
+    temp[8] = (unsigned char)(((value >> 56) & 0x7FU) | 0x80U);
+    temp[9] = (unsigned char)((value >> 63) & 0x01U);
+    temp[len - 1] &= 0x7FU;
+    smart_str_appendl(buf, (char*)temp, len);
 }
 
 static inline zend_bool king_proto_decode_varint(const unsigned char **buf_ptr, const unsigned char *buf_end, uint64_t *value_out) {
     uint64_t result = 0;
-    int shift = 0;
     const unsigned char *ptr = *buf_ptr;
-    for (int i = 0; i < 10; ++i) {
-        if (ptr >= buf_end) return 0;
+    for (int i = 0; i < KING_PROTO_VARINT_MAX_BYTES; ++i) {
+        if (ptr >= buf_end) {
+            return 0;
+        }
         unsigned char byte = *ptr++;
-        result |= (uint64_t)(byte & 0x7F) << shift;
+        if (i == KING_PROTO_VARINT_MAX_BYTES - 1 && (byte & 0xFEU) != 0) {
+            return 0;
+        }
+        result |= (uint64_t)(byte & 0x7FU) << (i * 7);
         if (!(byte & 0x80U)) {
             *value_out = result;
             *buf_ptr = ptr;
             return 1;
         }
-        shift += 7;
     }
     return 0;
 }
@@ -211,6 +245,30 @@ static inline zend_bool king_proto_decode_fixed64(const unsigned char **buf_ptr,
                  ((uint64_t)ptr[7] << 56);
     *buf_ptr += 8;
     return 1;
+}
+
+static inline uint32_t king_proto_float_to_bits(float value) {
+    uint32_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline float king_proto_bits_to_float(uint32_t bits) {
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+static inline uint64_t king_proto_double_to_bits(double value) {
+    uint64_t bits;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static inline double king_proto_bits_to_double(uint64_t bits) {
+    double value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
 }
 
 static inline uint32_t king_proto_zigzag_encode32(int32_t n) {

@@ -1,5 +1,11 @@
 --TEST--
 King telemetry injects the live current span into outgoing HTTP/1, HTTP/2, and HTTP/3 client requests
+--SKIPIF--
+<?php
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+?>
 --INI--
 king.security_allow_config_override=1
 --FILE--

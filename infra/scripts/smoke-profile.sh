@@ -34,8 +34,6 @@ EXT_DIR="${ROOT_DIR}/extension"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
 PHP_BIN="${PHP_BIN:-php}"
 EXT_SO="${PROFILE_DIR}/king.so"
-QUICHE_LIB="${PROFILE_DIR}/libquiche.so"
-QUICHE_SERVER="${PROFILE_DIR}/quiche-server"
 
 resolve_clang_arch_suffix() {
     local machine=""
@@ -113,20 +111,6 @@ if [[ ! -f "${EXT_SO}" ]]; then
     echo "Run ./infra/scripts/build-profile.sh ${PROFILE} first." >&2
     exit 1
 fi
-
-if [[ ! -f "${QUICHE_LIB}" ]]; then
-    echo "Missing staged libquiche for profile '${PROFILE}': ${QUICHE_LIB}" >&2
-    exit 1
-fi
-
-if [[ ! -x "${QUICHE_SERVER}" ]]; then
-    echo "Missing staged quiche-server for profile '${PROFILE}': ${QUICHE_SERVER}" >&2
-    exit 1
-fi
-
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
-export LD_LIBRARY_PATH="${PROFILE_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 
 case "${PROFILE}" in
     asan)

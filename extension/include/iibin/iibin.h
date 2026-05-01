@@ -21,8 +21,14 @@ PHP_FUNCTION(king_proto_define_schema);
 /* Encodes a PHP value using a predefined schema. */
 PHP_FUNCTION(king_proto_encode);
 
+/* Encodes multiple PHP values using a predefined schema. */
+PHP_FUNCTION(king_proto_encode_batch);
+
 /* Decodes a binary string using a predefined schema. */
 PHP_FUNCTION(king_proto_decode);
+
+/* Decodes multiple binary strings using a predefined schema. */
+PHP_FUNCTION(king_proto_decode_batch);
 
 /* Checks whether a schema or enum is registered under the given name. */
 PHP_FUNCTION(king_proto_is_defined);

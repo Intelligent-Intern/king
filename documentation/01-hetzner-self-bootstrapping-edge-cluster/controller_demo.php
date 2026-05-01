@@ -72,10 +72,11 @@ function printSnapshot(string $label): void
 }
 
 if (!extension_loaded('king')) {
+    $repoRoot = dirname(__DIR__, 2);
     fail(
         "The king extension is not loaded.\n"
         . "Run this example with:\n"
-        . "php8.4 -d extension=/home/jochen/projects/king.site/king/extension/modules/king.so "
+        . "php8.4 -d extension={$repoRoot}/extension/modules/king.so "
         . "-d king.security_allow_config_override=1 "
         . "documentation/01-hetzner-self-bootstrapping-edge-cluster/controller_demo.php"
     );

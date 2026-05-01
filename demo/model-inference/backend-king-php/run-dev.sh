@@ -63,8 +63,8 @@ start_backend() {
 if [[ "$WS_PORT" == "$PORT" ]]; then
   start_backend "all" "${PORT}"
 else
-  start_backend "http" "${PORT}"
-  start_backend "ws" "${WS_PORT}"
+  start_backend "all" "${PORT}"
+  start_backend "all" "${WS_PORT}"
 fi
 
 cleanup() {

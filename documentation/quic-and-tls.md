@@ -185,7 +185,7 @@ cancel paths also stay visible through `King\Client\Http3Client` as public
 `King\TlsException`, `King\QuicException`, `King\ProtocolException`,
 `King\TimeoutException`, and `King\RuntimeException` failures instead of
 collapsing into a generic OO runtime error. The same live peer coverage now
-also proves the active quiche event loop can stay idle across delayed response
+also proves the active LSQUIC event loop can stay idle across delayed response
 bursts, wake on real peer progress without sleeping until the full request
 budget, and then surface a real timeout once the peer stays silent past that
 budget. Under an intentionally lossy constrained-link harness, the same live
@@ -202,7 +202,7 @@ where the peer observes request and response headers inside early data, or
 server-disabled fallback, where the same resumed request is replayed only after
 establishment and the peer reports a disabled early-data reason. The same
 ticket-backed peer harness now also proves the exported HTTP/3 response stats
-fields stay tied to live quiche counters: `quic_packets_sent` and
+fields stay tied to live LSQUIC counters: `quic_packets_sent` and
 `quic_packets_received` stay consistent with peer-observed packet flow on clean
 request/response runs, while lossy and constrained-link runs surface honest
 `quic_packets_lost`, `quic_packets_retransmitted`, `quic_lost_bytes`, and
@@ -217,6 +217,8 @@ window, and then resume. The active HTTP/3 runtime re-wakes on the returning
 socket traffic, retransmits what the blackout stranded, and still completes
 the same request stream with visible loss and retransmit stats instead of
 timing out or silently replaying the work on a hidden fresh transport.
+
+For release-gate mapping of the current HTTP/3 regression suite, see [HTTP/3 Regression Evidence](./http3-regression-evidence.md).
 
 ## A First Session
 

@@ -2,7 +2,7 @@ static void king_config_object_snapshot_to_array(zval *target, king_cfg_t *cfg)
 {
     array_init(target);
 
-    add_assoc_string(target, "quic.cc_algorithm", cfg->quic.cc_algorithm != NULL ? cfg->quic.cc_algorithm : "");
+    king_config_object_add_quic_snapshot(target, &cfg->quic);
     add_assoc_bool(target, "tls.verify_peer", cfg->tls.tls_verify_peer);
     add_assoc_bool(target, "http2.enable", cfg->http2.enable);
     add_assoc_long(target, "http2.max_concurrent_streams", cfg->http2.max_concurrent_streams);

@@ -32,13 +32,20 @@ if [ ! -r "${YAML_VALIDATOR}" ]; then
     exit 1
 fi
 
+php_lint() {
+    php -n -l "$1"
+}
+
 echo "Linting PHP entry surfaces..."
-php -l stubs/king.php
-php -l benchmarks/run.php
-php -l infra/scripts/check-stub-parity.php
-php -l infra/scripts/runtime-config-compatibility.php
-php -l infra/scripts/runtime-install-smoke.php
-php -l infra/scripts/runtime-persistence-migration.php
+php_lint stubs/king.php
+php_lint benchmarks/run.php
+php_lint benchmarks/cases/proto_batch.php
+php_lint benchmarks/cases/proto_integer_encodings.php
+php_lint infra/scripts/check-stub-parity.php
+php_lint infra/scripts/check-http3-lsquic-loader-contract.php
+php_lint infra/scripts/runtime-config-compatibility.php
+php_lint infra/scripts/runtime-install-smoke.php
+php_lint infra/scripts/runtime-persistence-migration.php
 
 echo "Validating Composer metadata..."
 composer validate "${ROOT_DIR}/composer.json"
@@ -57,11 +64,47 @@ for workflow in "${workflow_files[@]}"; do
     ruby "${YAML_VALIDATOR}" "${workflow}"
 done
 
+echo "Checking repository artifact hygiene..."
+infra/scripts/check-repo-artifact-hygiene.sh
+
+echo "Checking Linux reproducible CI build matrix..."
+ruby infra/scripts/check-ci-linux-reproducible-builds.rb
+
+echo "Checking CI HTTP/3 stack build gates..."
+ruby infra/scripts/check-ci-builds-http3-stack.rb
+
+echo "Checking CI HTTP/3 contract suite coverage..."
+ruby infra/scripts/check-ci-http3-contract-suites.rb
+
+echo "Checking CI migration guardrails..."
+ruby infra/scripts/check-ci-migration-guardrails.rb
+
+echo "Checking macOS/dev dependency path policy..."
+ruby infra/scripts/check-dev-path-configuration.rb
+
+echo "Checking HTTP/3 product build path for Rust/Cargo bootstrap..."
+ruby infra/scripts/check-http3-product-build-path.rb
+
+echo "Checking HTTP/3 LSQUIC loader contract..."
+php -n infra/scripts/check-http3-lsquic-loader-contract.php
+
 echo "Checking extension include layout..."
 infra/scripts/check-include-layout.sh
 
-echo "Checking deterministic quiche bootstrap..."
-infra/scripts/check-quiche-bootstrap.sh
+echo "Checking deterministic LSQUIC bootstrap..."
+infra/scripts/check-lsquic-bootstrap.sh
+
+echo "Checking release supply-chain provenance gates..."
+ruby infra/scripts/check-release-supply-chain-provenance.rb
+
+echo "Checking release package manifest dependency hashes..."
+ruby infra/scripts/check-release-package-manifest-contract.rb
+
+echo "Checking dependency provenance documentation..."
+infra/scripts/check-dependency-provenance-doc.sh
+
+echo "Checking deterministic HTTP/3 test helper build plan..."
+infra/scripts/build-http3-test-helpers.sh --verify-plan
 
 echo "Checking supported PHP matrix alignment..."
 infra/scripts/check-php-support-matrix.sh

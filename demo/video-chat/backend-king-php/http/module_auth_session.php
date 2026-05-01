@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/users/user_emails.php';
 
+function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
+{
+    $message = strtolower($error->getMessage());
+    return str_contains($message, 'database is locked')
+        || str_contains($message, 'database schema is locked');
+}
+
 function videochat_handle_auth_session_routes(
     string $path,
     string $method,
@@ -17,9 +24,9 @@ function videochat_handle_auth_session_routes(
     callable $issueSessionId
 ): ?array {
     if ($path === '/api/auth/login') {
-        if (!in_array($method, ['GET', 'POST'], true)) {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/auth/login.', [
-                'allowed_methods' => ['GET', 'POST'],
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/login.', [
+                'allowed_methods' => ['POST'],
             ]);
         }
 
@@ -36,20 +43,6 @@ function videochat_handle_auth_session_routes(
                 [$basicEmail, $basicPassword] = explode(':', $decoded, 2);
                 $email = strtolower(trim($basicEmail));
                 $password = $basicPassword;
-            }
-        }
-
-        if ($email === '' || trim($password) === '') {
-            $query = videochat_request_query_params($request);
-            $queryEmail = is_scalar($query['email'] ?? null)
-                ? strtolower(trim((string) $query['email']))
-                : '';
-            $queryPassword = is_scalar($query['password'] ?? null)
-                ? (string) $query['password']
-                : '';
-            if ($queryEmail !== '' && trim($queryPassword) !== '') {
-                $email = $queryEmail;
-                $password = $queryPassword;
             }
         }
 
@@ -74,7 +67,9 @@ function videochat_handle_auth_session_routes(
             ]);
         }
 
-        try {
+        $maxLoginAttempts = 5;
+        for ($loginAttempt = 1; $loginAttempt <= $maxLoginAttempts; $loginAttempt += 1) {
+            try {
             $pdo = $openDatabase();
             $userQuery = $pdo->prepare(
                 <<<'SQL'
@@ -88,6 +83,7 @@ SELECT
     users.date_format,
     users.theme,
     users.avatar_path,
+    users.post_logout_landing_url,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -168,6 +164,8 @@ SQL
                 ':user_agent' => $userAgent === '' ? null : $userAgent,
             ]);
 
+            $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+
             return $jsonResponse(200, [
                 'status' => 'ok',
                 'session' => [
@@ -188,14 +186,74 @@ SQL
                     'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
                     'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
+                    'post_logout_landing_url' => is_string($user['post_logout_landing_url'] ?? null)
+                        ? trim((string) $user['post_logout_landing_url'])
+                        : '',
+                    'account_type' => $accountType,
+                    'is_guest' => $accountType === 'guest',
                 ],
                 'time' => gmdate('c'),
             ]);
-        } catch (Throwable $error) {
-            return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+            } catch (Throwable $error) {
+                if (
+                    $loginAttempt < $maxLoginAttempts
+                    && videochat_auth_session_is_transient_sqlite_lock($error)
+                ) {
+                    usleep(100_000 * $loginAttempt);
+                    continue;
+                }
+
+                error_log('[video-chat][auth] login failed: ' . get_class($error) . ': ' . $error->getMessage());
+                return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+        }
+
+        return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [
+            'reason' => 'internal_error',
+        ]);
+    }
+
+    if ($path === '/api/auth/session-state') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/auth/session-state.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $probe = videochat_authenticate_request($pdo, $request, 'rest');
+        } catch (Throwable) {
+            return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
                 'reason' => 'internal_error',
             ]);
         }
+
+        if (!(bool) ($probe['ok'] ?? false)) {
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'unauthenticated',
+                    'reason' => (string) ($probe['reason'] ?? 'invalid_session'),
+                ],
+                'session' => null,
+                'user' => null,
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'authenticated',
+                'reason' => 'ready',
+            ],
+            'session' => $probe['session'] ?? null,
+            'user' => $probe['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
     }
 
     if ($path === '/api/auth/session') {
@@ -205,10 +263,24 @@ SQL
             ]);
         }
 
+        try {
+            $freshContext = videochat_authenticate_request($openDatabase(), $request, 'rest');
+        } catch (Throwable) {
+            return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($freshContext['ok'] ?? false)) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => (string) ($freshContext['reason'] ?? 'invalid_session'),
+            ]);
+        }
+
         return $jsonResponse(200, [
             'status' => 'ok',
-            'session' => $apiAuthContext['session'] ?? null,
-            'user' => $apiAuthContext['user'] ?? null,
+            'session' => $freshContext['session'] ?? null,
+            'user' => $freshContext['user'] ?? null,
             'time' => gmdate('c'),
         ]);
     }
@@ -444,6 +516,9 @@ SQL
                     'revocation_state' => (string) ($revocation['reason'] ?? 'revoked'),
                     'revoked_at' => $revocation['revoked_at'] ?? gmdate('c'),
                     'websocket_disconnects' => $closedSockets,
+                    'post_logout_landing_url' => is_string(($apiAuthContext['user'] ?? [])['post_logout_landing_url'] ?? null)
+                        ? trim((string) (($apiAuthContext['user'] ?? [])['post_logout_landing_url']))
+                        : '',
                 ],
                 'time' => gmdate('c'),
             ]);

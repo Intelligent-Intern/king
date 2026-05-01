@@ -6,8 +6,8 @@
  * PURPOSE:
  * Protocol-aware request dispatcher for the active client runtime.
  * AUTO currently routes onto the local HTTP/1 path by default; explicit
- * `preferred_protocol` can force the libcurl-backed HTTP/2 or the quiche-
- * backed HTTP/3 leaves. The optional `response_stream` surface remains
+ * `preferred_protocol` can force the libcurl-backed HTTP/2 or the
+ * LSQUIC-backed HTTP/3 leaves. The optional `response_stream` surface remains
  * bound to the HTTP/1 runtime.
  * =========================================================================
  */

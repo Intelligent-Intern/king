@@ -1,0 +1,67 @@
+{
+  "contract_name": "king-model-inference-tool-descriptor",
+  "contract_version": "1.0.0",
+  "contract_scope": "Human-readable descriptor for an MCP-backed tool. Used by POST /api/tools/discover (#S-9) and POST /api/tools/pick (#S-10) to rank tools by semantic / hybrid / keyword match and return the top mcp_target for invocation. Embeddings live in tool_embeddings (svec-sibling table, keyed tvec-{hex}).",
+  "honesty_rules": [
+    "Each tool is uniquely identified by tool_id. One descriptor per tool_id.",
+    "mcp_target is the durable transport-level address used by the caller to invoke the tool through king_mcp_request(); it is returned verbatim in pick/discover results.",
+    "The descriptor is the ONLY signal used for semantic ranking. name + description + capabilities[] + tags[] are concatenated into the embedding input. input_schema_ref is metadata only — not embedded.",
+    "Descriptor storage is demo-scale brute-force cosine. No ANN. No tool-specific access control beyond what king_mcp_request already enforces.",
+    "POST /api/tools/pick fails closed with rejection code `no_semantic_match` when no tool scores above min_score. It never returns an arbitrary default target."
+  ],
+  "request_envelope": {
+    "tool_id": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 128,
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 128,
+      "required": true
+    },
+    "description": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 2048,
+      "required": true
+    },
+    "mcp_target": {
+      "type": "object",
+      "required": true,
+      "fields": {
+        "host": {"type": "string", "min_length": 1, "max_length": 255, "required": true},
+        "port": {"type": "int", "min": 1, "max": 65535, "required": true},
+        "service": {"type": "string", "min_length": 1, "max_length": 128, "required": true},
+        "method": {"type": "string", "min_length": 1, "max_length": 128, "required": true}
+      }
+    },
+    "input_schema_ref": {
+      "type": "string|null",
+      "max_length": 256,
+      "required": false,
+      "default": null
+    },
+    "capabilities": {
+      "type": "array<string>",
+      "max_items": 32,
+      "item_min_length": 1,
+      "item_max_length": 64,
+      "required": false,
+      "default": []
+    },
+    "tags": {
+      "type": "array<string>",
+      "max_items": 16,
+      "item_min_length": 1,
+      "item_max_length": 64,
+      "required": false,
+      "default": []
+    }
+  },
+  "rejection_codes": {
+    "invalid_tool_descriptor": "any required field missing, out of range, or of the wrong type; unknown top-level keys"
+  }
+}

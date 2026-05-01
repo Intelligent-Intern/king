@@ -17,6 +17,13 @@ test('route guard redirects unauthenticated users to /login', async ({ page }) =
   await expect(page.getByLabel('Password')).toBeVisible();
 });
 
+test('call goodbye is not shown without an authenticated guest session', async ({ page }) => {
+  await page.goto('/call-goodbye');
+  await expect(page).toHaveURL(/\/login\?redirect=(%2F|\/)call-goodbye$/);
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByText('You have left the video call.')).toHaveCount(0);
+});
+
 test('admin can click through all implemented admin routes and logout', async ({ page }) => {
   await signIn(page, {
     email: 'admin@intelligent-intern.com',
@@ -39,6 +46,10 @@ test('admin can click through all implemented admin routes and logout', async ({
   await expect(page.locator('.workspace-call-head h3', { hasText: 'Call Workspace' })).toBeVisible();
   await expect(page.locator('.workspace-call-head')).toContainText('Active room');
   await expect(page.locator('.workspace-call-head')).toContainText('lobby');
+
+  await page.goto('/call-goodbye');
+  await expect(page).toHaveURL(/\/admin\/calls$/);
+  await expect(page.getByText('You have left the video call.')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Log out' }).click();
   await expect(page).toHaveURL(/\/login$/);
@@ -65,6 +76,10 @@ test('user role is constrained by RBAC and can still open call workspace', async
   await page.goto('/workspace/call/review-room');
   await expect(page).toHaveURL(/\/workspace\/call\/review-room$/);
   await expect(page.locator('.workspace-call-head')).toContainText('review-room');
+
+  await page.goto('/call-goodbye');
+  await expect(page).toHaveURL(/\/user\/dashboard$/);
+  await expect(page.getByText('You have left the video call.')).toHaveCount(0);
 });
 
 test('session state survives hard reload and /login redirects for authenticated user', async ({ page }) => {

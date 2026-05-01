@@ -3,7 +3,13 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../support/database.php';
+require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
+require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
+require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../domain/realtime/realtime_signaling.php';
 
 function videochat_realtime_signaling_assert(bool $condition, string $message): void
@@ -169,6 +175,85 @@ try {
     videochat_realtime_signaling_assert((bool) ($answerPublish['ok'] ?? false), 'answer publish should succeed');
     videochat_realtime_signaling_assert((int) ($answerPublish['sent_count'] ?? 0) === 1, 'answer should be delivered only to sender user');
 
+    $decodedMediaSecurityHello = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'media-security/hello',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'media_security_hello',
+            'public_key' => 'peer-public-key',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaSecurityHello['ok'] ?? false), 'media-security hello should decode');
+    $mediaSecurityPublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedMediaSecurityHello,
+        $sender,
+        1_780_300_124_500
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaSecurityPublish['ok'] ?? false), 'media-security hello publish should succeed');
+    $mediaSecurityTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($mediaSecurityTargetFrame['type'] ?? '') === 'media-security/hello', 'target should receive media-security hello');
+    videochat_realtime_signaling_assert((string) (($mediaSecurityTargetFrame['payload'] ?? [])['kind'] ?? '') === 'media_security_hello', 'media-security payload kind mismatch');
+
+    $decodedControlState = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/control-state',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'workspace-control-state',
+            'state' => [
+                'handRaised' => true,
+                'cameraEnabled' => false,
+            ],
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedControlState['ok'] ?? false), 'call/control-state should decode');
+    $controlStatePublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedControlState,
+        $sender,
+        1_780_300_124_700
+    );
+    videochat_realtime_signaling_assert((bool) ($controlStatePublish['ok'] ?? false), 'call/control-state publish should succeed');
+    $controlStateTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($controlStateTargetFrame['type'] ?? '') === 'call/control-state', 'target should receive control-state');
+    videochat_realtime_signaling_assert((string) (($controlStateTargetFrame['payload'] ?? [])['kind'] ?? '') === 'workspace-control-state', 'control-state payload kind mismatch');
+
+    $decodedMediaQualityPressure = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/media-quality-pressure',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'sfu-video-quality-pressure',
+            'requested_action' => 'downgrade_outgoing_video',
+            'reason' => 'sfu_remote_video_frozen',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaQualityPressure['ok'] ?? false), 'call/media-quality-pressure should decode');
+    $mediaQualityPressurePublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedMediaQualityPressure,
+        $sender,
+        1_780_300_124_800
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaQualityPressurePublish['ok'] ?? false), 'call/media-quality-pressure publish should succeed');
+    $mediaQualityPressureTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($mediaQualityPressureTargetFrame['type'] ?? '') === 'call/media-quality-pressure', 'target should receive media-quality-pressure');
+    videochat_realtime_signaling_assert((string) (($mediaQualityPressureTargetFrame['payload'] ?? [])['kind'] ?? '') === 'sfu-video-quality-pressure', 'media-quality-pressure payload kind mismatch');
+
+    $decodedModerationState = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/moderation-state',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'workspace-moderation-state',
+            'moderated_users' => [
+                'pin:200' => ['pinned' => true],
+            ],
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedModerationState['ok'] ?? false), 'call/moderation-state should decode');
+
     $decodedInvalidSelfTarget = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/ice',
         'target_user_id' => 100,
@@ -244,6 +329,137 @@ try {
     );
     videochat_realtime_signaling_assert(!(bool) ($notInRoomPublish['ok'] ?? true), 'target outside room should fail signaling publish');
     videochat_realtime_signaling_assert((string) ($notInRoomPublish['error'] ?? '') === 'target_not_in_room', 'target not in room error mismatch');
+
+    if (extension_loaded('pdo_sqlite')) {
+        $brokerPdo = new PDO('sqlite::memory:');
+        $brokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        videochat_signaling_broker_bootstrap($brokerPdo);
+
+        $decodedBrokerOffer = videochat_signaling_decode_client_frame(json_encode([
+            'type' => 'call/offer',
+            'target_user_id' => 400,
+            'payload' => [
+                'kind' => 'webrtc_offer',
+                'sdp' => ['type' => 'offer', 'sdp' => 'broker-offer-sdp'],
+            ],
+        ], JSON_UNESCAPED_SLASHES));
+        videochat_realtime_signaling_assert((bool) ($decodedBrokerOffer['ok'] ?? false), 'broker offer command should decode');
+
+        $brokerPublish = videochat_signaling_publish(
+            $presenceState,
+            $senderConnection,
+            $decodedBrokerOffer,
+            $sender,
+            1_780_300_127_000,
+            static function (string $roomId, int $targetUserId, array $event) use ($brokerPdo): bool {
+                return videochat_signaling_broker_insert_event($brokerPdo, $roomId, $targetUserId, $event);
+            }
+        );
+        videochat_realtime_signaling_assert((bool) ($brokerPublish['ok'] ?? false), 'brokered offer should succeed when target is on another worker');
+        videochat_realtime_signaling_assert((int) ($brokerPublish['sent_count'] ?? -1) === 0, 'brokered offer should not claim local socket delivery');
+
+        $brokerFrames = [];
+        $brokerSender = static function (mixed $socket, array $payload) use (&$brokerFrames): bool {
+            $key = is_scalar($socket) ? (string) $socket : 'unknown';
+            if (!isset($brokerFrames[$key]) || !is_array($brokerFrames[$key])) {
+                $brokerFrames[$key] = [];
+            }
+            $brokerFrames[$key][] = $payload;
+            return true;
+        };
+        $lastBrokerEventId = 0;
+        videochat_signaling_broker_poll($brokerPdo, 'socket-target-broker', 'lobby', 400, $lastBrokerEventId, $brokerSender);
+        $brokerTargetFrame = videochat_realtime_signaling_last_frame($brokerFrames, 'socket-target-broker');
+        videochat_realtime_signaling_assert((string) ($brokerTargetFrame['type'] ?? '') === 'call/offer', 'broker target should receive call/offer');
+        videochat_realtime_signaling_assert((int) ($brokerTargetFrame['target_user_id'] ?? 0) === 400, 'broker target_user_id mismatch');
+        videochat_realtime_signaling_assert((string) (($brokerTargetFrame['payload'] ?? [])['kind'] ?? '') === 'webrtc_offer', 'broker payload kind mismatch');
+        videochat_realtime_signaling_assert($lastBrokerEventId > 0, 'broker poll should advance last event id');
+
+        $databasePath = sys_get_temp_dir() . '/videochat-signaling-db-target-' . bin2hex(random_bytes(6)) . '.sqlite';
+        if (is_file($databasePath)) {
+            @unlink($databasePath);
+        }
+        videochat_bootstrap_sqlite($databasePath);
+        $callPdo = videochat_open_sqlite_pdo($databasePath);
+        $adminUserId = (int) $callPdo->query("SELECT id FROM users WHERE email = 'admin@intelligent-intern.com' LIMIT 1")->fetchColumn();
+        $standardUserId = (int) $callPdo->query("SELECT id FROM users WHERE email = 'user@intelligent-intern.com' LIMIT 1")->fetchColumn();
+        $nowIso = '2026-04-28T14:00:00Z';
+        $callPdo->exec(
+            "INSERT INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
+             VALUES('broker-call-room', 'Broker Call Room', 'private', 'active', {$adminUserId}, '{$nowIso}', '{$nowIso}')"
+        );
+        $callPdo->exec(
+            "INSERT INTO calls(id, room_id, title, owner_user_id, status, starts_at, ends_at, created_at, updated_at)
+             VALUES('broker-call', 'broker-call-room', 'Broker Call', {$adminUserId}, 'active', '{$nowIso}', '2026-04-28T15:00:00Z', '{$nowIso}', '{$nowIso}')"
+        );
+        $insertParticipant = $callPdo->prepare(
+            <<<'SQL'
+INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', :call_role, :invite_state, :joined_at, :left_at)
+SQL
+        );
+        $insertParticipant->execute([
+            ':call_id' => 'broker-call',
+            ':user_id' => $adminUserId,
+            ':email' => 'admin@intelligent-intern.com',
+            ':display_name' => 'Platform Admin',
+            ':call_role' => 'owner',
+            ':invite_state' => 'allowed',
+            ':joined_at' => $nowIso,
+            ':left_at' => null,
+        ]);
+        $insertParticipant->execute([
+            ':call_id' => 'broker-call',
+            ':user_id' => $standardUserId,
+            ':email' => 'user@intelligent-intern.com',
+            ':display_name' => 'Call User',
+            ':call_role' => 'participant',
+            ':invite_state' => 'allowed',
+            ':joined_at' => $nowIso,
+            ':left_at' => null,
+        ]);
+        $openCallDatabase = static fn(): PDO => $callPdo;
+        $dbBrokerPdo = new PDO('sqlite::memory:');
+        $dbBrokerPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        videochat_signaling_broker_bootstrap($dbBrokerPdo);
+        $dbSenderConnection = $senderConnection;
+        $dbSenderConnection['room_id'] = 'broker-call-room';
+        $dbSenderConnection['requested_room_id'] = 'broker-call-room';
+        $dbSenderConnection['requested_call_id'] = 'broker-call';
+        $dbSenderConnection['active_call_id'] = 'broker-call';
+        $dbSenderConnection['user_id'] = $adminUserId;
+        $dbSenderConnection['connection_id'] = 'conn-broker-call-sender';
+        $dbPresenceState = videochat_presence_state_init();
+        $dbSenderJoin = videochat_presence_join_room($dbPresenceState, $dbSenderConnection, 'broker-call-room', $sender);
+        $dbSenderConnection = (array) ($dbSenderJoin['connection'] ?? $dbSenderConnection);
+        $decodedDbBrokerHello = videochat_signaling_decode_client_frame(json_encode([
+            'type' => 'media-security/hello',
+            'target_user_id' => $standardUserId,
+            'payload' => ['kind' => 'media_security_hello'],
+        ], JSON_UNESCAPED_SLASHES));
+        $dbBrokerPublish = videochat_signaling_publish(
+            $dbPresenceState,
+            $dbSenderConnection,
+            $decodedDbBrokerHello,
+            $sender,
+            1_780_300_128_000,
+            static function (string $roomId, int $targetUserId, array $event) use ($dbBrokerPdo, $openCallDatabase, &$dbSenderConnection): bool {
+                if (!videochat_realtime_db_room_has_joined_user($openCallDatabase, $dbSenderConnection, $roomId, $targetUserId)) {
+                    return false;
+                }
+
+                return videochat_signaling_broker_insert_event($dbBrokerPdo, $roomId, $targetUserId, $event);
+            }
+        );
+        videochat_realtime_signaling_assert((bool) ($dbBrokerPublish['ok'] ?? false), 'DB-admitted target should allow brokered media-security signaling before local presence is visible');
+        $callPdo->prepare("UPDATE call_participants SET invite_state = 'pending', joined_at = NULL WHERE call_id = :call_id AND user_id = :user_id")
+            ->execute([':call_id' => 'broker-call', ':user_id' => $standardUserId]);
+        videochat_realtime_signaling_assert(
+            !videochat_realtime_db_room_has_joined_user($openCallDatabase, $dbSenderConnection, 'broker-call-room', $standardUserId),
+            'pending target must not pass DB-admitted signaling gate'
+        );
+        @unlink($databasePath);
+    }
 
     videochat_presence_remove_connection($presenceState, (string) ($senderConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($presenceState, (string) ($targetPrimary['connection_id'] ?? ''), $sender);

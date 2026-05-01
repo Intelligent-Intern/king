@@ -1,0 +1,59 @@
+{
+  "contract_name": "king-model-inference-service-descriptor",
+  "contract_version": "1.0.0",
+  "contract_scope": "Human-readable descriptor attached to a service registered in Semantic DNS. The descriptor text (name + description + capabilities + tags) is embedded once at register time and stored as a vector keyed svec-{hex}; at query time POST /api/discover embeds the query and ranks registered services by brute-force cosine similarity against these vectors (#S-1, #S-2, #S-5).",
+  "honesty_rules": [
+    "The descriptor is additive to king_semantic_dns_register_service. It does not replace the keyword/attribute path; services without a descriptor are still discoverable by the existing keyword criteria.",
+    "service_id is the same identity key used by king_semantic_dns_register_service. One descriptor per service_id.",
+    "service_type mirrors the Semantic-DNS service_type the descriptor belongs to (e.g. king.inference.v1); required for scoped discovery.",
+    "name + description + capabilities[] + tags[] are concatenated into a single embedding input by model_inference_service_descriptor_embedding_text(). That text is what gets embedded; the individual fields are only retained for display and for the BM25 token path in #S-6.",
+    "capabilities[] and tags[] are free-form strings. They are not enums; the demo does not constrain domain vocabulary.",
+    "Descriptor content is assumed non-sensitive. Embedding and storage paths do not redact it."
+  ],
+  "request_envelope": {
+    "service_id": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 128,
+      "required": true,
+      "note": "must match service_id used in king_semantic_dns_register_service"
+    },
+    "service_type": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 64,
+      "required": true
+    },
+    "name": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 128,
+      "required": true
+    },
+    "description": {
+      "type": "string",
+      "min_length": 1,
+      "max_length": 2048,
+      "required": true
+    },
+    "capabilities": {
+      "type": "array<string>",
+      "max_items": 32,
+      "item_min_length": 1,
+      "item_max_length": 64,
+      "required": false,
+      "default": []
+    },
+    "tags": {
+      "type": "array<string>",
+      "max_items": 16,
+      "item_min_length": 1,
+      "item_max_length": 64,
+      "required": false,
+      "default": []
+    }
+  },
+  "rejection_codes": {
+    "invalid_service_descriptor": "any required field missing, out of range, or of the wrong type; also unknown top-level keys"
+  }
+}

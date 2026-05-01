@@ -252,8 +252,12 @@ SQL
         'call invite id should be uuid-v4'
     );
     videochat_invite_create_endpoint_assert(
-        videochat_invite_create_endpoint_uuid_v4_like((string) ($callInviteCode['code'] ?? '')),
-        'call invite code should be uuid-v4'
+        !array_key_exists('code', $callInviteCode),
+        'call invite create preview must not expose raw code'
+    );
+    videochat_invite_create_endpoint_assert(
+        ($callInviteCode['secret_available'] ?? true) === false,
+        'call invite create preview must mark secret unavailable'
     );
     videochat_invite_create_endpoint_assert((string) ($callInviteCode['scope'] ?? '') === 'call', 'call invite scope mismatch');
     videochat_invite_create_endpoint_assert((string) ($callInviteCode['call_id'] ?? '') === $callId, 'call invite call_id mismatch');
@@ -269,6 +273,53 @@ SQL
     videochat_invite_create_endpoint_assert(
         (string) ($callInviteCode['expires_at'] ?? '') === $expectedCallExpiresAt,
         'call invite expires_at mismatch'
+    );
+    $callInviteCopyBoundary = (array) (($callInvitePayload['result'] ?? [])['copy'] ?? []);
+    videochat_invite_create_endpoint_assert(
+        (string) ($callInviteCopyBoundary['endpoint_template'] ?? '') === '/api/invite-codes/{id}/copy',
+        'call invite create response must expose copy endpoint template without code'
+    );
+    $callInviteCopyPath = (string) ($callInviteCopyBoundary['endpoint'] ?? '');
+    videochat_invite_create_endpoint_assert(
+        $callInviteCopyPath === '/api/invite-codes/' . (string) ($callInviteCode['id'] ?? '') . '/copy',
+        'call invite copy endpoint path mismatch'
+    );
+    $callInviteCopyResponse = videochat_handle_invite_routes(
+        $callInviteCopyPath,
+        'POST',
+        [
+            ...$adminRequestTemplate,
+            'method' => 'POST',
+            'uri' => $callInviteCopyPath,
+            'body' => '',
+        ],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_invite_create_endpoint_assert(is_array($callInviteCopyResponse), 'call invite copy response must be an array');
+    videochat_invite_create_endpoint_assert((int) ($callInviteCopyResponse['status'] ?? 0) === 200, 'call invite copy status should be 200');
+    $callInviteCopyPayload = videochat_invite_create_endpoint_decode($callInviteCopyResponse);
+    videochat_invite_create_endpoint_assert(
+        (string) ((($callInviteCopyPayload['result'] ?? [])['state'] ?? '')) === 'copy_ready',
+        'call invite copy result state mismatch'
+    );
+    $callInviteCopyPreview = (array) ((($callInviteCopyPayload['result'] ?? [])['invite_code'] ?? []));
+    videochat_invite_create_endpoint_assert(
+        !array_key_exists('code', $callInviteCopyPreview),
+        'call invite copy preview must not expose raw code'
+    );
+    $callInviteCopy = (array) ((($callInviteCopyPayload['result'] ?? [])['copy'] ?? []));
+    $callInviteSecretCode = (string) ($callInviteCopy['code'] ?? '');
+    videochat_invite_create_endpoint_assert(
+        videochat_invite_create_endpoint_uuid_v4_like($callInviteSecretCode),
+        'call invite copied code should be uuid-v4'
+    );
+    videochat_invite_create_endpoint_assert(
+        (string) ($callInviteCopy['copy_text'] ?? '') === $callInviteSecretCode,
+        'call invite copy_text should equal copied code'
     );
 
     $secondCallInviteResponse = videochat_handle_invite_routes(
@@ -291,9 +342,33 @@ SQL
     videochat_invite_create_endpoint_assert(is_array($secondCallInviteResponse), 'second call invite-create response must be an array');
     videochat_invite_create_endpoint_assert((int) ($secondCallInviteResponse['status'] ?? 0) === 201, 'second call invite-create status should be 201');
     $secondCallInvitePayload = videochat_invite_create_endpoint_decode($secondCallInviteResponse);
-    $secondCallInviteCode = (string) (((($secondCallInvitePayload['result'] ?? [])['invite_code'] ?? [])['code'] ?? ''));
+    $secondCallInvitePreview = (array) ((($secondCallInvitePayload['result'] ?? [])['invite_code'] ?? []));
     videochat_invite_create_endpoint_assert(
-        strtolower($secondCallInviteCode) !== strtolower((string) ($callInviteCode['code'] ?? '')),
+        !array_key_exists('code', $secondCallInvitePreview),
+        'second call invite create preview must not expose raw code'
+    );
+    $secondCallInviteCopyPath = (string) (((($secondCallInvitePayload['result'] ?? [])['copy'] ?? [])['endpoint'] ?? ''));
+    $secondCallInviteCopyResponse = videochat_handle_invite_routes(
+        $secondCallInviteCopyPath,
+        'POST',
+        [
+            ...$adminRequestTemplate,
+            'method' => 'POST',
+            'uri' => $secondCallInviteCopyPath,
+            'body' => '',
+        ],
+        $adminAuth,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_invite_create_endpoint_assert(is_array($secondCallInviteCopyResponse), 'second call invite copy response must be an array');
+    videochat_invite_create_endpoint_assert((int) ($secondCallInviteCopyResponse['status'] ?? 0) === 200, 'second call invite copy status should be 200');
+    $secondCallInviteCopyPayload = videochat_invite_create_endpoint_decode($secondCallInviteCopyResponse);
+    $secondCallInviteCode = (string) (((($secondCallInviteCopyPayload['result'] ?? [])['copy'] ?? [])['code'] ?? ''));
+    videochat_invite_create_endpoint_assert(
+        strtolower($secondCallInviteCode) !== strtolower($callInviteSecretCode),
         'second call invite code must be unique'
     );
 
@@ -347,6 +422,7 @@ SQL
     videochat_invite_create_endpoint_assert((int) ($roomInviteResponse['status'] ?? 0) === 201, 'room invite-create status should be 201');
     $roomInvitePayload = videochat_invite_create_endpoint_decode($roomInviteResponse);
     $roomInviteCode = (array) ((($roomInvitePayload['result'] ?? [])['invite_code'] ?? []));
+    videochat_invite_create_endpoint_assert(!array_key_exists('code', $roomInviteCode), 'room invite create preview must not expose raw code');
     videochat_invite_create_endpoint_assert((string) ($roomInviteCode['scope'] ?? '') === 'room', 'room invite scope mismatch');
     videochat_invite_create_endpoint_assert((string) ($roomInviteCode['room_id'] ?? '') === 'lobby', 'room invite room_id mismatch');
     videochat_invite_create_endpoint_assert(($roomInviteCode['call_id'] ?? null) === null, 'room invite call_id must be null');
@@ -448,7 +524,7 @@ SQL
     $callInviteDbRowQuery = $pdo->prepare(
         'SELECT scope, room_id, call_id, max_redemptions, redemption_count, expires_at FROM invite_codes WHERE code = :code LIMIT 1'
     );
-    $callInviteDbRowQuery->execute([':code' => (string) ($callInviteCode['code'] ?? '')]);
+    $callInviteDbRowQuery->execute([':code' => $callInviteSecretCode]);
     $callInviteDbRow = $callInviteDbRowQuery->fetch();
     videochat_invite_create_endpoint_assert(is_array($callInviteDbRow), 'call invite db row must exist');
     videochat_invite_create_endpoint_assert((string) ($callInviteDbRow['scope'] ?? '') === 'call', 'call invite db scope mismatch');

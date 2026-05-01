@@ -88,8 +88,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 EXT_DIR="${ROOT_DIR}/extension"
 EXT_SO="${EXT_DIR}/modules/king.so"
-QUICHE_LIB="${ROOT_DIR}/quiche/target/release/libquiche.so"
-QUICHE_SERVER="${ROOT_DIR}/quiche/target/release/quiche-server"
 
 FAILED_TESTS_FILE="$(resolve_abs_path "${FAILED_TESTS_FILE}")"
 OUTPUT_DIR="$(resolve_abs_path "${OUTPUT_DIR}")"
@@ -102,6 +100,8 @@ DETERMINISTIC_FILE="${OUTPUT_DIR}/deterministic-tests.txt"
 SKIPPED_FILE="${OUTPUT_DIR}/skipped-tests.txt"
 RERUN_INPUT_FILE="${OUTPUT_DIR}/rerun-input-tests.txt"
 SUMMARY_FILE="${OUTPUT_DIR}/summary.txt"
+HELPER_PREBUILD_LOG="${OUTPUT_DIR}/http3-helper-prebuild.log"
+HELPER_PREBUILD_STATUS="not_required"
 
 : > "${FLAKY_FILE}"
 : > "${DETERMINISTIC_FILE}"
@@ -143,7 +143,7 @@ EOF
     exit 0
 fi
 
-if [[ ! -f "${EXT_SO}" || ! -f "${QUICHE_LIB}" || ! -x "${QUICHE_SERVER}" ]]; then
+if [[ ! -f "${EXT_SO}" ]]; then
     printf '%s\n' "${INPUT_FAILED_TESTS[@]}" > "${SKIPPED_FILE}"
     cat > "${SUMMARY_FILE}" <<EOF
 format=king_phpt_flake_classification_v1
@@ -199,14 +199,14 @@ fi
 
 printf '%s\n' "${RERUN_TESTS[@]}" > "${RERUN_INPUT_FILE}"
 
-export KING_QUICHE_LIBRARY="${QUICHE_LIB}"
-export KING_QUICHE_SERVER="${QUICHE_SERVER}"
-export LD_LIBRARY_PATH="${ROOT_DIR}/quiche/target/release${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-
-(
+HELPER_PREBUILD_STATUS="available"
+if ! (
     cd "${EXT_DIR}"
-    "${SCRIPT_DIR}/prebuild-http3-test-helpers.sh"
-)
+    "${SCRIPT_DIR}/prebuild-http3-test-helpers.sh" > "${HELPER_PREBUILD_LOG}" 2>&1
+); then
+    HELPER_PREBUILD_STATUS="unavailable"
+    cat "${HELPER_PREBUILD_LOG}" >&2
+fi
 
 RERUN_EXECUTED_COUNT=0
 FLAKY_COUNT=0
@@ -269,7 +269,7 @@ rerun_executed_count=${RERUN_EXECUTED_COUNT}
 flaky_count=${FLAKY_COUNT}
 deterministic_count=${DETERMINISTIC_COUNT}
 skipped_count=${SKIPPED_COUNT}
+http3_helper_prebuild_status=${HELPER_PREBUILD_STATUS}
 EOF
 
 exit 0
-

@@ -61,9 +61,74 @@ jobs:
             core.setOutput('reason', reason);
             core.notice(reason);
 
+  lsquic-runtime:
+    name: Pinned LSQUIC Runtime ${{ matrix.arch-label }}
+    needs: branch-push-dedupe
+    if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - runner: ubuntu-24.04-arm
+            arch-label: linux-arm64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
+
+      - name: Restore pinned LSQUIC runtime cache
+        id: restore-lsquic-runtime-cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .cache/king/lsquic/runtime/prefix
+          key: king-lsquic-runtime-${{ matrix.arch-label }}-${{ hashFiles('infra/scripts/lsquic-bootstrap.lock', 'infra/scripts/build-lsquic-runtime.sh') }}
+
+      - name: Verify pinned LSQUIC runtime cache
+        id: verify-lsquic-runtime-cache
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: |
+          if [[ "${{ steps.restore-lsquic-runtime-cache.outputs.cache-hit }}" == "true" ]] \
+            && bash ./infra/scripts/build-lsquic-runtime.sh --verify-current; then
+            echo "cache-current=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "cache-current=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Build pinned LSQUIC runtime
+        if: steps.verify-lsquic-runtime-cache.outputs.cache-current != 'true'
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
+        run: bash ./infra/scripts/build-lsquic-runtime.sh
+
+      - name: Save pinned LSQUIC runtime cache
+        if: steps.verify-lsquic-runtime-cache.outputs.cache-current != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: .cache/king/lsquic/runtime/prefix
+          key: ${{ steps.restore-lsquic-runtime-cache.outputs.cache-primary-key }}
+
+      - name: Upload pinned LSQUIC runtime
+        uses: actions/upload-artifact@v6
+        with:
+          name: king-lsquic-runtime-${{ matrix.arch-label }}
+          if-no-files-found: error
+          path: |
+            .cache/king/lsquic/runtime/prefix/**
+
   canonical-baseline:
     name: Audit, Build, Test shard ${{ matrix.shard-index }}/3, Go-Live
-    needs: branch-push-dedupe
+    needs:
+      - branch-push-dedupe
+      - lsquic-runtime
     if: needs.branch-push-dedupe.outputs.run-heavy-jobs == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -78,7 +143,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -89,14 +154,6 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
       - name: Verify dependency provenance documentation
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-dependency-provenance-doc.sh
@@ -105,37 +162,19 @@ jobs:
         if: matrix.shard-index == 1
         run: bash ./infra/scripts/check-repo-artifact-hygiene.sh
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
+
+      - name: Download pinned LSQUIC runtime
+        uses: actions/download-artifact@v7
+        with:
+          name: king-lsquic-runtime-linux-amd64
+          path: .cache/king/lsquic/runtime/prefix
 
       - name: Verify toolchain
         run: |
           php -v
           phpize -v
-          cargo --version
-
       - name: Lint public PHP stub surface
         if: matrix.shard-index == 1
         run: php -l stubs/king.php
@@ -152,6 +191,8 @@ jobs:
 
       - name: Build canonical release profile
         working-directory: extension
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: ../infra/scripts/build-profile.sh release
 
       - name: Verify public contract truthfulness gates
@@ -165,6 +206,11 @@ jobs:
         if: matrix.shard-index == 1
         run: bash demo/video-chat/backend-king-php/tests/contract-catalog-parity-contract.sh
 
+      - name: Verify video-chat frontend E2E release gate
+        if: matrix.shard-index == 1
+        working-directory: demo/video-chat/frontend-vue
+        run: npm run test:e2e:release-gate
+
       - name: Run video-chat compose smoke gate
         if: matrix.shard-index == 1
         run: |
@@ -177,6 +223,7 @@ jobs:
         env:
           SHARD_TOTAL: "3"
           SHARD_INDEX: "${{ matrix.shard-index }}"
+          KING_LSQUIC_LIBRARY: ${{ github.workspace }}/extension/build/profiles/release/runtime/liblsquic.so
         run: |
           mkdir -p ../compat-artifacts/phpt/canonical-shard-${{ matrix.shard-index }}
           set +e
@@ -192,7 +239,7 @@ jobs:
 
       - name: Upload canonical release package artifact
         if: matrix.shard-index == 1
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-package-php8.5-linux-amd64
           if-no-files-found: error
@@ -222,7 +269,7 @@ jobs:
 
       - name: Upload failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-canonical-baseline-failures-shard-${{ matrix.shard-index }}
           if-no-files-found: ignore
@@ -249,7 +296,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -260,38 +307,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Build profile
         working-directory: extension
@@ -313,7 +330,7 @@ jobs:
 
       - name: Upload profile failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-${{ matrix.profile }}-profile-failures
           if-no-files-found: ignore
@@ -323,7 +340,9 @@ jobs:
 
   install-package-matrix:
     name: Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}
-    needs: canonical-baseline
+    needs:
+      - canonical-baseline
+      - lsquic-runtime
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
@@ -355,6 +374,9 @@ jobs:
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
           - php-version: "8.5"
+            runner: ubuntu-24.04
+            arch-label: linux-amd64
+          - php-version: "8.5"
             runner: ubuntu-24.04-arm
             arch-label: linux-arm64
 
@@ -364,7 +386,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -375,41 +397,19 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
+
+      - name: Download pinned LSQUIC runtime
+        uses: actions/download-artifact@v7
+        with:
+          name: king-lsquic-runtime-${{ matrix.arch-label }}
+          path: .cache/king/lsquic/runtime/prefix
 
       - name: Build canonical release profile
         working-directory: extension
+        env:
+          KING_LSQUIC_RUNTIME_PREFIX: ${{ github.workspace }}/.cache/king/lsquic/runtime/prefix
         run: ../infra/scripts/build-profile.sh release
 
       - name: Package canonical release archive
@@ -434,7 +434,7 @@ jobs:
         run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
 
       - name: Upload release package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
           if-no-files-found: error
@@ -444,7 +444,7 @@ jobs:
 
       - name: Upload package install failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
           if-no-files-found: ignore
@@ -466,7 +466,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -477,38 +477,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -542,7 +512,7 @@ jobs:
 
       - name: Upload release upgrade failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-upgrade-failures
           if-no-files-found: ignore
@@ -563,7 +533,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -574,38 +544,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -639,7 +579,7 @@ jobs:
 
       - name: Upload release downgrade failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-downgrade-failures
           if-no-files-found: ignore
@@ -660,7 +600,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -671,38 +611,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Resolve previous compatibility ref
         id: previous
@@ -736,7 +646,7 @@ jobs:
 
       - name: Upload release persistence migration failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-persistence-migration-failures
           if-no-files-found: ignore
@@ -756,7 +666,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -767,38 +677,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Run release config-state compatibility matrix
         working-directory: extension
@@ -816,7 +696,7 @@ jobs:
 
       - name: Upload release config-state failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-config-state-failures
           if-no-files-found: ignore
@@ -849,7 +729,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
 
@@ -860,38 +740,8 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
-
       - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            autoconf \
-            automake \
-            bison \
-            build-essential \
-            clang \
-            cmake \
-            libssl-dev \
-            libcurl4-openssl-dev \
-            libtool \
-            ninja-build \
-            pkg-config \
-            re2c
+        run: bash ./infra/scripts/install-ci-system-dependencies.sh
 
       - name: Build sanitizer profile
         working-directory: extension
@@ -913,7 +763,7 @@ jobs:
 
       - name: Upload sanitizer soak failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-${{ matrix.mode }}-soak-diagnostics
           if-no-files-found: ignore
@@ -924,6 +774,7 @@ jobs:
   release-full-gate:
     name: Full pipeline completed
     needs:
+      - lsquic-runtime
       - canonical-baseline
       - profile-smoke
       - install-package-matrix

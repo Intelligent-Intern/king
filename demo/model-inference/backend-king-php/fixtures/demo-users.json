@@ -1,0 +1,36 @@
+{
+  "fixture_name": "king-model-inference-demo-users",
+  "fixture_version": "1.0.0",
+  "fixture_scope": "Demo-only user credentials seeded at server boot by #A-6 (model_inference_auth_seed_demo_users). Plaintext passwords are acceptable ONLY because the backend hashes them via password_hash(PASSWORD_DEFAULT) before INSERT, and because these are public, documented demo credentials — never reuse them for anything real.",
+  "honesty_rules": [
+    "Plaintext passwords live here for reproducible demo onboarding. Identical treatment to the video-chat demo's admin@intelligent-intern.com / admin123 fixture — see demo/video-chat/backend-king-php/support/database.php lines 95-233.",
+    "Every field is env-overridable via MODEL_INFERENCE_DEMO_<USER>_USERNAME / _PASSWORD / _DISPLAY_NAME / _ROLE. The seed routine reads env first, falls back to this fixture.",
+    "Seeding is idempotent. A re-run that finds an existing user with the same username + a password_hash that verifies against the plaintext here is a no-op. A hash mismatch means the user rotated their password out-of-band — the seed MUST NOT overwrite in that case.",
+    "role must be one of {user, admin}. Flat role model — the demo intentionally does NOT ship the full video-chat RBAC matrix.",
+    "These credentials are the demo's public default. Hosting this demo on anything resembling a production surface requires rotating all three via the env overrides and disabling the fixture file via the MODEL_INFERENCE_AUTH_DISABLE_DEMO_SEED env flag (also introduced by #A-6).",
+    "Adding or removing users requires a corresponding edit to the auth-seed-contract test so the fixture stays in lockstep with its pinned expectations."
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin123",
+      "display_name": "Admin",
+      "role": "admin",
+      "note": "Full-access fixture for the demo. Not production-hardened."
+    },
+    {
+      "username": "alice",
+      "password": "alice123",
+      "display_name": "Alice",
+      "role": "user",
+      "note": "Primary end-user fixture used by auth-smoke.sh and the A-batch Playwright cross-device test."
+    },
+    {
+      "username": "bob",
+      "password": "bob123",
+      "display_name": "Bob",
+      "role": "user",
+      "note": "Second end-user fixture — used by conversation-ownership-contract to prove cross-user 403 ownership_denied."
+    }
+  ]
+}

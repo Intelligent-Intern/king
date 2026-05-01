@@ -6,6 +6,9 @@ const KING_BENCHMARK_SCHEMA_VERSION = 1;
 const KING_BENCHMARK_BUDGET_SCHEMA_VERSION = 1;
 const KING_BENCHMARK_DEFAULT_MAX_SLOWDOWN = 1.35;
 
+require_once __DIR__ . '/cases/proto_batch.php';
+require_once __DIR__ . '/cases/proto_integer_encodings.php';
+
 main($argv);
 
 function main(array $argv): void
@@ -176,6 +179,9 @@ function build_case_definitions(): array
                 ];
             },
         ],
+        'proto_batch' => king_benchmark_proto_batch_case(),
+        'proto_varint' => king_benchmark_proto_varint_case(),
+        'proto_omega' => king_benchmark_proto_omega_case(),
         'object_store' => [
             'description' => 'object-store put/get/cache/delete cycle',
             'default_iterations' => 4000,

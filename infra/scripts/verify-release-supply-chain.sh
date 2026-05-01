@@ -174,9 +174,7 @@ for archive in "${ARCHIVES[@]}"; do
     MANIFEST_ARCHIVE_PATH="${archive}" \
     EXPECTED_GIT_COMMIT="${EXPECTED_GIT_COMMIT}" \
     ALLOW_SOURCE_DIRTY="${ALLOW_SOURCE_DIRTY}" \
-    PROVENANCE_QUICHE_BOOTSTRAP_LOCK="${SCRIPT_DIR}/quiche-bootstrap.lock" \
-    PROVENANCE_TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock" \
-    PROVENANCE_QUICHE_WORKSPACE_LOCK="${SCRIPT_DIR}/quiche-workspace.Cargo.lock" \
+    PROVENANCE_LSQUIC_BOOTSTRAP_LOCK="${SCRIPT_DIR}/lsquic-bootstrap.lock" \
     "${PHP_BIN}" <<'PHP'
 <?php
 
@@ -206,12 +204,15 @@ $gitCommit = $manifest['git_commit'] ?? null;
 $gitShort = $manifest['git_short'] ?? null;
 $sourceDirty = $manifest['source_dirty'] ?? null;
 $provenance = $manifest['provenance'] ?? null;
+$dependencyProvenance = $manifest['dependency_provenance'] ?? null;
+$http3Stack = $manifest['http3_stack'] ?? null;
 
-if (!is_string($gitCommit) || preg_match('/^[0-9a-f]{40}$/', $gitCommit) !== 1) {
+if (!is_string($gitCommit) || preg_match('/^[0-9a-fA-F]{40}$/', $gitCommit) !== 1) {
     $fail("Manifest git_commit is invalid for {$archivePath}.\n");
 }
+$gitCommit = strtolower($gitCommit);
 
-if (!is_string($gitShort) || $gitShort !== substr($gitCommit, 0, 12)) {
+if (!is_string($gitShort) || strtolower($gitShort) !== substr($gitCommit, 0, 12)) {
     $fail("Manifest git_short does not match git_commit for {$archivePath}.\n");
 }
 
@@ -231,26 +232,112 @@ if (!is_array($provenance)) {
     $fail("Manifest provenance section is missing for {$archivePath}.\n");
 }
 
-$required = [
-    'quiche_bootstrap_lock_sha256' => getenv('PROVENANCE_QUICHE_BOOTSTRAP_LOCK'),
-    'toolchain_lock_sha256' => getenv('PROVENANCE_TOOLCHAIN_LOCK'),
-    'quiche_workspace_lock_sha256' => getenv('PROVENANCE_QUICHE_WORKSPACE_LOCK'),
-];
+$lockPath = getenv('PROVENANCE_LSQUIC_BOOTSTRAP_LOCK');
+if (!is_string($lockPath) || $lockPath === '' || !is_file($lockPath)) {
+    $fail("Missing local provenance input for lsquic_bootstrap_lock_sha256.\n");
+}
 
-foreach ($required as $key => $path) {
-    if (!is_string($path) || $path === '' || !is_file($path)) {
-        $fail("Missing local provenance input for {$key}.\n");
+$lockValues = [];
+foreach (file($lockPath, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+    if (preg_match('/^([A-Z0-9_]+)="([^"]*)"$/', $line, $matches) === 1) {
+        $lockValues[$matches[1]] = $matches[2];
+    }
+}
+
+$readLock = static function (string $key) use ($lockValues, $fail): string {
+    $value = $lockValues[$key] ?? null;
+    if (!is_string($value) || $value === '') {
+        $fail("Missing lock value for {$key}.\n");
     }
 
+    return $value;
+};
+
+$required = [
+    'lsquic_bootstrap_lock_sha256' => hash_file('sha256', $lockPath),
+    'lsquic_archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
+    'boringssl_archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
+    'ls_qpack_archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
+    'ls_hpack_archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
+];
+
+foreach ($required as $key => $actualHash) {
     $expectedHash = $provenance[$key] ?? null;
     if (!is_string($expectedHash) || preg_match('/^[A-Fa-f0-9]{64}$/', $expectedHash) !== 1) {
         $fail("Invalid manifest provenance hash for {$key}.\n");
     }
     $expectedHash = strtolower($expectedHash);
 
-    $actualHash = hash_file('sha256', $path);
     if ($actualHash !== $expectedHash) {
         $fail("Provenance hash mismatch for {$key} in {$archivePath}.\n");
+    }
+}
+
+$expectedComponents = ['lsquic', 'boringssl', 'ls-qpack', 'ls-hpack'];
+if (
+    !is_array($http3Stack)
+    || ($http3Stack['transport'] ?? null) !== 'lsquic'
+    || ($http3Stack['tls'] ?? null) !== 'boringssl'
+    || ($http3Stack['components'] ?? null) !== $expectedComponents
+) {
+    $fail("Manifest HTTP/3 stack metadata is invalid for {$archivePath}.\n");
+}
+
+if (!is_array($dependencyProvenance)) {
+    $fail("Manifest dependency_provenance section is missing for {$archivePath}.\n");
+}
+
+$expectedDependencyProvenance = [
+    'lsquic' => [
+        'repo_url' => $readLock('KING_LSQUIC_REPO_URL'),
+        'version' => $readLock('KING_LSQUIC_TAG'),
+        'commit' => $readLock('KING_LSQUIC_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LICENSE_FILES')) ?: [],
+    ],
+    'boringssl' => [
+        'repo_url' => $readLock('KING_LSQUIC_BORINGSSL_REPO_URL'),
+        'version' => $readLock('KING_LSQUIC_BORINGSSL_TAG'),
+        'commit' => $readLock('KING_LSQUIC_BORINGSSL_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_BORINGSSL_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_BORINGSSL_LICENSE_FILES')) ?: [],
+    ],
+    'ls-qpack' => [
+        'path' => $readLock('KING_LSQUIC_LS_QPACK_PATH'),
+        'repo_url' => $readLock('KING_LSQUIC_LS_QPACK_REPO_URL'),
+        'version' => 'gitlink',
+        'commit' => $readLock('KING_LSQUIC_LS_QPACK_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_QPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_QPACK_LICENSE_FILES')) ?: [],
+    ],
+    'ls-hpack' => [
+        'path' => $readLock('KING_LSQUIC_LS_HPACK_PATH'),
+        'repo_url' => $readLock('KING_LSQUIC_LS_HPACK_REPO_URL'),
+        'version' => 'gitlink',
+        'commit' => $readLock('KING_LSQUIC_LS_HPACK_COMMIT'),
+        'archive_url' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_URL'),
+        'archive_sha256' => $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_SHA256'),
+        'archive_bytes' => (int) $readLock('KING_LSQUIC_LS_HPACK_ARCHIVE_BYTES'),
+        'license_files' => preg_split('/\s+/', $readLock('KING_LSQUIC_LS_HPACK_LICENSE_FILES')) ?: [],
+    ],
+];
+
+foreach ($expectedDependencyProvenance as $componentName => $expectedValues) {
+    $component = $dependencyProvenance[$componentName] ?? null;
+    if (!is_array($component)) {
+        $fail("Manifest dependency provenance is missing for {$componentName} in {$archivePath}.\n");
+    }
+
+    foreach ($expectedValues as $key => $expectedValue) {
+        if (($component[$key] ?? null) !== $expectedValue) {
+            $fail("Manifest dependency provenance mismatch for {$componentName}.{$key} in {$archivePath}.\n");
+        }
     }
 }
 

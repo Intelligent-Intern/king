@@ -7,7 +7,7 @@
     "model_selector.prefer_local is a hint, not a guarantee. If a locally registered model does not fit the node profile at selection time (#M-6), the selector may return a different winner or reject the request with 'model_fit_unavailable'.",
     "sampling.seed is optional; when present the backend MUST plumb it to llama.cpp as '-s <seed>' so two calls with the same seed + same prompt + same model produce the same completion. Omitting it yields a fresh random seed per call — never a silent default to 0.",
     "sampling.max_tokens is hard-capped by the backend at 8192 to refuse unbounded generation. A lower cap may apply if the loaded model's context_length is smaller (enforced at #M-10).",
-    "prompt is a single string. Chat templating (system/user/assistant roles) is NOT performed server-side in this leaf; clients that need templated prompts render the template client-side and submit the resulting string. A future leaf adds a 'messages' array and server-side chat templating.",
+    "prompt is a single string. The backend always submits it to llama.cpp's /v1/chat/completions, which applies the chat template baked into the GGUF (ChatML / Llama-2 chat / whatever-the-model-expects). Clients can now supply a multi-turn `messages` array (#T-1) for chat memory; when present, `prompt` is optional and — if supplied — is appended as the final user turn, letting the client pass prior history without mutating it. When `messages` is absent the envelope behaves exactly as before (single {system?, user:prompt} turn).",
     "stream is authoritative: 'false' forces POST /api/infer to return one full JSON envelope (#M-10); 'true' is only valid on WS 'infer.start' (#M-11). The HTTP route rejects stream=true with 'invalid_request_envelope' so callers can't silently request a streaming response they cannot consume."
   ],
   "envelope": {
@@ -31,13 +31,26 @@
       "type": "string",
       "min_length": 1,
       "max_length": 131072,
-      "required": true
+      "required": false,
+      "required_when": {"messages_absent": true},
+      "note": "required when messages[] is absent; optional when messages[] is present (appended as a trailing user turn if supplied)"
     },
     "system": {
       "type": "string",
       "min_length": 1,
       "max_length": 32768,
       "required": false
+    },
+    "messages": {
+      "type": "array<object>",
+      "required": false,
+      "min_items": 1,
+      "max_items": 64,
+      "item_shape": {
+        "role": {"type": "string", "enum": ["system", "user", "assistant"], "required": true},
+        "content": {"type": "string", "min_length": 1, "max_length": 32768, "required": true}
+      },
+      "note": "multi-turn chat history (#T-1). When present the server passes it verbatim to /v1/chat/completions, optionally prefixed by system and suffixed by prompt. Replaces prompt as the minimum user-signal requirement."
     },
     "sampling": {
       "type": "object",
@@ -47,7 +60,9 @@
         "top_p": {"type": "float", "min": 0.0, "max": 1.0, "required": true},
         "top_k": {"type": "int", "min": 0, "max": 1024, "required": true, "note": "0 disables top-k filtering"},
         "max_tokens": {"type": "int", "min": 1, "max": 8192, "required": true},
-        "seed": {"type": "int", "min": 0, "max": 4294967295, "required": false, "note": "missing means fresh random seed per call"}
+        "seed": {"type": "int", "min": 0, "max": 4294967295, "required": false, "note": "missing means fresh random seed per call"},
+        "frequency_penalty": {"type": "float", "min": -2.0, "max": 2.0, "required": false, "default": 0.0, "note": "OpenAI-compatible; scales penalty with token frequency in recent output. #T-3: combats small-model echo-collapse where the assistant copies the previous reply."},
+        "presence_penalty": {"type": "float", "min": -2.0, "max": 2.0, "required": false, "default": 0.0, "note": "OpenAI-compatible; penalizes any token that has appeared in the output at all. #T-3: pairs with frequency_penalty to break repetition loops."}
       }
     },
     "stream": {

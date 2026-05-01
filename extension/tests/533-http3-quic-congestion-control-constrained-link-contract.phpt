@@ -2,18 +2,10 @@
 King HTTP/3 keeps supported QUIC congestion-control algorithms live under sustained constrained links
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required for the HTTP/3 ticket test server";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+king_http3_skipif_require_c_helpers();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -133,7 +125,7 @@ try {
         var_dump($case['label']);
         var_dump($response['status']);
         var_dump($response['body'] === $expectedBody);
-        var_dump($response['transport_backend'] === 'quiche_h3');
+        var_dump($response['transport_backend'] === 'lsquic_h3');
         var_dump($response['quic_packets_lost'] > 0);
         var_dump($response['quic_packets_retransmitted'] > 0);
         var_dump($response['quic_lost_bytes'] > 0);

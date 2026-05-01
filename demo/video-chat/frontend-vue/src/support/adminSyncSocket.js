@@ -1,7 +1,13 @@
 import {
+  buildWebSocketUrl,
   resolveBackendWebSocketOriginCandidates,
   setBackendWebSocketOrigin,
 } from './backendOrigin';
+import {
+  appendAssetVersionQuery,
+  handleAssetVersionSocketClose,
+  handleAssetVersionSocketPayload,
+} from './assetVersion';
 
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 const MAX_PENDING_PUBLISHES = 20;
@@ -21,23 +27,13 @@ function normalizeReason(value) {
 }
 
 function socketUrlForOrigin(origin, sessionToken) {
-  const rawOrigin = String(origin || '').trim();
-  if (rawOrigin === '') return null;
-
-  try {
-    const url = new URL(rawOrigin);
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-    url.pathname = '/ws';
-    url.search = '';
-    url.searchParams.set('room', 'lobby');
-    const token = String(sessionToken || '').trim();
-    if (token !== '') {
-      url.searchParams.set('session', token);
-    }
-    return url.toString();
-  } catch {
-    return null;
+  const query = appendAssetVersionQuery(new URLSearchParams());
+  query.set('room', 'lobby');
+  const token = String(sessionToken || '').trim();
+  if (token !== '') {
+    query.set('session', token);
   }
+  return buildWebSocketUrl(origin, '/ws', query);
 }
 
 function socketIsOpen(socket) {
@@ -177,6 +173,7 @@ export function createAdminSyncSocket(options = {}) {
         payload = null;
       }
       if (!payload || typeof payload !== 'object') return;
+      if (handleAssetVersionSocketPayload(payload)) return;
       if (String(payload.type || '').trim().toLowerCase() !== 'admin/sync') return;
 
       onSync(payload);
@@ -200,6 +197,10 @@ export function createAdminSyncSocket(options = {}) {
 
       if (manuallyClosed) {
         emitState('idle', 'closed');
+        return;
+      }
+
+      if (handleAssetVersionSocketClose(event)) {
         return;
       }
 
@@ -247,6 +248,10 @@ export function createAdminSyncSocket(options = {}) {
 
     emitState('connecting', 'starting');
     const candidates = resolveBackendWebSocketOriginCandidates();
+    if (candidates.length === 0) {
+      emitState('blocked', 'secure_transport_required');
+      return false;
+    }
     connectWithOriginAt(candidates, 0, connectGeneration, sessionToken);
     return true;
   }

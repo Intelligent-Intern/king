@@ -39,7 +39,13 @@ dist/
 .cache/
 demo/video-chat/frontend-vue/.vite/
 demo/video-chat/frontend-vue/dist/
+demo/video-chat/frontend-vue/test-results/
 demo/video-chat/**/src/lib/wasm/build/
+
+# Local machine-specific environment overrides.
+.env.local
+*.env.local
+demo/video-chat/docker-compose.deploy.local.yml
 
 # model-inference backend: ephemeral sqlite + object-store + GGUF fixture
 # installed on demand via
@@ -59,6 +65,10 @@ demo/model-inference/backend-king-php/.local/
 *.onnx
 *.tflite
 *.bin
+# Browser runtime assets intentionally vendored for the video-chat CDN path.
+!demo/video-chat/frontend-vue/public/cdn/vendor/mediapipe/selfie_segmentation/*.tflite
+# Tiny video-chat upload rejection fixture; keep the global model-artifact guard above.
+!demo/video-chat/frontend-vue/tests/fixtures/chat/blocked/blob.bin
 # Exception: cargo vendor + ring/flate2 test fixtures + quiche cmake
 # artifacts need to keep their `.bin` names. These trees are already
 # scoped by earlier ignore rules (target/, .cargo/) and are not
@@ -73,6 +83,26 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# Editor / IDE personal state
+.idea/
+
+# macOS Finder metadata
+.DS_Store
+**/.DS_Store
+
+# Playwright MCP session artifacts (ephemeral browser logs / page dumps)
+.playwright-mcp/
+
+# clangd / IntelliSense (regenerated per build)
+compile_commands.json
+
+# Autotools and merge-conflict backup files
+*~
+*.orig
+
+# Demo local runtime data (SQLite DB, seeded fixtures)
+demo/video-chat/backend-king-php/.local/
 
 # Local image artifacts
 *.png

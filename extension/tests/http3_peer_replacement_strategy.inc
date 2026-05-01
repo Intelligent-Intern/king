@@ -1,0 +1,90 @@
+<?php
+
+return [
+    'strategy' => [
+        'id' => 'tracked_c_lsquic_test_helpers',
+        'summary' => 'HTTP/3 behavior peers run through repo-owned C helpers linked against the pinned LSQUIC/BoringSSL test dependency set; the previous Rust/Cargo/Quiche fixtures are removed.',
+        'selected_path' => 'c_helper',
+        'uses_king_owned_listeners_where_equivalent' => true,
+        'uses_ci_binary_artifacts' => false,
+        'uses_rust_or_cargo_bootstrap' => false,
+        'uses_quiche_workspace' => false,
+        'product_bootstrap' => false,
+        'dependency_lock' => 'infra/scripts/lsquic-bootstrap.lock',
+        'future_build_script' => 'infra/scripts/build-http3-test-helpers.sh',
+        'future_source_root' => 'extension/tests/http3_peer_helpers',
+        'future_output_root' => '.cache/king/http3-test-helpers',
+        'expiry_issue' => '#Q-8',
+        'removed_temporary_fixture_issue' => '#Q-9',
+    ],
+    'required_capabilities' => [
+        'handshake_failure',
+        'transport_close',
+        'application_close',
+        'timeout',
+        'flow_control',
+        'packet_loss',
+        'zero_rtt',
+        'session_tickets',
+        'multi_stream_fairness',
+        'userland_cancel',
+        'delayed_request_body',
+    ],
+    'active_helpers' => [
+        'king-http3-abort-client' => [
+            'target' => 'extension/tests/http3_peer_helpers/abort_client.c',
+            'path' => 'c_lsquic_client_helper',
+            'capabilities' => ['userland_cancel'],
+        ],
+        'king-http3-delayed-body-client' => [
+            'target' => 'extension/tests/http3_peer_helpers/delayed_body_client.c',
+            'path' => 'c_lsquic_client_helper',
+            'capabilities' => ['delayed_request_body'],
+        ],
+        'king-http3-failure-peer' => [
+            'target' => 'extension/tests/http3_peer_helpers/failure_peer.c',
+            'path' => 'c_lsquic_server_peer',
+            'capabilities' => [
+                'transport_close',
+                'application_close',
+                'timeout',
+                'flow_control',
+                'userland_cancel',
+            ],
+        ],
+        'king-http3-multi-peer' => [
+            'target' => 'extension/tests/http3_peer_helpers/multi_peer.c',
+            'path' => 'c_lsquic_server_peer',
+            'capabilities' => ['multi_stream_fairness'],
+        ],
+        'king-http3-ticket-server' => [
+            'target' => 'extension/tests/http3_peer_helpers/ticket_server.c',
+            'path' => 'c_lsquic_server_peer',
+            'capabilities' => [
+                'handshake_failure',
+                'packet_loss',
+                'zero_rtt',
+                'session_tickets',
+            ],
+        ],
+        'king-http3-test-helper-build-plan' => [
+            'target' => 'infra/scripts/build-http3-test-helpers.sh',
+            'path' => 'deterministic_shell_build_driver',
+            'capabilities' => [],
+        ],
+        'king-http3-test-helper-provenance' => [
+            'target' => 'infra/scripts/lsquic-bootstrap.lock',
+            'path' => 'pinned_lsquic_dependency_lock',
+            'capabilities' => [],
+        ],
+    ],
+    'completed_replacements' => [
+        'extension/tests/http3_abort_client.rs' => 'king-http3-abort-client',
+        'extension/tests/http3_delayed_body_client.rs' => 'king-http3-delayed-body-client',
+        'extension/tests/http3_failure_peer.rs' => 'king-http3-failure-peer',
+        'extension/tests/http3_multi_peer.rs' => 'king-http3-multi-peer',
+        'extension/tests/http3_ticket_server/src/main.rs' => 'king-http3-ticket-server',
+        'extension/tests/http3_ticket_server/Cargo.toml' => 'king-http3-test-helper-build-plan',
+        'extension/tests/http3_ticket_server/Cargo.lock' => 'king-http3-test-helper-provenance',
+    ],
+];
