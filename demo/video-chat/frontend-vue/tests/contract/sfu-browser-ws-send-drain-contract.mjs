@@ -29,6 +29,8 @@ try {
   const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
 
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'client has an explicit low-water send resume target');
+  requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_PROFILE_DRAIN_RATIO = 0.25', 'client drains to a low fraction of the active profile budget');
+  requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_DRAIN_TARGET_BYTES = 512 * 1024', 'client caps send-buffer drain target below one megabyte');
   requireContains(outboundFrameBudget, 'export const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 160', 'client does not hide media behind a 500ms browser drain wait');
   requireContains(outboundFrameBudget, 'export function resolveSfuSendDrainTargetBytes(metrics', 'client derives drain target from the active profile budget');
   requireContains(sfuClient, 'this.waitForSendBufferDrain(drainTargetBufferedBytes, SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS)', 'client waits only to the budgeted low-water target');

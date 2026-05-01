@@ -1,6 +1,6 @@
 import { nextTick } from 'vue';
 import { BackgroundFilterController } from '../../realtime/background/controller';
-import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
+import { buildOptionalCallAudioCaptureConstraints as defaultBuildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { callMediaPrefs } from '../../realtime/media/preferences';
 
 function finiteNumber(value, fallback) {
@@ -74,7 +74,9 @@ function applyVolumeToStreams(streams) {
   }
 }
 
-function buildPreviewConstraints() {
+function buildPreviewConstraints(
+  buildOptionalCallAudioCaptureConstraints = defaultBuildOptionalCallAudioCaptureConstraints,
+) {
   const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
   return {
@@ -94,7 +96,11 @@ function stopStreams(streams) {
   }
 }
 
-export function createJoinAccessPreviewController({ previewVideoRef, state }) {
+export function createJoinAccessPreviewController({
+  previewVideoRef,
+  state,
+  buildOptionalCallAudioCaptureConstraints = defaultBuildOptionalCallAudioCaptureConstraints,
+}) {
   const backgroundController = new BackgroundFilterController();
   let rawStream = null;
   let previewStream = null;
@@ -133,7 +139,7 @@ export function createJoinAccessPreviewController({ previewVideoRef, state }) {
     }
 
     try {
-      rawStream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
+      rawStream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints(buildOptionalCallAudioCaptureConstraints));
       applyVolumeToStreams([rawStream]);
 
       previewStream = rawStream;
