@@ -120,6 +120,7 @@ export class SFUClient {
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
   private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
   private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
+  private connectAttemptInFlight = false
   private mediaTransport: SfuWebSocketFallbackMediaTransport
 
   constructor(cb: SFUClientCallbacks) {
@@ -170,6 +171,7 @@ export class SFUClient {
   ): void {
     if (generation !== this.connectGeneration) return
     if (index >= candidates.length) {
+      this.connectAttemptInFlight = false
       reportClientDiagnostic({
         category: 'media',
         level: 'error',
@@ -214,11 +216,18 @@ export class SFUClient {
       const assetVersionProbe = handleAssetVersionConnectionFailure()
       if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
         assetVersionProbe.then((handled) => {
-          if (handled) return
+          if (handled) {
+            this.connectAttemptInFlight = false
+            return
+          }
           failToNextCandidate()
         }).catch(() => {
           failToNextCandidate()
         })
+        return
+      }
+      if (assetVersionProbe) {
+        this.connectAttemptInFlight = false
         return
       }
       failToNextCandidate()
@@ -230,6 +239,7 @@ export class SFUClient {
         return
       }
       opened = true
+      this.connectAttemptInFlight = false
       this.disconnectNotified = false
       setBackendSfuOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
@@ -259,7 +269,10 @@ export class SFUClient {
 
     ws.onclose = (event) => {
       if (generation !== this.connectGeneration) return
-      if (handleAssetVersionSocketClose(event)) return
+      if (handleAssetVersionSocketClose(event)) {
+        this.connectAttemptInFlight = false
+        return
+      }
       if (!opened) {
         failToNextCandidateAfterAssetVersionProbe()
         return
@@ -288,7 +301,8 @@ export class SFUClient {
     ws.onerror = () => {
       if (generation !== this.connectGeneration) return
       if (!opened) {
-        failToNextCandidateAfterAssetVersionProbe()
+        // Browsers follow pre-open errors with close; wait for that terminal
+        // event before trying the next origin so CONNECTING sockets do not pile up.
         return
       }
       try {
@@ -298,8 +312,10 @@ export class SFUClient {
   }
 
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
+    if (this.connectAttemptInFlight) return
     this.connectGeneration += 1
     this.outboundMediaGeneration += 1
+    this.connectAttemptInFlight = true
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
@@ -311,7 +327,7 @@ export class SFUClient {
     const generation = this.connectGeneration
 
     if (this.ws) {
-      this.retireSocket(this.ws)
+      this.retireSocket(this.ws, true)
       this.ws = null
     }
 
@@ -419,6 +435,7 @@ export class SFUClient {
   leave(): void {
     this.connectGeneration += 1
     this.outboundMediaGeneration += 1
+    this.connectAttemptInFlight = false
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()

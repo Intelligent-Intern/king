@@ -450,7 +450,7 @@ if command -v ufw >/dev/null 2>&1 && \${SUDO}ufw status | grep -q 'Status: activ
   \${SUDO}ufw allow 443/tcp >/dev/null || true
   \${SUDO}ufw allow 3478/tcp >/dev/null || true
   \${SUDO}ufw allow 3478/udp >/dev/null || true
-  \${SUDO}ufw allow 49160:49200/udp >/dev/null || true
+  \${SUDO}ufw allow 49160:49660/udp >/dev/null || true
 fi
 
 if command -v firewall-cmd >/dev/null 2>&1 && \${SUDO}firewall-cmd --state >/dev/null 2>&1; then
@@ -458,7 +458,7 @@ if command -v firewall-cmd >/dev/null 2>&1 && \${SUDO}firewall-cmd --state >/dev
   \${SUDO}firewall-cmd --permanent --add-service=https >/dev/null || true
   \${SUDO}firewall-cmd --permanent --add-port=3478/tcp >/dev/null || true
   \${SUDO}firewall-cmd --permanent --add-port=3478/udp >/dev/null || true
-  \${SUDO}firewall-cmd --permanent --add-port=49160-49200/udp >/dev/null || true
+  \${SUDO}firewall-cmd --permanent --add-port=49160-49660/udp >/dev/null || true
   \${SUDO}firewall-cmd --reload >/dev/null || true
 fi
 
@@ -722,6 +722,8 @@ VIDEOCHAT_V1_TURN_REALM=\${TURN_DOMAIN}
 VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET=\${TURN_SECRET_VALUE}
 VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret
 VIDEOCHAT_V1_TURN_EXTERNAL_IP=\${TURN_EXTERNAL_IP}
+VIDEOCHAT_V1_TURN_RELAY_MIN_PORT=49160
+VIDEOCHAT_V1_TURN_RELAY_MAX_PORT=49660
 VIDEOCHAT_V1_BACKEND_ORIGIN=https://\${API_DOMAIN}
 VIDEOCHAT_V1_BACKEND_WS_ORIGIN=https://\${WS_DOMAIN}
 VIDEOCHAT_V1_BACKEND_SFU_ORIGIN=https://\${SFU_DOMAIN}
@@ -974,6 +976,8 @@ if [ -s secrets/turn-secret ]; then
 fi
 set_env_value VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
+set_env_value VIDEOCHAT_V1_TURN_RELAY_MIN_PORT 49160
+set_env_value VIDEOCHAT_V1_TURN_RELAY_MAX_PORT 49660
 set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\${API_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "https://\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "https://\${SFU_DOMAIN}"
@@ -1255,6 +1259,8 @@ if [ -s secrets/turn-secret ]; then
 fi
 set_env_value VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
+set_env_value VIDEOCHAT_V1_TURN_RELAY_MIN_PORT 49160
+set_env_value VIDEOCHAT_V1_TURN_RELAY_MAX_PORT 49660
 set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "http://\${API_DOMAIN}:18080"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "http://\${WS_DOMAIN}:18081"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "http://\${SFU_DOMAIN}:18082"
