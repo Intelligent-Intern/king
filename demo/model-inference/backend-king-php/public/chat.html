@@ -668,8 +668,21 @@
   const SESSION_KEY = 'king-model-inference-session-id';
   const AUTH_STORAGE_KEY = 'king-model-inference-auth';
 
+  function secureRandomHex(byteLength) {
+    const cryptoSource = globalThis.crypto;
+    if (!cryptoSource || typeof cryptoSource.getRandomValues !== 'function') {
+      throw new Error('Web Crypto random source unavailable');
+    }
+    const bytes = new Uint8Array(byteLength);
+    cryptoSource.getRandomValues(bytes);
+    return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
   function generateSessionId() {
-    return 'sess-ui-' + Math.random().toString(36).slice(2, 10);
+    const cryptoSource = globalThis.crypto;
+    if (cryptoSource && typeof cryptoSource.randomUUID === 'function') {
+      return 'sess-ui-' + cryptoSource.randomUUID();
+    }
+    return 'sess-ui-' + secureRandomHex(16);
   }
   function loadOrCreateSessionId() {
     try {
