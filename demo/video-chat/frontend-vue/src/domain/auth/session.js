@@ -74,6 +74,7 @@ export const sessionState = reactive({
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
   theme: 'dark',
+  postLogoutLandingUrl: '',
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -112,6 +113,7 @@ function resetUserFields() {
   sessionState.timeFormat = '24h';
   sessionState.dateFormat = 'dmy_dot';
   sessionState.theme = 'dark';
+  sessionState.postLogoutLandingUrl = '';
   sessionState.status = '';
 }
 
@@ -143,7 +145,16 @@ function applyUserSnapshot(user) {
   sessionState.timeFormat = normalizeTimeFormat(user.time_format);
   sessionState.dateFormat = normalizeDateFormat(user.date_format);
   sessionState.theme = normalizeTheme(user.theme);
+  sessionState.postLogoutLandingUrl = normalizePostLogoutLandingUrl(user.post_logout_landing_url);
   sessionState.status = normalizeString(user.status);
+}
+
+function normalizePostLogoutLandingUrl(value) {
+  const url = normalizeString(value);
+  if (url === '' || !url.startsWith('/') || url.startsWith('//') || url.includes('\\')) {
+    return '';
+  }
+  return url;
 }
 
 function applySessionEnvelope(session, user) {
@@ -710,12 +721,18 @@ export async function uploadSessionAvatar(dataUrl) {
 }
 
 export async function logoutSession() {
+  let postLogoutLandingUrl = normalizePostLogoutLandingUrl(sessionState.postLogoutLandingUrl);
   try {
     if (sessionState.sessionToken) {
-      await fetchBackend('/api/auth/logout', {
+      const { response } = await fetchBackend('/api/auth/logout', {
         method: 'POST',
         headers: sessionHeaders(),
       });
+      const payload = await readJsonResponse(response);
+      const backendLandingUrl = normalizePostLogoutLandingUrl(payload?.result?.post_logout_landing_url);
+      if (backendLandingUrl !== '') {
+        postLogoutLandingUrl = backendLandingUrl;
+      }
     }
   } catch {
     // Best-effort logout: local session must still be dropped fail-closed.
@@ -724,7 +741,12 @@ export async function logoutSession() {
     setRecoveryState('idle');
   }
 
-  return { ok: true };
+  return { ok: true, postLogoutLandingUrl };
+}
+
+export function postLogoutRedirectTarget(result = null, fallback = '/login') {
+  const target = normalizePostLogoutLandingUrl(result?.postLogoutLandingUrl || sessionState.postLogoutLandingUrl);
+  return target !== '' ? target : fallback;
 }
 
 export function clearSessionState() {

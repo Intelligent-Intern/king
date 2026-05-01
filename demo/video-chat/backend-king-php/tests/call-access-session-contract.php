@@ -227,6 +227,11 @@ SQL
     $openCallId = (string) (($createOpen['call'] ?? [])['id'] ?? '');
     videochat_call_access_session_assert($openCallId !== '', 'open call id should be present');
 
+    $ownerLandingUpdate = videochat_update_user_settings($pdo, $adminUserId, [
+        'post_logout_landing_url' => '/call-goodbye?source=open-access-contract',
+    ]);
+    videochat_call_access_session_assert((bool) ($ownerLandingUpdate['ok'] ?? false), 'owner logout landing should update');
+
     $openAccess = videochat_create_call_access_link_for_user($pdo, $openCallId, $adminUserId, 'admin', [
         'link_kind' => 'open',
     ]);
@@ -280,6 +285,10 @@ SQL
     $guestUserId = (int) (((($openSessionPayload['result'] ?? [])['user'] ?? [])['id'] ?? 0));
     videochat_call_access_session_assert($guestUserId > 0, 'open guest session should create a user');
     videochat_call_access_session_assert((bool) (((($openSessionPayload['result'] ?? [])['user'] ?? [])['is_guest'] ?? false)) === true, 'open guest session user should be marked as guest');
+    videochat_call_access_session_assert(
+        (string) (((($openSessionPayload['result'] ?? [])['user'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?source=open-access-contract',
+        'open guest should inherit owner logout landing url for session'
+    );
 
     $openBinding = videochat_fetch_call_access_session_binding($pdo, $openSessionId);
     videochat_call_access_session_assert(is_array($openBinding), 'open guest session binding should be persisted');
@@ -317,6 +326,10 @@ SQL
         'websocket'
     );
     videochat_call_access_session_assert((bool) ($openAuth['ok'] ?? false), 'open guest access session should authenticate for websocket');
+    videochat_call_access_session_assert(
+        (string) (($openAuth['user'] ?? [])['post_logout_landing_url'] ?? '') === '/call-goodbye?source=open-access-contract',
+        'authenticated open guest should keep owner logout landing url'
+    );
     $openPendingResolution = videochat_realtime_resolve_connection_rooms($openAuth, $openCallId, $openDatabase, $openCallId);
     videochat_call_access_session_assert((string) ($openPendingResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'open guest should start in waiting room before admission');
     videochat_call_access_session_assert((string) ($openPendingResolution['pending_room_id'] ?? '') === $openCallId, 'open guest should wait for bound room admission');

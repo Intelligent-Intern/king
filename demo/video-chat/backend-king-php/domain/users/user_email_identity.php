@@ -79,6 +79,7 @@ function videochat_issue_email_change_token(): string
  *   date_format: string,
  *   theme: string,
  *   avatar_path: ?string,
+ *   post_logout_landing_url: string,
  *   account_type: string,
  *   is_guest: bool
  * }|null
@@ -101,6 +102,7 @@ SELECT
     users.date_format,
     users.theme,
     users.avatar_path,
+    users.post_logout_landing_url,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -129,6 +131,9 @@ SQL
         'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
         'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
+        'post_logout_landing_url' => is_string($row['post_logout_landing_url'] ?? null)
+            ? trim((string) $row['post_logout_landing_url'])
+            : '',
         'account_type' => $accountType,
         'is_guest' => $accountType === 'guest',
     ];

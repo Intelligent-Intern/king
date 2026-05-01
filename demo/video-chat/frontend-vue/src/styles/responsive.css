@@ -249,6 +249,14 @@
     grid-template-columns: 1fr;
   }
 
+  .settings-row-single {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-field-action {
+    min-width: 0;
+  }
+
   .settings-theme-layout {
     grid-template-columns: 1fr;
   }

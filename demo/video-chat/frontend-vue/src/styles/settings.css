@@ -129,9 +129,18 @@
   gap: 10px;
 }
 
+.settings-row-single {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
 .settings-field {
   display: grid;
   gap: 6px;
+}
+
+.settings-field-action {
+  min-width: 160px;
 }
 
 .settings-field label {

@@ -157,6 +157,40 @@
             </section>
 
             <section
+              v-if="showCallOwnerInviteLink"
+              class="call-left-settings-block call-left-invite-link-block"
+              aria-label="Free-for-all invite link"
+            >
+              <div class="call-left-settings-title">Invite link</div>
+              <div class="call-left-invite-link-row">
+                <input
+                  class="input call-left-invite-link-input"
+                  type="text"
+                  readonly
+                  :value="callOwnerInviteLinkState.url"
+                  :placeholder="callOwnerInviteLinkState.loading ? 'Generating invite link...' : 'Invite link unavailable'"
+                  @focus="$event.target.select()"
+                />
+                <button
+                  class="icon-mini-btn call-left-invite-link-copy"
+                  type="button"
+                  title="Copy invite link"
+                  aria-label="Copy invite link"
+                  :disabled="callOwnerInviteLinkState.loading || callOwnerInviteLinkState.url === ''"
+                  @click="copyCallOwnerInviteLink"
+                >
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
+              <p v-if="callOwnerInviteLinkState.copyNotice" class="call-left-settings-value">
+                {{ callOwnerInviteLinkState.copyNotice }}
+              </p>
+              <p v-if="callOwnerInviteLinkState.error" class="call-left-settings-error">
+                {{ callOwnerInviteLinkState.error }}
+              </p>
+            </section>
+
+            <section
               v-if="showInCallOwnerEditCard"
               class="call-left-settings-block call-left-owner-edit-block"
               aria-label="Call settings"
@@ -658,6 +692,32 @@
         </div>
       </section>
 
+      <section v-else-if="activeSettingsTile === 'session'" class="settings-panel">
+        <section class="settings-section">
+          <h4>Logout Landing</h4>
+          <p>Choose the same-origin page users should see after leaving or logging out.</p>
+          <div class="settings-row settings-row-single">
+            <label class="settings-field">
+              <span>Landing page path</span>
+              <input
+                v-model.trim="settingsDraft.postLogoutLandingUrl"
+                class="input"
+                type="text"
+                inputmode="url"
+                placeholder="/call-goodbye"
+                autocomplete="off"
+              />
+            </label>
+            <div class="settings-field settings-field-action">
+              <span>Default</span>
+              <button class="btn" type="button" @click="resetPostLogoutLandingUrl">
+                Reset to default
+              </button>
+            </div>
+          </div>
+        </section>
+      </section>
+
       <section v-else-if="activeSettingsTile === 'regional'" class="settings-panel">
         <section class="settings-section">
           <h4>Regional Time</h4>
@@ -895,6 +955,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import {
   logoutSession,
+  postLogoutRedirectTarget,
   saveSessionSettings,
   sessionState,
   uploadSessionAvatar,
@@ -1116,6 +1177,7 @@ const settingsDraft = reactive({
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
   language: 'en',
+  postLogoutLandingUrl: '',
   avatarDataUrl: '',
   themeColors: mergeThemeColorMap(persistedThemeColors),
 });
@@ -1132,6 +1194,7 @@ const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
   { id: 'credentials-email', label: 'Credentials + Email' },
+  { id: 'session', label: 'Session' },
   { id: 'regional', label: 'Regional' },
   { id: 'theme', label: 'Theme' },
   { id: 'notifications', label: 'Notifications' },
@@ -1272,6 +1335,13 @@ function applySettingsLanguage(language) {
   document.documentElement.lang = normalizeSettingsLanguage(language);
 }
 
+function normalizePostLogoutLandingUrl(value) {
+  const url = String(value || '').trim();
+  if (url === '') return '';
+  if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
+  return url;
+}
+
 function updateThemeColor(key, value) {
   const normalizedKey = String(key || '').trim();
   if (normalizedKey === '' || !(normalizedKey in themeColorDefaultMap)) return;
@@ -1397,6 +1467,15 @@ const callOwnerEditState = reactive({
   replaceParticipants: false,
 });
 
+const callOwnerInviteLinkState = reactive({
+  loading: false,
+  error: '',
+  url: '',
+  expiresAt: '',
+  copyNotice: '',
+  generatedForCallId: '',
+});
+
 const callOwnerParticipants = reactive({
   loading: false,
   error: '',
@@ -1426,6 +1505,11 @@ const callLayoutSidebarState = reactive({
 });
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
+const showCallOwnerInviteLink = computed(() => (
+  isCallWorkspace.value
+  && callOwnerEditState.visible
+  && normalizeCallAccessMode(callOwnerEditState.accessMode) === 'free_for_all'
+));
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
 
 function applySidebarLayoutMode(mode) {
@@ -1603,6 +1687,96 @@ function resetCallOwnerParticipantsState() {
   callOwnerExternalRows.value = [];
 }
 
+function resetCallOwnerInviteLinkState() {
+  callOwnerInviteLinkState.loading = false;
+  callOwnerInviteLinkState.error = '';
+  callOwnerInviteLinkState.url = '';
+  callOwnerInviteLinkState.expiresAt = '';
+  callOwnerInviteLinkState.copyNotice = '';
+  callOwnerInviteLinkState.generatedForCallId = '';
+}
+
+function buildJoinUrlFromPath(joinPath) {
+  const normalizedPath = String(joinPath || '').trim();
+  if (normalizedPath === '') return '';
+  const path = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
+  return origin !== '' ? `${origin}${path}` : path;
+}
+
+async function generateCallOwnerInviteLink({ force = false } = {}) {
+  if (!showCallOwnerInviteLink.value) {
+    resetCallOwnerInviteLinkState();
+    return;
+  }
+
+  const callId = String(callOwnerEditState.callId || '').trim();
+  if (callId === '') {
+    resetCallOwnerInviteLinkState();
+    return;
+  }
+
+  if (!force && callOwnerInviteLinkState.generatedForCallId === callId && callOwnerInviteLinkState.url !== '') {
+    return;
+  }
+
+  callOwnerInviteLinkState.loading = true;
+  callOwnerInviteLinkState.error = '';
+  callOwnerInviteLinkState.copyNotice = '';
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
+      method: 'POST',
+      body: { link_kind: 'open' },
+    });
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const accessId = String(result?.access_link?.id || '').trim();
+    const joinPath = String(result?.join_path || (accessId !== '' ? `/join/${accessId}` : '')).trim();
+    const url = buildJoinUrlFromPath(joinPath);
+    if (url === '') {
+      throw new Error('Invite link payload is invalid.');
+    }
+
+    callOwnerInviteLinkState.url = url;
+    callOwnerInviteLinkState.expiresAt = typeof result?.access_link?.expires_at === 'string'
+      ? result.access_link.expires_at
+      : '';
+    callOwnerInviteLinkState.generatedForCallId = callId;
+  } catch (error) {
+    callOwnerInviteLinkState.url = '';
+    callOwnerInviteLinkState.expiresAt = '';
+    callOwnerInviteLinkState.generatedForCallId = '';
+    callOwnerInviteLinkState.error = error instanceof Error ? error.message : 'Could not create invite link.';
+  } finally {
+    callOwnerInviteLinkState.loading = false;
+  }
+}
+
+async function copyCallOwnerInviteLink() {
+  const url = String(callOwnerInviteLinkState.url || '').trim();
+  if (url === '') return;
+
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.top = '-1000px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    callOwnerInviteLinkState.copyNotice = 'Invite link copied.';
+  } catch {
+    callOwnerInviteLinkState.copyNotice = '';
+    callOwnerInviteLinkState.error = 'Could not copy invite link.';
+  }
+}
+
 function hydrateCallOwnerDraftFromCall(call) {
   const normalizedCall = call && typeof call === 'object' ? call : {};
 
@@ -1660,6 +1834,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.callId = '';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
+    resetCallOwnerInviteLinkState();
     return;
   }
 
@@ -1669,6 +1844,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.loadingContext = false;
     callOwnerEditState.contextError = '';
     callOwnerEditState.callId = '';
+    resetCallOwnerInviteLinkState();
     return;
   }
 
@@ -1685,10 +1861,12 @@ async function refreshCallOwnerContext() {
 
     if (isOwner) {
       hydrateCallOwnerDraftFromCall(call);
+      void generateCallOwnerInviteLink();
     } else {
       callOwnerEditState.callId = '';
       closeInCallEditModal();
       resetCallOwnerParticipantsState();
+      resetCallOwnerInviteLinkState();
     }
   } catch (error) {
     if (sequence !== callOwnerContextSeq) return;
@@ -1696,6 +1874,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.callId = '';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
+    resetCallOwnerInviteLinkState();
     const status = Number(error?.responseStatus || 0);
     if (status !== 404 && status !== 403 && status !== 410) {
       callOwnerEditState.contextError = error instanceof Error ? error.message : 'Could not load call settings.';
@@ -2165,6 +2344,21 @@ watch(
 
 watch(
   () => [
+    showCallOwnerInviteLink.value,
+    String(callOwnerEditState.callId || '').trim(),
+    normalizeCallAccessMode(callOwnerEditState.accessMode),
+  ],
+  ([shouldShow]) => {
+    if (!shouldShow) {
+      resetCallOwnerInviteLinkState();
+      return;
+    }
+    void generateCallOwnerInviteLink();
+  }
+);
+
+watch(
+  () => [
     callOwnerEditState.open,
     callOwnerEditState.replaceParticipants,
     canLoadCallOwnerInternalDirectory.value,
@@ -2235,8 +2429,13 @@ function resetSettingsDraft() {
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
   settingsDraft.language = readStoredSettingsLanguage();
+  settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
   patchThemeColorMap(settingsDraft.themeColors, persistedThemeColors);
+}
+
+function resetPostLogoutLandingUrl() {
+  settingsDraft.postLogoutLandingUrl = '';
 }
 
 function setAvatarStatus(message = '') {
@@ -2322,6 +2521,7 @@ async function saveSettings() {
   const timeFormat = normalizeTimeFormat(rawTimeFormat);
   const dateFormat = normalizeDateFormat(rawDateFormat);
   const language = normalizeSettingsLanguage(settingsDraft.language);
+  const postLogoutLandingUrl = normalizePostLogoutLandingUrl(settingsDraft.postLogoutLandingUrl);
 
   if (displayName === '') {
     settingsState.message = 'Display name is required.';
@@ -2345,6 +2545,11 @@ async function saveSettings() {
 
   if (!SUPPORTED_SETTINGS_LANGUAGES.includes(language)) {
     settingsState.message = 'Unsupported language selected.';
+    return;
+  }
+
+  if (postLogoutLandingUrl === null) {
+    settingsState.message = 'Logout landing page must be a same-origin path like /call-goodbye.';
     return;
   }
 
@@ -2372,6 +2577,7 @@ async function saveSettings() {
       time_format: timeFormat,
       date_format: dateFormat,
       avatar_path: avatarPath,
+      post_logout_landing_url: postLogoutLandingUrl,
     });
 
     if (!saveResult.ok) {
@@ -2397,7 +2603,7 @@ async function saveSettings() {
 }
 
 async function handleSignOut() {
-  await logoutSession();
-  router.replace('/login');
+  const logoutResult = await logoutSession();
+  router.replace(postLogoutRedirectTarget(logoutResult, '/login'));
 }
 </script>

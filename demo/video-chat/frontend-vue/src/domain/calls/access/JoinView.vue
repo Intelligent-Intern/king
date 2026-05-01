@@ -1,131 +1,208 @@
 <template>
   <main class="call-access-join-page">
-    <section class="call-access-join-modal" role="dialog" aria-modal="true" aria-label="Join video call">
-      <header class="call-access-join-header">
-        <img class="call-access-join-logo" src="/assets/orgas/kingrt/icon.svg" alt="" />
-        <h1>Join Video Call</h1>
-      </header>
-
-      <section v-if="state.loadingContext" class="call-access-join-status">
-        Resolving call access...
-      </section>
-      <section v-else-if="state.contextError" class="call-access-join-status error">
-        {{ state.contextError }}
-      </section>
-      <template v-else>
-        <section class="call-access-join-call">
-          <div class="call-access-join-call-title">{{ state.callTitle }}</div>
-          <div class="call-access-join-call-meta">{{ state.callId }}</div>
-          <div class="call-access-join-call-meta">
-            {{ state.linkKind === 'open' ? 'Free-for-all link' : 'Personalized link' }}
+    <div class="calls-modal call-access-join-shell" role="presentation">
+      <div class="calls-modal-backdrop"></div>
+      <section
+        class="calls-modal-dialog calls-modal-dialog-enter call-access-join-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Join video call"
+      >
+        <header class="calls-modal-header calls-modal-header-enter">
+          <div class="calls-modal-header-enter-left">
+            <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+            <h1 class="calls-enter-title">Join Video Call</h1>
           </div>
-        </section>
-
-        <section class="call-access-join-preview" :style="{ aspectRatio: previewAspectRatio }">
-          <video ref="previewVideoRef" autoplay playsinline muted></video>
-          <p v-if="state.previewError" class="call-access-join-preview-status error">{{ state.previewError }}</p>
-          <p v-else-if="!state.previewReady" class="call-access-join-preview-status">Preparing preview...</p>
-        </section>
-
-        <section v-if="state.linkKind === 'open'" class="call-access-join-grid">
-          <label class="field">
-            <span>Your name</span>
-            <input
-              v-model.trim="state.guestName"
-              class="input"
-              type="text"
-              maxlength="96"
-              placeholder="Enter your display name"
-              :disabled="state.joining || state.waitingForAdmission"
-            />
-          </label>
-        </section>
-
-        <section class="call-access-join-grid">
-          <label class="field">
-            <span>Camera</span>
-            <AppSelect
-              :model-value="callMediaPrefs.selectedCameraId"
-              @update:model-value="setCallCameraDevice"
-            >
-              <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
-              <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
-                {{ camera.label }}
-              </option>
-            </AppSelect>
-          </label>
-
-          <label class="field">
-            <span>Microphone</span>
-            <AppSelect
-              :model-value="callMediaPrefs.selectedMicrophoneId"
-              @update:model-value="setCallMicrophoneDevice"
-            >
-              <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
-              <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
-                {{ microphone.label }}
-              </option>
-            </AppSelect>
-          </label>
-
-          <label class="field">
-            <span>Mic volume</span>
-            <input
-              class="input"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              :value="callMediaPrefs.microphoneVolume"
-              @input="setCallMicrophoneVolume($event.target.value)"
-            />
-          </label>
-
-          <label class="field">
-            <span>Speaker</span>
-            <AppSelect
-              :model-value="callMediaPrefs.selectedSpeakerId"
-              @update:model-value="setCallSpeakerDevice"
-            >
-              <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
-              <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
-                {{ speaker.label }}
-              </option>
-            </AppSelect>
-          </label>
-
-          <label class="field">
-            <span>Speaker volume</span>
-            <input
-              class="input"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              :value="callMediaPrefs.speakerVolume"
-              @input="setCallSpeakerVolume($event.target.value)"
-            />
-          </label>
-        </section>
-
-        <p v-if="state.joinError" class="call-access-join-status error">{{ state.joinError }}</p>
-        <p v-if="state.admissionMessage" class="call-access-join-status waiting" role="status" aria-live="polite">
-          {{ state.admissionMessage }}
-        </p>
-
-        <footer class="call-access-join-actions">
-          <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">Cancel</button>
-          <button class="btn" type="button" :disabled="state.joining || state.waitingForAdmission" @click="startSessionAndJoin">
-            {{ state.waitingForAdmission ? 'Waiting for host...' : (state.joining ? 'Joining...' : 'Join call') }}
+          <button class="icon-mini-btn" type="button" aria-label="Cancel join" @click="goToLogin">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
-        </footer>
-      </template>
-    </section>
+        </header>
+
+        <div v-if="state.loadingContext" class="calls-modal-body call-access-join-context-body">
+          <section class="call-access-join-status">Resolving call access...</section>
+        </div>
+        <div v-else-if="state.contextError" class="calls-modal-body call-access-join-context-body">
+          <section class="call-access-join-status error">{{ state.contextError }}</section>
+        </div>
+        <template v-else>
+          <div class="calls-modal-body calls-enter-body">
+            <div class="calls-enter-layout">
+              <section class="calls-enter-preview">
+                <div class="calls-enter-preview-frame">
+                  <video ref="previewVideoRef" autoplay playsinline muted></video>
+                  <p v-if="state.previewError" class="calls-inline-error">{{ state.previewError }}</p>
+                  <p v-else-if="!state.previewReady" class="calls-inline-hint">Preparing preview...</p>
+                  <div class="call-access-join-call-badge">
+                    <strong>{{ state.callTitle }}</strong>
+                    <span>{{ state.linkKind === 'open' ? 'Free-for-all link' : 'Personalized link' }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="calls-enter-right calls-enter-right-settings">
+                <div class="call-left-settings">
+                  <section v-if="state.linkKind === 'open'" class="call-left-settings-block" aria-label="Guest name">
+                    <div class="call-left-settings-title">Guest name</div>
+                    <div class="call-left-settings-field">
+                      <input
+                        v-model.trim="state.guestName"
+                        class="input"
+                        type="text"
+                        maxlength="96"
+                        placeholder="Enter your display name"
+                        :disabled="state.joining || state.waitingForAdmission"
+                        @keydown.enter.prevent="startSessionAndJoin"
+                      />
+                    </div>
+                  </section>
+
+                  <section class="call-left-settings-block" aria-label="Camera">
+                    <div class="call-left-settings-title">Camera</div>
+                    <div class="call-left-settings-field">
+                      <AppSelect
+                        id="guest-enter-call-camera-select"
+                        aria-label="Camera"
+                        :model-value="callMediaPrefs.selectedCameraId"
+                        @update:model-value="setCallCameraDevice"
+                      >
+                        <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                        <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
+                          {{ camera.label }}
+                        </option>
+                      </AppSelect>
+                    </div>
+                  </section>
+
+                  <section class="call-left-settings-block" aria-label="Mic">
+                    <div class="call-left-settings-title">Mic</div>
+                    <div class="call-left-settings-field">
+                      <AppSelect
+                        id="guest-enter-call-mic-select"
+                        aria-label="Mic"
+                        :model-value="callMediaPrefs.selectedMicrophoneId"
+                        @update:model-value="setCallMicrophoneDevice"
+                      >
+                        <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                        <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
+                          {{ microphone.label }}
+                        </option>
+                      </AppSelect>
+                    </div>
+                    <div class="call-left-settings-field">
+                      <label for="guest-enter-call-mic-volume">Volume</label>
+                      <div class="call-left-volume-row">
+                        <input
+                          id="guest-enter-call-mic-volume"
+                          class="call-left-range"
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          :value="callMediaPrefs.microphoneVolume"
+                          @input="setCallMicrophoneVolume($event.target.value)"
+                        />
+                        <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="call-left-settings-block" aria-label="Speaker">
+                    <div class="call-left-settings-title">Speaker</div>
+                    <div class="call-left-settings-field">
+                      <AppSelect
+                        id="guest-enter-call-speaker-select"
+                        aria-label="Speaker"
+                        :model-value="callMediaPrefs.selectedSpeakerId"
+                        @update:model-value="setCallSpeakerDevice"
+                      >
+                        <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                        <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
+                          {{ speaker.label }}
+                        </option>
+                      </AppSelect>
+                    </div>
+                    <div class="call-left-settings-field">
+                      <label for="guest-enter-call-speaker-volume">Volume</label>
+                      <div class="call-left-volume-row">
+                        <input
+                          id="guest-enter-call-speaker-volume"
+                          class="call-left-range"
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          :value="callMediaPrefs.speakerVolume"
+                          @input="setCallSpeakerVolume($event.target.value)"
+                        />
+                        <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
+                      </div>
+                    </div>
+                    <div class="call-left-settings-field">
+                      <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
+                        Play test sound
+                      </button>
+                    </div>
+                  </section>
+
+                  <section class="call-left-settings-block" aria-label="Background blur">
+                    <div class="call-left-settings-title">Background blur</div>
+                    <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
+                      <button
+                        class="call-left-blur-btn"
+                        :class="{ active: isBackgroundPresetActive('light') }"
+                        type="button"
+                        :aria-pressed="isBackgroundPresetActive('light')"
+                        aria-label="Blur"
+                        title="Blur"
+                        @click="applyBackgroundPreset('light')"
+                      >
+                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
+                      </button>
+                      <button
+                        class="call-left-blur-btn"
+                        :class="{ active: isBackgroundPresetActive('strong') }"
+                        type="button"
+                        :aria-pressed="isBackgroundPresetActive('strong')"
+                        aria-label="Strong blur"
+                        title="Strong blur"
+                        @click="applyBackgroundPreset('strong')"
+                      >
+                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
+                      </button>
+                    </div>
+                  </section>
+
+                  <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <footer class="calls-modal-footer calls-modal-footer-enter">
+            <p v-if="state.admissionMessage" class="calls-enter-admission-status" role="status" aria-live="polite">
+              {{ state.admissionMessage }}
+            </p>
+            <p v-if="state.joinError" class="calls-inline-error calls-enter-footer-error">
+              {{ state.joinError }}
+            </p>
+            <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">Cancel</button>
+            <button
+              class="btn btn-cyan"
+              type="button"
+              :disabled="state.joining || state.waitingForAdmission"
+              @click="startSessionAndJoin"
+            >
+              {{ state.waitingForAdmission ? 'Waiting for host...' : (state.joining ? 'Joining...' : 'Join call') }}
+            </button>
+          </footer>
+        </template>
+      </section>
+    </div>
   </main>
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppSelect from '../../../components/AppSelect.vue';
 import { loginWithCallAccess, sessionState } from '../../auth/session';
@@ -142,8 +219,10 @@ import {
 } from '../../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
 import {
+  applyCallBackgroundPreset as applyBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
+  isCallBackgroundPresetActive as isBackgroundPresetActive,
   refreshCallMediaDevices,
   setCallCameraDevice,
   setCallMicrophoneDevice,
@@ -151,17 +230,14 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../../realtime/media/preferences';
-import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
+import { createJoinAccessPreviewController } from './joinPreview';
 
 const route = useRoute();
 const router = useRouter();
 const previewVideoRef = ref(null);
-const previewStreamRef = ref(null);
-const previewAspectRatio = ref('16 / 9');
 
 let detachDeviceWatcher = null;
 let detachForegroundReconnect = null;
-let resizeBound = null;
 let admissionSocket = null;
 let admissionSocketGeneration = 0;
 let admissionAccepted = false;
@@ -190,6 +266,13 @@ const state = reactive({
   previewReady: false,
   previewError: '',
 });
+
+const {
+  applyPreviewAudioVolume,
+  playSpeakerTestSound,
+  startPreview,
+  stopPreview,
+} = createJoinAccessPreviewController({ previewVideoRef, state });
 
 function normalizeAccessId(value) {
   return String(value || '').trim().toLowerCase();
@@ -224,13 +307,6 @@ function admissionSocketUrlForOrigin(origin) {
   return buildWebSocketUrl(origin, '/ws', query);
 }
 
-function updatePreviewAspectRatio() {
-  if (typeof window === 'undefined') return;
-  const width = Math.max(1, Number(window.innerWidth || 0));
-  const height = Math.max(1, Number(window.innerHeight || 0));
-  previewAspectRatio.value = `${width} / ${height}`;
-}
-
 function extractErrorMessage(payload, fallback) {
   if (payload && typeof payload === 'object') {
     const message = payload?.error?.message;
@@ -239,27 +315,6 @@ function extractErrorMessage(payload, fallback) {
     }
   }
   return fallback;
-}
-
-function stopPreview() {
-  const node = previewVideoRef.value;
-  if (node instanceof HTMLVideoElement) {
-    try {
-      node.pause();
-    } catch {
-      // ignore
-    }
-    node.srcObject = null;
-  }
-
-  const stream = previewStreamRef.value;
-  if (stream instanceof MediaStream) {
-    for (const track of stream.getTracks()) {
-      track.stop();
-    }
-  }
-  previewStreamRef.value = null;
-  state.previewReady = false;
 }
 
 function clearAdmissionReconnectTimer() {
@@ -563,51 +618,6 @@ function startAdmissionWait(accessId) {
   return true;
 }
 
-function buildPreviewConstraints() {
-  const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
-  const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  return {
-    video: cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } },
-    audio: buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId),
-  };
-}
-
-async function startPreview() {
-  stopPreview();
-  state.previewReady = false;
-  state.previewError = '';
-
-  if (
-    typeof navigator === 'undefined'
-    || !navigator.mediaDevices
-    || typeof navigator.mediaDevices.getUserMedia !== 'function'
-  ) {
-    state.previewError = 'Camera preview is not supported in this browser.';
-    return;
-  }
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
-    previewStreamRef.value = stream;
-    const micVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
-    for (const track of stream.getAudioTracks()) {
-      if (typeof track.applyConstraints === 'function') {
-        track.applyConstraints({ volume: micVolume }).catch(() => {});
-      }
-    }
-
-    await nextTick();
-    const node = previewVideoRef.value;
-    if (!(node instanceof HTMLVideoElement)) return;
-    node.muted = true;
-    node.srcObject = stream;
-    await node.play().catch(() => {});
-    state.previewReady = true;
-  } catch (error) {
-    state.previewError = error instanceof Error ? error.message : 'Could not start camera preview.';
-  }
-}
-
 async function loadJoinContext() {
   state.loadingContext = true;
   state.contextError = '';
@@ -692,7 +702,19 @@ async function startSessionAndJoin() {
 }
 
 watch(
-  () => [callMediaPrefs.selectedCameraId, callMediaPrefs.selectedMicrophoneId],
+  () => [
+    callMediaPrefs.selectedCameraId,
+    callMediaPrefs.selectedMicrophoneId,
+    callMediaPrefs.backgroundFilterMode,
+    callMediaPrefs.backgroundBackdropMode,
+    callMediaPrefs.backgroundQualityProfile,
+    callMediaPrefs.backgroundBlurStrength,
+    callMediaPrefs.backgroundMaskVariant,
+    callMediaPrefs.backgroundBlurTransition,
+    callMediaPrefs.backgroundApplyOutgoing,
+    callMediaPrefs.backgroundMaxProcessWidth,
+    callMediaPrefs.backgroundMaxProcessFps,
+  ],
   () => {
     if (state.loadingContext || state.contextError) return;
     void startPreview();
@@ -701,25 +723,10 @@ watch(
 
 watch(
   () => callMediaPrefs.microphoneVolume,
-  () => {
-    const stream = previewStreamRef.value;
-    if (!(stream instanceof MediaStream)) return;
-    const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
-    for (const track of stream.getAudioTracks()) {
-      if (typeof track.applyConstraints === 'function') {
-        track.applyConstraints({ volume }).catch(() => {});
-      }
-    }
-  },
+  applyPreviewAudioVolume,
 );
 
 onMounted(async () => {
-  updatePreviewAspectRatio();
-  resizeBound = () => updatePreviewAspectRatio();
-  if (typeof window !== 'undefined') {
-    window.addEventListener('resize', resizeBound);
-    window.addEventListener('orientationchange', resizeBound);
-  }
   detachForegroundReconnect = attachForegroundReconnectHandlers({
     onBackground: markAdmissionReconnectAfterForeground,
     onForeground: reconnectAdmissionAfterForeground,
@@ -733,11 +740,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   closeAdmissionSocket({ cancel: state.waitingForAdmission && !admissionAccepted });
-  if (typeof window !== 'undefined' && typeof resizeBound === 'function') {
-    window.removeEventListener('resize', resizeBound);
-    window.removeEventListener('orientationchange', resizeBound);
-  }
-  resizeBound = null;
   if (typeof detachDeviceWatcher === 'function') {
     detachDeviceWatcher();
     detachDeviceWatcher = null;

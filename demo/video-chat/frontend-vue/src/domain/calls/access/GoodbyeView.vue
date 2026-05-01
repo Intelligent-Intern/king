@@ -17,6 +17,7 @@ import {
   isAuthenticated,
   isGuestSession,
   logoutSession,
+  postLogoutRedirectTarget,
   sessionState,
 } from '../../auth/session';
 
@@ -29,8 +30,8 @@ function redirectAccountSession() {
 }
 
 async function goToLogin() {
-  await logoutSession();
-  router.replace('/login');
+  const logoutResult = await logoutSession();
+  router.replace(postLogoutRedirectTarget(logoutResult, '/login'));
 }
 
 onMounted(redirectAccountSession);
