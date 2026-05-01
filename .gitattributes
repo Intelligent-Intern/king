@@ -1,0 +1,2 @@
+demo/video-chat/frontend-vue/public/cdn/vendor/** linguist-vendored=true
+demo/video-chat/frontend-vue/src/lib/wasm/wlvc.js linguist-generated=true
