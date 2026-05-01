@@ -29,6 +29,7 @@ const framePayload = read('../../src/lib/sfu/framePayload.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
 const backendOrigin = read('../../src/support/backendOrigin.js');
+const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
 
@@ -39,6 +40,13 @@ try {
   requireContains(sfuClient, 'const candidates = resolveBackendSfuOriginCandidates()', 'SFU origin candidates');
   requireContains(sfuClient, "setBackendSfuOrigin(candidates[index] || '')", 'SFU working origin persistence');
   requireContains(sfuClient, 'this.connectWithCandidates(candidates, index + 1, query, roomId, generation)', 'SFU failover to next origin');
+  requireContains(sfuClient, 'private connectAttemptInFlight = false', 'SFU client tracks one pending websocket handshake');
+  requireContains(sfuClient, 'if (this.connectAttemptInFlight) return', 'SFU client refuses duplicate pending websocket connect attempts');
+  requireContains(sfuClient, 'this.connectAttemptInFlight = false\n      this.disconnectNotified = false', 'SFU client clears pending handshake only after socket open');
+  requireContains(sfuClient, 'Browsers follow pre-open errors with close; wait for that terminal', 'SFU client waits for close before origin failover');
+  requireContains(socketLifecycle, 'if (state.connectInFlight && !state.manualSocketClose) return;', 'workspace websocket refuses duplicate pending connect attempts');
+  requireContains(socketLifecycle, 'state.connectInFlight = true;', 'workspace websocket opens a single-flight gate during handshake');
+  requireContains(socketLifecycle, 'The browser will emit close after a failed handshake', 'workspace websocket waits for close before origin failover');
 
   requireContains(sfuClient, 'room: roomId,', 'legacy room query compatibility');
   requireContains(sfuClient, 'room_id: roomId,', 'snake_case room query binding');
