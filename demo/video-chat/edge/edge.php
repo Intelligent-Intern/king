@@ -395,6 +395,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     $lastUpstreamReadProgress = $lastActivity;
     $lastClientWriteProgress = $lastActivity;
     $lastUpstreamWriteProgress = $lastActivity;
+    $closeWebSocketTunnel = static function () use (&$clientOpen, &$upstreamOpen, &$toClient, &$toUpstream): void {
+        // WebSocket tunnels cannot stay half-open: otherwise browser requests
+        // remain pending while the closed upstream socket sits in CLOSE_WAIT.
+        $clientOpen = false;
+        $upstreamOpen = false;
+        $toClient = '';
+        $toUpstream = '';
+    };
 
     while ($clientOpen || $upstreamOpen || $toUpstream !== '' || $toClient !== '') {
         if ((microtime(true) - $lastActivity) > $idleTimeout) {
@@ -447,6 +455,10 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         foreach ($read as $stream) {
             $chunk = @fread($stream, 16384);
             if ($chunk === false) {
+                if ($isWebSocket) {
+                    $closeWebSocketTunnel();
+                    continue;
+                }
                 if ($stream === $client) {
                     $clientOpen = false;
                 } else {
@@ -456,6 +468,11 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             }
             if ($chunk === '') {
                 if (feof($stream)) {
+                    if ($isWebSocket) {
+                        $closeWebSocketTunnel();
+                        $madeProgress = true;
+                        continue;
+                    }
                     if ($stream === $client) {
                         $clientOpen = false;
                     } else {
@@ -510,12 +527,20 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($stream === $upstreamStream && $toUpstream !== '') {
                 $written = @fwrite($upstreamStream, $toUpstream);
                 if ($written === false) {
+                    if ($isWebSocket) {
+                        $closeWebSocketTunnel();
+                        continue;
+                    }
                     $upstreamOpen = false;
                     $toUpstream = '';
                     continue;
                 }
                 if ($written === 0) {
                     if ((microtime(true) - $lastUpstreamWriteProgress) >= $writeStallTimeout) {
+                        if ($isWebSocket) {
+                            $closeWebSocketTunnel();
+                            continue;
+                        }
                         $upstreamOpen = false;
                         $toUpstream = '';
                     } else {
@@ -531,12 +556,20 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($stream === $client && $toClient !== '') {
                 $written = @fwrite($client, $toClient);
                 if ($written === false) {
+                    if ($isWebSocket) {
+                        $closeWebSocketTunnel();
+                        continue;
+                    }
                     $clientOpen = false;
                     $toClient = '';
                     continue;
                 }
                 if ($written === 0) {
                     if ((microtime(true) - $lastClientWriteProgress) >= $writeStallTimeout) {
+                        if ($isWebSocket) {
+                            $closeWebSocketTunnel();
+                            continue;
+                        }
                         $clientOpen = false;
                         $toClient = '';
                     } else {

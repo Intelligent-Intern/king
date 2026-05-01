@@ -86,6 +86,8 @@ require_text "${EDGE_DIR}/edge.php" 'VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS'
 require_text "${EDGE_DIR}/edge.php" '$written === 0'
 require_text "${EDGE_DIR}/edge.php" "\$chunk === ''"
 require_text "${EDGE_DIR}/edge.php" 'websocket idle timeout decide'
+require_text "${EDGE_DIR}/edge.php" 'WebSocket tunnels cannot stay half-open'
+require_text "${EDGE_DIR}/edge.php" '$closeWebSocketTunnel()'
 require_text "${EDGE_DIR}/edge.php" '$needsBackoff'
 require_text "${EDGE_DIR}/edge.php" 'Connection: close'
 require_text "${ROOT_DIR}/frontend-vue/src/lib/wasm/wasm-codec.ts" "WASM_MIME_CACHE_BUSTER"
