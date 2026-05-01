@@ -242,6 +242,32 @@
   color: var(--text-dim);
 }
 
+.call-left-invite-link-block {
+  min-width: 0;
+}
+
+.call-left-invite-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.call-left-invite-link-input {
+  min-width: 0;
+  height: 34px;
+  font-size: 12px;
+}
+
+.call-left-invite-link-copy {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  font-size: 18px;
+  line-height: 1;
+}
+
 .call-left-volume-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

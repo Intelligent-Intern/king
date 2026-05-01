@@ -230,15 +230,16 @@ Current finding:
   `/api/call-access/{access_id}/session`, then waits in the lobby/admission
   flow instead of showing the normal login screen.
 - The practical gap is UI and settings: the admin enter-call controller can
-  generate/copy this link, but the enter-call modal does not expose it. The user
-  dashboard does not expose an owner/moderator free-for-all link flow either.
+  generate/copy this link, but the in-call owner sidebar did not expose it where
+  the owner already manages live call settings.
 - Logout always drops the local session and routes to `/login` or the fixed
   `/call-goodbye` page. No configurable post-logout landing URL exists in user
   settings yet.
 
 Technical target:
-- Make the free-for-all invite URL visible and copyable where call owners,
-  moderators, and admins naturally manage a call.
+- Make the free-for-all invite URL visible and copyable where the call owner
+  naturally manages a live call: the left call sidebar between Background Blur
+  and Call settings.
 - Keep invite-only personal links separate from free-for-all open links.
 - Ensure guests entering through `/join/{access_id}` never hit the login mask
   before the lobby/admission step.
@@ -247,23 +248,30 @@ Technical target:
 
 ## Active Issues: Free-for-all Invite Lobby and Logout Landing
 
-1. [ ] `[free-for-all-public-link-surface]` Surface the open invite link in call management.
+1. [x] `[free-for-all-public-link-surface]` Surface the open invite link in call management.
 
    Scope:
-   - Add a visible "copy invite link" action to the admin call enter/manage UI
-     for calls with `access_mode=free_for_all`.
+   - Add a visible invite-link field plus copy action to the in-call left
+     sidebar for call owners when `access_mode=free_for_all`.
    - Reuse `POST /api/calls/{call_id}/access-link` with `link_kind=open`.
-   - Show the resulting `/join/{access_id}` URL and expiry, and keep the button
+   - Show the resulting `/join/{access_id}` URL, and keep the copy action
      separate from the normal "Join call" action.
-   - Add the matching owner/moderator surface in the user dashboard for calls
-     the current user is allowed to manage.
+   - Keep the layout stable on narrow/mobile sidebars with a single input plus
+     icon button row.
 
    Done when:
    - A free-for-all call owner/admin can copy a public `/join/{access_id}` link
      without opening DevTools or manually calling the API.
    - Invite-only calls do not expose an open-link copy action.
 
-2. [ ] `[call-access-open-link-contracts]` Harden backend contracts for open links.
+   Report:
+   - Added the owner-only free-for-all invite block in the call left sidebar
+     between Background Blur and Call settings.
+   - The block generates/reuses the backend open access link, renders a readonly
+     URL input, and provides clipboard copy with a textarea fallback.
+   - Invite-only calls and non-owners do not render the open invite surface.
+
+2. [x] `[call-access-open-link-contracts]` Harden backend contracts for open links.
 
    Scope:
    - Prove `free_for_all` creates or reuses exactly one open link per call.
@@ -276,7 +284,17 @@ Technical target:
    - Backend contracts fail if the public link flow regresses into a login-only
      or personal-invite-only flow.
 
-3. [ ] `[guest-lobby-direct-entry]` Keep `/join/{access_id}` as the canonical no-login lobby entry.
+   Report:
+   - Extended the call-access session contract so open guest sessions inherit
+     the owner configured logout landing URL while still authenticating as
+     `account_type=guest`.
+   - Existing call-update contracts continue to pin open-link requirements:
+     free-for-all defaults to `open`, rejects personal links, and invite-only
+     rejects `open`.
+   - Public `/api/call-access/{access_id}/session` remains the no-login guest
+     session issuer for `/join/{access_id}`.
+
+3. [x] `[guest-lobby-direct-entry]` Keep `/join/{access_id}` as the canonical no-login lobby entry.
 
    Scope:
    - Ensure router guards keep `/join/:accessId` public.
@@ -290,7 +308,15 @@ Technical target:
    - A fresh browser profile can open the copied link, enter a guest name, wait
      in the lobby, and enter the call after approval.
 
-4. [ ] `[settings-post-logout-landing-url]` Add a configurable logout landing URL setting.
+   Report:
+   - Preserved the existing public `/join/:accessId` route and public
+     call-access session endpoint.
+   - Open-link guest sessions still create a guest user, bind the call-access
+     session, and enter the waiting-room/admission path before the call room.
+   - The copied sidebar URL points at the frontend `/join/{access_id}` route,
+     not at the login-only workspace.
+
+4. [x] `[settings-post-logout-landing-url]` Add a configurable logout landing URL setting.
 
    Scope:
    - Add a persisted setting for the post-logout landing page.
@@ -303,7 +329,15 @@ Technical target:
    - Settings API contracts cover save, fetch, reset/default, and invalid URL
      rejection.
 
-5. [ ] `[settings-ui-logout-landing]` Add the setting to the frontend settings modal.
+   Report:
+   - Added `post_logout_landing_url` to user settings and sessions with a
+     dedicated migration.
+   - Exposed the field through `GET/PATCH /api/user/settings`, login/session
+     snapshots, cached auth snapshots, and logout payloads.
+   - Validation only accepts an empty default or a safe same-origin path; full
+     external and protocol-relative redirects are rejected.
+
+5. [x] `[settings-ui-logout-landing]` Add the setting to the frontend settings modal.
 
    Scope:
    - Add a focused settings field for the logout landing page.
@@ -315,7 +349,15 @@ Technical target:
    - A user can configure the landing page without editing environment variables
      or backend config.
 
-6. [ ] `[call-logout-redirect-runtime]` Route call logout to the configured landing page.
+   Report:
+   - Added a Session tab in the settings modal with a landing-page path input
+     and reset-to-default action.
+   - Frontend validation mirrors the backend same-origin path rule before
+     sending the settings PATCH.
+   - Mobile settings layout collapses the field/action row to avoid sidebar or
+     modal overflow.
+
+6. [x] `[call-logout-redirect-runtime]` Route call logout to the configured landing page.
 
    Scope:
    - Make `logoutSession` or the caller return/resolve the configured landing
@@ -328,6 +370,15 @@ Technical target:
    Done when:
    - Leaving a call as a free-for-all guest lands on the configured page.
    - Normal logout still clears backend and frontend session state fail-closed.
+
+   Report:
+   - `logoutSession()` now captures the configured landing target before local
+     session state is cleared and also honors the backend logout payload.
+   - Sidebar logout and the guest goodbye flow redirect to the configured safe
+     path, falling back to `/login` when unset.
+   - Free-for-all open guest sessions store the owner landing URL on the session
+     so the guest can leave to the owner-selected page without using an external
+     redirect.
 
 7. [ ] `[free-for-all-lobby-e2e]` Add end-to-end coverage for the full flow.
 

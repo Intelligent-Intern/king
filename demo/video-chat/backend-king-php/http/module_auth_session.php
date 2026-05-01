@@ -83,6 +83,7 @@ SELECT
     users.date_format,
     users.theme,
     users.avatar_path,
+    users.post_logout_landing_url,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -185,6 +186,9 @@ SQL
                     'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
                     'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
+                    'post_logout_landing_url' => is_string($user['post_logout_landing_url'] ?? null)
+                        ? trim((string) $user['post_logout_landing_url'])
+                        : '',
                     'account_type' => $accountType,
                     'is_guest' => $accountType === 'guest',
                 ],
@@ -512,6 +516,9 @@ SQL
                     'revocation_state' => (string) ($revocation['reason'] ?? 'revoked'),
                     'revoked_at' => $revocation['revoked_at'] ?? gmdate('c'),
                     'websocket_disconnects' => $closedSockets,
+                    'post_logout_landing_url' => is_string(($apiAuthContext['user'] ?? [])['post_logout_landing_url'] ?? null)
+                        ? trim((string) (($apiAuthContext['user'] ?? [])['post_logout_landing_url']))
+                        : '',
                 ],
                 'time' => gmdate('c'),
             ]);

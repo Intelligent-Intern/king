@@ -33,6 +33,7 @@ SELECT
     sessions.issued_at,
     sessions.expires_at,
     sessions.revoked_at,
+    sessions.post_logout_landing_url AS session_post_logout_landing_url,
     sessions.client_ip,
     sessions.user_agent,
     users.id AS user_id,
@@ -44,6 +45,7 @@ SELECT
     users.date_format,
     users.theme,
     users.avatar_path,
+    users.post_logout_landing_url AS user_post_logout_landing_url,
     roles.slug AS role_slug
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
@@ -127,6 +129,17 @@ SQL
             'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
             'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
+            'post_logout_landing_url' => (static function (array $source): string {
+                $sessionUrl = is_string($source['session_post_logout_landing_url'] ?? null)
+                    ? trim((string) $source['session_post_logout_landing_url'])
+                    : '';
+                if ($sessionUrl !== '') {
+                    return $sessionUrl;
+                }
+                return is_string($source['user_post_logout_landing_url'] ?? null)
+                    ? trim((string) $source['user_post_logout_landing_url'])
+                    : '';
+            })($row),
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
         ],

@@ -594,6 +594,13 @@ SQL,
                 'DROP TABLE IF EXISTS sfu_frames',
             ],
         ],
+        21 => [
+            'name' => '0021_post_logout_landing_url',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE sessions ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
+            ],
+        ],
     ];
 }
 

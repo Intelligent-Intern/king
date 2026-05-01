@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../users/user_settings.php';
+
 function videochat_issue_session_for_call_access(
     PDO $pdo,
     string $accessId,
@@ -140,6 +142,13 @@ function videochat_issue_session_for_call_access(
     $userAgent = substr(trim((string) ($requestMeta['user_agent'] ?? '')), 0, 500);
     $callId = trim((string) ($call['id'] ?? ''));
     $roomId = trim((string) ($call['room_id'] ?? ''));
+    $postLogoutLandingUrl = '';
+    if ($linkKind === 'open') {
+        $ownerUserId = (int) (($call['owner']['user_id'] ?? 0));
+        $postLogoutLandingUrl = videochat_fetch_user_post_logout_landing_url($pdo, $ownerUserId);
+    } else {
+        $postLogoutLandingUrl = videochat_fetch_user_post_logout_landing_url($pdo, $userId);
+    }
     if ($callId === '' || $roomId === '') {
         return [
             'ok' => false,
@@ -157,8 +166,8 @@ function videochat_issue_session_for_call_access(
 
         $insert = $pdo->prepare(
             <<<'SQL'
-INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
-VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
+INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, post_logout_landing_url, client_ip, user_agent)
+VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :post_logout_landing_url, :client_ip, :user_agent)
 SQL
         );
         $insert->execute([
@@ -166,6 +175,7 @@ SQL
             ':user_id' => $userId,
             ':issued_at' => $issuedAt,
             ':expires_at' => $expiresAt,
+            ':post_logout_landing_url' => $postLogoutLandingUrl,
             ':client_ip' => $clientIp === '' ? null : $clientIp,
             ':user_agent' => $userAgent === '' ? null : $userAgent,
         ]);
@@ -251,6 +261,7 @@ SQL
             'date_format' => (string) ($targetUser['date_format'] ?? 'dmy_dot'),
             'theme' => (string) ($targetUser['theme'] ?? 'dark'),
             'avatar_path' => is_string($targetUser['avatar_path'] ?? null) ? (string) $targetUser['avatar_path'] : null,
+            'post_logout_landing_url' => $postLogoutLandingUrl,
             'account_type' => (string) ($targetUser['account_type'] ?? 'account'),
             'is_guest' => (bool) ($targetUser['is_guest'] ?? false),
         ],

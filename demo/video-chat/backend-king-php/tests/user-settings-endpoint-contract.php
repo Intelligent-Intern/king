@@ -174,6 +174,7 @@ SQL
             'body' => json_encode([
                 'time_format' => '99h',
                 'date_format' => 'broken',
+                'post_logout_landing_url' => 'https://evil.example/logout',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -199,6 +200,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['date_format'] ?? '') === 'must_be_supported_date_format',
         'PATCH invalid-value date_format field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['post_logout_landing_url'] ?? '') === 'must_be_same_origin_path',
+        'PATCH invalid-value post_logout_landing_url field mismatch'
     );
 
     $patchUnknownField = videochat_handle_user_routes(
@@ -240,6 +245,7 @@ SQL
                 'date_format' => 'mdy_slash',
                 'theme' => 'light',
                 'avatar_path' => ' /avatars/endpoint-user-updated.png ',
+                'post_logout_landing_url' => ' /call-goodbye?from=settings ',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -274,6 +280,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['avatar_path'] ?? '')) === '/avatars/endpoint-user-updated.png',
         'PATCH valid avatar_path should be normalized'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?from=settings',
+        'PATCH valid post_logout_landing_url should be normalized'
     );
 
     $reauth = videochat_authenticate_request(
@@ -325,6 +335,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['avatar_path'] ?? '')) === '/avatars/endpoint-user-updated.png',
         'session-check should reflect updated avatar_path'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?from=settings',
+        'session-check should reflect updated post_logout_landing_url'
     );
 
     $invalidUserContextResponse = videochat_handle_user_routes(
