@@ -86,6 +86,7 @@ const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
 const SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS = 1000
 const SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS = 6000
 const SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS = 5000
+const SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5000
 
 interface SendBufferDrainResult {
   ok: boolean
@@ -200,16 +201,48 @@ export class SFUClient {
     this.ws = ws
     let opened = false
     let failedOver = false
+    let failoverAfterClose = false
+    let negotiationTimer: ReturnType<typeof setTimeout> | null = null
+
+    const clearNegotiationTimer = () => {
+      if (negotiationTimer === null) return
+      clearTimeout(negotiationTimer)
+      negotiationTimer = null
+    }
+
+    const connectNextCandidate = () => {
+      this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
+    }
 
     const failToNextCandidate = () => {
       if (generation !== this.connectGeneration) return
       if (opened) return
       if (failedOver) return
       failedOver = true
+      clearNegotiationTimer()
       if (this.ws === ws) {
         this.ws = null
       }
-      this.connectWithCandidates(candidates, index + 1, query, roomId, generation)
+      connectNextCandidate()
+    }
+
+    const failToNextCandidateAfterSocketClose = (closeReason = 'failover') => {
+      if (generation !== this.connectGeneration) return
+      if (opened) return
+      if (failedOver) return
+      failedOver = true
+      clearNegotiationTimer()
+      if (this.ws === ws) {
+        this.ws = null
+      }
+      try {
+        ws.close(1000, closeReason)
+      } catch {}
+      if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.CLOSING) {
+        failoverAfterClose = true
+        return
+      }
+      connectNextCandidate()
     }
 
     const failToNextCandidateAfterAssetVersionProbe = (): void => {
@@ -235,10 +268,12 @@ export class SFUClient {
 
     ws.onopen = () => {
       if (generation !== this.connectGeneration) {
+        clearNegotiationTimer()
         try { ws.close() } catch {}
         return
       }
       opened = true
+      clearNegotiationTimer()
       this.connectAttemptInFlight = false
       this.disconnectNotified = false
       setBackendSfuOrigin(candidates[index] || '')
@@ -269,8 +304,13 @@ export class SFUClient {
 
     ws.onclose = (event) => {
       if (generation !== this.connectGeneration) return
+      clearNegotiationTimer()
       if (handleAssetVersionSocketClose(event)) {
         this.connectAttemptInFlight = false
+        return
+      }
+      if (failoverAfterClose) {
+        connectNextCandidate()
         return
       }
       if (!opened) {
@@ -309,6 +349,25 @@ export class SFUClient {
         ws.close()
       } catch {}
     }
+
+    negotiationTimer = setTimeout(() => {
+      if (generation !== this.connectGeneration) return
+      if (opened || failedOver) return
+      reportClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'sfu_socket_negotiation_timeout',
+        code: 'sfu_socket_negotiation_timeout',
+        message: 'SFU websocket negotiation timed out before the browser opened the socket.',
+        roomId,
+        payload: {
+          room_id: roomId,
+          candidate_origin: String(candidates[index] || ''),
+          negotiation_timeout_ms: SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS,
+        },
+      })
+      failToNextCandidateAfterSocketClose('negotiation_timeout')
+    }, SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS)
   }
 
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
