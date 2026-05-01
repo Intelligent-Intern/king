@@ -51,10 +51,8 @@ export class WaveletCodec {
   private encoder: ReturnType<typeof createEncoder>
   private decoder: ReturnType<typeof createDecoder>
   private kalman: ReturnType<typeof createKalmanFilter>
-  private frameCount: number
   private stats: CodecStats
   private encodedChunkId: number = 0
-  private usingWasm: boolean = false
 
   constructor(config: Partial<WaveletCodecConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -69,7 +67,6 @@ export class WaveletCodec {
       processNoise: 0.001,
       measurementNoise: 0.1,
     })
-    this.frameCount = 0
     this.stats = {
       framesProcessed: 0,
       framesDecoded: 0,
@@ -108,7 +105,6 @@ export class WaveletCodec {
         this.decoder.reset()
         this.encoder = wasmEnc as unknown as ReturnType<typeof createEncoder>
         this.decoder = wasmDec as unknown as ReturnType<typeof createDecoder>
-        this.usingWasm = true
         debugLog('[WaveletCodec] Switched to WASM codec')
       } else {
         debugWarn(`[WaveletCodec] WASM init returned false: enc=${encOk} dec=${decOk}`)
@@ -256,40 +252,11 @@ export class WaveletCodec {
     return { data: frameData, width, height, isKeyFrame }
   }
 
-  private toGrayscale(imageData: ImageData): Float32Array {
-    const pixels = imageData.data
-    const grayscale = new Float32Array(imageData.width * imageData.height)
-
-    for (let i = 0; i < grayscale.length; i++) {
-      const r = pixels[i * 4]
-      const g = pixels[i * 4 + 1]
-      const b = pixels[i * 4 + 2]
-      grayscale[i] = 0.299 * r + 0.587 * g + 0.114 * b
-    }
-
-    return grayscale
-  }
-
-  private grayscaleToImageData(grayscale: Float32Array, width: number, height: number): ImageData {
-    const data = new Uint8ClampedArray(width * height * 4)
-    
-    for (let i = 0; i < grayscale.length; i++) {
-      const gray = Math.max(0, Math.min(255, Math.round(grayscale[i])))
-      data[i * 4] = gray
-      data[i * 4 + 1] = gray
-      data[i * 4 + 2] = gray
-      data[i * 4 + 3] = 255
-    }
-
-    return new ImageData(data, width, height)
-  }
-
   getStats(): CodecStats {
     return { ...this.stats }
   }
 
   reset(): void {
-    this.frameCount = 0
     this.encoder.reset()
     this.decoder.reset()
     this.kalman.reset()

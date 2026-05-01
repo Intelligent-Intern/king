@@ -426,7 +426,7 @@ export function createPublisherBackpressureController({
     return Number((1 + (level * 0.45)).toFixed(2));
   }
 
-  function resolveWlvcEncodeIntervalMs(baseIntervalMs = 0, details = {}) {
+  function resolveWlvcEncodeIntervalMs(baseIntervalMs = 0) {
     const normalizedBaseIntervalMs = Math.max(1, Number(baseIntervalMs || 0));
     const multiplier = motionDeltaCadenceMultiplier(Date.now());
     return Math.max(1, Math.round(normalizedBaseIntervalMs * multiplier));

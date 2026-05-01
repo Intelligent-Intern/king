@@ -67,7 +67,6 @@ export function createCallWorkspaceOrchestrationHelpers({
     usersPageRows,
   } = refs;
   const {
-    getAloneIdleLastActiveMs,
     normalizeRole,
     setAloneIdleLastActiveMs,
     setManualSocketClose,

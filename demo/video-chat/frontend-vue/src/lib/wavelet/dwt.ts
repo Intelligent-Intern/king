@@ -67,43 +67,6 @@ export class WaveletTransform {
     this.coefficients = WAVELET_COEFFICIENTS[this.config.wavelet]
   }
 
-  private extendSignal(signal: Float32Array, filter: number[], length: number): Float32Array {
-    const filterLen = filter.length
-    const halfLen = Math.floor(filterLen / 2)
-    const extended = new Float32Array(length + filterLen - 1)
-
-    switch (this.config.mode) {
-      case 'symmetric':
-        for (let i = 0; i < halfLen; i++) {
-          extended[i] = signal[halfLen - 1 - i]
-          extended[extended.length - 1 - i] = signal[signal.length - 1 - halfLen + i]
-        }
-        break
-      case 'zero':
-      default:
-        break
-    }
-
-    extended.set(signal, halfLen)
-    return extended
-  }
-
-  private convolve(signal: Float32Array, filter: number[]): Float32Array {
-    const outputLen = signal.length - filter.length + 1
-    const output = new Float32Array(outputLen)
-    const filterLen = filter.length
-
-    for (let i = 0; i < outputLen; i++) {
-      let sum = 0
-      for (let j = 0; j < filterLen; j++) {
-        sum += signal[i + j] * filter[j]
-      }
-      output[i] = sum
-    }
-
-    return output
-  }
-
   private convolvePeriodic(signal: Float32Array, filter: number[]): Float32Array {
     const output = new Float32Array(signal.length)
     const filterLen = filter.length

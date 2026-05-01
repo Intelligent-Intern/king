@@ -61,7 +61,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     chatListRef,
     connectionReason,
     connectionState,
-    currentUserId,
     desiredRoomId,
     ensureRoomBuckets,
     isCompactLayoutViewport,
@@ -75,7 +74,6 @@ export function registerCallWorkspaceLifecycleHelpers({
     nativeAudioBridgeBlockDiagnosticsSent,
     nativeAudioSecurityBannerMessage,
     nativeAudioSecurityTelemetrySnapshot,
-    remotePeersRef,
     rightSidebarCollapsed,
     routeCallRef,
     serverRoomId,
@@ -354,7 +352,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       } else {
         setMediaRuntimePath('unsupported', 'capability_probe_unsupported');
       }
-    } catch (e) {
+    } catch {
       mediaRuntimeCapabilities.value = {
         checkedAt: new Date().toISOString(),
         wlvcWasm: {

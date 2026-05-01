@@ -75,10 +75,6 @@ function closeBrowserDecoderState(decoderState) {
   }
 }
 
-function isBrowserDecoderClosed(decoder) {
-  return String(decoder?.state || '').trim().toLowerCase() === 'closed';
-}
-
 function isBrowserDecoderConfigured(decoder) {
   return String(decoder?.state || '').trim().toLowerCase() === 'configured';
 }

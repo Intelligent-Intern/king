@@ -24,17 +24,12 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     connectedParticipantUsers,
     controlState,
     currentUserId,
-    desiredRoomId,
-    formatTimestamp,
     fullscreenVideoUserId,
-    gridVideoSlotId,
     hangupCall,
-    initials,
     isAloneInCall,
     isCompactLayoutViewport,
     isCompactMiniStripAbove,
     isSocketOnline,
-    isShellMobileViewport,
     layoutStrategyOptionsFor,
     lobbyActionState,
     lobbyListRef,
@@ -44,8 +39,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     lobbyQueue,
     localReactionEchoes,
     mediaRenderVersion,
-    mediaRuntimeCapabilities,
-    miniVideoSlotId,
     moderationActionState,
     mutedUsers,
     nextTick: nextTickOverride,
@@ -67,7 +60,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     publishLocalActivitySample,
     queuedReactionEmojis,
     reconfigureLocalTracksFromSelectedDevices,
-    refreshCallMediaDevices,
     renderCallVideoLayout,
     replaceNumericArray,
     requestRoomSnapshot,
@@ -86,7 +78,6 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     usersSearch,
     usersSourceMode,
     viewerEffectiveCallRole,
-    visibleParticipantsLimit,
     workspaceError,
     workspaceNotice,
     workspaceSidebarState,
@@ -1650,9 +1641,6 @@ function openLeftSidebarOverlay(event) {
   if (!openFn) return;
   openFn();
 }
-
-let reconnectTimer = null;
-let pingTimer = null;
 
   return {
     activeMessages,

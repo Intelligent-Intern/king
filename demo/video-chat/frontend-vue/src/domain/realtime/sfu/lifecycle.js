@@ -32,7 +32,6 @@ export function createSfuLifecycleHelpers({
     sfuTrackListHasVideo,
     sfuTrackRows,
     stopLocalEncodingPipeline,
-    teardownSfuRemotePeers,
   } = callbacks;
 
   const {
