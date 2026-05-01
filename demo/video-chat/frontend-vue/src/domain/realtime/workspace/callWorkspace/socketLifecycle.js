@@ -528,6 +528,7 @@ export function createCallWorkspaceSocketHelpers({
     const leaveRoom = options?.leaveRoom === true;
     clearReconnectTimer();
     clearPingTimer();
+    state.connectInFlight = false;
     refs.hasRealtimeRoomSync.value = false;
     hideLobbyJoinToast();
     const socket = refs.socketRef.value;
@@ -624,9 +625,17 @@ export function createCallWorkspaceSocketHelpers({
   }
 
   async function connectSocket() {
+    if (state.connectInFlight && !state.manualSocketClose) return;
     const generation = ++state.connectGeneration;
+    state.connectInFlight = true;
+    const finishConnectInFlight = () => {
+      if (generation === state.connectGeneration) {
+        state.connectInFlight = false;
+      }
+    };
     const token = String(refs.sessionState.sessionToken || '').trim();
     if (token === '') {
+      finishConnectInFlight();
       refs.connectionReason.value = 'missing_session';
       refs.connectionState.value = 'expired';
       return;
@@ -657,6 +666,7 @@ export function createCallWorkspaceSocketHelpers({
 
     const sessionProbe = await probeWorkspaceSession();
     if (generation !== state.connectGeneration || state.manualSocketClose) {
+      finishConnectInFlight();
       return;
     }
     if (!sessionProbe.ok) {
@@ -667,6 +677,7 @@ export function createCallWorkspaceSocketHelpers({
       } else {
         refs.connectionState.value = sessionProbe.state;
         setNotice(sessionProbe.message, 'error');
+        finishConnectInFlight();
         return;
       }
     }
@@ -676,6 +687,7 @@ export function createCallWorkspaceSocketHelpers({
       refs.connectionState.value = 'blocked';
       refs.connectionReason.value = 'secure_transport_required';
       setNotice('Secure WebSocket transport is required. Configure HTTPS/WSS backend origins.', 'error');
+      finishConnectInFlight();
       return;
     }
 
@@ -684,6 +696,7 @@ export function createCallWorkspaceSocketHelpers({
       if (originIndex >= orderedSocketOrigins.length) {
         refs.connectionState.value = 'retrying';
         refs.connectionReason.value = 'socket_unreachable';
+        finishConnectInFlight();
         scheduleReconnect();
         return;
       }
@@ -701,12 +714,17 @@ export function createCallWorkspaceSocketHelpers({
         } catch {
           // ignore
         }
+        finishConnectInFlight();
         return;
       }
 
       refs.socketRef.value = socket;
       let opened = false;
       let failedOver = false;
+      let failoverAfterClose = false;
+      const connectNextOrigin = () => {
+        connectWithOriginAt(originIndex + 1);
+      };
 
       const failOverToNextOrigin = () => {
         if (failedOver) return;
@@ -719,7 +737,11 @@ export function createCallWorkspaceSocketHelpers({
         } catch {
           // ignore
         }
-        connectWithOriginAt(originIndex + 1);
+        if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.CLOSING) {
+          failoverAfterClose = true;
+          return;
+        }
+        connectNextOrigin();
       };
 
       const failOverAfterAssetVersionProbe = () => {
@@ -728,14 +750,20 @@ export function createCallWorkspaceSocketHelpers({
           : false;
         if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
           assetVersionProbe.then((handled) => {
-            if (handled) return;
+            if (handled) {
+              finishConnectInFlight();
+              return;
+            }
             failOverToNextOrigin();
           }).catch(() => {
             failOverToNextOrigin();
           });
           return;
         }
-        if (assetVersionProbe) return;
+        if (assetVersionProbe) {
+          finishConnectInFlight();
+          return;
+        }
         failOverToNextOrigin();
       };
 
@@ -750,6 +778,7 @@ export function createCallWorkspaceSocketHelpers({
         }
 
         opened = true;
+        finishConnectInFlight();
         const isReconnectOpen = refs.reconnectAttempt.value > 0;
         refs.reconnectAttempt.value = 0;
         refs.connectionState.value = 'online';
@@ -784,7 +813,8 @@ export function createCallWorkspaceSocketHelpers({
       socket.addEventListener('error', () => {
         if (generation !== state.connectGeneration || state.manualSocketClose) return;
         if (!opened) {
-          failOverAfterAssetVersionProbe();
+          // The browser will emit close after a failed handshake. Origin failover
+          // is intentionally deferred until then to keep connection attempts single-flight.
           return;
         }
         refs.connectionState.value = 'retrying';
@@ -802,9 +832,15 @@ export function createCallWorkspaceSocketHelpers({
         refs.hasRealtimeRoomSync.value = false;
 
         if (state.manualSocketClose) {
+          finishConnectInFlight();
           return;
         }
         if (handleAssetVersionSocketClose(event)) {
+          finishConnectInFlight();
+          return;
+        }
+        if (failoverAfterClose) {
+          connectNextOrigin();
           return;
         }
 
@@ -813,12 +849,14 @@ export function createCallWorkspaceSocketHelpers({
           refs.connectionState.value = 'expired';
           refs.connectionReason.value = closeReason;
           state.manualSocketClose = true;
+          finishConnectInFlight();
           return;
         }
         if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
           refs.connectionState.value = 'blocked';
           refs.connectionReason.value = closeReason || 'blocked';
           state.manualSocketClose = true;
+          finishConnectInFlight();
           return;
         }
         if (!opened) {
