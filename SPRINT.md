@@ -212,3 +212,142 @@ Technical target:
 4. Replace receiver recovery/render assumptions.
 5. Deploy only when the branch is complete enough to prove smooth video cadence
    and clean backend diagnostics.
+
+## Sprint: Free-for-all Invite Lobby and Logout Landing
+
+Sprint branch:
+- `sprint/free-for-all-invite-lobby-logout-landing`
+
+PR target:
+- `development/1.0.7-beta`
+
+Current finding:
+- The backend already has the correct public invite shape for free-for-all
+  calls: `POST /api/calls/{call_id}/access-link` creates an `open` access link
+  and returns `join_path` as `/join/{access_id}`.
+- `/join/:accessId` is already a public frontend route. It resolves
+  `/api/call-access/{access_id}/join`, creates a call-access guest session via
+  `/api/call-access/{access_id}/session`, then waits in the lobby/admission
+  flow instead of showing the normal login screen.
+- The practical gap is UI and settings: the admin enter-call controller can
+  generate/copy this link, but the enter-call modal does not expose it. The user
+  dashboard does not expose an owner/moderator free-for-all link flow either.
+- Logout always drops the local session and routes to `/login` or the fixed
+  `/call-goodbye` page. No configurable post-logout landing URL exists in user
+  settings yet.
+
+Technical target:
+- Make the free-for-all invite URL visible and copyable where call owners,
+  moderators, and admins naturally manage a call.
+- Keep invite-only personal links separate from free-for-all open links.
+- Ensure guests entering through `/join/{access_id}` never hit the login mask
+  before the lobby/admission step.
+- Add a validated, configurable post-logout landing page in settings and use it
+  after guest/call logout without introducing an open-redirect issue.
+
+## Active Issues: Free-for-all Invite Lobby and Logout Landing
+
+1. [ ] `[free-for-all-public-link-surface]` Surface the open invite link in call management.
+
+   Scope:
+   - Add a visible "copy invite link" action to the admin call enter/manage UI
+     for calls with `access_mode=free_for_all`.
+   - Reuse `POST /api/calls/{call_id}/access-link` with `link_kind=open`.
+   - Show the resulting `/join/{access_id}` URL and expiry, and keep the button
+     separate from the normal "Join call" action.
+   - Add the matching owner/moderator surface in the user dashboard for calls
+     the current user is allowed to manage.
+
+   Done when:
+   - A free-for-all call owner/admin can copy a public `/join/{access_id}` link
+     without opening DevTools or manually calling the API.
+   - Invite-only calls do not expose an open-link copy action.
+
+2. [ ] `[call-access-open-link-contracts]` Harden backend contracts for open links.
+
+   Scope:
+   - Prove `free_for_all` creates or reuses exactly one open link per call.
+   - Prove `invite_only` rejects `link_kind=open`.
+   - Prove `free_for_all` rejects personal link generation.
+   - Prove public `GET /api/call-access/{access_id}/join` returns enough context
+     for the lobby without authenticated session headers.
+
+   Done when:
+   - Backend contracts fail if the public link flow regresses into a login-only
+     or personal-invite-only flow.
+
+3. [ ] `[guest-lobby-direct-entry]` Keep `/join/{access_id}` as the canonical no-login lobby entry.
+
+   Scope:
+   - Ensure router guards keep `/join/:accessId` public.
+   - Ensure open-link guest sessions are issued with `account_type=guest` and
+     cannot inherit a stale logged-in account session.
+   - Ensure the guest is queued in the room/call lobby and can be admitted or
+     removed by owner, moderator, or admin.
+   - Ensure admission state survives refresh without bouncing to `/login`.
+
+   Done when:
+   - A fresh browser profile can open the copied link, enter a guest name, wait
+     in the lobby, and enter the call after approval.
+
+4. [ ] `[settings-post-logout-landing-url]` Add a configurable logout landing URL setting.
+
+   Scope:
+   - Add a persisted setting for the post-logout landing page.
+   - Expose it through `GET/PATCH /api/user/settings`.
+   - Validate it as a safe same-origin path or explicitly allowlisted absolute
+     HTTPS URL; reject protocol-relative URLs and arbitrary external redirects.
+   - Define a default fallback that preserves the current behavior when unset.
+
+   Done when:
+   - Settings API contracts cover save, fetch, reset/default, and invalid URL
+     rejection.
+
+5. [ ] `[settings-ui-logout-landing]` Add the setting to the frontend settings modal.
+
+   Scope:
+   - Add a focused settings field for the logout landing page.
+   - Show validation errors returned by `/api/user/settings`.
+   - Provide a reset-to-default control.
+   - Keep existing profile/theme/regional settings behavior unchanged.
+
+   Done when:
+   - A user can configure the landing page without editing environment variables
+     or backend config.
+
+6. [ ] `[call-logout-redirect-runtime]` Route call logout to the configured landing page.
+
+   Scope:
+   - Make `logoutSession` or the caller return/resolve the configured landing
+     target before local session state is cleared.
+   - Apply the redirect after guest call exit and normal sidebar logout.
+   - Keep `/call-goodbye` as a safe default/fallback for guest call exits until
+     a custom target is configured.
+   - Do not redirect authenticated non-guest users into guest-only routes.
+
+   Done when:
+   - Leaving a call as a free-for-all guest lands on the configured page.
+   - Normal logout still clears backend and frontend session state fail-closed.
+
+7. [ ] `[free-for-all-lobby-e2e]` Add end-to-end coverage for the full flow.
+
+   Scope:
+   - Cover call creation/update with `access_mode=free_for_all`.
+   - Copy the open link from UI.
+   - Open `/join/{access_id}` in a fresh unauthenticated context.
+   - Queue in lobby, admit from owner/admin UI, enter call, leave call, and land
+     on the configured logout page.
+
+   Done when:
+   - Playwright or focused contract tests prove the complete user-visible flow.
+
+## Execution Order: Free-for-all Invite Lobby and Logout Landing
+
+1. Close `[call-access-open-link-contracts]` first so the existing backend
+   behavior is pinned before UI changes.
+2. Implement `[free-for-all-public-link-surface]` and
+   `[guest-lobby-direct-entry]` together because the copied URL must be proven
+   against the real lobby path.
+3. Add the settings persistence/API before frontend settings UI.
+4. Wire logout redirect runtime after the setting exists.
+5. Finish with full-flow E2E coverage.
