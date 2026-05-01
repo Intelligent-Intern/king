@@ -10,6 +10,14 @@ log() {
   printf '[video-chat-smoke] %s\n' "$*"
 }
 
+curl_smoke() {
+  if [[ "${VIDEOCHAT_SMOKE_VERBOSE_CURL:-0}" == "1" ]]; then
+    curl -fsS "$@"
+    return
+  fi
+  curl -fsS "$@" 2>/dev/null
+}
+
 run_step() {
   local step="$1"
   log "START: ${step}"
@@ -355,13 +363,14 @@ compose_smoke() {
 
   local health_url="http://127.0.0.1:${compose_backend_port}/health"
   local runtime_url="http://127.0.0.1:${compose_backend_port}/api/runtime"
+  local admin_runtime_url="http://127.0.0.1:${compose_backend_port}/api/admin/runtime"
   local login_url="http://127.0.0.1:${compose_backend_port}/api/auth/login"
   local session_url="http://127.0.0.1:${compose_backend_port}/api/auth/session"
   local frontend_url="http://127.0.0.1:${compose_frontend_port}/"
   local health_ready=0
 
   for _ in {1..180}; do
-    if curl -fsS "${health_url}" >/dev/null; then
+    if curl_smoke "${health_url}" >/dev/null; then
       health_ready=1
       break
     fi
@@ -376,7 +385,7 @@ compose_smoke() {
 
   local frontend_ready=0
   for _ in {1..120}; do
-    if curl -fsS "${frontend_url}" >/dev/null; then
+    if curl_smoke "${frontend_url}" >/dev/null; then
       frontend_ready=1
       break
     fi
@@ -391,7 +400,7 @@ compose_smoke() {
   local runtime_response
   local runtime_ready=0
   for _ in {1..120}; do
-    if runtime_response="$(curl -fsS "${runtime_url}")"; then
+    if runtime_response="$(curl_smoke "${runtime_url}")"; then
       runtime_ready=1
       break
     fi
@@ -409,31 +418,19 @@ compose_smoke() {
         fwrite(STDERR, "runtime status not ok\n");
         exit(1);
     }
-    $db = $data["database"] ?? null;
-    if (!is_array($db)) {
-        fwrite(STDERR, "runtime missing database snapshot\n");
-        exit(1);
-    }
 
-    $applied = -1;
-    if (is_array($db["migrations"] ?? null)) {
-        $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
-    } elseif (array_key_exists("migrations_applied", $db)) {
-        $applied = (int) ($db["migrations_applied"] ?? -1);
-    } elseif (array_key_exists("schema_version", $db)) {
-        $applied = (int) ($db["schema_version"] ?? -1);
-    }
-
-    if ($applied < 1) {
-        fwrite(STDERR, "runtime migration snapshot invalid\n");
-        exit(1);
+    foreach (["database", "auth", "calls", "demo_users", "schema_version", "migrations_applied", "table_names"] as $key) {
+        if (array_key_exists($key, $data)) {
+            fwrite(STDERR, "public runtime leaked ".$key."\n");
+            exit(1);
+        }
     }
   '
 
   local login_response
   local login_ready=0
   for _ in {1..120}; do
-    if login_response="$(curl -fsS -X POST \
+    if login_response="$(curl_smoke -X POST \
       -H 'content-type: application/json' \
       --data '{"email":"admin@intelligent-intern.com","password":"admin123"}' \
       "${login_url}")"; then
@@ -464,10 +461,55 @@ compose_smoke() {
     echo trim($token);
   ')"
 
+  local admin_runtime_response
+  local admin_runtime_ready=0
+  for _ in {1..120}; do
+    if admin_runtime_response="$(curl_smoke \
+      -H "authorization: Bearer ${session_token}" \
+      "${admin_runtime_url}")"; then
+      admin_runtime_ready=1
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ "${admin_runtime_ready}" != "1" ]]; then
+    log "ERROR: admin runtime endpoint did not become ready; dumping compose status/logs"
+    compose_debug_dump
+    return 1
+  fi
+
+  printf '%s' "${admin_runtime_response}" | php -r '
+    $raw = stream_get_contents(STDIN);
+    $data = json_decode($raw, true);
+    if (!is_array($data) || ($data["status"] ?? "") !== "ok") {
+        fwrite(STDERR, "admin runtime status not ok\n");
+        exit(1);
+    }
+    $db = $data["database"] ?? null;
+    if (!is_array($db)) {
+        fwrite(STDERR, "admin runtime missing database snapshot\n");
+        exit(1);
+    }
+
+    $applied = -1;
+    if (is_array($db["migrations"] ?? null)) {
+        $applied = (int) ($db["migrations"]["applied_count"] ?? -1);
+    } elseif (array_key_exists("migrations_applied", $db)) {
+        $applied = (int) ($db["migrations_applied"] ?? -1);
+    } elseif (array_key_exists("schema_version", $db)) {
+        $applied = (int) ($db["schema_version"] ?? -1);
+    }
+
+    if ($applied < 1) {
+        fwrite(STDERR, "admin runtime migration snapshot invalid\n");
+        exit(1);
+    }
+  '
+
   local session_response
   local session_ready=0
   for _ in {1..120}; do
-    if session_response="$(curl -fsS \
+    if session_response="$(curl_smoke \
       -H "authorization: Bearer ${session_token}" \
       "${session_url}")"; then
       session_ready=1
@@ -494,6 +536,22 @@ compose_smoke() {
         exit(1);
     }
   '
+
+  if [[ "${VIDEOCHAT_SMOKE_SKIP_FRONTEND_E2E_MATRIX:-0}" != "1" ]]; then
+    log "compose frontend Playwright matrix gate"
+    VIDEOCHAT_V1_BACKEND_PORT="${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_WS_PORT="${compose_backend_ws_port}" \
+    VIDEOCHAT_V1_BACKEND_SFU_PORT="${compose_backend_sfu_port}" \
+    VIDEOCHAT_V1_FRONTEND_PORT="${compose_frontend_port}" \
+    VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
+    VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
+    "${compose_cmd[@]}" exec -T videochat-frontend-v1 sh -lc "\
+      cd /workspace && \
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+      PLAYWRIGHT_FRONTEND_PORT=4174 \
+      VITE_VIDEOCHAT_BACKEND_ORIGIN='http://127.0.0.1:${compose_backend_port}' \
+      npm run test:e2e:matrix -- --reporter=list"
+  fi
 }
 
 log "Root: ${ROOT_DIR}"
@@ -502,6 +560,13 @@ run_step "backend launcher syntax" bash -lc "bash -n '${BACKEND_DIR}/run-dev.sh'
 run_step "backend php syntax" bash -lc "php -l '${BACKEND_DIR}/public/index.php'"
 run_step "backend server php syntax" bash -lc "php -l '${BACKEND_DIR}/server.php'"
 run_step "frontend launcher syntax" bash -lc "node --check '${FRONTEND_DIR}/scripts/dev-server.mjs'"
+run_step "security policy: demo-scope hardening" bash -lc "'${ROOT_DIR}/scripts/check-security-hardening-policy.sh'"
+run_step "deployment decision: no internal edge pack" bash -lc "'${ROOT_DIR}/scripts/check-edge-deployment-decision.sh'"
+run_step "deployment baseline: optional TURN relay" bash -lc "'${ROOT_DIR}/scripts/check-turn-baseline.sh'"
+run_step "deployment baseline: secret management" bash -lc "'${ROOT_DIR}/scripts/check-secret-management.sh'"
+run_step "deployment baseline: multi-node runtime architecture" bash -lc "'${ROOT_DIR}/scripts/check-multi-node-runtime-architecture.sh'"
+run_step "deployment baseline: ops hardening" bash -lc "'${ROOT_DIR}/scripts/check-ops-hardening.sh'"
+run_step "deployment baseline: production endpoint smoke syntax" bash -lc "bash -n '${ROOT_DIR}/scripts/deploy-smoke.sh'"
 run_step "compose stack boot + migration/auth sanity" compose_smoke
 
 if [[ "${VIDEOCHAT_SMOKE_COMPOSE_ONLY:-0}" == "1" ]]; then
@@ -592,18 +657,41 @@ run_step "backend contract: auth/session refresh-rotation" bash -lc "'${BACKEND_
 run_step "backend contract: auth/session logout-revoke" bash -lc "'${BACKEND_DIR}/tests/session-logout-contract.sh'"
 run_step "backend contract: RBAC middleware matrix" bash -lc "'${BACKEND_DIR}/tests/rbac-middleware-contract.sh'"
 run_step "backend contract: realtime session revocation propagation" bash -lc "'${BACKEND_DIR}/tests/realtime-session-revocation-contract.sh'"
+run_step "backend contract: shared REST/WS error envelope" bash -lc "'${BACKEND_DIR}/tests/error-envelope-contract.sh'"
+run_step "backend contract: versioned REST/WS DTO schemas" bash -lc "'${BACKEND_DIR}/tests/contract-schema-versioning-contract.sh'"
+run_step "backend contract: UI parity acceptance matrix" bash -lc "'${BACKEND_DIR}/tests/ui-parity-acceptance-matrix-contract.sh'"
+run_step "backend contract: protected API forbidden/conflict semantics" bash -lc "'${BACKEND_DIR}/tests/protected-api-semantics-contract.sh'"
+run_step "backend contract: call schedule metadata" bash -lc "'${BACKEND_DIR}/tests/call-schedule-metadata-contract.sh'"
+run_step "backend contract: invite preview/copy boundary" bash -lc "'${BACKEND_DIR}/tests/invite-code-copy-boundary-contract.sh'"
 run_step "backend contract: API/WS catalog parity" bash -lc "'${BACKEND_DIR}/tests/contract-catalog-parity-contract.sh'"
 run_step "backend contract: WLVC wire envelope" bash -lc "'${BACKEND_DIR}/tests/wlvc-wire-contract.sh'"
+run_step "backend contract: media security truth model" bash -lc "'${BACKEND_DIR}/tests/media-security-contract.sh'"
+run_step "backend contract: gateway JWT binding" bash -lc "'${BACKEND_DIR}/tests/gateway-jwt-binding-contract.sh'"
+run_step "backend contract: gateway/backend signaling mapping" bash -lc "'${BACKEND_DIR}/tests/gateway-backend-mapping-contract.sh'"
 run_step "backend contract: room join/presence" bash -lc "'${BACKEND_DIR}/tests/realtime-presence-contract.sh'"
 run_step "backend contract: chat fanout" bash -lc "'${BACKEND_DIR}/tests/realtime-chat-contract.sh'"
 run_step "backend contract: reaction stream throttle" bash -lc "'${BACKEND_DIR}/tests/realtime-reaction-contract.sh'"
 run_step "backend contract: invite redeem" bash -lc "'${BACKEND_DIR}/tests/invite-code-redeem-contract.sh'"
+run_step "backend contract: call-access session binding" bash -lc "'${BACKEND_DIR}/tests/call-access-session-contract.sh'"
 run_step "backend contract: call signaling bootstrap" bash -lc "'${BACKEND_DIR}/tests/realtime-signaling-contract.sh'"
+run_step "backend contract: SFU room binding and relay" bash -lc "'${BACKEND_DIR}/tests/realtime-sfu-contract.sh'"
 
 run_step "frontend contract: WLVC wire envelope" bash -lc "
   set -euo pipefail
   cd '${FRONTEND_DIR}'
   npm run test:contract:wlvc
+"
+
+run_step "frontend contract: media security frame path" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:media-security
+"
+
+run_step "frontend contract: MediaPipe CDN assets" bash -lc "
+  set -euo pipefail
+  cd '${FRONTEND_DIR}'
+  npm run test:contract:mediapipe-cdn
 "
 
 run_step "frontend scaffold boot check" bash -lc "

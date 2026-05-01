@@ -312,25 +312,9 @@ jobs:
           coverage: none
           extensions: curl, mbstring, openssl, sockets
 
-      - name: Resolve pinned toolchain versions
+      - name: Resolve pinned PHP version
         id: toolchain
         run: bash ./infra/scripts/toolchain-lock.sh --github-output "${GITHUB_OUTPUT}"
-
-      - name: Setup Rust pinned toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "${{ steps.toolchain.outputs.rust_toolchain }}"
-
-      - name: Verify pinned Rust toolchain
-        run: bash ./infra/scripts/toolchain-lock.sh --verify-rust
-
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-${{ matrix.arch-label }}-cargo-${{ hashFiles('infra/scripts/quiche-bootstrap.lock', 'infra/scripts/bootstrap-quiche.sh', 'infra/scripts/build-profile.sh') }}
 
       - name: Install system dependencies
         run: |
@@ -375,7 +359,7 @@ jobs:
         run: ../infra/scripts/install-package-matrix.sh --archive "${{ steps.package.outputs.archive_path }}" --php-bins php
 
       - name: Upload release package artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}
           if-no-files-found: error
@@ -385,7 +369,7 @@ jobs:
 
       - name: Upload package install failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-package-install-${{ matrix.php-version }}-${{ matrix.arch-label }}-failures
           if-no-files-found: ignore
@@ -412,7 +396,7 @@ jobs:
         run: ./infra/scripts/package-pie-source.sh --output-dir release-assets --release-tag "${{ needs.resolve-release-merge.outputs.release-tag }}"
 
       - name: Upload PIE source asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: king-release-pie-source
           if-no-files-found: error
@@ -437,67 +421,67 @@ jobs:
           submodules: recursive
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.1-linux-amd64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.1-linux-arm64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.2-linux-amd64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.2-linux-arm64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.3-linux-amd64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.3-linux-arm64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.4-linux-amd64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.4-linux-arm64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.5-linux-amd64
           path: release-assets
 
       - name: Download packaged release artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.5-linux-arm64
           path: release-assets
 
       - name: Download PIE source artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-pie-source
           path: release-assets
@@ -695,14 +679,14 @@ jobs:
 
       - name: Download amd64 release package (PHP 8.4)
         if: matrix.component == 'backend'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.4-linux-amd64
           path: dist/docker-packages/php8.4/linux-amd64
 
       - name: Download arm64 release package (PHP 8.4)
         if: matrix.component == 'backend'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.4-linux-arm64
           path: dist/docker-packages/php8.4/linux-arm64
@@ -795,13 +779,13 @@ jobs:
           submodules: recursive
 
       - name: Download amd64 release package (PHP 8.5)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.5-linux-amd64
           path: dist/docker-packages/php8.5/linux-amd64
 
       - name: Download arm64 release package (PHP 8.5)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php8.5-linux-arm64
           path: dist/docker-packages/php8.5/linux-arm64
@@ -898,7 +882,7 @@ jobs:
             --require-clear-cves "CVE-2025-45582,CVE-2024-56433,CVE-2024-2236"
 
       - name: Upload Docker Hub runtime CVE inventory
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dockerhub-runtime-cve-inventory
           path: ${{ steps.dockerhub-cve-inventory.outputs.inventory_path }}
@@ -940,13 +924,13 @@ jobs:
           submodules: recursive
 
       - name: Download amd64 release package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php${{ matrix.php-version }}-linux-amd64
           path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
 
       - name: Download arm64 release package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php${{ matrix.php-version }}-linux-arm64
           path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64
@@ -1050,13 +1034,13 @@ jobs:
           submodules: recursive
 
       - name: Download amd64 release package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php${{ matrix.php-version }}-linux-amd64
           path: dist/docker-packages/php${{ matrix.php-version }}/linux-amd64
 
       - name: Download arm64 release package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: king-release-package-php${{ matrix.php-version }}-linux-arm64
           path: dist/docker-packages/php${{ matrix.php-version }}/linux-arm64

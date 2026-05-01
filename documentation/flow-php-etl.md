@@ -227,7 +227,7 @@ Future Flow PHP-style adapters on King should follow these rules:
 ## Repo-Local Streaming Source Contract
 
 The repository now also carries one real userland source contract under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/StreamingSource.php`](../demo/userland/flow-php/src/StreamingSource.php).
 
 That code is intentionally repo-local. It is not presented as the final public
@@ -273,7 +273,7 @@ The current PHPT proof covers:
 ## Repo-Local Streaming Sink Contract
 
 The repository now also carries one real userland sink contract under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/StreamingSink.php`](../demo/userland/flow-php/src/StreamingSink.php).
 
 Again, that code is intentionally repo-local. The important point for this
@@ -326,7 +326,7 @@ The current PHPT proof covers:
 ## Repo-Local MCP Host Contract
 
 The repository now also carries one real repo-local MCP host helper under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/McpHost.php`](../demo/userland/flow-php/src/McpHost.php).
 
 This piece exists because service composition for real app topologies needs an
@@ -349,7 +349,7 @@ The current PHPT proof covers startup, dispatch, and shutdown/error behavior:
 ## Repo-Local SQL/pgvector Bridge Contract (Non-Native Boundary)
 
 The repository now also carries one real repo-local SQL/vector bridge under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/SqlVectorBridge.php`](../demo/userland/flow-php/src/SqlVectorBridge.php).
 
 This boundary is explicit on purpose:
@@ -382,7 +382,7 @@ validation:
 
 The repository now also carries one real repo-local MCP service-discovery
 helper under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/McpServiceDiscovery.php`](../demo/userland/flow-php/src/McpServiceDiscovery.php).
 
 This piece exists because MCP client adapters and host lifecycle alone are not
@@ -417,7 +417,7 @@ resolution plus explicit failover progression:
 ## Repo-Local OO Object-Store Ingest Guidance
 
 The repository now also carries one real repo-local OO ingest helper under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/ObjectStoreIngest.php`](../demo/userland/flow-php/src/ObjectStoreIngest.php).
 
 This piece exists because dataflow-heavy application services often need one
@@ -449,7 +449,7 @@ and viewer delivery on this OO path:
 ## Repo-Local Object-Store Dataset Bridge Contract
 
 The repository now also carries one real userland object-store dataset bridge
-under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+under [`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/ObjectStoreDataset.php`](../demo/userland/flow-php/src/ObjectStoreDataset.php).
 
 This piece exists because plain byte sources and sinks are not yet the full
@@ -498,7 +498,7 @@ The current PHPT proof covers:
 ## Repo-Local Serialization And Schema Bridge Contract
 
 The repository now also carries one real repo-local serialization bridge under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/SerializationBridge.php`](../demo/userland/flow-php/src/SerializationBridge.php).
 
 This piece exists because a dataset handle by itself still leaves one common
@@ -575,7 +575,7 @@ lifecycle progression:
 ## Repo-Local Checkpoint Store Contract
 
 The repository now also carries one real userland checkpoint-store contract
-under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+under [`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/CheckpointStore.php`](../demo/userland/flow-php/src/CheckpointStore.php).
 
 This piece exists because restart-aware source and sink adapters are not enough
@@ -621,7 +621,7 @@ The current PHPT proof covers:
 ## Repo-Local Execution Backend Contract
 
 The repository now also carries one real userland execution-backend contract
-under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+under [`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/ExecutionBackend.php`](../demo/userland/flow-php/src/ExecutionBackend.php).
 
 This piece exists because bounded-memory transport adapters and durable
@@ -671,7 +671,7 @@ The current PHPT proof covers:
 ## Repo-Local Control-Plane Contract
 
 The repository now also carries one real userland control-plane helper under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/ControlPlane.php`](../demo/userland/flow-php/src/ControlPlane.php).
 
 This piece exists because execution capabilities plus checkpoint persistence
@@ -725,7 +725,7 @@ The current PHPT proof covers:
 ## Repo-Local Failure Taxonomy Contract
 
 The repository now also carries one real userland failure-taxonomy helper
-under [`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+under [`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/FailureTaxonomy.php`](../demo/userland/flow-php/src/FailureTaxonomy.php).
 
 This piece exists because restart-aware sources, sinks, checkpoints, and
@@ -788,7 +788,7 @@ The current PHPT proof covers:
 
 The repository now also carries one real userland partitioning and
 backpressure helper under
-[`../demo/userland/flow-php/README.md`](../demo/userland/flow-php/README.md) and
+[`documentation/dev/flow-php.md`](./dev/flow-php.md) and
 [`../demo/userland/flow-php/src/Partitioning.php`](../demo/userland/flow-php/src/Partitioning.php).
 
 This piece exists because distributed ETL still needs one honest answer to

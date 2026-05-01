@@ -3,7 +3,7 @@ static zend_result king_http3_prepare_request_headers(
     const char *method_str,
     size_t method_len,
     zval *headers_array,
-    quiche_h3_header **headers_out,
+    king_http3_header_t **headers_out,
     size_t *header_count_out,
     zend_string ***owned_strings_out,
     size_t *owned_string_count_out,
@@ -11,7 +11,7 @@ static zend_result king_http3_prepare_request_headers(
 {
     size_t header_count = 4;
     size_t owned_count = 0;
-    quiche_h3_header *headers;
+    king_http3_header_t *headers;
     zend_string **owned_strings;
     size_t index = 0;
     zend_string *value_string;
@@ -35,16 +35,16 @@ static zend_result king_http3_prepare_request_headers(
     headers[index].value_len = sizeof("https") - 1;
     index++;
 
-    headers[index].name = (const uint8_t *) ":authority";
-    headers[index].name_len = sizeof(":authority") - 1;
-    headers[index].value = (const uint8_t *) ZSTR_VAL(target->authority);
-    headers[index].value_len = ZSTR_LEN(target->authority);
-    index++;
-
     headers[index].name = (const uint8_t *) ":path";
     headers[index].name_len = sizeof(":path") - 1;
     headers[index].value = (const uint8_t *) ZSTR_VAL(target->path);
     headers[index].value_len = ZSTR_LEN(target->path);
+    index++;
+
+    headers[index].name = (const uint8_t *) ":authority";
+    headers[index].name_len = sizeof(":authority") - 1;
+    headers[index].value = (const uint8_t *) ZSTR_VAL(target->authority);
+    headers[index].value_len = ZSTR_LEN(target->authority);
     index++;
 
     if (headers_array != NULL && Z_TYPE_P(headers_array) == IS_ARRAY) {
@@ -136,7 +136,7 @@ failure:
 }
 
 static void king_http3_free_request_headers(
-    quiche_h3_header *headers,
+    king_http3_header_t *headers,
     zend_string **owned_strings,
     size_t owned_string_count)
 {
@@ -188,7 +188,14 @@ static zend_result king_http3_materialize_response(
         response->body.s != NULL ? ZSTR_LEN(response->body.s) : 0
     );
     add_assoc_string(return_value, "protocol", "http/3");
-    add_assoc_string(return_value, "transport_backend", "quiche_h3");
+    add_assoc_string(
+        return_value,
+        "transport_backend",
+#if defined(KING_HTTP3_BACKEND_LSQUIC)
+        runtime != NULL && runtime->lsquic_backend_active ? "lsquic_h3" :
+#endif
+        "unavailable"
+    );
     add_assoc_string(return_value, "effective_url", (char *) url_str);
     add_assoc_long(
         return_value,
@@ -261,35 +268,3 @@ static zend_result king_http3_materialize_response(
 
     return SUCCESS;
 }
-
-static king_http3_multi_request_t *king_http3_multi_find_request_by_stream_id(
-    king_http3_multi_request_t *requests,
-    size_t request_count,
-    uint64_t stream_id)
-{
-    size_t i;
-
-    for (i = 0; i < request_count; ++i) {
-        if (requests[i].request_headers_sent && requests[i].request_stream_id == stream_id) {
-            return &requests[i];
-        }
-    }
-
-    return NULL;
-}
-
-static bool king_http3_multi_all_responses_complete(
-    const king_http3_multi_request_t *requests,
-    size_t request_count)
-{
-    size_t i;
-
-    for (i = 0; i < request_count; ++i) {
-        if (!requests[i].response.response_complete) {
-            return false;
-        }
-    }
-
-    return true;
-}
-

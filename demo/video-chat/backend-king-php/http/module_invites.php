@@ -76,11 +76,84 @@ function videochat_handle_invite_routes(
             ]);
         }
 
+        $invitePreview = is_array($createResult['invite_code'] ?? null)
+            ? videochat_invite_code_preview($createResult['invite_code'])
+            : null;
+        $inviteId = is_array($invitePreview) ? (string) ($invitePreview['id'] ?? '') : '';
+
         return $jsonResponse(201, [
             'status' => 'ok',
             'result' => [
                 'state' => 'created',
-                'invite_code' => $createResult['invite_code'] ?? null,
+                'invite_code' => $invitePreview,
+                'copy' => [
+                    'method' => 'POST',
+                    'endpoint' => $inviteId !== '' ? '/api/invite-codes/' . rawurlencode($inviteId) . '/copy' : '',
+                    'endpoint_template' => '/api/invite-codes/{id}/copy',
+                ],
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/invite-codes/([A-Za-z0-9._-]{1,200})/copy$#', $path, $copyMatch) === 1) {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $authenticatedUserRole = (string) (($apiAuthContext['user']['role'] ?? 'user'));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/invite-codes/{id}/copy.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $copyResult = videochat_prepare_invite_code_copy(
+                $pdo,
+                (string) ($copyMatch[1] ?? ''),
+                $authenticatedUserId,
+                $authenticatedUserRole
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'invite_codes_copy_failed', 'Could not prepare invite code for copy.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        $copyReason = (string) ($copyResult['reason'] ?? 'internal_error');
+        if (!(bool) ($copyResult['ok'] ?? false)) {
+            if ($copyReason === 'not_found') {
+                return $errorResponse(404, 'invite_codes_not_found', 'Invite code does not exist.', [
+                    'fields' => is_array($copyResult['errors'] ?? null) ? $copyResult['errors'] : [],
+                ]);
+            }
+            if ($copyReason === 'forbidden') {
+                return $errorResponse(403, 'invite_codes_forbidden', 'You are not allowed to copy this invite code.', [
+                    'fields' => is_array($copyResult['errors'] ?? null) ? $copyResult['errors'] : [],
+                ]);
+            }
+            if ($copyReason === 'expired') {
+                return $errorResponse(410, 'invite_codes_expired', 'Invite code has expired.', [
+                    'fields' => is_array($copyResult['errors'] ?? null) ? $copyResult['errors'] : [],
+                ]);
+            }
+
+            return $errorResponse(500, 'invite_codes_copy_failed', 'Could not prepare invite code for copy.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'copy_ready',
+                'invite_code' => $copyResult['invite_code'] ?? null,
+                'copy' => $copyResult['copy'] ?? null,
             ],
             'time' => gmdate('c'),
         ]);

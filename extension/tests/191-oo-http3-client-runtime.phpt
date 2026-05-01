@@ -1,20 +1,10 @@
 --TEST--
-King OO Http3Client wrapper uses the active HTTP/3 runtime and returns Response objects
+King OO Http3Client wrapper uses the active LSQUIC HTTP/3 runtime and returns Response objects
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$server = getenv('KING_QUICHE_SERVER');
-if (!is_string($server) || $server === '' || !is_executable($server)) {
-    echo "skip KING_QUICHE_SERVER must point at a prebuilt quiche-server binary";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -39,7 +29,7 @@ try {
     $firstUrl = king_http3_test_server_url($server, '/first.txt');
     $secondUrl = king_http3_test_server_url($server, '/second.txt');
 
-    king_http3_request_with_retry(
+    $warmup = king_http3_request_with_retry(
         static fn () => king_http3_request_send(
             $firstUrl,
             'GET',
@@ -61,24 +51,27 @@ try {
     king_http3_destroy_fixture($fixture);
 }
 
+var_dump($warmup['transport_backend']);
+
 var_dump($first instanceof King\Response);
 var_dump($first->getStatusCode());
-var_dump($first->getHeaders()['content-length']);
+var_dump($first->getHeaders()['content-type']);
 var_dump($first->getBody());
 
 var_dump($second instanceof King\Response);
 var_dump($second->getStatusCode());
-var_dump($second->getHeaders()['content-length']);
+var_dump($second->getHeaders()['content-type']);
 var_dump($second->getBody());
 ?>
 --EXPECT--
+string(9) "lsquic_h3"
 bool(true)
 int(200)
-string(2) "12"
+string(10) "text/plain"
 string(12) "first-http3
 "
 bool(true)
 int(200)
-string(2) "13"
+string(10) "text/plain"
 string(13) "second-http3
 "

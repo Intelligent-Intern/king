@@ -40,11 +40,7 @@
 
 #include <php.h>
 
-#if defined(KING_RUNTIME_BUILD) && !defined(QUICHE_H)
-typedef void quiche_config;
-#else
-#  include <quiche.h>
-#endif
+typedef void king_quic_backend_config;
 
 /*
  * =========================================================================
@@ -106,8 +102,8 @@ typedef void quiche_config;
  * defined in the various sub-module headers.
  */
 typedef struct king_cfg_s {
-    /* The underlying raw config handle from the quiche library. */
-    quiche_config *quiche_cfg;
+    /* Reserved for an owned QUIC backend config handle when a runtime needs one. */
+    king_quic_backend_config *quic_backend_config;
 
     /* Set once the config is consumed by a live session. */
     zend_bool frozen;

@@ -210,10 +210,6 @@ run_matrix_mode() {
     shift 4
 
     (
-        export KING_QUICHE_LIBRARY="${prefix}/runtime/libquiche.so"
-        export KING_QUICHE_SERVER="${prefix}/runtime/quiche-server"
-        export LD_LIBRARY_PATH="${prefix}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-
         "${PHP_BIN}" \
             -d "extension=${prefix}/modules/king.so" \
             -d "king.security_allow_config_override=1" \

@@ -32,6 +32,7 @@ var_dump(str_contains($ci, 'install-package-matrix:'));
 var_dump(str_contains($ci, 'Release Package Build & Install Smoke PHP ${{ matrix.php-version }} ${{ matrix.arch-label }}'));
 var_dump(str_contains($ci, '../infra/scripts/install-package-matrix.sh --archive'));
 var_dump(str_contains($ci, 'king-release-package-php8.5-linux-amd64'));
+var_dump(str_contains($ci, 'php-version: "8.5"' . "\n" . '            runner: ubuntu-24.04' . "\n" . '            arch-label: linux-amd64'));
 var_dump(str_contains($ci, 'king-release-package-php${{ matrix.php-version }}-${{ matrix.arch-label }}'));
 var_dump(str_contains($ci, 'ubuntu-24.04-arm'));
 var_dump(!str_contains($ci, 'docker-build-and-push:'));
@@ -54,6 +55,7 @@ var_dump(str_contains($runtime, 'extension=/opt/king/package/modules/king.so'));
 var_dump(str_contains($runtime, 'PHP_BIN=php /opt/king/package/bin/smoke.sh'));
 ?>
 --EXPECT--
+bool(true)
 bool(true)
 bool(true)
 bool(true)

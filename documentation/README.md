@@ -21,6 +21,12 @@ keep it nearby while reading. The glossary exists so the handbook can use
 technical language without assuming every reader already lives inside that
 language every day.
 
+## Developer Docs
+
+Repo-local demo and package notes live under [`dev/`](./dev/). Keep Markdown
+out of code, demo, package, infra, benchmark, and test directories; add or move
+developer documentation here instead.
+
 ## How To Read The Handbook
 
 If you are new to King, begin with [Getting Started](./getting-started.md).
@@ -64,6 +70,7 @@ show up in both directions.
 | [QUIC and TLS](./quic-and-tls.md) | QUIC transport, TLS trust, session tickets, stream thinking, and the settings that shape transport behavior. | Read before tuning HTTP/3 or session reuse. |
 | [HTTP Clients and Streams](./http-clients-and-streams.md) | HTTP/1, HTTP/2, and HTTP/3 request flow, responses, streaming reads, cancellation, and reuse. | Read when you send outbound requests. |
 | [WebSocket](./websocket.md) | Long-lived bidirectional channels, message frames, ping and pong, close behavior, and IIBIN over WebSocket. | Read when the traffic is a conversation rather than a one-shot request. |
+| [GossipMesh Runtime](./gossipmesh.md) | Backend-authoritative video-chat topology, protected-envelope routing, duplicate suppression, TTL, and relay fallback contracts. | Read when working on the video-chat SFU/GossipMesh path. |
 | [Server Runtime](./server-runtime.md) | Listeners, upgrades, admin APIs, early hints, cancel hooks, and server-owned session state. | Read when King is receiving traffic instead of only sending it. |
 | [SSH over QUIC](./ssh-over-quic.md) | How SSH traffic is carried through the platform and mapped to target systems. | Read when building remote access or control gateways. |
 

@@ -9,6 +9,7 @@ $dbPath = getenv('VIDEOCHAT_KING_DB_PATH') ?: (__DIR__ . '/.local/video-chat.sql
 $appVersion = getenv('VIDEOCHAT_KING_BACKEND_VERSION') ?: '1.0.6-beta';
 $appEnv = getenv('VIDEOCHAT_KING_ENV') ?: 'development';
 $avatarStorageRoot = getenv('VIDEOCHAT_AVATAR_STORAGE_ROOT') ?: (dirname($dbPath) . '/avatars');
+$chatObjectStoreRoot = getenv('VIDEOCHAT_OBJECT_STORE_ROOT') ?: (dirname($dbPath) . '/object-store');
 $rawServerMode = strtolower(trim((string) (getenv('VIDEOCHAT_KING_SERVER_MODE') ?: 'all')));
 $serverMode = in_array($rawServerMode, ['all', 'http', 'ws'], true) ? $rawServerMode : 'all';
 $workerIndex = (int) (getenv('VIDEOCHAT_KING_WORKER_INDEX') ?: '0');
@@ -36,12 +37,17 @@ $log = static function (string $message): void {
 
 require_once __DIR__ . '/support/database.php';
 require_once __DIR__ . '/support/auth.php';
+require_once __DIR__ . '/support/config_hardening.php';
+require_once __DIR__ . '/support/error_envelope.php';
 require_once __DIR__ . '/domain/users/avatar_upload.php';
 require_once __DIR__ . '/domain/calls/call_directory.php';
 require_once __DIR__ . '/domain/calls/call_management.php';
 require_once __DIR__ . '/domain/calls/call_access.php';
 require_once __DIR__ . '/domain/calls/invite_codes.php';
 require_once __DIR__ . '/domain/realtime/realtime_chat.php';
+require_once __DIR__ . '/domain/realtime/chat_attachments.php';
+require_once __DIR__ . '/domain/realtime/chat_archive.php';
+require_once __DIR__ . '/domain/realtime/realtime_activity_layout.php';
 require_once __DIR__ . '/domain/realtime/realtime_admin_sync.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
@@ -53,7 +59,15 @@ require_once __DIR__ . '/domain/users/user_management.php';
 require_once __DIR__ . '/domain/users/user_settings.php';
 require_once __DIR__ . '/http/router.php';
 
+$secretHardening = videochat_config_hardening_report();
+if (!(bool) ($secretHardening['ok'] ?? false)) {
+    $errors = is_array($secretHardening['errors'] ?? null) ? $secretHardening['errors'] : [];
+    $log('secret/config hardening failed: ' . implode('; ', array_map('strval', $errors)));
+    exit(1);
+}
+
 $avatarMaxBytes = videochat_avatar_max_bytes();
+$chatObjectStoreMaxBytes = videochat_chat_object_store_max_bytes();
 
 $databaseRuntime = null;
 $maxBootstrapAttempts = 40;
@@ -82,6 +96,11 @@ if (!is_array($databaseRuntime)) {
     exit(1);
 }
 
+if (!videochat_chat_object_store_init($chatObjectStoreRoot, $chatObjectStoreMaxBytes)) {
+    $log('chat object-store init failed at ' . $chatObjectStoreRoot);
+    exit(1);
+}
+
 $activeWebsocketsBySession = [];
 $presenceState = videochat_presence_state_init();
 $lobbyState = videochat_lobby_state_init();
@@ -105,7 +124,6 @@ register_shutdown_function(static function () use ($log): void {
 
 $jsonResponse = static function (int $status, array $payload): array {
     $corsHeaders = [
-        'access-control-allow-origin' => '*',
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
@@ -123,19 +141,7 @@ $jsonResponse = static function (int $status, array $payload): array {
 };
 
 $errorResponse = static function (int $status, string $code, string $message, array $details = []) use ($jsonResponse): array {
-    $error = [
-        'code' => $code,
-        'message' => $message,
-    ];
-    if ($details !== []) {
-        $error['details'] = $details;
-    }
-
-    return $jsonResponse($status, [
-        'status' => 'error',
-        'error' => $error,
-        'time' => gmdate('c'),
-    ]);
+    return $jsonResponse($status, videochat_error_envelope($code, $message, $details));
 };
 
 $methodFromRequest = static function (array $request): string {
@@ -224,7 +230,8 @@ $runtimeEnvelope = static function () use (
     $databaseRuntime,
     $wsPath,
     $runtimeHealthSummary,
-    $avatarMaxBytes
+    $avatarMaxBytes,
+    $chatObjectStoreMaxBytes
 ): array {
     return [
         'service' => 'video-chat-backend-king-php',
@@ -265,6 +272,18 @@ $runtimeEnvelope = static function () use (
             'upload_limits' => [
                 'avatar_max_bytes' => $avatarMaxBytes,
                 'avatar_allowed_mime_types' => array_keys(videochat_avatar_allowed_mime_to_extension()),
+                'chat_inline_max_chars' => videochat_chat_attachment_inline_max_chars(),
+                'chat_inline_max_bytes' => videochat_chat_attachment_inline_max_bytes(),
+                'chat_attachment_max_count' => videochat_chat_attachment_max_count(),
+                'chat_attachment_max_images' => videochat_chat_attachment_max_images(),
+                'chat_attachment_max_image_bytes' => videochat_chat_attachment_max_image_bytes(),
+                'chat_attachment_max_document_bytes' => videochat_chat_attachment_max_document_bytes(),
+                'chat_attachment_max_message_bytes' => videochat_chat_attachment_max_message_bytes(),
+                'chat_attachment_max_upload_body_bytes' => videochat_chat_attachment_max_upload_body_bytes(),
+                'chat_attachment_call_soft_quota_bytes' => videochat_chat_attachment_call_soft_quota_bytes(),
+                'chat_attachment_call_hard_quota_bytes' => videochat_chat_attachment_call_hard_quota_bytes(),
+                'chat_object_store_max_bytes' => $chatObjectStoreMaxBytes,
+                'chat_attachment_allowed_extensions' => array_keys(videochat_chat_attachment_extension_mime_map()),
             ],
         ],
         'calls' => [
@@ -274,6 +293,7 @@ $runtimeEnvelope = static function () use (
             'call_access_join_endpoint' => '/api/call-access/{access_id}/join',
             'call_access_session_endpoint' => '/api/call-access/{access_id}/session',
             'invite_code_create_endpoint' => '/api/invite-codes',
+            'invite_code_copy_endpoint_template' => '/api/invite-codes/{id}/copy',
             'invite_code_redeem_endpoint' => '/api/invite-codes/redeem',
             'scope_values' => ['my', 'all'],
             'status_values' => ['all', 'scheduled', 'active', 'ended', 'cancelled'],
@@ -408,12 +428,13 @@ while (true) {
     $ok = king_http1_server_listen_once($host, $port, null, $handler);
     if ($ok === false) {
         $lastError = function_exists('king_get_last_error') ? trim((string) king_get_last_error()) : '';
-        $isExpectedTimeout = $lastError !== '' && (
+        $isExpectedListenerMiss = $lastError !== '' && (
             stripos($lastError, 'timed out while waiting for the HTTP/1 accept phase') !== false
             || stripos($lastError, 'timed out while waiting for the HTTP/1 request head phase') !== false
+            || stripos($lastError, 'failed before a complete HTTP/1 request head was received (errno 11)') !== false
         );
 
-        if ($lastError !== '' && !$isExpectedTimeout) {
+        if ($lastError !== '' && !$isExpectedListenerMiss) {
             $log('listen_once failure: ' . $lastError);
             usleep(50_000);
             continue;

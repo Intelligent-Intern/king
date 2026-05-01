@@ -70,6 +70,18 @@ try {
         'infer_http'       => ['method' => 'POST',   'paths' => ['/api/infer']],
         'transcripts_get'  => ['method' => 'GET',    'paths' => ['/api/transcripts/{request_id}']],
         'route_diagnostic' => ['method' => 'GET',    'paths' => ['/api/route']],
+        'discover'         => ['method' => 'POST',   'paths' => ['/api/discover']],
+        'tools_discover'   => ['method' => 'POST',   'paths' => ['/api/tools/discover']],
+        'tools_pick'       => ['method' => 'POST',   'paths' => ['/api/tools/pick']],
+        'telemetry_discovery_recent' => ['method' => 'GET', 'paths' => ['/api/telemetry/discovery/recent']],
+        'conversation_messages_list' => ['method' => 'GET', 'paths' => ['/api/conversations/{session_id}/messages']],
+        'conversation_meta_get' => ['method' => 'GET', 'paths' => ['/api/conversations/{session_id}']],
+        'conversation_delete' => ['method' => 'DELETE', 'paths' => ['/api/conversations/{session_id}']],
+        'conversation_list_me' => ['method' => 'GET', 'paths' => ['/api/conversations/me']],
+        'auth_login' => ['method' => 'POST', 'paths' => ['/api/auth/login']],
+        'auth_logout' => ['method' => 'POST', 'paths' => ['/api/auth/logout']],
+        'auth_whoami' => ['method' => 'GET', 'paths' => ['/api/auth/whoami']],
+        'login_ui' => ['method' => 'GET', 'paths' => ['/ui/login', '/ui/login/']],
     ];
 
     $liveApi = $catalog['api'] ?? null;
@@ -174,6 +186,18 @@ try {
         'infer_http'       => [['method' => 'POST',   'path' => '/api/infer',                                'expect_not_status' => 404]],
         'transcripts_get'  => [['method' => 'GET',    'path' => '/api/transcripts/req_00000000deadbeef',      'expect_not_status' => 405]],
         'route_diagnostic' => [['method' => 'GET',    'path' => '/api/route',                                'expect_status' => 200]],
+        'discover'         => [['method' => 'POST',   'path' => '/api/discover',                             'expect_not_status' => 404]],
+        'tools_discover'   => [['method' => 'POST',   'path' => '/api/tools/discover',                       'expect_not_status' => 404]],
+        'tools_pick'       => [['method' => 'POST',   'path' => '/api/tools/pick',                           'expect_not_status' => 404]],
+        'telemetry_discovery_recent' => [['method' => 'GET', 'path' => '/api/telemetry/discovery/recent',    'expect_status' => 200]],
+        'conversation_messages_list' => [['method' => 'GET', 'path' => '/api/conversations/sess-probe/messages', 'expect_not_status' => 404]],
+        'conversation_meta_get' => [['method' => 'GET', 'path' => '/api/conversations/sess-probe',           'expect_not_status' => 404]],
+        'conversation_delete' => [['method' => 'DELETE', 'path' => '/api/conversations/sess-probe',          'expect_not_status' => 404]],
+        'conversation_list_me' => [['method' => 'GET', 'path' => '/api/conversations/me',                    'expect_not_status' => 404]],
+        'auth_login' => [['method' => 'POST', 'path' => '/api/auth/login',                                   'expect_not_status' => 404]],
+        'auth_logout' => [['method' => 'POST', 'path' => '/api/auth/logout',                                 'expect_not_status' => 404]],
+        'auth_whoami' => [['method' => 'GET', 'path' => '/api/auth/whoami',                                  'expect_not_status' => 404]],
+        'login_ui' => [['method' => 'GET', 'path' => '/ui/login',                                            'expect_status' => 200]],
     ];
     foreach ($parityProbes as $key => $probes) {
         foreach ($probes as $probe) {
@@ -287,6 +311,14 @@ try {
         'routing_no_candidate',
         'document_not_found',
         'document_too_large',
+        'invalid_service_descriptor',
+        'invalid_tool_descriptor',
+        'embedding_worker_unavailable_discovery',
+        'no_semantic_match',
+        'invalid_credentials',
+        'session_expired',
+        'session_revoked',
+        'ownership_denied',
     ] as $required) {
         model_inference_catalog_contract_assert(
             in_array($required, $liveErrorCodes, true),
@@ -310,7 +342,7 @@ try {
         );
     }
     // A surface MUST NOT appear in both live and target-shape sections.
-    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'documents_list', 'documents_create', 'document_get', 'document_chunks', 'embed', 'rag', 'telemetry_rag_recent', 'retrieve', 'infer_http', 'telemetry_recent', 'chat_ui', 'transcripts_get', 'route_diagnostic'] as $shipped) {
+    foreach (['node_profile', 'models_list', 'models_create', 'model_get', 'model_delete', 'documents_list', 'documents_create', 'document_get', 'document_chunks', 'embed', 'rag', 'telemetry_rag_recent', 'retrieve', 'infer_http', 'telemetry_recent', 'chat_ui', 'transcripts_get', 'route_diagnostic', 'discover', 'tools_discover', 'tools_pick', 'telemetry_discovery_recent', 'conversation_messages_list', 'conversation_meta_get', 'conversation_delete', 'conversation_list_me', 'auth_login', 'auth_logout', 'auth_whoami', 'login_ui'] as $shipped) {
         model_inference_catalog_contract_assert(
             !isset($targetShapeApi[$shipped]),
             "{$shipped} has shipped and must not remain in planned_surfaces_target_shape"

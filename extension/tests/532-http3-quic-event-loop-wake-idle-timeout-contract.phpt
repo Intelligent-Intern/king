@@ -2,18 +2,10 @@
 King HTTP/3 event loop wakes on delayed peer progress, idles between bursts, and times out on sustained silence
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the local HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
-
-if (trim((string) shell_exec('command -v cargo')) === '') {
-    echo "skip cargo is required for the HTTP/3 peer helpers";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
+king_http3_skipif_require_c_helpers();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -66,10 +58,10 @@ var_dump($wakeResponses[0]['status'] === 200);
 var_dump($wakeResponses[1]['status'] === 200);
 var_dump($wakeResponses[2]['status'] === 200);
 var_dump($wakeResponses[3]['status'] === 200);
-var_dump($wakeResponses[0]['transport_backend'] === 'quiche_h3');
-var_dump($wakeResponses[1]['transport_backend'] === 'quiche_h3');
-var_dump($wakeResponses[2]['transport_backend'] === 'quiche_h3');
-var_dump($wakeResponses[3]['transport_backend'] === 'quiche_h3');
+var_dump($wakeResponses[0]['transport_backend'] === 'lsquic_h3');
+var_dump($wakeResponses[1]['transport_backend'] === 'lsquic_h3');
+var_dump($wakeResponses[2]['transport_backend'] === 'lsquic_h3');
+var_dump($wakeResponses[3]['transport_backend'] === 'lsquic_h3');
 var_dump($wakeA['connectionId'] === $wakeB['connectionId']);
 var_dump($wakeB['connectionId'] === $wakeC['connectionId']);
 var_dump($wakeC['connectionId'] === $wakeD['connectionId']);

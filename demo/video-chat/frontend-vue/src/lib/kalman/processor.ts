@@ -24,10 +24,25 @@ const DEFAULT_PROCESSOR_CONFIG: WebRTCVideoProcessorConfig = {
   targetBitrate: 500000,
   enableKalman: false, // Disabled: stub for future use
   kalmanStrength: 0.5,
-  turnServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
+  turnServers: buildDefaultTurnServers(),
+}
+
+function defaultTurnHostFromLocation(): string {
+  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return ''
+
+  const hostname = String(window.location.hostname || '').trim().toLowerCase()
+  if (hostname === '') return ''
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return hostname
+  if (hostname.startsWith('turn.')) return hostname
+  if (/^[0-9.]+$/.test(hostname) || hostname.includes(':')) return hostname
+
+  return `turn.${hostname.replace(/^(api|ws|sfu|cdn|cnd)\./, '')}`
+}
+
+function buildDefaultTurnServers(): RTCIceServer[] {
+  const turnHost = defaultTurnHostFromLocation()
+  if (turnHost === '') return []
+  return [{ urls: `stun:${turnHost}:3478` }]
 }
 
 export class WebRTCVideoProcessor {

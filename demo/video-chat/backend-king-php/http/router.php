@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/module_runtime.php';
 require_once __DIR__ . '/module_auth_session.php';
+require_once __DIR__ . '/module_infrastructure.php';
+require_once __DIR__ . '/module_operations.php';
+require_once __DIR__ . '/module_marketplace.php';
 require_once __DIR__ . '/module_users.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
@@ -17,6 +20,9 @@ function videochat_dispatch_route_module_order(): array
     return [
         'runtime',
         'auth_session',
+        'infrastructure',
+        'operations',
+        'marketplace',
         'users',
         'invites',
         'calls',
@@ -52,7 +58,6 @@ function videochat_dispatch_request(
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
     $corsHeaders = [
-        'access-control-allow-origin' => '*',
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
@@ -73,7 +78,7 @@ function videochat_dispatch_request(
 
         if (in_array(
             $requestPath,
-            ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login', '/api/auth/email-change/confirm'],
+                ['/', '/health', '/api/bootstrap', '/api/runtime', '/api/version', '/api/auth/login', '/api/auth/session-state', '/api/auth/email-change/confirm'],
             true
         )) {
             return true;
@@ -164,6 +169,32 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase,
                 $issueSessionId
+            );
+        } elseif ($moduleName === 'infrastructure') {
+            $response = videochat_handle_infrastructure_routes(
+                $path,
+                $method,
+                $jsonResponse,
+                $errorResponse
+            );
+        } elseif ($moduleName === 'operations') {
+            $response = videochat_handle_operations_routes(
+                $path,
+                $method,
+                $jsonResponse,
+                $errorResponse,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'marketplace') {
+            $response = videochat_handle_marketplace_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
             );
         } elseif ($moduleName === 'users') {
             $response = videochat_handle_user_routes(

@@ -140,7 +140,7 @@
                   title="Blur"
                   @click="applyBackgroundPreset('light')"
                 >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
                 </button>
                 <button
                   class="call-left-blur-btn"
@@ -151,15 +151,48 @@
                   title="Strong blur"
                   @click="applyBackgroundPreset('strong')"
                 >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/desktop.png" alt="" />
-                  <span class="call-left-blur-strong-mark" aria-hidden="true">+</span>
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
                 </button>
               </div>
             </section>
 
             <section
+              v-if="showCallOwnerInviteLink"
+              class="call-left-settings-block call-left-invite-link-block"
+              aria-label="Free-for-all invite link"
+            >
+              <div class="call-left-settings-title">Invite link</div>
+              <div class="call-left-invite-link-row">
+                <input
+                  class="input call-left-invite-link-input"
+                  type="text"
+                  readonly
+                  :value="callOwnerInviteLinkState.url"
+                  :placeholder="callOwnerInviteLinkState.loading ? 'Generating invite link...' : 'Invite link unavailable'"
+                  @focus="$event.target.select()"
+                />
+                <button
+                  class="icon-mini-btn call-left-invite-link-copy"
+                  type="button"
+                  title="Copy invite link"
+                  aria-label="Copy invite link"
+                  :disabled="callOwnerInviteLinkState.loading || callOwnerInviteLinkState.url === ''"
+                  @click="copyCallOwnerInviteLink"
+                >
+                  <span aria-hidden="true">⧉</span>
+                </button>
+              </div>
+              <p v-if="callOwnerInviteLinkState.copyNotice" class="call-left-settings-value">
+                {{ callOwnerInviteLinkState.copyNotice }}
+              </p>
+              <p v-if="callOwnerInviteLinkState.error" class="call-left-settings-error">
+                {{ callOwnerInviteLinkState.error }}
+              </p>
+            </section>
+
+            <section
               v-if="showInCallOwnerEditCard"
-              class="call-left-owner-edit-block"
+              class="call-left-settings-block call-left-owner-edit-block"
               aria-label="Call settings"
             >
               <div class="call-left-settings-title">Call settings</div>
@@ -174,6 +207,43 @@
               <p v-if="callOwnerEditState.contextError" class="call-left-settings-error">
                 {{ callOwnerEditState.contextError }}
               </p>
+
+              <template v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate">
+                <div class="call-left-settings-field">
+                  <label for="call-left-layout-mode">Video layout</label>
+                  <AppSelect
+                    id="call-left-layout-mode"
+                    aria-label="Video layout mode"
+                    :model-value="callLayoutSidebarState.currentMode"
+                    @update:model-value="applySidebarLayoutMode"
+                  >
+                    <option
+                      v-for="option in callLayoutSidebarState.modeOptions"
+                      :key="option.mode"
+                      :value="option.mode"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </AppSelect>
+                </div>
+                <div class="call-left-settings-field">
+                  <label for="call-left-layout-strategy">Activity strategy</label>
+                  <AppSelect
+                    id="call-left-layout-strategy"
+                    aria-label="Activity strategy"
+                    :model-value="callLayoutSidebarState.currentStrategy"
+                    @update:model-value="applySidebarLayoutStrategy"
+                  >
+                    <option
+                      v-for="option in callLayoutSidebarState.strategyOptions"
+                      :key="option.strategy"
+                      :value="option.strategy"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </AppSelect>
+                </div>
+              </template>
             </section>
 
             <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
@@ -232,7 +302,13 @@
             <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
           </button>
         </div>
-        <div class="workspace">
+        <div
+          class="workspace"
+          :class="{
+            'workspace-has-header': showWorkspaceHeader,
+            'workspace-no-header': !showWorkspaceHeader,
+          }"
+        >
           <section v-if="showWorkspaceHeader" class="section">
             <div class="section-head">
               <div class="section-head-left">
@@ -256,6 +332,14 @@
                   <button class="btn btn-cyan" type="button" @click="openCallsRegistry">Open Calls</button>
                   <button class="btn btn-cyan" type="button" @click="openGrafana">Open Grafana</button>
                 </template>
+                <button
+                  v-else-if="route.name === 'user-dashboard'"
+                  class="btn btn-cyan"
+                  type="button"
+                  @click="openUserCreateCall"
+                >
+                  New call
+                </button>
                 <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
               </div>
             </div>
@@ -388,76 +472,205 @@
             <div class="settings-theme-preview-viewport">
               <div class="settings-theme-preview-scale">
                 <div class="settings-theme-preview-shell">
-                  <aside class="settings-theme-preview-left">
-                    <div class="settings-theme-preview-brand">
-                      <img src="/assets/orgas/kingrt/logo.svg" alt="" />
+                  <aside class="settings-theme-preview-left-pane">
+                    <div class="brand-strip settings-theme-preview-brand-strip">
+                      <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
                     </div>
-                    <div class="settings-theme-preview-left-menu" aria-label="Preview workspace navigation">
-                      <span class="settings-theme-preview-left-menu-item is-active">
-                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                    <nav class="nav settings-theme-preview-nav" aria-label="Preview workspace navigation">
+                      <a class="nav-link active" href="#" @click.prevent>
+                        <img src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
                         <span>Video Calls</span>
-                      </span>
-                      <span class="settings-theme-preview-left-menu-item">
-                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                      </a>
+                      <a class="nav-link" href="#" @click.prevent>
+                        <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
                         <span>User Management</span>
-                      </span>
-                      <span class="settings-theme-preview-left-menu-item">
-                        <span class="settings-theme-preview-left-menu-dot" aria-hidden="true"></span>
+                      </a>
+                      <a class="nav-link" href="#" @click.prevent>
+                        <img src="/assets/orgas/kingrt/icons/users.png" alt="" />
                         <span>Overview</span>
-                      </span>
-                    </div>
-                    <div class="settings-theme-preview-left-profile">
-                      <span class="settings-theme-preview-left-avatar">PA</span>
-                      <div class="settings-theme-preview-left-profile-copy">
-                        <strong>Platform Admin</strong>
-                        <small>admin</small>
-                      </div>
-                    </div>
+                      </a>
+                    </nav>
+                    <section class="sidebar-profile avatar-only settings-theme-preview-profile">
+                      <button class="sidebar-avatar-trigger" type="button" aria-label="Preview profile avatar">
+                        <img class="sidebar-avatar-image" :src="settingsAvatarPreviewSrc" alt="Preview avatar" />
+                      </button>
+                    </section>
                   </aside>
 
-                  <section class="settings-theme-preview-right">
-                    <header class="settings-theme-preview-right-head">
-                      <h5>Video Call Management</h5>
-                      <button class="settings-theme-preview-new-btn" type="button">New video call</button>
-                    </header>
-                    <div class="settings-theme-preview-top-tabs">
-                      <span class="settings-theme-preview-top-tab is-active">Calls</span>
-                      <span class="settings-theme-preview-top-tab">Calender</span>
-                    </div>
-                    <div class="settings-theme-preview-toolbar">
-                      <span class="settings-theme-preview-select">Type: all</span>
-                      <span class="settings-theme-preview-select">Status: all</span>
-                      <span class="settings-theme-preview-select">Range: 30 days</span>
-                      <button class="settings-theme-preview-search-btn" type="button">Search</button>
-                    </div>
-                    <div class="settings-theme-preview-table">
-                      <div class="settings-theme-preview-table-head">
-                        <span>Call</span>
-                        <span>Status</span>
-                        <span>Window</span>
-                        <span>Participants</span>
-                        <span>Owner</span>
-                      </div>
-                      <div class="settings-theme-preview-table-row">
-                        <span class="settings-theme-preview-cell-strong">Platform Standup</span>
-                        <span class="settings-theme-preview-tag ok">active</span>
-                        <span class="settings-theme-preview-cell">16 Apr 09:30 - 10:00</span>
-                        <span class="settings-theme-preview-cell">3 / 8</span>
-                        <span class="settings-theme-preview-cell">Platform Admin</span>
-                      </div>
-                      <div class="settings-theme-preview-table-row">
-                        <span class="settings-theme-preview-cell-strong">Quarterly Review</span>
-                        <span class="settings-theme-preview-tag warn">scheduled</span>
-                        <span class="settings-theme-preview-cell">17 Apr 14:00 - 14:45</span>
-                        <span class="settings-theme-preview-cell">6 / 12</span>
-                        <span class="settings-theme-preview-cell">Call Moderator</span>
-                      </div>
-                    </div>
-                    <div class="settings-theme-preview-pagination">
-                      <span>◀</span>
-                      <span>Page 1 / 4</span>
-                      <span>▶</span>
-                    </div>
+                  <section class="settings-theme-preview-main">
+                    <section class="view-card calls-view settings-theme-preview-calls-view">
+                      <section class="section calls-header settings-theme-preview-calls-header">
+                        <div class="calls-header-left">
+                          <h1>Video Call Management</h1>
+                        </div>
+                        <div class="actions">
+                          <button class="btn btn-cyan" type="button">New video call</button>
+                        </div>
+                      </section>
+
+                      <section class="toolbar calls-toolbar settings-theme-preview-calls-toolbar">
+                        <div class="calls-toolbar-left settings-theme-preview-calls-toolbar-left">
+                          <div class="calls-view-tabs" role="tablist" aria-label="Calls view mode preview">
+                            <button
+                              class="tab"
+                              :class="{ active: settingsThemePreview.viewMode === 'calls' }"
+                              type="button"
+                              role="tab"
+                              :aria-selected="settingsThemePreview.viewMode === 'calls'"
+                              @click="setSettingsThemePreviewViewMode('calls')"
+                            >
+                              Calls
+                            </button>
+                            <button
+                              class="tab"
+                              :class="{ active: settingsThemePreview.viewMode === 'calendar' }"
+                              type="button"
+                              role="tab"
+                              :aria-selected="settingsThemePreview.viewMode === 'calendar'"
+                              @click="setSettingsThemePreviewViewMode('calendar')"
+                            >
+                              Calender
+                            </button>
+                          </div>
+
+                          <label
+                            class="calls-search calls-search-main settings-theme-preview-inline-search"
+                            aria-label="Preview call search"
+                          >
+                            <input
+                              v-model="settingsThemePreview.query"
+                              class="input"
+                              type="search"
+                              placeholder="Search call title"
+                              @keydown.enter.prevent="applySettingsThemePreviewFilters"
+                            />
+                          </label>
+                        </div>
+
+                        <div class="calls-toolbar-right">
+                          <AppSelect v-model="settingsThemePreview.status" @change="applySettingsThemePreviewFilters">
+                            <option value="all">All status</option>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="active">Active</option>
+                            <option value="ended">Ended</option>
+                            <option value="cancelled">Cancelled</option>
+                          </AppSelect>
+
+                          <AppSelect v-model="settingsThemePreview.scope" @change="applySettingsThemePreviewFilters">
+                            <option value="all">All scope</option>
+                            <option value="my">My scope</option>
+                          </AppSelect>
+
+                          <button
+                            class="icon-mini-btn calls-toolbar-search-btn"
+                            type="button"
+                            title="Search calls"
+                            aria-label="Search calls"
+                            @click="applySettingsThemePreviewFilters"
+                          >
+                            <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
+                          </button>
+                        </div>
+                      </section>
+
+                      <section v-if="settingsThemePreview.viewMode === 'calls'" class="table-wrap calls-table-wrap">
+                        <table class="calls-list-table">
+                          <thead>
+                            <tr>
+                              <th class="col-title">Call</th>
+                              <th>Status</th>
+                              <th>Window</th>
+                              <th>Participants</th>
+                              <th>Owner</th>
+                              <th class="col-actions">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody v-if="settingsThemePreviewRows.length > 0">
+                            <tr v-for="call in settingsThemePreviewRows" :key="call.id">
+                              <td data-label="Call">
+                                <div class="call-title">{{ call.title }}</div>
+                                <div class="call-subline code">{{ call.id }}</div>
+                              </td>
+                              <td data-label="Status">
+                                <span class="tag" :class="settingsThemePreviewStatusTagClass(call.status)">
+                                  {{ call.status }}
+                                </span>
+                              </td>
+                              <td data-label="Window">{{ call.window }}</td>
+                              <td data-label="Participants">
+                                {{ call.participants.total }}
+                                <span class="call-subline">
+                                  in {{ call.participants.internal }} / ex {{ call.participants.external }}
+                                </span>
+                              </td>
+                              <td data-label="Owner">
+                                {{ call.owner.displayName }}
+                                <span class="call-subline">{{ call.owner.email }}</span>
+                              </td>
+                              <td data-label="Actions">
+                                <div class="actions-inline">
+                                  <button class="icon-mini-btn" type="button" title="Edit call" aria-label="Edit call">
+                                    <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
+                                  </button>
+                                  <button class="icon-mini-btn" type="button" title="Enter video call" aria-label="Enter video call">
+                                    <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
+                                  </button>
+                                  <button class="icon-mini-btn danger" type="button" title="Cancel call" aria-label="Cancel call">
+                                    <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
+                                  </button>
+                                  <button class="icon-mini-btn danger" type="button" title="Delete call" aria-label="Delete call">
+                                    <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+
+                        <section v-if="settingsThemePreviewRows.length === 0" class="section calls-empty">
+                          No calls match the active filters.
+                        </section>
+                      </section>
+
+                      <section v-else class="table-wrap calls-calendar-wrap">
+                        <section class="calls-calendar-full settings-theme-preview-calendar-mock">
+                          <div class="settings-theme-preview-calendar-grid">
+                            <span>Mon</span>
+                            <span>Tue</span>
+                            <span>Wed</span>
+                            <span>Thu</span>
+                            <span>Fri</span>
+                            <span>Sat</span>
+                            <span>Sun</span>
+                          </div>
+                          <div class="settings-theme-preview-calendar-event">Platform Standup · 09:30</div>
+                        </section>
+                      </section>
+
+                      <section v-if="settingsThemePreview.viewMode === 'calls'" class="footer calls-pagination-wrap">
+                        <div class="pagination">
+                          <button
+                            class="pager-btn pager-icon-btn"
+                            type="button"
+                            :disabled="settingsThemePreview.page <= 1"
+                            @click="goToSettingsThemePreviewPage(settingsThemePreview.page - 1)"
+                          >
+                            <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+                          </button>
+                          <div class="page-info">
+                            Page {{ settingsThemePreview.page }} / {{ settingsThemePreviewPageCount }}
+                          </div>
+                          <button
+                            class="pager-btn pager-icon-btn"
+                            type="button"
+                            :disabled="settingsThemePreview.page >= settingsThemePreviewPageCount"
+                            @click="goToSettingsThemePreviewPage(settingsThemePreview.page + 1)"
+                          >
+                            <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+                          </button>
+                        </div>
+                      </section>
+                    </section>
                   </section>
                 </div>
               </div>
@@ -477,6 +690,32 @@
             <input class="input" type="password" value="********" disabled autocomplete="off" />
           </label>
         </div>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'session'" class="settings-panel">
+        <section class="settings-section">
+          <h4>Logout Landing</h4>
+          <p>Choose the same-origin page users should see after leaving or logging out.</p>
+          <div class="settings-row settings-row-single">
+            <label class="settings-field">
+              <span>Landing page path</span>
+              <input
+                v-model.trim="settingsDraft.postLogoutLandingUrl"
+                class="input"
+                type="text"
+                inputmode="url"
+                placeholder="/call-goodbye"
+                autocomplete="off"
+              />
+            </label>
+            <div class="settings-field settings-field-action">
+              <span>Default</span>
+              <button class="btn" type="button" @click="resetPostLogoutLandingUrl">
+                Reset to default
+              </button>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section v-else-if="activeSettingsTile === 'regional'" class="settings-panel">
@@ -561,10 +800,6 @@
               <option value="invite_only">Invite only</option>
               <option value="free_for_all">Free for all</option>
             </AppSelect>
-          </label>
-          <label class="field">
-            <span>Room ID</span>
-            <input v-model.trim="callOwnerEditState.roomId" class="input" type="text" placeholder="lobby" />
           </label>
           <label class="field">
             <span>Starts at</span>
@@ -720,6 +955,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import {
   logoutSession,
+  postLogoutRedirectTarget,
   saveSessionSettings,
   sessionState,
   uploadSessionAvatar,
@@ -727,22 +963,22 @@ import {
 import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
+  applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
-  setCallBackgroundBackdropMode,
-  setCallBackgroundBlurStrength,
-  setCallBackgroundFilterMode,
-  setCallBackgroundQualityProfile,
+  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
-  setCallBackgroundApplyOutgoing,
   setCallSpeakerDevice,
   setCallSpeakerVolume,
-} from '../domain/realtime/callMediaPreferences';
+} from '../domain/realtime/media/preferences';
+import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/media/audioCaptureConstraints';
 
 const router = useRouter();
 const route = useRoute();
+const applyBackgroundPreset = applyCallBackgroundPreset;
+const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);
@@ -757,6 +993,7 @@ const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const SETTINGS_THEME_COLORS_STORAGE_KEY = 'ii_videocall_v1_theme_colors';
+const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
 const themeColorFields = Object.freeze([
   { key: '--bg-shell', label: 'Shell background', default: '#0b1324' },
@@ -765,7 +1002,7 @@ const themeColorFields = Object.freeze([
   { key: '--bg-surface', label: 'Surface', default: '#003c93' },
   { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
   { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
-  { key: '--bg-action', label: 'Action', default: '#ffffff' },
+  { key: '--bg-action', label: 'Action', default: '#0b1324' },
   { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
   { key: '--bg-row', label: 'Row', default: '#2a569f' },
   { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },
@@ -780,7 +1017,7 @@ const themeColorFields = Object.freeze([
   { key: '--bg-tab', label: 'Tab', default: '#003c93' },
   { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
   { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
-  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#182c4d' },
+  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#3d5f98' },
   { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
   { key: '--bg-icon', label: 'Icon background', default: '#ffffff' },
   { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
@@ -817,6 +1054,8 @@ function mergeThemeColorMap(source) {
   for (const field of themeColorFields) {
     merged[field.key] = normalizeHexColor(payload[field.key], themeColorDefaultMap[field.key]);
   }
+  // Keep UI chrome on the approved palette color.
+  merged['--bg-ui-chrome'] = '#3d5f98';
   return merged;
 }
 
@@ -860,6 +1099,7 @@ const navItems = computed(() => {
   const items = [
     { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
     { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/kingrt/icons/user.png', roles: ['admin'] },
+    { to: '/admin/marketplace', label: 'Marketplace', icon: '/assets/orgas/kingrt/icons/add_to_call.png', roles: ['admin'] },
     { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
     { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
   ];
@@ -871,6 +1111,7 @@ const pageTitle = computed(() => {
   const mapping = {
     '/admin/overview': 'Video Operations',
     '/admin/users': 'User Management',
+    '/admin/marketplace': 'Marketplace',
     '/admin/calls': 'Video Call Management',
     '/user/dashboard': 'My Video Calls',
   };
@@ -884,7 +1125,7 @@ const pageSubtitle = computed(() => {
   return '';
 });
 const showWorkspaceHeader = computed(() => (
-  !['/admin/users', '/admin/calls'].includes(route.path)
+  !['/admin/users', '/admin/marketplace', '/admin/calls'].includes(route.path)
   && !isCallWorkspace.value
 ));
 
@@ -936,6 +1177,7 @@ const settingsDraft = reactive({
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
   language: 'en',
+  postLogoutLandingUrl: '',
   avatarDataUrl: '',
   themeColors: mergeThemeColorMap(persistedThemeColors),
 });
@@ -952,12 +1194,124 @@ const activeSettingsTile = ref('about-me');
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
   { id: 'credentials-email', label: 'Credentials + Email' },
+  { id: 'session', label: 'Session' },
   { id: 'regional', label: 'Regional' },
   { id: 'theme', label: 'Theme' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'apps', label: 'Apps' },
 ]));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
+const SETTINGS_THEME_PREVIEW_PAGE_SIZE = 4;
+const settingsThemePreviewCalls = Object.freeze([
+  {
+    id: '9fbe5c05-8440-4d2e-8a3c-9900ca346c55',
+    title: 'Platform Standup',
+    status: 'active',
+    window: '16 Apr 09:30 - 10:00',
+    scope: 'my',
+    participants: { total: 3, internal: 2, external: 1 },
+    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
+  },
+  {
+    id: '47632c72-ab39-49b6-ba58-05e3e6483fb8',
+    title: 'Quarterly Review',
+    status: 'scheduled',
+    window: '17 Apr 14:00 - 14:45',
+    scope: 'all',
+    participants: { total: 6, internal: 4, external: 2 },
+    owner: { displayName: 'Call Moderator', email: 'moderator@intelligent-intern.com' },
+  },
+  {
+    id: '8d2c1cd4-d5af-45d0-8f8f-7d4ef3044b29',
+    title: 'Customer Escalation',
+    status: 'ended',
+    window: '15 Apr 17:00 - 17:35',
+    scope: 'all',
+    participants: { total: 5, internal: 3, external: 2 },
+    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
+  },
+  {
+    id: '1ca5664f-2e32-4c63-9d85-2f6ca2418c11',
+    title: 'Partner Kickoff',
+    status: 'cancelled',
+    window: '18 Apr 11:00 - 11:30',
+    scope: 'my',
+    participants: { total: 2, internal: 1, external: 1 },
+    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
+  },
+  {
+    id: '3bd2717f-e8ba-4e76-88ed-bceb5b8f39db',
+    title: 'Hiring Sync',
+    status: 'scheduled',
+    window: '19 Apr 13:00 - 13:30',
+    scope: 'all',
+    participants: { total: 4, internal: 4, external: 0 },
+    owner: { displayName: 'People Ops', email: 'peopleops@intelligent-intern.com' },
+  },
+]);
+const settingsThemePreview = reactive({
+  viewMode: 'calls',
+  query: '',
+  status: 'all',
+  scope: 'all',
+  page: 1,
+});
+
+const settingsThemePreviewFilteredCalls = computed(() => {
+  const query = String(settingsThemePreview.query || '').trim().toLowerCase();
+  return settingsThemePreviewCalls.filter((call) => {
+    if (settingsThemePreview.status !== 'all' && call.status !== settingsThemePreview.status) {
+      return false;
+    }
+    if (settingsThemePreview.scope !== 'all' && call.scope !== settingsThemePreview.scope) {
+      return false;
+    }
+    if (query === '') {
+      return true;
+    }
+    return call.title.toLowerCase().includes(query);
+  });
+});
+
+const settingsThemePreviewPageCount = computed(() => {
+  return Math.max(1, Math.ceil(settingsThemePreviewFilteredCalls.value.length / SETTINGS_THEME_PREVIEW_PAGE_SIZE));
+});
+
+const settingsThemePreviewRows = computed(() => {
+  const currentPage = Math.max(1, Math.min(settingsThemePreview.page, settingsThemePreviewPageCount.value));
+  const start = (currentPage - 1) * SETTINGS_THEME_PREVIEW_PAGE_SIZE;
+  return settingsThemePreviewFilteredCalls.value.slice(start, start + SETTINGS_THEME_PREVIEW_PAGE_SIZE);
+});
+
+watch(
+  () => settingsThemePreviewFilteredCalls.value.length,
+  () => {
+    settingsThemePreview.page = Math.max(1, Math.min(settingsThemePreview.page, settingsThemePreviewPageCount.value));
+  }
+);
+
+function setSettingsThemePreviewViewMode(mode) {
+  const normalized = String(mode || '').trim().toLowerCase();
+  settingsThemePreview.viewMode = normalized === 'calendar' ? 'calendar' : 'calls';
+}
+
+function applySettingsThemePreviewFilters() {
+  settingsThemePreview.page = 1;
+}
+
+function goToSettingsThemePreviewPage(nextPage) {
+  const parsed = Number.parseInt(String(nextPage), 10);
+  if (!Number.isInteger(parsed)) return;
+  settingsThemePreview.page = Math.max(1, Math.min(parsed, settingsThemePreviewPageCount.value));
+}
+
+function settingsThemePreviewStatusTagClass(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (normalized === 'active') return 'ok';
+  if (normalized === 'scheduled') return 'warn';
+  if (normalized === 'cancelled') return 'danger';
+  return 'warn';
+}
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
@@ -979,6 +1333,13 @@ function storeSettingsLanguage(language) {
 function applySettingsLanguage(language) {
   if (typeof document === 'undefined') return;
   document.documentElement.lang = normalizeSettingsLanguage(language);
+}
+
+function normalizePostLogoutLandingUrl(value) {
+  const url = String(value || '').trim();
+  if (url === '') return '';
+  if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
+  return url;
 }
 
 function updateThemeColor(key, value) {
@@ -1070,11 +1431,6 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   return payload;
 }
 
-function isUuidLike(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(normalized);
-}
-
 function isoToLocalInput(isoValue) {
   if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
   const date = new Date(isoValue);
@@ -1106,10 +1462,18 @@ const callOwnerEditState = reactive({
   callId: '',
   title: '',
   accessMode: 'invite_only',
-  roomId: 'lobby',
   startsLocal: '',
   endsLocal: '',
   replaceParticipants: false,
+});
+
+const callOwnerInviteLinkState = reactive({
+  loading: false,
+  error: '',
+  url: '',
+  expiresAt: '',
+  copyNotice: '',
+  generatedForCallId: '',
 });
 
 const callOwnerParticipants = reactive({
@@ -1129,9 +1493,34 @@ const callOwnerExistingInternalUserIds = ref([]);
 const callOwnerExternalRows = ref([]);
 let callOwnerExternalRowId = 0;
 let callOwnerContextSeq = 0;
+const callLayoutSidebarState = reactive({
+  visible: false,
+  canModerate: false,
+  currentMode: 'main_mini',
+  currentStrategy: 'manual_pinned',
+  modeOptions: [],
+  strategyOptions: [],
+  setMode: null,
+  setStrategy: null,
+});
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
+const showCallOwnerInviteLink = computed(() => (
+  isCallWorkspace.value
+  && callOwnerEditState.visible
+  && normalizeCallAccessMode(callOwnerEditState.accessMode) === 'free_for_all'
+));
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
+
+function applySidebarLayoutMode(mode) {
+  if (typeof callLayoutSidebarState.setMode !== 'function') return;
+  callLayoutSidebarState.setMode(mode);
+}
+
+function applySidebarLayoutStrategy(strategy) {
+  if (typeof callLayoutSidebarState.setStrategy !== 'function') return;
+  callLayoutSidebarState.setStrategy(strategy);
+}
 
 function isNavItemActive(item) {
   if (item.to.startsWith('/workspace/call')) {
@@ -1232,51 +1621,6 @@ function handleNavItemClick() {
   }
 }
 
-function isBackgroundPresetActive(preset) {
-  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
-  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
-
-  if (preset === 'off') {
-    return mode !== 'blur' || !applyOutgoing;
-  }
-  if (preset === 'light') {
-    return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
-  }
-  if (preset === 'strong') {
-    return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
-  }
-  return false;
-}
-
-function applyBackgroundPreset(preset) {
-  if (preset !== 'light' && preset !== 'strong') {
-    setCallBackgroundFilterMode('off');
-    setCallBackgroundApplyOutgoing(false);
-    return;
-  }
-
-  if (isBackgroundPresetActive(preset)) {
-    setCallBackgroundFilterMode('off');
-    setCallBackgroundApplyOutgoing(false);
-    return;
-  }
-
-  setCallBackgroundFilterMode('blur');
-  setCallBackgroundApplyOutgoing(true);
-
-  if (preset === 'strong') {
-    setCallBackgroundBackdropMode('blur9');
-    setCallBackgroundQualityProfile('quality');
-    setCallBackgroundBlurStrength(4);
-    return;
-  }
-
-  setCallBackgroundBackdropMode('blur7');
-  setCallBackgroundQualityProfile('balanced');
-  setCallBackgroundBlurStrength(2);
-}
-
 function extractCallFromPayload(payload) {
   if (!payload || typeof payload !== 'object') return null;
   if (payload.call && typeof payload.call === 'object') {
@@ -1291,44 +1635,32 @@ function extractCallFromPayload(payload) {
   return null;
 }
 
-async function fetchCallById(callId) {
-  const normalizedCallId = String(callId || '').trim();
-  if (normalizedCallId === '') {
-    throw new Error('Missing call id.');
-  }
-  const payload = await apiRequest(`/api/calls/${encodeURIComponent(normalizedCallId)}`);
-  const call = extractCallFromPayload(payload);
-  if (!call || typeof call !== 'object') {
-    throw new Error('Call payload is invalid.');
-  }
-  return call;
-}
-
 async function resolveEditableCallFromRouteRef(callRef) {
   const normalized = String(callRef || '').trim();
   if (normalized === '') {
     throw new Error('Missing call reference.');
   }
 
-  if (isUuidLike(normalized)) {
-    try {
-      return await fetchCallById(normalized);
-    } catch (directError) {
-      const directStatus = Number(directError?.responseStatus || 0);
-      if (directStatus !== 404) {
-        throw directError;
-      }
-
-      const accessPayload = await apiRequest(`/api/call-access/${encodeURIComponent(normalized)}`);
-      const accessCall = extractCallFromPayload(accessPayload);
-      if (accessCall && typeof accessCall === 'object') {
-        return accessCall;
-      }
-      throw new Error('Call payload is invalid.');
+  const payload = await apiRequest(`/api/calls/resolve/${encodeURIComponent(normalized)}`);
+  const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+  const state = String(result.state || '').trim().toLowerCase();
+  if (state === 'resolved') {
+    const resolvedCall = extractCallFromPayload({ result });
+    if (resolvedCall && typeof resolvedCall === 'object') {
+      return resolvedCall;
     }
+    throw new Error('Call payload is invalid.');
   }
 
-  return fetchCallById(normalized);
+  const error = new Error('Call reference could not be resolved.');
+  if (state === 'expired') {
+    error.responseStatus = 410;
+  } else if (state === 'forbidden') {
+    error.responseStatus = 403;
+  } else {
+    error.responseStatus = 404;
+  }
+  throw error;
 }
 
 function nextCallOwnerExternalRow(seed = null) {
@@ -1355,12 +1687,101 @@ function resetCallOwnerParticipantsState() {
   callOwnerExternalRows.value = [];
 }
 
+function resetCallOwnerInviteLinkState() {
+  callOwnerInviteLinkState.loading = false;
+  callOwnerInviteLinkState.error = '';
+  callOwnerInviteLinkState.url = '';
+  callOwnerInviteLinkState.expiresAt = '';
+  callOwnerInviteLinkState.copyNotice = '';
+  callOwnerInviteLinkState.generatedForCallId = '';
+}
+
+function buildJoinUrlFromPath(joinPath) {
+  const normalizedPath = String(joinPath || '').trim();
+  if (normalizedPath === '') return '';
+  const path = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
+  return origin !== '' ? `${origin}${path}` : path;
+}
+
+async function generateCallOwnerInviteLink({ force = false } = {}) {
+  if (!showCallOwnerInviteLink.value) {
+    resetCallOwnerInviteLinkState();
+    return;
+  }
+
+  const callId = String(callOwnerEditState.callId || '').trim();
+  if (callId === '') {
+    resetCallOwnerInviteLinkState();
+    return;
+  }
+
+  if (!force && callOwnerInviteLinkState.generatedForCallId === callId && callOwnerInviteLinkState.url !== '') {
+    return;
+  }
+
+  callOwnerInviteLinkState.loading = true;
+  callOwnerInviteLinkState.error = '';
+  callOwnerInviteLinkState.copyNotice = '';
+
+  try {
+    const payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/access-link`, {
+      method: 'POST',
+      body: { link_kind: 'open' },
+    });
+    const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
+    const accessId = String(result?.access_link?.id || '').trim();
+    const joinPath = String(result?.join_path || (accessId !== '' ? `/join/${accessId}` : '')).trim();
+    const url = buildJoinUrlFromPath(joinPath);
+    if (url === '') {
+      throw new Error('Invite link payload is invalid.');
+    }
+
+    callOwnerInviteLinkState.url = url;
+    callOwnerInviteLinkState.expiresAt = typeof result?.access_link?.expires_at === 'string'
+      ? result.access_link.expires_at
+      : '';
+    callOwnerInviteLinkState.generatedForCallId = callId;
+  } catch (error) {
+    callOwnerInviteLinkState.url = '';
+    callOwnerInviteLinkState.expiresAt = '';
+    callOwnerInviteLinkState.generatedForCallId = '';
+    callOwnerInviteLinkState.error = error instanceof Error ? error.message : 'Could not create invite link.';
+  } finally {
+    callOwnerInviteLinkState.loading = false;
+  }
+}
+
+async function copyCallOwnerInviteLink() {
+  const url = String(callOwnerInviteLinkState.url || '').trim();
+  if (url === '') return;
+
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = url;
+      textarea.setAttribute('readonly', 'readonly');
+      textarea.style.position = 'fixed';
+      textarea.style.top = '-1000px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+    callOwnerInviteLinkState.copyNotice = 'Invite link copied.';
+  } catch {
+    callOwnerInviteLinkState.copyNotice = '';
+    callOwnerInviteLinkState.error = 'Could not copy invite link.';
+  }
+}
+
 function hydrateCallOwnerDraftFromCall(call) {
   const normalizedCall = call && typeof call === 'object' ? call : {};
 
   callOwnerEditState.callId = String(normalizedCall.id || '').trim();
   callOwnerEditState.title = String(normalizedCall.title || '').trim();
-  callOwnerEditState.roomId = String(normalizedCall.room_id || 'lobby').trim() || 'lobby';
   callOwnerEditState.accessMode = normalizeCallAccessMode(normalizedCall.access_mode);
   callOwnerEditState.startsLocal = isoToLocalInput(String(normalizedCall.starts_at || ''));
   callOwnerEditState.endsLocal = isoToLocalInput(String(normalizedCall.ends_at || ''));
@@ -1413,6 +1834,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.callId = '';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
+    resetCallOwnerInviteLinkState();
     return;
   }
 
@@ -1422,6 +1844,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.loadingContext = false;
     callOwnerEditState.contextError = '';
     callOwnerEditState.callId = '';
+    resetCallOwnerInviteLinkState();
     return;
   }
 
@@ -1438,10 +1861,12 @@ async function refreshCallOwnerContext() {
 
     if (isOwner) {
       hydrateCallOwnerDraftFromCall(call);
+      void generateCallOwnerInviteLink();
     } else {
       callOwnerEditState.callId = '';
       closeInCallEditModal();
       resetCallOwnerParticipantsState();
+      resetCallOwnerInviteLinkState();
     }
   } catch (error) {
     if (sequence !== callOwnerContextSeq) return;
@@ -1449,6 +1874,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.callId = '';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
+    resetCallOwnerInviteLinkState();
     const status = Number(error?.responseStatus || 0);
     if (status !== 404 && status !== 403 && status !== 410) {
       callOwnerEditState.contextError = error instanceof Error ? error.message : 'Could not load call settings.';
@@ -1653,7 +2079,6 @@ async function submitInCallEditModal() {
   }
 
   const payload = {
-    room_id: String(callOwnerEditState.roomId || '').trim() || 'lobby',
     title,
     access_mode: normalizeCallAccessMode(callOwnerEditState.accessMode),
     starts_at: startsAt,
@@ -1780,9 +2205,7 @@ async function startMicLevelMonitor() {
   if (!AudioContextCtor) return;
 
   const selectedMicId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  const audioConstraints = selectedMicId !== ''
-    ? { deviceId: { exact: selectedMicId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-    : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  const audioConstraints = buildOptionalCallAudioCaptureConstraints(true, selectedMicId);
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
@@ -1868,6 +2291,7 @@ provide('workspaceSidebarState', {
   isMobileViewport,
   isTabletSidebarOpen,
   showLeftSidebar,
+  callLayoutControls: callLayoutSidebarState,
 });
 
 watch([isMobileViewport, isMobileSidebarOpen], () => {
@@ -1916,6 +2340,21 @@ watch(
     void refreshCallOwnerContext();
   },
   { immediate: true }
+);
+
+watch(
+  () => [
+    showCallOwnerInviteLink.value,
+    String(callOwnerEditState.callId || '').trim(),
+    normalizeCallAccessMode(callOwnerEditState.accessMode),
+  ],
+  ([shouldShow]) => {
+    if (!shouldShow) {
+      resetCallOwnerInviteLinkState();
+      return;
+    }
+    void generateCallOwnerInviteLink();
+  }
 );
 
 watch(
@@ -1979,14 +2418,24 @@ function openGrafana() {
   window.open('https://grafana.example.local', '_blank', 'noopener,noreferrer');
 }
 
+function openUserCreateCall() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(USER_CALL_CREATE_EVENT));
+}
+
 function resetSettingsDraft() {
   settingsDraft.displayName = sessionState.displayName || '';
   settingsDraft.theme = sessionState.theme || 'dark';
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
   settingsDraft.language = readStoredSettingsLanguage();
+  settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
   patchThemeColorMap(settingsDraft.themeColors, persistedThemeColors);
+}
+
+function resetPostLogoutLandingUrl() {
+  settingsDraft.postLogoutLandingUrl = '';
 }
 
 function setAvatarStatus(message = '') {
@@ -2072,6 +2521,7 @@ async function saveSettings() {
   const timeFormat = normalizeTimeFormat(rawTimeFormat);
   const dateFormat = normalizeDateFormat(rawDateFormat);
   const language = normalizeSettingsLanguage(settingsDraft.language);
+  const postLogoutLandingUrl = normalizePostLogoutLandingUrl(settingsDraft.postLogoutLandingUrl);
 
   if (displayName === '') {
     settingsState.message = 'Display name is required.';
@@ -2095,6 +2545,11 @@ async function saveSettings() {
 
   if (!SUPPORTED_SETTINGS_LANGUAGES.includes(language)) {
     settingsState.message = 'Unsupported language selected.';
+    return;
+  }
+
+  if (postLogoutLandingUrl === null) {
+    settingsState.message = 'Logout landing page must be a same-origin path like /call-goodbye.';
     return;
   }
 
@@ -2122,6 +2577,7 @@ async function saveSettings() {
       time_format: timeFormat,
       date_format: dateFormat,
       avatar_path: avatarPath,
+      post_logout_landing_url: postLogoutLandingUrl,
     });
 
     if (!saveResult.ok) {
@@ -2147,7 +2603,7 @@ async function saveSettings() {
 }
 
 async function handleSignOut() {
-  await logoutSession();
-  router.replace('/login');
+  const logoutResult = await logoutSession();
+  router.replace(postLogoutRedirectTarget(logoutResult, '/login'));
 }
 </script>

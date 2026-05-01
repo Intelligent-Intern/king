@@ -17,6 +17,11 @@ descriptions=(
   "CMake install manifests must not be versioned (cmake_install.cmake)"
   "CMake compile database must not be versioned (compile_commands.json)"
   "Transient native build binaries must not be versioned"
+  "Quiche source/vendor trees must not be versioned"
+  "Cargo home/vendor caches must not be versioned"
+  "Cargo build target directories must not be versioned"
+  "Legacy Quiche runtime artifacts must not be versioned"
+  "Unclassified Cargo manifests/locks must not be versioned"
 )
 
 patterns=(
@@ -27,6 +32,11 @@ patterns=(
   '(^|/)cmake_install\.cmake$'
   '(^|/)compile_commands\.json$'
   '(^|/)(build|target|modules)/.*\.(o|obj|lo|la|a|so|dylib|dll|exe)$'
+  '(^|/)quiche(/|$)|(^|/)extension/quiche(/|$)'
+  '(^|/)\.cargo(/|$)|(^|/)cargo-(home|registry|git)(/|$)'
+  '(^|/)target/'
+  '(^|/)(libquiche\.(so|dylib|dll|a|la)|quiche-server(\.exe)?)$'
+  '(^|/)Cargo\.(toml|lock)$'
 )
 
 failed=0
@@ -37,6 +47,7 @@ for i in "${!descriptions[@]}"; do
   regex="${patterns[i]}"
 
   mapfile -t matches < <(printf '%s\n' "${tracked_files[@]}" | grep -E "${regex}" || true)
+
   if [[ "${#matches[@]}" -eq 0 ]]; then
     continue
   fi

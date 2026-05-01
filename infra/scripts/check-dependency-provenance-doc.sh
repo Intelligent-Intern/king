@@ -5,16 +5,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 TOOLCHAIN_LOCK="${SCRIPT_DIR}/toolchain.lock"
-QUICHE_LOCK="${SCRIPT_DIR}/quiche-bootstrap.lock"
-DOC_FILE="${ROOT_DIR}/DEPENDENCY_PROVENANCE.md"
+LSQUIC_CHECK="${SCRIPT_DIR}/check-lsquic-bootstrap.sh"
+DOC_FILE="${ROOT_DIR}/documentation/dependency-provenance.md"
 
 if [[ ! -f "${TOOLCHAIN_LOCK}" ]]; then
     echo "Missing toolchain lock file: ${TOOLCHAIN_LOCK}" >&2
     exit 1
 fi
 
-if [[ ! -f "${QUICHE_LOCK}" ]]; then
-    echo "Missing quiche bootstrap lock file: ${QUICHE_LOCK}" >&2
+if [[ ! -x "${LSQUIC_CHECK}" ]]; then
+    echo "Missing executable LSQUIC bootstrap checker: ${LSQUIC_CHECK}" >&2
     exit 1
 fi
 
@@ -25,8 +25,6 @@ fi
 
 # shellcheck source=/dev/null
 source "${TOOLCHAIN_LOCK}"
-# shellcheck source=/dev/null
-source "${QUICHE_LOCK}"
 
 require_literal() {
     local value="$1"
@@ -44,11 +42,30 @@ require_literal() {
     fi
 }
 
+require_active_http3_provenance_quiche_free() {
+    local active_section
+
+    active_section="$(awk '
+        /^## HTTP\/3 Replacement Stack Provenance Pins$/ { in_section = 1; next }
+        /^## / && in_section { exit }
+        in_section { print }
+    ' "${DOC_FILE}")"
+
+    if [[ -z "${active_section}" ]]; then
+        echo "Missing active HTTP/3 replacement provenance section." >&2
+        exit 1
+    fi
+
+    if grep -Eiq 'cloudflare/quiche|KING_QUICHE|(^|[^[:alnum:]])quiche([^[:alnum:]]|$)' <<<"${active_section}"; then
+        echo "Active HTTP/3 replacement provenance still names Quiche." >&2
+        exit 1
+    fi
+}
+
 require_literal "${KING_CANONICAL_PHP_VERSION:-}" "KING_CANONICAL_PHP_VERSION"
 require_literal "${KING_RUST_TOOLCHAIN_VERSION:-}" "KING_RUST_TOOLCHAIN_VERSION"
-require_literal "${KING_QUICHE_REPO_URL:-}" "KING_QUICHE_REPO_URL"
-require_literal "${KING_QUICHE_COMMIT:-}" "KING_QUICHE_COMMIT"
-require_literal "${KING_QUICHE_BORINGSSL_COMMIT:-}" "KING_QUICHE_BORINGSSL_COMMIT"
-require_literal "${KING_QUICHE_WIREFILTER_COMMIT:-}" "KING_QUICHE_WIREFILTER_COMMIT"
+require_active_http3_provenance_quiche_free
+
+"${LSQUIC_CHECK}"
 
 echo "Dependency provenance doc is in sync with lock files."

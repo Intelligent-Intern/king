@@ -1,0 +1,388 @@
+@media (max-width: 1440px) {
+  .shell {
+    --left-col: 250px;
+    --right-col: 310px;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1180px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .shell {
+    --left-col: 72px;
+    height: auto;
+    min-height: 100vh;
+    grid-template-columns: var(--left-col) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    position: relative;
+  }
+
+  .sidebar {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    z-index: auto;
+  }
+
+  .sidebar.sidebar-left.collapsed {
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+  }
+
+  .shell.left-collapsed {
+    --left-col: 72px;
+  }
+
+  .shell.tablet-mode .show-sidebar-inline.show-left-sidebar-overlay {
+    display: none;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .sidebar-content.left {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell.tablet-mode .sidebar-content {
+    margin: 0;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip {
+    justify-content: center;
+    padding: 0;
+    position: relative;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip::before {
+    content: '';
+    width: 50px;
+    height: 50px;
+    background-image: url('/assets/orgas/kingrt/icon.svg');
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip img[data-brand-logo] {
+    display: none;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip .sidebar-toggle-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: none;
+    transform: translate(-50%, -50%);
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip:hover::before {
+    display: none;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .brand-strip:hover .sidebar-toggle-btn {
+    display: grid;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav {
+    padding: 10px 8px;
+    justify-items: center;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav-link {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+    gap: 0;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav-link span {
+    display: none;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .logout-wrap,
+  .shell.tablet-mode:not(.tablet-left-open) .sidebar-profile,
+  .shell.tablet-mode:not(.tablet-left-open) .session-box {
+    display: none;
+  }
+
+  .shell.call-workspace-mode.tablet-mode:not(.tablet-left-open) .left-call-content {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell.call-workspace-mode.tablet-mode {
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .shell.call-workspace-mode.tablet-mode .sidebar-content.left.left-call-content {
+    margin: 0;
+    height: 100%;
+  }
+
+  .shell.call-workspace-mode.tablet-mode:not(.tablet-left-open) {
+    --left-col: 0px;
+  }
+
+  .shell.call-workspace-mode.tablet-mode:not(.tablet-left-open) .sidebar.sidebar-left {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(360px, 92vw);
+    z-index: 20;
+    visibility: hidden;
+    transform: translateX(-24px);
+    pointer-events: none;
+  }
+
+  .shell.call-workspace-mode.tablet-mode.tablet-left-open .sidebar.sidebar-left {
+    visibility: visible;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .shell.call-workspace-mode.tablet-mode .main {
+    grid-column: 1 / -1;
+    min-height: 0;
+    height: 100%;
+  }
+
+  .shell.call-workspace-mode.tablet-mode .workspace {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .shell.tablet-mode.tablet-left-open .sidebar.sidebar-left {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(360px, 92vw);
+    z-index: 20;
+  }
+
+  .shell.tablet-mode.tablet-left-open .brand-strip {
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+
+  .shell.tablet-mode.tablet-left-open .brand-strip img[data-brand-logo] {
+    width: auto;
+    max-height: 40px;
+    visibility: visible;
+  }
+
+  .shell.tablet-mode.tablet-left-open .brand-strip .sidebar-toggle-btn {
+    position: static;
+    display: grid;
+    transform: none;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-link {
+    width: auto;
+    padding: 0 12px;
+    justify-content: flex-start;
+    gap: 9px;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-link span {
+    display: inline;
+  }
+
+  .shell.tablet-mode.tablet-left-open .logout-wrap {
+    display: block;
+  }
+
+  .shell.tablet-mode.tablet-left-open .sidebar-profile {
+    display: grid;
+  }
+
+  .shell.tablet-mode.tablet-left-open .session-box {
+    display: block;
+  }
+
+  .main {
+    grid-column: 2;
+    grid-row: 1;
+    padding: 0;
+    min-height: 100vh;
+  }
+
+  .workspace {
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .footer {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-dialog {
+    --settings-dialog-padding: 10px;
+    width: calc(100vw - 16px);
+    height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
+    padding: var(--settings-dialog-padding);
+  }
+
+  .settings-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-row-single {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-field-action {
+    min-width: 0;
+  }
+
+  .settings-theme-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-theme-palette {
+    max-height: 44vh;
+  }
+
+  .settings-theme-preview-scale {
+    --preview-scale: 0.5;
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-theme-preview-scale {
+    --preview-scale: 0.42;
+  }
+
+  .settings-theme-color-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .settings-theme-color-inputs {
+    justify-content: flex-start;
+  }
+
+  .shell.mobile-mode {
+    --left-col: 0px;
+    grid-template-columns: 1fr;
+  }
+
+  .shell.mobile-mode .sidebar {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    z-index: 30;
+  }
+
+  .shell.call-workspace-mode.mobile-mode .sidebar {
+    z-index: 75;
+  }
+
+  .shell.mobile-mode .sidebar.sidebar-left {
+    left: 0;
+    right: 0;
+    visibility: visible;
+    transform: translateX(0);
+    pointer-events: auto;
+  }
+
+  .shell.mobile-mode .sidebar.sidebar-left.collapsed {
+    visibility: hidden;
+    transform: translateX(-24px);
+    pointer-events: none;
+  }
+
+  .shell.mobile-mode .show-sidebar-inline.show-left-sidebar-overlay {
+    display: none;
+  }
+
+  .shell.mobile-mode .sidebar-content {
+    margin: 0;
+    border-radius: 0;
+    height: 100%;
+  }
+
+  .shell.mobile-mode .sidebar-content.left {
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .shell.mobile-mode .brand-strip {
+    display: flex;
+    background: var(--brand-bg);
+  }
+
+  .shell.mobile-mode .main {
+    grid-column: 1;
+    padding: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .shell.mobile-mode .mobile-brand-strip {
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    background: var(--brand-bg);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 10px;
+  }
+
+  .shell.mobile-mode.mobile-left-open .mobile-brand-strip {
+    visibility: hidden;
+  }
+
+  .shell.mobile-mode.mobile-left-open {
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .shell.mobile-mode .mobile-brand-strip img {
+    max-height: 52px;
+  }
+
+  .shell.mobile-mode .mobile-menu-btn {
+    display: grid;
+    place-items: center;
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+  }
+
+  .shell.mobile-mode .workspace {
+    min-height: calc(100vh - 70px);
+    border-radius: 0;
+  }
+
+  .shell.call-workspace-mode.mobile-mode .workspace {
+    min-height: 100vh;
+  }
+
+  .shell.call-workspace-mode.mobile-mode .sidebar-content.left.left-call-content {
+    margin: 0;
+    height: 100%;
+  }
+}

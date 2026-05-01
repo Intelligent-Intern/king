@@ -1,9 +1,11 @@
 import { reactive } from 'vue';
-import { currentBackendOrigin, fetchBackend } from '../../support/backendFetch';
+import { fetchBackend } from '../../support/backendFetch';
 import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
+import { extractErrorMessage, normalizeNetworkErrorMessage } from './sessionErrors';
 
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
+const ACCOUNT_TYPES = new Set(['account', 'guest']);
 
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
@@ -19,15 +21,27 @@ function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
+function normalizeAccountType(value) {
+  const accountType = normalizeString(value).toLowerCase();
+  return ACCOUNT_TYPES.has(accountType) ? accountType : '';
+}
+
+function inferAccountType(user) {
+  const explicitType = normalizeAccountType(user?.account_type);
+  if (explicitType !== '') {
+    return explicitType;
   }
 
-  return fallback;
+  if (user?.is_guest === true) {
+    return 'guest';
+  }
+
+  const email = normalizeString(user?.email).toLowerCase();
+  if (email.startsWith('guest+') && email.endsWith('@videochat.local')) {
+    return 'guest';
+  }
+
+  return 'account';
 }
 
 function safeParse(raw) {
@@ -54,10 +68,13 @@ export const sessionState = reactive({
   displayName: '',
   email: '',
   userId: 0,
+  accountType: '',
+  isGuest: false,
   avatarPath: null,
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
   theme: 'dark',
+  postLogoutLandingUrl: '',
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -90,10 +107,13 @@ function resetUserFields() {
   sessionState.displayName = '';
   sessionState.email = '';
   sessionState.userId = 0;
+  sessionState.accountType = '';
+  sessionState.isGuest = false;
   sessionState.avatarPath = null;
   sessionState.timeFormat = '24h';
   sessionState.dateFormat = 'dmy_dot';
   sessionState.theme = 'dark';
+  sessionState.postLogoutLandingUrl = '';
   sessionState.status = '';
 }
 
@@ -117,13 +137,24 @@ function applyUserSnapshot(user) {
   sessionState.displayName = normalizeString(user.display_name);
   sessionState.email = normalizeString(user.email);
   sessionState.userId = Number.isInteger(user.id) ? user.id : 0;
+  sessionState.accountType = inferAccountType(user);
+  sessionState.isGuest = sessionState.accountType === 'guest';
   sessionState.avatarPath = typeof user.avatar_path === 'string' && normalizeString(user.avatar_path) !== ''
     ? normalizeString(user.avatar_path)
     : null;
   sessionState.timeFormat = normalizeTimeFormat(user.time_format);
   sessionState.dateFormat = normalizeDateFormat(user.date_format);
   sessionState.theme = normalizeTheme(user.theme);
+  sessionState.postLogoutLandingUrl = normalizePostLogoutLandingUrl(user.post_logout_landing_url);
   sessionState.status = normalizeString(user.status);
+}
+
+function normalizePostLogoutLandingUrl(value) {
+  const url = normalizeString(value);
+  if (url === '' || !url.startsWith('/') || url.startsWith('//') || url.includes('\\')) {
+    return '';
+  }
+  return url;
 }
 
 function applySessionEnvelope(session, user) {
@@ -149,8 +180,16 @@ export function isAuthenticated() {
   return !!sessionState.sessionToken && !!normalizeRole(sessionState.role);
 }
 
+export function isGuestSession() {
+  return isAuthenticated() && sessionState.accountType === 'guest';
+}
+
 export function defaultRouteForRole(role) {
   return role === 'admin' ? '/admin/overview' : '/user/dashboard';
+}
+
+export function callListRouteForRole(role) {
+  return role === 'admin' ? '/admin/calls' : '/user/dashboard';
 }
 
 function sessionHeaders() {
@@ -189,25 +228,18 @@ function normalizeAuthErrorState(reason, message, clearState = false) {
   sessionState.recovered = !sessionState.sessionToken;
 }
 
-function normalizeNetworkErrorMessage(error, fallback) {
-  const message = error instanceof Error ? error.message.trim() : '';
-  if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-    return `Could not reach backend (${currentBackendOrigin()}).`;
-  }
-  return message || fallback;
-}
-
 export async function loginWithPassword(email, password) {
   try {
     const { response } = await fetchBackend('/api/auth/login', {
-      method: 'GET',
-      query: {
-        email: normalizeString(email).toLowerCase(),
-        password: String(password || ''),
-      },
+      method: 'POST',
       headers: {
         accept: 'application/json',
+        'content-type': 'application/json',
       },
+      body: JSON.stringify({
+        email: normalizeString(email).toLowerCase(),
+        password: String(password || ''),
+      }),
     });
 
     const payload = await readJsonResponse(response);
@@ -374,7 +406,7 @@ export async function ensureSessionRecovery(force = false) {
 
     setRecoveryState('probing');
     try {
-      const { response } = await fetchBackend('/api/auth/session', {
+      const { response } = await fetchBackend('/api/auth/session-state', {
         method: 'GET',
         headers: sessionHeaders(),
       });
@@ -387,6 +419,19 @@ export async function ensureSessionRecovery(force = false) {
         return {
           ok: false,
           reason: 'invalid_session',
+          status: response.status,
+          message,
+        };
+      }
+
+      const sessionStateResult = String(payload?.result?.state || '').trim().toLowerCase();
+      if (sessionStateResult !== 'authenticated') {
+        const reason = String(payload?.result?.reason || 'invalid_session').trim().toLowerCase() || 'invalid_session';
+        const message = 'Session validation failed.';
+        normalizeAuthErrorState(reason, message, true);
+        return {
+          ok: false,
+          reason,
           status: response.status,
           message,
         };
@@ -676,12 +721,18 @@ export async function uploadSessionAvatar(dataUrl) {
 }
 
 export async function logoutSession() {
+  let postLogoutLandingUrl = normalizePostLogoutLandingUrl(sessionState.postLogoutLandingUrl);
   try {
     if (sessionState.sessionToken) {
-      await fetchBackend('/api/auth/logout', {
+      const { response } = await fetchBackend('/api/auth/logout', {
         method: 'POST',
         headers: sessionHeaders(),
       });
+      const payload = await readJsonResponse(response);
+      const backendLandingUrl = normalizePostLogoutLandingUrl(payload?.result?.post_logout_landing_url);
+      if (backendLandingUrl !== '') {
+        postLogoutLandingUrl = backendLandingUrl;
+      }
     }
   } catch {
     // Best-effort logout: local session must still be dropped fail-closed.
@@ -690,7 +741,12 @@ export async function logoutSession() {
     setRecoveryState('idle');
   }
 
-  return { ok: true };
+  return { ok: true, postLogoutLandingUrl };
+}
+
+export function postLogoutRedirectTarget(result = null, fallback = '/login') {
+  const target = normalizePostLogoutLandingUrl(result?.postLogoutLandingUrl || sessionState.postLogoutLandingUrl);
+  return target !== '' ? target : fallback;
 }
 
 export function clearSessionState() {

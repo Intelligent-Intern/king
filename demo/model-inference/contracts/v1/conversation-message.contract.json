@@ -1,0 +1,44 @@
+{
+  "contract_name": "king-model-inference-conversation-message",
+  "contract_version": "1.0.0",
+  "contract_scope": "Server-side persisted transcript for a chat session. Closes readiness tracker bullet V.8 (prompt/cache/checkpoint persistence). Consumed by GET /api/conversations/{session_id}/messages (#C-batch) and written by the inference HTTP + WS paths after each successful turn.",
+  "honesty_rules": [
+    "session_id is client-supplied and NOT authenticated; any caller with the string can read or delete the corresponding messages. Matches the honesty rule on inference-request.contract.json. A future leaf may bind session_id to an authenticated identity.",
+    "seq is per-session and monotonically increasing starting at 0. Gaps are not expected; a non-monotonic seq indicates a bug in the append path.",
+    "request_id is populated only on assistant-role rows (the row written alongside the streaming response). system/user rows carry null request_id.",
+    "content is stored verbatim from the validated inference-request envelope (for user/system turns) or from the concatenated streamed delta text (for assistant turns). No truncation is applied at persist time.",
+    "This store is SQLite-only at the current leaf. Object-store-backed durable replay is a future extension — V.8 is ticked by this leaf because prompt+completion persistence is the core requirement; checkpoint/cache durability beyond SQLite is a separate hardening axis.",
+    "When the client re-sends the full messages[] on every turn (the #T-1 chat UI does this), the append path skips the first N entries that are already persisted to avoid duplicates."
+  ],
+  "row_envelope": {
+    "message_id": {"type": "int", "required": true, "note": "AUTOINCREMENT primary key"},
+    "seq": {"type": "int", "min": 0, "required": true, "note": "per-session monotonic position"},
+    "role": {"type": "string", "enum": ["system", "user", "assistant"], "required": true},
+    "content": {"type": "string", "min_length": 1, "required": true},
+    "request_id": {"type": "string|null", "required": true, "note": "non-null only for assistant rows"},
+    "model_name": {"type": "string|null", "required": true},
+    "model_quantization": {"type": "string|null", "required": true},
+    "created_at": {"type": "rfc3339", "required": true}
+  },
+  "list_response_envelope": {
+    "status": "ok",
+    "session_id": "string",
+    "found": "bool",
+    "meta": {
+      "session_id": "string",
+      "created_at": "rfc3339",
+      "updated_at": "rfc3339",
+      "turn_count": "int",
+      "last_request_id": "string|null",
+      "last_model_name": "string|null",
+      "last_model_quantization": "string|null"
+    },
+    "messages": "array<row_envelope>",
+    "count": "int",
+    "time": "rfc3339"
+  },
+  "rejection_codes": {
+    "method_not_allowed": "non-GET on /messages, non-GET/DELETE on session meta",
+    "not_implemented": "collection-level /api/conversations or an unknown sub-route"
+  }
+}

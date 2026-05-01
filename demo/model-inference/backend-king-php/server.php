@@ -83,6 +83,22 @@ try {
     model_inference_document_schema_migrate($databasePdo);
     model_inference_chunk_schema_migrate($databasePdo);
     model_inference_vector_schema_migrate($databasePdo);
+    // #A-1 / #A-6: migrate auth schema + seed demo users.
+    require_once __DIR__ . '/domain/auth/auth_store.php';
+    model_inference_auth_schema_migrate($databasePdo);
+    // #A-4: migrate conversations.user_ref column.
+    require_once __DIR__ . '/domain/conversation/conversation_store.php';
+    model_inference_conversation_schema_migrate($databasePdo);
+    $seedResult = model_inference_auth_seed_demo_users($databasePdo);
+    if (($seedResult['seeded'] ?? 0) > 0 || ($seedResult['skipped'] ?? 0) > 0) {
+        $log(sprintf(
+            'auth: demo users seeded=%d skipped=%d preserved=%d source=%s',
+            (int) ($seedResult['seeded'] ?? 0),
+            (int) ($seedResult['skipped'] ?? 0),
+            (int) ($seedResult['preserved'] ?? 0),
+            (string) ($seedResult['source'] ?? '')
+        ));
+    }
     unset($databasePdo);
 } catch (Throwable $error) {
     $log('schema migration failed: ' . $error->getMessage());

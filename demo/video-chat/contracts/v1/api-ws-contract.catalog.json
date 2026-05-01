@@ -1,8 +1,20 @@
 {
-  "catalog_version": "v1.0.6-beta",
+  "catalog_version": "v1.0.7-beta",
   "catalog_name": "king-video-chat-api-ws",
   "api": {
     "runtime_health": {
+      "type": "object",
+      "required": {
+        "service": { "type": "string", "enum": ["video-chat-backend-king-php"] },
+        "status": { "type": "string", "enum": ["ok"] },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      },
+      "optional": {
+        "asset_version": { "type": "string", "pattern": "/^[A-Za-z0-9._-]{1,80}$/" }
+      },
+      "allow_additional": false
+    },
+    "runtime_admin_detail": {
       "type": "object",
       "required": {
         "service": { "type": "string", "enum": ["video-chat-backend-king-php"] },
@@ -68,6 +80,7 @@
           "required": {
             "list_endpoint": { "type": "string", "enum": ["/api/calls"] },
             "invite_code_create_endpoint": { "type": "string", "enum": ["/api/invite-codes"] },
+            "invite_code_copy_endpoint_template": { "type": "string", "enum": ["/api/invite-codes/{id}/copy"] },
             "invite_code_redeem_endpoint": { "type": "string", "enum": ["/api/invite-codes/redeem"] }
           }
         },
@@ -84,11 +97,13 @@
         "ws_path": { "type": "string", "pattern": "/^\\//" },
         "runtime_endpoint": { "type": "string", "enum": ["/api/runtime"] },
         "version_endpoint": { "type": "string", "enum": ["/api/version"] },
+        "admin_runtime_endpoint": { "type": "string", "enum": ["/api/admin/runtime"] },
         "calls_endpoint": { "type": "string", "enum": ["/api/calls"] },
         "call_create_endpoint": { "type": "string", "enum": ["/api/calls"] },
         "call_update_endpoint_template": { "type": "string", "enum": ["/api/calls/{id}"] },
         "call_cancel_endpoint_template": { "type": "string", "enum": ["/api/calls/{id}/cancel"] },
         "invite_code_create_endpoint": { "type": "string", "enum": ["/api/invite-codes"] },
+        "invite_code_copy_endpoint_template": { "type": "string", "enum": ["/api/invite-codes/{id}/copy"] },
         "invite_code_redeem_endpoint": { "type": "string", "enum": ["/api/invite-codes/redeem"] },
         "login_endpoint": { "type": "string", "enum": ["/api/auth/login"] },
         "session_endpoint": { "type": "string", "enum": ["/api/auth/session"] },
@@ -99,9 +114,49 @@
         "user_settings_endpoint": { "type": "string", "enum": ["/api/user/settings"] },
         "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
       }
+    },
+    "error_response": {
+      "type": "object",
+      "required": {
+        "status": { "type": "string", "enum": ["error"] },
+        "error": {
+          "type": "object",
+          "required": {
+            "code": { "type": "string", "min_length": 1 },
+            "message": { "type": "string", "min_length": 1 }
+          },
+          "optional": {
+            "details": { "type": "any" }
+          }
+        },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      }
     }
   },
   "ws": {
+    "system_error": {
+      "type": "object",
+      "required": {
+        "type": { "type": "string", "enum": ["system/error"] },
+        "status": { "type": "string", "enum": ["error"] },
+        "code": { "type": "string", "min_length": 1 },
+        "message": { "type": "string", "min_length": 1 },
+        "error": {
+          "type": "object",
+          "required": {
+            "code": { "type": "string", "min_length": 1 },
+            "message": { "type": "string", "min_length": 1 }
+          },
+          "optional": {
+            "details": { "type": "any" }
+          }
+        },
+        "time": { "type": "string", "pattern": "/^\\d{4}-\\d{2}-\\d{2}T/" }
+      },
+      "optional": {
+        "details": { "type": "any" }
+      }
+    },
     "room_snapshot": {
       "type": "object",
       "required": {
@@ -141,7 +196,22 @@
           "required": {
             "id": { "type": "string", "pattern": "/^chat_/" },
             "client_message_id": { "one_of": [{ "type": "string", "min_length": 1 }, { "type": "null" }] },
-            "text": { "type": "string", "min_length": 1 },
+            "text": { "type": "string", "min_length": 0 },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": {
+                  "id": { "type": "string", "min_length": 1 },
+                  "name": { "type": "string", "min_length": 1 },
+                  "content_type": { "type": "string", "min_length": 1 },
+                  "size_bytes": { "type": "int", "min": 1 },
+                  "kind": { "type": "string", "enum": ["image", "text", "pdf", "document"] },
+                  "extension": { "type": "string", "min_length": 1 },
+                  "download_url": { "type": "string", "pattern": "/^\\/api\\/calls\\//" }
+                }
+              }
+            },
             "sender": {
               "type": "object",
               "required": {
@@ -315,7 +385,7 @@
     "signaling_event": {
       "type": "object",
       "required": {
-        "type": { "type": "string", "enum": ["call/offer", "call/answer", "call/ice", "call/hangup"] },
+        "type": { "type": "string", "enum": ["call/offer", "call/answer", "call/ice", "call/hangup", "call/control-state", "call/media-quality-pressure", "call/moderation-state", "media-security/hello", "media-security/sender-key"] },
         "room_id": { "type": "string", "min_length": 1 },
         "target_user_id": { "type": "int", "min": 1 },
         "sender": {

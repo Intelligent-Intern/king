@@ -253,7 +253,7 @@ verify_archive() {
 
     verify_args=(./infra/scripts/verify-release-package.sh --archive "${archive_path}")
     if [[ "${allow_missing_provenance}" == "1" ]]; then
-        verify_args+=(--allow-missing-provenance)
+        verify_args+=(--allow-missing-provenance --allow-legacy-http3-metadata)
     fi
 
     (
@@ -277,9 +277,6 @@ run_package_fixture() {
     local log_path="$3"
 
     (
-        export KING_QUICHE_LIBRARY="${prefix}/runtime/libquiche.so"
-        export KING_QUICHE_SERVER="${prefix}/runtime/quiche-server"
-        export LD_LIBRARY_PATH="${prefix}/runtime${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
         export KING_PERSIST_OBJECT_STORE_ROOT="${OBJECT_STORE_ROOT}"
 
         "${PHP_BIN}" \

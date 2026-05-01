@@ -12,7 +12,7 @@
  *
  * Wire format (FrameData.data / inner payload):
  *   Bytes  0–3   magic   0x574C5643 ("WLVC")
- *   Byte   4     version = 1
+ *   Byte   4     version = 2
  *   Byte   5     frame_type: 0 = keyframe, 1 = delta
  *   Byte   6     quality (1–100)
  *   Byte   7     levels  (DWT depth, currently 4)
@@ -23,7 +23,13 @@
  *   Bytes 20–23  V encoded byte count (uint32 LE)
  *   Bytes 24–25  uvW (uint16 LE)
  *   Bytes 26–27  uvH (uint16 LE)
- *   [28+]        Y_data | U_data | V_data
+ *   Byte  28     wavelet_type (0=haar, 1=db4, 2=cdf97)
+ *   Byte  29     color_space (0=yuv, 1=rgb)
+ *   Byte  30     entropy_coding (0=rle, 1=arithmetic, 2=none)
+ *   Byte  31     flags: bit0=motion_estimation, bit1=blur_background,
+ *                bit2=chroma_temporal_residual
+ *   Byte  32     blur_radius (0=off; reserved for higher-level pipeline use)
+ *   [33+]        Y_data | U_data | V_data
  *
  * This format is byte-compatible with the TypeScript codec in codec.ts.
  */
@@ -40,8 +46,27 @@
 namespace wlvc {
 
 static const uint32_t kMagic        = 0x574C5643u;
-static const int      kHeaderBytes  = 28;
+static const int      kHeaderBytes  = 33;
 static const int      kDefaultLevels = 4;
+static const uint8_t  kFrameFlagMotionEstimation = 0x01;
+static const uint8_t  kFrameFlagChromaTemporalResidual = 0x04;
+
+enum WaveletType {
+    kHaar = 0,
+    kDB4 = 1,
+    kCDF97 = 2
+};
+
+enum ColorSpace {
+    kYUV = 0,
+    kRGB = 1
+};
+
+enum EntropyMode {
+    kRLE = 0,
+    kArithmetic = 1,
+    kNone = 2
+};
 
 // ---------------------------------------------------------------------------
 // Encoder
@@ -53,6 +78,10 @@ struct EncoderConfig {
     int quality          = 60;    // 1–100
     int key_frame_interval = 30;
     int levels           = kDefaultLevels;
+    WaveletType wavelet_type = kHaar;
+    ColorSpace color_space = kYUV;
+    EntropyMode entropy_coding = kRLE;
+    bool motion_estimation = true;
 };
 
 class Encoder {
@@ -82,8 +111,8 @@ private:
 
     // Planar channel buffers (allocated once)
     std::vector<float>   Y_, U_, V_;     // float DWT workspace
-    std::vector<float>   Ydelta_;        // temporal residual buffer
-    std::vector<float>   prevY_;         // previous luma for delta coding
+    std::vector<float>   Ydelta_, Udelta_, Vdelta_; // temporal residual buffers
+    std::vector<float>   prevY_, prevU_, prevV_;    // previous channels for delta coding
     std::vector<int16_t> Yq_, Uq_, Vq_; // quantised output
     std::vector<float>   tmp_;           // 1-D DWT scratch (max(w,h) floats)
     std::vector<uint8_t> rle_buf_;       // per-channel RLE workspace
@@ -100,6 +129,9 @@ struct DecoderConfig {
     int height  = 480;
     int quality = 60;
     int levels  = kDefaultLevels;
+    WaveletType wavelet_type = kHaar;
+    ColorSpace color_space = kYUV;
+    EntropyMode entropy_coding = kRLE;
 };
 
 class Decoder {
@@ -123,7 +155,7 @@ private:
     DecoderConfig cfg_;
 
     std::vector<float>   Y_, U_, V_;
-    std::vector<float>   prevY_;
+    std::vector<float>   prevY_, prevU_, prevV_;
     std::vector<int16_t> Yq_, Uq_, Vq_;
     std::vector<float>   tmp_;
 

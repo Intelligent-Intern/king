@@ -36,6 +36,16 @@ function wait(ms) {
   });
 }
 
+function buildBackendTimeoutError(timeoutMs) {
+  const timeoutValue = Math.max(1, Math.round(Number(timeoutMs) || 0));
+  const seconds = Number.isFinite(timeoutValue)
+    ? `${Math.round(timeoutValue / 100) / 10}s`
+    : 'the configured timeout';
+  const error = new Error(`Backend request timed out after ${seconds}.`);
+  error.name = 'TimeoutError';
+  return error;
+}
+
 let backendRequestQueue = Promise.resolve();
 
 async function performBackendFetch(path, options = {}) {
@@ -63,7 +73,7 @@ async function performBackendFetch(path, options = {}) {
       const endpoint = isAbsolute ? `${String(path || '').trim()}${querySuffix}` : `${origin}${path}${querySuffix}`;
       const controller = new AbortController();
       const timeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
-        ? setTimeout(() => controller.abort(), Number(timeoutMs))
+        ? setTimeout(() => controller.abort(buildBackendTimeoutError(timeoutMs)), Number(timeoutMs))
         : null;
 
       try {
@@ -83,6 +93,14 @@ async function performBackendFetch(path, options = {}) {
           endpoint,
         };
       } catch (error) {
+        if (
+          controller.signal.aborted
+          && controller.signal.reason instanceof Error
+          && error instanceof Error
+          && (error.name === 'AbortError' || /aborted/i.test(String(error.message || '')))
+        ) {
+          error = controller.signal.reason;
+        }
         if (!firstError) firstError = error;
         if (!retryOnNetworkError || !isNetworkError(error)) {
           throw error;

@@ -112,6 +112,14 @@ try {
             "chat.html must contain marker: {$marker}"
         );
     }
+    model_inference_ui_contract_assert(
+        str_contains($rawAsset, 'cryptoSource.randomUUID') && str_contains($rawAsset, 'cryptoSource.getRandomValues'),
+        'chat.html must generate client session ids with Web Crypto'
+    );
+    model_inference_ui_contract_assert(
+        !str_contains($rawAsset, 'Math.random('),
+        'chat.html must not use Math.random() for client session identifiers'
+    );
 
     // 7. Catalog-fixture sanity: /ui is listed with the expected shape.
     $catalog = json_decode((string) file_get_contents(__DIR__ . '/../../contracts/v1/api-ws-contract.catalog.json'), true);

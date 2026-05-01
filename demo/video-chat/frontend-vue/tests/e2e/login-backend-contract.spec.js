@@ -6,7 +6,7 @@ test('login uses backend contract and returns a session token', async ({ page })
   await expect(page.getByLabel('Password')).toBeVisible();
 
   const loginResponsePromise = page.waitForResponse((response) => {
-    return response.url().includes('/api/auth/login') && response.request().method() === 'GET';
+    return response.url().includes('/api/auth/login') && response.request().method() === 'POST';
   });
 
   await page.getByLabel('Email').fill('admin@intelligent-intern.com');
@@ -15,10 +15,14 @@ test('login uses backend contract and returns a session token', async ({ page })
 
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.status()).toBe(200);
-  expect(loginResponse.request().method()).toBe('GET');
-  expect((loginResponse.request().postData() ?? '').length).toBe(0);
-  expect(loginResponse.url()).toContain('/api/auth/login?');
-  expect(loginResponse.url()).toContain('email=admin%40intelligent-intern.com');
+  expect(loginResponse.request().method()).toBe('POST');
+  expect(loginResponse.url()).toMatch(/\/api\/auth\/login$/);
+
+  const requestBody = JSON.parse(loginResponse.request().postData() || '{}');
+  expect(requestBody).toEqual({
+    email: 'admin@intelligent-intern.com',
+    password: 'admin123',
+  });
 
   const payload = await loginResponse.json();
   expect(payload?.status).toBe('ok');

@@ -53,7 +53,7 @@ function king_http3_server_wire_start_server(
         $commandParts[] = escapeshellarg((string) $modeArg);
     }
 
-    $command = implode(' ', $commandParts);
+    $command = 'exec ' . implode(' ', $commandParts);
 
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
@@ -88,6 +88,26 @@ function king_http3_server_wire_start_server(
 
 function king_http3_server_wire_stop_server(array $server): array
 {
+    $status = proc_get_status($server['process']);
+    if (($status['running'] ?? false) === true) {
+        $deadline = microtime(true) + 2.0;
+        do {
+            usleep(50000);
+            $status = proc_get_status($server['process']);
+        } while (($status['running'] ?? false) === true && microtime(true) < $deadline);
+    }
+
+    if (($status['running'] ?? false) === true) {
+        proc_terminate($server['process']);
+        usleep(100000);
+        $status = proc_get_status($server['process']);
+    }
+
+    if (($status['running'] ?? false) === true) {
+        proc_terminate($server['process'], 9);
+        usleep(100000);
+    }
+
     $stdout = isset($server['pipes'][1]) ? stream_get_contents($server['pipes'][1]) : '';
     $stderr = isset($server['pipes'][2]) ? stream_get_contents($server['pipes'][2]) : '';
 

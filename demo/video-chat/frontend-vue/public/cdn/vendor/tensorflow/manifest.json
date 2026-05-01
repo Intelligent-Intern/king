@@ -1,0 +1,29 @@
+{
+  "vendor": "tensorflow",
+  "files": [
+    {
+      "path": "tfjs-core/tf-core.min.js",
+      "package": "@tensorflow/tfjs-core",
+      "version": "4.22.0",
+      "source": "npm:@tensorflow/tfjs-core@4.22.0/dist/tf-core.min.js"
+    },
+    {
+      "path": "tfjs-converter/tf-converter.min.js",
+      "package": "@tensorflow/tfjs-converter",
+      "version": "4.22.0",
+      "source": "npm:@tensorflow/tfjs-converter@4.22.0/dist/tf-converter.min.js"
+    },
+    {
+      "path": "tfjs-backend-webgl/tf-backend-webgl.min.js",
+      "package": "@tensorflow/tfjs-backend-webgl",
+      "version": "4.22.0",
+      "source": "npm:@tensorflow/tfjs-backend-webgl@4.22.0/dist/tf-backend-webgl.min.js"
+    },
+    {
+      "path": "body-segmentation/body-segmentation.min.js",
+      "package": "@tensorflow-models/body-segmentation",
+      "version": "1.0.2",
+      "source": "npm:@tensorflow-models/body-segmentation@1.0.2/dist/body-segmentation.min.js"
+    }
+  ]
+}

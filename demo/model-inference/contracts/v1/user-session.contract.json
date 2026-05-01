@@ -1,0 +1,26 @@
+{
+  "contract_name": "king-model-inference-user-session",
+  "contract_version": "1.0.0",
+  "contract_scope": "Row shape of a live /api/auth/login session and the user envelope the server emits across /api/auth/* + /api/conversations/* owner gates. Opaque bearer session ids (32-char hex) persisted in SQLite with TTL and revocation. Closes readiness tracker AB.2.",
+  "session": {
+    "id": {"type": "string", "length": 32, "pattern": "/^[a-f0-9]{32}$/", "note": "opaque bearer token"},
+    "user_id": {"type": "int", "min": 1},
+    "issued_at": {"type": "rfc3339"},
+    "expires_at": {"type": "rfc3339"},
+    "revoked_at": {"type": "rfc3339|null"},
+    "ttl_seconds": {"type": "int", "min": 60, "max": 2592000, "note": "server-clamped"}
+  },
+  "user": {
+    "id": {"type": "int", "min": 1},
+    "username": {"type": "string", "min_length": 2, "max_length": 64, "pattern": "/^[a-zA-Z0-9_.\\-]+$/"},
+    "display_name": {"type": "string", "min_length": 1, "max_length": 128},
+    "role": {"type": "string", "enum": ["user", "admin"]},
+    "status": {"type": "string", "enum": ["active", "disabled"]}
+  },
+  "honesty_rules": [
+    "password_hash is NEVER included in the user envelope the server emits. Auth responses strip it at serialization time.",
+    "revoked_at replaces expires_at for lookup purposes — a row with revoked_at NOT NULL fails validation regardless of expires_at.",
+    "A disabled user (status='disabled') fails session validation even on sessions issued while the user was active. Demo scope: re-enabling the user does NOT resurrect the prior sessions.",
+    "The user envelope is the same shape everywhere auth appears: /api/auth/login, /api/auth/whoami, conversation `meta.user_ref` rehydration (#A-4), WS handshake context (#A-5)."
+  ]
+}

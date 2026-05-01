@@ -2,14 +2,9 @@
 King HTTP/1, HTTP/2, and HTTP/3 one-shot listeners preserve on-wire request-response and session lifecycle contracts in one matrix
 --SKIPIF--
 <?php
-if (trim((string) shell_exec('command -v openssl')) === '') {
-    echo "skip openssl is required for the on-wire HTTP/3 fixture";
-}
-
-$library = getenv('KING_QUICHE_LIBRARY');
-if (!is_string($library) || $library === '' || !is_file($library)) {
-    echo "skip KING_QUICHE_LIBRARY must point at a prebuilt libquiche runtime";
-}
+require __DIR__ . '/http3_new_stack_skip.inc';
+king_http3_skipif_require_openssl();
+king_http3_skipif_require_lsquic_runtime();
 ?>
 --INI--
 king.security_allow_config_override=1
@@ -229,7 +224,7 @@ try {
             'http3 ' . $label . ' protocol drifted'
         );
         king_server_listener_646_assert(
-            ($response['transport_backend'] ?? null) === 'quiche_h3',
+            ($response['transport_backend'] ?? null) === 'lsquic_h3',
             'http3 ' . $label . ' transport backend drifted'
         );
         king_server_listener_646_assert(
@@ -280,7 +275,7 @@ try {
             'http3 ' . $label . ' server capability was not an int token'
         );
         king_server_listener_646_assert(
-            ($capture['request']['transport_backend_before'] ?? null) === 'server_http3_socket',
+            ($capture['request']['transport_backend_before'] ?? null) === 'server_http3_lsquic_socket',
             'http3 ' . $label . ' session transport backend drifted'
         );
         king_server_listener_646_assert(
@@ -296,7 +291,7 @@ try {
             'http3 ' . $label . ' post session state was not closed'
         );
         king_server_listener_646_assert(
-            ($capture['post_stats']['transport_backend'] ?? null) === 'server_http3_socket',
+            ($capture['post_stats']['transport_backend'] ?? null) === 'server_http3_lsquic_socket',
             'http3 ' . $label . ' post session transport backend drifted'
         );
     }

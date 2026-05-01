@@ -12,12 +12,22 @@ PHP_BIN="${PHP_BIN:-php}"
 DEFAULT_EXT="${REPO_ROOT}/extension/modules/king.so"
 KING_EXTENSION_PATH="${KING_EXTENSION_PATH:-${DEFAULT_EXT}}"
 SERVER_MODE_OVERRIDE="${VIDEOCHAT_KING_SERVER_MODE:-}"
-DEFAULT_WORKERS="${VIDEOCHAT_KING_WORKERS:-1}"
-HTTP_WORKERS="${VIDEOCHAT_KING_HTTP_WORKERS:-${DEFAULT_WORKERS}}"
-WS_WORKERS="${VIDEOCHAT_KING_WS_WORKERS:-${DEFAULT_WORKERS}}"
+DEFAULT_HTTP_WORKERS="${VIDEOCHAT_KING_DEFAULT_HTTP_WORKERS:-24}"
+DEFAULT_WS_WORKERS="${VIDEOCHAT_KING_DEFAULT_WS_WORKERS:-8}"
+HTTP_WORKERS="${VIDEOCHAT_KING_HTTP_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_HTTP_WORKERS}}}"
+WS_WORKERS="${VIDEOCHAT_KING_WS_WORKERS:-${VIDEOCHAT_KING_WORKERS:-${DEFAULT_WS_WORKERS}}}"
 
-php_args=()
+php_args=("-d" "king.security_allow_config_override=1")
 ext_source=""
+
+append_php_ini_if_set() {
+  local env_name="$1"
+  local ini_name="$2"
+  local value="${!env_name:-}"
+  if [[ -n "${value}" ]]; then
+    php_args+=("-d" "${ini_name}=${value}")
+  fi
+}
 
 if "${PHP_BIN}" -m | grep -Eiq '^king$'; then
   ext_source="php.ini"
@@ -30,6 +40,22 @@ else
   exit 1
 fi
 
+if [[ -n "${VIDEOCHAT_OTEL_EXPORTER_ENDPOINT:-}" && -z "${VIDEOCHAT_OTEL_ENABLE:-}" ]]; then
+  VIDEOCHAT_OTEL_ENABLE=1
+fi
+
+append_php_ini_if_set VIDEOCHAT_OTEL_ENABLE king.otel_enable
+append_php_ini_if_set VIDEOCHAT_OTEL_SERVICE_NAME king.otel_service_name
+append_php_ini_if_set VIDEOCHAT_OTEL_EXPORTER_ENDPOINT king.otel_exporter_endpoint
+append_php_ini_if_set VIDEOCHAT_OTEL_EXPORTER_PROTOCOL king.otel_exporter_protocol
+append_php_ini_if_set VIDEOCHAT_OTEL_EXPORTER_TIMEOUT_MS king.otel_exporter_timeout_ms
+append_php_ini_if_set VIDEOCHAT_OTEL_QUEUE_STATE_PATH king.otel_queue_state_path
+append_php_ini_if_set VIDEOCHAT_OTEL_BATCH_MAX_QUEUE_SIZE king.otel_batch_processor_max_queue_size
+append_php_ini_if_set VIDEOCHAT_OTEL_METRICS_ENABLE king.otel_metrics_enable
+append_php_ini_if_set VIDEOCHAT_OTEL_METRICS_EXPORT_INTERVAL_MS king.otel_metrics_export_interval_ms
+append_php_ini_if_set VIDEOCHAT_OTEL_LOGS_ENABLE king.otel_logs_enable
+append_php_ini_if_set VIDEOCHAT_OTEL_LOGS_EXPORTER_BATCH_SIZE king.otel_logs_exporter_batch_size
+
 # Fail fast when sqlite driver support is unavailable.
 if ! "${PHP_BIN}" "${php_args[@]}" -m | grep -Eiq '^pdo_sqlite$'; then
   echo "[video-chat][king-php-backend] Missing required PHP extension: pdo_sqlite." >&2
@@ -38,6 +64,9 @@ if ! "${PHP_BIN}" "${php_args[@]}" -m | grep -Eiq '^pdo_sqlite$'; then
 fi
 
 echo "[video-chat][king-php-backend] extension source: ${ext_source}"
+if [[ -n "${VIDEOCHAT_OTEL_EXPORTER_ENDPOINT:-}" ]]; then
+  echo "[video-chat][king-php-backend] otlp exporter endpoint: ${VIDEOCHAT_OTEL_EXPORTER_ENDPOINT}"
+fi
 echo "[video-chat][king-php-backend] starting http://$HOST:$PORT/"
 if [[ "$WS_PORT" == "$PORT" ]]; then
   echo "[video-chat][king-php-backend] websocket ws://$HOST:$PORT$WS_PATH (shared listener)"

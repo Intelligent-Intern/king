@@ -11,8 +11,12 @@ require_once __DIR__ . '/module_telemetry.php';
 require_once __DIR__ . '/module_embed.php';
 require_once __DIR__ . '/module_ingest.php';
 require_once __DIR__ . '/module_retrieve.php';
+require_once __DIR__ . '/module_discover.php';
+require_once __DIR__ . '/module_conversations.php';
+require_once __DIR__ . '/module_auth.php';
 require_once __DIR__ . '/module_routing.php';
 require_once __DIR__ . '/module_ui.php';
+require_once __DIR__ . '/../domain/auth/auth_middleware.php';
 
 /**
  * Deterministic module-registration order for the inference backend.
@@ -33,9 +37,12 @@ function model_inference_dispatch_route_module_order(): array
         'runtime',
         'profile',
         'registry',
+        'auth',
         'embed',
         'ingest',
         'retrieve',
+        'discover',
+        'conversations',
         'inference',
         'realtime',
         'telemetry',
@@ -64,7 +71,8 @@ function model_inference_dispatch_request(
     string $host,
     int $port,
     ?callable $getEmbeddingSession = null,
-    ?callable $getRagMetrics = null
+    ?callable $getRagMetrics = null,
+    ?callable $getDiscoveryMetrics = null
 ): array {
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
@@ -81,6 +89,22 @@ function model_inference_dispatch_request(
             'headers' => $corsHeaders,
             'body' => '',
         ];
+    }
+
+    // A-3: non-blocking auth middleware — hydrates $request['user'] +
+    // $request['auth_session'] when a valid Bearer token is present,
+    // otherwise leaves them null and lets the request proceed
+    // anonymously. Every downstream module can inspect $request['user']
+    // to decide whether to enforce ownership or continue anonymously.
+    try {
+        $__auth_pdo = $openDatabase();
+        $request = model_inference_auth_apply_middleware($__auth_pdo, $request);
+    } catch (Throwable $ignored) {
+        // auth failure must never block the request — fall through with
+        // user=null; every module already tolerates anonymous access
+        $request['user'] = $request['user'] ?? null;
+        $request['auth_session'] = $request['auth_session'] ?? null;
+        $request['auth_reason'] = 'middleware_error';
     }
 
     $runtimeResponse = model_inference_handle_runtime_routes(
@@ -117,6 +141,18 @@ function model_inference_dispatch_request(
     );
     if ($registryResponse !== null) {
         return $registryResponse;
+    }
+
+    $authResponse = model_inference_handle_auth_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase
+    );
+    if ($authResponse !== null) {
+        return $authResponse;
     }
 
     if ($getEmbeddingSession !== null) {
@@ -161,6 +197,32 @@ function model_inference_dispatch_request(
         return $retrieveResponse;
     }
 
+    $discoverResponse = model_inference_handle_discover_routes(
+        $path,
+        $method,
+        $request,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase,
+        $getEmbeddingSession,
+        $getDiscoveryMetrics
+    );
+    if ($discoverResponse !== null) {
+        return $discoverResponse;
+    }
+
+    $conversationsResponse = model_inference_handle_conversations_routes(
+        $path,
+        $method,
+        $jsonResponse,
+        $errorResponse,
+        $openDatabase,
+        $request
+    );
+    if ($conversationsResponse !== null) {
+        return $conversationsResponse;
+    }
+
     $inferenceResponse = model_inference_handle_inference_routes(
         $path,
         $method,
@@ -198,7 +260,8 @@ function model_inference_dispatch_request(
         $jsonResponse,
         $errorResponse,
         $getInferenceMetrics,
-        $getRagMetrics
+        $getRagMetrics,
+        $getDiscoveryMetrics
     );
     if ($telemetryResponse !== null) {
         return $telemetryResponse;

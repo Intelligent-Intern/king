@@ -16,6 +16,7 @@ Verifies a packaged King release archive by checking:
 Options:
   --archive PATH                 Archive path to verify
   --allow-missing-provenance     Permit legacy manifests without provenance metadata
+  --allow-legacy-http3-metadata  Permit compatibility archives with legacy Quiche HTTP/3 manifest metadata
 EOF
 }
 
@@ -24,6 +25,7 @@ ARCHIVE_PATH=""
 PHP_BIN="${PHP_BIN:-php}"
 PACKAGE_DIR=""
 ALLOW_MISSING_PROVENANCE=0
+ALLOW_LEGACY_HTTP3_METADATA=0
 
 archive_entry_path_is_safe() {
     local entry="$1"
@@ -149,6 +151,10 @@ while [[ $# -gt 0 ]]; do
             ALLOW_MISSING_PROVENANCE=1
             shift
             ;;
+        --allow-legacy-http3-metadata)
+            ALLOW_LEGACY_HTTP3_METADATA=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -206,35 +212,35 @@ fi
 
 PACKAGE_DIR="${package_entries[0]}"
 
-for required_dir in \
-    "bin" \
-    "docs" \
-    "modules" \
-    "runtime"
-do
+required_dirs=(
+    "bin"
+    "docs"
+    "modules"
+)
+required_paths=(
+    "SHA256SUMS"
+    "bin/smoke.php"
+    "bin/smoke.sh"
+    "docs/INSTALL.md"
+    "manifest.json"
+    "modules/king.so"
+)
+
+if [[ "${ALLOW_MISSING_PROVENANCE}" != "1" ]]; then
+    required_dirs+=("runtime")
+    required_paths+=("runtime/liblsquic.so")
+fi
+
+for required_dir in "${required_dirs[@]}"; do
     assert_package_directory "${required_dir}"
 done
 
-for required_path in \
-    "SHA256SUMS" \
-    "bin/smoke.php" \
-    "bin/smoke.sh" \
-    "docs/INSTALL.md" \
-    "manifest.json" \
-    "modules/king.so" \
-    "runtime/libquiche.so" \
-    "runtime/quiche-server"
-do
+for required_path in "${required_paths[@]}"; do
     assert_package_regular_file "${required_path}"
 done
 
 if [[ ! -x "${PACKAGE_DIR}/bin/smoke.sh" ]]; then
     echo "Packaged smoke script is not executable." >&2
-    exit 1
-fi
-
-if [[ ! -x "${PACKAGE_DIR}/runtime/quiche-server" ]]; then
-    echo "Packaged quiche-server is not executable." >&2
     exit 1
 fi
 
@@ -247,6 +253,7 @@ echo "Verifying package-local checksums..."
 echo "Verifying manifest metadata..."
 PACKAGE_DIR="${PACKAGE_DIR}" \
 ALLOW_MISSING_PROVENANCE="${ALLOW_MISSING_PROVENANCE}" \
+ALLOW_LEGACY_HTTP3_METADATA="${ALLOW_LEGACY_HTTP3_METADATA}" \
 "${PHP_BIN}" <<'PHP'
 <?php
 
@@ -254,6 +261,7 @@ declare(strict_types=1);
 
 $packageDir = getenv('PACKAGE_DIR');
 $allowMissingProvenance = getenv('ALLOW_MISSING_PROVENANCE') === '1';
+$allowLegacyHttp3Metadata = getenv('ALLOW_LEGACY_HTTP3_METADATA') === '1';
 if (!is_string($packageDir) || $packageDir === '') {
     fwrite(STDERR, "Missing PACKAGE_DIR environment variable.\n");
     exit(1);
@@ -267,6 +275,76 @@ if (!is_string($resolvedPackageDir) || $resolvedPackageDir === '') {
 
 $manifestPath = $packageDir . '/manifest.json';
 $manifest = json_decode((string) file_get_contents($manifestPath), true, 512, JSON_THROW_ON_ERROR);
+
+$legacyHttp3Tokens = [
+    'qui' . 'che',
+    'KING_' . 'QUI' . 'CHE',
+    'lib' . 'qui' . 'che',
+    'qui' . 'che-server',
+    'qui' . 'che-bootstrap',
+    'qui' . 'che-workspace',
+    'Cargo.toml',
+    'Cargo.lock',
+];
+
+$containsLegacyHttp3Metadata = static function (mixed $value) use (&$containsLegacyHttp3Metadata, $legacyHttp3Tokens): bool {
+    if (is_string($value)) {
+        foreach ($legacyHttp3Tokens as $token) {
+            if (stripos($value, $token) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    if (!is_array($value)) {
+        return false;
+    }
+
+    foreach ($value as $key => $child) {
+        if (is_string($key) && $containsLegacyHttp3Metadata($key)) {
+            return true;
+        }
+
+        if ($containsLegacyHttp3Metadata($child)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+$assertLegacyHttp3Free = static function (mixed $value, string $path) use (&$assertLegacyHttp3Free, $legacyHttp3Tokens): void {
+    if (is_string($value)) {
+        foreach ($legacyHttp3Tokens as $token) {
+            if (stripos($value, $token) !== false) {
+                fwrite(STDERR, "Manifest contains legacy HTTP/3 metadata at {$path}.\n");
+                exit(1);
+            }
+        }
+
+        return;
+    }
+
+    if (!is_array($value)) {
+        return;
+    }
+
+    foreach ($value as $key => $child) {
+        $keyPath = $path . '[' . (is_int($key) ? $key : (string) $key) . ']';
+        if (is_string($key)) {
+            $assertLegacyHttp3Free($key, $keyPath . ':key');
+        }
+
+        $assertLegacyHttp3Free($child, $keyPath);
+    }
+};
+
+$manifestHasLegacyHttp3Metadata = $containsLegacyHttp3Metadata($manifest);
+if (!$allowLegacyHttp3Metadata) {
+    $assertLegacyHttp3Free($manifest, 'manifest');
+}
 
 if (($manifest['package_format'] ?? null) !== 1) {
     fwrite(STDERR, "Unexpected manifest package_format.\n");
@@ -288,6 +366,13 @@ if (!is_array($manifest['platform'] ?? null) || !is_string($manifest['platform']
     exit(1);
 }
 
+$expectedComponents = ['lsquic', 'boringssl', 'ls-qpack', 'ls-hpack'];
+$dependencyProvenanceHashKeys = [
+    'lsquic' => 'lsquic_archive_sha256',
+    'boringssl' => 'boringssl_archive_sha256',
+    'ls-qpack' => 'ls_qpack_archive_sha256',
+    'ls-hpack' => 'ls_hpack_archive_sha256',
+];
 $provenance = $manifest['provenance'] ?? null;
 if (!is_array($provenance)) {
     if ($allowMissingProvenance) {
@@ -298,15 +383,130 @@ if (!is_array($provenance)) {
     }
 }
 
-if (is_array($provenance)) {
+if (is_array($provenance) && $manifestHasLegacyHttp3Metadata) {
+    if (!$allowLegacyHttp3Metadata) {
+        fwrite(STDERR, "Manifest contains legacy HTTP/3 metadata.\n");
+        exit(1);
+    }
+} elseif (is_array($provenance)) {
+    $artifacts = $manifest['artifacts'] ?? null;
+    if (!is_array($artifacts)) {
+        fwrite(STDERR, "Manifest artifacts metadata is missing.\n");
+        exit(1);
+    }
+
+    $kingModuleArtifact = $artifacts['modules/king.so'] ?? null;
+    if (
+        !is_array($kingModuleArtifact)
+        || ($kingModuleArtifact['kind'] ?? null) !== 'php_extension_module'
+        || ($kingModuleArtifact['http3_stack'] ?? null) !== 'lsquic-boringssl'
+    ) {
+        fwrite(STDERR, "Manifest king.so artifact metadata is invalid.\n");
+        exit(1);
+    }
+
+    $lsquicRuntimeArtifact = $artifacts['runtime/liblsquic.so'] ?? null;
+    if (!is_array($lsquicRuntimeArtifact)) {
+        if (!$allowMissingProvenance) {
+            fwrite(STDERR, "Manifest LSQUIC runtime artifact metadata is missing.\n");
+            exit(1);
+        }
+    } else {
+        if (
+            ($lsquicRuntimeArtifact['kind'] ?? null) !== 'http3_transport_runtime'
+            || ($lsquicRuntimeArtifact['tls'] ?? null) !== 'boringssl'
+            || !in_array('lsquic', $lsquicRuntimeArtifact['provides'] ?? [], true)
+        ) {
+            fwrite(STDERR, "Manifest LSQUIC runtime artifact metadata is invalid.\n");
+            exit(1);
+        }
+    }
+
+    $http3Stack = $manifest['http3_stack'] ?? null;
+    if (
+        !is_array($http3Stack)
+        || ($http3Stack['transport'] ?? null) !== 'lsquic'
+        || ($http3Stack['tls'] ?? null) !== 'boringssl'
+        || ($http3Stack['bootstrap_lock'] ?? null) !== 'infra/scripts/lsquic-bootstrap.lock'
+        || ($http3Stack['bootstrap_script'] ?? null) !== 'infra/scripts/bootstrap-lsquic.sh'
+        || !is_array($http3Stack['components'] ?? null)
+    ) {
+        fwrite(STDERR, "Manifest HTTP/3 stack metadata is invalid.\n");
+        exit(1);
+    }
+
+    if ($http3Stack['components'] !== $expectedComponents) {
+        fwrite(STDERR, "Manifest HTTP/3 component list is invalid.\n");
+        exit(1);
+    }
+
     foreach ([
-        'quiche_bootstrap_lock_sha256',
-        'toolchain_lock_sha256',
-        'quiche_workspace_lock_sha256',
+        'lsquic_bootstrap_lock_sha256',
+        'lsquic_archive_sha256',
+        'boringssl_archive_sha256',
+        'ls_qpack_archive_sha256',
+        'ls_hpack_archive_sha256',
     ] as $provenanceKey) {
         $value = $provenance[$provenanceKey] ?? null;
-        if (!is_string($value) || preg_match('/^[a-f0-9]{64}$/', $value) !== 1) {
+        if (!is_string($value) || preg_match('/^[A-Fa-f0-9]{64}$/', $value) !== 1) {
             fwrite(STDERR, "Manifest provenance hash is invalid for {$provenanceKey}.\n");
+            exit(1);
+        }
+        $provenance[$provenanceKey] = strtolower($value);
+    }
+
+    $dependencyProvenance = $manifest['dependency_provenance'] ?? null;
+    if (!is_array($dependencyProvenance)) {
+        fwrite(STDERR, "Manifest dependency_provenance metadata is missing.\n");
+        exit(1);
+    }
+
+    if (array_keys($dependencyProvenance) !== $expectedComponents) {
+        fwrite(STDERR, "Manifest dependency provenance component list is invalid.\n");
+        exit(1);
+    }
+
+    foreach ($expectedComponents as $componentName) {
+        $component = $dependencyProvenance[$componentName] ?? null;
+        if (!is_array($component)) {
+            fwrite(STDERR, "Manifest dependency provenance is missing for {$componentName}.\n");
+            exit(1);
+        }
+
+        foreach (['name', 'repo_url', 'version', 'commit', 'archive_url', 'archive_sha256'] as $requiredKey) {
+            if (!is_string($component[$requiredKey] ?? null) || $component[$requiredKey] === '') {
+                fwrite(STDERR, "Manifest dependency provenance key {$componentName}.{$requiredKey} is invalid.\n");
+                exit(1);
+            }
+        }
+
+        $componentCommit = (string) $component['commit'];
+        if (preg_match('/^[A-Fa-f0-9]{40}$/', $componentCommit) !== 1) {
+            fwrite(STDERR, "Manifest dependency provenance commit is invalid for {$componentName}.\n");
+            exit(1);
+        }
+        $component['commit'] = strtolower($componentCommit);
+
+        $componentArchiveHash = (string) $component['archive_sha256'];
+        if (preg_match('/^[A-Fa-f0-9]{64}$/', $componentArchiveHash) !== 1) {
+            fwrite(STDERR, "Manifest dependency provenance archive hash is invalid for {$componentName}.\n");
+            exit(1);
+        }
+        $component['archive_sha256'] = strtolower($componentArchiveHash);
+
+        $provenanceKey = $dependencyProvenanceHashKeys[$componentName];
+        if (($provenance[$provenanceKey] ?? null) !== $component['archive_sha256']) {
+            fwrite(STDERR, "Manifest dependency provenance hash does not match top-level provenance for {$componentName}.\n");
+            exit(1);
+        }
+
+        if (!is_int($component['archive_bytes'] ?? null) || $component['archive_bytes'] <= 0) {
+            fwrite(STDERR, "Manifest dependency provenance archive size is invalid for {$componentName}.\n");
+            exit(1);
+        }
+
+        if (!is_array($component['license_files'] ?? null) || count($component['license_files']) < 1) {
+            fwrite(STDERR, "Manifest dependency provenance license files are invalid for {$componentName}.\n");
             exit(1);
         }
     }

@@ -26,6 +26,25 @@ PHP_FUNCTION(king_proto_encode)
     RETURN_STR(encoded.s);
 }
 
+PHP_FUNCTION(king_proto_encode_batch)
+{
+    zend_string *schema_name;
+    zval *records;
+    zval encoded_records;
+
+    ZEND_PARSE_PARAMETERS_START(2, 2)
+        Z_PARAM_STR(schema_name)
+        Z_PARAM_ARRAY(records)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_UNDEF(&encoded_records);
+    if (king_iibin_encode_batch(schema_name, records, &encoded_records) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    RETURN_ZVAL(&encoded_records, 0, 1);
+}
+
 PHP_FUNCTION(king_proto_decode)
 {
     zend_string *schema_name;
@@ -51,4 +70,31 @@ PHP_FUNCTION(king_proto_decode)
     }
 
     RETURN_ZVAL(&decoded_result, 0, 1);
+}
+
+PHP_FUNCTION(king_proto_decode_batch)
+{
+    zend_string *schema_name;
+    zval *binary_records;
+    zval *decode_as_object = NULL;
+    zval decoded_records;
+
+    ZEND_PARSE_PARAMETERS_START(2, 3)
+        Z_PARAM_STR(schema_name)
+        Z_PARAM_ARRAY(binary_records)
+        Z_PARAM_OPTIONAL
+        Z_PARAM_ZVAL(decode_as_object)
+    ZEND_PARSE_PARAMETERS_END();
+
+    ZVAL_UNDEF(&decoded_records);
+    if (king_iibin_decode_batch(
+            schema_name,
+            binary_records,
+            decode_as_object,
+            &decoded_records
+        ) != SUCCESS) {
+        RETURN_THROWS();
+    }
+
+    RETURN_ZVAL(&decoded_records, 0, 1);
 }

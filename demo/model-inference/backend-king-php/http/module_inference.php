@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/inference/inference_request.php';
 require_once __DIR__ . '/../domain/inference/inference_session.php';
 require_once __DIR__ . '/../domain/inference/transcript_store.php';
+require_once __DIR__ . '/../domain/conversation/conversation_store.php';
 require_once __DIR__ . '/../domain/registry/model_registry.php';
 require_once __DIR__ . '/../domain/registry/model_fit_selector.php';
 require_once __DIR__ . '/../domain/profile/hardware_profile.php';
@@ -157,6 +158,28 @@ function model_inference_handle_inference_routes(
         $requestId,
         model_inference_transcript_from_http($responseEnvelope, $validated)
     );
+
+    // C-batch (#V.8): persist the turn so GET /api/conversations/{id}/messages
+    // can replay it on page reload. Best-effort — never fail the reply.
+    // A-4: when the request is authenticated, bind the conversation to
+    // the user via user_ref.
+    try {
+        $assistantText = (string) ($responseEnvelope['completion']['text'] ?? '');
+        if ($assistantText !== '') {
+            $pdo = $openDatabase();
+            model_inference_conversation_schema_migrate($pdo);
+            $userRef = null;
+            $authUser = $request['user'] ?? null;
+            if (is_array($authUser) && isset($authUser['id'])) {
+                $userRef = (int) $authUser['id'];
+            }
+            model_inference_conversation_append_turn(
+                $pdo, $validated, $assistantText, $requestId, $entry, $userRef
+            );
+        }
+    } catch (Throwable $ignored) {
+        // persistence failure must not corrupt the HTTP response
+    }
 
     return $jsonResponse(200, $responseEnvelope);
 }
