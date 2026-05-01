@@ -253,7 +253,7 @@ verify_archive() {
 
     verify_args=(./infra/scripts/verify-release-package.sh --archive "${archive_path}")
     if [[ "${allow_missing_provenance}" == "1" ]]; then
-        verify_args+=(--allow-missing-provenance)
+        verify_args+=(--allow-missing-provenance --allow-legacy-http3-metadata)
     fi
 
     (

@@ -16,6 +16,7 @@ Verifies a packaged King release archive by checking:
 Options:
   --archive PATH                 Archive path to verify
   --allow-missing-provenance     Permit legacy manifests without provenance metadata
+  --allow-legacy-http3-metadata  Permit compatibility archives with legacy Quiche HTTP/3 manifest metadata
 EOF
 }
 
@@ -24,6 +25,7 @@ ARCHIVE_PATH=""
 PHP_BIN="${PHP_BIN:-php}"
 PACKAGE_DIR=""
 ALLOW_MISSING_PROVENANCE=0
+ALLOW_LEGACY_HTTP3_METADATA=0
 
 archive_entry_path_is_safe() {
     local entry="$1"
@@ -149,6 +151,10 @@ while [[ $# -gt 0 ]]; do
             ALLOW_MISSING_PROVENANCE=1
             shift
             ;;
+        --allow-legacy-http3-metadata)
+            ALLOW_LEGACY_HTTP3_METADATA=1
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -247,6 +253,7 @@ echo "Verifying package-local checksums..."
 echo "Verifying manifest metadata..."
 PACKAGE_DIR="${PACKAGE_DIR}" \
 ALLOW_MISSING_PROVENANCE="${ALLOW_MISSING_PROVENANCE}" \
+ALLOW_LEGACY_HTTP3_METADATA="${ALLOW_LEGACY_HTTP3_METADATA}" \
 "${PHP_BIN}" <<'PHP'
 <?php
 
@@ -254,6 +261,7 @@ declare(strict_types=1);
 
 $packageDir = getenv('PACKAGE_DIR');
 $allowMissingProvenance = getenv('ALLOW_MISSING_PROVENANCE') === '1';
+$allowLegacyHttp3Metadata = getenv('ALLOW_LEGACY_HTTP3_METADATA') === '1';
 if (!is_string($packageDir) || $packageDir === '') {
     fwrite(STDERR, "Missing PACKAGE_DIR environment variable.\n");
     exit(1);
@@ -278,6 +286,34 @@ $legacyHttp3Tokens = [
     'Cargo.toml',
     'Cargo.lock',
 ];
+
+$containsLegacyHttp3Metadata = static function (mixed $value) use (&$containsLegacyHttp3Metadata, $legacyHttp3Tokens): bool {
+    if (is_string($value)) {
+        foreach ($legacyHttp3Tokens as $token) {
+            if (stripos($value, $token) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    if (!is_array($value)) {
+        return false;
+    }
+
+    foreach ($value as $key => $child) {
+        if (is_string($key) && $containsLegacyHttp3Metadata($key)) {
+            return true;
+        }
+
+        if ($containsLegacyHttp3Metadata($child)) {
+            return true;
+        }
+    }
+
+    return false;
+};
 
 $assertLegacyHttp3Free = static function (mixed $value, string $path) use (&$assertLegacyHttp3Free, $legacyHttp3Tokens): void {
     if (is_string($value)) {
@@ -305,7 +341,10 @@ $assertLegacyHttp3Free = static function (mixed $value, string $path) use (&$ass
     }
 };
 
-$assertLegacyHttp3Free($manifest, 'manifest');
+$manifestHasLegacyHttp3Metadata = $containsLegacyHttp3Metadata($manifest);
+if (!$allowLegacyHttp3Metadata) {
+    $assertLegacyHttp3Free($manifest, 'manifest');
+}
 
 if (($manifest['package_format'] ?? null) !== 1) {
     fwrite(STDERR, "Unexpected manifest package_format.\n");
@@ -344,7 +383,12 @@ if (!is_array($provenance)) {
     }
 }
 
-if (is_array($provenance)) {
+if (is_array($provenance) && $manifestHasLegacyHttp3Metadata) {
+    if (!$allowLegacyHttp3Metadata) {
+        fwrite(STDERR, "Manifest contains legacy HTTP/3 metadata.\n");
+        exit(1);
+    }
+} elseif (is_array($provenance)) {
     $artifacts = $manifest['artifacts'] ?? null;
     if (!is_array($artifacts)) {
         fwrite(STDERR, "Manifest artifacts metadata is missing.\n");
