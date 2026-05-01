@@ -123,7 +123,7 @@ async function handleReadback(payload = {}) {
   let drawImageMs;
   let readbackMs;
   let imageData;
-  let frameSize;
+  let frameSize = null;
   try {
     frameSize = resolveWorkerFrameSize(source, payload);
     const context = ensureCaptureCanvas(frameSize.frameWidth, frameSize.frameHeight);

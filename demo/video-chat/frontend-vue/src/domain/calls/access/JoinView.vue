@@ -218,6 +218,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
+import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import {
   applyCallBackgroundPreset as applyBackgroundPreset,
   attachCallMediaDeviceWatcher,
@@ -272,7 +273,11 @@ const {
   playSpeakerTestSound,
   startPreview,
   stopPreview,
-} = createJoinAccessPreviewController({ previewVideoRef, state });
+} = createJoinAccessPreviewController({
+  previewVideoRef,
+  state,
+  buildOptionalCallAudioCaptureConstraints,
+});
 
 function normalizeAccessId(value) {
   return String(value || '').trim().toLowerCase();

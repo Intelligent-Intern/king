@@ -32,9 +32,9 @@ export const SFU_WLVC_FRAME_HEIGHT = 720;
 export const SFU_WLVC_FRAME_QUALITY = 43;
 export const SFU_WLVC_KEYFRAME_INTERVAL = 8;
 export const SFU_WLVC_ENCODE_INTERVAL_MS = 92;
-export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 4 * 1024 * 1024;
-export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 1024 * 1024;
-export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 10 * 1024 * 1024;
+export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES = 2 * 1024 * 1024;
+export const SFU_WLVC_SEND_BUFFER_LOW_WATER_BYTES = 512 * 1024;
+export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES = 6 * 1024 * 1024;
 export const SFU_WLVC_BACKPRESSURE_MIN_PAUSE_MS = 350;
 export const SFU_WLVC_BACKPRESSURE_MAX_PAUSE_MS = 2500;
 export const SFU_WLVC_BACKPRESSURE_HARD_RESET_AFTER_MS = 30_000;
@@ -43,12 +43,12 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   rescue: Object.freeze({
     maxEncodedBytesPerFrame: 2048 * 1024,
     maxKeyframeBytesPerFrame: 2560 * 1024,
-    maxWireBytesPerSecond: 3200 * 1024,
+    maxWireBytesPerSecond: 2200 * 1024,
     maxEncodeMs: 78,
     maxDrawImageMs: 24,
     maxReadbackMs: 40,
     maxQueueAgeMs: 260,
-    maxBufferedBytes: 3 * 1024 * 1024,
+    maxBufferedBytes: 2 * 1024 * 1024,
     payloadSoftLimitRatio: 0.94,
     minKeyframeRetryMs: 1400,
     expectedRecovery: 'hold_rescue_until_socket_low_water',
@@ -56,12 +56,12 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   realtime: Object.freeze({
     maxEncodedBytesPerFrame: 3072 * 1024,
     maxKeyframeBytesPerFrame: 3840 * 1024,
-    maxWireBytesPerSecond: 4600 * 1024,
+    maxWireBytesPerSecond: 3000 * 1024,
     maxEncodeMs: 92,
     maxDrawImageMs: 28,
     maxReadbackMs: 40,
     maxQueueAgeMs: 300,
-    maxBufferedBytes: 4 * 1024 * 1024,
+    maxBufferedBytes: 2560 * 1024,
     payloadSoftLimitRatio: 0.93,
     minKeyframeRetryMs: 1100,
     expectedRecovery: 'downshift_to_rescue_before_critical_buffer',
@@ -69,12 +69,12 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   balanced: Object.freeze({
     maxEncodedBytesPerFrame: 4608 * 1024,
     maxKeyframeBytesPerFrame: 5632 * 1024,
-    maxWireBytesPerSecond: 6500 * 1024,
+    maxWireBytesPerSecond: 4200 * 1024,
     maxEncodeMs: 120,
     maxDrawImageMs: 36,
     maxReadbackMs: 52,
     maxQueueAgeMs: 360,
-    maxBufferedBytes: 6500 * 1024,
+    maxBufferedBytes: 3 * 1024 * 1024,
     payloadSoftLimitRatio: 0.91,
     minKeyframeRetryMs: 900,
     expectedRecovery: 'downshift_to_realtime_before_critical_buffer',
@@ -82,12 +82,12 @@ export const SFU_VIDEO_QUALITY_PROFILE_BUDGETS = Object.freeze({
   quality: Object.freeze({
     maxEncodedBytesPerFrame: 5632 * 1024,
     maxKeyframeBytesPerFrame: 6656 * 1024,
-    maxWireBytesPerSecond: 8400 * 1024,
+    maxWireBytesPerSecond: 5200 * 1024,
     maxEncodeMs: 150,
     maxDrawImageMs: 42,
     maxReadbackMs: 64,
     maxQueueAgeMs: 420,
-    maxBufferedBytes: 8 * 1024 * 1024,
+    maxBufferedBytes: 4 * 1024 * 1024,
     payloadSoftLimitRatio: 0.9,
     minKeyframeRetryMs: 800,
     expectedRecovery: 'downshift_to_balanced_before_critical_buffer',

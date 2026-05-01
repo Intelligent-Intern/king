@@ -106,9 +106,9 @@ async function main() {
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES', 'motion payload keyframe cap');
   requireContains(runtimeConfig, 'SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS', 'motion payload cadence throttle window');
   requireContains(runtimeConfig, 'SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD', 'motion payload repeated-pressure downshift threshold');
-  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS = 1000;', 'one second send-pressure downgrade window');
-  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD = 2;', 'two skipped frames trigger quality downgrade');
-  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 2;', 'two send failures trigger quality downgrade');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS = 750;', 'sub-second send-pressure downgrade window');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD = 1;', 'first skipped frame triggers quality downgrade');
+  requireContains(runtimeConfig, 'export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 1;', 'first send failure triggers quality downgrade');
   requireContains(publisherPipeline, 'handleWlvcFramePayloadPressure(encodedPayloadBytes', 'publisher drops oversized frames before send');
   requireContains(publisherPipeline, 'encodedPayloadBytes > maxEncodedPayloadBytes', 'publisher compares encoded WLVC payload with cap');
   requireContains(sfuPublisherControl, 'sfu_high_motion_payload_pressure', 'publisher controller high-motion pressure reason');

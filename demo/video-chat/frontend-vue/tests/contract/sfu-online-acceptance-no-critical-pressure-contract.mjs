@@ -49,8 +49,8 @@ try {
   requireContains(pressureGate, "request:client-diagnostics", 'online gate records backend client diagnostics POST bodies');
   requireContains(pressureGate, '/api\\/user\\/client-diagnostics', 'online gate watches backend diagnostics submissions');
   requireContains(pressureGate, 'remote video frozen', 'online gate blocks remote freeze diagnostics');
-  requireContains(pressureGate, 'CRITICAL_BUFFERED_BYTES = 10 * 1024 * 1024', 'online gate has a critical bufferedAmount ceiling');
-  requireContains(pressureGate, 'MAX_ACCEPTED_BUFFERED_BYTES = 8 * 1024 * 1024', 'online gate enforces the quality profile buffer budget');
+  requireContains(pressureGate, 'CRITICAL_BUFFERED_BYTES = 6 * 1024 * 1024', 'online gate has a critical bufferedAmount ceiling');
+  requireContains(pressureGate, 'MAX_ACCEPTED_BUFFERED_BYTES = 4 * 1024 * 1024', 'online gate enforces the quality profile buffer budget');
   requireContains(pressureGate, 'socketFailureCount', 'online gate fails on SFU socket close/error during media flow');
   requireContains(pressureGate, 'luma > 8', 'online gate fails black remote video');
   requireContains(harness, 'highMotionVideo = false', 'media shim keeps high-motion opt-in');
