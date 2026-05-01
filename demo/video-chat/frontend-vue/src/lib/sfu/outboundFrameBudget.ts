@@ -1,4 +1,6 @@
 const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024
+const SFU_FRAME_CHUNK_BACKPRESSURE_PROFILE_DRAIN_RATIO = 0.25
+const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_DRAIN_TARGET_BYTES = 512 * 1024
 export const SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS = 160
 export const SFU_FRAME_WIRE_BUDGET_WINDOW_MS = 1000
 
@@ -30,9 +32,10 @@ function normalizedBudgetNumber(value: unknown): number {
 export function resolveSfuSendDrainTargetBytes(metrics: Record<string, unknown>): number {
   const bufferedBudgetBytes = normalizedBudgetNumber(metrics.budget_max_buffered_bytes)
   if (bufferedBudgetBytes <= 0) return SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES
+  const profileDrainTargetBytes = Math.floor(bufferedBudgetBytes * SFU_FRAME_CHUNK_BACKPRESSURE_PROFILE_DRAIN_RATIO)
   return Math.max(
     SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES,
-    Math.floor(bufferedBudgetBytes * 0.5),
+    Math.min(SFU_FRAME_CHUNK_BACKPRESSURE_MAX_DRAIN_TARGET_BYTES, profileDrainTargetBytes),
   )
 }
 
