@@ -246,24 +246,17 @@ export class SFUClient {
     }
 
     const failToNextCandidateAfterAssetVersionProbe = (): void => {
-      const assetVersionProbe = handleAssetVersionConnectionFailure()
-      if (assetVersionProbe && typeof assetVersionProbe.then === 'function') {
-        assetVersionProbe.then((handled) => {
+      Promise.resolve(handleAssetVersionConnectionFailure())
+        .then((handled) => {
           if (handled) {
             this.connectAttemptInFlight = false
             return
           }
           failToNextCandidate()
-        }).catch(() => {
+        })
+        .catch(() => {
           failToNextCandidate()
         })
-        return
-      }
-      if (assetVersionProbe) {
-        this.connectAttemptInFlight = false
-        return
-      }
-      failToNextCandidate()
     }
 
     ws.onopen = () => {
