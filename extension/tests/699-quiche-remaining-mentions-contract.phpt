@@ -80,6 +80,7 @@ function remaining_quiche_match_category(string $path, array $removedFixtureClas
         'infra/scripts/check-http3-product-build-path.rb',
         'infra/scripts/check-repo-artifact-hygiene.sh',
         'infra/scripts/package-pie-source.sh',
+        'infra/scripts/verify-release-package.sh',
     ], true)) {
         return 'guard_or_packaging_literal';
     }
