@@ -16,6 +16,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/book/:ownerId',
+    name: 'appointment-booking',
+    component: () => import('../domain/calls/appointment/AppointmentBookingView.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/call-goodbye',
     name: 'call-goodbye',
     component: () => import('../domain/calls/access/GoodbyeView.vue'),

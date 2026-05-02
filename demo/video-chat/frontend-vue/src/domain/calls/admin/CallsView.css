@@ -159,6 +159,27 @@
   grid-template-rows: minmax(0, 1fr);
 }
 
+.calls-calendar-shell {
+  position: relative;
+  min-height: 0;
+  display: grid;
+}
+
+.calls-calendar-appointment-btn {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 18px;
+  width: 34px;
+  height: 34px;
+  background: var(--color-0f3a52);
+}
+
+.calls-calendar-appointment-btn img {
+  width: 17px;
+  height: 17px;
+}
+
 .calls-calendar-full {
   min-height: 0;
   height: 100%;

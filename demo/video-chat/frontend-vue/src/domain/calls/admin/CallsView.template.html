@@ -127,7 +127,18 @@
       <section v-else-if="calendarError" class="section calls-empty calls-error">
         {{ calendarError }}
       </section>
-      <section v-else ref="callsCalendarEl" class="calls-calendar-full"></section>
+      <section v-else class="calls-calendar-shell">
+        <button
+          class="icon-mini-btn calls-calendar-appointment-btn"
+          type="button"
+          title="Appointment slots"
+          aria-label="Configure appointment slots"
+          @click="openAppointmentConfig"
+        >
+          <img src="/assets/orgas/kingrt/icons/add.png" alt="" />
+        </button>
+        <section ref="callsCalendarEl" class="calls-calendar-full"></section>
+      </section>
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
@@ -605,5 +616,11 @@
       :call-id="chatArchiveState.callId"
       :call-title="chatArchiveState.callTitle"
       @close="closeChatArchive"
+    />
+
+    <AppointmentConfigModal
+      :open="appointmentConfigOpen"
+      @close="closeAppointmentConfig"
+      @saved="setNotice('ok', 'Appointment slots saved.')"
     />
   </section>
