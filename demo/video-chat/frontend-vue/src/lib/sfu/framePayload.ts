@@ -30,6 +30,7 @@ export interface SfuOutboundFrameInput {
   protectedFrame?: string | null
   protectionMode?: SfuProtectionMode
   frameSequence?: number
+  mediaGeneration?: number
   senderSentAtMs?: number
   codecId?: SfuCodecId | string | null
   runtimeId?: SfuRuntimeId | string | null
