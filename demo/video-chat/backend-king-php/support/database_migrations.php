@@ -601,6 +601,52 @@ SQL,
                 "ALTER TABLE sessions ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
             ],
         ],
+        22 => [
+            'name' => '0022_appointment_calendar',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_blocks (
+    id TEXT PRIMARY KEY,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'disabled')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_appointment_blocks_owner_window ON appointment_blocks(owner_user_id, starts_at, ends_at)",
+                "CREATE INDEX IF NOT EXISTS idx_appointment_blocks_status_start ON appointment_blocks(status, starts_at)",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_bookings (
+    id TEXT PRIMARY KEY,
+    block_id TEXT NOT NULL REFERENCES appointment_blocks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    call_id TEXT REFERENCES calls(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    access_id TEXT REFERENCES call_access_links(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    salutation TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    privacy_accepted INTEGER NOT NULL DEFAULT 1 CHECK (privacy_accepted IN (0, 1)),
+    privacy_accepted_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'booked' CHECK (status IN ('booked', 'cancelled', 'failed')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_appointment_bookings_owner_time ON appointment_bookings(owner_user_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_appointment_bookings_call ON appointment_bookings(call_id)",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_appointment_bookings_block_booked
+ON appointment_bookings(block_id)
+WHERE status = 'booked'
+SQL,
+            ],
+        ],
     ];
 }
 

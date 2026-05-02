@@ -10,6 +10,7 @@ require_once __DIR__ . '/module_marketplace.php';
 require_once __DIR__ . '/module_users.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
+require_once __DIR__ . '/module_appointment_calendar.php';
 require_once __DIR__ . '/module_realtime.php';
 
 /**
@@ -26,6 +27,7 @@ function videochat_dispatch_route_module_order(): array
         'users',
         'invites',
         'calls',
+        'appointment_calendar',
         'realtime',
     ];
 }
@@ -58,7 +60,7 @@ function videochat_dispatch_request(
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
     $corsHeaders = [
-        'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
+        'access-control-allow-methods' => 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
     ];
@@ -85,6 +87,10 @@ function videochat_dispatch_request(
         }
 
         if (preg_match('#^/api/call-access/[A-Fa-f0-9-]{36}/(join|session)$#', $requestPath) === 1) {
+            return true;
+        }
+
+        if (preg_match('#^/api/appointment-calendar/public/\d+(?:/book)?$#', $requestPath) === 1) {
             return true;
         }
 
@@ -232,6 +238,17 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase,
                 $issueSessionId
+            );
+        } elseif ($moduleName === 'appointment_calendar') {
+            $response = videochat_handle_appointment_calendar_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
             );
         } elseif ($moduleName === 'realtime') {
             $response = videochat_handle_realtime_routes(

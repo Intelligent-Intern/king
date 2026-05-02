@@ -9,6 +9,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import AppointmentConfigModal from '../appointment/AppointmentConfigModal.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
 import {
@@ -201,10 +202,19 @@ const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
   ? 'Schedule video call'
   : 'New video call'));
 const deleteAllCallsBusy = ref(false);
+const appointmentConfigOpen = ref(false);
 const canDeleteAllCalls = computed(() => !deleteAllCallsBusy.value && !loadingCalls.value);
 
 function openPrimaryCompose() {
   openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
+}
+
+function openAppointmentConfig() {
+  appointmentConfigOpen.value = true;
+}
+
+function closeAppointmentConfig() {
+  appointmentConfigOpen.value = false;
 }
 
 const {
@@ -721,6 +731,11 @@ function handleEscape(event) {
 
   if (enterCallState.open) {
     closeEnterCallModal();
+    return;
+  }
+
+  if (appointmentConfigOpen.value) {
+    closeAppointmentConfig();
   }
 }
 

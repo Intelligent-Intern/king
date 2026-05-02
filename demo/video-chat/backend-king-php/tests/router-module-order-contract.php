@@ -23,7 +23,18 @@ function videochat_router_contract_json_decode(string $raw): array
 }
 
 try {
-    $expectedOrder = ['runtime', 'auth_session', 'infrastructure', 'operations', 'users', 'invites', 'calls', 'realtime'];
+    $expectedOrder = [
+        'runtime',
+        'auth_session',
+        'infrastructure',
+        'operations',
+        'marketplace',
+        'users',
+        'invites',
+        'calls',
+        'appointment_calendar',
+        'realtime',
+    ];
     $actualOrder = videochat_dispatch_route_module_order();
     videochat_router_contract_assert($actualOrder === $expectedOrder, 'module order does not match expected deterministic sequence');
     videochat_router_contract_assert(count(array_unique($actualOrder)) === count($actualOrder), 'module order contains duplicates');
