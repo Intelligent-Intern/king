@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GossipMesh Task 0 - 4-Peer Local Video Harness</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 0; padding: 20px; background: #f5f7f8; color: #1f2933; }
+    #app { max-width: 1440px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 0 0 6px; }
+    p { margin: 0 0 18px; color: #52616f; }
+    .controls { margin-bottom: 16px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .controls label { display: inline-flex; align-items: center; gap: 6px; }
+    button { padding: 8px 14px; cursor: pointer; border: 1px solid #b8c2cc; border-radius: 4px; background: white; }
+    button:hover { background: #eef2f5; }
+    button:disabled { cursor: not-allowed; opacity: 0.5; }
+    select { padding: 5px 8px; border: 1px solid #b8c2cc; border-radius: 4px; background: white; }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 410px; gap: 16px; align-items: start; }
+    .viewer { border: 1px solid #c8d1da; background: white; border-radius: 6px; padding: 14px; }
+    .viewer-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .viewer-header h2 { font-size: 18px; margin: 0; }
+    .carrier { padding: 3px 8px; border-radius: 999px; font-size: 12px; border: 1px solid; }
+    .carrier.connected { color: #067647; background: #ecfdf3; border-color: #abefc6; }
+    .carrier.degraded { color: #b54708; background: #fffaeb; border-color: #fedf89; }
+    .carrier.lost { color: #b42318; background: #fef3f2; border-color: #fecdca; }
+    .video-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .video-tile { border: 1px solid #d6dde5; border-radius: 6px; overflow: hidden; background: #0b1117; }
+    .tile-title { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: 13px; background: #f8fafc; color: #243447; border-bottom: 1px solid #d6dde5; }
+    .tile-title .role { color: #697586; }
+    canvas { width: 100%; aspect-ratio: 16 / 9; display: block; background: #0b1117; }
+    .stats { margin-top: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .stat { border: 1px solid #d6dde5; border-radius: 4px; padding: 8px; background: #fbfcfd; }
+    .stat span { display: block; color: #697586; font-size: 11px; }
+    .stat strong { font-size: 18px; }
+    .side { display: grid; gap: 16px; }
+    .panel { border: 1px solid #c8d1da; background: white; border-radius: 6px; padding: 14px; }
+    .panel h3 { margin: 0 0 10px; font-size: 16px; }
+    .peer-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .peer-table th, .peer-table td { text-align: left; border-bottom: 1px solid #edf1f5; padding: 6px 4px; }
+    .event-list { max-height: 520px; overflow-y: auto; font-size: 12px; }
+    .event { padding: 4px 0; border-bottom: 1px solid #edf1f5; display: grid; grid-template-columns: 52px 58px 44px 138px 1fr; gap: 6px; align-items: baseline; }
+    .ts { color: #697586; }
+    .peer { font-weight: 700; }
+    .lane { padding: 1px 5px; border-radius: 3px; text-align: center; font-size: 11px; }
+    .lane.ops { background: #e6f2ff; color: #075985; }
+    .lane.data { background: #e9fbe9; color: #166534; }
+    .event-type { font-weight: 700; }
+    .details { color: #52616f; overflow-wrap: anywhere; }
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .video-grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <h1>GossipMesh Task 0: Four Local Publishers, One Peer Perspective</h1>
+    <p>Four independent mock clients publish their own stream from one shared camera source. Select a peer to see that peer's local self-view plus videos received from the other publishers through bounded gossip.</p>
+
+    <div class="controls">
+      <button @click="startHarness" :disabled="running">Start 4-Peer Mesh</button>
+      <button @click="stopHarness" :disabled="!running">Stop</button>
+      <button @click="clearEvents">Clear Events</button>
+      <button @click="exportEvents" :disabled="events.length === 0">Export JSON</button>
+      <label>
+        View as:
+        <select v-model="selectedPeerId">
+          <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
+        </select>
+      </label>
+      <label>
+        Fault peer:
+        <select v-model="faultPeerId">
+          <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
+        </select>
+      </label>
+      <span>Source: {{ sourceMode }}</span>
+      <label>
+        Fault:
+        <select v-model="faultType">
+          <option value="">None</option>
+          <option value="data_drop">Data Drop 20%</option>
+          <option value="duplicate_frames">Duplicate Frames</option>
+          <option value="slow_peer">Slow Selected Peer</option>
+          <option value="neighbor_failure">Neighbor Failure</option>
+          <option value="ops_heartbeat_loss">Ops Heartbeat Loss</option>
+          <option value="ops_carrier_loss">Ops Carrier Loss</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="layout">
+      <section class="viewer">
+        <div class="viewer-header">
+          <h2>{{ selectedPeer.label }} sees</h2>
+          <span :class="['carrier', selectedPeer.carrierState]">{{ selectedPeer.carrierState }}</span>
+        </div>
+
+        <div class="video-grid">
+          <div v-for="publisher in peers" :key="publisher.id" class="video-tile">
+            <div class="tile-title">
+              <strong>{{ publisher.label }}</strong>
+              <span class="role">{{ publisher.id === selectedPeerId ? 'own local publish' : 'received via gossip' }}</span>
+              <span v-if="publisher.id === faultPeerId && faultType" class="role">fault target</span>
+            </div>
+            <canvas :ref="el => setViewCanvasRef(publisher.id, el)" width="640" height="360"></canvas>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span>Sent</span><strong>{{ selectedPeer.stats.sent }}</strong></div>
+          <div class="stat"><span>Received</span><strong>{{ selectedPeer.stats.received }}</strong></div>
+          <div class="stat"><span>Dropped</span><strong>{{ selectedPeer.stats.dropped }}</strong></div>
+          <div class="stat"><span>Duplicates</span><strong>{{ selectedPeer.stats.duplicates }}</strong></div>
+        </div>
+      </section>
+
+      <aside class="side">
+        <section class="panel">
+          <h3>Peer State</h3>
+          <table class="peer-table">
+            <thead>
+              <tr>
+                <th>Peer</th>
+                <th>Carrier</th>
+                <th>Sent</th>
+                <th>Recv</th>
+                <th>Neighbors</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="peer in peers" :key="peer.id">
+                <td>{{ peer.label }}</td>
+                <td>{{ peer.carrierState }}</td>
+                <td>{{ peer.stats.sent }}</td>
+                <td>{{ peer.stats.received }}</td>
+                <td>{{ peer.neighbors.join(', ') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h3>Event Trace ({{ events.length }})</h3>
+          <div class="event-list">
+            <div v-for="(evt, idx) in events.slice(-90)" :key="idx" class="event">
+              <span class="ts">{{ (evt.timestamp % 100000).toFixed(0) }}</span>
+              <span class="peer">{{ evt.peer_id }}</span>
+              <span :class="['lane', evt.lane]">{{ evt.lane }}</span>
+              <span class="event-type">{{ evt.event }}</span>
+              <span class="details">{{ formatEventDetails(evt) }}</span>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, computed, nextTick, onBeforeUnmount } = Vue;
+
+    const PEER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];
+    const PEER_COLORS = ['#ef4444', '#0891b2', '#7c3aed', '#16a34a'];
+    const FANOUT = 2;
+    const INITIAL_TTL = 3;
+    const FRAME_INTERVAL_MS = 180;
+    const HEARTBEAT_INTERVAL_MS = 1000;
+    const LOST_AFTER_MS = 6500;
+    const DEGRADED_AFTER_MS = 3500;
+    const STALE_FRAME_AFTER_MS = 1500;
+
+    createApp({
+      setup() {
+        const running = ref(false);
+        const faultType = ref('');
+        const sourceMode = ref('stopped');
+        const selectedPeerId = ref('peer_1');
+        const faultPeerId = ref('peer_2');
+        const events = ref([]);
+        const peers = ref([]);
+        const viewCanvasRefs = {};
+        const latestOwnFrames = {};
+        const latestReceivedFrames = {};
+        let frameTimer = 0;
+        let heartbeatTimer = 0;
+        let renderRaf = 0;
+        let frameTick = 0;
+        let cameraStream = null;
+        let cameraVideo = null;
+
+        const selectedPeer = computed(() => {
+          return peers.value.find((peer) => peer.id === selectedPeerId.value) || peers.value[0] || {
+            id: 'peer_1',
+            label: 'Alice',
+            carrierState: 'connected',
+            stats: { sent: 0, received: 0, dropped: 0, duplicates: 0 },
+            neighbors: [],
+          };
+        });
+
+        function createPeer(index) {
+          const id = `peer_${index + 1}`;
+          return {
+            id,
+            label: PEER_NAMES[index],
+            color: PEER_COLORS[index],
+            carrierState: 'connected',
+            lastHeartbeatAt: Date.now(),
+            opsEpoch: 1,
+            signalSequence: 0,
+            mediaGeneration: 1,
+            frameSequence: 0,
+            seenWindow: new Map(),
+            neighbors: [],
+            stats: { sent: 0, received: 0, dropped: 0, duplicates: 0, forwarded: 0 },
+          };
+        }
+
+        async function startHarness() {
+          if (running.value) return;
+          stopTimers();
+          await startSharedCameraSource();
+          events.value = [];
+          const nextPeers = PEER_NAMES.map((_, index) => createPeer(index));
+          for (const peer of nextPeers) {
+            peer.neighbors = selectNeighbors(peer.id, nextPeers.map((candidate) => candidate.id));
+            latestReceivedFrames[peer.id] = {};
+          }
+          peers.value = nextPeers;
+          selectedPeerId.value = nextPeers[0].id;
+          faultPeerId.value = nextPeers[1]?.id || nextPeers[0].id;
+          running.value = true;
+
+          logEvent('mesh', 'topology_change', 'ops', {
+            peer_count: nextPeers.length,
+            fanout: FANOUT,
+            ttl: INITIAL_TTL,
+          });
+
+          nextTick(() => {
+            frameTimer = window.setInterval(publishAllPeers, FRAME_INTERVAL_MS);
+            heartbeatTimer = window.setInterval(tickOpsLane, HEARTBEAT_INTERVAL_MS);
+            renderLoop();
+          });
+        }
+
+        function stopHarness() {
+          running.value = false;
+          stopTimers();
+          stopSharedCameraSource();
+          sourceMode.value = 'stopped';
+          peers.value = [];
+          for (const key of Object.keys(viewCanvasRefs)) delete viewCanvasRefs[key];
+          for (const key of Object.keys(latestOwnFrames)) delete latestOwnFrames[key];
+          for (const key of Object.keys(latestReceivedFrames)) delete latestReceivedFrames[key];
+        }
+
+        function stopTimers() {
+          if (frameTimer) window.clearInterval(frameTimer);
+          if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+          if (renderRaf) window.cancelAnimationFrame(renderRaf);
+          frameTimer = 0;
+          heartbeatTimer = 0;
+          renderRaf = 0;
+        }
+
+        async function startSharedCameraSource() {
+          stopSharedCameraSource();
+          if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+            sourceMode.value = 'synthetic fallback';
+            return;
+          }
+          try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+              video: { width: 640, height: 360, frameRate: 30 },
+              audio: false,
+            });
+            cameraVideo = document.createElement('video');
+            cameraVideo.muted = true;
+            cameraVideo.playsInline = true;
+            cameraVideo.srcObject = cameraStream;
+            await cameraVideo.play();
+            sourceMode.value = 'shared camera';
+          } catch (error) {
+            console.warn('[gossip-harness] camera unavailable; using synthetic fallback', error);
+            stopSharedCameraSource();
+            sourceMode.value = 'synthetic fallback';
+          }
+        }
+
+        function stopSharedCameraSource() {
+          if (cameraStream) {
+            for (const track of cameraStream.getTracks()) track.stop();
+          }
+          if (cameraVideo) {
+            try { cameraVideo.pause(); } catch {}
+            cameraVideo.srcObject = null;
+          }
+          cameraStream = null;
+          cameraVideo = null;
+        }
+
+        function setViewCanvasRef(publisherId, el) {
+          if (el) viewCanvasRefs[publisherId] = el;
+        }
+
+        function selectNeighbors(peerId, allPeerIds) {
+          const others = allPeerIds.filter((id) => id !== peerId).sort();
+          const start = Math.max(0, others.findIndex((id) => id > peerId));
+          const rotated = start >= 0 ? others.slice(start).concat(others.slice(0, start)) : others;
+          return rotated.slice(0, FANOUT);
+        }
+
+        function publishAllPeers() {
+          if (!running.value) return;
+          frameTick += 1;
+          for (const peer of peers.value) {
+            peer.frameSequence += 1;
+            const frame = createFrame(peer, frameTick);
+            latestOwnFrames[peer.id] = frame;
+            peer.stats.sent += 1;
+            logEvent(peer.id, 'send', 'data', frameEvent(frame, { ttl: INITIAL_TTL }));
+            deliverToNeighbors(peer.id, frame, INITIAL_TTL, peer.id);
+          }
+        }
+
+        function createFrame(peer, tick) {
+          return {
+            publisher_id: peer.id,
+            publisher_label: peer.label,
+            color: peer.color,
+            track_id: `${peer.id}_camera`,
+            media_generation: peer.mediaGeneration,
+            frame_sequence: peer.frameSequence,
+            frame_type: peer.frameSequence % 30 === 1 ? 'keyframe' : 'delta',
+            timestamp: Date.now(),
+            tick,
+            source_mode: sourceMode.value,
+            frame_id: `${peer.id}:${peer.id}_camera:${peer.mediaGeneration}:${peer.frameSequence}`,
+          };
+        }
+
+        function deliverToNeighbors(fromPeerId, frame, ttl, originPeerId) {
+          if (ttl <= 0) return;
+          const fromPeer = getPeer(fromPeerId);
+          if (!fromPeer) return;
+          if (fromPeer.carrierState === 'lost') {
+            logEvent(fromPeerId, 'drop_data', 'data', frameEvent(frame, {
+              reason: 'publisher_carrier_lost',
+              reconnect_allowed: true,
+            }));
+            return;
+          }
+          const neighbors = fromPeer.neighbors.filter((id) => id !== originPeerId || id === frame.publisher_id);
+          for (const targetPeerId of neighbors.slice(0, FANOUT)) {
+            if (faultType.value === 'neighbor_failure' && fromPeerId === faultPeerId.value) {
+              logEvent(fromPeerId, 'drop_data', 'data', frameEvent(frame, {
+                target_peer: targetPeerId,
+                reason: 'neighbor_failure',
+              }));
+              continue;
+            }
+            deliverFrame(targetPeerId, frame, fromPeerId, ttl - 1);
+            if (faultType.value === 'duplicate_frames') {
+              deliverFrame(targetPeerId, frame, fromPeerId, ttl - 1, true);
+            }
+          }
+        }
+
+        function deliverFrame(targetPeerId, frame, forwardedFrom, ttl, forcedDuplicate = false) {
+          const target = getPeer(targetPeerId);
+          if (!target || target.id === frame.publisher_id) return;
+          if (target.carrierState === 'lost') {
+            target.stats.dropped += 1;
+            logEvent(targetPeerId, 'drop_data', 'data', frameEvent(frame, {
+              forwarded_from: forwardedFrom,
+              reason: 'receiver_carrier_lost',
+              reconnect_allowed: true,
+            }));
+            return;
+          }
+
+          if (faultType.value === 'data_drop' && Math.random() < 0.2) {
+            target.stats.dropped += 1;
+            logEvent(targetPeerId, 'drop_data', 'data', frameEvent(frame, {
+              forwarded_from: forwardedFrom,
+              reason: 'data_drop_fault',
+            }));
+            return;
+          }
+
+          if (faultType.value === 'slow_peer' && targetPeerId === faultPeerId.value && frame.frame_sequence % 3 !== 0) {
+            target.stats.dropped += 1;
+            logEvent(targetPeerId, 'drop_data', 'data', frameEvent(frame, {
+              forwarded_from: forwardedFrom,
+              reason: 'slow_peer_budget',
+              reconnect_allowed: false,
+            }));
+            return;
+          }
+
+          if (target.seenWindow.has(frame.frame_id)) {
+            target.stats.duplicates += 1;
+            logEvent(targetPeerId, 'drop_duplicate', 'data', frameEvent(frame, {
+              forwarded_from: forwardedFrom,
+              forced_duplicate: forcedDuplicate,
+              reconnect_allowed: false,
+            }));
+            return;
+          }
+
+          rememberSeen(target, frame.frame_id);
+          target.stats.received += 1;
+          latestReceivedFrames[targetPeerId][frame.publisher_id] = frame;
+          logEvent(targetPeerId, 'receive', 'data', frameEvent(frame, {
+            forwarded_from: forwardedFrom,
+            ttl,
+          }));
+
+          if (ttl > 0) {
+            target.stats.forwarded += 1;
+            logEvent(targetPeerId, 'forward', 'data', frameEvent(frame, {
+              fanout: FANOUT,
+              ttl,
+            }));
+            deliverToNeighbors(targetPeerId, frame, ttl, forwardedFrom);
+          }
+        }
+
+        function rememberSeen(peer, frameId) {
+          peer.seenWindow.set(frameId, Date.now());
+          if (peer.seenWindow.size <= 512) return;
+          const oldest = Array.from(peer.seenWindow.entries()).sort((a, b) => a[1] - b[1])[0];
+          if (oldest) peer.seenWindow.delete(oldest[0]);
+        }
+
+        function tickOpsLane() {
+          const now = Date.now();
+          for (const peer of peers.value) {
+            peer.signalSequence += 1;
+
+            const selectedOpsFault = peer.id === faultPeerId.value
+              && (faultType.value === 'ops_heartbeat_loss' || faultType.value === 'ops_carrier_loss');
+
+            if (selectedOpsFault) {
+              logEvent(peer.id, 'heartbeat', 'ops', {
+                ops_epoch: peer.opsEpoch,
+                signal_sequence: peer.signalSequence,
+                dropped: true,
+                reason: faultType.value,
+              });
+            } else {
+              peer.lastHeartbeatAt = now;
+              if (peer.carrierState !== 'connected') {
+                const previous = peer.carrierState;
+                peer.carrierState = 'connected';
+                logEvent(peer.id, 'carrier_state_change', 'ops', {
+                  previous_state: previous,
+                  carrier_state: 'connected',
+                  reason: 'heartbeat_restored',
+                });
+              }
+              logEvent(peer.id, 'heartbeat', 'ops', {
+                ops_epoch: peer.opsEpoch,
+                signal_sequence: peer.signalSequence,
+              });
+              logEvent(peer.id, 'heartbeat_ack', 'ops', {
+                ops_epoch: peer.opsEpoch,
+                signal_sequence: peer.signalSequence,
+              });
+            }
+
+            if (faultType.value === 'ops_carrier_loss' && peer.id === faultPeerId.value) {
+              peer.lastHeartbeatAt = now - LOST_AFTER_MS - 100;
+            }
+            updateCarrierState(peer, now);
+          }
+        }
+
+        function updateCarrierState(peer, now) {
+          const ageMs = now - peer.lastHeartbeatAt;
+          if (ageMs > LOST_AFTER_MS) {
+            if (peer.carrierState !== 'lost') {
+              const previous = peer.carrierState;
+              peer.carrierState = 'lost';
+              logEvent(peer.id, 'carrier_state_change', 'ops', {
+                previous_state: previous,
+                carrier_state: 'lost',
+                reason: 'ops_carrier_timeout',
+                heartbeat_age_ms: ageMs,
+              });
+              logEvent(peer.id, 'reconnect_requested', 'ops', {
+                carrier_state: 'lost',
+                reconnect_allowed: true,
+                reconnect_reason: 'ops_carrier_timeout',
+                first_cause: 'ops_heartbeat_loss',
+              });
+            }
+            return;
+          }
+          if (ageMs > DEGRADED_AFTER_MS && peer.carrierState === 'connected') {
+            peer.carrierState = 'degraded';
+            logEvent(peer.id, 'carrier_state_change', 'ops', {
+              carrier_state: 'degraded',
+              reason: 'ops_heartbeat_degraded',
+              heartbeat_age_ms: ageMs,
+            });
+          }
+        }
+
+        function renderLoop() {
+          renderSelectedPerspective();
+          renderRaf = window.requestAnimationFrame(renderLoop);
+        }
+
+        function renderSelectedPerspective() {
+          const viewerId = selectedPeerId.value;
+          for (const publisher of peers.value) {
+            const canvas = viewCanvasRefs[publisher.id];
+            if (!canvas) continue;
+            const frame = publisher.id === viewerId
+              ? latestOwnFrames[publisher.id]
+              : latestReceivedFrames[viewerId]?.[publisher.id];
+            drawTile(canvas, publisher, frame, publisher.id === viewerId);
+          }
+        }
+
+        function drawTile(canvas, publisher, frame, isOwn) {
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          ctx.fillStyle = '#0b1117';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          if (!frame) {
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '22px monospace';
+            ctx.fillText(isOwn ? 'Waiting for local publisher...' : 'No received frame yet', 24, 54);
+            ctx.font = '16px monospace';
+            ctx.fillText(`${publisher.label} (${publisher.id})`, 24, 86);
+            return;
+          }
+
+          const staleAgeMs = Date.now() - frame.timestamp;
+          const isStale = !isOwn && staleAgeMs > STALE_FRAME_AFTER_MS;
+          const t = frame.tick / 8;
+          if (
+            cameraVideo
+            && cameraVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+            && sourceMode.value === 'shared camera'
+          ) {
+            ctx.drawImage(cameraVideo, 0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = `${frame.color}44`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          } else {
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, frame.color);
+            gradient.addColorStop(1, '#111827');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+          }
+
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.beginPath();
+          ctx.arc(
+            320 + Math.cos(t + publisher.id.charCodeAt(5)) * 145,
+            180 + Math.sin(t * 0.9 + publisher.id.charCodeAt(5)) * 95,
+            44,
+            0,
+            Math.PI * 2,
+          );
+          ctx.fill();
+
+          ctx.fillStyle = 'rgba(0,0,0,0.55)';
+          ctx.fillRect(0, 0, canvas.width, 88);
+          ctx.fillStyle = 'white';
+          ctx.font = '20px monospace';
+          ctx.fillText(`${publisher.label} ${isOwn ? 'LOCAL' : 'REMOTE'}`, 18, 30);
+          ctx.font = '15px monospace';
+          ctx.fillText(`seq=${frame.frame_sequence} gen=${frame.media_generation} type=${frame.frame_type}`, 18, 56);
+          ctx.fillText(`source=${frame.source_mode} frame=${frame.frame_id}`, 18, 78);
+
+          if (isStale) {
+            ctx.fillStyle = 'rgba(11, 17, 23, 0.68)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '24px monospace';
+            ctx.fillText('STALE - no fresh mesh data', 42, 174);
+            ctx.font = '16px monospace';
+            ctx.fillText(`last frame age ${Math.round(staleAgeMs)}ms`, 42, 204);
+          }
+        }
+
+        function getPeer(peerId) {
+          return peers.value.find((peer) => peer.id === peerId);
+        }
+
+        function frameEvent(frame, extra = {}) {
+          return {
+            frame_id: frame.frame_id,
+            publisher_id: frame.publisher_id,
+            track_id: frame.track_id,
+            media_generation: frame.media_generation,
+            frame_sequence: frame.frame_sequence,
+            frame_type: frame.frame_type,
+            ...extra,
+          };
+        }
+
+        function logEvent(peerId, event, lane, extra = {}) {
+          events.value.push({
+            timestamp: Date.now(),
+            peer_id: peerId,
+            event,
+            lane,
+            ...extra,
+          });
+          if (events.value.length > 2500) {
+            events.value = events.value.slice(-2000);
+          }
+        }
+
+        function clearEvents() {
+          events.value = [];
+        }
+
+        function exportEvents() {
+          const blob = new Blob([JSON.stringify(events.value, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `gossip-harness-${Date.now()}.json`;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
+
+        function formatEventDetails(evt) {
+          return Object.entries(evt)
+            .filter(([key]) => !['timestamp', 'peer_id', 'event', 'lane'].includes(key))
+            .map(([key, value]) => `${key}=${value}`)
+            .join(' ');
+        }
+
+        onBeforeUnmount(stopHarness);
+
+        return {
+          running,
+          faultType,
+          sourceMode,
+          selectedPeerId,
+          faultPeerId,
+          selectedPeer,
+          events,
+          peers,
+          setViewCanvasRef,
+          startHarness,
+          stopHarness,
+          clearEvents,
+          exportEvents,
+          formatEventDetails,
+        };
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>
