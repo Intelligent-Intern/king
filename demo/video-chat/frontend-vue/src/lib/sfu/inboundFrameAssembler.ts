@@ -20,6 +20,7 @@ interface PendingInboundFrameChunk {
   senderSentAtMs: number
   codecId: string
   runtimeId: string
+  mediaGeneration: number
   layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
   layerId: 'full' | 'foreground' | 'background'
   cacheEpoch: number
@@ -43,11 +44,13 @@ interface SfuInboundFrameAssemblerOptions {
 export class SfuInboundFrameAssembler {
   private pendingChunks = new Map<string, PendingInboundFrameChunk>()
   private lastDiagnosticAtMs = 0
+  private acceptedGenerations = new Map<string, number>()
 
   constructor(private readonly options: SfuInboundFrameAssemblerOptions) {}
 
   clear(): void {
     this.pendingChunks.clear()
+    this.acceptedGenerations.clear()
   }
 
   rejectFramePayloadLengthMismatch(msg: any): boolean {
@@ -91,6 +94,7 @@ export class SfuInboundFrameAssembler {
     const senderSentAtMs = Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms))
     const codecId = stringField(msg.codecId, msg.codec_id) || 'wlvc_unknown'
     const runtimeId = stringField(msg.runtimeId, msg.runtime_id) || 'unknown_runtime'
+    const mediaGeneration = Math.max(0, integerField(0, msg.mediaGeneration, msg.media_generation, msg.outbound_media_generation))
     const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
     const chunkPayloadChars = Math.max(0, integerField(chunkValue.length, msg.chunkPayloadChars, msg.chunk_payload_chars))
     const tileMetadataInput = {
@@ -195,6 +199,26 @@ export class SfuInboundFrameAssembler {
         return null
       }
 
+      const key = `${publisherId}:${trackId}`
+      const acceptedGeneration = this.acceptedGenerations.get(key) ?? 0
+      if (mediaGeneration > 0 && mediaGeneration < acceptedGeneration) {
+        this.reportDiagnostic(
+          'sfu_frame_chunk_rejected',
+          'warning',
+          'SFU frame chunk belongs to an older media generation; discarding.',
+          {
+            frame_id: frameId,
+            publisher_id: publisherId,
+            track_id: trackId,
+            media_generation: mediaGeneration,
+            accepted_generation: acceptedGeneration,
+            reject_reason: 'stale_media_generation',
+          },
+          true,
+        )
+        return null
+      }
+
       this.pendingChunks.set(frameId, {
         publisherId,
         publisherUserId,
@@ -210,6 +234,7 @@ export class SfuInboundFrameAssembler {
         senderSentAtMs,
         codecId,
         runtimeId,
+        mediaGeneration,
         layoutMode,
         layerId,
         cacheEpoch,
@@ -239,6 +264,7 @@ export class SfuInboundFrameAssembler {
             protectionMode,
             codecId,
             runtimeId,
+            mediaGeneration,
             layoutMode,
             layerId,
             cacheEpoch,
@@ -383,6 +409,10 @@ export class SfuInboundFrameAssembler {
     }
 
     this.pendingChunks.delete(frameId)
+    if (existing.mediaGeneration > 0) {
+      const key = `${existing.publisherId}:${existing.trackId}`
+      this.acceptedGenerations.set(key, existing.mediaGeneration)
+    }
     return buildReassembledFrame({
       frameId,
       publisherId: existing.publisherId,
@@ -396,6 +426,7 @@ export class SfuInboundFrameAssembler {
       protectionMode: existing.protectionMode,
       codecId: existing.codecId,
       runtimeId: existing.runtimeId,
+      mediaGeneration: existing.mediaGeneration,
       layoutMode: existing.layoutMode,
       layerId: existing.layerId,
       cacheEpoch: existing.cacheEpoch,
@@ -454,6 +485,7 @@ export class SfuInboundFrameAssembler {
       && existing.senderSentAtMs === next.senderSentAtMs
       && existing.codecId === next.codecId
       && existing.runtimeId === next.runtimeId
+      && existing.mediaGeneration === next.mediaGeneration
       && existing.layoutMode === next.layoutMode
       && existing.layerId === next.layerId
       && existing.cacheEpoch === next.cacheEpoch
@@ -506,10 +538,11 @@ function buildReassembledFrame(input: {
   frameType: 'keyframe' | 'delta'
   frameSequence: number
   senderSentAtMs: number
-  codecId: string
-  runtimeId: string
   protocolVersion: number
   protectionMode: 'transport_only' | 'protected' | 'required'
+  codecId: string
+  runtimeId: string
+  mediaGeneration: number
   layoutMode: 'full_frame' | 'tile_foreground' | 'background_snapshot'
   layerId: 'full' | 'foreground' | 'background'
   cacheEpoch: number
@@ -540,6 +573,7 @@ function buildReassembledFrame(input: {
     sender_sent_at_ms: input.senderSentAtMs,
     codec_id: input.codecId,
     runtime_id: input.runtimeId,
+    media_generation: input.mediaGeneration,
     protection_mode: input.protectionMode,
     layout_mode: input.layoutMode,
     layer_id: input.layerId,

@@ -300,6 +300,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             code: 'sfu_remote_video_decoder_waiting_keyframe',
             message: 'Remote SFU video is receiving frames but waiting for a renderable keyframe before restarting transport.',
             payload: {
+              lane: 'data',
               publisher_id: publisherId,
               publisher_user_id: Number(peer.userId || 0),
               publisher_name: String(peer.displayName || '').trim(),
@@ -339,6 +340,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           code: 'sfu_remote_video_frozen',
           message: 'Remote SFU video rendered earlier but stopped producing fresh decoded frames.',
           payload: {
+            lane: 'data',
             publisher_id: publisherId,
             publisher_user_id: Number(peer.userId || 0),
             publisher_name: String(peer.displayName || '').trim(),
@@ -405,6 +407,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         code: 'sfu_remote_video_stalled',
         message: 'Remote publisher advertised tracks but no decoded video frames arrived.',
         payload: {
+          lane: 'data',
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),
           publisher_name: String(peer.displayName || '').trim(),
@@ -441,6 +444,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           code: 'sfu_remote_video_reconnect_gate',
           message: 'Remote SFU video recovery gated hard socket reconnect behind per-peer backoff.',
           payload: {
+            lane: 'data',
             publisher_id: publisherId,
             publisher_user_id: Number(peer.userId || 0),
             age_ms: stalledAgeMs,
