@@ -124,6 +124,7 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
             : (protectedFrame !== '' ? 'protected' : 'transport_only'),
           protocolVersion: Math.max(1, integerField(1, msg.protocolVersion, msg.protocol_version)),
           frameSequence: Math.max(0, integerField(0, msg.frameSequence, msg.frame_sequence)),
+          mediaGeneration: Math.max(0, integerField(0, msg.mediaGeneration, msg.media_generation, msg.outbound_media_generation)),
           payloadChars,
           chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
           frameId: stringField(msg.frameId, msg.frame_id),

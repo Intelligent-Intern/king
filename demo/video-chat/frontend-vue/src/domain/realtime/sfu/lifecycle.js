@@ -100,35 +100,37 @@ export function createSfuLifecycleHelpers({
         if (!hadActiveConnection) {
           if (state.sfuConnectRetryCount < sfuConnectMaxRetries) {
             state.sfuConnectRetryCount += 1;
-            captureClientDiagnostic({
-              category: 'media',
-              level: 'warning',
-              eventType: 'sfu_connect_retry_scheduled',
-              code: 'sfu_connect_retry_scheduled',
-              message: 'SFU connection retry was scheduled before the call became active.',
-              payload: {
-                retry_count: state.sfuConnectRetryCount,
-                retry_max: sfuConnectMaxRetries,
-                retry_delay_ms: sfuConnectRetryDelayMs,
-                media_runtime_path: refs.mediaRuntimePath.value,
-              },
-            });
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_connect_retry_scheduled',
+          code: 'sfu_connect_retry_scheduled',
+          message: 'SFU connection retry was scheduled before the call became active.',
+          payload: {
+            lane: 'ops',
+            retry_count: state.sfuConnectRetryCount,
+            retry_max: sfuConnectMaxRetries,
+            retry_delay_ms: sfuConnectRetryDelayMs,
+            media_runtime_path: refs.mediaRuntimePath.value,
+          },
+        });
             setTimeout(() => requestSfuConnect(), sfuConnectRetryDelayMs);
             return;
           }
-          captureClientDiagnostic({
-            category: 'media',
-            level: 'error',
-            eventType: 'sfu_connect_exhausted',
-            code: 'sfu_connect_exhausted',
-            message: 'SFU connection retries were exhausted before the call could become active.',
-            payload: {
-              retry_count: state.sfuConnectRetryCount,
-              media_runtime_path: refs.mediaRuntimePath.value,
-              connection_state: refs.connectionState.value,
-            },
-            immediate: true,
-          });
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'error',
+          eventType: 'sfu_subscribe_failed',
+          code: 'sfu_subscribe_failed',
+          message: 'SFU subscribe failed.',
+          payload: {
+            lane: 'ops',
+            publisher_id: publisherId,
+            publisher_user_id: publisherUserId,
+            track_count: Array.isArray(event?.tracks) ? event.tracks.length : 0,
+          },
+          immediate: true,
+        });
           state.sfuConnectRetryCount = 0;
           void maybeFallbackToNativeRuntime('sfu_connect_failed');
           return;
@@ -140,6 +142,7 @@ export function createSfuLifecycleHelpers({
           code: 'sfu_disconnected_after_connect',
           message: 'SFU disconnected after the call was already connected.',
           payload: {
+            lane: 'ops',
             media_runtime_path: refs.mediaRuntimePath.value,
             connection_state: refs.connectionState.value,
             remote_peer_count: refs.remotePeersRef.value.size,
@@ -183,19 +186,20 @@ export function createSfuLifecycleHelpers({
           senderUserId: Number(details?.requester_user_id || details?.requesterUserId || 0),
         });
       }
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'sfu_browser_encoder_compatibility_fallback_requested',
-        code: 'sfu_browser_encoder_compatibility_fallback_requested',
-        message: 'A receiver requested the WLVC compatibility codec, so the publisher will leave the browser WebCodecs encoder path.',
-        payload: {
-          ...details,
-          compatibility_disabled_until_ms: Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
-          requested_action: requestedAction,
-        },
-        immediate: true,
-      });
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_browser_encoder_compatibility_fallback_requested',
+          code: 'sfu_browser_encoder_compatibility_fallback_requested',
+          message: 'A receiver requested the WLVC compatibility codec, so the publisher will leave the browser WebCodecs encoder path.',
+          payload: {
+            lane: 'ops',
+            ...details,
+            compatibility_disabled_until_ms: Number(refs.sfuTransportState?.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
+            requested_action: requestedAction,
+          },
+          immediate: true,
+        });
       if (typeof stopLocalEncodingPipeline === 'function') {
         stopLocalEncodingPipeline();
       }
