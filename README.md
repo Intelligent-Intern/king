@@ -11,6 +11,7 @@
 [![PHP 8.1-8.5](https://img.shields.io/badge/PHP-8.1--8.5-777BB4?logo=php&logoColor=white)](https://github.com/Intelligent-Intern/king)
 [![Linux x86_64 / arm64](https://img.shields.io/badge/Linux-x86__64%20%2F%20arm64-333333?logo=linux&logoColor=white)](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml)
 [![Container Images via CI](https://img.shields.io/badge/Container%20Images-via%20CI-2496ED?logo=docker&logoColor=white)](https://github.com/Intelligent-Intern/king/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://sashakolpakov.github.io/king/)
 
 King turns PHP into a systems platform for transport-heavy, realtime,
 infrastructure-aware software. Instead of pushing critical networking,
@@ -49,6 +50,10 @@ local release profile. If you only want the extension build, use
 
 If you want the beginner path from zero to a local WebSocket roundtrip, start
 with [documentation/getting-started.md](./documentation/getting-started.md).
+The deployable documentation site is built from [`docs/`](./docs/) and is
+published through GitHub Pages at <https://sashakolpakov.github.io/king/>.
+The same workflow can also publish from the upstream repository at
+<https://intelligent-intern.github.io/king/> if Pages is enabled there.
 
 King also ships a
 [PIE](https://github.com/php/pie) install path. PIE is the successor to PECL.
@@ -403,7 +408,10 @@ Core documents:
 - [`BACKLOG.md`](BACKLOG.md): open work split into release batches.
 - [`SPRINT.md`](SPRINT.md): active branch scope only.
 - [`READYNESS_TRACKER.md`](READYNESS_TRACKER.md): completion log only.
-- [`documentation/`](documentation/README.md): handbook and developer docs.
+- [`docs/`](docs/index.rst): deployable Sphinx documentation site.
+- [`documentation/`](documentation/README.md): detailed Markdown handbook and developer docs.
+- [`demo/video-chat/`](demo/video-chat): documented demo application. Other
+  directories under `demo/` are intentionally not part of the public docs site.
 
 ## Build
 
@@ -477,7 +485,8 @@ files keep this contract.
 
 The build entrypoint above is the repository build path.
 Canonical release-install verification then runs through
-`./infra/scripts/package-release.sh`, `./infra/scripts/install-package-matrix.sh`, and
+`./infra/scripts/package-release.sh`,
+`./infra/scripts/install-package-matrix.sh`, and
 `./infra/scripts/container-smoke-matrix.sh`.
 The supported host/runtime verification matrix spans PHP `8.1` through `8.5`.
 
