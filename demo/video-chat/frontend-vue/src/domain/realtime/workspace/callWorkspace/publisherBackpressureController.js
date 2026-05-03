@@ -17,6 +17,7 @@ export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CADENCE_THROTTLE: 'cadence_throttle',
   PROFILE_DOWNSHIFT: 'profile_downshift',
   REQUEST_KEYFRAME: 'request_keyframe',
+  SOCKET_RESTART: 'socket_restart',
 });
 
 function normalizedNumber(value, fallback = 0) {
@@ -514,23 +515,13 @@ export function createPublisherBackpressureController({
       }
     }
     const socketLooksStuck = decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
-    if (socketLooksStuck) {
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'sfu_backpressure_socket_restart_blocked',
-        code: 'sfu_backpressure_socket_restart_blocked',
-        message: 'Socket restart requested by backpressure controller but blocked; data-lane issues must use keyframe/layer/route recovery.',
-        payload: {
-          lane: 'data',
-          buffered_amount: bufferedAmount,
-          skipped_frame_count: state.wlvcBackpressureSkipCount,
-          sustained_backpressure_ms: sustainedBackpressureMs,
-          outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
-          media_runtime_path: getMediaRuntimePath(),
-        },
-        immediate: true,
-      })
+    if (socketLooksStuck && restartSfuAfterVideoStall('sfu_send_buffer_stuck', {
+      buffered_amount: bufferedAmount,
+      skipped_frame_count: state.wlvcBackpressureSkipCount,
+      sustained_backpressure_ms: sustainedBackpressureMs,
+      outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+    })) {
+      resetWlvcBackpressureCounters();
     }
   }
 
@@ -713,26 +704,17 @@ export function createPublisherBackpressureController({
       decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)
       || restartServerIngressLag
     ) {
-      captureClientDiagnostic({
-        category: 'media',
-        level: 'warning',
-        eventType: 'sfu_backpressure_socket_restart_blocked',
-        code: 'sfu_backpressure_socket_restart_blocked',
-        message: 'Socket restart requested by backpressure controller but blocked; data-lane issues must use keyframe/layer/route recovery.',
-        payload: {
-          lane: 'data',
-          reason: restartReason,
-          buffered_amount: normalizedBuffered,
-          send_failure_count: state.wlvcFrameSendFailureCount,
-          sustained_backpressure_ms: sustainedBackpressureMs,
-          queue_age_ms: queueAgeMs,
-          budget_max_queue_age_ms: budgetMaxQueueAgeMs,
-          king_receive_latency_ms: kingReceiveLatencyMs,
-          outgoing_video_quality_profile: currentProfile,
-          media_runtime_path: getMediaRuntimePath(),
-        },
-        immediate: true,
-      });
+      if (restartSfuAfterVideoStall(restartReason, {
+        buffered_amount: normalizedBuffered,
+        send_failure_count: state.wlvcFrameSendFailureCount,
+        sustained_backpressure_ms: sustainedBackpressureMs,
+        queue_age_ms: queueAgeMs,
+        budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+        king_receive_latency_ms: kingReceiveLatencyMs,
+        outgoing_video_quality_profile: currentProfile,
+      })) {
+        resetWlvcFrameSendFailureCounters();
+      }
     }
 
     if ((nowMs - state.wlvcFrameSendFailureLastLogAtMs) < sfuBackpressureLogCooldownMs) {
@@ -981,9 +963,17 @@ export function createPublisherBackpressureController({
       return false;
     }
 
+    const normalizedReason = String(reason || 'video_stall').trim().toLowerCase();
+    const publisherTransportStuck = [
+      'sfu_ingress_latency_budget_exceeded',
+      'sfu_send_buffer_stuck',
+    ].includes(normalizedReason);
     const carrierState = getCarrierState?.();
     const carrierLost = carrierState?.isLost?.() ?? false;
-    const reconnectAllowed = carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
+    const carrierAllowsReconnect = !carrierState
+      || carrierLost
+      || (carrierState?.canRequestReconnect?.() ?? false);
+    const reconnectAllowed = carrierAllowsReconnect || publisherTransportStuck;
 
     if (!reconnectAllowed) {
       captureClientDiagnostic({
@@ -995,8 +985,9 @@ export function createPublisherBackpressureController({
         payload: {
           lane: 'data',
           ...payload,
-          reason: String(reason || 'video_stall'),
+          reason: normalizedReason,
           reconnect_allowed: false,
+          publisher_transport_stuck: publisherTransportStuck,
           carrier_state: carrierState?.getState?.() ?? 'unknown',
           media_runtime_path: getMediaRuntimePath(),
           remote_peer_count: getRemotePeerCount(),
@@ -1017,8 +1008,9 @@ export function createPublisherBackpressureController({
       payload: {
         lane: 'ops',
         ...payload,
-        reason: String(reason || 'video_stall'),
+        reason: normalizedReason,
         reconnect_allowed: true,
+        publisher_transport_stuck: publisherTransportStuck,
         carrier_state: carrierState?.getState?.() ?? 'unknown',
         media_runtime_path: getMediaRuntimePath(),
         remote_peer_count: getRemotePeerCount(),

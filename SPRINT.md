@@ -172,6 +172,27 @@ Out of scope for this sprint:
 6. [ ] Add tests and run desktop/mobile smoke verification.
 7. [x] Deploy the corrected King video chat build to KingRT.
 
+## Carried SFU Contract Guardrails
+
+These closed media-path contracts remain active guardrails for the appointment
+sprint. They preserve the King video-call runtime target while the current
+sprint changes booking and invite flows.
+
+1. [x] `[sfu-bounded-age-biased-frame-buffer]` SFU fallback replay buffers stay
+   bounded by age, rows, and bytes.
+2. [x] `[real-media-plane-contract]` The target media-plane contract remains
+   `documentation/dev/video-chat/real-media-plane-architecture.md`; whole-frame
+   WebSocket relay is fallback infrastructure only.
+3. [x] `[sfu-control-data-plane-split]` SFU control signaling remains separate
+   from fallback media payload transport.
+4. [x] `[packet-layer-sfu-forwarder]` Packet/layer forwarding semantics remain
+   the intended replacement for whole-frame fanout.
+5. [x] `[native-render-and-jitter-buffer]` Receiver runtime direction remains
+   native render plus jitter/keyframe/layer recovery, not canvas repaint as the
+   primary media runtime.
+6. [x] `[end-to-end-media-pressure-observability]` Full-path media diagnostics
+   must continue to identify the first over-budget stage.
+
 ## Definition of Done
 
 - [x] The owner can open appointment setup from the video chat calendar `+`

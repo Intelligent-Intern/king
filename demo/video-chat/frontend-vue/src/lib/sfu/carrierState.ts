@@ -1,15 +1,17 @@
 /**
  * Ops-lane carrier state machine.
  *
- * Reconnect is an ops-lane-only decision. This module owns the carrier
- * state and is the only code allowed to request reconnect.
+ * Carrier loss is the default ops-lane reconnect signal. Measured publisher
+ * transport stalls can still escalate through the backpressure controller, but
+ * those callers must carry explicit diagnostics and bounded thresholds.
  *
  * States:
  * - connected: ops heartbeats and acks are healthy.
  * - degraded: missed heartbeats but not yet lost.
  * - lost: missed heartbeats or ack quorum failure for the carrier-loss window.
  *
- * Reconnect is allowed only when state transitions to `lost`.
+ * Carrier-initiated reconnect is allowed only when state transitions to
+ * `lost`.
  */
 
 export type CarrierState = 'connected' | 'degraded' | 'lost'

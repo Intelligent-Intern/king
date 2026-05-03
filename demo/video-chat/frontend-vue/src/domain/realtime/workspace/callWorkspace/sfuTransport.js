@@ -50,11 +50,8 @@ export function createSfuTransportController(options) {
   } = options;
 
   const getCarrierState = () => sfuClientRef.value?.carrierState ?? null;
-
-  const publisherBackpressureController = createPublisherBackpressureController({
-    ...options,
-    getCarrierState,
-  });
+  Object.assign(options, { getCarrierState });
+  const publisherBackpressureController = createPublisherBackpressureController(options);
 
   function isSfuClientOpen() {
     const client = sfuClientRef.value;
