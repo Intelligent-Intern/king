@@ -42,6 +42,10 @@ import {
   SfuWebSocketFallbackMediaTransport,
 } from './mediaTransport'
 import {
+  SfuCarrierState,
+  type CarrierStateChange,
+} from './carrierState'
+import {
   appendSfuPublisherTraceStage,
   buildSfuEndToEndPerformancePayload,
   buildSfuFrameTransportSample,
@@ -114,6 +118,9 @@ export class SFUClient {
   private outboundWireBudget = new SfuOutboundWireBudget()
   private outboundFrameSequenceByTrack = new Map<string, number>()
   private outboundMediaGeneration = 0
+  private opsEpoch = 0
+  private opsSignalSequence = 0
+  private carrierState: SfuCarrierState
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
@@ -126,6 +133,24 @@ export class SFUClient {
 
   constructor(cb: SFUClientCallbacks) {
     this.cb = cb
+    this.carrierState = new SfuCarrierState()
+    this.carrierState.onChange((change: CarrierStateChange) => {
+      this.reportClientDiagnostic({
+        category: 'media',
+        level: change.current === 'lost' ? 'error' : (change.current === 'degraded' ? 'warning' : 'info'),
+        eventType: 'sfu_carrier_state_changed',
+        code: 'sfu_carrier_state_changed',
+        message: `SFU carrier state changed from ${change.previous} to ${change.current}.`,
+        payload: {
+          lane: 'ops',
+          carrier_state: change.current,
+          previous_carrier_state: change.previous,
+          reason: change.reason,
+          ...this.carrierState.getDiagnostics(),
+        },
+        immediate: change.current === 'lost',
+      })
+    })
     this.mediaTransport = new SfuWebSocketFallbackMediaTransport({
       getSocket: () => this.ws,
       getBufferedAmount: () => this.getWebSocketBufferedAmount(),
@@ -182,6 +207,7 @@ export class SFUClient {
         roomId,
         payload: {
           room_id: roomId,
+          lane: 'ops',
           candidate_count: candidates.length,
         },
         immediate: true,
@@ -269,6 +295,7 @@ export class SFUClient {
       clearNegotiationTimer()
       this.connectAttemptInFlight = false
       this.disconnectNotified = false
+      this.carrierState.reset()
       setBackendSfuOrigin(candidates[index] || '')
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
       this.startPublisherFrameStallTimer()
@@ -292,6 +319,16 @@ export class SFUClient {
       let msg: any
       try { msg = JSON.parse(ev.data) } catch { return }
       if (handleAssetVersionSocketPayload(msg)) return
+      // Track ops heartbeats for carrier state
+      if (typeof msg === 'object' && msg !== null) {
+        const msgType = String(msg.type || '')
+        if (msgType === 'sfu/heartbeat' || msgType === 'sfu/heartbeat_ack') {
+          this.carrierState.heartbeatReceived()
+        }
+        if (msgType === 'sfu/heartbeat_ack') {
+          this.carrierState.ackReceived()
+        }
+      }
       this.handleMessage(msg)
     }
 
@@ -314,6 +351,7 @@ export class SFUClient {
         this.ws = null
       }
       this.stopPublisherFrameStallTimer()
+      this.carrierState.socketClosed()
       reportClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -323,9 +361,11 @@ export class SFUClient {
         roomId,
         payload: {
           room_id: roomId,
+          lane: 'ops',
           close_code: Number(event?.code || 0),
           was_clean: Boolean(event?.wasClean),
           candidate_origin: String(candidates[index] || ''),
+          ...this.carrierState.getDiagnostics(),
         },
       })
       this.notifyDisconnectOnce()
@@ -355,6 +395,7 @@ export class SFUClient {
         roomId,
         payload: {
           room_id: roomId,
+          lane: 'ops',
           candidate_origin: String(candidates[index] || ''),
           negotiation_timeout_ms: SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS,
         },
@@ -367,6 +408,8 @@ export class SFUClient {
     if (this.connectAttemptInFlight) return
     this.connectGeneration += 1
     this.outboundMediaGeneration += 1
+    this.opsEpoch += 1
+    this.opsSignalSequence = 0
     this.connectAttemptInFlight = true
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
@@ -487,6 +530,8 @@ export class SFUClient {
   leave(): void {
     this.connectGeneration += 1
     this.outboundMediaGeneration += 1
+    this.opsEpoch += 1
+    this.opsSignalSequence = 0
     this.connectAttemptInFlight = false
     this.disconnectNotified = false
     this.inboundFrameAssembler.clear()
@@ -535,6 +580,11 @@ export class SFUClient {
 
   private send(msg: object): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
+      const opsMsg = msg as Record<string, unknown>
+      if (typeof opsMsg.type === 'string' && !String(opsMsg.type).startsWith('sfu/frame')) {
+        opsMsg.ops_epoch = this.opsEpoch
+        opsMsg.signal_sequence = ++this.opsSignalSequence
+      }
       this.ws.send(JSON.stringify(msg))
       return true
     }
@@ -614,6 +664,7 @@ export class SFUClient {
         roomId: this.roomId,
         payload: {
           room_id: this.roomId,
+          lane: 'data',
           publisher_id: publisherId,
           stall_age_ms: ageMs,
           last_frame_at_ms: health.lastFrameAtMs,
@@ -1159,6 +1210,7 @@ export class SFUClient {
       roomId: this.roomId,
       payload: {
         room_id: this.roomId,
+        lane: 'data',
         ...payload,
       },
       immediate,

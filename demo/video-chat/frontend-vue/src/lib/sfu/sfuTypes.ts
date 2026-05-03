@@ -25,6 +25,7 @@ export interface SFUEncodedFrame {
   protectionMode?: 'transport_only' | 'protected' | 'required'
   protocolVersion?: number
   frameSequence?: number
+  mediaGeneration?: number
   payloadChars?: number
   chunkCount?: number
   frameId?: string
