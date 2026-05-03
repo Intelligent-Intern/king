@@ -803,10 +803,11 @@ export class MediaSecuritySession {
     if (!sender || typeof sender.createEncodedStreams !== 'function') return false;
     if (this.nativeSenders.has(sender)) return true;
     const streams = sender.createEncodedStreams();
-    if (!streams?.readable || !streams?.writable || typeof TransformStream !== 'function') return false;
+    const NativeTransformStream = globalThis.TransformStream;
+    if (!streams?.readable || !streams?.writable || typeof NativeTransformStream !== 'function') return false;
     this.nativeSenders.add(sender);
     streams.readable
-      .pipeThrough(new TransformStream({
+      .pipeThrough(new NativeTransformStream({
         transform: async (encodedFrame, controller) => {
           try {
             encodedFrame.data = await this.protectNativeEncodedFrame(encodedFrame, { trackKind, trackId });
@@ -828,10 +829,11 @@ export class MediaSecuritySession {
     if (!receiver || typeof receiver.createEncodedStreams !== 'function') return false;
     if (this.nativeReceivers.has(receiver)) return true;
     const streams = receiver.createEncodedStreams();
-    if (!streams?.readable || !streams?.writable || typeof TransformStream !== 'function') return false;
+    const NativeTransformStream = globalThis.TransformStream;
+    if (!streams?.readable || !streams?.writable || typeof NativeTransformStream !== 'function') return false;
     this.nativeReceivers.add(receiver);
     streams.readable
-      .pipeThrough(new TransformStream({
+      .pipeThrough(new NativeTransformStream({
         transform: async (encodedFrame, controller) => {
           try {
             encodedFrame.data = await this.decryptNativeEncodedFrame(encodedFrame, senderUserId, { trackId });
@@ -854,7 +856,7 @@ export class MediaSecuritySession {
       && typeof RTCRtpSender.prototype?.createEncodedStreams === 'function'
       && typeof RTCRtpReceiver !== 'undefined'
       && typeof RTCRtpReceiver.prototype?.createEncodedStreams === 'function'
-      && typeof TransformStream === 'function';
+      && typeof globalThis.TransformStream === 'function';
   }
 }
 
