@@ -498,7 +498,8 @@ export class MediaSecuritySession {
 
     const epoch = Number(payload.epoch || 0);
     const senderKeyId = asString(payload.sender_key_id);
-    if (epoch < 1 || senderKeyId === '') throw new Error('wrong_key_id');
+    if (epoch < 1) throw new Error('invalid_epoch');
+    if (senderKeyId === '') throw new Error('missing_sender_key_id');
 
     const subtle = subtleCrypto();
     const nonce = base64UrlToBytes(payload.nonce);
