@@ -546,7 +546,6 @@ export function createLocalPublisherPipelineHelpers({
           mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
           return;
         }
-        let frameImageData = imageData;
         let tilePatchMetadata = null;
         let tilePatchTransportMetrics = null;
         let encoded = null;
@@ -580,7 +579,6 @@ export function createLocalPublisherPipelineHelpers({
               videoProfile.frameQuality,
             );
             if (patchEncoder) {
-              frameImageData = selectivePatchPlan.patchImageData;
               tilePatchMetadata = selectivePatchPlan.tilePatch;
               tilePatchTransportMetrics = {
                 selection_tile_count: selectivePatchPlan.changedTileCount,
@@ -588,7 +586,7 @@ export function createLocalPublisherPipelineHelpers({
                 selection_tile_ratio: Number(selectivePatchPlan.selectedTileRatio.toFixed(6)),
                 selection_mask_guided: selectivePatchPlan.matteGuided,
               };
-              encoded = patchEncoder.encodeFrame(frameImageData, timestamp);
+              encoded = patchEncoder.encodeFrame(selectivePatchPlan.patchImageData, timestamp);
               encodedFrameType = 'keyframe';
             }
           }
@@ -618,7 +616,6 @@ export function createLocalPublisherPipelineHelpers({
               videoProfile.frameQuality,
             );
             if (patchEncoder) {
-              frameImageData = backgroundSnapshotPlan.patchImageData;
               tilePatchMetadata = backgroundSnapshotPlan.tilePatch;
               tilePatchTransportMetrics = {
                 selection_tile_count: backgroundSnapshotPlan.changedTileCount,
@@ -626,7 +623,7 @@ export function createLocalPublisherPipelineHelpers({
                 selection_tile_ratio: Number(backgroundSnapshotPlan.selectedTileRatio.toFixed(6)),
                 selection_mask_guided: backgroundSnapshotPlan.matteGuided,
               };
-              encoded = patchEncoder.encodeFrame(frameImageData, timestamp);
+              encoded = patchEncoder.encodeFrame(backgroundSnapshotPlan.patchImageData, timestamp);
               encodedFrameType = 'keyframe';
             }
           }
