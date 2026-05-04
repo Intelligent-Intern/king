@@ -140,6 +140,7 @@ function king_server_http1_wire_abort_request(int $port, string $request, int $s
 {
     $deadline = microtime(true) + 3.0;
     $socket = false;
+    $message = 'connection timed out';
 
     if (!function_exists('socket_create')) {
         throw new RuntimeException('The sockets extension is required for HTTP/1 abort requests. Please enable it in php.ini.');
