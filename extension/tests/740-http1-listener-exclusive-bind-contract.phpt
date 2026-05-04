@@ -11,7 +11,7 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-$probe = '';
+$probe = false;
 $checkPython = proc_open(
     ['command', '-v', 'python3'],
     [
@@ -45,12 +45,12 @@ if (is_resource($checkPython)) {
             }
             $reusePortExit = proc_close($checkReusePort);
             if ($reusePortExit === 0) {
-                $probe = 'yes';
+                $probe = true;
             }
         }
     }
 }
-if ($probe !== 'yes') {
+if (!$probe) {
     echo "skip python3 with socket.SO_REUSEPORT is required";
 }
 ?>
