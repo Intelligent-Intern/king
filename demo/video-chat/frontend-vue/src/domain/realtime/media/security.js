@@ -472,7 +472,7 @@ export class MediaSecuritySession {
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
     if (payloadKexSuite === '' || payloadKexSuite !== keyContext.kexSuite || payload.media_suite !== MEDIA_SUITE) {
-      throw new Error('downgrade_attempt');
+      throw new Error('KEX/media suite downgrade attempt detected');
     }
     const participantSetHash = await this.participantHashForPeer(sender);
     const transcriptHash = await this.transcriptHashForPeer({
