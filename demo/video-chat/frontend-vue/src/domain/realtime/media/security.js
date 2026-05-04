@@ -64,9 +64,11 @@ function nativeEncodedFrameAadTrackId(trackKind = 'data') {
   return 'native_data';
 }
 
+const VALID_PROTECTED_CODEC_IDS = new Set(['wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown']);
+
 function normalizeProtectedCodecId(value, runtimePath = '') {
   const normalized = asString(value).toLowerCase();
-  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'webcodecs_vp8' || normalized === 'wlvc_unknown') return normalized;
+  if (VALID_PROTECTED_CODEC_IDS.has(normalized)) return normalized;
   if (asString(runtimePath).toLowerCase() === 'webrtc_native') return 'webrtc_native';
   return 'wlvc_unknown';
 }
