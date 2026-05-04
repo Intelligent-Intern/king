@@ -280,7 +280,8 @@ export class SFUClient {
             return
           }
           failToNextCandidate()
-        }).catch(() => {
+        })
+        .catch(() => {
           failToNextCandidate()
         })
         return

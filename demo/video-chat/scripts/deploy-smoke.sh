@@ -57,12 +57,16 @@ assert_public_health_payload() {
     }
     $keys = array_keys($payload);
     sort($keys);
-    if ($keys !== ["service", "status", "time"]) {
+    if ($keys !== ["asset_version", "service", "status", "time"]) {
         fwrite(STDERR, "unexpected public health keys: " . implode(",", $keys) . "\n");
         exit(1);
     }
     if (($payload["status"] ?? "") !== "ok") {
         fwrite(STDERR, "health status is not ok\n");
+        exit(1);
+    }
+    if (!is_string($payload["asset_version"] ?? null) || $payload["asset_version"] === "") {
+        fwrite(STDERR, "health asset_version is missing\n");
         exit(1);
     }
   '
@@ -105,7 +109,7 @@ websocket_upgrade_smoke() {
 
   if [[ "${code}" == "000" ]]; then
     local header_code
-    header_code="$(awk '/^HTTP\\// {code=$2} END {print code}' "${headers}" | tr -d '\r')"
+    header_code="$(awk '/^HTTP\// {code=$2} END {print code}' "${headers}" | tr -d '\r')"
     [[ -n "${header_code}" ]] && code="${header_code}"
   fi
 

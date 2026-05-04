@@ -12,6 +12,15 @@ $sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 's
 $turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $domain)));
 $cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $domain)));
 $cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: 'cnd.' . $domain));
+$externalDomainInput = trim((string) getenv('VIDEOCHAT_EDGE_EXTERNAL_DOMAINS'));
+$externalDomains = [];
+foreach (preg_split('/\s*,\s*/', $externalDomainInput) ?: [] as $externalDomain) {
+    $externalDomain = strtolower(trim((string) $externalDomain));
+    if ($externalDomain !== '') {
+        $externalDomains[] = $externalDomain;
+    }
+}
+$externalDomains = array_values(array_unique($externalDomains));
 $cdnDomains = [$cdnDomain];
 foreach (preg_split('/\s*,\s*/', $cdnAliasInput) ?: [] as $alias) {
     $alias = strtolower(trim((string) $alias));
@@ -26,6 +35,8 @@ $staticRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_STATIC_ROOT') ?: '/app/fron
 $apiUpstream = getenv('VIDEOCHAT_EDGE_API_UPSTREAM') ?: 'videochat-backend-v1:18080';
 $wsUpstream = getenv('VIDEOCHAT_EDGE_WS_UPSTREAM') ?: 'videochat-backend-ws-v1:18080';
 $sfuUpstream = getenv('VIDEOCHAT_EDGE_SFU_UPSTREAM') ?: 'videochat-backend-sfu-v1:18080';
+$externalUpstream = trim((string) getenv('VIDEOCHAT_EDGE_EXTERNAL_UPSTREAM'));
+$socialPreviewImagePath = getenv('VIDEOCHAT_EDGE_SOCIAL_PREVIEW_IMAGE') ?: '/assets/orgas/kingrt/social/invitation-preview.png';
 $maxHeaderBytes = (int) (getenv('VIDEOCHAT_EDGE_MAX_HEADER_BYTES') ?: '65536');
 $connectTimeout = (float) (getenv('VIDEOCHAT_EDGE_CONNECT_TIMEOUT_SECONDS') ?: '5');
 $httpIdleTimeout = (int) (getenv('VIDEOCHAT_EDGE_HTTP_IDLE_TIMEOUT_SECONDS') ?: '60');
@@ -286,7 +297,61 @@ $contentType = static function (string $path): string {
     };
 };
 
-$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion): void {
+$escapeHtml = static function (string $value): string {
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+};
+
+$absoluteHttpsUrl = static function (string $host, string $target) use ($domain): string {
+    $host = trim($host) !== '' ? $host : $domain;
+    $target = trim($target) !== '' ? $target : '/';
+    if ($target[0] !== '/') {
+        $target = '/' . $target;
+    }
+    return 'https://' . $host . $target;
+};
+
+$injectSocialPreview = static function (string $body, array $request) use ($domain, $cdnDomain, $socialPreviewImagePath, $escapeHtml, $absoluteHttpsUrl): string {
+    $target = (string) ($request['target'] ?: ($request['path'] ?? '/'));
+    $path = (string) ($request['path'] ?? '/');
+    $host = (string) ($request['host'] ?: $domain);
+    $assetHost = $cdnDomain !== '' ? $cdnDomain : $host;
+    $pageUrl = $absoluteHttpsUrl($host, $target);
+    $imageUrl = $absoluteHttpsUrl($assetHost, $socialPreviewImagePath);
+    $isInvite = str_starts_with($path, '/join/');
+    $title = $isInvite ? "You're invited to a KINGRT video call" : 'KINGRT Video Chat';
+    $description = $isInvite
+        ? 'Join the video call on KINGRT.'
+        : 'Run your own calls with KINGRT open-source video collaboration.';
+
+    $tags = [
+        '<meta name="description" content="' . $escapeHtml($description) . '" />',
+        '<link rel="canonical" href="' . $escapeHtml($pageUrl) . '" />',
+        '<meta property="og:type" content="website" />',
+        '<meta property="og:site_name" content="KINGRT" />',
+        '<meta property="og:title" content="' . $escapeHtml($title) . '" />',
+        '<meta property="og:description" content="' . $escapeHtml($description) . '" />',
+        '<meta property="og:url" content="' . $escapeHtml($pageUrl) . '" />',
+        '<meta property="og:image" content="' . $escapeHtml($imageUrl) . '" />',
+        '<meta property="og:image:secure_url" content="' . $escapeHtml($imageUrl) . '" />',
+        '<meta property="og:image:type" content="image/png" />',
+        '<meta property="og:image:width" content="1076" />',
+        '<meta property="og:image:height" content="562" />',
+        '<meta property="og:image:alt" content="' . $escapeHtml($title) . '" />',
+        '<meta name="twitter:card" content="summary_large_image" />',
+        '<meta name="twitter:title" content="' . $escapeHtml($title) . '" />',
+        '<meta name="twitter:description" content="' . $escapeHtml($description) . '" />',
+        '<meta name="twitter:image" content="' . $escapeHtml($imageUrl) . '" />',
+    ];
+    $meta = implode("\n    ", $tags);
+
+    if (str_contains($body, '<!-- kingrt-social-preview -->')) {
+        return str_replace('<!-- kingrt-social-preview -->', $meta, $body);
+    }
+
+    return str_replace('</head>', "    {$meta}\n  </head>", $body);
+};
+
+$serveStatic = static function ($client, array $request) use ($staticRoot, $writeResponse, $contentType, $cdnDomains, $assetVersion, $injectSocialPreview): void {
     $path = rawurldecode((string) $request['path']);
     $isCdnAsset = in_array($request['host'], $cdnDomains, true) || str_starts_with($path, '/cdn/');
     $corsHeaders = $isCdnAsset
@@ -324,6 +389,9 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
     }
 
     $body = (string) @file_get_contents($candidate);
+    if (basename($candidate) === 'index.html') {
+        $body = $injectSocialPreview($body, $request);
+    }
     $headers = [
         'Content-Type' => $contentType($candidate),
         'Cache-Control' => basename($candidate) === 'index.html'
@@ -407,6 +475,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     while ($clientOpen || $upstreamOpen || $toUpstream !== '' || $toClient !== '') {
         if ((microtime(true) - $lastActivity) > $idleTimeout) {
             break;
+        }
+        // Upstream may reject a websocket handshake with HTTP bytes, then close.
+        // Keep the client side alive until that buffered response is flushed.
+        if ($isWebSocket && !$upstreamOpen && $toClient === '') {
+            $clientOpen = false;
+        }
+        if ($isWebSocket && !$clientOpen && $toUpstream === '') {
+            $upstreamOpen = false;
         }
         if (!$clientOpen) {
             $toClient = '';
@@ -592,9 +668,12 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $apiUpstream, $wsUpstream, $sfuUpstream): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
+    if ($externalUpstream !== '' && in_array($host, $externalDomains, true)) {
+        return $externalUpstream;
+    }
     if (in_array($host, $cdnDomains, true)) {
         return 'static';
     }
