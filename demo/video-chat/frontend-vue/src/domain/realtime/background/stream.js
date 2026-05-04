@@ -1,6 +1,13 @@
 import { createMediaPipeSegmentationBackend } from './backendMediapipe';
 import { createTfjsSegmentationBackend } from './backendTfjs';
 import { clamp01, lerp, smoothstep, toNumber } from './math';
+import { createBackgroundPipelineController } from './pipeline/controller';
+import { createBackgroundCompositorStage } from './pipeline/compositorStage';
+import { shouldUseReactiveBackgroundPipeline } from './pipeline/featureFlags';
+import { BACKGROUND_PIPELINE_MESSAGE_TYPES } from './pipeline/messages';
+import { createVideoFrameScheduler } from './pipeline/scheduler';
+import { createBackgroundSegmenterStage } from './pipeline/segmenterStage';
+import { BACKGROUND_PIPELINE_STAGE_NAMES, BACKGROUND_PIPELINE_STAGE_STATES } from './pipeline/stages';
 
 // Default matte shaping values for inner mask refinement.
 // Keep these at module scope so they are easy to tune and audit.
@@ -333,6 +340,29 @@ function resolveProcessingSpec(sourceWidth, sourceHeight, sourceFps, maxProcessW
     fps: Math.max(8, Math.min(capFps, inFps))
   };
 }
+function normalizeBackgroundFilterRuntimeConfig(options = {}) {
+  const requestedMode = String(options.mode || 'off').trim().toLowerCase();
+  const mode = requestedMode === 'replace'
+    ? 'replace'
+    : requestedMode === 'blur'
+      ? 'blur'
+      : 'off';
+  return {
+    autoDisableOnOverload: options.autoDisableOnOverload !== false,
+    backgroundColor: String(options.backgroundColor ?? '').trim(),
+    backgroundImageUrl: String(options.backgroundImageUrl ?? '').trim(),
+    blurPx: Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3)))),
+    detectIntervalMs: Math.max(66, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 140)))),
+    facePaddingPx: Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14)))),
+    mode,
+    overloadConsecutiveFrames: Math.max(3, Math.min(60, Math.round(toNumber(options.overloadConsecutiveFrames, 12)))),
+    overloadFrameMs: Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90))),
+    preferFastMatte: options.preferFastMatte === true,
+    sourceActive: options.sourceActive !== false,
+    statsIntervalMs: Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3)))),
+    temporalSmoothingAlpha: Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3))),
+  };
+}
 async function waitForVideoReady(video) {
   if (video.readyState >= 2) return;
   await new Promise((resolve) => {
@@ -346,21 +376,18 @@ async function waitForVideoReady(video) {
     setTimeout(onReady, 500);
   });
 }
-async function createBackgroundFilterStream(sourceStream, options = {}) {
-  const mode = String(options.mode || "off").trim().toLowerCase();
+async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const videoTrack = sourceStream.getVideoTracks()[0] ?? null;
   if (!videoTrack) {
     return { stream: sourceStream, active: false, reason: "no_video_track", backend: "none", dispose: () => {
-    } };
-  }
-  if (mode !== "blur") {
-    return { stream: sourceStream, active: false, reason: "off", backend: "none", dispose: () => {
     } };
   }
   if (typeof document === "undefined") {
     return { stream: sourceStream, active: false, reason: "unsupported", backend: "none", dispose: () => {
     } };
   }
+  const pipelineController = options.pipelineController || null;
+  const runtimeConfig = normalizeBackgroundFilterRuntimeConfig(options);
   const settings = videoTrack.getSettings?.() ?? {};
   const sourceWidth = Math.max(1, Math.round(toNumber(settings.width, 1280)));
   const sourceHeight = Math.max(1, Math.round(toNumber(settings.height, 720)));
@@ -375,18 +402,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const width = processing.width;
   const height = processing.height;
   const fps = processing.fps;
-  const statsIntervalMs = Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3))));
   const onStats = typeof options.onStats === "function" ? options.onStats : null;
-  const blurPx = Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3))));
-  const backgroundColor = String(options.backgroundColor ?? "").trim();
-  const backgroundImageUrl = String(options.backgroundImageUrl ?? "").trim();
-  const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
-  const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3)));
-  const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 140))));
-  const preferFastMatte = options.preferFastMatte === true;
-  const autoDisableOnOverload = options.autoDisableOnOverload !== false;
-  const overloadFrameMs = Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90)));
-  const overloadConsecutiveFrames = Math.max(3, Math.min(60, Math.round(toNumber(options.overloadConsecutiveFrames, 12))));
   const onOverload = typeof options.onOverload === "function" ? options.onOverload : null;
   let disposed = false;
   const video = document.createElement("video");
@@ -402,12 +418,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     } };
   }
   let backgroundImage = null;
-  if (backgroundImageUrl) {
-    void loadBackgroundImage(backgroundImageUrl).then((img) => {
-      if (disposed) return;
-      backgroundImage = img;
-    });
-  }
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, width);
   canvas.height = Math.max(1, height);
@@ -446,35 +456,8 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
     } };
   }
-  let segmentationBackend = null;
-  try {
-    try {
-      segmentationBackend = await createMediaPipeSegmentationBackend({ detectIntervalMs });
-    } catch {
-      segmentationBackend = null;
-    }
-    if (!segmentationBackend) {
-      try {
-        segmentationBackend = await createTfjsSegmentationBackend({ detectIntervalMs, facePaddingPx });
-      } catch {
-        segmentationBackend = null;
-      }
-    }
-  } catch {
-    video.pause();
-    video.srcObject = null;
-    return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-    } };
-  }
-  if (!segmentationBackend) {
-    video.pause();
-    video.srcObject = null;
-    return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-    } };
-  }
   const captureStream = canvas.captureStream;
   if (typeof captureStream !== "function") {
-    segmentationBackend.dispose();
     video.pause();
     video.srcObject = null;
     return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
@@ -485,11 +468,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const filteredTrack = filteredVideoStream.getVideoTracks()[0] ?? null;
   if (filteredTrack) out.addTrack(filteredTrack);
   for (const audioTrack of sourceStream.getAudioTracks()) out.addTrack(audioTrack);
-  let rafId = 0;
-  let faces = [];
-  let smoothedFaces = [];
-  let hasMatteMask = false;
-  let previousMaskAlpha = null;
   let readyResolved = false;
   let frameCount = 0;
   let detectCount = 0;
@@ -504,10 +482,11 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   let overloadStreak = 0;
   let overloadDisabled = false;
   let lastFrameProcessMs = 0;
-  let lastBackgroundRefreshAt = 0;
   let stableFrameStreak = 0;
+  let segmentationBackend = null;
+  let segmentationBackendKind = 'none';
   let resolveReady = () => {};
-  const backgroundRefreshIntervalMs = 180;
+  let sourceStopReason = '';
   const markReady = () => {
     if (readyResolved) return;
     readyResolved = true;
@@ -516,31 +495,131 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const ready = new Promise((resolve) => {
     resolveReady = resolve;
   });
-  const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));
-  const buildMaskFromPayload = (job) => {
-    if (!job || !job.matteMask) return false;
-    if (!previousMaskAlpha || previousMaskAlpha.length !== canvas.width * canvas.height) {
-      previousMaskAlpha = new Uint8ClampedArray(canvas.width * canvas.height);
+  const readyTimer = setTimeout(
+    markReady,
+    Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, runtimeConfig.detectIntervalMs + 100),
+  );
+  const segmenterStage = createBackgroundSegmenterStage({
+    buildInnerFeatherMask,
+    maskLayer,
+    getTemporalSmoothingAlpha: () => runtimeConfig.temporalSmoothingAlpha,
+    smoothFaceBoxes,
+    video,
+    videoSampleLayer,
+    width: canvas.width,
+    height: canvas.height,
+  });
+  const compositorStage = createBackgroundCompositorStage({
+    backgroundLayer,
+    backgroundLayerCanvas,
+    canvas,
+    ctx,
+    drawCoverImage,
+    getBackgroundColor: () => runtimeConfig.backgroundColor,
+    getBackgroundImage: () => backgroundImage,
+    getBlurPx: () => runtimeConfig.blurPx,
+    maskLayerCanvas,
+    personLayer,
+    personLayerCanvas,
+    video,
+  });
+  async function refreshBackgroundImage() {
+    if (runtimeConfig.backgroundImageUrl === '') {
+      backgroundImage = null;
+      return null;
     }
-    return buildInnerFeatherMask(
-      maskLayer,
-      job.matteMask,
-      videoSampleLayer,
-      video,
-      canvas.width,
-      canvas.height,
-      job.faces,
-      job.vw,
-      job.vh,
-      previousMaskAlpha,
-      job.useFastMatte
+    backgroundImage = await loadBackgroundImage(runtimeConfig.backgroundImageUrl);
+    return backgroundImage;
+  }
+
+  async function ensureSegmentationBackend() {
+    if (segmentationBackend || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) return segmentationBackend;
+    try {
+      try {
+        segmentationBackend = await createMediaPipeSegmentationBackend({ detectIntervalMs: runtimeConfig.detectIntervalMs });
+      } catch {
+        segmentationBackend = null;
+      }
+      if (!segmentationBackend) {
+        try {
+          segmentationBackend = await createTfjsSegmentationBackend({
+            detectIntervalMs: runtimeConfig.detectIntervalMs,
+            facePaddingPx: runtimeConfig.facePaddingPx,
+          });
+        } catch {
+          segmentationBackend = null;
+        }
+      }
+    } catch {
+      segmentationBackend = null;
+    }
+    segmentationBackendKind = segmentationBackend?.kind || 'none';
+    return segmentationBackend;
+  }
+
+  function syncPipelineStageStates() {
+    if (!pipelineController) return;
+    pipelineController.updateStage(
+      BACKGROUND_PIPELINE_STAGE_NAMES.SOURCE,
+      runtimeConfig.sourceActive ? BACKGROUND_PIPELINE_STAGE_STATES.RUNNING : BACKGROUND_PIPELINE_STAGE_STATES.PAUSED,
+      { reason: sourceStopReason || (runtimeConfig.sourceActive ? 'active' : 'inactive') },
     );
-  };
-  const draw = () => {
+    pipelineController.updateStage(
+      BACKGROUND_PIPELINE_STAGE_NAMES.SEGMENTER,
+      runtimeConfig.sourceActive && runtimeConfig.mode !== 'off'
+        ? BACKGROUND_PIPELINE_STAGE_STATES.RUNNING
+        : BACKGROUND_PIPELINE_STAGE_STATES.IDLE,
+      { mode: runtimeConfig.mode },
+    );
+    pipelineController.updateStage(
+      BACKGROUND_PIPELINE_STAGE_NAMES.COMPOSITOR,
+      runtimeConfig.sourceActive ? BACKGROUND_PIPELINE_STAGE_STATES.RUNNING : BACKGROUND_PIPELINE_STAGE_STATES.PAUSED,
+      { mode: runtimeConfig.mode },
+    );
+  }
+
+  function applyConfigUpdate(nextOptions = {}) {
+    const nextConfig = normalizeBackgroundFilterRuntimeConfig(nextOptions);
+    if (!Object.prototype.hasOwnProperty.call(nextOptions, 'sourceActive')) {
+      nextConfig.sourceActive = runtimeConfig.sourceActive;
+    }
+    Object.assign(runtimeConfig, nextConfig);
+    if (pipelineController) {
+      pipelineController.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.CONFIG_UPDATE, {
+        mode: runtimeConfig.mode,
+        sourceActive: runtimeConfig.sourceActive,
+        backgroundImageUrl: runtimeConfig.backgroundImageUrl !== '',
+      });
+    }
+    if (runtimeConfig.mode === 'off') {
+      segmenterStage.reset();
+      overloadDisabled = false;
+    }
+    syncPipelineStageStates();
+  }
+
+  function setSourceActive(active, reason = '') {
+    runtimeConfig.sourceActive = active !== false;
+    sourceStopReason = String(reason || '').trim();
+    if (!runtimeConfig.sourceActive) {
+      segmenterStage.reset();
+      compositorStage.reset();
+    }
+    if (pipelineController) {
+      pipelineController.emit(
+        runtimeConfig.sourceActive
+          ? BACKGROUND_PIPELINE_MESSAGE_TYPES.SOURCE_STARTED
+          : BACKGROUND_PIPELINE_MESSAGE_TYPES.SOURCE_STOPPED,
+        { reason: sourceStopReason || (runtimeConfig.sourceActive ? 'source_active' : 'source_inactive') },
+      );
+    }
+    syncPipelineStageStates();
+  }
+
+  const draw = (frameStartedAt = performance.now()) => {
     if (disposed) return;
-    const frameStartedAt = performance.now();
+    if (!runtimeConfig.sourceActive) return;
     if (frameStartedAt < nextFrameDueAt) {
-      rafId = requestAnimationFrame(draw);
       return;
     }
     if (overloadDisabled) {
@@ -553,106 +632,57 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
         ctx.restore();
       }
       nextFrameDueAt = frameStartedAt + dynamicFrameBudgetMs;
-      rafId = requestAnimationFrame(draw);
       return;
     }
     const vw = video.videoWidth || canvas.width;
     const vh = video.videoHeight || canvas.height;
     if (vw <= 1 || vh <= 1) {
-      rafId = requestAnimationFrame(draw);
       return;
     }
     const now = performance.now();
-    const canRunSegmentation = now >= overloadCooldownUntil;
+    const effectEnabled = runtimeConfig.mode !== 'off';
+    const canRunSegmentation = effectEnabled && now >= overloadCooldownUntil && Boolean(segmentationBackend);
     const segmentationWidth = Math.max(1, Math.round(Math.min(vw, canvas.width)));
     const segmentationHeight = Math.max(1, Math.round(Math.min(vh, canvas.height)));
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
-      : { faces, detectSampleMs: null, matteMask: null };
-    faces = segmentation.faces;
-    smoothedFaces = smoothFaceBoxes(smoothedFaces, faces, temporalSmoothingAlpha);
+      : { faces: segmenterStage.getState().faces, detectSampleMs: null, matteMask: null };
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);
     }
     const underLoad = lastFrameProcessMs > Math.min(LONG_RAF_FRAME_MS, dynamicFrameBudgetMs * 0.75);
-    const shouldRefreshMask = Boolean(segmentation.matteMask)
-      && (segmentation.detectSampleMs !== null || !hasMatteMask)
-      && (!underLoad || !hasMatteMask);
-    if (shouldRefreshMask && segmentation.matteMask) {
-      const useFastMatte = preferFastMatte || underLoad;
-      const updatedMask = buildMaskFromPayload({
-        matteMask: segmentation.matteMask,
-        faces: smoothedFaces.map((face) => ({
-          x: Number(face?.x || 0),
-          y: Number(face?.y || 0),
-          width: Number(face?.width || 0),
-          height: Number(face?.height || 0)
-        })),
-        vw,
-        vh,
-        useFastMatte
-      });
-      if (updatedMask) {
-        hasMatteMask = true;
-      }
-    }
-    if (backgroundImage) {
-      ctx.save();
-      drawCoverImage(ctx, backgroundImage, canvas.width, canvas.height);
-      ctx.restore();
-    } else if (backgroundColor) {
-      ctx.save();
-      ctx.fillStyle = backgroundColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    } else {
-      if (now - lastBackgroundRefreshAt >= backgroundRefreshIntervalMs || lastBackgroundRefreshAt === 0) {
-        backgroundLayer.save();
-        backgroundLayer.filter = `blur(${Math.max(1, Math.round(blurPx * 0.9))}px)`;
-        backgroundLayer.drawImage(video, 0, 0, backgroundLayerCanvas.width, backgroundLayerCanvas.height);
-        backgroundLayer.restore();
-        lastBackgroundRefreshAt = now;
-      }
-      ctx.drawImage(backgroundLayerCanvas, 0, 0, canvas.width, canvas.height);
-    }
-    if (hasMatteMask) {
-      personLayer.save();
-      personLayer.globalCompositeOperation = "copy";
-      personLayer.filter = "none";
-      personLayer.drawImage(video, 0, 0, canvas.width, canvas.height);
-      personLayer.restore();
-      personLayer.save();
-      personLayer.globalCompositeOperation = "destination-in";
-      personLayer.drawImage(maskLayerCanvas, 0, 0, canvas.width, canvas.height);
-      personLayer.restore();
-      ctx.drawImage(personLayerCanvas, 0, 0, canvas.width, canvas.height);
-    } else {
-      // Keep the whole frame blurred until the fresh matte is ready instead of
-      // briefly exposing the raw camera frame during a blur-strength handoff.
-      ctx.save();
-      ctx.filter = `blur(${blurPx}px)`;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    }
+    const segmenterState = effectEnabled
+      ? segmenterStage.update(segmentation, {
+          preferFastMatte: runtimeConfig.preferFastMatte,
+          underLoad,
+          vh,
+          vw,
+        })
+      : (segmenterStage.reset(), segmenterStage.getState());
+    compositorStage.render({
+      hasMatteMask: segmenterState.hasMatteMask,
+      mode: runtimeConfig.mode,
+      now,
+    });
     markReady();
     frameCount += 1;
     const frameProcessMs = Math.max(0, performance.now() - frameStartedAt);
     lastFrameProcessMs = frameProcessMs;
     processDurationSum += frameProcessMs;
-    if (frameProcessMs >= overloadFrameMs) {
+    if (frameProcessMs >= runtimeConfig.overloadFrameMs) {
       overloadStreak += 1;
     } else {
       overloadStreak = Math.max(0, overloadStreak - 1);
     }
-    if (autoDisableOnOverload && overloadStreak >= overloadConsecutiveFrames) {
+    if (runtimeConfig.autoDisableOnOverload && overloadStreak >= runtimeConfig.overloadConsecutiveFrames) {
       overloadDisabled = true;
       if (onOverload) {
         try {
           onOverload({
             avgProcessMs: frameProcessMs,
             targetFps: dynamicFps,
-            thresholdMs: overloadFrameMs
+            thresholdMs: runtimeConfig.overloadFrameMs
           });
         } catch {
         }
@@ -677,7 +707,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     }
     if (onStats) {
       const elapsedMs = now - statsWindowStartAt;
-      if (elapsedMs >= statsIntervalMs) {
+      if (elapsedMs >= runtimeConfig.statsIntervalMs) {
         const elapsedSec = Math.max(1e-3, elapsedMs / 1e3);
         const avgProcessMs = frameCount > 0 ? processDurationSum / frameCount : 0;
         const processLoad = Math.max(0, Math.min(1, avgProcessMs * (frameCount / elapsedSec) / 1e3));
@@ -706,15 +736,31 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       }
     }
     nextFrameDueAt = frameStartedAt + dynamicFrameBudgetMs;
-    rafId = requestAnimationFrame(draw);
   };
-  rafId = requestAnimationFrame(draw);
+  const scheduler = createVideoFrameScheduler({ onFrame: draw, video });
+  applyConfigUpdate(options);
+  await refreshBackgroundImage();
+  await ensureSegmentationBackend();
+  setSourceActive(runtimeConfig.sourceActive, 'initial');
+  scheduler.start();
+  const onTrackEnded = () => setSourceActive(false, 'track_ended');
+  const onTrackMute = () => setSourceActive(false, 'track_muted');
+  const onTrackUnmute = () => {
+    setSourceActive(true, 'track_unmuted');
+    void ensureSegmentationBackend();
+  };
+  videoTrack.addEventListener?.('ended', onTrackEnded);
+  videoTrack.addEventListener?.('mute', onTrackMute);
+  videoTrack.addEventListener?.('unmute', onTrackUnmute);
   const dispose = () => {
     if (disposed) return;
     disposed = true;
-    if (rafId) cancelAnimationFrame(rafId);
+    scheduler.stop();
     clearTimeout(readyTimer);
     markReady();
+    videoTrack.removeEventListener?.('ended', onTrackEnded);
+    videoTrack.removeEventListener?.('mute', onTrackMute);
+    videoTrack.removeEventListener?.('unmute', onTrackUnmute);
     try {
       video.pause();
       video.srcObject = null;
@@ -726,26 +772,67 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       } catch {
       }
     }
-    segmentationBackend.dispose();
-    smoothedFaces = [];
-    previousMaskAlpha = null;
+    segmentationBackend?.dispose?.();
+    compositorStage.reset();
+    segmenterStage.reset();
+    pipelineController?.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.PIPELINE_STOP, {});
   };
-  return {
+  const handle = {
+    sourceStream,
     stream: out,
-    active: true,
-    reason: "ok",
-    backend: segmentationBackend.kind,
+    active: runtimeConfig.mode !== 'off',
+    reason: runtimeConfig.mode === 'off' ? 'off' : 'ok',
+    backend: segmentationBackendKind,
+    mode: runtimeConfig.mode,
+    sourceActive: runtimeConfig.sourceActive,
     ready,
-    getMatteMaskSnapshot: () => {
-      try {
-        return maskLayer.getImageData(0, 0, canvas.width, canvas.height);
-      } catch {
-        return null;
+    getMatteMaskSnapshot: () => segmenterStage.getMatteMaskSnapshot(),
+    async updateConfig(nextOptions = {}) {
+      applyConfigUpdate(nextOptions);
+      await refreshBackgroundImage();
+      if (runtimeConfig.mode !== 'off') {
+        await ensureSegmentationBackend();
       }
+      handle.active = runtimeConfig.mode !== 'off';
+      handle.reason = runtimeConfig.mode === 'off' ? 'off' : 'ok';
+      handle.backend = segmentationBackendKind;
+      handle.mode = runtimeConfig.mode;
+      handle.sourceActive = runtimeConfig.sourceActive;
+      return handle;
     },
+    setSourceActive,
     dispose
   };
+  return handle;
 }
+
+async function createBackgroundFilterStream(sourceStream, options = {}) {
+  const pipelineController = createBackgroundPipelineController({
+    sourceId: String(options.sourceId || 'local-video').trim() || 'local-video',
+  });
+  pipelineController.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.PIPELINE_START, {
+    reactive: shouldUseReactiveBackgroundPipeline(),
+  });
+  pipelineController.updateStage(
+    BACKGROUND_PIPELINE_STAGE_NAMES.SOURCE,
+    BACKGROUND_PIPELINE_STAGE_STATES.RUNNING,
+  );
+
+  const result = await createBackgroundFilterStreamLegacy(sourceStream, {
+    ...options,
+    pipelineController,
+  });
+
+  return {
+    ...result,
+    pipeline: {
+      controller: pipelineController,
+      mode: shouldUseReactiveBackgroundPipeline() ? 'reactive' : 'legacy_fallback',
+      reactive: shouldUseReactiveBackgroundPipeline(),
+    },
+  };
+}
+
 export {
   createBackgroundFilterStream,
   resolveProcessingSpec

@@ -31,7 +31,12 @@ function toFacingMode(value) {
 }
 
 function toBackgroundFilterMode(value) {
+  if (value === 'replace') return 'replace';
   return value === 'blur' ? 'blur' : 'off';
+}
+
+function toBackgroundReplacementImageUrl(value) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function toBackgroundBackdropMode(value) {
@@ -90,6 +95,7 @@ function readPersistedCallMediaPrefs() {
       backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
       backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
       backgroundApplyOutgoing: toApplyOutgoing(parsed.background_apply_outgoing),
+      backgroundReplacementImageUrl: toBackgroundReplacementImageUrl(parsed.background_replacement_image_url),
       backgroundMaxProcessWidth: clampInteger(parsed.background_max_process_width, 960, 320, 1920),
       backgroundMaxProcessFps: clampInteger(parsed.background_max_process_fps, 24, 8, 30),
     };
@@ -116,6 +122,7 @@ function serializeCallMediaPrefs() {
     background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
     background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),
     background_apply_outgoing: toApplyOutgoing(callMediaPrefs.backgroundApplyOutgoing),
+    background_replacement_image_url: toBackgroundReplacementImageUrl(callMediaPrefs.backgroundReplacementImageUrl),
     background_max_process_width: clampInteger(callMediaPrefs.backgroundMaxProcessWidth, 960, 320, 1920),
     background_max_process_fps: clampInteger(callMediaPrefs.backgroundMaxProcessFps, 24, 8, 30),
   });
@@ -175,6 +182,7 @@ export const callMediaPrefs = reactive({
   backgroundMaskVariant: persistedPrefs?.backgroundMaskVariant ?? 4,
   backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
   backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
+  backgroundReplacementImageUrl: persistedPrefs?.backgroundReplacementImageUrl || '',
   backgroundMaxProcessWidth: persistedPrefs?.backgroundMaxProcessWidth ?? 960,
   backgroundMaxProcessFps: persistedPrefs?.backgroundMaxProcessFps ?? 24,
   backgroundFilterActive: false,
@@ -250,6 +258,9 @@ function applyEnumeratedDevices(devices) {
 }
 
 export async function refreshCallMediaDevices({ requestPermissions = false } = {}) {
+  console.log('Refreshing media devices...', { requestPermissions });
+  console.log('MediaDevices supported:', typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function');
+  console.log(navigator.mediaDevices);
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices
@@ -342,13 +353,21 @@ export function setCallBackgroundApplyOutgoing(value) {
   persistCallMediaPrefs();
 }
 
+export function setCallBackgroundReplacementImageUrl(value) {
+  callMediaPrefs.backgroundReplacementImageUrl = toBackgroundReplacementImageUrl(value);
+  persistCallMediaPrefs();
+}
+
 export function isCallBackgroundPresetActive(preset) {
   const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
   const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
   const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
 
   if (preset === 'off') {
-    return mode !== 'blur' || !applyOutgoing;
+    return mode === 'off' || !applyOutgoing;
+  }
+  if (preset === 'green') {
+    return mode === 'replace' && applyOutgoing && backdrop === 'green';
   }
   if (preset === 'light') {
     return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
@@ -360,6 +379,13 @@ export function isCallBackgroundPresetActive(preset) {
 }
 
 export function applyCallBackgroundPreset(preset) {
+  if (preset === 'green') {
+    setCallBackgroundReplacementImageUrl('');
+    setCallBackgroundBackdropMode('green');
+    setCallBackgroundFilterMode('replace');
+    setCallBackgroundApplyOutgoing(true);
+    return;
+  }
   if (preset !== 'light' && preset !== 'strong') {
     setCallBackgroundFilterMode('off');
     setCallBackgroundApplyOutgoing(false);
