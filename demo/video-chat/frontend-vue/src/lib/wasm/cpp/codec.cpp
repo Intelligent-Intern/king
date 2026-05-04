@@ -163,14 +163,30 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
     size_t y_rle_sz = 0;
     size_t u_rle_sz = 0;
     size_t v_rle_sz = 0;
+    size_t y_rle_off = 0;
+    size_t u_rle_off = 0;
+    size_t v_rle_off = 0;
     if (cfg_.entropy_coding == kNone) {
         y_rle_sz = int16_plane_bytes(y_count);
         u_rle_sz = int16_plane_bytes(uv_count);
         v_rle_sz = int16_plane_bytes(uv_count);
     } else {
-        y_rle_sz = rle_encode(Yq_.data(), y_count_i, rle_buf_.data());
-        u_rle_sz = rle_encode(Uq_.data(), uv_count_i, rle_buf_.data());
-        v_rle_sz = rle_encode(Vq_.data(), uv_count_i, rle_buf_.data());
+        const size_t y_cap = int16_plane_bytes(y_count_i);
+        const size_t u_cap = int16_plane_bytes(uv_count_i);
+        const size_t v_cap = int16_plane_bytes(uv_count_i);
+        if (y_cap > std::numeric_limits<size_t>::max() - u_cap) return -1;
+        const size_t yu_cap = y_cap + u_cap;
+        if (yu_cap > std::numeric_limits<size_t>::max() - v_cap) return -1;
+        const size_t total_rle_cap = yu_cap + v_cap;
+        rle_buf_.resize(total_rle_cap);
+
+        y_rle_off = 0;
+        u_rle_off = y_cap;
+        v_rle_off = y_cap + u_cap;
+
+        y_rle_sz = rle_encode(Yq_.data(), y_count_i, rle_buf_.data() + y_rle_off);
+        u_rle_sz = rle_encode(Uq_.data(), uv_count_i, rle_buf_.data() + u_rle_off);
+        v_rle_sz = rle_encode(Vq_.data(), uv_count_i, rle_buf_.data() + v_rle_off);
     }
 
     // Pack header + payload
