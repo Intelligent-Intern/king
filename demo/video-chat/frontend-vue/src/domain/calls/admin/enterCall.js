@@ -443,7 +443,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   }
 
   async function openCallWorkspace(target = null) {
+    console.log('Opening call workspace with target:', target);
     const routeSegment = await resolveWorkspaceRouteSegment(target);
+    console.log('Resolved workspace route segment:', routeSegment);
     closeEnterCallModal();
     await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
   }

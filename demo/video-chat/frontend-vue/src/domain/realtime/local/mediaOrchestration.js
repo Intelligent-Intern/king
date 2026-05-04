@@ -1,6 +1,7 @@
 import { buildOptionalCallAudioCaptureConstraints } from '../media/audioCaptureConstraints';
 import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings } from './sfuCaptureProfileConstraints';
 import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
+import { shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -392,7 +393,7 @@ export function createLocalMediaOrchestrationHelpers({
 
   function isBackgroundFilterEnabledForOutgoing() {
     const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
-    return mode === 'blur' && Boolean(callMediaPrefs.backgroundApplyOutgoing);
+    return (mode === 'blur' || mode === 'replace') && Boolean(callMediaPrefs.backgroundApplyOutgoing);
   }
 
   function resolveBackgroundFilterOptions(runtimeToken) {
@@ -400,9 +401,14 @@ export function createLocalMediaOrchestrationHelpers({
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     };
-    const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur' ? 'blur' : 'off';
+    const requestedMode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+    const mode = requestedMode === 'replace'
+      ? 'replace'
+      : requestedMode === 'blur'
+        ? 'blur'
+        : 'off';
     const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-    if (!applyOutgoing || mode !== 'blur') {
+    if (!applyOutgoing || (mode !== 'blur' && mode !== 'replace')) {
       return { mode: 'off' };
     }
 
@@ -442,7 +448,9 @@ export function createLocalMediaOrchestrationHelpers({
 
     return {
       mode,
+      backgroundColor: mode === 'replace' && backdrop === 'green' ? '#16a34a' : '',
       blurPx,
+      backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
       detectIntervalMs,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
@@ -503,7 +511,7 @@ export function createLocalMediaOrchestrationHelpers({
     state.backgroundBaselineCaptured = false;
 
     const options = resolveBackgroundFilterOptions(runtimeToken);
-    if (options.mode !== 'blur') {
+    if (!shouldUseReactiveBackgroundPipeline() && options.mode !== 'blur' && options.mode !== 'replace') {
       resetBackgroundRuntimeMetrics('off');
       return rawStream;
     }
@@ -673,7 +681,7 @@ export function createLocalMediaOrchestrationHelpers({
         stopRetiredLocalStreams([previousOutputStream, previousFilteredStream], [nextStream, rawStream]);
       }
 
-      if (!isBackgroundFilterEnabledForOutgoing()) {
+      if (!isBackgroundFilterEnabledForOutgoing() && !shouldUseReactiveBackgroundPipeline()) {
         backgroundFilterController.dispose();
       }
 
@@ -755,7 +763,7 @@ export function createLocalMediaOrchestrationHelpers({
 
       stopRetiredLocalStreams([previousOutputStream, previousRawStream, previousFilteredStream], [nextOutputStream, nextRawStream]);
 
-      if (!isBackgroundFilterEnabledForOutgoing()) {
+      if (!isBackgroundFilterEnabledForOutgoing() && !shouldUseReactiveBackgroundPipeline()) {
         backgroundFilterController.dispose();
       }
 

@@ -203,6 +203,113 @@
   cursor: zoom-out;
 }
 
+.workspace-local-pipeline-panel {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  z-index: 24;
+  width: min(360px, calc(100% - 28px));
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-rgba-255-255-255-0-12);
+  border-radius: 12px;
+  background: var(--color-rgba-8-20-43-0-78);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 28px var(--color-rgba-0-0-0-0-28);
+}
+
+.workspace-local-pipeline-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workspace-local-pipeline-btn {
+  min-width: 64px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--bg-control);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-local-pipeline-btn:hover {
+  background: var(--bg-tab-hover);
+}
+
+.workspace-local-pipeline-btn.active {
+  background: var(--bg-control-active);
+  color: var(--color-0b1324);
+  border-color: transparent;
+}
+
+.workspace-local-pipeline-diagnostics {
+  display: grid;
+  gap: 4px;
+}
+
+.workspace-local-pipeline-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.workspace-local-pipeline-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.workspace-local-pipeline-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.workspace-local-pipeline-stage {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--color-rgba-255-255-255-0-08);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: lowercase;
+}
+
+.workspace-local-pipeline-stage.state-running {
+  background: var(--color-rgba-0-196-140-0-2);
+  color: var(--color-bdf6cf);
+}
+
+.workspace-local-pipeline-stage.state-paused,
+.workspace-local-pipeline-stage.state-idle {
+  background: var(--color-rgba-255-255-255-0-08);
+  color: var(--text-muted);
+}
+
+.workspace-local-pipeline-stage.state-failed,
+.workspace-local-pipeline-stage.state-stopped {
+  background: var(--color-rgba-224-50-50-0-18);
+  color: var(--color-ffd1dc);
+}
+
+@media (max-width: 900px) {
+  .workspace-local-pipeline-panel {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+  }
+}
+
 .video-container {
   position: absolute;
   inset: 0;
