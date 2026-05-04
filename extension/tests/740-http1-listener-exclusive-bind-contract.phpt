@@ -124,7 +124,7 @@ var_dump($capture['listen_result']);
 var_dump($capture['listen_error']);
 ?>
 --EXPECTF--
-string(%d) "BIND_FAIL errno=%d"
+string(18) "BIND_FAIL errno=98"
 int(426)
 bool(true)
 string(0) ""
