@@ -385,13 +385,22 @@ export class MediaSecuritySession {
       try {
         await this.handleSenderKeySignal(sender, pending);
       } catch (error) {
-        if (asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch') {
+        if (this.isParticipantSetMismatchError(error)) {
           continue;
         }
         throw error;
       }
     }
     return true;
+  }
+
+  isParticipantSetMismatchError(error) {
+    const code = asString(error?.code).trim().toUpperCase();
+    if (code === 'PARTICIPANT_SET_MISMATCH') {
+      return true;
+    }
+    // Backward compatibility for older throw sites that only set message text.
+    return asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch';
   }
 
   async buildSenderKeySignal(targetUserId) {
