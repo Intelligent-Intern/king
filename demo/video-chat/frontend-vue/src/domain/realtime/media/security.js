@@ -418,7 +418,7 @@ export class MediaSecuritySession {
       asString(peer.participantSetHash) !== participantSetHash
       || asString(peer.transcriptHash) !== transcriptHash
     ) {
-      throw new Error('participant_set_mismatch');
+      throw new Error('Participant set mismatch detected (participant_set_mismatch)');
     }
     peer.participantSetHash = participantSetHash;
     peer.transcriptHash = transcriptHash;
