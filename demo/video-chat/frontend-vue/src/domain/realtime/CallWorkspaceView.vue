@@ -1553,7 +1553,7 @@ const {
     clearAdmissionGate,
     clearErrors,
     clearLobbyActionText,
-    clearTransientActivityPublishErrorNotice,
+    clearTransientActivityPublishErrorNotice: (...args) => clearTransientActivityPublishErrorNotice(...args),
     closeNativePeerConnection: (...args) => closeNativePeerConnection(...args),
     closeSocketLocal: (...args) => closeSocket(...args),
     downgradeSfuVideoQualityAfterEncodePressure: (...args) => downgradeSfuVideoQualityAfterEncodePressure(...args),
