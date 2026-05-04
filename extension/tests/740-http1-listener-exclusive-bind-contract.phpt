@@ -125,8 +125,10 @@ PY;
     }
     $exitCode = proc_close($process);
 
-    if ($exitCode !== 0 && trim($stdout) === '') {
-        throw new RuntimeException('duplicate bind probe failed: ' . trim($stderr));
+    if ($exitCode !== 0) {
+        throw new RuntimeException(
+            'duplicate bind probe failed (exit=' . $exitCode . '): stderr=' . trim($stderr) . '; stdout=' . trim($stdout)
+        );
     }
 
     return trim($stdout);
