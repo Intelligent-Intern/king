@@ -142,7 +142,7 @@ function king_server_http1_wire_abort_request(int $port, string $request, int $s
     $socket = false;
 
     if (!function_exists('socket_create')) {
-        throw new RuntimeException('socket_create() is required for HTTP/1 abort requests');
+        throw new RuntimeException('The sockets extension is required for HTTP/1 abort requests. Please enable it in php.ini.');
     }
 
     do {
