@@ -56,6 +56,11 @@ Optional environment:
   VIDEOCHAT_DEPLOY_SFU_DOMAIN  SFU websocket host, default: sfu.<domain>.
   VIDEOCHAT_DEPLOY_TURN_DOMAIN TURN host, default: turn.<domain>.
   VIDEOCHAT_DEPLOY_CDN_DOMAIN  Static/CDN asset host, default: cdn.<domain>.
+  VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS
+                              Optional comma-separated hostnames to route to an
+                              external HTTP upstream through the King edge.
+  VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM
+                              Upstream host:port for VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS.
   VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS
                               Comma-separated frontend dev-server hosts, default:
                               deploy domain plus api/ws/sfu/turn/cdn hosts.
@@ -177,6 +182,8 @@ refresh_deploy_config() {
   DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-}"
   DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-}"
   DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-}"
+  DEPLOY_EXTERNAL_DOMAINS="${VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS:-}"
+  DEPLOY_EXTERNAL_UPSTREAM="${VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM:-}"
 
   if [[ -n "${DEPLOY_DOMAIN}" ]]; then
     DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}"
@@ -190,12 +197,17 @@ refresh_deploy_config() {
   if [[ -z "${DEPLOY_VUE_ALLOWED_HOSTS}" && -n "${DEPLOY_DOMAIN}" ]]; then
     DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN}"
   fi
+  if [[ -n "${DEPLOY_EXTERNAL_DOMAINS}" ]]; then
+    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS:+${DEPLOY_VUE_ALLOWED_HOSTS},}${DEPLOY_EXTERNAL_DOMAINS}"
+  fi
 
   export VIDEOCHAT_DEPLOY_API_DOMAIN="${DEPLOY_API_DOMAIN}"
   export VIDEOCHAT_DEPLOY_WS_DOMAIN="${DEPLOY_WS_DOMAIN}"
   export VIDEOCHAT_DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN}"
   export VIDEOCHAT_DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN}"
   export VIDEOCHAT_DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS="${DEPLOY_EXTERNAL_DOMAINS}"
+  export VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM="${DEPLOY_EXTERNAL_UPSTREAM}"
   export VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS}"
   if [[ -n "${DEPLOY_REFRESH_KNOWN_HOSTS}" ]]; then
     export VIDEOCHAT_DEPLOY_REFRESH_KNOWN_HOSTS="${DEPLOY_REFRESH_KNOWN_HOSTS}"
@@ -223,8 +235,11 @@ deploy_refresh_known_hosts_enabled() {
 deploy_dns_targets() {
   local target seen=""
   local legacy_cdn_domain=""
+  local external_domains=()
   [[ -n "${DEPLOY_DOMAIN}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
-  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}"; do
+  IFS=',' read -r -a external_domains <<< "${DEPLOY_EXTERNAL_DOMAINS}"
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}" "${external_domains[@]}"; do
+    target="${target//[[:space:]]/}"
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
       *" ${target} "*) continue ;;
@@ -304,6 +319,8 @@ persist_current_deploy_config() {
   local_env_upsert VIDEOCHAT_DEPLOY_SFU_DOMAIN "${DEPLOY_SFU_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_TURN_DOMAIN "${DEPLOY_TURN_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_CDN_DOMAIN "${DEPLOY_CDN_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "${DEPLOY_EXTERNAL_DOMAINS}"
+  local_env_upsert VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "${DEPLOY_EXTERNAL_UPSTREAM}"
   local_env_upsert VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS "${DEPLOY_VUE_ALLOWED_HOSTS}"
   [[ -n "${VIDEOCHAT_DEPLOY_SSH_KEY:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_SSH_KEY "${VIDEOCHAT_DEPLOY_SSH_KEY}"
   [[ -n "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE:-}" ]] && local_env_upsert VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE "${VIDEOCHAT_DEPLOY_KNOWN_HOSTS_FILE}"
@@ -496,7 +513,7 @@ sync_checkout() {
 }
 
 certbot_standalone() {
-  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q legacy_cdn_domain_q
+  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q legacy_cdn_domain_q external_domains_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   email_q="$(shell_quote "${DEPLOY_EMAIL}")"
@@ -506,6 +523,7 @@ certbot_standalone() {
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
   legacy_cdn_domain_q="$(shell_quote "cnd.${DEPLOY_DOMAIN}")"
+  external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
 
   log "Obtaining/renewing Let's Encrypt cert for ${DEPLOY_DOMAIN}"
   remote_bash <<REMOTE
@@ -520,6 +538,7 @@ SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
 LEGACY_CDN_DOMAIN=${legacy_cdn_domain_q}
+EXTERNAL_DOMAINS=${external_domains_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 FRONTEND_WAS_RUNNING=0
 EDGE_WAS_RUNNING=0
@@ -592,6 +611,13 @@ CERTBOT_DOMAINS=(
 if [ -n "\${LEGACY_CDN_DOMAIN}" ] && [ "\${LEGACY_CDN_DOMAIN}" != "\${CDN_DOMAIN}" ]; then
   CERTBOT_DOMAINS+=(-d "\${LEGACY_CDN_DOMAIN}")
 fi
+IFS=',' read -r -a EXTRA_CERT_DOMAINS <<< "\${EXTERNAL_DOMAINS}"
+for cert_domain in "\${EXTRA_CERT_DOMAINS[@]}"; do
+  cert_domain="\${cert_domain//[[:space:]]/}"
+  if [ -n "\${cert_domain}" ]; then
+    CERTBOT_DOMAINS+=(-d "\${cert_domain}")
+  fi
+done
 
 \${SUDO} certbot certonly \\
   --standalone \\
@@ -612,7 +638,7 @@ REMOTE
 }
 
 write_remote_runtime_files() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -622,6 +648,8 @@ write_remote_runtime_files() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
+  external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   admin_q="$(shell_quote "${VIDEOCHAT_DEPLOY_ADMIN_PASSWORD:-}")"
   user_q="$(shell_quote "${VIDEOCHAT_DEPLOY_USER_PASSWORD:-}")"
@@ -649,6 +677,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+EXTERNAL_DOMAINS=${external_domains_q}
+EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 ADMIN_PASSWORD=${admin_q}
 USER_PASSWORD=${user_q}
@@ -714,6 +744,8 @@ VIDEOCHAT_DEPLOY_WS_DOMAIN=\${WS_DOMAIN}
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=\${SFU_DOMAIN}
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=\${TURN_DOMAIN}
 VIDEOCHAT_DEPLOY_CDN_DOMAIN=\${CDN_DOMAIN}
+VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS=\${EXTERNAL_DOMAINS}
+VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM=\${EXTERNAL_UPSTREAM}
 VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret
 VIDEOCHAT_STUN_URIS=stun:\${TURN_DOMAIN}:3478
 VIDEOCHAT_TURN_URIS=turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp
@@ -884,7 +916,7 @@ REMOTE
 }
 
 start_production_https() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
@@ -894,6 +926,8 @@ start_production_https() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
+  external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
   infra_provider_q="$(shell_quote "${VIDEOCHAT_INFRA_PROVIDER:-auto}")"
@@ -917,6 +951,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+EXTERNAL_DOMAINS=${external_domains_q}
+EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 INFRA_PROVIDER=${infra_provider_q}
@@ -966,6 +1002,8 @@ set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "\${EXTERNAL_DOMAINS}"
+set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "\${EXTERNAL_UPSTREAM}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_STUN_URIS "stun:\${TURN_DOMAIN}:3478"
 set_env_value VIDEOCHAT_TURN_URIS "turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp"
@@ -1196,7 +1234,7 @@ REMOTE
 }
 
 start_public_http() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
@@ -1204,6 +1242,8 @@ start_public_http() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
+  external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
   vue_allowed_hosts_q="$(shell_quote "${DEPLOY_VUE_ALLOWED_HOSTS}")"
 
@@ -1217,6 +1257,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+EXTERNAL_DOMAINS=${external_domains_q}
+EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
 VUE_ALLOWED_HOSTS=${vue_allowed_hosts_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
@@ -1249,6 +1291,8 @@ set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "\${EXTERNAL_DOMAINS}"
+set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "\${EXTERNAL_UPSTREAM}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
 set_env_value VIDEOCHAT_STUN_URIS "stun:\${TURN_DOMAIN}:3478"
 set_env_value VIDEOCHAT_TURN_URIS "turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp"
