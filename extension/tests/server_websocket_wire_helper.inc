@@ -334,7 +334,9 @@ function king_server_websocket_wire_raw_client_send_text($socket, string $payloa
     } elseif ($payloadLength <= 65535) {
         $frame .= chr(0x80 | 126) . pack('n', $payloadLength);
     } else {
-        $frame .= chr(0x80 | 127) . pack('N2', 0, $payloadLength);
+        $high = intdiv($payloadLength, 4294967296);
+        $low = $payloadLength % 4294967296;
+        $frame .= chr(0x80 | 127) . pack('N2', $high, $low);
     }
 
     $maskedPayload = '';
