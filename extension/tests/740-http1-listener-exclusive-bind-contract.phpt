@@ -11,44 +11,22 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-$probe = false;
-$checkPython = proc_open(
-    ['command', '-v', 'python3'],
+$checkReusePort = @proc_open(
+    ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
     [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
     ],
-    $pythonPipes
+    $reusePortPipes
 );
-if (is_resource($checkPython)) {
-    stream_get_contents($pythonPipes[1]);
-    stream_get_contents($pythonPipes[2]);
-    foreach ($pythonPipes as $pipe) {
+$probe = false;
+if (is_resource($checkReusePort)) {
+    stream_get_contents($reusePortPipes[1]);
+    stream_get_contents($reusePortPipes[2]);
+    foreach ($reusePortPipes as $pipe) {
         fclose($pipe);
     }
-    $pythonExit = proc_close($checkPython);
-
-    if ($pythonExit === 0) {
-        $checkReusePort = proc_open(
-            ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
-            [
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $reusePortPipes
-        );
-        if (is_resource($checkReusePort)) {
-            stream_get_contents($reusePortPipes[1]);
-            stream_get_contents($reusePortPipes[2]);
-            foreach ($reusePortPipes as $pipe) {
-                fclose($pipe);
-            }
-            $reusePortExit = proc_close($checkReusePort);
-            if ($reusePortExit === 0) {
-                $probe = true;
-            }
-        }
-    }
+    $probe = proc_close($checkReusePort) === 0;
 }
 if (!$probe) {
     echo "skip python3 with socket.SO_REUSEPORT is required";
