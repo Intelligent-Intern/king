@@ -11,12 +11,24 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-$probe = trim((string) shell_exec(
-    'command -v python3 >/dev/null 2>&1'
-    . ' && python3 -c ' . escapeshellarg("import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)")
-    . ' >/dev/null 2>&1 && printf yes'
-));
-if ($probe !== 'yes') {
+$checkReusePort = @proc_open(
+    ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
+    [
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ],
+    $reusePortPipes
+);
+$probe = false;
+if (is_resource($checkReusePort)) {
+    stream_get_contents($reusePortPipes[1]);
+    stream_get_contents($reusePortPipes[2]);
+    foreach ($reusePortPipes as $pipe) {
+        fclose($pipe);
+    }
+    $probe = proc_close($checkReusePort) === 0;
+}
+if (!$probe) {
     echo "skip python3 with socket.SO_REUSEPORT is required";
 }
 ?>
@@ -75,7 +87,7 @@ finally:
     sock.close()
 PY;
 
-    $command = 'python3 -c ' . escapeshellarg($script) . ' ' . (int) $port;
+    $command = ['python3', '-c', $script, (string) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
@@ -91,8 +103,10 @@ PY;
     }
     $exitCode = proc_close($process);
 
-    if ($exitCode !== 0 && trim($stdout) === '') {
-        throw new RuntimeException('duplicate bind probe failed: ' . trim($stderr));
+    if ($exitCode !== 0) {
+        throw new RuntimeException(
+            'duplicate bind probe failed (exit=' . $exitCode . '): stderr=' . trim($stderr) . '; stdout=' . trim($stdout)
+        );
     }
 
     return trim($stdout);
@@ -124,7 +138,7 @@ var_dump($capture['listen_result']);
 var_dump($capture['listen_error']);
 ?>
 --EXPECTF--
-string(%d) "BIND_FAIL errno=%d"
+string(18) "BIND_FAIL errno=98"
 int(426)
 bool(true)
 string(0) ""
