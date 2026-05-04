@@ -75,7 +75,7 @@ finally:
     sock.close()
 PY;
 
-    $command = 'python3 -c ' . escapeshellarg($script) . ' ' . (int) $port;
+    $command = ['python3', '-c', $script, (string) (int) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
