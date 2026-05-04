@@ -64,9 +64,11 @@ function nativeEncodedFrameAadTrackId(trackKind = 'data') {
   return 'native_data';
 }
 
+const VALID_PROTECTED_CODEC_IDS = new Set(['wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown']);
+
 function normalizeProtectedCodecId(value, runtimePath = '') {
   const normalized = asString(value).toLowerCase();
-  if (normalized === 'wlvc_wasm' || normalized === 'wlvc_ts' || normalized === 'webcodecs_vp8' || normalized === 'wlvc_unknown') return normalized;
+  if (VALID_PROTECTED_CODEC_IDS.has(normalized)) return normalized;
   if (asString(runtimePath).toLowerCase() === 'webrtc_native') return 'webrtc_native';
   return 'wlvc_unknown';
 }
@@ -385,13 +387,22 @@ export class MediaSecuritySession {
       try {
         await this.handleSenderKeySignal(sender, pending);
       } catch (error) {
-        if (asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch') {
+        if (this.isParticipantSetMismatchError(error)) {
           continue;
         }
         throw error;
       }
     }
     return true;
+  }
+
+  isParticipantSetMismatchError(error) {
+    const code = asString(error?.code).trim().toUpperCase();
+    if (code === 'PARTICIPANT_SET_MISMATCH') {
+      return true;
+    }
+    // Backward compatibility for older throw sites that only set message text.
+    return asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch';
   }
 
   async buildSenderKeySignal(targetUserId) {
@@ -418,7 +429,7 @@ export class MediaSecuritySession {
       asString(peer.participantSetHash) !== participantSetHash
       || asString(peer.transcriptHash) !== transcriptHash
     ) {
-      throw new Error('participant_set_mismatch');
+      throw new Error('Participant set mismatch detected (participant_set_mismatch)');
     }
     peer.participantSetHash = participantSetHash;
     peer.transcriptHash = transcriptHash;
@@ -472,7 +483,7 @@ export class MediaSecuritySession {
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
     if (payloadKexSuite === '' || payloadKexSuite !== keyContext.kexSuite || payload.media_suite !== MEDIA_SUITE) {
-      throw new Error('downgrade_attempt');
+      throw new Error('KEX/media suite downgrade attempt detected');
     }
     const participantSetHash = await this.participantHashForPeer(sender);
     const transcriptHash = await this.transcriptHashForPeer({
@@ -498,7 +509,8 @@ export class MediaSecuritySession {
 
     const epoch = Number(payload.epoch || 0);
     const senderKeyId = asString(payload.sender_key_id);
-    if (epoch < 1 || senderKeyId === '') throw new Error('wrong_key_id');
+    if (epoch < 1) throw new Error('invalid_epoch');
+    if (senderKeyId === '') throw new Error('missing_sender_key_id');
 
     const subtle = subtleCrypto();
     const nonce = base64UrlToBytes(payload.nonce);
