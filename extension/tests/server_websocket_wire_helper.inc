@@ -245,7 +245,7 @@ function king_server_websocket_wire_raw_client_connect(int $port, string $path)
     $message = 'connection failed';
 
     if (!function_exists('socket_create')) {
-        throw new RuntimeException('socket_create() is required for raw websocket client fixtures');
+        throw new RuntimeException('The sockets extension is required for raw websocket client fixtures. Please enable it in php.ini.');
     }
 
     do {
