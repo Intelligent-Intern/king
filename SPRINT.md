@@ -1,6 +1,361 @@
 # King Active Issues
 
-## Sprint: Video Chat Localization, RTL, And Modular Workspace Foundation
+## Sprint: Governance UX, Recursive CRUD, Permissions, And Onboarding
+
+Branch:
+- `feature/videochat-localization-sprint`
+
+Status:
+- Active sprint as of 2026-05-05.
+- The completed localization/module-foundation work remains archived below as
+  baseline evidence. New work should use this sprint as the active issue list.
+- Video-call runtime stays out of scope for this sprint unless a later issue
+  explicitly says otherwise.
+
+Execution boundary:
+- Do not touch video-call runtime code for this governance/admin refactor.
+- Keep `demo/video-chat/frontend-vue/src/domain/calls/**`,
+  `demo/video-chat/frontend-vue/src/domain/realtime/**`, SFU, WASM, and
+  wavelet code outside this sprint.
+- `WorkspaceShell.vue` is already too large. New settings/profile/tour behavior
+  must be extracted into focused components/composables instead of adding more
+  logic there.
+- CRUD and permission work must preserve the stronger tenant/resource-grant
+  direction already present in the backend. Do not replace it with local-only
+  UI flags or weaker role-only shortcuts.
+
+Sprint goal:
+- Make the Administration and Governance workspace areas coherent,
+  permission-aware, i18n-ready, testable, and based on reusable admin/CRUD
+  primitives.
+- Replace ad-hoc entity selects with a recursive linked `+1` flow: open the
+  related CRUD picker, search/select/create there, optionally recurse into its
+  related records, then return with a chosen value.
+- Add a clean route/action/resource permission contract from module descriptor
+  through navigation, action bars, backend routes, and tests.
+- Plan and start onboarding tours with a `?` help icon, per-area tours, and
+  completion badges shown in personal settings/profile.
+- Extend the personal profile surface with about/social/contact fields.
+
+## Assessment, 2026-05-05
+
+1. Navigation and menu structure
+- Present: frontend module descriptors live under
+  `demo/video-chat/frontend-vue/src/modules`, the router consumes generated
+  module records, and the left navigation uses the Pinia-backed module store.
+- Present: grouped first-level items already exist for `Administration` and
+  `Governance`, and the menu can expand/collapse submenus.
+- Gap: module descriptors expose route/nav labels and module-level
+  permissions, but they do not yet describe page action bars, create semantics,
+  relation fields, entity ownership, or per-action permissions.
+- Gap: `Governance` has placeholder CRUD routes for groups, organizations,
+  modules, permissions, roles, grants, policies, audit log, data portability,
+  and compliance. Only users has a real backend-backed view. Modules and
+  permissions are readonly descriptor catalog rows, but the page still shows a
+  generic create button that is wrong for system rows.
+- Gap: `Administration` is the correct first-level bucket for Marketplace,
+  Localization, App Configuration, and Theme Editor. The current descriptors
+  match that direction, but action semantics are still page-local.
+
+2. I18n readiness
+- Present: descriptors carry `label_key` and `pageTitle_key`; the navigation,
+  route metadata, governance CRUD labels, user admin labels, theme editor, and
+  localization admin surfaces use `t(...)` in most visible places.
+- Present: frontend localization contracts already cover a broad set of public,
+  admin, settings, and call surfaces.
+- Gap: fallback `label`/`pageTitle` strings in descriptors are still visible
+  escape hatches. The contract should treat keys as the source of truth for
+  visible labels and use raw labels only as diagnostics.
+- Gap: `governanceCatalog.js` builds English descriptions such as route counts,
+  permissions, grant targets, and time-limited grants. Those descriptions need
+  structured fields plus localized rendering, not concatenated English text.
+- Gap: `WorkspaceShell.vue` still contains hard-coded call sidebar strings.
+  They are outside this sprint boundary, but they remain a known global i18n
+  debt from the archived localization sprint.
+
+3. Permission coverage
+- Present: `navigationBuilder.js` computes `required_permissions`, filters
+  navigation by role/module/permission context, and route records carry
+  permission metadata.
+- Present: `routeAccess.js` maps tenant session permissions to module
+  permission keys and the router checks route/session access.
+- Present: backend tenant tables include tenants, tenant memberships,
+  organizations, groups, group memberships, `permission_grants`,
+  time-limited grants, export jobs, and import jobs. The grant evaluator already
+  checks direct user, group, organization, validity window, revocation, tenant,
+  resource type, resource id, and action.
+- Gap: action buttons are not described or filtered by descriptor permissions.
+  Create/edit/delete/import/export/save buttons are page-local and must become
+  action-model driven.
+- Gap: backend HTTP route authorization is still mostly role/path based. The
+  tenant grant engine is not yet wired into every governance/admin resource
+  action.
+- Gap: UI-only permissions such as `theme_editor_enabled` exist separately from
+  module permission/action grants. That needs a compatibility bridge, not a
+  second permanent permission model.
+
+4. CRUD and action-bar correctness
+- Present: shared primitives exist: `AppPageHeader`, `AdminPageFrame`,
+  `AdminTableFrame`, `AppPagination`, `AppModalShell`, `AppIconButton`, and
+  `AppSelect`.
+- Present: governance CRUD already uses the shared admin page/table/modal
+  primitives and maximizable modal behavior.
+- Gap: `GovernanceCrudView.vue` is generic in a way that hides product logic.
+  Groups, organizations, roles, grants, policies, export/import, and compliance
+  need entity-specific fields, validation, relation handling, and action names.
+- Gap: "Create new" is not always valid. Examples:
+  - Modules: system/descriptor rows should be readonly; action should be
+    "register module" only when backend module upload/registration exists.
+  - Permissions: descriptor permission rows should be readonly; action should
+    be "import permission manifest" or none until mutable permission resources
+    exist.
+  - Audit log: create/delete do not make sense; actions should be inspect,
+    filter, export.
+  - Data portability: action should be export/import job, not generic create.
+  - Grants: action should be add grant with subject/resource/time fields.
+- Gap: user creation still uses direct role/theme selects. Role/group/theme
+  assignment must use relation/link pickers when the target is an entity rather
+  than a tiny local enum.
+
+5. Relation flow and N+1 data
+- Decision: entity references must not be normal selects. Use a linked `+1`
+  relation control that opens the target CRUD picker. The picker supports
+  search, pagination, mass selection where allowed, create-in-place, nested
+  relation creation, select, and return.
+- Required user story: create user -> add group -> if group does not exist,
+  create group -> add modules/permissions to group -> mass-select permissions
+  with pagination -> return to group -> return to user -> save user.
+- Required behavior: the relation flow is recursive and stack-based. Each level
+  keeps unsaved draft state, selected records, validation errors, and a safe
+  back/cancel path.
+- Required backend shape: list endpoints must return normalized rows plus
+  included relation summaries or batch relation summaries. The frontend must not
+  fetch relation labels row-by-row.
+- Required frontend shape: entity stores/cache by `{ entity, id }` with batch
+  hydration; tables render summaries from the cache and request missing summary
+  sets in one call per page.
+
+6. Frontend test gaps
+- Covered now: module registry, navigation builder, route access, governance
+  catalog rows, shared admin primitives, localization runtime/import/settings,
+  RTL foundation, and several e2e admin/shared UI smoke paths.
+- Missing: descriptor action-bar contract; per-action permission visibility;
+  create/edit/delete/import/export semantics per entity; recursive relation
+  picker unit tests; relation stack e2e journey; batch summary/N+1 contract;
+  governance backend API contracts; settings profile fields; onboarding tour
+  and badge persistence; scroll/full-height regression for admin content;
+  mobile/tablet responsive checks for nested CRUD modals.
+
+7. Design and scroll audit
+- Present: shared page/header/table/footer components reduce some duplication.
+- Gap: pages still vary between `AppPageHeader` directly and
+  `AdminPageFrame`. New admin/governance pages should use the same frame unless
+  they have a concrete reason not to.
+- Gap: the standard action bar should be semantic and sparse: primary create
+  only where create is meaningful, secondary import/export/config actions only
+  where they match the entity, and icon buttons with tooltips for repeated row
+  actions.
+- Gap: no standard help/tour action exists in the page header. The required
+  pattern is a `?` icon with hover/title text "Take the tour"; it opens the
+  relevant guided tour without adding visible explanatory blocks to the page.
+- Gap: scroll ownership must be explicit. Desktop left navigation must stay
+  fixed while the main admin content scrolls; modal bodies must scroll without
+  hiding footers; nested relation flows must remain usable on mobile.
+
+8. Backend/data-model readiness
+- Present: tenant foundation and time-limited permission grants exist.
+- Gap: governance CRUD endpoints are not complete for organizations, groups,
+  roles, grants, policies, modules, permissions, audit log, data export/import,
+  and compliance.
+- Gap: user/profile storage does not yet include about/social/contact fields or
+  onboarding badge progress.
+- Gap: export/import job tables exist, but the user-facing API and admin UI are
+  not wired to round-trip users/organizations and their related grants/groups.
+
+9. Profile and onboarding
+- Present: settings descriptors provide About Me, Credentials + E-Mail, Theme,
+  Localization, and Regional Time panels.
+- Gap: About Me currently does not cover the requested profile fields:
+  `about_me`, LinkedIn, X.com, YouTube, and messenger contacts.
+- Gap: no onboarding/tour model exists. We need tour definitions per area,
+  completion events, persisted badges, and badge display in personal settings.
+
+## Architecture Decisions For This Sprint
+
+1. Descriptor action model
+- Extend frontend module descriptors with action metadata instead of letting
+  every page invent action bars locally:
+  - `actions[].key`
+  - `actions[].label_key`
+  - `actions[].icon`
+  - `actions[].kind` (`create`, `edit`, `delete`, `import`, `export`,
+    `configure`, `inspect`, `tour`, `custom`)
+  - `actions[].required_permissions`
+  - `actions[].resource_type`
+  - `actions[].enabled_when`
+- Route/nav/module permissions remain; action permissions are additional and
+  narrower.
+
+2. CRUD descriptor model
+- Add a reusable CRUD contract per entity:
+  - `entity_key`
+  - `resource_type`
+  - `endpoint`
+  - `fields`
+  - `relationships`
+  - `table_columns`
+  - `selection_mode`
+  - `allowed_actions`
+- CRUD descriptors drive the standard page header, toolbar, table, pagination,
+  modal, validation, relation picker, and permission-gated actions.
+
+3. Recursive relation picker
+- Build a `CrudRelationStack` / `useCrudRelationNavigator(options)` primitive.
+- Entity relation fields render as `+1` linked controls, not selects.
+- The relation stack supports nested create/select/back/cancel and preserves
+  unsaved parent drafts.
+- Many-to-many relations support mass selection with pagination and search.
+
+4. N+1-safe entity loading
+- CRUD list responses must include summary data needed for the current page, or
+  provide one batch summary endpoint per entity type.
+- The frontend stores summaries in a normalized cache and never does row-level
+  relation fetch loops.
+- Contract tests must fail when a table implementation fetches relation labels
+  inside row rendering.
+
+5. Permission enforcement
+- The backend route layer must resolve tenant, actor, resource, action, and
+  time window before mutating data.
+- Frontend visibility is convenience only. Backend permissions are the source
+  of truth.
+- Existing legacy role/admin checks remain only as compatibility aliases until
+  equivalent resource/action grants are wired.
+
+6. Onboarding
+- Tour definitions are descriptor-addressable by area and step key.
+- A `?` page-header action opens the current area's tour.
+- Completion writes a user-scoped badge/progress record.
+- Personal settings/profile shows completed badges and pending suggested tours.
+
+## Active Issues
+
+1. [ ] [descriptor-action-contract] Add action metadata to module descriptors
+   and a passing contract test that every admin/governance route has
+   permission-bound action definitions or an explicit readonly/no-action state.
+
+   Done when:
+   - Administration and Governance descriptors expose action metadata.
+   - Modules, permissions, audit log, and readonly catalog pages no longer get
+     a generic create action.
+   - Tests prove action labels use i18n keys and actions carry permissions or
+     explicit readonly reasons.
+
+2. [ ] [standard-admin-frame] Create a standard admin/governance page contract
+   for h1/title, action bar, search, table, pagination, scroll ownership, and
+   help/tour icon.
+
+   Done when:
+   - Existing admin/governance pages render through shared primitives or have a
+     documented exception.
+   - Desktop left navigation does not scroll with page content.
+   - Main admin content and modal bodies scroll predictably on desktop, tablet,
+     and mobile.
+   - The `?` tour action is available through the shared header action model.
+
+3. [ ] [governance-crud-descriptors] Replace the placeholder governance CRUD
+   logic with entity-specific CRUD descriptors for users, groups,
+   organizations, roles, grants, policies, export/import jobs, compliance,
+   modules, permissions, and audit log.
+
+   Done when:
+   - Each entity has fields, table columns, allowed actions, and relation
+     descriptors.
+   - Readonly entities cannot be created through the UI.
+   - Row actions are icon-based, permission-gated, and localized.
+
+4. [ ] [recursive-relation-picker] Implement the linked `+1` relation workflow
+   for entity references and remove entity selects from governance/user CRUD.
+
+   Done when:
+   - User -> group -> group permissions/modules can be completed in one nested
+     flow and returns to the unsaved user draft.
+   - Mass selection supports search and pagination.
+   - The flow is recursive and has tested back/cancel behavior.
+
+5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
+   CRUD tables and relation pickers.
+
+   Done when:
+   - List pages receive included summaries or batch summaries.
+   - Frontend code has no per-row relation label request loops.
+   - A contract test covers the batch summary requirement.
+
+6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
+   onto tenant-scoped resource/action permissions.
+
+   Done when:
+   - Groups, organizations, memberships, grants, export/import jobs, and policy
+     endpoints are tenant-scoped.
+   - Mutations call the backend permission evaluator with resource/action/time.
+   - Tests cover allowed, denied, expired, revoked, and wrong-tenant cases.
+
+7. [ ] [profile-social-fields] Extend personal profile/settings with about and
+   social/contact fields.
+
+   Done when:
+   - User storage supports `about_me`, LinkedIn, X.com, YouTube, and messenger
+     contacts.
+   - Settings UI edits these fields without bloating `WorkspaceShell.vue`.
+   - Frontend and backend validation/tests cover URL/contact formats.
+
+8. [ ] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
+   persisted completion badges.
+
+   Done when:
+   - Page headers can open a current-area tour via `?`.
+   - Tour completion persists per user/tenant.
+   - Badges are visible in personal settings/profile.
+   - Tests cover tour definition loading and badge persistence.
+
+9. [ ] [admin-i18n-hardening] Close remaining admin/governance i18n escape
+   hatches.
+
+   Done when:
+   - Descriptor raw labels are not rendered as visible UI when a key is
+     available.
+   - Governance catalog descriptions render from structured localized fields.
+   - Admin/governance action labels, empty states, errors, and readonly reasons
+     are all keyed.
+
+10. [ ] [frontend-governance-test-matrix] Add frontend tests for the new admin
+    logic.
+
+    Done when:
+    - Unit/contract tests cover descriptor actions, permission filtering,
+      CRUD descriptors, relation stack, and N+1 summary loading.
+    - E2E covers create user with nested group/permission assignment and
+      readonly catalog behavior.
+    - Responsive e2e covers scroll ownership and nested modal usability.
+
+11. [ ] [data-portability-ui] Implement user and organization export/import
+    UI on top of tenant export/import jobs.
+
+    Done when:
+    - Users can export their own data where permitted.
+    - Organization admins can export/import organization data where permitted.
+    - Import validates schema, tenant isolation, references, and dry-run output
+      before mutation.
+
+12. [ ] [rollout-proof] Keep deployment proof and release notes current for
+    the governance/admin sprint.
+
+    Done when:
+    - Contract and build output are recorded after each implementation slice.
+    - No release artifact directories are deployed.
+    - Any known skipped tests are documented with reason and next action.
+
+## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
 Branch:
 - `feature/videochat-localization-sprint`
