@@ -162,7 +162,7 @@ static zend_result king_http3_materialize_response(
 {
     char status_line_buffer[64];
 
-    if (response->status_code <= 0) {
+    if ((zend_long) response->status_code <= 0) {
         king_http3_throw(
             king_ce_protocol_exception,
             "king_http3_request_send() did not receive a valid HTTP/3 status code."
@@ -172,11 +172,11 @@ static zend_result king_http3_materialize_response(
 
     smart_str_0(&response->body);
 
-    snprintf(status_line_buffer, sizeof(status_line_buffer), "HTTP/3 %ld", response->status_code);
+    snprintf(status_line_buffer, sizeof(status_line_buffer), "HTTP/3 " ZEND_LONG_FMT, (zend_long) response->status_code);
     response->status_line = zend_string_init(status_line_buffer, strlen(status_line_buffer), 0);
 
     array_init(return_value);
-    add_assoc_long(return_value, "status", response->status_code);
+    add_assoc_long(return_value, "status", (zend_long) response->status_code);
     add_assoc_str(return_value, "status_line", response->status_line);
     response->status_line = NULL;
     add_assoc_zval(return_value, "headers", &response->headers);

@@ -21,7 +21,7 @@ function read(relativePath) {
 try {
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
   const workspaceLines = workspaceView.split('\n').length;
-  assert.ok(workspaceLines <= 2200, `CallWorkspaceView.vue must stay below the monolith cap (got ${workspaceLines})`);
+  assert.ok(workspaceLines <= 2150, `CallWorkspaceView.vue must stay below the monolith cap (got ${workspaceLines})`);
 
   const requiredImports = [
     "createCallWorkspaceSocketHelpers",
@@ -35,6 +35,8 @@ try {
     "registerCallWorkspaceLifecycleHelpers",
     "createCallWorkspaceMediaStack",
     "createCallWorkspaceNativeStack",
+    "createCallWorkspaceGossipDataLane",
+    "createCallWorkspaceShellViewport",
   ];
   for (const name of requiredImports) {
     assert.ok(workspaceView.includes(name), `CallWorkspaceView.vue must import/use ${name}`);
@@ -56,6 +58,7 @@ try {
   const requiredHelperFiles = [
     'chatRuntime.js',
     'clientDiagnostics.js',
+    'gossipDataLane.js',
     'lifecycle.js',
     'mediaSecurityRuntime.js',
     'mediaStack.js',
@@ -68,6 +71,7 @@ try {
     'runtimeHealth.js',
     'runtimeSwitching.js',
     'sfuTransport.js',
+    'shellViewport.js',
     'socketLifecycle.js',
     'videoLayout.js',
   ];

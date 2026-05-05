@@ -177,7 +177,7 @@ static zend_string *king_orchestrator_build_attempt_identity(zend_string *run_id
 {
     return strpprintf(
         0,
-        "%s:attempt-%ld",
+        "%s:attempt-" ZEND_LONG_FMT,
         run_id != NULL ? ZSTR_VAL(run_id) : "run-unknown",
         king_orchestrator_run_attempt_number(run_id)
     );
@@ -193,7 +193,7 @@ static zend_string *king_orchestrator_build_failure_identity(
 {
     return strpprintf(
         0,
-        "%s:%s:%s:%ld",
+        "%s:%s:%s:" ZEND_LONG_FMT,
         attempt_identity != NULL
             ? ZSTR_VAL(attempt_identity)
             : (run_id != NULL ? ZSTR_VAL(run_id) : "run-unknown"),

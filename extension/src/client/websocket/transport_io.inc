@@ -42,10 +42,10 @@ static zend_string *king_websocket_build_authority(king_ws_state *state)
     }
 
     if (needs_brackets) {
-        return strpprintf(0, "[%s]:%ld", host, state->port);
+        return strpprintf(0, "[%s]:" ZEND_LONG_FMT, host, state->port);
     }
 
-    return strpprintf(0, "%s:%ld", host, state->port);
+    return strpprintf(0, "%s:" ZEND_LONG_FMT, host, state->port);
 }
 
 static zend_string *king_websocket_build_transport_target(king_ws_state *state)
@@ -58,10 +58,10 @@ static zend_string *king_websocket_build_transport_target(king_ws_state *state)
         && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
 
     if (needs_brackets) {
-        return strpprintf(0, "%s://[%s]:%ld", transport, host, state->port);
+        return strpprintf(0, "%s://[%s]:" ZEND_LONG_FMT, transport, host, state->port);
     }
 
-    return strpprintf(0, "%s://%s:%ld", transport, host, state->port);
+    return strpprintf(0, "%s://%s:" ZEND_LONG_FMT, transport, host, state->port);
 }
 
 static zend_string *king_websocket_generate_client_key(king_ws_state *state)
@@ -469,7 +469,7 @@ static zend_result king_websocket_reject_received_backpressure_overflow(
     unsigned char close_payload[2] = {0x03, 0xf0}; /* 1008 */
 
     king_websocket_set_error(
-        "%s() pending WebSocket messages exceeded max_queued_messages %ld or max_queued_bytes %ld.",
+        "%s() pending WebSocket messages exceeded max_queued_messages " ZEND_LONG_FMT " or max_queued_bytes " ZEND_LONG_FMT ".",
         function_name,
         state->max_queued_messages,
         state->max_queued_bytes

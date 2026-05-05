@@ -73,7 +73,7 @@ static void king_autoscaling_json_append_kv_long(
 {
     char raw[64];
 
-    snprintf(raw, sizeof(raw), "%ld", (long) value);
+    snprintf(raw, sizeof(raw), ZEND_LONG_FMT, (zend_long) value);
 
     if (!*first_field) {
         smart_str_appendc(buffer, ',');
@@ -541,7 +541,7 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_API_ERROR;
     }
 
-    if (http_code < 200 || http_code >= 300) {
+    if ((zend_long) http_code < 200 || (zend_long) http_code >= 300) {
         king_autoscaling_runtime.spend_status = KING_AUTOSCALING_BUDGET_STATUS_API_ERROR;
         king_autoscaling_runtime.quota_status = KING_AUTOSCALING_BUDGET_STATUS_API_ERROR;
         king_autoscaling_runtime.spend_usage_percent = -1;
@@ -549,8 +549,8 @@ static king_autoscaling_hetzner_budget_decision_t king_autoscaling_check_hetzner
         snprintf(
             king_autoscaling_runtime.budget_probe_error,
             sizeof(king_autoscaling_runtime.budget_probe_error),
-            "Hetzner budget API returned HTTP %ld.",
-            http_code
+            "Hetzner budget API returned HTTP " ZEND_LONG_FMT ".",
+            (zend_long) http_code
         );
         smart_str_free(&response);
         return KING_AUTOSCALING_HETZNER_BUDGET_DECISION_API_ERROR;

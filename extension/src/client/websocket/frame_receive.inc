@@ -250,7 +250,7 @@ static zend_result king_websocket_read_raw_frame(
         && payload_len > (size_t) state->max_payload_size
     ) {
         king_websocket_set_error(
-            "%s() received a WebSocket frame payload %zu larger than max_payload_size %ld.",
+            "%s() received a WebSocket frame payload %zu larger than max_payload_size " ZEND_LONG_FMT ".",
             function_name,
             payload_len,
             state->max_payload_size
@@ -366,7 +366,7 @@ static zend_result king_websocket_handle_control_frame(
                     return king_websocket_reject_received_protocol_violation(
                         state,
                         function_name,
-                        "%s() received an invalid WebSocket close status code %ld.",
+                        "%s() received an invalid WebSocket close status code " ZEND_LONG_FMT ".",
                         function_name,
                         close_code
                     );
@@ -434,7 +434,7 @@ static zend_result king_websocket_append_fragment(
         || frame->payload_len > max_payload_size - *message_len
     ) {
         king_websocket_set_error(
-            "%s() received a fragmented WebSocket message payload %zu larger than max_payload_size %ld.",
+            "%s() received a fragmented WebSocket message payload %zu larger than max_payload_size " ZEND_LONG_FMT ".",
             function_name,
             *message_len + frame->payload_len,
             state->max_payload_size

@@ -295,7 +295,7 @@ static zend_result king_server_admin_api_validate_config(
     if (config->accept_timeout_ms < 0
         || config->accept_timeout_ms > KING_SERVER_ADMIN_API_MAX_ACCEPT_TIMEOUT_MS) {
         king_server_control_set_errorf(
-            "%s() accept_timeout_ms must be between 0 and %ld.",
+            "%s() accept_timeout_ms must be between 0 and " ZEND_LONG_FMT ".",
             function_name,
             (zend_long) KING_SERVER_ADMIN_API_MAX_ACCEPT_TIMEOUT_MS
         );
@@ -304,4 +304,3 @@ static zend_result king_server_admin_api_validate_config(
 
     return SUCCESS;
 }
-

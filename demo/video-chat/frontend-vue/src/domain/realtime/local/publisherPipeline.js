@@ -52,6 +52,7 @@ export function createLocalPublisherPipelineHelpers({
     maybeFallbackToNativeRuntime,
     mediaDebugLog,
     noteWlvcSourceReadbackSuccess = () => false,
+    publishLocalEncodedFrameToGossip = () => false,
     reconfigureLocalTracksFromSelectedDevices,
     renderCallVideoLayout,
     resetBackgroundRuntimeMetrics,
@@ -825,6 +826,16 @@ export function createLocalPublisherPipelineHelpers({
             sfuSendFailureDetails,
           );
           return;
+        }
+        try {
+          publishLocalEncodedFrameToGossip(outgoingFrame);
+        } catch (gossipError) {
+          captureClientDiagnosticError('gossip_data_lane_publish_failed', gossipError, {
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            track_id: videoTrack.id,
+          }, {
+            code: 'gossip_data_lane_publish_failed',
+          });
         }
         const postSendBufferedAmount = getSfuClientBufferedAmount();
         const postSendPressureBytes = Math.max(

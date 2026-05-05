@@ -473,6 +473,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     }
     closeSocket({ leaveRoom: true });
     teardownLocalPublisher();
+    callbacks.teardownGossipDataLane?.();
     teardownNativePeerConnections();
     teardownSfuRemotePeers();
     if (sfuClientRef.value) {

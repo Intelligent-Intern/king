@@ -377,7 +377,7 @@ static zend_result king_http1_open_socket(
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_ADDRCONFIG;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, port);
     gai_status = getaddrinfo(host, port_buffer, &hints, &results);
     if (gai_status != 0) {
         king_http1_throw(
@@ -461,7 +461,7 @@ static zend_result king_http1_open_socket(
 
     king_http1_throw(
         king_ce_network_exception,
-        "%s() failed to connect a TCP socket to '%s:%ld' for the HTTP/1 runtime (errno %d).",
+        "%s() failed to connect a TCP socket to '%s:" ZEND_LONG_FMT "' for the HTTP/1 runtime (errno %d).",
         function_name,
         host,
         port,

@@ -610,7 +610,7 @@ static int king_orchestrator_execute_remote_run(
     smart_str_append(&command, encoded_handler_boundary);
     smart_str_appendc(&command, '\t');
     smart_str_append(&command, encoded_tool_configs);
-    smart_str_append_printf(&command, "\t%ld\t%ld\n", timeout_budget_ms, deadline_budget_ms);
+    smart_str_append_printf(&command, "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\n", timeout_budget_ms, deadline_budget_ms);
     smart_str_0(&command);
 
     zend_string_release(encoded_run_id);
