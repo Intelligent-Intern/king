@@ -21,6 +21,10 @@ function normalizeTheme(value) {
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
+function errorCodeFromPayload(payload) {
+  const code = payload && typeof payload === 'object' ? payload?.error?.code : '';
+  return typeof code === 'string' ? code.trim() : '';
+}
 function normalizeAccountType(value) {
   const accountType = normalizeString(value).toLowerCase();
   return ACCOUNT_TYPES.has(accountType) ? accountType : '';
@@ -380,6 +384,7 @@ export async function loginWithCallAccess(accessId, options = {}) {
     return {
       ok: false,
       status: 422,
+      errorCode: 'call_access_validation_failed',
       message: 'Call access id is invalid.',
     };
   }
@@ -399,6 +404,7 @@ export async function loginWithCallAccess(accessId, options = {}) {
       return {
         ok: false,
         status: response.status,
+        errorCode: errorCodeFromPayload(payload),
         message: extractErrorMessage(payload, 'Could not start call access session.'),
       };
     }
