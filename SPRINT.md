@@ -540,13 +540,16 @@ Non-goals for this sprint:
      locales.
    - [x] Public booking slot labels, FullCalendar locale/direction, and
      booking submit payload use the active public locale.
+   - [x] Public join/access and appointment booking API errors resolve safe
+     frontend text from stable backend error codes, including invalid,
+     expired, missing, and unavailable public paths.
 
    Done when:
    - [x] Public pages choose language from explicit route/query/cookie/browser
      fallback in a deterministic order.
    - [x] Public pages support RTL locales.
    - [x] Public booking slots and date/time formatting use the active locale.
-   - [ ] Invalid/expired access paths show localized safe error text.
+   - [x] Invalid/expired access paths show localized safe error text.
    - [ ] Browser smoke covers public booking in `en`, `de`, `ar`, and one
      additional RTL locale from the website source.
 
