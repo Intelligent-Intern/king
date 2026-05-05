@@ -638,6 +638,11 @@ Non-goals for this sprint:
     - Live call workspace at least as a UI shell smoke without requiring real
       camera permission for every scenario.
 
+    Progress:
+    - [x] Public-localization Playwright smoke covers public booking across
+      desktop, tablet, and mobile viewports for `en`, `de`, `ar`, and `fa`,
+      including document direction and horizontal overflow checks.
+
     Done when:
     - [ ] Screenshots show no overlapping text in representative LTR and RTL
       locales.
