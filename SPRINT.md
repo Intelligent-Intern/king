@@ -531,10 +531,18 @@ Non-goals for this sprint:
    - Public error states for expired or invalid tokens.
    - Language resolution without requiring authentication.
 
+   Progress:
+   - [x] Public routes resolve locale deterministically from explicit
+     `locale` / `lang` / `language` query, then public locale cookie, then
+     browser language, then English fallback.
+   - [x] Public booking and join routes load i18n resources without requiring
+     an authenticated session and apply document `lang` / `dir`, including RTL
+     locales.
+
    Done when:
-   - [ ] Public pages choose language from explicit route/query/cookie/browser
+   - [x] Public pages choose language from explicit route/query/cookie/browser
      fallback in a deterministic order.
-   - [ ] Public pages support RTL locales.
+   - [x] Public pages support RTL locales.
    - [ ] Public booking slots and date/time formatting use the active locale.
    - [ ] Invalid/expired access paths show localized safe error text.
    - [ ] Browser smoke covers public booking in `en`, `de`, `ar`, and one
