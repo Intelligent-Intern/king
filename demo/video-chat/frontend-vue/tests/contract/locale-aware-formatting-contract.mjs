@@ -16,46 +16,54 @@ const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const sampleIso = '2026-01-02T14:05:00Z';
 const sampleDate = new Date(sampleIso);
 
+function localizedInteger(value, locale, minimumIntegerDigits = 2) {
+  return new Intl.NumberFormat(locale, {
+    minimumIntegerDigits,
+    useGrouping: false,
+  }).format(value);
+}
+
+function expectedLocalizedDate(date, locale, dateFormat) {
+  const year = localizedInteger(date.getFullYear(), locale, 4);
+  const month = localizedInteger(date.getMonth() + 1, locale, 2);
+  const day = localizedInteger(date.getDate(), locale, 2);
+  if (dateFormat === 'ymd_dash') return `${year}-${month}-${day}`;
+  if (dateFormat === 'ymd_compact') return `${year}${month}${day}`;
+  if (dateFormat === 'mdy_slash') return `${month}/${day}/${year}`;
+  return `${day}.${month}.${year}`;
+}
+
+function expectedLocalizedTime(date, locale, timeFormat) {
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: timeFormat === '12h',
+  }).format(date);
+}
+
+function expectedLocalizedDateTime(date, { locale, dateFormat = 'dmy_dot', timeFormat = '24h' }) {
+  return `${expectedLocalizedDate(date, locale, dateFormat)} ${expectedLocalizedTime(date, locale, timeFormat)}`;
+}
+
 assert.equal(normalizeDateTimeLocale('de'), 'de');
 assert.equal(normalizeDateTimeLocale('definitely-unsupported'), 'en');
 
 for (const locale of ['en', 'de', 'ar', 'fa', 'ps']) {
   assert.equal(normalizeDateTimeLocale(locale), locale);
   assert.equal(
-    formatLocalizedDateTimeDisplay(sampleIso, { locale, timeFormat: '24h' }),
-    new Intl.DateTimeFormat(locale, {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(sampleDate),
-    `${locale} 24h date-time formatting must use the active locale`,
+    formatLocalizedDateTimeDisplay(sampleIso, { locale, dateFormat: 'ymd_dash', timeFormat: '24h' }),
+    expectedLocalizedDateTime(sampleDate, { locale, dateFormat: 'ymd_dash', timeFormat: '24h' }),
+    `${locale} date-time formatting must use the active locale and requested date format`,
   );
 }
 
 assert.equal(
-  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'en', timeFormat: '12h' }),
-  new Intl.DateTimeFormat('en', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  }).format(sampleDate),
+  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'en', dateFormat: 'mdy_slash', timeFormat: '12h' }),
+  expectedLocalizedDateTime(sampleDate, { locale: 'en', dateFormat: 'mdy_slash', timeFormat: '12h' }),
 );
 assert.equal(
-  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'ar', timeFormat: '12h' }),
-  new Intl.DateTimeFormat('ar', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  }).format(sampleDate),
+  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'ar', dateFormat: 'ymd_compact', timeFormat: '12h' }),
+  expectedLocalizedDateTime(sampleDate, { locale: 'ar', dateFormat: 'ymd_compact', timeFormat: '12h' }),
 );
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
@@ -106,6 +114,8 @@ const localizedTableSources = await Promise.all([
 
 for (const { relativePath, source } of localizedTableSources) {
   assert.match(source, /formatLocalizedDateTimeDisplay/, `${relativePath} must use centralized localized date-time formatting`);
+  assert.match(source, /dateFormat:\s*sessionState\.dateFormat/, `${relativePath} must pass the active user date format`);
+  assert.match(source, /timeFormat:\s*sessionState\.timeFormat/, `${relativePath} must pass the active user time format`);
   assert.doesNotMatch(source, /Intl\.DateTimeFormat\(['"](?:en-GB|de-DE)['"]/, `${relativePath} must not pin date-time formatting to en-GB/de-DE`);
 }
 

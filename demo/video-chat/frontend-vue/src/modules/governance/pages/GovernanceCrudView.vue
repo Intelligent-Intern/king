@@ -269,6 +269,7 @@ function statusLabel(status) {
 function formatDate(value) {
   return formatLocalizedDateTimeDisplay(value, {
     locale: sessionState.locale,
+    dateFormat: sessionState.dateFormat,
     timeFormat: sessionState.timeFormat,
     fallback: t('common.not_available'),
   });

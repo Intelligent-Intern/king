@@ -86,6 +86,7 @@ function categoryLabel(category) {
 function formatDateTime(value) {
   return formatLocalizedDateTimeDisplay(value, {
     locale: sessionState.locale,
+    dateFormat: sessionState.dateFormat,
     timeFormat: sessionState.timeFormat,
     fallback: t('common.not_available'),
   });
