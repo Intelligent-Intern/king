@@ -557,7 +557,7 @@ Non-goals for this sprint:
     - [x] Contract tests cover representative LTR and RTL formatting examples,
       including `en`, `de`, `ar`, `fa`, and `ps`.
 
-11. [ ] `[localization-contract-tests]` Add backend and frontend contracts.
+11. [x] `[localization-contract-tests]` Add backend and frontend contracts.
 
     Scope:
     - Backend tests for migrations, user locale settings, CSV validation,
