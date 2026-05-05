@@ -435,7 +435,7 @@ Non-goals for this sprint:
      allowed fallback gaps.
    - [x] Contract test fails on missing English keys.
 
-7. [ ] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
+7. [x] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
 
    Scope:
    - Add direction-aware shell classes and CSS logical-property cleanup.
@@ -464,15 +464,20 @@ Non-goals for this sprint:
    - [x] Physical left/right CSS audit is documented with resolved non-call
      surfaces, remaining geometric coordinates, and call-specific follow-up
      scope.
+   - [x] Browser smoke now captures RTL public booking/join, authenticated
+     admin/settings, and call-workspace shell screenshots across responsive
+     viewports and verifies no horizontal overflow.
+   - [x] RTL contract now proves video/canvas content is not mirrored by RTL
+     rules; only the intentional local self-preview mirror is allowed.
 
    Done when:
-   - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
+   - [x] RTL locales set app `dir="rtl"` and UI direction changes across all
      major screens.
    - [x] Left/right physical CSS audit is resolved or documented with a reason.
-   - [ ] Navigation, modal headers, pagination, wizard steps, and form rows are
+   - [x] Navigation, modal headers, pagination, wizard steps, and form rows are
      coherent in RTL.
-   - [ ] Canvas/video rendering remains visually correct.
-   - [ ] Playwright screenshots prove desktop, tablet, and mobile RTL layouts.
+   - [x] Canvas/video rendering remains visually correct.
+   - [x] Playwright screenshots prove desktop, tablet, and mobile RTL layouts.
 
 8. [x] `[backend-errors-and-email-localization]` Localize server-driven user text and email templates.
 
