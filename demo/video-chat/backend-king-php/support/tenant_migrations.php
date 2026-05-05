@@ -33,6 +33,56 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0037_governance_policies',
             'statements' => videochat_governance_policy_statements(),
         ],
+        38 => [
+            'name' => '0038_governance_roles',
+            'statements' => videochat_governance_role_statements(),
+        ],
+    ];
+}
+
+function videochat_governance_role_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,
+    key TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_roles_tenant_key ON governance_roles(tenant_id, lower(key)) WHERE key <> \'\'',
+        'CREATE INDEX IF NOT EXISTS idx_governance_roles_tenant_status ON governance_roles(tenant_id, status, updated_at DESC)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_role_permissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES governance_roles(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    permission_key TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('create', 'read', 'update', 'delete', 'share', 'manage')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(role_id, permission_key)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_role_permissions_tenant_role ON governance_role_permissions(tenant_id, role_id)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_role_modules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES governance_roles(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    module_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(role_id, module_key)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_role_modules_tenant_role ON governance_role_modules(tenant_id, role_id)',
     ];
 }
 
@@ -439,6 +489,9 @@ function videochat_tenant_owned_table_names(): array
 {
     return [
         ...videochat_tenant_legacy_owned_table_names(),
+        'governance_roles',
+        'governance_role_permissions',
+        'governance_role_modules',
         'governance_policies',
         'governance_policy_groups',
         'governance_policy_organizations',

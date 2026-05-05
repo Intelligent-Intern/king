@@ -422,7 +422,11 @@ Sprint goal:
      persisted organization/group/permission relations, and policy-sourced
      `permission_grants` so policies feed the existing evaluator instead of
      staying as frontend-only rows.
-   - Remaining work: recursive permission mutations from role editors.
+   - Added tenant-scoped `/api/governance/roles` CRUD with public UUIDs plus
+     persisted role permission/module relations, so role editors mutate real
+     backend data instead of local draft rows.
+   - Remaining work: assigning Governance roles to users/groups and expanding
+     those assignments into evaluator grants.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -533,6 +537,9 @@ Sprint goal:
     - Extended Governance CRUD API and persistence contracts for backend-backed
       policies, relation summaries, policy-sourced evaluator grants, and grant
       cleanup on policy deletion.
+    - Extended Governance CRUD API and persistence contracts for backend-backed
+      roles, persisted permission/module relations, and relation clearing on
+      role update.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
