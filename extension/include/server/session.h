@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#  include <pthread.h>
+#endif
 
 #include "include/client/session.h"
 
@@ -30,12 +33,12 @@
 
 /* Best-effort gettid() fallback for the server-session guard. */
 static inline uint64_t king_server_session_current_tid(void) {
-#if defined(SYS_gettid)
-    return (uint64_t)syscall(SYS_gettid);
-#elif defined(__APPLE__)
+#if defined(__APPLE__)
     uint64_t tid64 = 0;
     pthread_threadid_np(NULL, &tid64);
     return tid64;
+#elif defined(SYS_gettid)
+    return (uint64_t)syscall(SYS_gettid);
 #else
     return (uint64_t)getpid();
 #endif

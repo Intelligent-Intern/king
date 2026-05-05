@@ -275,7 +275,7 @@ static zend_result king_server_admin_api_write_response(
 
     response = strpprintf(
         0,
-        "HTTP/1.1 %ld %s\r\n"
+        "HTTP/1.1 " ZEND_LONG_FMT " %s\r\n"
         "Content-Type: text/plain\r\n"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n\r\n"
@@ -485,4 +485,3 @@ cleanup:
     }
     return status;
 }
-

@@ -38,7 +38,7 @@ static zend_result king_telemetry_load_libcurl_symbol(void **target, const char 
 
 static zend_result king_telemetry_ensure_libcurl_ready(void)
 {
-    const char *const candidates[] = {"libcurl.so.4", "libcurl.so", NULL};
+    const char *const candidates[] = {KING_LIBCURL_RUNTIME_CANDIDATES};
     size_t index;
 
     if (king_telemetry_libcurl.ready) {
@@ -62,7 +62,8 @@ static zend_result king_telemetry_ensure_libcurl_ready(void)
         snprintf(
             king_telemetry_libcurl.load_error,
             sizeof(king_telemetry_libcurl.load_error),
-            "Failed to load libcurl.so.4 or libcurl.so for telemetry exports."
+            "Failed to load %s for telemetry exports.",
+            KING_LIBCURL_RUNTIME_CANDIDATE_NAMES
         );
         return FAILURE;
     }

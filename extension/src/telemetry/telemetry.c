@@ -6,6 +6,7 @@
  */
 #include "php_king.h"
 #include "include/telemetry/telemetry.h"
+#include "include/runtime/libcurl_candidates.h"
 #include <zend_hash.h>
 #include <curl/curl.h>
 #include <dlfcn.h>

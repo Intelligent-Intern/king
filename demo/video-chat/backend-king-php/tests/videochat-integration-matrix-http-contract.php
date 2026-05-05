@@ -67,12 +67,10 @@ try {
     $pdo = videochat_open_sqlite_pdo($databasePath);
 
     $adminUser = videochat_integration_http_demo_user('admin');
-    $moderatorUser = videochat_integration_http_demo_user('moderator');
     $standardUser = videochat_integration_http_demo_user('user');
 
     $sessionIds = [
         'sess_http_admin_1',
-        'sess_http_moderator_1',
         'sess_http_user_1',
         'sess_http_admin_rotated',
     ];
@@ -191,7 +189,7 @@ try {
         $request = [
             'method' => strtoupper($method),
             'uri' => $path,
-            'path' => $path,
+            'path' => (string) (parse_url($path, PHP_URL_PATH) ?: '/'),
             'headers' => $headers,
             'remote_address' => '127.0.0.1',
         ];
@@ -267,11 +265,9 @@ try {
     );
 
     $adminLogin = $login($adminUser);
-    $moderatorLogin = $login($moderatorUser);
     $userLogin = $login($standardUser);
 
     $adminSessionId = (string) $adminLogin['session_id'];
-    $moderatorSessionId = (string) $moderatorLogin['session_id'];
     $userSessionId = (string) $userLogin['session_id'];
 
     $adminSessionResponse = $dispatch('GET', '/api/auth/session', null, $adminSessionId);
@@ -290,8 +286,8 @@ try {
         'user/admin deny error code mismatch'
     );
 
-    $moderatorPing = $dispatch('GET', '/api/moderation/ping', null, $moderatorSessionId);
-    videochat_integration_http_assert((int) ($moderatorPing['status'] ?? 0) === 200, 'moderator ping should succeed');
+    $adminModerationPing = $dispatch('GET', '/api/moderation/ping', null, $adminSessionId);
+    videochat_integration_http_assert((int) ($adminModerationPing['status'] ?? 0) === 200, 'admin moderation ping should succeed after global moderator role removal');
 
     $userModerationDenied = $dispatch('GET', '/api/moderation/ping', null, $userSessionId);
     videochat_integration_http_assert((int) ($userModerationDenied['status'] ?? 0) === 403, 'user moderation ping should be forbidden');
@@ -314,7 +310,7 @@ try {
             'title' => 'Integration Matrix Call',
             'starts_at' => '2026-10-01T09:00:00Z',
             'ends_at' => '2026-10-01T10:00:00Z',
-            'internal_participant_user_ids' => [(int) $moderatorLogin['payload']['user']['id'], (int) $userLogin['payload']['user']['id']],
+            'internal_participant_user_ids' => [(int) $userLogin['payload']['user']['id']],
             'external_participants' => [
                 ['email' => 'guest-a.integration@example.com', 'display_name' => 'Guest A'],
                 ['email' => 'guest-b.integration@example.com', 'display_name' => 'Guest B'],
@@ -331,7 +327,7 @@ try {
     videochat_integration_http_assert((string) ($createdCall['title'] ?? '') === 'Integration Matrix Call', 'created call title mismatch');
     videochat_integration_http_assert((string) ($createdCall['status'] ?? '') === 'scheduled', 'created call status mismatch');
     videochat_integration_http_assert(
-        (int) (((($createdCall['participants'] ?? [])['totals'] ?? [])['total'] ?? 0)) === 5,
+        (int) (((($createdCall['participants'] ?? [])['totals'] ?? [])['total'] ?? 0)) === 4,
         'created call total participant mismatch'
     );
 
@@ -345,7 +341,7 @@ try {
     $participantCountQuery = $pdo->prepare('SELECT COUNT(*) FROM call_participants WHERE call_id = :call_id');
     $participantCountQuery->execute([':call_id' => $callId]);
     $participantCount = (int) $participantCountQuery->fetchColumn();
-    videochat_integration_http_assert($participantCount === 5, 'created call participant count mismatch');
+    videochat_integration_http_assert($participantCount === 4, 'created call participant count mismatch');
 
     $callsList = $dispatch('GET', '/api/calls?scope=my&page=1&page_size=10', null, $adminSessionId);
     videochat_integration_http_assert((int) ($callsList['status'] ?? 0) === 200, 'calls list should succeed');
@@ -380,10 +376,21 @@ try {
     videochat_integration_http_assert((int) ($callInviteCreate['status'] ?? 0) === 201, 'call invite create should succeed');
     $callInviteCreateBody = videochat_integration_http_decode($callInviteCreate);
     $callInvite = is_array($callInviteCreateBody['result']['invite_code'] ?? null) ? $callInviteCreateBody['result']['invite_code'] : [];
-    $inviteCode = (string) ($callInvite['code'] ?? '');
-    videochat_integration_http_assert(videochat_integration_http_uuid_v4_like($inviteCode), 'call invite code should be uuid-v4');
+    $inviteId = (string) ($callInvite['id'] ?? '');
+    videochat_integration_http_assert(videochat_integration_http_uuid_v4_like($inviteId), 'call invite id should be uuid-v4');
+    videochat_integration_http_assert(!array_key_exists('code', $callInvite), 'call invite create preview must not expose raw code');
     videochat_integration_http_assert((string) ($callInvite['scope'] ?? '') === 'call', 'call invite scope mismatch');
     videochat_integration_http_assert((string) ($callInvite['call_id'] ?? '') === $callId, 'call invite call_id mismatch');
+    $copyBoundary = is_array($callInviteCreateBody['result']['copy'] ?? null) ? $callInviteCreateBody['result']['copy'] : [];
+    $copyEndpoint = (string) ($copyBoundary['endpoint'] ?? '');
+    videochat_integration_http_assert($copyEndpoint === '/api/invite-codes/' . $inviteId . '/copy', 'call invite copy endpoint mismatch');
+
+    $callInviteCopy = $dispatch('POST', $copyEndpoint, '', $adminSessionId);
+    videochat_integration_http_assert((int) ($callInviteCopy['status'] ?? 0) === 200, 'call invite copy should succeed');
+    $callInviteCopyBody = videochat_integration_http_decode($callInviteCopy);
+    $inviteCopy = is_array($callInviteCopyBody['result']['copy'] ?? null) ? $callInviteCopyBody['result']['copy'] : [];
+    $inviteCode = (string) ($inviteCopy['code'] ?? '');
+    videochat_integration_http_assert(videochat_integration_http_uuid_v4_like($inviteCode), 'call invite copied code should be uuid-v4');
 
     $userInviteForbidden = $dispatch(
         'POST',

@@ -69,7 +69,7 @@ static int dynamic_admin_validate_long_range(zval *value, zend_long min_value, z
         zend_throw_exception_ex(
             spl_ce_InvalidArgumentException,
             0,
-            "Configuration parameter must be between %ld and %ld.",
+            "Configuration parameter must be between " ZEND_LONG_FMT " and " ZEND_LONG_FMT ".",
             min_value,
             max_value
         );

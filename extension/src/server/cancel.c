@@ -49,7 +49,7 @@ zend_result king_server_cancel_invoke_if_registered(
     if (zend_fcall_info_init(&handler, 0, &fci, &fcc, NULL, NULL) != SUCCESS) {
         zval_ptr_dtor(&handler);
         king_server_control_set_errorf(
-            "Failed to invoke the registered server cancel handler for stream %ld.",
+            "Failed to invoke the registered server cancel handler for stream " ZEND_LONG_FMT ".",
             stream_id
         );
         return FAILURE;
@@ -75,7 +75,7 @@ zend_result king_server_cancel_invoke_if_registered(
 
         if (EG(exception) == NULL) {
             king_server_control_set_errorf(
-                "Failed to invoke the registered server cancel handler for stream %ld.",
+                "Failed to invoke the registered server cancel handler for stream " ZEND_LONG_FMT ".",
                 stream_id
             );
         }
@@ -143,7 +143,7 @@ PHP_FUNCTION(king_server_on_cancel)
         ) == NULL) {
         zval_ptr_dtor(&validated_handler);
         king_server_control_set_errorf(
-            "king_server_on_cancel() failed to register the cancel handler for stream %ld.",
+            "king_server_on_cancel() failed to register the cancel handler for stream " ZEND_LONG_FMT ".",
             stream_id
         );
         RETURN_FALSE;

@@ -9,7 +9,7 @@ static void king_server_http3_build_request(
     zval headers;
     zend_string *authority;
 
-    authority = strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+    authority = strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
 
     array_init(request);
     add_assoc_string(request, "method", "GET");
@@ -114,4 +114,3 @@ PHP_FUNCTION(king_http3_server_listen)
     king_set_error("");
     RETURN_TRUE;
 }
-

@@ -14,8 +14,8 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `[chat-attachment-upload-timeout-contract] missing ${label}`);
 }
 
-const backendFetch = read('src/support/backendFetch.js');
-const workspaceApi = read('src/domain/realtime/workspace/api.js');
+const backendFetch = read('src/support/backendFetch.ts');
+const workspaceApi = read('src/domain/realtime/workspace/api.ts');
 const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
 
 requireContains(backendFetch, 'controller.abort(buildBackendTimeoutError(timeoutMs))', 'timeout abort reason');

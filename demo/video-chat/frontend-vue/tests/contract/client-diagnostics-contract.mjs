@@ -15,18 +15,19 @@ function requireContains(source, needle, label) {
 }
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+const workspaceClientDiagnostics = read('src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts');
+const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
 const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
 const sendFailureDetails = read('src/lib/sfu/sendFailureDetails.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('src/lib/sfu/inboundFrameAssembler.ts');
-const diagnostics = read('src/support/clientDiagnostics.js');
+const diagnostics = read('src/support/clientDiagnostics.ts');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
 requireContains(diagnostics, 'const DIAGNOSTICS_MAX_BATCH = 12;', 'diagnostics batch limit');
@@ -40,19 +41,23 @@ requireContains(diagnostics, 'diagnosticsSentFingerprints.add(diagnosticsFingerp
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_runtime_error'", 'global runtime error diagnostics hook');
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_unhandled_rejection'", 'global promise rejection diagnostics hook');
 requireContains(diagnostics, 'source_file: normalizeString(event?.filename', 'minified bundle source position capture');
-requireContains(workspace, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
-requireContains(workspace, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
-requireContains(workspace, 'last_sfu_transport_sample: callWorkspaceLastSfuTransportSample()', 'last sfu transport sample context');
+requireContains(workspace, 'configureCallWorkspaceClientDiagnosticsContext({', 'workspace delegates diagnostics context');
+requireContains(workspaceClientDiagnostics, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
+requireContains(workspaceClientDiagnostics, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
+requireContains(workspaceClientDiagnostics, 'last_sfu_transport_sample: callWorkspaceLastSfuTransportSample()', 'last sfu transport sample context');
 requireContains(sfuClient, 'getLastFrameTransportSample()', 'sfu client exposes last transport sample');
 requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote stall diagnostics hook');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
 requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'expected signaling failures enter recovery path');
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId)', 'target_not_in_room prunes unreachable peer locally');
 requireContains(socketLifecycle, 'const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);', 'media-security publish failures enter the same unreachable-peer recovery path');
-requireContains(socketLifecycle, "const shouldPruneTargetNotInRoom = targetIsKnown && normalizedError === 'target_not_in_room';", 'media-security target_not_in_room must evict stale participants before the next key sync');
+requireContains(socketLifecycle, "&& normalizedError === 'target_not_in_room'", 'media-security target_not_in_room must evict stale participants before the next key sync');
+requireContains(socketLifecycle, '&& failedStaleTargetPruningSignal;', 'target_not_in_room pruning is limited to stale-target-safe signaling families');
 requireContains(socketLifecycle, "requestWlvcFullFrameKeyframe('media_security_target_not_in_room_pruned'", 'media-security stale-target pruning forces a fresh video keyframe');
 requireContains(socketLifecycle, "const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;", 'media-security target_not_in_room forces rekey when local pruning changed the participant set');
 requireContains(socketLifecycle, 'void sendMediaSecuritySync(shouldForceMediaSecurityRekey);', 'media-security publish failures retry through the normal sync path');
+requireContains(socketLifecycle, "eventType: 'realtime_signaling_stale_target_pruned'", 'expected stale-target pruning has a dedicated diagnostics hook');
+requireContains(socketLifecycle, "if (code === 'signaling_publish_failed' && !expectedStaleTargetPublishFailure)", 'broker failure diagnostics stay separate from expected stale-target pruning');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');

@@ -46,11 +46,7 @@ static void king_http2_libcurl_close_runtime_handle(void)
 
 static zend_result king_http2_ensure_libcurl_ready(void)
 {
-    const char *const candidates[] = {
-        "libcurl.so.4",
-        "libcurl.so",
-        NULL
-    };
+    const char *const candidates[] = {KING_LIBCURL_RUNTIME_CANDIDATES};
     size_t i;
     curl_version_info_data *version_info;
 
@@ -75,7 +71,8 @@ static zend_result king_http2_ensure_libcurl_ready(void)
         snprintf(
             king_http2_libcurl.load_error,
             sizeof(king_http2_libcurl.load_error),
-            "Failed to load libcurl.so.4 or libcurl.so for the active HTTP/2 runtime."
+            "Failed to load %s for the active HTTP/2 runtime.",
+            KING_LIBCURL_RUNTIME_CANDIDATE_NAMES
         );
         return FAILURE;
     }

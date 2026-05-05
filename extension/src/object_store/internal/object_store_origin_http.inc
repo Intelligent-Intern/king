@@ -85,9 +85,9 @@ static void king_object_store_cdn_origin_http_format_status_error(
     snprintf(
         error,
         error_size,
-        "CDN HTTP origin read for '%s' returned HTTP %ld.",
+        "CDN HTTP origin read for '%s' returned HTTP " ZEND_LONG_FMT ".",
         object_id != NULL ? object_id : "",
-        status_code
+        (zend_long) status_code
     );
 }
 
@@ -103,9 +103,9 @@ static void king_object_store_cdn_origin_http_format_transport_error(
         snprintf(
             error,
             error_size,
-            "CDN HTTP origin read for '%s' timed out after %ld ms.",
+            "CDN HTTP origin read for '%s' timed out after " ZEND_LONG_FMT " ms.",
             object_id != NULL ? object_id : "",
-            timeout_ms
+            (zend_long) timeout_ms
         );
         return;
     }
@@ -190,7 +190,7 @@ static int king_object_store_cdn_origin_http_request(
 
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_URL, ZSTR_VAL(url.s));
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_NOSIGNAL, 1L);
-    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, timeout_ms);
+    king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_TIMEOUT_MS, (zend_long) timeout_ms);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_USERAGENT, "king-cdn-origin/1");
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPHEADER, headers);
     king_object_store_libcurl.curl_easy_setopt_fn(easy, CURLOPT_HTTPGET, 1L);
@@ -218,8 +218,8 @@ static int king_object_store_cdn_origin_http_request(
     if (curl_code != CURLE_OK) {
         if (!response->body_limit_exceeded
             && !response->header_limit_exceeded
-            && response->status_code >= 400
-            && response->status_code < 600) {
+            && (zend_long) response->status_code >= 400
+            && (zend_long) response->status_code < 600) {
             king_object_store_libcurl.curl_slist_free_all_fn(headers);
             king_object_store_libcurl.curl_easy_cleanup_fn(easy);
             smart_str_free(&url);
@@ -234,7 +234,7 @@ static int king_object_store_cdn_origin_http_request(
             king_object_store_cdn_origin_http_format_transport_error(
                 object_id,
                 curl_code,
-                timeout_ms,
+                (zend_long) timeout_ms,
                 error,
                 error_size
             );

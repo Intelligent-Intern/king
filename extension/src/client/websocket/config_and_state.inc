@@ -621,7 +621,7 @@ void king_websocket_state_build_info_array(zval *return_value, king_ws_state *st
     add_assoc_str(
         return_value,
         "remote_addr",
-        strpprintf(0, "%s:%ld", ZSTR_VAL(state->host), state->port)
+        strpprintf(0, "%s:" ZEND_LONG_FMT, ZSTR_VAL(state->host), state->port)
     );
     add_assoc_str(return_value, "protocol", zend_string_copy(state->scheme));
     add_assoc_long(return_value, "max_payload_size", state->max_payload_size);

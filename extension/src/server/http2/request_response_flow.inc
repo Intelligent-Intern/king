@@ -98,7 +98,7 @@ static zend_result king_server_http2_send_response(
         body = zend_string_init("", 0, 0);
     }
 
-    status_string = strpprintf(0, "%ld", status);
+    status_string = strpprintf(0, ZEND_LONG_FMT, status);
     king_server_http2_hpack_encode_literal_static_name(
         &header_block,
         8,
@@ -393,4 +393,3 @@ static zend_result king_server_http2_handle_wire_request(
     king_server_http2_request_state_dtor(&state);
     return SUCCESS;
 }
-

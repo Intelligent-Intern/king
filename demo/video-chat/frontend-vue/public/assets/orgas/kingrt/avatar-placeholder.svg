@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" role="img" aria-labelledby="title desc">
+  <title id="title">Profile avatar placeholder</title>
+  <desc id="desc">Default KingRT profile avatar silhouette.</desc>
+  <defs>
+    <linearGradient id="avatar-bg" x1="20" y1="18" x2="140" y2="144" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f7a8c"/>
+      <stop offset="0.55" stop-color="#253f8f"/>
+      <stop offset="1" stop-color="#1d1f2f"/>
+    </linearGradient>
+    <linearGradient id="avatar-ring" x1="32" y1="22" x2="128" y2="138" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8fafc" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#c9d7ff" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+  <rect width="160" height="160" rx="36" fill="url(#avatar-bg)"/>
+  <circle cx="80" cy="62" r="30" fill="#f8fafc" opacity="0.9"/>
+  <path d="M34 137c5.6-29.4 23.4-47 46-47s40.4 17.6 46 47" fill="#f8fafc" opacity="0.9"/>
+  <rect x="4" y="4" width="152" height="152" rx="32" fill="none" stroke="url(#avatar-ring)" stroke-width="8"/>
+</svg>

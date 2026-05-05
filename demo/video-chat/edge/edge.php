@@ -532,18 +532,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             $chunk = @fread($stream, 16384);
             if ($chunk === false) {
                 if ($isWebSocket) {
-                    if ($stream === $upstreamStream && $toClient !== '') {
-                        $upstreamOpen = false;
-                        $madeProgress = true;
-                        continue;
-                    }
-                    if ($stream === $client && $toUpstream !== '') {
-                        $clientOpen = false;
-                        $madeProgress = true;
-                        continue;
-                    }
                     $closeWebSocketTunnel();
-                    $madeProgress = true;
                     continue;
                 }
                 if ($stream === $client) {
@@ -556,16 +545,6 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($chunk === '') {
                 if (feof($stream)) {
                     if ($isWebSocket) {
-                        if ($stream === $upstreamStream && $toClient !== '') {
-                            $upstreamOpen = false;
-                            $madeProgress = true;
-                            continue;
-                        }
-                        if ($stream === $client && $toUpstream !== '') {
-                            $clientOpen = false;
-                            $madeProgress = true;
-                            continue;
-                        }
                         $closeWebSocketTunnel();
                         $madeProgress = true;
                         continue;

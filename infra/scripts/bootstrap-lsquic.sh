@@ -14,6 +14,9 @@ are never committed.
 Environment variables:
   KING_LSQUIC_SOURCE_CACHE  Archive/source cache root. Default: .cache/king/lsquic
   KING_LSQUIC_SOURCE_DIR    Extracted source root. Default: $KING_LSQUIC_SOURCE_CACHE/src
+  KING_LSQUIC_ARCHIVE_MIRROR_BASE
+                            Optional HTTPS mirror containing archives named
+                            like <component>-<sha256>.tar.gz.
 USAGE
 }
 
@@ -75,6 +78,51 @@ archive_path() {
     printf '%s/%s\n' "${ARCHIVE_DIR}" "$(archive_name "${component}" "${sha}")"
 }
 
+curl_retry_flags() {
+    local flags=(-fsSL --retry 5 --retry-delay 2 --retry-connrefused)
+
+    if curl --help all 2>/dev/null | grep -q -- '--retry-all-errors'; then
+        flags+=(--retry-all-errors)
+    fi
+
+    printf '%s\n' "${flags[@]}"
+}
+
+github_codeload_url() {
+    local url="$1"
+    local repo=""
+    local ref=""
+
+    case "${url}" in
+        https://github.com/*/*/archive/*.tar.gz)
+            repo="${url#https://github.com/}"
+            repo="${repo%%/archive/*}"
+            ref="${url#https://github.com/${repo}/archive/}"
+            ref="${ref%.tar.gz}"
+            printf 'https://codeload.github.com/%s/tar.gz/%s\n' "${repo}" "${ref}"
+            ;;
+    esac
+}
+
+archive_candidate_urls() {
+    local component="$1"
+    local url="$2"
+    local expected_sha="$3"
+    local mirror_base="${KING_LSQUIC_ARCHIVE_MIRROR_BASE:-}"
+    local codeload_url=""
+
+    if [[ -n "${mirror_base}" ]]; then
+        printf '%s/%s\n' "${mirror_base%/}" "$(archive_name "${component}" "${expected_sha}")"
+    fi
+
+    printf '%s\n' "${url}"
+
+    codeload_url="$(github_codeload_url "${url}")"
+    if [[ -n "${codeload_url}" && "${codeload_url}" != "${url}" ]]; then
+        printf '%s\n' "${codeload_url}"
+    fi
+}
+
 file_sha256() {
     local file="$1"
 
@@ -130,6 +178,8 @@ fetch_archive() {
     local expected_bytes="$4"
     local destination=""
     local tmp=""
+    local candidate=""
+    local curl_flags=()
 
     destination="$(archive_path "${component}" "${expected_sha}")"
     mkdir -p "${ARCHIVE_DIR}"
@@ -140,18 +190,28 @@ fetch_archive() {
     fi
 
     tmp="${destination}.tmp.$$"
-    rm -f "${tmp}"
-    if ! curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused "${url}" -o "${tmp}"; then
+    # shellcheck disable=SC2207
+    curl_flags=($(curl_retry_flags))
+
+    while IFS= read -r candidate; do
+        [[ -n "${candidate}" ]] || continue
         rm -f "${tmp}"
-        echo "Failed to fetch ${component} archive: ${url}" >&2
-        return 1
-    fi
-    if ! verify_archive "${component}" "${tmp}" "${expected_sha}" "${expected_bytes}"; then
-        rm -f "${tmp}"
-        return 1
-    fi
-    mv "${tmp}" "${destination}"
-    printf '%s\n' "${destination}"
+        if ! curl "${curl_flags[@]}" "${candidate}" -o "${tmp}"; then
+            echo "Failed to fetch ${component} archive candidate: ${candidate}" >&2
+            continue
+        fi
+        if ! verify_archive "${component}" "${tmp}" "${expected_sha}" "${expected_bytes}"; then
+            rm -f "${tmp}"
+            echo "Rejected ${component} archive candidate after verification: ${candidate}" >&2
+            continue
+        fi
+        mv "${tmp}" "${destination}"
+        printf '%s\n' "${destination}"
+        return
+    done < <(archive_candidate_urls "${component}" "${url}" "${expected_sha}")
+
+    echo "Failed to fetch ${component} archive from all deterministic candidates for: ${url}" >&2
+    return 1
 }
 
 extract_archive_root() {

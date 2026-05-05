@@ -299,12 +299,12 @@ static zend_result king_server_http3_open_listener_socket(
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG;
 
-    snprintf(service, sizeof(service), "%ld", port);
+    snprintf(service, sizeof(service), ZEND_LONG_FMT, port);
 
     rc = getaddrinfo(host, service, &hints, &result);
     if (rc != 0) {
         king_server_local_set_errorf(
-            "%s() failed to resolve the HTTP/3 bind address '%s:%ld': %s.",
+            "%s() failed to resolve the HTTP/3 bind address '%s:" ZEND_LONG_FMT "': %s.",
             function_name,
             host,
             port,
