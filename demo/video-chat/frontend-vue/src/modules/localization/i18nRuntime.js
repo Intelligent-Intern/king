@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { markRaw, reactive } from 'vue';
 import { sessionState } from '../../domain/auth/session';
 import { fetchBackend } from '../../support/backendFetch';
 import {
@@ -23,7 +23,7 @@ export const i18nState = reactive({
   localeMessages: {},
   fallbackMessages: { ...ENGLISH_MESSAGES },
   messages: { ...ENGLISH_MESSAGES },
-  missingKeys: {},
+  missingKeys: markRaw({}),
   lastError: '',
   resourceLoadKey: '',
 });
