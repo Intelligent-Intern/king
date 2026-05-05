@@ -42,6 +42,10 @@ try {
     $actualOrder = videochat_dispatch_route_module_order();
     videochat_router_contract_assert($actualOrder === $expectedOrder, 'module order does not match expected deterministic sequence');
     videochat_router_contract_assert(count(array_unique($actualOrder)) === count($actualOrder), 'module order contains duplicates');
+    videochat_router_contract_assert(
+        videochat_rbac_allowed_roles_for_path('/api/localization/resources') === ['admin', 'user'],
+        'localization resource endpoint must be available to authenticated admin and user roles'
+    );
 
     $openDatabaseCalls = 0;
     $openDatabase = static function () use (&$openDatabaseCalls): PDO {
