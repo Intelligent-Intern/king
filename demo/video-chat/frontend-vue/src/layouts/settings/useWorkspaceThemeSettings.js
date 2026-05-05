@@ -119,7 +119,7 @@ export function useWorkspaceThemeSettings(options = {}) {
   });
   const editor = reactive({
     open: false,
-    step: 'logos',
+    panel: 'colors',
     createNew: false,
     id: '',
     label: '',
@@ -130,13 +130,13 @@ export function useWorkspaceThemeSettings(options = {}) {
     modalLogoDataUrl: '',
     modalLogoReset: false,
   });
+  const themePrompt = ref('');
   const themePage = ref(1);
 
   const themeColorFields = computed(() => THEME_COLOR_FIELDS.map((field) => ({
     ...field,
     label: t(field.labelKey),
   })));
-  const previewColorFields = computed(() => themeColorFields.value.slice(0, 6));
   const fallbackThemes = computed(() => ([
     { id: 'dark', label: t('theme_settings.system_dark'), colors: defaultWorkspaceThemeColors(), isSystem: true },
     { id: 'light', label: t('theme_settings.system_light'), colors: defaultWorkspaceThemeColors('light'), isSystem: true },
@@ -178,11 +178,17 @@ export function useWorkspaceThemeSettings(options = {}) {
     }
   }
 
+  function setEditorPanel(panel) {
+    if (['chat', 'colors', 'images'].includes(panel)) {
+      editor.panel = panel;
+    }
+  }
+
   function startCreateTheme() {
     state.error = '';
     state.notice = '';
     editor.open = true;
-    editor.step = 'logos';
+    editor.panel = 'colors';
     editor.createNew = true;
     editor.id = '';
     editor.label = t('theme_settings.custom_theme_default_name');
@@ -199,7 +205,7 @@ export function useWorkspaceThemeSettings(options = {}) {
     state.error = '';
     state.notice = '';
     editor.open = true;
-    editor.step = 'logos';
+    editor.panel = 'colors';
     editor.createNew = false;
     editor.id = String(theme?.id || '');
     editor.label = String(theme?.label || editor.id || t('theme_settings.theme_fallback_name'));
@@ -214,7 +220,7 @@ export function useWorkspaceThemeSettings(options = {}) {
   function cancelEditor() {
     if (state.saving) return;
     editor.open = false;
-    editor.step = 'logos';
+    editor.panel = 'colors';
     state.error = '';
   }
 
@@ -231,6 +237,53 @@ export function useWorkspaceThemeSettings(options = {}) {
     const field = THEME_COLOR_FIELDS.find((entry) => entry.key === key);
     if (!field) return;
     editor.colors[key] = normalizeHex(value, editor.colors[key] || field.default);
+  }
+
+  function applyThemePrompt() {
+    const prompt = String(themePrompt.value || '').trim().toLowerCase();
+    if (prompt === '') {
+      state.error = t('theme_settings.chat_prompt_required');
+      return;
+    }
+
+    state.error = '';
+    let changed = false;
+    if (/(hell|light|bright)/.test(prompt)) {
+      loadSystemDefault('light');
+      changed = true;
+    } else if (/(dunkel|dark|navy)/.test(prompt)) {
+      loadSystemDefault('dark');
+      changed = true;
+    }
+
+    if (/(cyan|blau|blue|king)/.test(prompt)) {
+      updateThemeColor('--bg-action', '#1582bf');
+      updateThemeColor('--bg-action-hover', '#59c7f2');
+      updateThemeColor('--brand-cyan', '#1582bf');
+      updateThemeColor('--brand-cyan-hover', '#59c7f2');
+      updateThemeColor('--bg-tab-active', '#1582bf');
+      changed = true;
+    }
+
+    if (/(kontrast|contrast|klar|lesbar)/.test(prompt)) {
+      updateThemeColor('--text-main', '#ffffff');
+      updateThemeColor('--text-primary', '#ffffff');
+      updateThemeColor('--text-muted', '#efefe7');
+      updateThemeColor('--text-secondary', '#efefe7');
+      updateThemeColor('--line', '#03275a');
+      updateThemeColor('--border-subtle', '#03275a');
+      changed = true;
+    }
+
+    if (!changed) {
+      updateThemeColor('--bg-shell', '#000010');
+      updateThemeColor('--bg-main', '#000010');
+      updateThemeColor('--bg-surface', '#00052d');
+      updateThemeColor('--bg-action', '#1582bf');
+      updateThemeColor('--bg-action-hover', '#59c7f2');
+    }
+
+    state.notice = t('theme_settings.chat_prompt_applied');
   }
 
   async function selectLogo(event, kind) {
@@ -351,9 +404,9 @@ export function useWorkspaceThemeSettings(options = {}) {
   return {
     state,
     editor,
+    themePrompt,
     themePage,
     themeColorFields,
-    previewColorFields,
     selectedTheme,
     canEditThemes,
     canManageBranding,
@@ -362,12 +415,14 @@ export function useWorkspaceThemeSettings(options = {}) {
     pagedThemes,
     sidebarLogoPreview,
     modalLogoPreview,
+    setEditorPanel,
     startCreateTheme,
     startEditTheme,
     cancelEditor,
     loadBasePalette,
     loadSystemDefault,
     updateThemeColor,
+    applyThemePrompt,
     selectLogo,
     keepLogo,
     resetLogo,
