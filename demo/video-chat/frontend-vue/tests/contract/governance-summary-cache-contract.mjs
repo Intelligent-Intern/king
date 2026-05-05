@@ -9,6 +9,27 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function assertLoopHasNoRequestCall(sourceText, loopSnippet, label, endTag = 'tr') {
+  const pattern = new RegExp(`${escapeRegExp(loopSnippet)}[\\s\\S]*?<\\/${endTag}>`);
+  const match = sourceText.match(pattern);
+  assert.ok(match, `${label} loop must stay present in the row template`);
+  assert.doesNotMatch(
+    match[0],
+    /\b(?:fetch|fetchBackend|apiJson|apiRequest)\s*\(/,
+    `${label} row rendering must not request relation summaries per row`,
+  );
+}
+
+function functionWindow(sourceText, functionName, size = 1000) {
+  const index = sourceText.indexOf(`function ${functionName}`);
+  assert.notEqual(index, -1, `${functionName} must stay present`);
+  return sourceText.slice(index, index + size);
+}
+
 const cache = createEntitySummaryCache();
 const summary = normalizeEntitySummary('groups', {
   id: 'group:core',
@@ -97,5 +118,44 @@ assert.doesNotMatch(viewSource, /v-for="row in pagedRows"[\s\S]{0,800}fetch\(/, 
 const persistenceSource = await source('src/modules/governance/useGovernanceCrudPersistence.js');
 assert.match(persistenceSource, /fetchSummaryBatch/, 'governance persistence must expose a batch summary loader');
 assert.match(persistenceSource, /\/api\/governance\/summaries/, 'batch summaries must use the governance summaries endpoint');
+
+const userTableSource = await source('src/modules/users/pages/components/UsersTable.vue');
+const usersViewSource = await source('src/modules/users/pages/admin/UsersView.vue');
+const userEditorSource = await source('src/modules/users/pages/components/UserEditorModal.vue');
+const marketplaceTableSource = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
+const localizationAdminSource = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
+const themeSettingsSource = await source('src/layouts/settings/WorkspaceThemeSettings.vue');
+const administrationSettingsSource = await source('src/layouts/settings/WorkspaceAdministrationSettings.vue');
+const backendSummarySource = await source('../backend-king-php/domain/tenancy/governance_summaries.php');
+
+assertLoopHasNoRequestCall(userTableSource, 'v-for="user in rows"', 'user management');
+assert.match(usersViewSource, /loadGovernanceRoleOptions\(apiRequest\)/, 'user editor role relation options must load through a preloaded option endpoint');
+assert.match(usersViewSource, /loadGovernanceGroupOptions\(apiRequest\)/, 'user editor group relation options must load through a preloaded option endpoint');
+
+const userRelationProvider = functionWindow(userEditorSource, 'relationRowsForEntity');
+assert.match(userRelationProvider, /governanceRoleRows\.value/, 'user relation provider must use preloaded governance role rows');
+assert.match(userRelationProvider, /governanceGroupRows\.value/, 'user relation provider must use preloaded governance group rows');
+assert.match(userRelationProvider, /themeRows\.value/, 'user relation provider must use preloaded theme rows');
+assert.match(userRelationProvider, /governanceCatalogRows\(entityKey\)/, 'user relation provider must use local governance module and permission catalogs');
+assert.doesNotMatch(userRelationProvider, /\b(?:fetch|fetchBackend|apiJson|apiRequest)\s*\(/, 'user relation provider must not request rows during render');
+assert.doesNotMatch(userRelationProvider, /governancePersistence\./, 'user relation provider must not create or fetch persisted governance rows during render');
+
+assertLoopHasNoRequestCall(marketplaceTableSource, 'v-for="app in rows"', 'marketplace');
+assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="language in pagedLanguages"', 'localization languages');
+assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="resource in preview.resources.slice(0, 8)"', 'localization CSV preview');
+assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="bundle in bundles"', 'localization bundles');
+assertLoopHasNoRequestCall(localizationAdminSource, 'v-for="entry in imports"', 'localization imports');
+assertLoopHasNoRequestCall(themeSettingsSource, 'v-for="theme in pagedThemes"', 'theme management', 'article');
+assertLoopHasNoRequestCall(administrationSettingsSource, 'v-for="(recipient, index) in leadRecipients"', 'administration lead recipients', 'div');
+
+for (const entity of ['users', 'groups', 'organizations', 'roles', 'grants', 'policies', 'data-portability']) {
+  assert.match(
+    backendSummarySource,
+    new RegExp(`'${escapeRegExp(entity)}'`),
+    `governance summaries endpoint must support ${entity}`,
+  );
+}
+assert.match(backendSummarySource, /result' => \['included' => \$included\]/, 'summary endpoint must return included summaries in result payload');
+assert.match(backendSummarySource, /'included' => \$included/, 'summary endpoint must also expose top-level included summaries');
 
 console.log('[governance-summary-cache-contract] PASS');
