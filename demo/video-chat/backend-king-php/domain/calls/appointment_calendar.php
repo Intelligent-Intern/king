@@ -39,7 +39,7 @@ function videochat_appointment_owner(PDO $pdo, int $ownerUserId, ?int $tenantId 
     $tenantWhere = $tenantJoin !== '' ? 'AND tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\'' : '';
     $query = $pdo->prepare(
         <<<SQL
-SELECT users.id, users.email, users.display_name
+SELECT users.id, users.email, users.display_name, users.locale
 FROM users
 {$tenantJoin}
 WHERE users.id = :id
@@ -62,6 +62,7 @@ SQL
         'id' => (int) ($row['id'] ?? 0),
         'email' => strtolower((string) ($row['email'] ?? '')),
         'display_name' => (string) ($row['display_name'] ?? ''),
+        'locale' => videochat_normalize_locale_code($row['locale'] ?? ''),
     ];
 }
 
@@ -513,6 +514,7 @@ function videochat_validate_public_appointment_booking_payload(array $payload): 
     $firstName = videochat_appointment_clean_text($payload['first_name'] ?? '', 80);
     $lastName = videochat_appointment_clean_text($payload['last_name'] ?? '', 80);
     $email = videochat_appointment_normalize_email($payload['email'] ?? '');
+    $locale = videochat_normalize_locale_code($payload['locale'] ?? '');
     $errors = [];
 
     if ($slotId === '' || strlen($slotId) > 80) {
@@ -541,6 +543,7 @@ function videochat_validate_public_appointment_booking_payload(array $payload): 
             'first_name' => $firstName,
             'last_name' => $lastName,
             'email' => $email,
+            'locale' => $locale,
             'message' => videochat_appointment_clean_text($payload['message'] ?? '', 2000),
         ],
     ];

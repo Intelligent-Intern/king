@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/appointment_calendar_settings.php';
+require_once __DIR__ . '/../localization/email_templates.php';
 
 function videochat_appointment_frontend_origin(): string
 {
@@ -204,7 +205,7 @@ function videochat_appointment_send_mail(array $settings, string $toEmail, strin
     return videochat_appointment_write_outbox($recipient, $subject, $body);
 }
 
-function videochat_send_appointment_booking_notifications(array $settings, array $owner, array $bookingData, array $context): array
+function videochat_send_appointment_booking_notifications(array $settings, array $owner, array $bookingData, array $context, ?PDO $pdo = null): array
 {
     $guestName = trim((string) ($bookingData['first_name'] ?? '') . ' ' . (string) ($bookingData['last_name'] ?? ''));
     $ownerName = trim((string) ($owner['display_name'] ?? ''));
@@ -231,11 +232,34 @@ function videochat_send_appointment_booking_notifications(array $settings, array
     ];
 
     $recipients = [
-        'guest' => ['email' => $guestEmail, 'name' => $guestName, 'join_link' => $guestJoinLink],
-        'owner' => ['email' => $ownerEmail, 'name' => $ownerName, 'join_link' => $ownerJoinLink],
+        'guest' => [
+            'email' => $guestEmail,
+            'name' => $guestName,
+            'join_link' => $guestJoinLink,
+            'locale' => (string) ($bookingData['locale'] ?? ($context['guest_locale'] ?? '')),
+        ],
+        'owner' => [
+            'email' => $ownerEmail,
+            'name' => $ownerName,
+            'join_link' => $ownerJoinLink,
+            'locale' => (string) ($owner['locale'] ?? ($context['owner_locale'] ?? '')),
+        ],
     ];
     $results = [];
     foreach ($recipients as $role => $recipient) {
+        $templates = $pdo instanceof PDO
+            ? videochat_resolve_localized_email_templates(
+                $pdo,
+                is_numeric($context['tenant_id'] ?? null) ? (int) $context['tenant_id'] : null,
+                (string) ($recipient['locale'] ?? ''),
+                'emails.appointment_booking.subject',
+                'emails.appointment_booking.body',
+                $subjectTemplate,
+                $bodyTemplate,
+                videochat_required_appointment_email_subject_placeholders(),
+                videochat_required_appointment_email_body_placeholders()
+            )
+            : ['subject_template' => $subjectTemplate, 'body_template' => $bodyTemplate];
         $variables = [
             ...$common,
             'recipient_role' => $role,
@@ -247,9 +271,14 @@ function videochat_send_appointment_booking_notifications(array $settings, array
             'call_title' => $callTitle,
             'join_link' => $variables['join_link'],
         ]);
-        $subject = videochat_appointment_render_mail_template($subjectTemplate, $variables);
-        $body = videochat_appointment_render_mail_template($bodyTemplate, $variables);
-        $results[$role] = videochat_appointment_send_mail($settings, (string) $recipient['email'], (string) $recipient['name'], $subject, $body);
+        $subject = videochat_appointment_render_mail_template((string) ($templates['subject_template'] ?? $subjectTemplate), $variables);
+        $body = videochat_appointment_render_mail_template((string) ($templates['body_template'] ?? $bodyTemplate), $variables);
+        $results[$role] = [
+            ...videochat_appointment_send_mail($settings, (string) $recipient['email'], (string) $recipient['name'], $subject, $body),
+            'template_locale' => (string) ($templates['locale'] ?? ''),
+            'subject_locale' => (string) ($templates['subject_locale'] ?? ''),
+            'body_locale' => (string) ($templates['body_locale'] ?? ''),
+        ];
     }
 
     return $results;
