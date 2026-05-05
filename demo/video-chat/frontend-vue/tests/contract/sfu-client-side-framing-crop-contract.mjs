@@ -34,12 +34,13 @@ async function main() {
 
   requireContains(packageJson, 'sfu-client-side-framing-crop-contract.mjs', 'SFU contract suite includes framing crop proof');
 
-  requireContains(template, '@dblclick.stop="toggleVideoFullscreen(primaryVideoUserId)"', 'main video double-click fullscreen toggle');
-  requireContains(template, '@dblclick.stop="toggleVideoFullscreen(participant.userId)"', 'grid and mini video double-click fullscreen toggle');
+  requireContains(template, '@dblclick.stop="toggleVideoFullscreenForEvent(primaryVideoUserId, $event)"', 'main video double-click fullscreen toggle');
+  requireContains(template, '@dblclick.stop="toggleVideoFullscreenForEvent(participant.userId, $event)"', 'grid and mini video double-click fullscreen toggle');
   requireContains(fullscreenToggle, 'createVideoFullscreenToggle', 'fullscreen toggle helper stays outside CallWorkspaceView');
   requireContains(fullscreenToggle, "callLayoutState.mode = 'main_only'", 'double-click enters main-only fullscreen layout');
   requireContains(fullscreenToggle, "callLayoutState.mode = nextMode === 'main_only' ? 'main_mini' : nextMode", 'second double-click exits fullscreen');
   requireContains(participantUi, "from './videoFullscreenToggle'", 'participant UI uses focused fullscreen helper');
+  requireContains(participantUi, 'function toggleVideoFullscreenForEvent', 'fullscreen toggle resolves the concrete clicked media surface');
 
   requireContains(videoLayout, 'targetAspectRatioForSurface', 'layout computes target surface aspect ratio');
   requireContains(videoLayout, "role === REMOTE_RENDER_SURFACE_ROLES.MINI", 'mini surfaces are explicitly square framing targets');
@@ -52,8 +53,15 @@ async function main() {
 
   requireContains(frameSizing, 'resolveCoverFrameSizeFromDimensions', 'publisher frame sizing has cover-crop mode');
   requireContains(frameSizing, "aspectMode: 'source_cover_crop'", 'cover-crop mode is explicit in transport metrics');
-  requireContains(frameSizing, 'resolvePublisherFramingTarget', 'publisher reads layout framing dataset before encode');
-  requireContains(sourceReadback, 'drawSourceFrame(context, source, canvasFrameSize', 'DOM canvas readback crops before encode');
+  requireContains(frameSizing, 'resolvePublisherFramingTarget', 'UI surface framing helper stays available for presentation binding');
+  requireContains(sourceReadback, 'resolvePublisherTransportFramingTarget', 'publisher transport uses source-stable framing target');
+  requireContains(sourceReadback, 'resolvePublisherTransportFramingTarget()', 'publisher readback does not inherit mutable local preview surface framing');
+  assert.equal(
+    sourceReadback.includes('resolvePublisherFramingTarget(video)'),
+    false,
+    'publisher readback must not use local preview crop state for transport frames',
+  );
+  requireContains(sourceReadback, 'drawSourceFrame(context, source, canvasFrameSize', 'DOM canvas readback applies explicit transport framing before encode');
   requireContains(sourceReadback, 'sourceCropForFrameSize', 'source readback carries source crop math');
   requireContains(workerProtocol, 'sourceCropX', 'worker protocol carries crop rectangle');
   requireContains(workerReadback, 'sourceCropX: frameSize.sourceCropX', 'worker readback sends crop rectangle');

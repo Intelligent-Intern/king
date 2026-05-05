@@ -499,6 +499,9 @@ sync_checkout() {
     --exclude '.codex/' \
     --exclude '.env.local' \
     --exclude '*.env.local' \
+    --exclude 'dist/' \
+    --exclude 'compat-artifacts/' \
+    --exclude '.cache/' \
     --exclude 'demo/video-chat/docker-compose.deploy.local.yml' \
     --exclude 'demo/video-chat/frontend-vue/node_modules/' \
     --exclude 'demo/video-chat/frontend-vue/.vite/' \
@@ -510,6 +513,9 @@ sync_checkout() {
     --exclude '.mypy_cache/' \
     "${REPO_ROOT}/" \
     "${SSH_DEST}:${DEPLOY_PATH}/"
+
+  log "Removing release artifacts from remote checkout"
+  remote "rm -rf $(shell_quote "${DEPLOY_PATH}/dist") $(shell_quote "${DEPLOY_PATH}/compat-artifacts") $(shell_quote "${DEPLOY_PATH}/.cache")"
 }
 
 certbot_standalone() {

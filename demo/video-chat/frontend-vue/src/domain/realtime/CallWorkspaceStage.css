@@ -688,6 +688,23 @@
   background: var(--bg-video);
 }
 
+.video-container :deep([data-call-screen-share-pan-enabled="1"]),
+.workspace-grid-video-slot :deep([data-call-screen-share-pan-enabled="1"]),
+.workspace-mini-video-slot :deep([data-call-screen-share-pan-enabled="1"]),
+.workspace-fullscreen-video-slot :deep([data-call-screen-share-pan-enabled="1"]) {
+  object-fit: cover !important;
+  object-position: var(--call-screen-share-object-position, center center) !important;
+  cursor: grab;
+  touch-action: none;
+}
+
+.video-container :deep([data-call-screen-share-pan-dragging="1"]),
+.workspace-grid-video-slot :deep([data-call-screen-share-pan-dragging="1"]),
+.workspace-mini-video-slot :deep([data-call-screen-share-pan-dragging="1"]),
+.workspace-fullscreen-video-slot :deep([data-call-screen-share-pan-dragging="1"]) {
+  cursor: grabbing;
+}
+
 .workspace-mini-title {
   position: relative;
   z-index: 2;

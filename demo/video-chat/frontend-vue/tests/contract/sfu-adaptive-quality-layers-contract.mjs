@@ -62,7 +62,12 @@ async function main() {
 
   requireContains(mediaStack, 'setSubscriberLayerPreference', 'receiver layer preference goes to the SFU socket');
   requireContains(mediaStack, "requestedAction === 'prefer_thumbnail_video_layer'", 'thumbnail layer preference remains a pure subscriber-route change');
-  requireContains(mediaStack, 'requestPublisherMediaRecovery', 'primary/fullscreen layer preference can request publisher keyframe recovery without socket reconnect');
+  requireContains(mediaStack, 'requestPublisherMediaRecovery', 'explicit receiver recovery can still request publisher keyframe recovery without socket reconnect');
+  assert.equal(
+    mediaStack.includes("|| requestedVideoLayer === 'primary'"),
+    false,
+    'primary layer preference must not force a full publisher keyframe by itself',
+  );
   requireContains(sfuClient, "type: 'sfu/layer-preference'", 'SFU client sends server-authoritative subscriber layer preference');
   requireContains(sfuStore, "'sfu/layer-preference'", 'SFU backend accepts layer preference control frames');
   requireContains(sfuGateway, 'videochat_sfu_apply_subscriber_layer_preference($sfuClients[$clientId], $msg)', 'SFU gateway stores subscriber layer preference server-side');
@@ -71,6 +76,7 @@ async function main() {
   requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_primary_layer_pruned', 'thumbnail subscribers prune explicit primary layer frames');
   requireContains(sfuSubscriberBudget, 'primary_subscriber_thumbnail_layer_pruned', 'primary subscribers prune explicit thumbnail layer frames');
   requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_delta_cadence', 'thumbnail subscribers cannot force primary receivers down');
+  requireContains(sfuSubscriberBudget, 'videochat_sfu_frame_requires_contiguous_decode', 'thumbnail cadence must preserve decode-contiguous media frames');
   requireContains(sfuBrokerReplay, '$subscriber = []', 'cross-worker replay receives subscriber state for layer routing');
 
   requireContains(mediaStack, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'media stack preserves explicit adaptive layer actions');
@@ -84,6 +90,11 @@ async function main() {
   requireContains(socketLifecycle, "direction: 'up'", 'primary layer request triggers automatic upshift');
   requireContains(socketLifecycle, "requested_video_quality_profile: requestedVideoQualityProfile || 'balanced'", 'primary layer asks for the stable balanced profile');
   requireContains(socketLifecycle, "requested_video_quality_profile: requestedVideoQualityProfile || 'realtime'", 'thumbnail layer asks for realtime profile');
+  assert.equal(
+    socketLifecycle.includes('|| primaryLayerRequested'),
+    false,
+    'publisher must not treat primary layer preference as a full-keyframe recovery trigger',
+  );
 
   requireContains(runtimeSwitching, 'bypassQualityRecoveryCooldown', 'fullscreen recovery can explicitly bypass normal slow recovery cooldown');
   requireContains(runtimeSwitching, 'requestedProfileForDirection', 'profile switcher can jump to requested automatic layer profile');
@@ -133,6 +144,24 @@ async function main() {
     adaptiveModule.buildSfuLayerPreferencePayload({ layerPreference: 'thumbnail', renderSurfaceRole: 'mini' }).requested_video_quality_profile,
     'realtime',
     'thumbnail payload must target realtime, not rescue',
+  );
+  const peer = {};
+  const frame = { trackId: 'camera', frameSequence: 1 };
+  assert.equal(
+    adaptiveModule.shouldSendSfuLayerPreference(peer, 'alex', frame, 'primary', 1000),
+    true,
+    'first primary preference must be sent',
+  );
+  adaptiveModule.markSfuLayerPreferenceSent(peer, 'alex', frame, 'primary', 1000);
+  assert.equal(
+    adaptiveModule.shouldSendSfuLayerPreference(peer, 'alex', frame, 'primary', 5000),
+    false,
+    'unchanged primary preference must not be resent as a periodic recovery loop',
+  );
+  assert.equal(
+    adaptiveModule.shouldSendSfuLayerPreference(peer, 'alex', frame, 'thumbnail', 5000),
+    true,
+    'actual layer changes must still be sent',
   );
 
   process.stdout.write('[sfu-adaptive-quality-layers-contract] PASS\n');

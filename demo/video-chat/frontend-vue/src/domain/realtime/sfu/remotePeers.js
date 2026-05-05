@@ -1,4 +1,8 @@
 import { resetProtectedBrowserVideoDecoders } from './remoteBrowserEncodedVideo';
+import {
+  SCREEN_SHARE_MEDIA_SOURCE,
+  resolveScreenSharePeerIdentity,
+} from '../screenShareIdentity.js';
 
 export function createSfuRemotePeerHelpers({
   bumpMediaRenderVersion,
@@ -64,6 +68,29 @@ export function createSfuRemotePeerHelpers({
     return null;
   }
 
+  function findLocalScreenSharePreviewEntryByUserId(userId, excludePublisherId = '') {
+    const entry = findSfuRemotePeerEntryByUserId(userId, excludePublisherId);
+    return entry?.peer?.localScreenSharePreview === true ? entry : null;
+  }
+
+  function isLocalScreenShareIdentity(identity) {
+    return Boolean(
+      identity?.isScreenShare
+        && Number.isInteger(Number(identity.ownerUserId || 0))
+        && Number(identity.ownerUserId || 0) === currentUserId()
+    );
+  }
+
+  function deleteDecodedLoopbackPeer(publisherId, peer = null) {
+    const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+    if (normalizedPublisherId === '') return false;
+    const existingPeer = peer || remotePeersRef.value.get(normalizedPublisherId);
+    if (existingPeer && typeof existingPeer === 'object') {
+      teardownRemotePeer(existingPeer);
+    }
+    return deleteSfuRemotePeer(normalizedPublisherId);
+  }
+
   function sfuTrackSignature(tracks) {
     return sfuTrackRows(tracks)
       .map((track) => [
@@ -119,11 +146,37 @@ export function createSfuRemotePeerHelpers({
     };
   }
 
-  function getSfuRemotePeerByFrameIdentity(publisherId, publisherUserId) {
+  function getSfuRemotePeerByFrameIdentity(publisherId, publisherUserId, options = {}) {
     const normalizedPublisherId = normalizeSfuPublisherId(publisherId);
+    const identity = resolveScreenSharePeerIdentity({
+      publisherUserId,
+      mediaSource: options?.publisherMediaSource || options?.mediaSource || '',
+    });
+    const normalizedPublisherUserId = Number(identity.userId || publisherUserId || 0);
     const exactPeer = normalizedPublisherId !== ''
       ? remotePeersRef.value.get(normalizedPublisherId)
       : null;
+    if (isLocalScreenShareIdentity(identity)) {
+      const localPreviewEntry = findLocalScreenSharePreviewEntryByUserId(normalizedPublisherUserId, normalizedPublisherId);
+      if (localPreviewEntry) {
+        if (exactPeer?.decoder && exactPeer !== localPreviewEntry.peer) {
+          deleteDecodedLoopbackPeer(normalizedPublisherId, exactPeer);
+        }
+        return {
+          publisherId: localPreviewEntry.publisherId,
+          peer: localPreviewEntry.peer,
+          matchedBy: 'local_screen_share_preview',
+        };
+      }
+      if (exactPeer?.decoder || exactPeer?.decodedCanvas) {
+        deleteDecodedLoopbackPeer(normalizedPublisherId, exactPeer);
+      }
+      return {
+        publisherId: normalizedPublisherId,
+        peer: null,
+        matchedBy: 'local_screen_share_pending',
+      };
+    }
     if (exactPeer?.decoder) {
       return {
         publisherId: normalizedPublisherId,
@@ -132,7 +185,6 @@ export function createSfuRemotePeerHelpers({
       };
     }
 
-    const normalizedPublisherUserId = Number(publisherUserId || 0);
     if (!Number.isInteger(normalizedPublisherUserId) || normalizedPublisherUserId <= 0) {
       return {
         publisherId: normalizedPublisherId,
@@ -222,15 +274,35 @@ export function createSfuRemotePeerHelpers({
     const publisherId = normalizeSfuPublisherId(options.publisherId);
     const publisherUserId = Number(options.publisherUserId || 0);
     if (publisherId === '') return null;
-    if (Number.isInteger(publisherUserId) && publisherUserId === currentUserId()) {
-      return null;
-    }
 
     const tracks = sfuTrackRows(options.tracks);
+    const identity = resolveScreenSharePeerIdentity({
+      publisherUserId,
+      publisherName: options.publisherName,
+      tracks,
+      mediaSource: options.publisherMediaSource || options.mediaSource || '',
+    });
+    const peerUserId = Number(identity.userId || publisherUserId || 0);
     const exactPeer = remotePeersRef.value.get(publisherId) || null;
+    if (!identity.isScreenShare && Number.isInteger(publisherUserId) && publisherUserId === currentUserId()) {
+      return null;
+    }
+    if (isLocalScreenShareIdentity(identity)) {
+      const localPreviewEntry = findLocalScreenSharePreviewEntryByUserId(peerUserId, publisherId);
+      if (localPreviewEntry?.peer?.localScreenSharePreview === true) {
+        if (exactPeer && exactPeer !== localPreviewEntry.peer) {
+          deleteDecodedLoopbackPeer(publisherId, exactPeer);
+        }
+        return localPreviewEntry.peer;
+      }
+      if (exactPeer) {
+        deleteDecodedLoopbackPeer(publisherId, exactPeer);
+      }
+      return null;
+    }
     const fallbackPeerEntry = exactPeer
       ? null
-      : findSfuRemotePeerEntryByUserId(publisherUserId, publisherId);
+      : findSfuRemotePeerEntryByUserId(peerUserId, publisherId);
     const existingPeerEntry = exactPeer
       ? { publisherId, peer: exactPeer }
       : fallbackPeerEntry;
@@ -259,10 +331,17 @@ export function createSfuRemotePeerHelpers({
         : null;
       const updatedPeer = {
         ...existingPeer,
-        userId: Number.isInteger(publisherUserId) && publisherUserId > 0
-          ? publisherUserId
+        userId: Number.isInteger(peerUserId) && peerUserId > 0
+          ? peerUserId
           : Number(existingPeer.userId || 0),
-        displayName: String(options.publisherName || existingPeer.displayName || '').trim(),
+        publisherUserId: Number.isInteger(publisherUserId) && publisherUserId > 0
+          ? publisherUserId
+          : Number(existingPeer.publisherUserId || 0),
+        displayName: String(identity.displayName || existingPeer.displayName || '').trim(),
+        mediaSource: identity.isScreenShare ? SCREEN_SHARE_MEDIA_SOURCE : String(existingPeer.mediaSource || ''),
+        screenShareOwnerUserId: identity.isScreenShare
+          ? identity.ownerUserId
+          : Number(existingPeer.screenShareOwnerUserId || 0),
         tracks,
         createdAtMs: continuityReset ? continuityReset.createdAtMs : Number(existingPeer.createdAtMs || Date.now()),
         frameCount: continuityReset ? continuityReset.frameCount : Number(existingPeer.frameCount || 0),
@@ -323,6 +402,14 @@ export function createSfuRemotePeerHelpers({
       };
       if (updatedPeer.decodedCanvas instanceof HTMLElement) {
         updatedPeer.decodedCanvas.dataset.publisherId = publisherId;
+        if (Number.isInteger(updatedPeer.publisherUserId) && updatedPeer.publisherUserId > 0) {
+          updatedPeer.decodedCanvas.dataset.publisherUserId = String(updatedPeer.publisherUserId);
+        }
+        if (updatedPeer.mediaSource === SCREEN_SHARE_MEDIA_SOURCE) {
+          updatedPeer.decodedCanvas.dataset.mediaSource = SCREEN_SHARE_MEDIA_SOURCE;
+        } else {
+          delete updatedPeer.decodedCanvas.dataset.mediaSource;
+        }
         if (Number.isInteger(updatedPeer.userId) && updatedPeer.userId > 0) {
           updatedPeer.decodedCanvas.dataset.userId = String(updatedPeer.userId);
         }
@@ -368,8 +455,14 @@ export function createSfuRemotePeerHelpers({
     canvas.height = sfuFrameHeight;
     canvas.className = 'remote-video';
     canvas.dataset.publisherId = publisherId;
+    if (Number.isInteger(peerUserId) && peerUserId > 0) {
+      canvas.dataset.userId = String(peerUserId);
+    }
     if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
-      canvas.dataset.userId = String(publisherUserId);
+      canvas.dataset.publisherUserId = String(publisherUserId);
+    }
+    if (identity.isScreenShare) {
+      canvas.dataset.mediaSource = SCREEN_SHARE_MEDIA_SOURCE;
     }
 
     if (existingPeer) {
@@ -377,8 +470,11 @@ export function createSfuRemotePeerHelpers({
     }
 
     const peer = {
-      userId: Number.isInteger(publisherUserId) && publisherUserId > 0 ? publisherUserId : 0,
-      displayName: String(options.publisherName || '').trim(),
+      userId: Number.isInteger(peerUserId) && peerUserId > 0 ? peerUserId : 0,
+      publisherUserId: Number.isInteger(publisherUserId) && publisherUserId > 0 ? publisherUserId : 0,
+      displayName: String(identity.displayName || '').trim(),
+      mediaSource: identity.isScreenShare ? SCREEN_SHARE_MEDIA_SOURCE : '',
+      screenShareOwnerUserId: identity.isScreenShare ? identity.ownerUserId : 0,
       pc: null,
       video: null,
       tracks,
@@ -439,7 +535,15 @@ export function createSfuRemotePeerHelpers({
   function ensureSfuRemotePeerForFrame(frame) {
     const publisherId = normalizeSfuPublisherId(frame?.publisherId);
     if (publisherId === '') return null;
-    const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);
+    const fallbackPeer = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId, {
+      publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '',
+    });
+    if (
+      fallbackPeer?.matchedBy === 'local_screen_share_preview'
+      || fallbackPeer?.matchedBy === 'local_screen_share_pending'
+    ) {
+      return null;
+    }
     const existingPeer = fallbackPeer?.peer || remotePeersRef.value.get(publisherId);
     if (existingPeer?.decoder) return Promise.resolve(existingPeer);
     const pending = pendingSfuRemotePeerInitializers.get(publisherId);
@@ -449,6 +553,7 @@ export function createSfuRemotePeerHelpers({
     const init = createOrUpdateSfuRemotePeer({
       publisherId,
       publisherUserId: frame?.publisherUserId,
+      publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '',
       publisherName: '',
       tracks: trackId === '' ? [] : [{ id: trackId, kind: 'video', label: 'Remote video' }],
     })
@@ -479,7 +584,16 @@ export function createSfuRemotePeerHelpers({
       || '';
     const publisherRollover = resolvedPreviousPublisherId !== '' && resolvedPreviousPublisherId !== normalizedPublisherId;
     const shouldResetContinuity = publisherRollover || options.resetContinuity === true;
-    const normalizedUserId = Number(publisherUserId || 0);
+    const identity = resolveScreenSharePeerIdentity({
+      publisherUserId,
+      publisherName: peer.displayName,
+      tracks: peer.tracks,
+      mediaSource: options.publisherMediaSource
+        || options.mediaSource
+        || peer.mediaSource
+        || '',
+    });
+    const normalizedUserId = Number(identity.userId || publisherUserId || 0);
     if (!shouldResetContinuity && (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0)) return peer;
     if (!shouldResetContinuity && Number(peer?.userId || 0) === normalizedUserId) return peer;
     const continuityReset = shouldResetContinuity
@@ -490,10 +604,23 @@ export function createSfuRemotePeerHelpers({
       userId: Number.isInteger(normalizedUserId) && normalizedUserId > 0
         ? normalizedUserId
         : Number(peer?.userId || 0),
+      publisherUserId: Number.isInteger(Number(publisherUserId || 0)) && Number(publisherUserId || 0) > 0
+        ? Number(publisherUserId || 0)
+        : Number(peer?.publisherUserId || 0),
+      mediaSource: identity.isScreenShare ? SCREEN_SHARE_MEDIA_SOURCE : String(peer.mediaSource || ''),
+      screenShareOwnerUserId: identity.isScreenShare ? identity.ownerUserId : Number(peer.screenShareOwnerUserId || 0),
       ...(continuityReset || {}),
     };
     if (updatedPeer.decodedCanvas instanceof HTMLElement) {
       updatedPeer.decodedCanvas.dataset.publisherId = normalizedPublisherId;
+      if (Number.isInteger(updatedPeer.publisherUserId) && updatedPeer.publisherUserId > 0) {
+        updatedPeer.decodedCanvas.dataset.publisherUserId = String(updatedPeer.publisherUserId);
+      }
+      if (updatedPeer.mediaSource === SCREEN_SHARE_MEDIA_SOURCE) {
+        updatedPeer.decodedCanvas.dataset.mediaSource = SCREEN_SHARE_MEDIA_SOURCE;
+      } else {
+        delete updatedPeer.decodedCanvas.dataset.mediaSource;
+      }
       if (Number.isInteger(updatedPeer.userId) && updatedPeer.userId > 0) {
         updatedPeer.decodedCanvas.dataset.userId = String(updatedPeer.userId);
       }

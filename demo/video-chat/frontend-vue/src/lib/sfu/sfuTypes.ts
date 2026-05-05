@@ -32,6 +32,7 @@ export interface SFUEncodedFrame {
   senderSentAtMs?: number
   codecId?: string
   runtimeId?: string
+  publisherMediaSource?: string
   videoLayer?: 'primary' | 'thumbnail' | string | null
   outgoingVideoQualityProfile?: string
   kingReceiveLatencyMs?: number

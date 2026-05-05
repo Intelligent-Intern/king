@@ -1113,6 +1113,14 @@ const mediaStack = createCallWorkspaceMediaStack({
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
+    onLocalScreenShareStateChanged: (active, reason = '') => {
+      refreshUsersDirectoryPresentation();
+      void syncControlStateToPeers();
+      publishLocalActivitySample(true);
+      if (!active && reason === 'ended') {
+        setNotice('Screen sharing ended.', 'ok');
+      }
+    },
     clearMediaSecuritySfuPublisherSeen,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
       if (sfuClientRef.value) {
@@ -1208,6 +1216,7 @@ const mediaStack = createCallWorkspaceMediaStack({
   refs: {
     activeRoomId,
     activeSocketCallId,
+    SFUClient,
     backgroundBaselineCollector,
     backgroundFilterController,
     callMediaPrefs,
@@ -1309,6 +1318,7 @@ const {
   resetWlvcBackpressureCounters,
   resetWlvcFrameSendFailureCounters,
   restartSfuAfterVideoStall: restartSfuAfterVideoStallHelper,
+  setLocalScreenShareEnabled,
   setSfuRemotePeer,
   sfuTrackListHasVideo,
   sfuTrackRows,
@@ -1777,6 +1787,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   rightSidebarCollapsed,
   sendSocketFrame,
   selectCallLayoutParticipants,
+  setLocalScreenShareEnabled,
   showLobbyTab,
   typingByRoom,
   usersDirectoryLoading,
@@ -1944,6 +1955,7 @@ const {
   togglePinned,
   toggleScreenShare,
   toggleVideoFullscreen,
+  toggleVideoFullscreenForEvent,
   toggleUserMuted,
   typingUsers,
   updatePeerControlState,

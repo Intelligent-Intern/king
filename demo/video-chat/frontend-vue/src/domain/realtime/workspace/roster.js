@@ -3,6 +3,7 @@ import {
   normalizeRole,
   normalizeRoomId,
 } from './utils';
+import { SCREEN_SHARE_MEDIA_SOURCE, isScreenShareMediaSource } from '../screenShareIdentity.js';
 
 export function normalizeParticipantRow(raw) {
   const user = raw && typeof raw.user === 'object' ? raw.user : {};
@@ -49,6 +50,7 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
   if (!Number.isInteger(peerUserId) || peerUserId <= 0 || peerUserId === currentUserId) return;
 
   const source = String(options.source || 'media');
+  const isScreenSharePeer = isScreenShareMediaSource(peer?.mediaSource || peer?.media_source);
   const displayName = String(peer?.displayName || '').trim() || `User ${peerUserId}`;
   const callRole = normalizeCallRole(callParticipantRoles[peerUserId] || peer?.callRole || 'participant');
   const existing = aggregate.get(peerUserId);
@@ -60,9 +62,13 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     }
     existing.callRole = normalizeCallRole(callParticipantRoles[peerUserId] || existing.callRole || callRole);
     existing.mediaPeerSource = source;
+    if (isScreenSharePeer) {
+      existing.mediaSource = SCREEN_SHARE_MEDIA_SOURCE;
+      existing.screenShareOwnerUserId = Number(peer?.screenShareOwnerUserId || peer?.publisherUserId || 0);
+    }
     return;
   }
-  if (!allowMissingSnapshotSupplement) return;
+  if (!allowMissingSnapshotSupplement && !isScreenSharePeer) return;
 
   aggregate.set(peerUserId, {
     userId: peerUserId,
@@ -72,6 +78,10 @@ export function mergeLiveMediaPeerIntoRoster(aggregate, peer, options = {}) {
     connectedAt: '',
     connections: 1,
     mediaPeerSource: source,
+    ...(isScreenSharePeer ? {
+      mediaSource: SCREEN_SHARE_MEDIA_SOURCE,
+      screenShareOwnerUserId: Number(peer?.screenShareOwnerUserId || peer?.publisherUserId || 0),
+    } : {}),
   });
 }
 

@@ -48,7 +48,9 @@ int rle_decode(const uint8_t* in, size_t in_bytes,
 /** Worst-case encoded size for n_values int16s (no compression). */
 inline size_t rle_max_bytes(int n_values) {
     // Each value gets its own pair: header + n_values × 4 B
-    return static_cast<size_t>(RLE_HEADER_BYTES + n_values * RLE_PAIR_BYTES);
+    const size_t count = n_values > 0 ? static_cast<size_t>(n_values) : 0;
+    return static_cast<size_t>(RLE_HEADER_BYTES)
+         + count * static_cast<size_t>(RLE_PAIR_BYTES);
 }
 
 } // namespace wlvc

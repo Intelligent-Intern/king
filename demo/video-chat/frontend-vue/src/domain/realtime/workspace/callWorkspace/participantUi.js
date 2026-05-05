@@ -1,7 +1,9 @@
-import { computed, nextTick, onBeforeUnmount, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
+import { createParticipantActivityState } from './participantActivityState';
 import { createCallWorkspaceModerationSync } from './moderationSync';
 import { createVideoFullscreenToggle } from './videoFullscreenToggle';
+import { isScreenShareMediaSource, isScreenShareUserId, screenShareUserIdForOwner } from '../../screenShareIdentity.js';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
@@ -67,6 +69,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     rightSidebarCollapsed,
     sendSocketFrame,
     selectCallLayoutParticipants,
+    setLocalScreenShareEnabled,
     showLobbyTab,
     typingByRoom,
     usersDirectoryLoading,
@@ -119,88 +122,26 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
   let aloneIdleWatchTimer = null;
   let aloneIdleCountdownTimer = null;
   let aloneIdleLastActiveMs = Date.now();
-function markParticipantActivity(userId, source = 'control', atMs = Date.now()) {
-  const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-  const nowMs = Number.isFinite(Number(atMs)) ? Math.max(0, Number(atMs)) : Date.now();
-  participantActivityByUserId[normalizedUserId] = {
-    lastActiveMs: nowMs,
-    source: String(source || '').trim().toLowerCase(),
-    weight: participantActivityWeight(source),
+  const layoutAutomationTick = ref(0);
+  const layoutSelectionState = {
+    activeSpeakerUserId: 0,
+    topActivityEnteredAtMsByUserId: {},
   };
-}
+  const autoPinnedScreenShareUserIds = new Set();
+  let layoutAutomationTimer = null;
 
-function pruneParticipantActivity(allowedUserIds = null) {
-  const allowed = allowedUserIds instanceof Set ? allowedUserIds : null;
-  const nowMs = Date.now();
-  const staleAfterMs = PARTICIPANT_ACTIVITY_WINDOW_MS * 2;
-  for (const key of Object.keys(participantActivityByUserId)) {
-    const userId = Number(key);
-    if (!Number.isInteger(userId) || userId <= 0) {
-      delete participantActivityByUserId[key];
-      continue;
-    }
-    if (allowed && !allowed.has(userId)) {
-      delete participantActivityByUserId[key];
-      continue;
-    }
-    const entry = participantActivityByUserId[key];
-    const lastActiveMs = Number(entry?.lastActiveMs || 0);
-    if (!Number.isFinite(lastActiveMs) || (nowMs - lastActiveMs) > staleAfterMs) {
-      delete participantActivityByUserId[key];
-    }
-  }
-}
-
-function participantActivityScore(userId, nowMs = Date.now()) {
-  const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 0;
-  const entry = participantActivityByUserId[normalizedUserId];
-  if (!entry || typeof entry !== 'object') return 0;
-  if (Number.isFinite(Number(entry.score2s))) return Number(entry.score2s);
-  if (Number.isFinite(Number(entry.score_2s))) return Number(entry.score_2s);
-  if (Number.isFinite(Number(entry.score))) return Number(entry.score);
-  const lastActiveMs = Number(entry.lastActiveMs || 0);
-  if (!Number.isFinite(lastActiveMs) || lastActiveMs <= 0) return 0;
-  const ageMs = Math.max(0, nowMs - lastActiveMs);
-  if (ageMs >= PARTICIPANT_ACTIVITY_WINDOW_MS) return 0;
-  const freshness = 1 - (ageMs / PARTICIPANT_ACTIVITY_WINDOW_MS);
-  const weight = Number.isFinite(Number(entry.weight)) ? Number(entry.weight) : 0.5;
-  return freshness * Math.max(0.25, Math.min(1, weight)) * 100;
-}
-
-function activityLabelForUser(userId) {
-  const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return '';
-  const entry = participantActivityByUserId[normalizedUserId];
-  const score = participantActivityScore(normalizedUserId);
-  if (Boolean(entry?.isSpeaking) || score >= 55) return 'Speaking';
-  if (score >= 18) return 'Active';
-  return '';
-}
-
-function applyParticipantActivityPayload(activity, participant = null) {
-  const normalizedUserId = Number(activity?.user_id || activity?.userId || participant?.user_id || participant?.userId || 0);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-  const updatedAtMs = Number(activity?.updated_at_ms || activity?.updatedAtMs || Date.now());
-  participantActivityByUserId[normalizedUserId] = {
-    lastActiveMs: Number.isFinite(updatedAtMs) && updatedAtMs > 0 ? updatedAtMs : Date.now(),
-    source: String(activity?.source || 'server_activity').trim().toLowerCase(),
-    weight: Number.isFinite(Number(activity?.score)) ? Math.max(0.25, Math.min(1, Number(activity.score) / 100)) : 0.75,
-    score: Number(activity?.score || 0),
-    score_2s: Number(activity?.score_2s ?? activity?.score2s ?? 0),
-    score_5s: Number(activity?.score_5s ?? activity?.score5s ?? 0),
-    score_15s: Number(activity?.score_15s ?? activity?.score15s ?? 0),
-    isSpeaking: Boolean(activity?.is_speaking ?? activity?.isSpeaking ?? false),
-  };
-}
-
-function applyActivitySnapshot(rows) {
-  if (!Array.isArray(rows)) return;
-  for (const row of rows) {
-    applyParticipantActivityPayload(row);
-  }
-}
+const {
+  activityLabelForUser,
+  applyActivitySnapshot,
+  applyParticipantActivityPayload,
+  markParticipantActivity,
+  participantActivityScore,
+  pruneParticipantActivity,
+} = createParticipantActivityState({
+  participantActivityByUserId,
+  participantActivityWeight,
+  participantActivityWindowMs: PARTICIPANT_ACTIVITY_WINDOW_MS,
+});
 
 function applyCallLayoutPayload(payload) {
   const normalized = normalizeCallLayoutState(payload);
@@ -217,15 +158,6 @@ function applyCallLayoutPayload(payload) {
   replaceNumericArray(callLayoutState.selection.visible_user_ids, normalized.selection.visibleUserIds);
   replaceNumericArray(callLayoutState.selection.mini_user_ids, normalized.selection.miniUserIds);
   replaceNumericArray(callLayoutState.selection.pinned_user_ids, normalized.selection.pinnedUserIds);
-
-  for (const key of Object.keys(pinnedUsers)) {
-    if (!normalized.pinnedUserIds.includes(Number(key))) {
-      delete pinnedUsers[key];
-    }
-  }
-  for (const pinnedUserId of normalized.pinnedUserIds) {
-    pinnedUsers[pinnedUserId] = true;
-  }
 
   nextTick(() => renderCallVideoLayout());
 }
@@ -248,12 +180,49 @@ function participantVisibilityScore(row, nowMs = Date.now()) {
 
 const normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 const currentLayoutMode = computed(() => normalizeCallLayoutMode(normalizedCallLayout.value.mode));
+const activeScreenShareUserIds = computed(() => {
+  const seen = new Set();
+  const userIds = [];
+  for (const row of connectedParticipantUsers.value) {
+    const screenShareUserId = screenShareUserIdFromParticipant(row);
+    if (screenShareUserId <= 0 || seen.has(screenShareUserId)) continue;
+    seen.add(screenShareUserId);
+    userIds.push(screenShareUserId);
+  }
+  return userIds;
+});
+  if (typeof window !== 'undefined') {
+    layoutAutomationTimer = window.setInterval(() => {
+      const layout = normalizedCallLayout.value;
+      if (layout.automationPaused || layout.strategy === 'manual_pinned') return;
+      layoutAutomationTick.value += 1;
+    }, 1000);
+  }
+  onBeforeUnmount(() => {
+    if (layoutAutomationTimer !== null && typeof window !== 'undefined') {
+      window.clearInterval(layoutAutomationTimer);
+    }
+  });
+watch(activeScreenShareUserIds, (screenShareUserIds, previousScreenShareUserIds = []) => {
+  const currentIds = new Set(screenShareUserIds);
+  for (const previousUserId of previousScreenShareUserIds) {
+    if (!currentIds.has(previousUserId)) {
+      autoPinnedScreenShareUserIds.delete(previousUserId);
+    }
+  }
+  const nextScreenShareUserId = screenShareUserIds.find((userId) => !autoPinnedScreenShareUserIds.has(userId));
+  if (nextScreenShareUserId > 0) {
+    pinScreenShareParticipant(nextScreenShareUserId);
+  }
+});
 const layoutSelection = computed(() => selectCallLayoutParticipants({
+  tick: layoutAutomationTick.value,
   participants: connectedParticipantUsers.value,
   currentUserId: currentUserId.value,
   pinnedUsers,
   activityByUserId: participantActivityByUserId,
   layoutState: normalizedCallLayout.value,
+  selectionState: layoutSelectionState,
   nowMs: Date.now(),
 }));
 const stripParticipants = computed(() => layoutSelection.value.visibleParticipants.slice(0, VISIBLE_PARTICIPANTS_LIMIT));
@@ -339,6 +308,90 @@ function participantMediaStatusLabel(userId) {
 
 function participantMediaStatusState(userId) {
   return participantMediaStatus(userId).state;
+}
+
+function screenShareUserIdFromParticipant(row) {
+  const userId = Number(row?.userId || row?.user_id || 0);
+  if (Number.isInteger(userId) && isScreenShareUserId(userId)) return userId;
+  if (!isScreenShareMediaSource(row?.mediaSource || row?.media_source)) return 0;
+  const ownerUserId = Number(
+    row?.screenShareOwnerUserId
+    || row?.screen_share_owner_user_id
+    || row?.publisherUserId
+    || row?.publisher_user_id
+    || 0
+  );
+  return screenShareUserIdForOwner(ownerUserId) || (Number.isInteger(userId) && userId > 0 ? userId : 0);
+}
+
+function replaceLocalPinsWithScreenShare(screenShareUserId) {
+  const normalizedUserId = Number(screenShareUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  const alreadyPinnedOnly = pinnedUsers[normalizedUserId] === true && Object.keys(pinnedUsers).length === 1;
+  if (alreadyPinnedOnly) {
+    autoPinnedScreenShareUserIds.add(normalizedUserId);
+    return false;
+  }
+  for (const key of Object.keys(pinnedUsers)) {
+    delete pinnedUsers[key];
+  }
+  pinnedUsers[normalizedUserId] = true;
+  autoPinnedScreenShareUserIds.add(normalizedUserId);
+  markUserActionText(normalizedUserId, 'pin', 'Pinned', false);
+  refreshUsersDirectoryPresentation();
+  nextTick(() => renderCallVideoLayout());
+  return true;
+}
+
+function pinScreenShareParticipant(screenShareUserId) {
+  const normalizedUserId = Number(screenShareUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  if (autoPinnedScreenShareUserIds.has(normalizedUserId)) return false;
+  return replaceLocalPinsWithScreenShare(normalizedUserId);
+}
+
+function forgetScreenShareAutoPin(screenShareUserId, removePin = false) {
+  const normalizedUserId = Number(screenShareUserId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return false;
+  autoPinnedScreenShareUserIds.delete(normalizedUserId);
+  if (!removePin || pinnedUsers[normalizedUserId] !== true) return false;
+  delete pinnedUsers[normalizedUserId];
+  refreshUsersDirectoryPresentation();
+  nextTick(() => renderCallVideoLayout());
+  return true;
+}
+
+function fullscreenUserIdFromEvent(event, fallbackUserId = 0) {
+  const readUserId = (node) => {
+    if (!(node instanceof HTMLElement)) return 0;
+    return Number(
+      node.dataset?.callVideoSurfaceUserId
+      || node.dataset?.userId
+      || 0
+    );
+  };
+  const path = typeof event?.composedPath === 'function' ? event.composedPath() : [];
+  for (const node of path) {
+    const userId = readUserId(node);
+    if (Number.isInteger(userId) && userId > 0) return userId;
+  }
+  let node = event?.target instanceof HTMLElement ? event.target : null;
+  while (node) {
+    const userId = readUserId(node);
+    if (Number.isInteger(userId) && userId > 0) return userId;
+    node = node.parentElement;
+  }
+  const normalizedFallbackUserId = Number(fallbackUserId || 0);
+  return Number.isInteger(normalizedFallbackUserId) && normalizedFallbackUserId > 0
+    ? normalizedFallbackUserId
+    : 0;
+}
+
+function toggleVideoFullscreenForEvent(fallbackUserId, event) {
+  const targetUserId = fullscreenUserIdFromEvent(event, fallbackUserId);
+  if (targetUserId > 0) {
+    toggleVideoFullscreen(targetUserId);
+  }
 }
 
 const layoutModeOptions = computed(() => layoutModeOptionsFor(CALL_LAYOUT_MODES));
@@ -584,7 +637,6 @@ const {
   currentUserId,
   isSocketOnline,
   mutedUsers,
-  pinnedUsers,
   sendSocketFrame,
   rowActionKey,
   MODERATION_SYNC_FLUSH_INTERVAL_MS,
@@ -1115,12 +1167,18 @@ function applyRemoteControlState(payload, sender) {
   const kind = String(payload?.kind || '').trim().toLowerCase();
   if (kind === 'workspace-control-state') {
     const state = payload && typeof payload.state === 'object' ? payload.state : {};
+    const nextScreenEnabled = Boolean(state.screenEnabled);
     updatePeerControlState(senderUserId, {
       handRaised: Boolean(state.handRaised),
       cameraEnabled: state.cameraEnabled !== false,
       micEnabled: state.micEnabled !== false,
-      screenEnabled: Boolean(state.screenEnabled),
+      screenEnabled: nextScreenEnabled,
     });
+    if (nextScreenEnabled) {
+      pinScreenShareParticipant(screenShareUserIdForOwner(senderUserId));
+    } else {
+      forgetScreenShareAutoPin(screenShareUserIdForOwner(senderUserId), true);
+    }
     refreshUsersDirectoryPresentation();
     return true;
   }
@@ -1135,13 +1193,7 @@ function applyRemoteControlState(payload, sender) {
       if (!Number.isInteger(subjectUserId) || subjectUserId <= 0) continue;
 
       if (action === 'pin') {
-        const nextPinned = Boolean(value?.pinned);
-        if (nextPinned) {
-          pinnedUsers[subjectUserId] = true;
-        } else {
-          delete pinnedUsers[subjectUserId];
-        }
-        markUserActionText(subjectUserId, 'pin', pinnedUsers[subjectUserId] ? 'Pinned' : 'Unpinned', false);
+        continue;
       }
       if (action === 'mute') {
         const nextMuted = Boolean(value?.muted);
@@ -1163,7 +1215,12 @@ function applyRemoteControlState(payload, sender) {
 function syncControlStateToPeers() {
   const peerIds = connectedParticipantUsers.value
     .map((row) => row.userId)
-    .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+    .filter((userId) => (
+      Number.isInteger(userId)
+      && userId > 0
+      && userId !== currentUserId.value
+      && !isScreenShareUserId(userId)
+    ));
 
   let sentCount = 0;
   for (const targetUserId of peerIds) {
@@ -1215,17 +1272,17 @@ function toggleUserMuted(userId) {
 
 function togglePinned(userId) {
   const normalizedUserId = Number(userId);
-  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
   const nextPinned = pinnedUsers[normalizedUserId] !== true;
+  for (const key of Object.keys(pinnedUsers)) {
+    delete pinnedUsers[key];
+  }
   if (nextPinned) {
     pinnedUsers[normalizedUserId] = true;
-  } else {
-    delete pinnedUsers[normalizedUserId];
   }
   markUserActionText(normalizedUserId, 'pin', nextPinned ? 'Pinned' : 'Unpinned', false);
   refreshUsersDirectoryPresentation();
-  queueModerationSync('pin', normalizedUserId);
-  publishLayoutSelectionState();
+  nextTick(() => renderCallVideoLayout());
 }
 
 function currentPinnedUserIds() {
@@ -1310,10 +1367,34 @@ function toggleMicrophone() {
   publishLocalActivitySample(true);
 }
 
-function toggleScreenShare() {
-  controlState.screenEnabled = !controlState.screenEnabled;
-  refreshUsersDirectoryPresentation();
-  void syncControlStateToPeers();
+async function toggleScreenShare() {
+  const nextScreenEnabled = controlState.screenEnabled !== true;
+  const localScreenShareUserId = screenShareUserIdForOwner(currentUserId.value);
+  if (typeof setLocalScreenShareEnabled !== 'function') {
+    controlState.screenEnabled = nextScreenEnabled;
+    if (controlState.screenEnabled) {
+      pinScreenShareParticipant(localScreenShareUserId);
+    } else {
+      forgetScreenShareAutoPin(localScreenShareUserId, true);
+    }
+    refreshUsersDirectoryPresentation();
+    void syncControlStateToPeers();
+    return;
+  }
+
+  try {
+    const screenShareActive = await setLocalScreenShareEnabled(nextScreenEnabled);
+    if (nextScreenEnabled && screenShareActive === true) {
+      pinScreenShareParticipant(localScreenShareUserId);
+    } else if (!nextScreenEnabled) {
+      forgetScreenShareAutoPin(localScreenShareUserId, true);
+    }
+  } catch (error) {
+    controlState.screenEnabled = false;
+    refreshUsersDirectoryPresentation();
+    void syncControlStateToPeers();
+    setNotice(error?.message || 'Screen sharing failed.', 'error');
+  }
 }
 
 async function refreshUsersDirectory() {
@@ -1759,6 +1840,7 @@ function openLeftSidebarOverlay(event) {
     toggleCamera,
     toggleCompactMiniStripPlacement,
     toggleVideoFullscreen,
+    toggleVideoFullscreenForEvent,
     toggleHandRaised,
     toggleMicrophone,
     togglePinned,

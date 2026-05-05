@@ -1,6 +1,7 @@
 import { buildOptionalCallAudioCaptureConstraints } from '../media/audioCaptureConstraints';
 import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings } from './sfuCaptureProfileConstraints';
 import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
+import { buildDisplayMediaOptions, hasGetDisplayMedia, normalizeDisplayMediaError } from './screenShareCapture';
 export function createLocalMediaOrchestrationHelpers({
   backgroundBaselineCollector,
   backgroundFilterController,
@@ -18,6 +19,7 @@ export function createLocalMediaOrchestrationHelpers({
     currentSfuVideoProfile,
     isWlvcRuntimePath,
     normalizeRoomId,
+    onLocalScreenShareStateChanged = () => {},
     refreshCallMediaDevices,
     sendSocketFrame,
     shouldMaintainNativePeerConnections,
@@ -38,7 +40,11 @@ export function createLocalMediaOrchestrationHelpers({
       if (kind === 'audio') {
         track.enabled = controlState.micEnabled !== false;
       } else if (kind === 'video') {
-        track.enabled = controlState.cameraEnabled !== false;
+        const isScreenTrack = activeScreenShareTrackId !== ''
+          && String(track?.id || '') === activeScreenShareTrackId;
+        track.enabled = isScreenTrack
+          ? controlState.screenEnabled !== false
+          : controlState.cameraEnabled !== false;
       }
     }
   }
@@ -58,9 +64,15 @@ export function createLocalMediaOrchestrationHelpers({
   const startEncodingPipeline = typeof localPublisherCallbacks.startEncodingPipeline === 'function'
     ? localPublisherCallbacks.startEncodingPipeline
     : async () => false;
+  const startScreenShareParticipant = typeof localPublisherCallbacks.startScreenShareParticipant === 'function'
+    ? localPublisherCallbacks.startScreenShareParticipant
+    : null;
   const stopLocalEncodingPipeline = typeof localPublisherCallbacks.stopLocalEncodingPipeline === 'function'
     ? localPublisherCallbacks.stopLocalEncodingPipeline
     : () => {};
+  const stopScreenShareParticipant = typeof localPublisherCallbacks.stopScreenShareParticipant === 'function'
+    ? localPublisherCallbacks.stopScreenShareParticipant
+    : null;
   const stopRetiredLocalStreams = typeof localPublisherCallbacks.stopRetiredLocalStreams === 'function'
     ? localPublisherCallbacks.stopRetiredLocalStreams
     : () => {};
@@ -68,6 +80,11 @@ export function createLocalMediaOrchestrationHelpers({
     ? localPublisherCallbacks.unpublishSfuTracks
     : () => {};
   let localMediaPermissionRetryAfterMs = 0;
+  let screenShareStream = null;
+  let screenShareEndedHandler = null;
+  let screenShareSwitchInFlight = false;
+  let activeScreenShareTrackId = '';
+  const hasScreenShareParticipantPublisher = Boolean(startScreenShareParticipant && stopScreenShareParticipant);
 
   function buildLocalMediaConstraints() {
     const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
@@ -124,6 +141,299 @@ export function createLocalMediaOrchestrationHelpers({
       videoProfile: currentSfuVideoProfile(),
       captureDiagnostic,
     });
+  }
+
+  function isLocalScreenShareActive() {
+    if (hasScreenShareParticipantPublisher) return false;
+    return screenShareStream instanceof MediaStream && activeScreenShareTrackId !== '';
+  }
+
+  function notifyLocalScreenShareStateChanged(active, reason = '') {
+    try {
+      onLocalScreenShareStateChanged(Boolean(active), String(reason || '').trim());
+    } catch {
+      // UI state notifications must not block media switching.
+    }
+  }
+
+  function liveAudioTracksForScreenShare(...streams) {
+    const tracks = [];
+    const seen = new Set();
+    for (const stream of streams) {
+      if (!(stream instanceof MediaStream)) continue;
+      for (const track of stream.getAudioTracks()) {
+        if (!track || track.readyState === 'ended') continue;
+        const trackId = String(track.id || '');
+        if (trackId !== '' && seen.has(trackId)) continue;
+        if (trackId !== '') seen.add(trackId);
+        tracks.push(track);
+      }
+    }
+    return tracks;
+  }
+
+  function detachScreenShareEndedHandler() {
+    if (!(screenShareStream instanceof MediaStream) || !screenShareEndedHandler) {
+      screenShareEndedHandler = null;
+      return;
+    }
+    const videoTrack = screenShareStream.getVideoTracks()[0] || null;
+    if (videoTrack) {
+      videoTrack.removeEventListener('ended', screenShareEndedHandler);
+    }
+    screenShareEndedHandler = null;
+  }
+
+  function attachScreenShareEndedHandler(stream) {
+    detachScreenShareEndedHandler();
+    const videoTrack = stream instanceof MediaStream ? stream.getVideoTracks()[0] || null : null;
+    if (!videoTrack) return;
+    screenShareEndedHandler = () => {
+      void stopLocalScreenShare('ended');
+    };
+    videoTrack.addEventListener('ended', screenShareEndedHandler, { once: true });
+  }
+
+  function stopDisplayStreamTracks(stream, preservedTrackIds = new Set()) {
+    if (!(stream instanceof MediaStream)) return;
+    for (const track of stream.getTracks()) {
+      if (track?.id && preservedTrackIds.has(track.id)) continue;
+      try {
+        track.stop();
+      } catch {
+        // ignore display stream cleanup failures
+      }
+    }
+  }
+
+  async function syncNativePeersAfterLocalTrackSwitch() {
+    if (!shouldMaintainNativePeerConnections()) return;
+    syncNativePeerConnectionsWithRoster();
+    for (const peer of refs.nativePeerConnectionsRef.value.values()) {
+      if (!shouldSyncNativeLocalTracksBeforeOffer(peer)) continue;
+      await syncNativePeerLocalTracks(peer);
+      if (peer.initiator && !peer.negotiating) {
+        void sendNativeOffer(peer);
+      }
+    }
+  }
+
+  async function acquireScreenShareStream() {
+    if (!hasGetDisplayMedia()) {
+      throw normalizeDisplayMediaError({
+        name: 'NotSupportedError',
+        message: 'Screen sharing is not supported in this browser.',
+      });
+    }
+
+    try {
+      return await navigator.mediaDevices.getDisplayMedia(buildDisplayMediaOptions({
+        audio: false,
+        video: { cursor: 'always' },
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+      }));
+    } catch (error) {
+      throw normalizeDisplayMediaError(error);
+    }
+  }
+
+  async function startLocalScreenShare() {
+    if (hasScreenShareParticipantPublisher) {
+      if (controlState.screenEnabled === true) return true;
+      if (screenShareSwitchInFlight) {
+        throw normalizeDisplayMediaError({
+          name: 'InvalidStateError',
+          message: 'Screen sharing is already switching.',
+        });
+      }
+      screenShareSwitchInFlight = true;
+      try {
+        const started = await startScreenShareParticipant();
+        controlState.screenEnabled = started === true;
+        notifyLocalScreenShareStateChanged(controlState.screenEnabled, 'started');
+        return controlState.screenEnabled;
+      } catch (error) {
+        controlState.screenEnabled = false;
+        notifyLocalScreenShareStateChanged(false, 'failed');
+        throw error;
+      } finally {
+        screenShareSwitchInFlight = false;
+      }
+    }
+
+    if (isLocalScreenShareActive()) return true;
+    if (screenShareSwitchInFlight || state.localTrackReconfigureInFlight) {
+      throw normalizeDisplayMediaError({
+        name: 'InvalidStateError',
+        message: 'Local media is switching devices. Try screen sharing again in a moment.',
+      });
+    }
+
+    screenShareSwitchInFlight = true;
+    let displayStream = null;
+    let previousRawStream = null;
+    let previousFilteredStream = null;
+    let previousOutputStream = null;
+    let previousTracks = [];
+    let switchedLocalRefs = false;
+    try {
+      previousRawStream = refs.localRawStreamRef.value instanceof MediaStream ? refs.localRawStreamRef.value : null;
+      previousFilteredStream = refs.localFilteredStreamRef.value instanceof MediaStream ? refs.localFilteredStreamRef.value : null;
+      previousOutputStream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
+      previousTracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
+
+      displayStream = await acquireScreenShareStream();
+      const screenVideoTrack = displayStream.getVideoTracks()[0] || null;
+      if (!screenVideoTrack) {
+        stopRetiredLocalStreams([displayStream], []);
+        throw normalizeDisplayMediaError({
+          name: 'NotFoundError',
+          message: 'No screen sharing video track was selected.',
+        });
+      }
+
+      const preservedAudioTracks = liveAudioTracksForScreenShare(
+        previousOutputStream,
+        previousFilteredStream,
+        previousRawStream,
+      );
+      const nextOutputStream = new MediaStream([screenVideoTrack, ...preservedAudioTracks]);
+      const preservedTrackIds = new Set(nextOutputStream.getTracks().map((track) => track.id));
+      stopDisplayStreamTracks(displayStream, preservedTrackIds);
+
+      refs.localRawStreamRef.value = nextOutputStream;
+      refs.localFilteredStreamRef.value = nextOutputStream;
+      refs.localStreamRef.value = nextOutputStream;
+      refs.localTracksRef.value = nextOutputStream.getTracks();
+      switchedLocalRefs = true;
+      screenShareStream = displayStream;
+      activeScreenShareTrackId = screenVideoTrack.id;
+      controlState.screenEnabled = true;
+      applyControlStateToLocalTracks(refs.localTracksRef.value);
+      startActivityMonitor(nextOutputStream);
+      state.localTracksPublishedToSfu = false;
+      unpublishSfuTracks(previousTracks);
+      publishLocalTracksToSfuIfReady({ force: true });
+      applyCallInputPreferences();
+      applyCallOutputPreferences();
+      await syncNativePeersAfterLocalTrackSwitch();
+      await startEncodingPipeline(screenVideoTrack);
+      stopRetiredLocalStreams([previousOutputStream, previousRawStream, previousFilteredStream], [nextOutputStream]);
+      attachScreenShareEndedHandler(displayStream);
+      notifyLocalScreenShareStateChanged(true, 'started');
+      captureDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'local_screen_share_started',
+        code: 'local_screen_share_started',
+        message: 'Local screen sharing started.',
+        payload: {
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+          track_id: screenVideoTrack.id,
+          track_label: String(screenVideoTrack.label || ''),
+        },
+      });
+      return true;
+    } catch (error) {
+      detachScreenShareEndedHandler();
+      if (switchedLocalRefs) {
+        const screenTracks = refs.localStreamRef.value instanceof MediaStream
+          ? refs.localStreamRef.value.getTracks()
+          : [];
+        unpublishSfuTracks(screenTracks);
+        refs.localRawStreamRef.value = previousRawStream;
+        refs.localFilteredStreamRef.value = previousFilteredStream;
+        refs.localStreamRef.value = previousOutputStream;
+        refs.localTracksRef.value = previousTracks;
+        applyControlStateToLocalTracks(refs.localTracksRef.value);
+        if (previousOutputStream instanceof MediaStream) {
+          startActivityMonitor(previousOutputStream);
+          state.localTracksPublishedToSfu = false;
+          publishLocalTracksToSfuIfReady({ force: true });
+          const previousVideoTrack = previousOutputStream.getVideoTracks()[0] || null;
+          if (previousVideoTrack) {
+            try {
+              await startEncodingPipeline(previousVideoTrack);
+            } catch {
+              stopLocalEncodingPipeline();
+            }
+          } else {
+            stopLocalEncodingPipeline();
+            clearLocalPreviewElement();
+          }
+        }
+      }
+      if (displayStream instanceof MediaStream) {
+        stopRetiredLocalStreams([displayStream], []);
+      }
+      controlState.screenEnabled = false;
+      activeScreenShareTrackId = '';
+      screenShareStream = null;
+      notifyLocalScreenShareStateChanged(false, 'failed');
+      captureClientDiagnosticError('local_screen_share_failed', error, {
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+      }, { code: 'local_screen_share_failed', immediate: true });
+      throw error;
+    } finally {
+      screenShareSwitchInFlight = false;
+    }
+  }
+
+  async function stopLocalScreenShare(reason = 'stopped') {
+    if (hasScreenShareParticipantPublisher) {
+      if (screenShareSwitchInFlight) return false;
+      screenShareSwitchInFlight = true;
+      try {
+        await stopScreenShareParticipant(reason);
+        controlState.screenEnabled = false;
+        notifyLocalScreenShareStateChanged(false, reason);
+        return true;
+      } finally {
+        screenShareSwitchInFlight = false;
+      }
+    }
+
+    if (screenShareSwitchInFlight) return false;
+    const hadScreenShare = isLocalScreenShareActive();
+    const displayStream = screenShareStream instanceof MediaStream ? screenShareStream : null;
+    const previousTracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
+
+    detachScreenShareEndedHandler();
+    screenShareStream = null;
+    activeScreenShareTrackId = '';
+    controlState.screenEnabled = false;
+    notifyLocalScreenShareStateChanged(false, reason);
+
+    if (!hadScreenShare) {
+      applyControlStateToLocalTracks(refs.localTracksRef.value);
+      return true;
+    }
+
+    stopRetiredLocalStreams([displayStream], []);
+    const restored = await reconfigureLocalTracksFromSelectedDevices();
+    if (!restored) {
+      unpublishSfuTracks(previousTracks);
+      state.localTracksPublishedToSfu = false;
+      stopLocalEncodingPipeline();
+      clearLocalPreviewElement();
+    }
+    captureDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'local_screen_share_stopped',
+      code: 'local_screen_share_stopped',
+      message: 'Local screen sharing stopped.',
+      payload: {
+        media_runtime_path: refs.mediaRuntimePathRef.value,
+        reason: String(reason || 'stopped'),
+      },
+    });
+    return restored;
+  }
+
+  async function setLocalScreenShareEnabled(enabled) {
+    return enabled ? startLocalScreenShare() : stopLocalScreenShare('stopped');
   }
 
   async function enforceSfuVideoCaptureProfile(stream, reason) {
@@ -616,6 +926,12 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   async function reconfigureLocalBackgroundFilterOnly() {
+    if (isLocalScreenShareActive()) {
+      applyControlStateToLocalTracks(refs.localTracksRef.value);
+      applyCallInputPreferences();
+      applyCallOutputPreferences();
+      return true;
+    }
     const rawStream = refs.localRawStreamRef.value instanceof MediaStream ? refs.localRawStreamRef.value : null;
     if (!(rawStream instanceof MediaStream)) {
       return reconfigureLocalTracksFromSelectedDevices();
@@ -695,6 +1011,12 @@ export function createLocalMediaOrchestrationHelpers({
   }
 
   async function reconfigureLocalTracksFromSelectedDevices() {
+    if (isLocalScreenShareActive()) {
+      applyControlStateToLocalTracks(refs.localTracksRef.value);
+      applyCallInputPreferences();
+      applyCallOutputPreferences();
+      return true;
+    }
     if (!(refs.localStreamRef.value instanceof MediaStream)) {
       return publishLocalTracks();
     }
@@ -792,6 +1114,7 @@ export function createLocalMediaOrchestrationHelpers({
     reconfigureLocalBackgroundFilterOnly,
     reconfigureLocalTracksFromSelectedDevices,
     resetBackgroundRuntimeMetrics,
+    setLocalScreenShareEnabled,
     startActivityMonitor,
     stopActivityMonitor,
   };

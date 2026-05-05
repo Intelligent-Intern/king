@@ -31,6 +31,7 @@ import {
 import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
+  normalizeVideoLayer,
   prepareSfuOutboundFramePayload,
   SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
   type PreparedSfuOutboundFramePayload,
@@ -107,6 +108,10 @@ interface PublisherFrameHealth {
   recoveryCount: number
 }
 
+interface SFUClientOptions {
+  autoSubscribe?: boolean
+}
+
 export class SFUClient {
   private ws: WebSocket | null = null
   private cb: SFUClientCallbacks
@@ -130,9 +135,11 @@ export class SFUClient {
   private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
   private connectAttemptInFlight = false
   private mediaTransport: SfuWebSocketFallbackMediaTransport
+  private autoSubscribe: boolean
 
-  constructor(cb: SFUClientCallbacks) {
+  constructor(cb: SFUClientCallbacks, options: SFUClientOptions = {}) {
     this.cb = cb
+    this.autoSubscribe = options.autoSubscribe !== false
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
       this.reportClientDiagnostic({
@@ -515,7 +522,10 @@ export class SFUClient {
 
   async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean> {
     this.lastSendFailure = null
-    const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
+    const frameSequence = this.nextOutboundFrameSequence(
+      frame.trackId,
+      frame.videoLayer ?? frame.transportMetrics?.video_layer ?? frame.transportMetrics?.videoLayer,
+    )
     return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
       ...frame,
       transportMetrics: {
@@ -714,8 +724,10 @@ export class SFUClient {
     return Math.max(0, Number(this.ws?.bufferedAmount || 0))
   }
 
-  private nextOutboundFrameSequence(trackId: string): number {
-    const key = String(trackId || '').trim() || 'default'
+  private nextOutboundFrameSequence(trackId: string, videoLayer: unknown = ''): number {
+    const trackKey = String(trackId || '').trim() || 'default'
+    const normalizedVideoLayer = normalizeVideoLayer(videoLayer)
+    const key = normalizedVideoLayer !== '' ? `${trackKey}:${normalizedVideoLayer}` : trackKey
     const next = Math.max(1, Number(this.outboundFrameSequenceByTrack.get(key) || 0) + 1)
     this.outboundFrameSequenceByTrack.set(key, next)
     return next
@@ -1254,7 +1266,9 @@ export class SFUClient {
       callbacks: this.cb,
       inboundFrameAssembler: this.inboundFrameAssembler,
       roomId: this.roomId,
-      subscribe: (publisherId) => this.subscribe(publisherId),
+      subscribe: (publisherId) => {
+        if (this.autoSubscribe) this.subscribe(publisherId)
+      },
     }, msg)
   }
 }
