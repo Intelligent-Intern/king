@@ -35,6 +35,12 @@ pinned and hashed as separate rows.
 - `infra/scripts/check-lsquic-bootstrap.sh` validates LSQUIC/BoringSSL archive
   pins, checksums, byte sizes, HTTPS source URLs, and documentation drift
   without network access.
+- `infra/scripts/bootstrap-lsquic.sh` may try multiple deterministic transport
+  URLs for the same pinned archive when a provider endpoint is temporarily
+  unhealthy: optional `KING_LSQUIC_ARCHIVE_MIRROR_BASE`, the lockfile URL, and
+  the equivalent `codeload.github.com` archive URL for GitHub sources. Every
+  candidate still goes through the same SHA-256 and byte-size verification
+  before extraction or cache admission.
 - `infra/scripts/check-dependency-provenance-doc.sh` hard-fails when this
   document diverges from the lock sources or reintroduces Quiche provenance
   into the active HTTP/3 replacement section.
