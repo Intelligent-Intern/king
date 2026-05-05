@@ -5,6 +5,7 @@ const GROUPS = {
     key: 'administration',
     to: '/admin/administration',
     label: 'Administration',
+    label_key: 'navigation.administration',
     icon: '/assets/orgas/kingrt/icons/gear.png',
     order: 20,
     roles: ['admin'],
@@ -13,6 +14,7 @@ const GROUPS = {
     key: 'governance',
     to: '/admin/governance',
     label: 'Governance',
+    label_key: 'navigation.governance',
     icon: '/assets/orgas/kingrt/icons/adminon.png',
     order: 30,
     roles: ['admin'],
@@ -128,6 +130,7 @@ export function buildWorkspaceNavigation(registry, contextInput = {}) {
       key: rawItem.key || `${rawItem.module_key}:${rawItem.to}`,
       to: rawItem.to,
       label: rawItem.label,
+      label_key: rawItem.label_key || '',
       icon: rawItem.icon || DEFAULT_ICON,
       order: rawItem.order,
       roles: normalizeStringList(rawItem.roles),
@@ -148,11 +151,12 @@ export function buildWorkspaceNavigation(registry, contextInput = {}) {
         key: groupKey,
         to: `/${groupKey}`,
         label: groupKey,
+        label_key: '',
         icon: DEFAULT_ICON,
         order: 100,
         roles: item.roles,
       };
-      grouped.set(groupKey, { ...definition, children: [] });
+      grouped.set(groupKey, { ...definition, label_key: definition.label_key || '', children: [] });
     }
     grouped.get(groupKey).children.push(item);
   }
@@ -170,6 +174,7 @@ export function buildSettingsPanels(registry, contextInput = {}) {
   return registry.settingsPanels()
     .map((panel) => ({
       ...panel,
+      label_key: panel.label_key || '',
       required_permissions: entryRequiredPermissions(panel, modulePermissions.get(panel.module_key)),
     }))
     .filter((panel) => entryAllowsAccess(panel, contextInput, panel.required_permissions))

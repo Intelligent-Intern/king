@@ -34,6 +34,7 @@ const adminFlat = adminNavigation.flatMap((item) => item.children || [item]);
 assert.ok(adminFlat.some((item) => item.to === '/admin/overview'), 'admin overview must be visible');
 assert.ok(adminNavigation.some((item) => item.key === 'administration'), 'administration group must be built');
 assert.ok(adminNavigation.some((item) => item.key === 'governance'), 'governance group must be built');
+assert.ok(adminFlat.every((item) => typeof item.label_key === 'string'), 'navigation entries must carry translation label keys');
 
 const userNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, { role: 'user' });
 assert.deepEqual(userNavigation, [], 'descriptor admin navigation must be hidden for normal users');
@@ -66,6 +67,7 @@ assert.deepEqual(
 const settingsPanels = buildSettingsPanels(workspaceModuleRegistry, { role: 'user' });
 assert.ok(settingsPanels.some((panel) => panel.key === 'personal.theme'), 'user settings panels must be descriptor built');
 assert.ok(settingsPanels.every((panel) => Array.isArray(panel.required_permissions)), 'settings panels must carry permissions');
+assert.ok(settingsPanels.every((panel) => typeof panel.label_key === 'string'), 'settings panels must carry translation label keys');
 
 setActivePinia(createPinia());
 const store = useWorkspaceModuleStore();

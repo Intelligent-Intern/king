@@ -5,6 +5,7 @@ import {
   localizationLanguageDirection,
   normalizeLocalizationLanguage,
 } from '../../support/localizationOptions';
+import { ENGLISH_MESSAGES } from './englishMessages.js';
 
 export const DEFAULT_I18N_NAMESPACES = Object.freeze([
   'common',
@@ -13,16 +14,6 @@ export const DEFAULT_I18N_NAMESPACES = Object.freeze([
   'localization',
 ]);
 
-const BUILTIN_ENGLISH_MESSAGES = Object.freeze({
-  'common.cancel': 'Cancel',
-  'common.save': 'Save',
-  'common.saved': 'Saved',
-  'common.loading': 'Loading...',
-  'settings.language': 'Language',
-  'settings.language_saved': 'Language saved.',
-  'localization.import_preview_ready': 'Preview ready for {count} rows.',
-});
-
 export const i18nState = reactive({
   locale: 'en',
   direction: 'ltr',
@@ -30,8 +21,8 @@ export const i18nState = reactive({
   loading: false,
   namespaces: [...DEFAULT_I18N_NAMESPACES],
   localeMessages: {},
-  fallbackMessages: { ...BUILTIN_ENGLISH_MESSAGES },
-  messages: { ...BUILTIN_ENGLISH_MESSAGES },
+  fallbackMessages: { ...ENGLISH_MESSAGES },
+  messages: { ...ENGLISH_MESSAGES },
   missingKeys: {},
   lastError: '',
 });
@@ -128,7 +119,7 @@ export function applyI18nResourcePayload(payload = {}) {
   const locale = normalizeLocalizationLanguage(payload.locale || sessionState.locale);
   const direction = payload.direction === 'rtl' ? 'rtl' : localizationLanguageDirection(locale);
   const fallbackMessages = {
-    ...BUILTIN_ENGLISH_MESSAGES,
+    ...ENGLISH_MESSAGES,
     ...normalizeI18nResources(payload.fallback_resources),
   };
   const localeMessages = normalizeI18nResources(payload.resources);
@@ -188,7 +179,7 @@ export async function loadI18nResources(options = {}) {
       direction: localizationLanguageDirection(locale),
       namespaces,
       resources: {},
-      fallback_resources: BUILTIN_ENGLISH_MESSAGES,
+      fallback_resources: ENGLISH_MESSAGES,
     });
     return i18nState;
   }
@@ -219,7 +210,7 @@ export async function loadI18nResources(options = {}) {
         direction: localizationLanguageDirection(locale),
         namespaces,
         resources: {},
-        fallback_resources: BUILTIN_ENGLISH_MESSAGES,
+        fallback_resources: ENGLISH_MESSAGES,
       });
       return i18nState;
     } finally {

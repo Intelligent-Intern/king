@@ -17,6 +17,7 @@ export default {
       group: 'administration',
       to: '/admin/administration/theme-editor',
       label: 'Theme Editor',
+      label_key: 'navigation.administration.theme_editor',
       order: 40,
       roles: ['admin'],
     },
