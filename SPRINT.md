@@ -505,9 +505,11 @@ Non-goals for this sprint:
    - [x] Email localization contract covers valid localized templates, invalid
      localized templates falling back to English, outbox rendering, and public
      lead template locale selection.
-   - [x] Localization admin API errors resolve frontend text from stable
-     backend error codes instead of displaying backend English messages
-     directly, with a contract covering the localization endpoint codes.
+   - [x] Localization, Marketplace, and Admin Users API clients resolve
+     frontend text from stable backend error codes instead of displaying
+     backend English messages directly. The contract now covers localization,
+     marketplace, users, user-account admin, and workspace-administration
+     endpoint codes.
 
    Done when:
    - [ ] API error payloads still expose stable codes and do not depend on
