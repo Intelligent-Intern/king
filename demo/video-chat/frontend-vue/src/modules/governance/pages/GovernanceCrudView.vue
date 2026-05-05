@@ -83,11 +83,25 @@
       :submit-label="modalSubmitLabel"
       :form="form"
       :fields="modalFields"
+      :relationships="modalRelationships"
+      :relation-selections="relationSelections"
       :error="formError"
       :maximized="modalMaximized"
       @update:maximized="modalMaximized = $event"
       @close="closeModal"
+      @open-relation="openRelationNavigator"
       @submit="submitModal"
+    />
+
+    <CrudRelationStack
+      :open="relationNavigatorOpen"
+      :relation="relationNavigatorRelation"
+      :selections="relationSelections"
+      :row-provider="relationRowsForEntity"
+      :maximized="relationNavigatorMaximized"
+      @update:maximized="relationNavigatorMaximized = $event"
+      @close="closeRelationNavigator"
+      @apply="applyRelationSelection"
     />
   </AdminPageFrame>
 </template>
@@ -102,6 +116,7 @@ import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import { sessionState } from '../../../domain/auth/session';
 import { moduleAccessContextFromSession } from '../../../http/routeAccess.js';
 import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
+import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { descriptorAllowsAction, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
@@ -118,8 +133,12 @@ const pageSize = 8;
 const modalOpen = ref(false);
 const modalMode = ref('create');
 const modalMaximized = ref(false);
+const relationNavigatorOpen = ref(false);
+const relationNavigatorRelation = ref(null);
+const relationNavigatorMaximized = ref(false);
 const formError = ref('');
 const form = reactive({ id: '' });
+const relationSelections = reactive({});
 
 const scopeKey = computed(() => String(route.name || route.path));
 const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
@@ -140,6 +159,7 @@ const tableColumns = computed(() => crudDescriptor.value.table_columns || []);
 const modalFields = computed(() => (crudDescriptor.value.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'
 )));
+const modalRelationships = computed(() => crudDescriptor.value.relationships || []);
 const rowActions = computed(() => (crudDescriptor.value.row_actions || []).filter((action) => (
   entryAllowsAccess(action, routeActionContext.value, action.required_permissions)
 )));
@@ -171,6 +191,7 @@ const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? t('common.
 watch(() => route.fullPath, () => {
   query.value = '';
   page.value = 1;
+  closeRelationNavigator();
   closeModal();
 });
 
@@ -281,6 +302,7 @@ function resetForm(row = null) {
   for (const field of modalFields.value) {
     form[field.key] = fieldDefaultValue(field, row);
   }
+  resetRelationSelections(row);
   formError.value = '';
 }
 
@@ -302,6 +324,7 @@ function openEditModal(row) {
 function closeModal() {
   modalOpen.value = false;
   modalMaximized.value = false;
+  closeRelationNavigator();
   formError.value = '';
 }
 
@@ -349,12 +372,86 @@ function rowFromPayload(payload, id, updatedAt) {
   return {
     id,
     ...payload,
+    relationships: relationSelectionSnapshot(),
     name,
     key: payload.key || '',
     description: payload.description || '',
     status: payload.status ? normalizeStatus(payload.status) : 'active',
     updatedAt,
   };
+}
+
+function resetRelationSelections(row = null) {
+  for (const key of Object.keys(relationSelections)) {
+    delete relationSelections[key];
+  }
+  const source = row?.relationships && typeof row.relationships === 'object' ? row.relationships : {};
+  for (const [key, value] of Object.entries(source)) {
+    relationSelections[key] = Array.isArray(value) ? value : [];
+  }
+}
+
+function relationSelectionSnapshot() {
+  return Object.fromEntries(Object.entries(relationSelections).map(([key, rows]) => [
+    key,
+    Array.isArray(rows) ? rows.map(rowSelectionSummary) : [],
+  ]));
+}
+
+function rowSelectionSummary(row) {
+  return {
+    id: row?.id || '',
+    name: row?.name || row?.display_name || row?.email || row?.key || '',
+    key: row?.key || '',
+    status: row?.status || '',
+    description: row?.description || '',
+  };
+}
+
+function openRelationNavigator(relationship) {
+  relationNavigatorRelation.value = relationship;
+  relationNavigatorMaximized.value = false;
+  relationNavigatorOpen.value = true;
+}
+
+function closeRelationNavigator() {
+  relationNavigatorOpen.value = false;
+  relationNavigatorRelation.value = null;
+  relationNavigatorMaximized.value = false;
+}
+
+function applyRelationSelection(payload) {
+  const key = String(payload?.relation?.key || '').trim();
+  if (key !== '') {
+    relationSelections[key] = Array.isArray(payload.selectedRows)
+      ? payload.selectedRows.map(rowSelectionSummary)
+      : [];
+  }
+  closeRelationNavigator();
+}
+
+function relationRowsForEntity(entityKey) {
+  const key = String(entityKey || '').trim();
+  if (key === 'subjects') {
+    return [
+      ...relationRowsForEntity('users'),
+      ...relationRowsForEntity('groups'),
+      ...relationRowsForEntity('organizations'),
+    ];
+  }
+  if (key === 'resources') {
+    return [
+      ...relationRowsForEntity('modules'),
+      ...relationRowsForEntity('permissions'),
+      ...relationRowsForEntity('groups'),
+      ...relationRowsForEntity('organizations'),
+    ];
+  }
+  if (key === 'modules' || key === 'permissions') {
+    return buildGovernanceCatalogRows(workspaceModuleRegistry, `admin-governance-${key}`);
+  }
+  const scopedRows = rowsByScope[`admin-governance-${key}`];
+  return Array.isArray(scopedRows) ? scopedRows : [];
 }
 
 function isRowReadonly(row) {

@@ -322,6 +322,18 @@ Sprint goal:
    - Mass selection supports search and pagination.
    - The flow is recursive and has tested back/cancel behavior.
 
+   Progress 2026-05-05:
+   - Added `useCrudRelationNavigator(options)` as the reusable stack state for
+     recursive relation navigation, search, pagination, single selection, and
+     mass selection.
+   - Added `CrudRelationStack.vue` and wired Governance CRUD modals to show
+     descriptor relationships as `+1` controls instead of raw entity selects.
+   - Governance draft rows now retain relation selections in draft state and
+     can hydrate those selections when reopening a local row.
+   - Remaining work: use the same relation primitive in the backend-backed
+     user editor, add create-in-place inside the stack, and connect relation
+     mutations to real tenant-scoped backend APIs.
+
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
 
@@ -421,6 +433,9 @@ Sprint goal:
     - Added `governance-crud-descriptors-contract.mjs` for entity descriptor
       coverage, localized descriptor keys, readonly semantics, permission-bound
       row actions, and CRUD view/modal descriptor consumption.
+    - Added `governance-relation-stack-contract.mjs` for relation stack state,
+      recursive push/back behavior, mass selection, modal `+1` links, and
+      Governance CRUD draft selection wiring.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
