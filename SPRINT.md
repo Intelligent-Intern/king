@@ -332,9 +332,12 @@ Sprint goal:
      can hydrate those selections when reopening a local row.
    - Relation stack now supports create-in-place for local Governance draft
      entities while blocking backend-backed users from fake local creation.
+   - Backend-backed user editor now uses the shared relation stack for legacy
+     role and theme assignments while still writing the existing `role` and
+     `theme` payload fields for current APIs.
    - Remaining work: use the same relation primitive in the backend-backed
-     user editor, attach nested created records to their parent draft, and
-     connect relation mutations to real tenant-scoped backend APIs.
+     group assignment flow, attach nested created records to their parent
+     draft, and connect relation mutations to real tenant-scoped backend APIs.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -450,6 +453,9 @@ Sprint goal:
       Governance CRUD draft selection wiring.
     - Added `governance-summary-cache-contract.mjs` for normalized summary
       hydration, missing-id batch requests, and no row-render fetch loops.
+    - Added `user-editor-relation-controls-contract.mjs` for backend-backed
+      user editor Role/Theme `+1` relation controls and legacy payload
+      compatibility.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

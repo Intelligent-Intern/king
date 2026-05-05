@@ -182,6 +182,10 @@ const props = defineProps({
     type: Function,
     default: () => true,
   },
+  showNestedRelations: {
+    type: Boolean,
+    default: true,
+  },
   maximized: {
     type: Boolean,
     default: false,
@@ -199,7 +203,7 @@ const draft = reactive({});
 
 const title = computed(() => t('governance.relation_picker.title', { relation: relationLabel(props.relation) }));
 const isMultiple = computed(() => navigator.currentFrame.value?.selection_mode === 'multiple');
-const nestedRelations = computed(() => navigator.currentDescriptor.value?.relationships || []);
+const nestedRelations = computed(() => (props.showNestedRelations ? navigator.currentDescriptor.value?.relationships || [] : []));
 const createFields = computed(() => (navigator.currentDescriptor.value?.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'
 )));
@@ -211,7 +215,7 @@ const canCreateDraft = computed(() => (
 ));
 const targetEntityLabel = computed(() => {
   const descriptor = navigator.currentDescriptor.value;
-  if (!descriptor) return t('common.not_available');
+  if (!descriptor) return frameLabel(navigator.currentFrame.value);
   return t(`navigation.governance.${descriptor.entity_key.replace('-', '_')}`);
 });
 
