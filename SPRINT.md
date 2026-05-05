@@ -402,6 +402,8 @@ Non-goals for this sprint:
      are keyed; modal computed state moved into `useUserEditorModal`.
    - [x] User management page, table, validation, notices, and destructive
      confirmations use localization keys.
+   - [x] Tenant context/admin labels and Governance CRUD status/not-available
+     text use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
