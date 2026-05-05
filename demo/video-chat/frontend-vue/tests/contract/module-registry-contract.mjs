@@ -26,6 +26,17 @@ for (const route of routes) {
   assert.ok(!String(route.source_path || '').startsWith('domain/realtime/'), 'module route must not touch realtime domain');
 }
 
+for (const descriptor of modules) {
+  assert.ok(Array.isArray(descriptor.access.grant_targets), `${descriptor.module_key} access grant targets missing`);
+  assert.ok(descriptor.access.grant_targets.includes('group'), `${descriptor.module_key} must be group-assignable`);
+  assert.ok(descriptor.access.grant_targets.includes('organization'), `${descriptor.module_key} must be organization-assignable`);
+  assert.equal(
+    descriptor.access.supports_time_limited_grants,
+    true,
+    `${descriptor.module_key} must expose the time-limited grant metadata slot`,
+  );
+}
+
 assert.ok(
   routes.some((route) => route.path === '/admin/administration/marketplace' && route.module_key === 'marketplace'),
   'marketplace route must be descriptor-owned',

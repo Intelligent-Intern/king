@@ -11,10 +11,24 @@ export function normalizeModuleDescriptor(descriptor) {
     module_key: moduleKey,
     version,
     permissions: Array.isArray(source.permissions) ? [...source.permissions] : [],
+    access: normalizeAccessMetadata(source.access),
     routes: Array.isArray(source.routes) ? [...source.routes] : [],
     navigation: Array.isArray(source.navigation) ? [...source.navigation] : [],
     settings_panels: Array.isArray(source.settings_panels) ? [...source.settings_panels] : [],
     i18n_namespaces: Array.isArray(source.i18n_namespaces) ? [...source.i18n_namespaces] : [],
+  });
+}
+
+function normalizeAccessMetadata(access) {
+  const source = access && typeof access === 'object' ? access : {};
+  const grantTargets = Array.isArray(source.grant_targets)
+    ? source.grant_targets.map((target) => String(target || '').trim()).filter(Boolean)
+    : ['organization', 'group', 'user'];
+
+  return Object.freeze({
+    grant_targets: [...new Set(grantTargets)].sort(),
+    supports_time_limited_grants: source.supports_time_limited_grants !== false,
+    default_expires_at: typeof source.default_expires_at === 'string' ? source.default_expires_at.trim() : null,
   });
 }
 
