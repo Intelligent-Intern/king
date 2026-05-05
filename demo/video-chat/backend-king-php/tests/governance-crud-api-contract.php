@@ -295,6 +295,48 @@ try {
     ]);
     videochat_governance_crud_assert((int) ($groupPermissionCreateOrganization['status'] ?? 0) === 201, 'group permission relation should allow member organization creation');
 
+    $createPolicy = $dispatch('POST', '/api/governance/policies', $adminAuth, [
+        'name' => 'Contract Policy',
+        'key' => 'contract.policy',
+        'status' => 'active',
+        'relationships' => [
+            'groups' => [
+                ['entity_key' => 'groups', 'id' => $createdGroupId],
+            ],
+            'organizations' => [
+                ['entity_key' => 'organizations', 'id' => $createdOrganizationId],
+            ],
+            'permissions' => [
+                ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.groups.create', 'key' => 'governance.groups.create'],
+            ],
+        ],
+    ]);
+    $createPolicyPayload = videochat_governance_crud_decode($createPolicy);
+    $createdPolicy = (($createPolicyPayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createPolicy['status'] ?? 0) === 201, 'admin should create governance policy');
+    videochat_governance_crud_assert(is_array($createdPolicy), 'created policy row missing');
+    videochat_governance_crud_assert(preg_match('/^[0-9a-f-]{36}$/', (string) ($createdPolicy['id'] ?? '')) === 1, 'created policy should expose uuid id');
+    videochat_governance_crud_assert(!array_key_exists('database_id', $createdPolicy), 'created policy must not expose internal database id');
+    videochat_governance_crud_assert(
+        (string) (((($createdPolicy['relationships'] ?? [])['groups'] ?? [])[0] ?? [])['id'] ?? '') === $createdGroupId,
+        'created policy response should include selected group summary'
+    );
+    videochat_governance_crud_assert(
+        (string) (((($createdPolicy['relationships'] ?? [])['permissions'] ?? [])[0] ?? [])['key'] ?? '') === 'governance.groups.create',
+        'created policy response should include selected permission summary'
+    );
+    $createdPolicyId = (string) ($createdPolicy['id'] ?? '');
+    $policyGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'policy:{$createdPolicyId}' AND subject_type = 'group' AND action = 'create'")->fetchColumn();
+    videochat_governance_crud_assert($policyGrantCount === 1, 'policy permissions should sync to evaluator grants');
+    $policyGrantedCreate = $dispatch('POST', '/api/governance/groups', $userAuth, [
+        'name' => 'Policy Granted Group',
+    ]);
+    videochat_governance_crud_assert((int) ($policyGrantedCreate['status'] ?? 0) === 201, 'policy permission relation should allow member group creation');
+    $deletePolicy = $dispatch('DELETE', '/api/governance/policies/' . rawurlencode($createdPolicyId), $adminAuth);
+    videochat_governance_crud_assert((int) ($deletePolicy['status'] ?? 0) === 200, 'admin should delete governance policy');
+    $deletedPolicyGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'policy:{$createdPolicyId}'")->fetchColumn();
+    videochat_governance_crud_assert($deletedPolicyGrantCount === 0, 'deleting policy should remove policy-sourced grants');
+
     $createGrant = $dispatch('POST', '/api/governance/grants', $adminAuth, [
         'name' => 'Contract Group Create Grant',
         'subject_type' => 'group',

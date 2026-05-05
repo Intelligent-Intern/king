@@ -29,6 +29,67 @@ function videochat_sqlite_tenant_migrations(): array
                 'CREATE INDEX IF NOT EXISTS idx_permission_grants_subject_source ON permission_grants(tenant_id, subject_type, group_id, organization_id, user_id, source)',
             ],
         ],
+        37 => [
+            'name' => '0037_governance_policies',
+            'statements' => videochat_governance_policy_statements(),
+        ],
+    ];
+}
+
+function videochat_governance_policy_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_policies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,
+    key TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_governance_policies_tenant_key ON governance_policies(tenant_id, lower(key)) WHERE key <> \'\'',
+        'CREATE INDEX IF NOT EXISTS idx_governance_policies_tenant_status ON governance_policies(tenant_id, status, updated_at DESC)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_policy_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    policy_id INTEGER NOT NULL REFERENCES governance_policies(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES "groups"(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(policy_id, group_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_policy_groups_tenant_group ON governance_policy_groups(tenant_id, group_id)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_policy_organizations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    policy_id INTEGER NOT NULL REFERENCES governance_policies(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    organization_id INTEGER NOT NULL REFERENCES organizations(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(policy_id, organization_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_policy_orgs_tenant_org ON governance_policy_organizations(tenant_id, organization_id)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_policy_permissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    policy_id INTEGER NOT NULL REFERENCES governance_policies(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    permission_key TEXT NOT NULL,
+    resource_type TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('create', 'read', 'update', 'delete', 'share', 'manage')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(policy_id, permission_key)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_policy_permissions_tenant_policy ON governance_policy_permissions(tenant_id, policy_id)',
     ];
 }
 
@@ -254,6 +315,7 @@ SQL,
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_group_memberships_user_unique ON group_memberships(group_id, user_id) WHERE subject_type = \'user\'',
         'CREATE UNIQUE INDEX IF NOT EXISTS idx_group_memberships_org_unique ON group_memberships(group_id, organization_id) WHERE subject_type = \'organization\'',
         'CREATE INDEX IF NOT EXISTS idx_group_memberships_tenant_user ON group_memberships(tenant_id, user_id, status)',
+        ...videochat_governance_policy_statements(),
         <<<'SQL'
 CREATE TABLE IF NOT EXISTS permission_grants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -364,6 +426,10 @@ function videochat_tenant_owned_table_names(): array
         'call_layout_state',
         'call_participant_activity',
         'client_diagnostics',
+        'governance_policies',
+        'governance_policy_groups',
+        'governance_policy_organizations',
+        'governance_policy_permissions',
         'appointment_blocks',
         'appointment_bookings',
         'appointment_calendar_settings',
