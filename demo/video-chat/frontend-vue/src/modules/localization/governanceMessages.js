@@ -96,6 +96,7 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.search': 'Search {entity}',
   'governance.status': 'Status',
   'governance.status_active': 'active',
+  'governance.status_archived': 'archived',
   'governance.status_disabled': 'disabled',
   'governance.status_draft': 'draft',
   'governance.system': 'System',

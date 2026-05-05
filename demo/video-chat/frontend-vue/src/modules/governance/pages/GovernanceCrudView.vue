@@ -636,7 +636,7 @@ function goToPage(nextPage) {
 
 function normalizeStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  return ['active', 'draft', 'disabled'].includes(normalized) ? normalized : 'active';
+  return ['active', 'archived', 'draft', 'disabled'].includes(normalized) ? normalized : 'active';
 }
 
 function statusClass(status) {
@@ -648,6 +648,7 @@ function statusClass(status) {
 function statusLabel(status) {
   const normalized = normalizeStatus(status);
   if (normalized === 'active') return t('governance.status_active');
+  if (normalized === 'archived') return t('governance.status_archived');
   if (normalized === 'draft') return t('governance.status_draft');
   if (normalized === 'disabled') return t('governance.status_disabled');
   return String(status || '');
