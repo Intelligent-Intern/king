@@ -1,22 +1,20 @@
 <template>
-  <section class="view-card administration-localization-view">
-    <AppPageHeader class="section localization-head" title="Localization">
-      <template #actions>
-        <label class="btn btn-cyan localization-file-button">
-          <span>Upload CSV</span>
-          <input class="localization-file-input" type="file" accept=".csv,text/csv" @change="selectCsv" />
-        </label>
-      </template>
-    </AppPageHeader>
+  <AdminPageFrame class="administration-localization-view" title="Localization">
+    <template #actions>
+      <label class="btn btn-cyan localization-file-button">
+        <span>Upload CSV</span>
+        <input class="localization-file-input" type="file" accept=".csv,text/csv" @change="selectCsv" />
+      </label>
+    </template>
 
-    <section class="toolbar localization-toolbar">
+    <template #toolbar>
       <label class="search-field search-field-main" aria-label="Search languages">
         <input v-model.trim="query" class="input" type="search" placeholder="Search languages" />
       </label>
       <span class="settings-upload-status">{{ csvStatus }}</span>
-    </section>
+    </template>
 
-    <section class="table-wrap localization-table-wrap">
+    <AdminTableFrame class="localization-table-wrap">
       <table class="governance-table localization-table">
         <thead>
           <tr>
@@ -44,9 +42,9 @@
           </tr>
         </tbody>
       </table>
-    </section>
+    </AdminTableFrame>
 
-    <footer class="footer localization-footer">
+    <template #footer>
       <AppPagination
         :page="page"
         :page-count="pageCount"
@@ -56,14 +54,15 @@
         :has-next="page < pageCount"
         @page-change="goToPage"
       />
-    </footer>
-  </section>
+    </template>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
 import AppPagination from '../../components/AppPagination.vue';
+import AdminPageFrame from '../../components/admin/AdminPageFrame.vue';
+import AdminTableFrame from '../../components/admin/AdminTableFrame.vue';
 import {
   SUPPORTED_LOCALIZATION_LANGUAGES,
   localizationLanguageDirection,
@@ -111,38 +110,6 @@ function selectCsv(event) {
 </script>
 
 <style scoped>
-.administration-localization-view {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: transparent;
-}
-
-.administration-localization-view > :first-child {
-  border-top-left-radius: 0;
-  border-top-right-radius: 5px;
-}
-
-.localization-head,
-.localization-toolbar,
-.localization-footer {
-  background: var(--bg-ui-chrome);
-}
-
-.localization-head,
-.localization-toolbar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.localization-toolbar {
-  padding-bottom: 25px;
-}
-
 .localization-file-button {
   position: relative;
   overflow: hidden;
@@ -155,14 +122,6 @@ function selectCsv(event) {
   cursor: pointer;
 }
 
-.localization-table-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin-top: 0;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
 .localization-table {
   margin-top: 10px;
 }
@@ -173,11 +132,4 @@ function selectCsv(event) {
   color: var(--text-muted);
 }
 
-.localization-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
-}
 </style>
