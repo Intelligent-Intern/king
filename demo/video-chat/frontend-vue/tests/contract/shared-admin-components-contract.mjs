@@ -92,6 +92,9 @@ assert.match(themeSettings, /theme_settings\.close_editor/, 'theme editor must u
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
 assert.match(sidePanelShell, /\.app-side-panel[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/, 'CRUD side panels must be anchored to the right edge');
+assert.match(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-left:\s*1px solid var\(--border-subtle\);[\s\S]*?border-radius:\s*0;/, 'right side panels must only render the left divider with no rounded corners');
+assert.doesNotMatch(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*1px solid/, 'right side panels must not render top, right, and bottom borders');
+assert.doesNotMatch(sidePanelShell, /border-radius:\s*10px 0 0 10px/, 'right side panels must not keep the old rounded drawer corners');
 assert.match(sidePanelShell, /\.app-side-panel-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized CRUD side panels must use fullscreen width');
 assert.match(sidePanelShell, /\.app-side-panel-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized CRUD side panels must use fullscreen height');
 assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*auto;/, 'users search field must use right-aligned standard toolbar sizing');
