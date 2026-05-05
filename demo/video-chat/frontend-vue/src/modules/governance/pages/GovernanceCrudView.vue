@@ -14,16 +14,17 @@
     </template>
 
     <template #toolbar>
-      <label class="search-field search-field-main" :aria-label="t('governance.search', { entity: pluralLabel })">
-        <input
-          v-model.trim="query"
-          class="input"
-          type="search"
-          :placeholder="t('governance.search', { entity: pluralLabel })"
-        />
-      </label>
-      <span v-if="loading" class="governance-state">{{ t('common.loading') }}</span>
-      <span v-if="loadError" class="governance-inline-error">{{ loadError }}</span>
+      <GovernanceCrudToolbar
+        v-model:query="query"
+        v-model:status-filter="statusFilter"
+        v-model:scope-filter="scopeFilter"
+        :status-options="statusOptions"
+        :scope-options="scopeOptions"
+        :plural-label="pluralLabel"
+        :loading="loading"
+        :load-error="loadError"
+        @search="applyToolbarSearch"
+      />
     </template>
 
     <AdminTableFrame class="governance-table-wrap">
@@ -69,7 +70,18 @@
               </div>
             </td>
           </tr>
-          <tr v-if="filteredRows.length === 0">
+          <tr v-if="showEmptyState">
+            <td :colspan="emptyColspan" class="governance-empty-state-cell">
+              <GovernanceEmptyState
+                :title="emptyStateTitle"
+                :body="emptyStateBody"
+                :create-label="createButtonLabel"
+                :show-create="Boolean(createAction)"
+                @create="openCreateModal"
+              />
+            </td>
+          </tr>
+          <tr v-else-if="filteredRows.length === 0">
             <td :colspan="emptyColspan" class="governance-empty-cell">{{ t('governance.empty_filter') }}</td>
           </tr>
         </tbody>
@@ -132,6 +144,8 @@ import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import { sessionState } from '../../../domain/auth/session';
 import { moduleAccessContextFromSession } from '../../../http/routeAccess.js';
 import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
+import GovernanceCrudToolbar from '../components/GovernanceCrudToolbar.vue';
+import GovernanceEmptyState from '../components/GovernanceEmptyState.vue';
 import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
@@ -149,6 +163,7 @@ import {
 import { createEntitySummaryCache } from '../entitySummaryCache.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
 import { relationRowSummary, relationSelectionSnapshot as buildRelationSelectionSnapshot } from '../relationSummaryPayload.js';
+import { useGovernanceCrudFilters } from '../useGovernanceCrudFilters.js';
 import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
@@ -160,7 +175,6 @@ const route = useRoute();
 const router = useRouter();
 const governancePersistence = createGovernanceCrudPersistence({ router });
 const rowsByScope = reactive({});
-const query = ref('');
 const page = ref(1);
 const pageSize = 8;
 const modalOpen = ref(false);
@@ -221,11 +235,17 @@ const portabilityActions = computed(() => {
   ));
 });
 const createButtonLabel = computed(() => routeActionLabel(createAction.value, t, t('governance.create')));
-const filteredRows = computed(() => {
-  const needle = query.value.trim().toLowerCase();
-  if (needle === '') return visibleRows.value;
-  return visibleRows.value.filter((row) => rowSearchText(row).includes(needle));
-});
+const {
+  query,
+  statusFilter,
+  scopeFilter,
+  statusOptions,
+  scopeOptions,
+  filteredRows,
+  hasActiveFilters,
+  resetFilters,
+  applyToolbarSearch,
+} = useGovernanceCrudFilters({ rows: visibleRows, tableColumns, crudDescriptor, rowDescription });
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
 const pagedRows = computed(() => {
   const offset = (page.value - 1) * pageSize;
@@ -248,12 +268,19 @@ const relationNavigatorTitle = computed(() => (
     ? t('governance.relation_picker.title', { relation: relationNavigatorLabel(relationNavigatorRelation.value) })
     : modalTitle.value
 ));
+const showEmptyState = computed(() => !loading.value && visibleRows.value.length === 0 && !hasActiveFilters.value);
+const emptyStateTitle = computed(() => t('governance.empty_state.title', { entity: pluralLabel.value.toLocaleLowerCase() }));
+const emptyStateBody = computed(() => t('governance.empty_state.body', { entity: singularLabel.value.toLocaleLowerCase() }));
 
 watch(() => route.fullPath, () => {
-  query.value = '';
+  resetFilters();
   page.value = 1;
   closeRelationNavigator();
   closeModal();
+});
+
+watch([query, statusFilter, scopeFilter], () => {
+  page.value = 1;
 });
 
 watch(() => [entityKey.value, sessionState.sessionToken], () => {
@@ -343,17 +370,6 @@ function rowCellValue(row, column) {
   if (String(value || '').trim() === '') return t('common.not_available');
   const enumLabel = optionLabel(fieldForKey(column?.key), value);
   return enumLabel !== '' ? enumLabel : String(value);
-}
-
-function rowSearchText(row) {
-  const keys = crudDescriptor.value.search_fields || tableColumns.value.map((column) => column.key);
-  return keys
-    .map((key) => {
-      if (key === 'description') return rowDescription(row);
-      return row?.[key] ?? '';
-    })
-    .join(' ')
-    .toLowerCase();
 }
 
 function fieldDefaultValue(field, row = null) {

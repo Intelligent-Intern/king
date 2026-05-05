@@ -1,7 +1,7 @@
 :root {
-  --bg-shell: var(--color-0b1324);
-  --bg-pane: var(--color-182c4d);
-  --brand-bg: var(--color-0b1324);
+  --bg-shell: var(--color-101b33);
+  --bg-pane: var(--color-101b33);
+  --brand-bg: var(--color-1482be);
   --bg-surface: var(--color-003c93);
   --bg-surface-strong: var(--color-0c1c33);
   --bg-input: var(--color-d8dadd);
@@ -9,15 +9,15 @@
   --bg-action-hover: var(--color-5696ef);
   --bg-row: var(--color-2a569f);
   --bg-row-hover: var(--color-163260);
-  --line: var(--color-09111e);
+  --line: var(--color-1d315c);
   --text-main: var(--color-edf3ff);
   --text-muted: var(--color-8490a1);
   --ok: var(--color-177f22);
   --wait: var(--color-8d9500);
   --danger: var(--color-ff0000);
 
-  --bg-sidebar: var(--color-0b1324);
-  --bg-main: var(--color-0b1324);
+  --bg-sidebar: var(--color-1482be);
+  --bg-main: var(--color-101b33);
   --bg-tab: var(--color-003c93);
   --bg-tab-hover: var(--bg-action-hover);
   --bg-tab-active: var(--bg-row);
@@ -51,6 +51,7 @@
   --color-0f1d34: #0f1d34;
   --color-0f1f37: #0f1f37;
   --color-0f6ea8: #0f6ea8;
+  --color-101b33: #101b33;
   --color-10203b: #10203b;
   --color-11213a: #11213a;
   --color-112b55: #112b55;
@@ -74,6 +75,7 @@
   --color-1a96d8: #1a96d8;
   --color-1b427a: #1b427a;
   --color-1c437a: #1c437a;
+  --color-1d315c: #1d315c;
   --color-1d3f70: #1d3f70;
   --color-1e3b66: #1e3b66;
   --color-1f1808: #1f1808;

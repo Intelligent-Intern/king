@@ -4,6 +4,31 @@
   margin-top: 10px;
 }
 
+.governance-crud-view .admin-page-frame-toolbar {
+  gap: 14px;
+  justify-content: flex-start;
+}
+
+.governance-search-field {
+  flex: 1 1 280px;
+  max-width: 360px;
+}
+
+.governance-filter-select {
+  flex: 0 1 180px;
+}
+
+.governance-toolbar-submit-btn {
+  width: 48px;
+  height: 40px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-action);
+}
+
+.governance-toolbar-submit-btn:hover {
+  background: var(--bg-action-hover);
+}
+
 .governance-actions-col {
   width: 120px;
 }
@@ -27,6 +52,67 @@
   padding: 18px 12px;
   text-align: center;
   color: var(--text-muted);
+}
+
+.governance-empty-state-cell {
+  height: min(48vh, 420px);
+  padding: 0;
+}
+
+.governance-empty-state {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 36px 18px;
+  color: var(--text-primary);
+}
+
+.governance-empty-state h2,
+.governance-empty-state p {
+  margin: 0;
+}
+
+.governance-empty-state h2 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.governance-empty-state p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.governance-empty-icon {
+  position: relative;
+  width: 52px;
+  height: 40px;
+  border: 3px solid var(--border-subtle);
+  border-radius: 9px;
+  opacity: 0.95;
+}
+
+.governance-empty-icon::before {
+  content: '';
+  position: absolute;
+  inset-inline: 8px;
+  top: 13px;
+  height: 10px;
+  border: 3px solid var(--border-subtle);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.governance-empty-icon::after {
+  content: '';
+  position: absolute;
+  inset-inline: 10px;
+  top: -7px;
+  height: 14px;
+  border: 3px solid var(--border-subtle);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
 }
 
 .governance-state,
@@ -99,5 +185,9 @@
 
   .governance-table td:last-child {
     border-bottom: 0;
+  }
+
+  .governance-empty-state-cell {
+    height: auto;
   }
 }

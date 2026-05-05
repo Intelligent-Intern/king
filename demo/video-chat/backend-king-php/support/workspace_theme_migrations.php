@@ -10,7 +10,7 @@ INSERT OR IGNORE INTO workspace_theme_presets(id, label, colors_json, is_system,
 VALUES(
   'dark',
   'Dark',
-  '{"--bg-shell":"#09111e","--bg-pane":"#182c4d","--brand-bg":"#09111e","--bg-surface":"#003c93","--bg-surface-strong":"#0c1c33","--bg-input":"#d8dadd","--bg-action":"#0b1324","--bg-action-hover":"#5696ef","--bg-row":"#2a569f","--bg-row-hover":"#163260","--line":"#09111e","--text-main":"#edf3ff","--text-muted":"#8490a1","--ok":"#177f22","--wait":"#8d9500","--danger":"#ff0000","--bg-sidebar":"#09111e","--bg-main":"#182c4d","--bg-tab":"#003c93","--bg-tab-hover":"#5696ef","--bg-tab-active":"#2a569f","--bg-ui-chrome":"#3d5f98","--bg-ui-chrome-active":"#2a569f","--bg-icon":"#162e51","--bg-icon-active":"#5696ef","--border-subtle":"#09111e","--text-primary":"#edf3ff","--text-secondary":"#c6d4eb","--text-dim":"#5e6d86","--warn":"#4d5011","--brand-cyan":"#1482be","--brand-cyan-hover":"#1a96d8","--brand-cyan-active":"#0f6ea8"}',
+  '{"--bg-shell":"#101b33","--bg-pane":"#101b33","--brand-bg":"#1482be","--bg-surface":"#003c93","--bg-surface-strong":"#0c1c33","--bg-input":"#d8dadd","--bg-action":"#0b1324","--bg-action-hover":"#5696ef","--bg-row":"#2a569f","--bg-row-hover":"#163260","--line":"#1d315c","--text-main":"#edf3ff","--text-muted":"#8490a1","--ok":"#177f22","--wait":"#8d9500","--danger":"#ff0000","--bg-sidebar":"#1482be","--bg-main":"#101b33","--bg-tab":"#003c93","--bg-tab-hover":"#5696ef","--bg-tab-active":"#2a569f","--bg-ui-chrome":"#3d5f98","--bg-ui-chrome-active":"#2a569f","--bg-icon":"#162e51","--bg-icon-active":"#5696ef","--border-subtle":"#1d315c","--text-primary":"#edf3ff","--text-secondary":"#c6d4eb","--text-dim":"#5e6d86","--warn":"#4d5011","--brand-cyan":"#1482be","--brand-cyan-hover":"#1a96d8","--brand-cyan-active":"#0f6ea8"}',
   1,
   NULL,
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
@@ -28,6 +28,18 @@ VALUES(
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 )
+SQL,
+    ];
+}
+
+function videochat_workspace_theme_refresh_statements(): array
+{
+    return [
+        <<<'SQL'
+UPDATE workspace_theme_presets
+SET colors_json = '{"--bg-shell":"#101b33","--bg-pane":"#101b33","--brand-bg":"#1482be","--bg-surface":"#003c93","--bg-surface-strong":"#0c1c33","--bg-input":"#d8dadd","--bg-action":"#0b1324","--bg-action-hover":"#5696ef","--bg-row":"#2a569f","--bg-row-hover":"#163260","--line":"#1d315c","--text-main":"#edf3ff","--text-muted":"#8490a1","--ok":"#177f22","--wait":"#8d9500","--danger":"#ff0000","--bg-sidebar":"#1482be","--bg-main":"#101b33","--bg-tab":"#003c93","--bg-tab-hover":"#5696ef","--bg-tab-active":"#2a569f","--bg-ui-chrome":"#3d5f98","--bg-ui-chrome-active":"#2a569f","--bg-icon":"#162e51","--bg-icon-active":"#5696ef","--border-subtle":"#1d315c","--text-primary":"#edf3ff","--text-secondary":"#c6d4eb","--text-dim":"#5e6d86","--warn":"#4d5011","--brand-cyan":"#1482be","--brand-cyan-hover":"#1a96d8","--brand-cyan-active":"#0f6ea8"}',
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = 'dark' AND is_system = 1
 SQL,
     ];
 }

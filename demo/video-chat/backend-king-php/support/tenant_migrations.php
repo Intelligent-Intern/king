@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/workspace_theme_migrations.php';
+
 function videochat_tenant_default_public_id(): string
 {
     return '00000000-0000-4000-8000-000000000001';
@@ -48,6 +50,10 @@ function videochat_sqlite_tenant_migrations(): array
         41 => [
             'name' => '0041_governance_user_roles',
             'statements' => videochat_governance_user_role_statements(),
+        ],
+        42 => [
+            'name' => '0042_workspace_theme_palette_refresh',
+            'statements' => videochat_workspace_theme_refresh_statements(),
         ],
     ];
 }

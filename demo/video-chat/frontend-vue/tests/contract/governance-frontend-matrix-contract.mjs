@@ -73,8 +73,16 @@ assert.ok(permissionRows.every((row) => row.readonly === true), 'permission cata
 assert.ok(permissionRows.every((row) => row.description_key === 'governance.catalog.permission_description'), 'permission rows must use keyed descriptions');
 
 const governanceCrudSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
+const governanceToolbarSource = await source('src/modules/governance/components/GovernanceCrudToolbar.vue');
+const governanceEmptyStateSource = await source('src/modules/governance/components/GovernanceEmptyState.vue');
 assert.match(governanceCrudSource, /rowsByScope/, 'governance CRUD must keep route-scoped local rows isolated');
 assert.match(governanceCrudSource, /routeActionsForContext/, 'governance CRUD must use permission-filtered route actions');
+assert.match(governanceCrudSource, /GovernanceCrudToolbar/, 'governance CRUD must use the standard toolbar component');
+assert.match(governanceCrudSource, /GovernanceEmptyState/, 'governance CRUD must render the standard empty state');
+assert.match(governanceToolbarSource, /icons\/send\.png/, 'governance toolbar submit must use the shared send icon');
+assert.match(governanceToolbarSource, /governance\.filter\.all_status/, 'governance toolbar must expose status filtering');
+assert.match(governanceToolbarSource, /governance\.filter\.all_scope/, 'governance toolbar must expose scope filtering');
+assert.match(governanceEmptyStateSource, /@click="\$emit\('create'\)"/, 'governance empty state must route create to the parent action');
 assert.doesNotMatch(governanceCrudSource, /v-for="row in pagedRows"[\s\S]{0,500}fetch\(/, 'row rendering must not trigger per-row fetch calls');
 assert.doesNotMatch(governanceCrudSource, /<select[\s\S]*group/i, 'governance CRUD must not introduce raw relation selects');
 
