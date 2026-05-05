@@ -432,6 +432,9 @@ Non-goals for this sprint:
      page, appointment settings modal, and shared call list table. Those
      surfaces no longer carry static English labels, aria labels, titles, or
      action text.
+   - [x] Appointment slot configuration panel and form rows are now keyed and
+     included in the translation-key coverage contract, including FullCalendar
+     slot labels, copy/insert actions, save/load notices, and validation text.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
