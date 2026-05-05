@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
 const repoVideoChatRoot = path.resolve(frontendRoot, '..');
 const vendorDir = path.join(frontendRoot, 'public/cdn/vendor/mediapipe/selfie_segmentation');
+const tasksVisionVendorDir = path.join(frontendRoot, 'public/cdn/vendor/mediapipe/tasks-vision');
 const tensorflowVendorDir = path.join(frontendRoot, 'public/cdn/vendor/tensorflow');
 
 function readUtf8(file) {
@@ -40,6 +41,24 @@ try {
   assert.ok(backend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'MediaPipe backend must support deploy-time CDN origin');
   assert.ok(backend.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'MediaPipe backend must use the vendored CDN path');
 
+  const workerBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendWorkerSegmenter.js'));
+  assert.ok(workerBackend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'Worker segmenter backend must support deploy-time CDN origin');
+  assert.ok(workerBackend.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'Worker segmenter backend must use a vendored model path');
+  assert.ok(!workerBackend.includes('/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite'), 'Worker segmenter must not point at an unvendored model');
+
+  const imageSegmenterWorker = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/workers/imageSegmenterWorker.js'));
+  assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs'), 'Image segmenter worker must load the vendored tasks-vision module');
+  assert.ok(!imageSegmenterWorker.includes("from '@mediapipe/tasks-vision'"), 'Image segmenter worker must not leave a bare package import for production');
+  assert.ok(!imageSegmenterWorker.includes('/node_modules/@mediapipe/tasks-vision'), 'Image segmenter worker must not load node_modules at runtime');
+  assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation.tflite'), 'Image segmenter worker must use a vendored model path');
+
+  const backgroundStream = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.js'));
+  assert.ok(backgroundStream.includes("import { createMediaPipeSegmentationBackend } from './backendMediapipe';"), 'Background stream must keep the production MediaPipe fallback');
+  assert.ok(backgroundStream.includes('Falling back to MediaPipe selfie segmentation backend'), 'Background stream must fall back when the worker backend fails');
+
+  const viteConfig = readUtf8(path.join(frontendRoot, 'vite.config.js'));
+  assert.ok(!viteConfig.includes("external: ['@mediapipe/tasks-vision']"), 'Vite worker build must not externalize tasks-vision');
+
   const tfjsBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendTfjs.js'));
   assertNoJsdelivrAssetSource(tfjsBackend, 'TensorFlow fallback backend');
   assert.ok(tfjsBackend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'TensorFlow fallback backend must support deploy-time CDN origin');
@@ -68,6 +87,20 @@ try {
       assert.ok(size > 0, `${file} must not be empty`);
     }
   }
+
+  const tasksVisionManifest = JSON.parse(readUtf8(path.join(tasksVisionVendorDir, 'manifest.json')));
+  assert.equal(tasksVisionManifest.package, '@mediapipe/tasks-vision');
+  assert.equal(tasksVisionManifest.version, '0.10.35');
+  const tasksVisionFiles = new Set((tasksVisionManifest.files || []).map((entry) => entry.path));
+  for (const file of ['vision_bundle.mjs', 'vision_bundle_mjs.js.map']) {
+    assert.ok(tasksVisionFiles.has(file), `Tasks-Vision manifest must pin ${file}`);
+    assert.ok(assertFile(path.join(tasksVisionVendorDir, file)) > 0, `${file} must not be empty`);
+  }
+
+  const preferences = readUtf8(path.join(frontendRoot, 'src/domain/realtime/media/preferences.js'));
+  assert.ok(preferences.includes('/assets/orgas/kingrt/social/invitation-preview.png'), 'Image background preset must use an existing production asset');
+  assert.ok(!preferences.includes("setCallBackgroundReplacementImageUrl('/assets/images/bookshelf.png')"), 'Image background preset must not store the removed bookshelf asset');
+  assert.ok(assertFile(path.join(frontendRoot, 'public/assets/orgas/kingrt/social/invitation-preview.png')) > 0, 'Replacement background image must exist');
 
   const tensorflowManifest = JSON.parse(readUtf8(path.join(tensorflowVendorDir, 'manifest.json')));
   assert.equal(tensorflowManifest.vendor, 'tensorflow');

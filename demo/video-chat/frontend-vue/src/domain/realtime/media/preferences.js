@@ -7,6 +7,7 @@ import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstrai
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
+export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
 
 function clampVolume(value) {
   const numeric = Number(value);
@@ -35,8 +36,17 @@ function toBackgroundFilterMode(value) {
   return value === 'blur' ? 'blur' : 'off';
 }
 
+function isLegacyBackgroundReplacementImageUrl(value) {
+  const path = String(value || '').split(/[?#]/)[0];
+  return path === `/assets/images/${'bookshelf.png'}`;
+}
+
 function toBackgroundReplacementImageUrl(value) {
-  return typeof value === 'string' ? value.trim() : '';
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (isLegacyBackgroundReplacementImageUrl(url)) {
+    return DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL;
+  }
+  return url;
 }
 
 function toBackgroundBackdropMode(value) {
@@ -385,7 +395,7 @@ export function isCallBackgroundPresetActive(preset) {
 
 export function applyCallBackgroundPreset(preset) {
   if (preset === 'image') {
-    setCallBackgroundReplacementImageUrl('/assets/images/bookshelf.png');
+    setCallBackgroundReplacementImageUrl(DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL);
     setCallBackgroundBackdropMode('image');
     setCallBackgroundFilterMode('replace');
     setCallBackgroundApplyOutgoing(true);
