@@ -453,6 +453,8 @@ Non-goals for this sprint:
      RTL-safe layout.
    - [x] Localization contract now includes an RTL layout foundation guard for
      those non-call admin/module surfaces and document direction sync.
+   - [x] Shared pagination directional icons mirror under `html[dir="rtl"]`
+     without applying RTL transforms to canvas or video content.
 
    Done when:
    - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
