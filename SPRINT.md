@@ -414,8 +414,12 @@ Sprint goal:
    - Group `relationships.modules` now syncs selected modules into
      module-read `permission_grants` with `source = group_modules`, giving the
      evaluator a concrete `module/<key>/read` contract.
-   - Remaining work: policies, export/import job APIs, and recursive
-     permission mutations from role editors.
+   - Added `/api/governance/data-portability-jobs` to list/read export and
+     import jobs, create tenant-scoped export jobs from the existing bundle
+     generator, and reject import dry-runs without a submitted bundle before a
+     failed job row is persisted.
+   - Remaining work: policies and recursive permission mutations from role
+     editors.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -520,6 +524,9 @@ Sprint goal:
     - Extended Governance CRUD contracts for persisted grants, public grant
       UUIDs, group-subject grants that allow member actions, and aggregate
       subject/resource relation hydration.
+    - Extended Governance CRUD API and persistence contracts for backend-backed
+      data portability jobs, export job creation, and import validation without
+      fake failed job rows.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
