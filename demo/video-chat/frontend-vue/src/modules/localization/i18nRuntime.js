@@ -25,6 +25,7 @@ export const i18nState = reactive({
   messages: { ...ENGLISH_MESSAGES },
   missingKeys: {},
   lastError: '',
+  resourceLoadKey: '',
 });
 
 let resourceLoadInFlight = null;
@@ -115,7 +116,7 @@ function recordMissingKey(key) {
   i18nState.missingKeys[key] = (i18nState.missingKeys[key] || 0) + 1;
 }
 
-export function applyI18nResourcePayload(payload = {}) {
+export function applyI18nResourcePayload(payload = {}, options = {}) {
   const locale = normalizeLocalizationLanguage(payload.locale || sessionState.locale);
   const direction = payload.direction === 'rtl' ? 'rtl' : localizationLanguageDirection(locale);
   const fallbackMessages = {
@@ -131,6 +132,7 @@ export function applyI18nResourcePayload(payload = {}) {
   replaceObject(i18nState.fallbackMessages, fallbackMessages);
   replaceObject(i18nState.localeMessages, localeMessages);
   replaceObject(i18nState.messages, messages);
+  i18nState.resourceLoadKey = normalizeString(options.resourceLoadKey || '');
   i18nState.ready = true;
   i18nState.lastError = '';
   syncI18nDocumentState(locale, direction);
@@ -162,10 +164,18 @@ export async function loadI18nResources(options = {}) {
   const locale = normalizeLocalizationLanguage(options.locale || sessionState.locale);
   const namespaces = normalizeI18nNamespaces(options.namespaces);
   const force = options.force === true;
-  const loadKey = `${locale}|${namespaces.join(',')}|${sessionState.tenantId || 0}`;
+  const publicLoad = options.public === true;
+  const tenantKey = sessionState.sessionToken ? String(sessionState.tenantId || 0) : (publicLoad ? 'public' : 'local');
+  const loadKey = `${locale}|${namespaces.join(',')}|${tenantKey}`;
 
   syncI18nDocumentState(locale, sessionState.direction || localizationLanguageDirection(locale));
-  if (!force && i18nState.ready && i18nState.locale === locale && hasLoadedNamespaces(namespaces)) {
+  if (
+    !force
+    && i18nState.ready
+    && i18nState.locale === locale
+    && i18nState.resourceLoadKey === loadKey
+    && hasLoadedNamespaces(namespaces)
+  ) {
     return i18nState;
   }
 
@@ -173,14 +183,14 @@ export async function loadI18nResources(options = {}) {
     return resourceLoadInFlight;
   }
 
-  if (!sessionState.sessionToken) {
+  if (!sessionState.sessionToken && !publicLoad) {
     applyI18nResourcePayload({
       locale,
       direction: localizationLanguageDirection(locale),
       namespaces,
       resources: {},
       fallback_resources: ENGLISH_MESSAGES,
-    });
+    }, { resourceLoadKey: loadKey });
     return i18nState;
   }
 
@@ -202,7 +212,7 @@ export async function loadI18nResources(options = {}) {
       if (!response.ok || !payload || payload.status !== 'ok') {
         throw new Error(payload?.error?.message || 'Could not load translations.');
       }
-      return applyI18nResourcePayload(payload);
+      return applyI18nResourcePayload(payload, { resourceLoadKey: loadKey });
     } catch (error) {
       i18nState.lastError = error instanceof Error ? error.message : 'Could not load translations.';
       applyI18nResourcePayload({
@@ -211,7 +221,7 @@ export async function loadI18nResources(options = {}) {
         namespaces,
         resources: {},
         fallback_resources: ENGLISH_MESSAGES,
-      });
+      }, { resourceLoadKey: loadKey });
       return i18nState;
     } finally {
       i18nState.loading = false;
