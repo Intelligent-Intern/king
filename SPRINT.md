@@ -1522,7 +1522,26 @@ Non-goals for this sprint:
     - [ ] Existing users can log in with default English.
     - [ ] Superadmin can upload a CSV in production-like smoke.
     - [ ] Production health and deploy smoke pass.
-    - [ ] Rollback notes identify which migration changes are additive.
+    - [x] Rollback notes identify which migration changes are additive.
+
+    Progress 2026-05-05:
+    - Added `documentation/dev/video-chat/localization-rollout.md` with
+      preflight commands, migration scope, production locale smoke steps for
+      `en`, `de`, `ar`, and `sgd`, primary-superadmin CSV upload smoke, and
+      code-first rollback notes for additive localization schema changes.
+    - Added `localization-rollout-proof-contract.mjs` and included it in
+      `npm run test:contract:localization`; it pins the rollout note, additive
+      migration names, schema tables, `users.locale DEFAULT 'en'`, CSV
+      superadmin smoke, deploy-smoke references, and rollback language.
+    - `npm run test:contract:localization` passes frontend/static contracts;
+      backend SQLite contracts skip locally because this PHP runtime does not
+      include `pdo_sqlite`.
+    - `demo/video-chat/scripts/check-deploy-idempotency.sh`, `bash -n
+      demo/video-chat/scripts/deploy-smoke.sh`, and `bash -n
+      demo/video-chat/scripts/deploy.sh` pass.
+    - Remaining work requires an explicit production or production-like deploy
+      run: migration idempotency on the deploy target, default-English login,
+      primary-superadmin CSV upload smoke, production health, and deploy smoke.
 
 14. [x] `[king-pipeline-orchestrator-oo-surface]` Add the King OO orchestrator facade.
 
