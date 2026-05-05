@@ -45,6 +45,10 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0040_governance_organization_roles',
             'statements' => videochat_governance_organization_role_statements(),
         ],
+        41 => [
+            'name' => '0041_governance_user_roles',
+            'statements' => videochat_governance_user_role_statements(),
+        ],
     ];
 }
 
@@ -81,6 +85,24 @@ CREATE TABLE IF NOT EXISTS governance_organization_roles (
 SQL,
         'CREATE INDEX IF NOT EXISTS idx_governance_organization_roles_tenant_organization ON governance_organization_roles(tenant_id, organization_id)',
         'CREATE INDEX IF NOT EXISTS idx_governance_organization_roles_tenant_role ON governance_organization_roles(tenant_id, role_id)',
+    ];
+}
+
+function videochat_governance_user_role_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_user_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES governance_roles(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(user_id, role_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_user_roles_tenant_user ON governance_user_roles(tenant_id, user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_governance_user_roles_tenant_role ON governance_user_roles(tenant_id, role_id)',
     ];
 }
 
@@ -538,6 +560,7 @@ function videochat_tenant_owned_table_names(): array
         'governance_role_modules',
         'governance_group_roles',
         'governance_organization_roles',
+        'governance_user_roles',
         'governance_policies',
         'governance_policy_groups',
         'governance_policy_organizations',

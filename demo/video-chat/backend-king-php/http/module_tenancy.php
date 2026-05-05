@@ -627,6 +627,7 @@ function videochat_handle_governance_user_summary_route(
     }
 
     $rows = videochat_tenancy_governance_user_summary_rows(is_array($listing['rows'] ?? null) ? $listing['rows'] : []);
+    $rows = videochat_tenancy_governance_enrich_user_role_rows($pdo, $tenantId, $rows);
     $total = (int) ($listing['total'] ?? 0);
     $pageCount = (int) ($listing['page_count'] ?? 0);
     $page = (int) ($filters['page'] ?? 1);
