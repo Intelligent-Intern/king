@@ -578,6 +578,7 @@ Non-goals for this sprint:
       `demo/video-chat/frontend-vue/src/modules`.
     - Define a frontend module descriptor contract based on the Intelligent
       Intern descriptor pattern.
+    - Add Pinia as the frontend module/runtime store foundation.
     - Support dynamic page/widget loading through descriptor loaders.
     - Let router/navigation/settings consume registered module metadata.
     - Keep existing routes stable while changing where route components are
@@ -586,10 +587,10 @@ Non-goals for this sprint:
     Done when:
     - [x] Module descriptors can register routes, navigation entries,
       permissions, settings panels, and i18n namespaces.
-    - [ ] Router can consume module routes without direct feature imports.
-    - [ ] Navigation can consume module navigation metadata.
+    - [x] Router can consume module routes without direct feature imports.
+    - [x] Navigation can consume module navigation metadata.
     - [ ] Settings can consume module settings-panel metadata.
-    - [ ] Build proves module dynamic imports are valid.
+    - [x] Build proves module dynamic imports are valid.
 
 18. [ ] `[shared-admin-components]` Extract reusable non-call UI building blocks.
 
@@ -640,9 +641,9 @@ Non-goals for this sprint:
     - Keep the contract ready for organization and group assignment.
 
     Done when:
-    - [ ] Each non-call module has a stable key and permission namespace.
+    - [x] Each non-call module has a stable key and permission namespace.
     - [ ] Module metadata can be listed in Governance.
-    - [ ] Disabled modules do not appear in navigation.
+    - [x] Disabled modules do not appear in navigation.
     - [ ] Unauthorized users cannot resolve module routes.
     - [ ] Time-limited rights have an explicit metadata slot, even if full
       enforcement is finished in the tenancy sprint.
@@ -658,7 +659,7 @@ Non-goals for this sprint:
     - Keep localization and RTL proof compatible with module loading.
 
     Done when:
-    - [ ] Build passes with dynamic module imports.
+    - [x] Build passes with dynamic module imports.
     - [ ] Browser smoke proves non-call navigation and settings pages still
       render.
     - [ ] Route compatibility smoke covers old and new module-backed paths.
