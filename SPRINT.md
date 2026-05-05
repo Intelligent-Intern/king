@@ -483,6 +483,16 @@ Non-goals for this sprint:
    - Preserve placeholders for booking mails and lead notifications.
    - Resolve recipient locale for owner and guest independently where possible.
 
+   Progress:
+   - [x] Appointment booking mail templates reject configured subject/body
+     text that removes critical placeholders such as `{call_title}`,
+     `{recipient_name}`, `{starts_at}`, and `{join_link}`.
+   - [x] Public lead notification templates reject configured subject/body
+     text that removes critical `{name}` and `{email}` placeholders.
+   - [x] Mail template placeholder contract covers defaults, invalid
+     configured templates, valid configured templates, and reset-to-default
+     behavior.
+
    Done when:
    - [ ] API error payloads still expose stable codes and do not depend on
      translated text for logic.
@@ -560,13 +570,16 @@ Non-goals for this sprint:
       `translation_resources`, failed commits stay atomic, duplicate keys and
       unsupported locales fail, and only primary superadmin `user_id = 1` can
       import translations.
+    - [x] Mail template placeholder contract runs in the localization suite
+      without requiring SQLite and fails if appointment or lead notification
+      templates lose required placeholders.
 
     Done when:
     - [x] Tests fail if a used key is missing from English fallback.
     - [x] Tests fail if CSV upload mutates data during preview.
     - [x] Tests fail if non-`user_id=1` can import translations.
     - [x] Tests fail if a configured RTL locale does not set RTL.
-    - [ ] Tests fail if required email placeholders are missing.
+    - [x] Tests fail if required email placeholders are missing.
 
 12. [ ] `[localization-browser-smoke]` Add browser proof.
 
