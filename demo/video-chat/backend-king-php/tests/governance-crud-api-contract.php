@@ -118,9 +118,36 @@ try {
     videochat_governance_crud_assert((int) ($groupsList['status'] ?? 0) === 200, 'admin should list groups');
     videochat_governance_crud_assert(count((array) (($groupsPayload['result'] ?? [])['rows'] ?? [])) >= 1, 'group list should include seeded group');
 
+    $userSummaries = $dispatch('GET', '/api/governance/users', $adminAuth);
+    $userSummaryPayload = videochat_governance_crud_decode($userSummaries);
+    $userRows = (array) (($userSummaryPayload['result'] ?? [])['rows'] ?? []);
+    videochat_governance_crud_assert((int) ($userSummaries['status'] ?? 0) === 200, 'admin should list governance user summaries');
+    videochat_governance_crud_assert(
+        count(array_filter($userRows, static fn ($row): bool => is_array($row) && (string) ($row['id'] ?? '') === (string) $regularUserId)) === 1,
+        'governance user summaries should include tenant users'
+    );
+    videochat_governance_crud_assert(!array_key_exists('password_hash', is_array($userRows[0] ?? null) ? $userRows[0] : []), 'governance user summaries must not expose password hashes');
+
+    $invalidMemberCreate = $dispatch('POST', '/api/governance/groups', $adminAuth, [
+        'name' => 'Invalid Member Group',
+        'relationships' => [
+            'members' => [
+                ['entity_key' => 'users', 'id' => '999999'],
+            ],
+        ],
+    ]);
+    videochat_governance_crud_assert((int) ($invalidMemberCreate['status'] ?? 0) === 422, 'invalid group member reference should fail validation');
+    $invalidMemberGroupCount = (int) $pdo->query("SELECT COUNT(*) FROM \"groups\" WHERE name = 'Invalid Member Group'")->fetchColumn();
+    videochat_governance_crud_assert($invalidMemberGroupCount === 0, 'invalid member group must not be created');
+
     $createGroup = $dispatch('POST', '/api/governance/groups', $adminAuth, [
         'name' => 'Contract Group',
         'status' => 'active',
+        'relationships' => [
+            'members' => [
+                ['entity_key' => 'users', 'id' => (string) $regularUserId],
+            ],
+        ],
     ]);
     $createGroupPayload = videochat_governance_crud_decode($createGroup);
     $createdGroup = (($createGroupPayload['result'] ?? [])['row'] ?? null);
@@ -128,7 +155,13 @@ try {
     videochat_governance_crud_assert(is_array($createdGroup), 'created group row missing');
     videochat_governance_crud_assert(preg_match('/^[0-9a-f-]{36}$/', (string) ($createdGroup['id'] ?? '')) === 1, 'created group should expose uuid id');
     videochat_governance_crud_assert(!array_key_exists('database_id', $createdGroup), 'created group must not expose internal database id');
+    videochat_governance_crud_assert(
+        (string) (((($createdGroup['relationships'] ?? [])['members'] ?? [])[0] ?? [])['id'] ?? '') === (string) $regularUserId,
+        'created group response should include selected member summary'
+    );
     $createdGroupId = (string) ($createdGroup['id'] ?? '');
+    $memberCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships INNER JOIN \"groups\" ON \"groups\".id = group_memberships.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND group_memberships.user_id = {$regularUserId} AND group_memberships.status = 'active'")->fetchColumn();
+    videochat_governance_crud_assert($memberCount === 1, 'created group member should be persisted');
 
     $updateGroup = $dispatch('PATCH', '/api/governance/groups/' . rawurlencode($createdGroupId), $adminAuth, [
         'name' => 'Contract Group Updated',
@@ -140,6 +173,26 @@ try {
         (string) (((($updateGroupPayload['result'] ?? [])['row'] ?? [])['status'] ?? '')) === 'archived',
         'updated group status mismatch'
     );
+    videochat_governance_crud_assert(
+        (string) (((((($updateGroupPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['members'] ?? [])[0] ?? [])['id'] ?? '') === (string) $regularUserId,
+        'field-only update should preserve group members'
+    );
+
+    $clearMembers = $dispatch('PATCH', '/api/governance/groups/' . rawurlencode($createdGroupId), $adminAuth, [
+        'name' => 'Contract Group Updated',
+        'status' => 'archived',
+        'relationships' => [
+            'members' => [],
+        ],
+    ]);
+    $clearMembersPayload = videochat_governance_crud_decode($clearMembers);
+    videochat_governance_crud_assert((int) ($clearMembers['status'] ?? 0) === 200, 'admin should clear group members');
+    videochat_governance_crud_assert(
+        count((array) (((($clearMembersPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['members'] ?? [])) === 0,
+        'cleared group response should include an empty members relationship'
+    );
+    $clearedMemberCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships INNER JOIN \"groups\" ON \"groups\".id = group_memberships.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND group_memberships.user_id = {$regularUserId} AND group_memberships.status = 'active'")->fetchColumn();
+    videochat_governance_crud_assert($clearedMemberCount === 0, 'cleared group member should no longer be active');
 
     $otherTenantPublicId = '00000000-0000-4000-8000-000000009901';
     $otherGroupPublicId = '00000000-0000-4000-8000-000000009902';

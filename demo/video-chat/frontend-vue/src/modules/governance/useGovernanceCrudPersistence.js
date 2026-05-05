@@ -19,13 +19,14 @@ function descriptorEndpoint(descriptor) {
 }
 
 export function createGovernanceCrudPersistence({ router } = {}) {
-  async function apiRequest(path, { method = 'GET', body = null } = {}, allowRefreshRetry = true) {
+  async function apiRequest(path, { method = 'GET', body = null, query = null } = {}, allowRefreshRetry = true) {
     let response;
     try {
       const result = await fetchBackend(path, {
         method,
         headers: requestHeaders(body !== null),
         body: body === null ? undefined : JSON.stringify(body),
+        query,
       });
       response = result.response;
     } catch (error) {
@@ -46,7 +47,7 @@ export function createGovernanceCrudPersistence({ router } = {}) {
     if (!response.ok) {
       if ((response.status === 401 || response.status === 403) && allowRefreshRetry) {
         const refreshResult = await refreshSession();
-        if (refreshResult?.ok) return apiRequest(path, { method, body }, false);
+        if (refreshResult?.ok) return apiRequest(path, { method, body, query }, false);
         await logoutSession();
         await router?.push?.('/login');
         throw new Error('Session expired. Please sign in again.');
@@ -64,6 +65,19 @@ export function createGovernanceCrudPersistence({ router } = {}) {
     if (endpoint === '') return [];
     const payload = await apiRequest(endpoint);
     return governanceCrudRowsFromPayload(payload, descriptor?.entity_key || '');
+  }
+
+  async function listUserSummaries({ search = '', status = 'active' } = {}) {
+    const payload = await apiRequest('/api/governance/users', {
+      query: {
+        query: search,
+        status,
+        page: 1,
+        page_size: 100,
+        order: 'role_then_name_asc',
+      },
+    });
+    return governanceCrudRowsFromPayload(payload, 'users');
   }
 
   async function createRow(descriptor, body) {
@@ -84,6 +98,7 @@ export function createGovernanceCrudPersistence({ router } = {}) {
 
   return {
     listRows,
+    listUserSummaries,
     createRow,
     updateRow,
     deleteRow,
