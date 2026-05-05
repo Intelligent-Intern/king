@@ -437,8 +437,11 @@ Sprint goal:
      tenant-scoped user role assignments, and expands active role
      permission/module relations into direct user grants with
      `source = user_roles`; role update/delete resyncs assigned users.
-   - Remaining work: broaden UI affordances for direct user role assignment
-     beyond the backend contract where the user-management screen needs it.
+   - User Management now loads Governance roles and exposes a separate
+     multi-select relation control for direct user role assignment, sending
+     `relationships.roles` to the admin user API.
+   - Remaining work: broaden direct-role UI affordances only where non-admin
+     profile or delegation screens need them.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -561,6 +564,9 @@ Sprint goal:
    - Extended admin user create contract for direct governance role assignment,
      user-sourced evaluator grants, and cleanup when role permissions or roles
      are removed.
+   - Extended user editor relation contract so direct Governance role
+     assignment is covered by the shared `CrudRelationStack` and persisted
+     through `relationships.roles`.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
