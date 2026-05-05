@@ -548,9 +548,11 @@ Non-goals for this sprint:
       handler readiness fail closed with stable error codes.
     - [x] No call-related excluded paths are edited.
 
-16. [ ] `[module-inventory-and-boundaries]` Inventory non-call modules and shared component candidates.
+16. [x] `[module-inventory-and-boundaries]` Inventory non-call modules and shared component candidates.
 
     Scope:
+    - Inventory artifact:
+      `documentation/video-chat-module-boundaries.md`.
     - Map current non-call frontend areas to target modules:
       `administration`, `governance`, `users`, `marketplace`,
       `workspace_settings`, `localization`, and `theme_editor`.
@@ -562,10 +564,10 @@ Non-goals for this sprint:
       wave.
 
     Done when:
-    - [ ] Inventory lists every non-call feature area and its target module.
-    - [ ] Shared component candidate list exists with current source owners.
-    - [ ] Route and navigation compatibility map exists.
-    - [ ] Explicit no-touch list for call-related paths is included in the
+    - [x] Inventory lists every non-call feature area and its target module.
+    - [x] Shared component candidate list exists with current source owners.
+    - [x] Route and navigation compatibility map exists.
+    - [x] Explicit no-touch list for call-related paths is included in the
       execution checklist.
 
 17. [ ] `[frontend-module-runtime]` Add module registry and dynamic loading.
