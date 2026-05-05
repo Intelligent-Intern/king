@@ -25,20 +25,20 @@
 
 .users-banner.ok {
   border: 1px solid var(--border-subtle);
-  background: var(--color-152a49);
+  background: var(--color-border);
 }
 
 .users-banner.error {
-  border: 1px solid var(--color-8f4a58);
-  background: var(--color-311922);
-  color: var(--color-ffd7db);
+  border: 1px solid var(--color-error);
+  background: var(--color-surface-navy);
+  color: var(--color-heading);
 }
 
 .users-empty {
   padding: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-152a49);
+  background: var(--color-border);
   color: var(--text-main);
 }
 
@@ -146,7 +146,7 @@
   padding: 0 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1d34);
+  background: var(--color-surface-navy);
   color: var(--text-main);
   cursor: pointer;
   text-align: start;
@@ -180,7 +180,7 @@
   padding: 8px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--color-0f1d34);
+  background: var(--color-surface-navy);
 }
 
 .users-email-row {
@@ -191,7 +191,7 @@
   padding: 8px 10px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-rgba-5-12-23-0-35);
+  background: color-mix(in srgb, var(--color-primary-navy) 35%, transparent);
 }
 
 .users-email-main {
@@ -241,7 +241,7 @@
   border-radius: 50%;
   border: 1px solid var(--border-subtle);
   overflow: hidden;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
 }
 
 .users-avatar-preview {
@@ -294,7 +294,7 @@
 
 .users-form-error {
   margin: 0;
-  color: var(--color-ffd7db);
+  color: var(--color-heading);
 }
 
 @media (max-width: 1180px) {

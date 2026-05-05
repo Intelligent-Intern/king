@@ -15,15 +15,15 @@
 
 .calls-banner {
   font-size: 12px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .calls-banner.ok {
-  background: var(--color-1f4f31);
+  background: var(--color-success);
 }
 
 .calls-banner.error {
-  background: var(--color-4f1f1f);
+  background: var(--color-surface-navy);
 }
 
 .calls-table-wrap {
@@ -49,7 +49,7 @@
 .call-subline {
   display: block;
   margin-top: 2px;
-  color: var(--color-c7d7f2);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -60,7 +60,7 @@
 }
 
 .calls-error {
-  color: var(--color-ff9f9f);
+  color: var(--color-heading);
 }
 
 .calls-calendar-wrap {
@@ -81,7 +81,7 @@
 .calls-calendar-day {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   overflow: hidden;
 }
 
@@ -163,7 +163,7 @@
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-09111e);
+  background: var(--color-surface-navy);
 }
 
 .calls-modal-dialog {
@@ -175,7 +175,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
+  box-shadow: 0 16px 32px var(--color-primary-navy);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -267,7 +267,7 @@
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -343,7 +343,7 @@
 .calls-participants-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   padding: 10px;
   min-height: 0;
   display: grid;
@@ -364,7 +364,7 @@
 .calls-participants-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   display: grid;
@@ -390,7 +390,7 @@
 
 .calls-participant-main {
   font-size: 12px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .calls-participant-meta {
@@ -402,7 +402,7 @@
 .calls-external-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   padding: 8px;
@@ -426,10 +426,10 @@
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -438,7 +438,7 @@
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -465,8 +465,8 @@
 .calls-enter-admission-status {
   border: 1px solid var(--brand-cyan);
   border-radius: 6px;
-  background: var(--color-132745);
-  color: var(--color-e6f0ff);
+  background: var(--color-border);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -489,8 +489,8 @@
   width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-08111f);
-  color: var(--color-e6f0ff);
+  background: var(--color-surface-navy);
+  color: var(--color-heading);
   padding: 8px 10px;
   font-size: 12px;
   overflow: auto;

@@ -61,6 +61,6 @@ async function saveConfiguration() {
 }
 
 .administration-status.error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 </style>

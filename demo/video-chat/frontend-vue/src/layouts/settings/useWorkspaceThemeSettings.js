@@ -59,19 +59,21 @@ function createTranslator(t) {
 
 export function defaultWorkspaceThemeColors(themeId = 'dark') {
   const lightOverrides = {
-    '--bg-shell': '#eff4fb',
-    '--bg-pane': '#dce8f6',
-    '--brand-bg': '#e8eff8',
-    '--bg-surface': '#f4f8fd',
+    '--bg-shell': '#efefe7',
+    '--bg-pane': '#efefe7',
+    '--brand-bg': '#000010',
+    '--bg-surface': '#ffffff',
     '--bg-surface-strong': '#ffffff',
     '--bg-input': '#ffffff',
-    '--text-main': '#122035',
-    '--text-muted': '#5a6780',
-    '--bg-sidebar': '#e8eff8',
-    '--bg-main': '#dce8f6',
-    '--text-primary': '#122035',
-    '--text-secondary': '#33425d',
-    '--text-dim': '#6d7d96',
+    '--bg-row': '#ffffff',
+    '--bg-row-hover': '#efefe7',
+    '--text-main': '#000010',
+    '--text-muted': '#03275a',
+    '--bg-sidebar': '#000010',
+    '--bg-main': '#efefe7',
+    '--text-primary': '#000010',
+    '--text-secondary': '#03275a',
+    '--text-dim': '#03275a',
   };
   const colors = {};
   for (const field of THEME_COLOR_FIELDS) {
@@ -80,7 +82,7 @@ export function defaultWorkspaceThemeColors(themeId = 'dark') {
   return colors;
 }
 
-function normalizeHex(value, fallback = '#000000') {
+function normalizeHex(value, fallback = '#000010') {
   const normalized = String(value || '').trim().toLowerCase();
   if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
   if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;

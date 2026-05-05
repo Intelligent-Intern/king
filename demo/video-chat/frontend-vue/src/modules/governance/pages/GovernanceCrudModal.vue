@@ -192,7 +192,7 @@ function fieldClass(field) {
 
 .governance-form-error {
   margin: 0;
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 .governance-relations {

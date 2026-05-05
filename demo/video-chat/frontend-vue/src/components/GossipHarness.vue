@@ -66,6 +66,7 @@ import { GossipLaneBus } from '../lib/gossipmesh/gossipLanes'
 
 const PEER_COUNT = 4
 const PEER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana']
+const STYLEGUIDE_FRAME_COLORS = ['#00052d', '#03275a', '#1582bf', '#59c7f2']
 
 interface PeerPane {
   id: string
@@ -234,15 +235,15 @@ function startFakeVideo(): void {
 
     // Draw fake video
     const time = Date.now() / 1000
-    ctx.fillStyle = `hsl(${(time * 50) % 360}, 70%, 50%)`
+    ctx.fillStyle = STYLEGUIDE_FRAME_COLORS[Math.floor(time * 4) % STYLEGUIDE_FRAME_COLORS.length]
     ctx.fillRect(0, 0, 640, 360)
 
-    ctx.fillStyle = 'white'
+    ctx.fillStyle = '#ffffff'
     ctx.beginPath()
     ctx.arc(320 + Math.cos(angle) * 150, 180 + Math.sin(angle) * 100, 50, 0, Math.PI * 2)
     ctx.fill()
 
-    ctx.fillStyle = 'white'
+    ctx.fillStyle = '#ffffff'
     ctx.font = '20px monospace'
     ctx.fillText(`Frame: ${frameSequence}`, 20, 30)
 
@@ -284,7 +285,7 @@ function startAllPeersPublishing(): void {
   if (!ctx) return
 
   // Draw fake video for each peer with different colors
-  const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4']
+  const colors = STYLEGUIDE_FRAME_COLORS
 
   captureInterval = setInterval(() => {
     if (!running.value || !controller.value) return
@@ -371,29 +372,29 @@ onBeforeUnmount(() => {
 .gossip-harness { padding: 20px; font-family: monospace; }
 .controls { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .panes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px; }
-.pane { border: 2px solid #ccc; padding: 10px; border-radius: 8px; background: white; }
+.pane { border: 2px solid var(--color-border); padding: 10px; border-radius: 8px; background: var(--color-text-primary); }
 .pane h3 { margin: 0 0 10px 0; display: flex; align-items: center; gap: 10px; }
-.video-container { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; overflow: hidden; }
+.video-container { position: relative; width: 100%; aspect-ratio: 16/9; background: var(--color-primary-navy); border-radius: 4px; overflow: hidden; }
 .video-container video, .video-container canvas { width: 100%; height: 100%; object-fit: contain; }
 .pane-stats { display: flex; gap: 10px; font-size: 12px; margin-top: 10px; flex-wrap: wrap; }
-.pane-log { font-size: 11px; max-height: 100px; overflow-y: auto; border-top: 1px solid #eee; padding-top: 8px; margin-top: 10px; }
-.event-log { border: 1px solid #ccc; padding: 15px; background: white; border-radius: 8px; }
+.pane-log { font-size: 11px; max-height: 100px; overflow-y: auto; border-top: 1px solid var(--color-heading); padding-top: 8px; margin-top: 10px; }
+.event-log { border: 1px solid var(--color-border); padding: 15px; background: var(--color-text-primary); border-radius: 8px; }
 .event-list { max-height: 400px; overflow-y: auto; font-size: 12px; }
-.event { padding: 4px 0; border-bottom: 1px solid #f0f0f0; display: flex; gap: 8px; }
-.connected { color: green; font-size: 12px; }
-.degraded { color: orange; font-size: 12px; }
-.lost { color: red; font-size: 12px; }
-.ts { color: #999; min-width: 60px; }
+.event { padding: 4px 0; border-bottom: 1px solid var(--color-heading); display: flex; gap: 8px; }
+.connected { color: var(--color-success); font-size: 12px; }
+.degraded { color: var(--color-warning); font-size: 12px; }
+.lost { color: var(--color-error); font-size: 12px; }
+.ts { color: var(--color-border); min-width: 60px; }
 .peer { font-weight: bold; min-width: 80px; }
 .lane { padding: 2px 6px; border-radius: 3px; font-size: 11px; min-width: 40px; text-align: center; }
-.lane.ops { background: #e6f2ff; color: #0066cc; }
-.lane.data { background: #e6ffe6; color: #009900; }
+.lane.ops { background: var(--color-cyan-hover); color: var(--color-primary-navy); }
+.lane.data { background: var(--color-success); color: var(--color-text-primary); }
 .event-type { min-width: 150px; font-weight: bold; }
-.details { color: #666; font-size: 11px; }
-button { padding: 8px 16px; cursor: pointer; border: 1px solid #ccc; border-radius: 4px; background: white; }
-button:hover { background: #f0f0f0; }
+.details { color: var(--color-border); font-size: 11px; }
+button { padding: 8px 16px; cursor: pointer; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-text-primary); }
+button:hover { background: var(--color-heading); }
 button:disabled { cursor: not-allowed; opacity: 0.5; }
-select { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; }
+select { padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 4px; }
 .camera-source { margin-bottom: 20px; }
 .camera-source video { width: 320px; height: 180px; border-radius: 4px; }
 </style>

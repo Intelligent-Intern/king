@@ -47,17 +47,17 @@ watch(
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
   padding: 24px;
 }
 
 .call-goodbye-card {
   width: min(520px, 100%);
-  background: var(--color-182c4d);
-  border: 1px solid var(--color-133262);
+  background: var(--color-border);
+  border: 1px solid var(--color-border);
   border-radius: 14px;
   padding: 24px;
-  color: var(--color-f7f7f7);
+  color: var(--color-text-primary);
   text-align: center;
   display: grid;
   gap: 12px;
@@ -77,6 +77,6 @@ watch(
 .call-goodbye-meta {
   margin: 0;
   font-size: 0.86rem;
-  color: var(--color-c9d5ea);
+  color: var(--color-heading);
 }
 </style>

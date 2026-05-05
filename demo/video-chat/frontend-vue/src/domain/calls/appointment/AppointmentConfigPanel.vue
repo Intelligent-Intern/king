@@ -132,8 +132,8 @@ function blockToEvent(block) {
     editable: !booked,
     durationEditable: !booked,
     startEditable: !booked,
-    backgroundColor: booked ? '#52627a' : '#0e8fb8',
-    borderColor: booked ? '#6c7b92' : '#4fd7ff',
+    backgroundColor: booked ? 'var(--color-border)' : 'var(--color-cyan-primary)',
+    borderColor: booked ? 'var(--color-border)' : 'var(--color-cyan-hover)',
     extendedProps: {
       booked,
       timezone: String(block?.timezone || 'UTC'),
@@ -405,8 +405,8 @@ function insertCopiedSlots(dateValue) {
       start,
       end,
       editable: true,
-      backgroundColor: '#0e8fb8',
-      borderColor: '#4fd7ff',
+      backgroundColor: 'var(--color-cyan-primary)',
+      borderColor: 'var(--color-cyan-hover)',
       extendedProps: { booked: false },
     });
   }
@@ -493,8 +493,8 @@ async function ensureCalendar() {
         start,
         end,
         editable: true,
-        backgroundColor: '#0e8fb8',
-        borderColor: '#4fd7ff',
+        backgroundColor: 'var(--color-cyan-primary)',
+        borderColor: 'var(--color-cyan-hover)',
         extendedProps: { booked: false },
       });
       calendarInstance.unselect();
@@ -635,8 +635,8 @@ onBeforeUnmount(() => {
 }
 
 .appointment-slot-mode-toggle.active {
-  border-color: var(--color-4fd7ff);
-  background: var(--color-0f3a52);
+  border-color: var(--color-cyan-hover);
+  background: var(--color-border);
 }
 
 .appointment-config-mode-tabs {
@@ -708,10 +708,10 @@ onBeforeUnmount(() => {
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -720,7 +720,7 @@ onBeforeUnmount(() => {
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -749,8 +749,8 @@ onBeforeUnmount(() => {
   max-width: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f3a52);
-  color: var(--color-ffffff);
+  background: var(--color-border);
+  color: var(--color-text-primary);
   font-size: 11px;
   line-height: 1;
   padding: 0 8px;
@@ -758,7 +758,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.appointment-day-action.insert) {
-  background: var(--color-1f4f31);
+  background: var(--color-success);
 }
 
 @media (max-width: 760px) {

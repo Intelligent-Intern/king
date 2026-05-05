@@ -433,7 +433,7 @@ watch(
 }
 
 .chat-archive-error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 .chat-archive-load-more {

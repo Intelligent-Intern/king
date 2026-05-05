@@ -17,27 +17,27 @@
 }
 
 .shell.call-workspace-mode {
-  --bg-shell: var(--color-0b1324);
-  --bg-sidebar: var(--color-0b1324);
-  --bg-main: var(--color-0b1324);
+  --bg-shell: var(--color-surface-navy);
+  --bg-sidebar: var(--color-surface-navy);
+  --bg-main: var(--color-surface-navy);
   --call-workspace-sidebar-bottom: 64px;
-  --bg-video: var(--color-0b1324);
-  --bg-surface: var(--color-0b1324);
-  --bg-surface-strong: var(--color-133262);
-  --bg-tab: var(--color-003c93);
-  --bg-tab-hover: var(--color-3f79d6);
+  --bg-video: var(--color-surface-navy);
+  --bg-surface: var(--color-surface-navy);
+  --bg-surface-strong: var(--color-border);
+  --bg-tab: var(--color-border);
+  --bg-tab-hover: var(--color-cyan-primary);
   --bg-tab-active: var(--bg-row);
-  --bg-action: var(--color-0b1324);
-  --bg-action-hover: var(--color-3f79d6);
-  --bg-icon: var(--color-133262);
-  --bg-icon-active: var(--color-3f79d6);
-  --bg-input: var(--color-0b1324);
-  --border-subtle: var(--color-133262);
-  --text-main: var(--color-f7f7f7);
-  --text-primary: var(--color-f7f7f7);
-  --text-secondary: var(--color-f7f7f7);
-  --text-muted: var(--color-3f79d6);
-  --text-dim: var(--color-3f79d6);
+  --bg-action: var(--color-surface-navy);
+  --bg-action-hover: var(--color-cyan-primary);
+  --bg-icon: var(--color-border);
+  --bg-icon-active: var(--color-cyan-primary);
+  --bg-input: var(--color-surface-navy);
+  --border-subtle: var(--color-border);
+  --text-main: var(--color-text-primary);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-primary);
+  --text-muted: var(--color-cyan-primary);
+  --text-dim: var(--color-cyan-primary);
   --action-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(8%) saturate(176%) hue-rotate(180deg) brightness(94%) contrast(89%);
 }
 
@@ -271,7 +271,7 @@
 
 .nav-link.active {
   background: var(--bg-tab-active);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .nav-group {
@@ -347,7 +347,7 @@
 
 .nav-sublink.active {
   background: var(--bg-tab-active);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .logout-wrap {
@@ -397,7 +397,7 @@
   border-radius: 50%;
   border: 1px solid var(--border-subtle);
   object-fit: cover;
-  background: var(--color-132542);
+  background: var(--color-border);
 }
 
 .sidebar-profile-meta {

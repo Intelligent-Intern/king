@@ -4,7 +4,7 @@
   border-radius: 8px;
   background: var(--bg-surface);
   color: var(--text-primary);
-  box-shadow: 0 18px 48px var(--color-rgba-0-0-0-0-42);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--color-primary-navy) 42%, transparent);
 }
 
 .driver-active-element {
@@ -47,7 +47,7 @@
 .driver-popover.kingrt-tour-popover .driver-popover-next-btn {
   border-color: var(--brand-cyan);
   background: var(--brand-cyan);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .driver-popover.kingrt-tour-popover .driver-popover-next-btn:hover {

@@ -10,7 +10,36 @@ async function source(relativePath) {
 
 const appSource = await source('src/App.vue');
 const baseSource = await source('src/styles/base.css');
+const callSettingsSource = await source('src/styles/call-settings.css');
 const themeSettingsSource = await source('src/layouts/settings/useWorkspaceThemeSettings.js');
+
+const allowedPalette = new Set([
+  '#000010',
+  '#00052d',
+  '#1582bf',
+  '#59c7f2',
+  '#efefe7',
+  '#ffffff',
+  '#03275a',
+  '#00652f',
+  '#f47221',
+  '#ef4423',
+]);
+
+const expectedColorDefinitions = [
+  ['--color-primary-navy', '#000010'],
+  ['--color-surface-navy', '#00052d'],
+  ['--color-cyan-primary', '#1582bf'],
+  ['--color-cyan-hover', '#59c7f2'],
+  ['--color-heading', '#efefe7'],
+  ['--color-text-primary', '#ffffff'],
+  ['--color-text-link', '#1582bf'],
+  ['--color-text-link-hover', '#59c7f2'],
+  ['--color-border', '#03275a'],
+  ['--color-success', '#00652f'],
+  ['--color-warning', '#f47221'],
+  ['--color-error', '#ef4423'],
+];
 
 for (const [token, value] of [
   ['--bg-shell', '#000010'],
@@ -30,15 +59,22 @@ for (const [token, value] of [
   assert.match(themeSettingsSource, new RegExp(`key: '${token}'[\\s\\S]*default: '${value}'`), `theme editor default must keep ${token} at ${value}`);
 }
 
-assert.match(baseSource, /--color-000010:\s*#000010;/, 'base tokens must expose primary navy');
-assert.match(baseSource, /--color-00052d:\s*#00052d;/, 'base tokens must expose surface navy');
-assert.match(baseSource, /--color-03275a:\s*#03275a;/, 'base tokens must expose border navy');
-assert.match(baseSource, /--color-1582bf:\s*#1582bf;/, 'base tokens must expose primary cyan');
-assert.match(baseSource, /--color-59c7f2:\s*#59c7f2;/, 'base tokens must expose hover cyan');
-assert.match(baseSource, /--bg-shell:\s*var\(--color-000010\);/, 'base shell must use primary navy');
-assert.match(baseSource, /--brand-bg:\s*var\(--color-000010\);/, 'base sidebar must use primary navy');
-assert.match(baseSource, /--bg-surface:\s*var\(--color-00052d\);/, 'base surfaces must use surface navy');
-assert.match(baseSource, /--bg-action:\s*var\(--color-1582bf\);/, 'base actions must use cyan primary');
-assert.match(baseSource, /--border-subtle:\s*var\(--line\);/, 'shared borders must stay centralized through border-subtle');
+const colorDefinitions = [...baseSource.matchAll(/(--color-[\w-]+):\s*(#[0-9a-f]{6});/gi)]
+  .map((match) => [match[1], match[2].toLowerCase()]);
+assert.deepEqual(colorDefinitions, expectedColorDefinitions, 'base CSS must define only the 12 KingRT styleguide color slots');
+
+for (const [_token, value] of colorDefinitions) {
+  assert.equal(allowedPalette.has(value), true, `palette value ${value} must come from the KingRT styleguide`);
+}
+
+assert.doesNotMatch(baseSource, /--color-rgba-/, 'base CSS must not define rgba color tokens');
+assert.doesNotMatch(baseSource, /--color-[0-9a-f]{3,}/, 'base CSS must not define arbitrary hex-named color tokens');
+assert.match(baseSource, /--bg-shell:\s*var\(--color-primary-navy\);/, 'base shell must use primary navy');
+assert.match(baseSource, /--brand-bg:\s*var\(--color-primary-navy\);/, 'base sidebar must use primary navy');
+assert.match(baseSource, /--bg-surface:\s*var\(--color-surface-navy\);/, 'base surfaces must use surface navy');
+assert.match(baseSource, /--bg-action:\s*var\(--color-cyan-primary\);/, 'base actions must use cyan primary');
+assert.match(baseSource, /--border-subtle:\s*var\(--color-border\);/, 'shared borders must use the styleguide border color');
+assert.match(callSettingsSource, /\.ii-select\s*\{[\s\S]*?border:\s*1px solid var\(--border-subtle\);[\s\S]*?background-color:\s*var\(--border-subtle\);/, 'AppSelect background must use the styleguide border color');
+assert.match(callSettingsSource, /\.ii-select option,[\s\S]*?\.ii-select optgroup\s*\{[\s\S]*?background:\s*var\(--border-subtle\);/, 'native select dropdown options must use the styleguide border color');
 
 console.log('[theme-palette-contract] PASS');

@@ -388,7 +388,7 @@ defineExpose({
 }
 
 .settings-theme-delete:hover {
-  background: var(--color-cc0000);
+  background: var(--color-error);
 }
 
 .settings-logo-grid,
@@ -531,7 +531,7 @@ defineExpose({
 }
 
 .settings-upload-status.error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 @media (max-width: 760px) {

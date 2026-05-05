@@ -424,7 +424,7 @@ function applySelection() {
 
 .crud-relation-error {
   margin: 0;
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 .crud-relation-create-actions {

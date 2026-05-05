@@ -89,11 +89,11 @@ defineEmits(['add-row', 'remove-row']);
 .appointment-form-row {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-10203b);
+  background: var(--color-border);
   padding: 8px;
 }
 
-.appointment-form-row.booked { background: var(--color-122340); }
+.appointment-form-row.booked { background: var(--color-border); }
 
 .appointment-form-row label {
   min-width: 0;
