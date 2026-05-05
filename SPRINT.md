@@ -455,13 +455,17 @@ Non-goals for this sprint:
      compose modal labels, and dashboard compose/invite/admission messages now
      use localization keys. The translation-key coverage contract now also
      scans explicitly included `.template.html` files.
+   - [x] Non-English fallback gaps are now explicit in a machine-readable
+     fallback policy. The localization contract verifies every supported
+     non-English locale and every English message namespace is either covered
+     by CSV import or consciously allowed to use English fallback until import.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
      surfaces except explicit test fixtures and non-user debug identifiers.
    - [ ] All strings have stable namespaced keys.
-   - [ ] English fallback covers 100 percent of used keys.
-   - [ ] Non-English seed/import files cover the key set or explicitly mark
+   - [x] English fallback covers 100 percent of used keys.
+   - [x] Non-English seed/import files cover the key set or explicitly mark
      allowed fallback gaps.
    - [x] Contract test fails on missing English keys.
 
