@@ -1,53 +1,57 @@
 <template>
-  <section class="theme-preview" :style="previewStyle" :aria-label="t('theme_preview.aria')">
+  <section class="theme-preview" :class="{ compact }" :style="previewStyle" :aria-label="t('theme_preview.aria')">
     <aside class="theme-preview-sidebar">
       <div class="theme-preview-brand">
         <img :src="sidebarLogoSrc" alt="" />
       </div>
       <nav class="theme-preview-nav" :aria-label="t('theme_preview.navigation_aria')">
-        <a class="active" href="#" @click.prevent>
-          <img src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
-          <span>{{ t('navigation.calls.admin') }}</span>
-        </a>
-        <a href="#" @click.prevent>
-          <img src="/assets/orgas/kingrt/icons/adminon.png" alt="" />
-          <span>{{ t('navigation.governance') }}</span>
-        </a>
-        <a href="#" @click.prevent>
-          <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
-          <span>{{ t('navigation.governance.users') }}</span>
-        </a>
+        <button
+          v-for="item in navigationItems"
+          :key="item.id"
+          type="button"
+          :class="{ active: activeSection === item.id }"
+          @click="activeSection = item.id"
+        >
+          <img :src="item.icon" alt="" />
+          <span>{{ t(item.labelKey) }}</span>
+        </button>
       </nav>
     </aside>
 
     <main class="theme-preview-main">
       <header class="theme-preview-header">
         <div>
-          <h5>{{ t('theme_preview.video_call_management') }}</h5>
+          <h5>{{ t(activeNavigationItem.titleKey) }}</h5>
           <span>{{ t('theme_preview.live_preview') }}</span>
         </div>
-        <button class="theme-preview-action" type="button">{{ t('theme_preview.new_video_call') }}</button>
+        <button class="theme-preview-action" type="button">{{ t(activeNavigationItem.actionKey) }}</button>
       </header>
 
       <section class="theme-preview-toolbar">
         <div class="theme-preview-tabs">
-          <button class="active" type="button">{{ t('theme_preview.calls') }}</button>
-          <button type="button">{{ t('theme_preview.calendar') }}</button>
+          <button
+            v-for="(tab, index) in activeNavigationItem.tabs"
+            :key="tab"
+            :class="{ active: index === 0 }"
+            type="button"
+          >
+            {{ t(tab) }}
+          </button>
         </div>
-        <input type="text" readonly :value="t('theme_preview.search_call_title')" />
+        <input type="text" readonly :value="t(activeNavigationItem.searchKey)" />
         <button class="theme-preview-icon" type="button">
           <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
         </button>
       </section>
 
       <section class="theme-preview-table">
-        <article v-for="call in calls" :key="call.id" class="theme-preview-row">
+        <article v-for="row in activeRows" :key="row.id" class="theme-preview-row">
           <div>
-            <strong>{{ t(call.titleKey) }}</strong>
-            <span>{{ call.id }}</span>
+            <strong>{{ t(row.titleKey) }}</strong>
+            <span>{{ row.id }}</span>
           </div>
-          <span class="theme-preview-status" :class="call.statusClass">{{ t(call.statusKey) }}</span>
-          <span>{{ call.window }}</span>
+          <span class="theme-preview-status" :class="row.statusClass">{{ t(row.statusKey) }}</span>
+          <span>{{ row.detail }}</span>
           <div class="theme-preview-row-actions">
             <button type="button"><img src="/assets/orgas/kingrt/icons/gear.png" alt="" /></button>
             <button type="button"><img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" /></button>
@@ -65,7 +69,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { t } from '../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
@@ -77,31 +81,120 @@ const props = defineProps({
     type: String,
     required: true,
   },
+  compact: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-const calls = Object.freeze([
+const activeSection = ref('calls');
+
+const navigationItems = Object.freeze([
   {
-    id: '9fbe5c05',
-    titleKey: 'theme_preview.call.platform_standup',
-    statusKey: 'users.status_active',
-    statusClass: 'ok',
-    window: '09:30 - 10:00',
+    id: 'calls',
+    icon: '/assets/orgas/kingrt/icons/lobby.png',
+    labelKey: 'navigation.calls.admin',
+    titleKey: 'theme_preview.video_call_management',
+    actionKey: 'theme_preview.new_video_call',
+    searchKey: 'theme_preview.search_call_title',
+    tabs: ['theme_preview.calls', 'theme_preview.calendar'],
   },
   {
-    id: '47632c72',
-    titleKey: 'theme_preview.call.quarterly_review',
-    statusKey: 'theme_preview.status_scheduled',
-    statusClass: 'warn',
-    window: '14:00 - 14:45',
+    id: 'governance',
+    icon: '/assets/orgas/kingrt/icons/adminon.png',
+    labelKey: 'navigation.governance',
+    titleKey: 'theme_preview.governance_management',
+    actionKey: 'theme_preview.new_role',
+    searchKey: 'theme_preview.search_governance',
+    tabs: ['theme_preview.roles', 'theme_preview.groups'],
   },
   {
-    id: '8d2c1cd',
-    titleKey: 'theme_preview.call.customer_escalation',
-    statusKey: 'theme_preview.status_ended',
-    statusClass: '',
-    window: '17:00 - 17:35',
+    id: 'users',
+    icon: '/assets/orgas/kingrt/icons/user.png',
+    labelKey: 'navigation.governance.users',
+    titleKey: 'theme_preview.user_management',
+    actionKey: 'theme_preview.new_user',
+    searchKey: 'theme_preview.search_users',
+    tabs: ['theme_preview.users', 'theme_preview.credentials'],
   },
 ]);
+
+const rowsBySection = Object.freeze({
+  calls: [
+    {
+      id: '9fbe5c05',
+      titleKey: 'theme_preview.call.platform_standup',
+      statusKey: 'users.status_active',
+      statusClass: 'ok',
+      detail: '09:30 - 10:00',
+    },
+    {
+      id: '47632c72',
+      titleKey: 'theme_preview.call.quarterly_review',
+      statusKey: 'theme_preview.status_scheduled',
+      statusClass: 'warn',
+      detail: '14:00 - 14:45',
+    },
+    {
+      id: '8d2c1cd',
+      titleKey: 'theme_preview.call.customer_escalation',
+      statusKey: 'theme_preview.status_ended',
+      statusClass: '',
+      detail: '17:00 - 17:35',
+    },
+  ],
+  governance: [
+    {
+      id: 'role-admin',
+      titleKey: 'theme_preview.row.platform_admin',
+      statusKey: 'users.status_active',
+      statusClass: 'ok',
+      detail: '42 permissions',
+    },
+    {
+      id: 'group-sales',
+      titleKey: 'theme_preview.row.sales_group',
+      statusKey: 'theme_preview.status_scheduled',
+      statusClass: 'warn',
+      detail: '8 members',
+    },
+    {
+      id: 'module-calendar',
+      titleKey: 'theme_preview.row.calendar_module',
+      statusKey: 'theme_preview.status_ended',
+      statusClass: '',
+      detail: '3 routes',
+    },
+  ],
+  users: [
+    {
+      id: 'u-0001',
+      titleKey: 'theme_preview.row.jochen',
+      statusKey: 'users.status_active',
+      statusClass: 'ok',
+      detail: 'admin',
+    },
+    {
+      id: 'u-0042',
+      titleKey: 'theme_preview.row.alexander',
+      statusKey: 'users.status_active',
+      statusClass: 'ok',
+      detail: 'editor',
+    },
+    {
+      id: 'u-0088',
+      titleKey: 'theme_preview.row.pierre',
+      statusKey: 'theme_preview.status_scheduled',
+      statusClass: 'warn',
+      detail: 'viewer',
+    },
+  ],
+});
+
+const activeNavigationItem = computed(() => (
+  navigationItems.find((item) => item.id === activeSection.value) || navigationItems[0]
+));
+const activeRows = computed(() => rowsBySection[activeSection.value] || rowsBySection.calls);
 
 const previewStyle = computed(() => {
   const style = {};
@@ -156,19 +249,23 @@ const previewStyle = computed(() => {
   padding: 10px;
 }
 
-.theme-preview-nav a {
+.theme-preview-nav button {
   min-height: 34px;
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
   text-decoration: none;
   padding: 0 8px;
 }
 
-.theme-preview-nav a.active {
+.theme-preview-nav button.active,
+.theme-preview-nav button:hover {
   background: var(--bg-tab-active);
   color: var(--text-primary);
 }
@@ -321,6 +418,63 @@ const previewStyle = computed(() => {
 
 .theme-preview-footer span {
   font-size: 12px;
+}
+
+.theme-preview.compact {
+  min-height: 270px;
+  grid-template-columns: 124px minmax(0, 1fr);
+}
+
+.theme-preview.compact .theme-preview-brand {
+  height: 44px;
+}
+
+.theme-preview.compact .theme-preview-nav {
+  padding: 6px;
+}
+
+.theme-preview.compact .theme-preview-nav button {
+  min-height: 28px;
+  gap: 6px;
+  padding: 0 6px;
+}
+
+.theme-preview.compact .theme-preview-main {
+  padding: 8px;
+  gap: 7px;
+}
+
+.theme-preview.compact .theme-preview-header h5 {
+  font-size: 13px;
+}
+
+.theme-preview.compact .theme-preview-header span,
+.theme-preview.compact .theme-preview-action,
+.theme-preview.compact .theme-preview-footer,
+.theme-preview.compact .theme-preview-row:nth-child(n+3) {
+  display: none;
+}
+
+.theme-preview.compact .theme-preview-tabs button,
+.theme-preview.compact .theme-preview-icon,
+.theme-preview.compact .theme-preview-row-actions button {
+  min-height: 26px;
+}
+
+.theme-preview.compact .theme-preview-toolbar input {
+  min-width: 0;
+  height: 28px;
+}
+
+.theme-preview.compact .theme-preview-row {
+  min-height: 42px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.theme-preview.compact .theme-preview-status,
+.theme-preview.compact .theme-preview-row > span:nth-of-type(2),
+.theme-preview.compact .theme-preview-row-actions {
+  display: none;
 }
 
 @media (max-width: 760px) {
