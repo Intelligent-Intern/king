@@ -1,6 +1,6 @@
 <template>
   <form class="settings-section workspace-administration-settings" autocomplete="off" @submit.prevent>
-    <h4>Administration</h4>
+    <h4 v-if="title">{{ title }}</h4>
 
     <section v-if="state.loading" class="settings-upload-status">Loading administration settings...</section>
     <section v-if="state.error" class="settings-upload-status error">{{ state.error }}</section>
@@ -147,6 +147,13 @@ import { sessionState } from '../../domain/auth/session';
 import { loadAppointmentSettings, saveAppointmentSettings } from '../../domain/calls/appointment/appointmentCalendarApi';
 import { loadWorkspaceAdministration, saveWorkspaceAdministration } from '../../domain/workspace/administrationApi';
 import { applyAppearancePayload } from '../../domain/workspace/appearance';
+
+defineProps({
+  title: {
+    type: String,
+    default: 'Administration',
+  },
+});
 
 const DEFAULT_LOGO = '/assets/orgas/kingrt/logo.svg';
 const placeholders = Object.freeze([

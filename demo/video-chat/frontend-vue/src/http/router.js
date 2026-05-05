@@ -49,6 +49,34 @@ const routes = [
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
+        path: 'admin/administration',
+        redirect: '/admin/administration/marketplace',
+      },
+      {
+        path: 'admin/administration/marketplace',
+        name: 'admin-administration-marketplace',
+        component: () => import('../domain/marketplace/AdminMarketplaceView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Marketplace' },
+      },
+      {
+        path: 'admin/administration/localization',
+        name: 'admin-administration-localization',
+        component: () => import('../domain/administration/AdministrationLocalizationView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Localization' },
+      },
+      {
+        path: 'admin/administration/app-configuration',
+        name: 'admin-administration-app-configuration',
+        component: () => import('../domain/administration/AppConfigurationView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'App Configuration' },
+      },
+      {
+        path: 'admin/administration/theme-editor',
+        name: 'admin-administration-theme-editor',
+        component: () => import('../domain/administration/ThemeEditorView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Theme Editor' },
+      },
+      {
         path: 'admin/governance',
         redirect: '/admin/governance/users',
       },
@@ -124,9 +152,7 @@ const routes = [
       },
       {
         path: 'admin/marketplace',
-        name: 'admin-marketplace',
-        component: () => import('../domain/marketplace/AdminMarketplaceView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        redirect: '/admin/administration/marketplace',
       },
       {
         path: 'admin/calls',

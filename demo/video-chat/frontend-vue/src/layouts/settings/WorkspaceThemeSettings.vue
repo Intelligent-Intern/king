@@ -1,6 +1,6 @@
 <template>
   <section class="settings-theme-settings">
-    <section v-if="!editor.open" class="settings-section">
+    <section v-if="!props.managementOnly && !editor.open" class="settings-section">
       <h4>Theme</h4>
       <p>Choose one of the saved workspace themes.</p>
       <label class="settings-field">
@@ -13,7 +13,7 @@
       </label>
     </section>
 
-    <section v-if="canEditThemes" class="settings-section settings-theme-crud">
+    <section v-if="!props.selectionOnly && canEditThemes" class="settings-section settings-theme-crud">
       <header v-if="!editor.open" class="settings-subhead">
         <h5>Theme Management</h5>
         <button class="btn" type="button" :disabled="state.saving" @click="startCreateTheme">
@@ -263,6 +263,14 @@ const props = defineProps({
     default: 'dark',
   },
   saving: {
+    type: Boolean,
+    default: false,
+  },
+  selectionOnly: {
+    type: Boolean,
+    default: false,
+  },
+  managementOnly: {
     type: Boolean,
     default: false,
   },
