@@ -338,6 +338,8 @@ Sprint goal:
    - Governance group member assignment now uses the same linked relation
      picker, hydrates selectable users from `/api/governance/users`, and
      persists selected members into tenant-scoped `group_memberships`.
+   - Governance organization user assignment now persists the same `+1`
+     relation flow into tenant-scoped `organization_memberships`.
    - Remaining work: attach nested created records to their parent draft and
      connect module/permission/grant relation mutations to real tenant-scoped
      backend APIs.
@@ -363,6 +365,8 @@ Sprint goal:
    - Governance group list/read/create/update responses now include
      organization and member summaries in backend enrichment passes so the
      group editor can reopen selected relations without row-by-row lookups.
+   - Governance organization responses now include parent-organization and
+     user summaries for the same reopen-without-N+1 contract.
    - Remaining work: add batch summary endpoints and included summaries for
      organizations, grants, policies, and export/import jobs.
 
@@ -398,6 +402,8 @@ Sprint goal:
    - Group organization relations now round-trip as
      `relationships.organization` summaries, matching the existing
      `organization_id` persistence path.
+   - Organization user relations now create, preserve, and clear active
+     `organization_memberships` through `relationships.users`.
    - Remaining work: organization memberships, grants, policies, export/import
      job APIs, and recursive relation mutations for modules/permissions.
 

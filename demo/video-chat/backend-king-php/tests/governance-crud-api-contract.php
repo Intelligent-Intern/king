@@ -143,12 +143,39 @@ try {
     $createOrganization = $dispatch('POST', '/api/governance/organizations', $adminAuth, [
         'name' => 'Contract Organization',
         'status' => 'active',
+        'relationships' => [
+            'users' => [
+                ['entity_key' => 'users', 'id' => (string) $regularUserId],
+            ],
+        ],
     ]);
     $createOrganizationPayload = videochat_governance_crud_decode($createOrganization);
     $createdOrganization = (($createOrganizationPayload['result'] ?? [])['row'] ?? null);
     videochat_governance_crud_assert((int) ($createOrganization['status'] ?? 0) === 201, 'admin should create organization for group relation');
     videochat_governance_crud_assert(is_array($createdOrganization), 'created organization row missing');
+    videochat_governance_crud_assert(
+        (string) (((($createdOrganization['relationships'] ?? [])['users'] ?? [])[0] ?? [])['id'] ?? '') === (string) $regularUserId,
+        'created organization response should include selected user summary'
+    );
     $createdOrganizationId = (string) ($createdOrganization['id'] ?? '');
+    $organizationMemberCount = (int) $pdo->query("SELECT COUNT(*) FROM organization_memberships INNER JOIN organizations ON organizations.id = organization_memberships.organization_id WHERE organizations.public_id = '{$createdOrganizationId}' AND organization_memberships.user_id = {$regularUserId} AND organization_memberships.status = 'active'")->fetchColumn();
+    videochat_governance_crud_assert($organizationMemberCount === 1, 'created organization user should be persisted');
+
+    $clearOrganizationUsers = $dispatch('PATCH', '/api/governance/organizations/' . rawurlencode($createdOrganizationId), $adminAuth, [
+        'name' => 'Contract Organization',
+        'status' => 'active',
+        'relationships' => [
+            'users' => [],
+        ],
+    ]);
+    $clearOrganizationUsersPayload = videochat_governance_crud_decode($clearOrganizationUsers);
+    videochat_governance_crud_assert((int) ($clearOrganizationUsers['status'] ?? 0) === 200, 'admin should clear organization users');
+    videochat_governance_crud_assert(
+        count((array) (((($clearOrganizationUsersPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['users'] ?? [])) === 0,
+        'cleared organization response should include empty users relationship'
+    );
+    $clearedOrganizationMemberCount = (int) $pdo->query("SELECT COUNT(*) FROM organization_memberships INNER JOIN organizations ON organizations.id = organization_memberships.organization_id WHERE organizations.public_id = '{$createdOrganizationId}' AND organization_memberships.user_id = {$regularUserId} AND organization_memberships.status = 'active'")->fetchColumn();
+    videochat_governance_crud_assert($clearedOrganizationMemberCount === 0, 'cleared organization user should no longer be active');
 
     $createGroup = $dispatch('POST', '/api/governance/groups', $adminAuth, [
         'name' => 'Contract Group',
