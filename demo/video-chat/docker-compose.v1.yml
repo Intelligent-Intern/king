@@ -180,6 +180,7 @@ services:
         VITE_VIDEOCHAT_ENABLE_SFU: "${VITE_VIDEOCHAT_ENABLE_SFU:-}"
         VITE_VIDEOCHAT_ENABLE_MEDIAPIPE: "${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE:-}"
         VITE_VIDEOCHAT_ENABLE_TFJS: "${VITE_VIDEOCHAT_ENABLE_TFJS:-}"
+        VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE: "${VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE:-}"
         VITE_VIDEOCHAT_CDN_ORIGIN: "${VITE_VIDEOCHAT_CDN_ORIGIN:-}"
         VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"
         VIDEOCHAT_PRODUCTION_SOURCEMAPS: "${VIDEOCHAT_PRODUCTION_SOURCEMAPS:-}"
@@ -199,25 +200,17 @@ services:
       VITE_VIDEOCHAT_ENABLE_SFU: "${VITE_VIDEOCHAT_ENABLE_SFU:-}"
       VITE_VIDEOCHAT_ENABLE_MEDIAPIPE: "${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE:-}"
       VITE_VIDEOCHAT_ENABLE_TFJS: "${VITE_VIDEOCHAT_ENABLE_TFJS:-}"
+      VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE: "${VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE:-}"
       VITE_VIDEOCHAT_CDN_ORIGIN: "${VITE_VIDEOCHAT_CDN_ORIGIN:-}"
     depends_on:
       - videochat-backend-v1
       - videochat-backend-ws-v1
       - videochat-backend-sfu-v1
     volumes:
-      - ./frontend-vue:/workspace
-    command:
-      - sh
-      - -lc
-      - |
-        # Always use image-baked dependencies to avoid stale host node_modules.
-        if [ -e /workspace/node_modules ] || [ -L /workspace/node_modules ]; then
-          rm -rf /workspace/node_modules
-        fi
-        ln -s /app/node_modules /workspace/node_modules
-        rm -rf /workspace/.vite /workspace/node_modules/.vite
-        cd /workspace
-        npm run dev -- --force --host 0.0.0.0 --port 5174 --strictPort
+          - ./frontend-vue:/app
+          - /app/node_modules
+    working_dir: /app
+    command: npm run dev -- --host 0.0.0.0 --port 5174
     ports:
       - "${VIDEOCHAT_V1_FRONTEND_BIND:-0.0.0.0}:${VIDEOCHAT_V1_FRONTEND_PORT:-5176}:5174"
     restart: unless-stopped
@@ -240,6 +233,7 @@ services:
         VITE_VIDEOCHAT_ENABLE_SFU: "${VITE_VIDEOCHAT_ENABLE_SFU:-}"
         VITE_VIDEOCHAT_ENABLE_MEDIAPIPE: "${VITE_VIDEOCHAT_ENABLE_MEDIAPIPE:-}"
         VITE_VIDEOCHAT_ENABLE_TFJS: "${VITE_VIDEOCHAT_ENABLE_TFJS:-}"
+        VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE: "${VITE_VIDEOCHAT_ENABLE_REACTIVE_MEDIA_PIPELINE:-}"
         VITE_VIDEOCHAT_CDN_ORIGIN: "${VITE_VIDEOCHAT_CDN_ORIGIN:-}"
         VIDEOCHAT_ASSET_VERSION: "${VIDEOCHAT_ASSET_VERSION:-}"
         VIDEOCHAT_PRODUCTION_SOURCEMAPS: "${VIDEOCHAT_PRODUCTION_SOURCEMAPS:-}"
