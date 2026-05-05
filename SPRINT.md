@@ -408,6 +408,8 @@ Non-goals for this sprint:
      errors use localization keys.
    - [x] Theme preview labels, sample navigation, sample calls, statuses, and
      pagination text use localization keys.
+   - [x] Governance route metadata now carries translation keys for page
+     titles and singular/plural entity labels.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
