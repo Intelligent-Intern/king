@@ -2,78 +2,78 @@
   <form class="settings-section workspace-administration-settings" autocomplete="off" @submit.prevent>
     <h4 v-if="title">{{ title }}</h4>
 
-    <section v-if="state.loading" class="settings-upload-status">Loading administration settings...</section>
+    <section v-if="state.loading" class="settings-upload-status">{{ t('administration.loading_settings') }}</section>
     <section v-if="state.error" class="settings-upload-status error">{{ state.error }}</section>
 
     <section class="settings-section">
       <header class="settings-subhead">
-        <h5>Calendar Booking Email</h5>
-        <button class="btn" type="button" @click="resetBookingEmailDefaults">Reset default</button>
+        <h5>{{ t('administration.calendar_booking_email') }}</h5>
+        <button class="btn" type="button" @click="resetBookingEmailDefaults">{{ t('administration.reset_default') }}</button>
       </header>
       <label class="settings-field">
-        <span>Subject template</span>
+        <span>{{ t('administration.subject_template') }}</span>
         <input v-model.trim="bookingDraft.mail_subject_template" class="input" type="text" />
       </label>
       <label class="settings-field">
-        <span>Body template</span>
+        <span>{{ t('administration.body_template') }}</span>
         <textarea v-model="bookingDraft.mail_body_template" class="settings-textarea" rows="8"></textarea>
       </label>
     </section>
 
     <section v-if="isPrimaryAdmin" class="settings-section">
       <header class="settings-subhead">
-        <h5>Mail Server</h5>
+        <h5>{{ t('administration.mail_server') }}</h5>
       </header>
       <section class="settings-row">
         <label class="settings-field">
-          <span>Sender email</span>
+          <span>{{ t('administration.sender_email') }}</span>
           <input v-model.trim="adminDraft.mail_from_email" class="input" type="email" autocomplete="email" />
         </label>
         <label class="settings-field">
-          <span>Sender name</span>
+          <span>{{ t('administration.sender_name') }}</span>
           <input v-model.trim="adminDraft.mail_from_name" class="input" type="text" autocomplete="organization" />
         </label>
       </section>
       <section class="settings-row">
         <label class="settings-field">
-          <span>SMTP host</span>
+          <span>{{ t('administration.smtp_host') }}</span>
           <input v-model.trim="adminDraft.mail_smtp_host" class="input" type="text" autocomplete="off" />
         </label>
         <label class="settings-field">
-          <span>SMTP port</span>
+          <span>{{ t('administration.smtp_port') }}</span>
           <input v-model.number="adminDraft.mail_smtp_port" class="input" type="number" min="1" max="65535" />
         </label>
       </section>
       <section class="settings-row">
         <label class="settings-field">
-          <span>Encryption</span>
+          <span>{{ t('administration.encryption') }}</span>
           <AppSelect v-model="adminDraft.mail_smtp_encryption">
             <option value="starttls">STARTTLS</option>
             <option value="ssl">SSL/TLS</option>
-            <option value="none">None</option>
+            <option value="none">{{ t('administration.encryption_none') }}</option>
           </AppSelect>
         </label>
         <label class="settings-field">
-          <span>SMTP username</span>
+          <span>{{ t('administration.smtp_username') }}</span>
           <input v-model.trim="adminDraft.mail_smtp_username" class="input" type="text" autocomplete="username" />
         </label>
       </section>
       <section class="settings-row">
         <label class="settings-field">
-          <span>SMTP password</span>
+          <span>{{ t('administration.smtp_password') }}</span>
           <input
             v-model="adminDraft.mail_smtp_password"
             class="input"
             type="password"
             autocomplete="new-password"
-            :placeholder="adminDraft.mail_smtp_password_set ? 'Leave empty to keep current password' : ''"
+            :placeholder="adminDraft.mail_smtp_password_set ? t('administration.password_keep_placeholder') : ''"
           />
         </label>
         <label class="settings-field settings-password-clear">
-          <span>Password state</span>
+          <span>{{ t('administration.password_state') }}</span>
           <label class="settings-checkbox-row">
             <input v-model="adminDraft.mail_smtp_password_clear" type="checkbox" />
-            <span>Clear saved password</span>
+            <span>{{ t('administration.clear_saved_password') }}</span>
           </label>
         </label>
       </section>
@@ -81,8 +81,8 @@
 
     <section v-if="isPrimaryAdmin" class="settings-section">
       <header class="settings-subhead">
-        <h5>Website Lead Email</h5>
-        <button class="btn" type="button" @click="resetLeadEmailDefaults">Reset default</button>
+        <h5>{{ t('administration.website_lead_email') }}</h5>
+        <button class="btn" type="button" @click="resetLeadEmailDefaults">{{ t('administration.reset_default') }}</button>
       </header>
       <section class="settings-recipient-list">
         <div v-for="(recipient, index) in leadRecipients" :key="recipient.id" class="settings-recipient-row">
@@ -90,51 +90,51 @@
           <button
             class="icon-mini-btn danger"
             type="button"
-            :aria-label="`Remove recipient ${index + 1}`"
+            :aria-label="t('administration.remove_recipient', { number: index + 1 })"
             @click="removeLeadRecipient(index)"
           >
             <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
           </button>
         </div>
-        <button class="icon-mini-btn" type="button" aria-label="Add lead recipient" @click="addLeadRecipient">
+        <button class="icon-mini-btn" type="button" :aria-label="t('administration.add_lead_recipient')" @click="addLeadRecipient">
           <img src="/assets/orgas/kingrt/icons/add.png" alt="" />
         </button>
       </section>
       <label class="settings-field">
-        <span>Lead subject template</span>
+        <span>{{ t('administration.lead_subject_template') }}</span>
         <input v-model.trim="adminDraft.lead_subject_template" class="input" type="text" />
       </label>
       <label class="settings-field">
-        <span>Lead body template</span>
+        <span>{{ t('administration.lead_body_template') }}</span>
         <textarea v-model="adminDraft.lead_body_template" class="settings-textarea" rows="8"></textarea>
       </label>
     </section>
 
     <section v-if="isPrimaryAdmin" class="settings-section">
       <header class="settings-subhead">
-        <h5>Branding Logos</h5>
+        <h5>{{ t('administration.branding_logos') }}</h5>
       </header>
       <section class="settings-row">
         <label class="settings-field">
-          <span>Left sidebar logo</span>
+          <span>{{ t('theme_settings.left_sidebar_logo') }}</span>
           <img class="settings-logo-preview" :src="sidebarLogoPreview" alt="" />
-          <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="selectLogo($event, 'sidebar')" />
-          <button class="btn" type="button" @click="resetLogo('sidebar')">Restore default</button>
+          <input class="input" type="file" accept="image/png,image/jpeg,image/webp" :aria-label="t('theme_settings.left_sidebar_logo')" @change="selectLogo($event, 'sidebar')" />
+          <button class="btn" type="button" @click="resetLogo('sidebar')">{{ t('administration.restore_default') }}</button>
         </label>
         <label class="settings-field">
-          <span>Modal logo</span>
+          <span>{{ t('theme_settings.modal_logo') }}</span>
           <img class="settings-logo-preview" :src="modalLogoPreview" alt="" />
-          <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="selectLogo($event, 'modal')" />
-          <button class="btn" type="button" @click="resetLogo('modal')">Restore default</button>
+          <input class="input" type="file" accept="image/png,image/jpeg,image/webp" :aria-label="t('theme_settings.modal_logo')" @change="selectLogo($event, 'modal')" />
+          <button class="btn" type="button" @click="resetLogo('modal')">{{ t('administration.restore_default') }}</button>
         </label>
       </section>
     </section>
 
     <section v-if="!isPrimaryAdmin" class="settings-upload-status">
-      Mail server, website lead notifications, and branding are managed by the primary admin account.
+      {{ t('administration.primary_admin_only') }}
     </section>
 
-    <section class="settings-placeholder-list" aria-label="Email template placeholders">
+    <section class="settings-placeholder-list" :aria-label="t('administration.email_placeholders')">
       <span v-for="placeholder in placeholders" :key="placeholder">{{ placeholder }}</span>
     </section>
   </form>
@@ -147,11 +147,12 @@ import { sessionState } from '../../domain/auth/session';
 import { loadAppointmentSettings, saveAppointmentSettings } from '../../domain/calls/appointment/appointmentCalendarApi';
 import { loadWorkspaceAdministration, saveWorkspaceAdministration } from '../../domain/workspace/administrationApi';
 import { applyAppearancePayload } from '../../domain/workspace/appearance';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 defineProps({
   title: {
     type: String,
-    default: 'Administration',
+    default: '',
   },
 });
 
@@ -262,7 +263,7 @@ async function load() {
       applyAdminSettings(await loadWorkspaceAdministration());
     }
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not load administration settings.';
+    state.error = error instanceof Error ? error.message : t('administration.load_settings_failed');
   } finally {
     state.loading = false;
   }
@@ -292,7 +293,7 @@ function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(new Error('Could not read image file.'));
+    reader.onerror = () => reject(new Error(t('theme_settings.image_read_failed')));
     reader.readAsDataURL(file);
   });
 }
@@ -301,7 +302,7 @@ async function selectLogo(event, kind) {
   const file = event?.target?.files?.[0] || null;
   if (!file) return;
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    state.error = 'Logo must be PNG, JPEG, or WEBP.';
+    state.error = t('theme_settings.logo_type_invalid');
     return;
   }
   const dataUrl = await readFileAsDataUrl(file);
@@ -363,9 +364,9 @@ async function save() {
       const adminResult = await saveWorkspaceAdministration(buildAdminPayload());
       applyAdminSettings(adminResult);
     }
-    return { ok: true, message: 'Administration settings saved.' };
+    return { ok: true, message: t('administration.settings_saved') };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Could not save administration settings.';
+    const message = error instanceof Error ? error.message : t('administration.save_settings_failed');
     state.error = message;
     return { ok: false, message };
   }
