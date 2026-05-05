@@ -360,9 +360,9 @@ Sprint goal:
    - Persisted Governance group/organization lists now hydrate the same summary
      cache from backend list responses, and deleted rows are removed from the
      cache to avoid stale relation picker entries.
-   - Governance group list/read/create/update responses now include member
-     summaries in one backend enrichment pass so the group editor can reopen
-     selected users without row-by-row lookups.
+   - Governance group list/read/create/update responses now include
+     organization and member summaries in backend enrichment passes so the
+     group editor can reopen selected relations without row-by-row lookups.
    - Remaining work: add batch summary endpoints and included summaries for
      organizations, grants, policies, and export/import jobs.
 
@@ -395,6 +395,9 @@ Sprint goal:
    - Added group-member validation and sync so `relationships.members` creates,
      preserves, and clears active `group_memberships` instead of staying in
      frontend draft state.
+   - Group organization relations now round-trip as
+     `relationships.organization` summaries, matching the existing
+     `organization_id` persistence path.
    - Remaining work: organization memberships, grants, policies, export/import
      job APIs, and recursive relation mutations for modules/permissions.
 
