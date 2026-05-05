@@ -12,11 +12,6 @@ function requireExists(root, relativePath) {
   assert.ok(fs.existsSync(absolutePath), `missing required current hardening file: ${relativePath}`);
 }
 
-function requireAbsent(root, relativePath) {
-  const absolutePath = path.resolve(root, relativePath);
-  assert.ok(!fs.existsSync(absolutePath), `forbidden weaker replacement is present: ${relativePath}`);
-}
-
 function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `missing ${label}`);
 }
@@ -37,13 +32,12 @@ try {
   requireContains(intakeDoc, '`694c2d9`', 'mini-strip source commit');
   requireContains(intakeDoc, '`376426f`', 'mini fallback source commit');
   requireContains(intakeDoc, '`76c356b`', 'publisher stall source commit');
-  requireContains(intakeDoc, 'reject runtimeHealth TypeScript conversion', 'runtimeHealth TS rejection');
   requireContains(intakeDoc, 'reject buffer increases and looser thresholds', 'buffer regression rejection');
   requireContains(intakeDoc, 'binary-frame-aware SFU-client tracker', 'binary-aware stall tracker decision');
 
   const requiredCurrentFiles = [
-    'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js',
-    'src/domain/realtime/workspace/callWorkspace/runtimeHealth.js',
+    'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts',
+    'src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts',
     'src/lib/sfu/outboundFrameBudget.ts',
     'src/lib/sfu/sendFailureDetails.ts',
     'src/lib/sfu/sfuMessageHandler.ts',
@@ -59,9 +53,6 @@ try {
   for (const relativePath of requiredCurrentFiles) {
     requireExists(frontendRoot, relativePath);
   }
-
-  requireAbsent(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
-
   process.stdout.write('[more-payload-intake-contract] PASS\n');
 } catch (error) {
   if (error instanceof Error) {

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KingRT Call Stabilization Harness</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --stage: #10294a;
+      --panel: #0d1d33;
+      --panel-strong: #143257;
+      --line: #2a4f82;
+      --text: #edf4ff;
+      --muted: #a9bddb;
+      --cyan: #22c7e8;
+      --green: #56d37b;
+      --orange: #f7a84b;
+      --red: #f0617a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      min-height: 0;
+    }
+
+    .stage {
+      display: grid;
+      grid-template-rows: minmax(0, 1fr) 132px 64px;
+      min-height: 0;
+      background: #07111f;
+    }
+
+    .main {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+      background: var(--stage);
+    }
+
+    .main-media {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 25% 20%, color-mix(in srgb, var(--speaker-color) 38%, transparent), transparent 34%),
+        linear-gradient(135deg, color-mix(in srgb, var(--speaker-color) 22%, transparent), transparent 46%),
+        color-mix(in srgb, var(--speaker-color) 24%, var(--stage));
+    }
+
+    .main-media::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      opacity: 0.28;
+      background:
+        linear-gradient(90deg, transparent 0 48%, rgba(255,255,255,0.12) 49% 51%, transparent 52% 100%),
+        linear-gradient(0deg, transparent 0 48%, rgba(255,255,255,0.1) 49% 51%, transparent 52% 100%);
+      background-size: 120px 120px;
+      transform: translate3d(var(--motion-x, 0px), var(--motion-y, 0px), 0);
+      transition: transform 180ms linear;
+    }
+
+    .main-avatar {
+      position: relative;
+      z-index: 2;
+      width: min(34vw, 230px);
+      aspect-ratio: 1 / 1;
+      display: grid;
+      place-items: center;
+      border: 4px solid color-mix(in srgb, var(--speaker-color) 72%, white);
+      background: color-mix(in srgb, var(--speaker-color) 58%, black);
+      color: #ffffff;
+      font-size: clamp(76px, 14vw, 160px);
+      font-weight: 950;
+      box-shadow: 0 28px 80px rgba(0,0,0,0.36);
+    }
+
+    .main-pattern {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      opacity: 0.24;
+      background: var(--speaker-pattern);
+      background-size: var(--speaker-pattern-size);
+      transform: translate3d(var(--motion-x, 0px), var(--motion-y, 0px), 0);
+    }
+
+    .main-name {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      z-index: 2;
+      padding: 7px 10px;
+      background: rgba(5, 14, 27, 0.88);
+      border: 1px solid rgba(255,255,255,0.14);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .main-name strong {
+      display: block;
+      color: var(--speaker-color);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .mini-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 0;
+      overflow-x: auto;
+      padding: 10px 12px;
+      background: #091a35;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .tile {
+      position: relative;
+      flex: 0 0 180px;
+      width: 180px;
+      height: 112px;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: color-mix(in srgb, var(--speaker-color) 20%, var(--panel-strong));
+    }
+
+    .tile-media,
+    .tile-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .tile-media {
+      opacity: 0;
+      background:
+        var(--speaker-pattern),
+        linear-gradient(135deg, color-mix(in srgb, var(--speaker-color) 32%, transparent), transparent 44%),
+        color-mix(in srgb, var(--speaker-color) 28%, var(--stage));
+      background-size: var(--speaker-pattern-size), auto, auto;
+      transition: opacity 160ms ease;
+    }
+
+    .tile.ready .tile-media {
+      opacity: 1;
+    }
+
+    .tile-placeholder {
+      gap: 5px;
+      align-content: center;
+      justify-items: center;
+      color: var(--muted);
+      background:
+        radial-gradient(circle at 50% 26%, color-mix(in srgb, var(--speaker-color) 42%, transparent), transparent 34%),
+        linear-gradient(145deg, color-mix(in srgb, var(--speaker-color) 42%, #112b55), #0b1324);
+      transition: opacity 160ms ease;
+    }
+
+    .tile.ready .tile-placeholder {
+      opacity: 0;
+    }
+
+    .initials {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: color-mix(in srgb, var(--speaker-color) 72%, black);
+      color: var(--text);
+      font-weight: 900;
+    }
+
+    .tile-name {
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      bottom: 7px;
+      z-index: 3;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      font-size: 11px;
+      font-weight: 800;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+
+    .tile-score {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      z-index: 3;
+      padding: 3px 6px;
+      background: rgba(5, 14, 27, 0.86);
+      border: 1px solid rgba(255,255,255,0.16);
+      color: var(--text);
+      font-size: 10px;
+      font-weight: 900;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 18px;
+      height: 18px;
+      background: var(--speaker-color);
+      border: 1px solid rgba(255,255,255,0.24);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #0b1324;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+
+    button {
+      height: 38px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: #1b427a;
+      color: var(--text);
+      padding: 0 12px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #26589b;
+    }
+
+    .side {
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      border-left: 1px solid rgba(255,255,255,0.1);
+      background: var(--panel);
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .metric {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr) 52px;
+      align-items: center;
+      gap: 8px;
+      margin: 10px 0;
+      font-size: 12px;
+    }
+
+    .metric-name {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+      color: var(--speaker-color);
+      font-weight: 900;
+    }
+
+    .metric-name small {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .bar {
+      height: 8px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.12);
+    }
+
+    .fill {
+      height: 100%;
+      width: var(--w, 0%);
+      background: var(--speaker-color);
+      transition: width 180ms linear;
+    }
+
+    .raw-bar {
+      margin-top: 4px;
+      height: 5px;
+      opacity: 0.58;
+    }
+
+    .speaker {
+      outline: 1px solid color-mix(in srgb, var(--speaker-color) 65%, transparent);
+      outline-offset: 4px;
+    }
+
+    .log {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      display: grid;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      background: rgba(34,199,232,0.12);
+      border: 1px solid rgba(34,199,232,0.28);
+      color: #bff4ff;
+      font-weight: 800;
+    }
+
+    @media (max-width: 860px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) 300px;
+      }
+
+      .side {
+        border-left: 0;
+        border-top: 1px solid rgba(255,255,255,0.1);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage">
+      <section class="main" id="main">
+        <div class="main-media" id="mainMedia"></div>
+        <div class="main-name" id="mainName"></div>
+      </section>
+      <section class="mini-strip" id="miniStrip"></section>
+      <section class="controls">
+        <button type="button" id="playPause">Pause</button>
+        <button type="button" id="singleSpike">Spike Speaker B</button>
+        <button type="button" id="reset">Reset</button>
+        <span class="pill" id="modeLabel">using KingRT layout/strategies.ts</span>
+      </section>
+    </section>
+
+    <aside class="side">
+      <h1>Three-Speaker Stabilization Harness</h1>
+      <div id="legend"></div>
+      <div id="metrics"></div>
+      <div class="log" id="log"></div>
+    </aside>
+  </main>
+
+  <script type="module" src="./realtime-call-stabilization-harness.ts"></script>
+</body>
+</html>

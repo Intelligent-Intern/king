@@ -2,7 +2,7 @@ import {
   REMOTE_RENDER_SURFACE_ROLES,
   normalizeRemoteRenderSurfaceRole,
   remoteRenderSurfaceRoleForPeer,
-} from './remoteRenderScheduler.js';
+} from './remoteRenderScheduler.ts';
 
 export const SFU_ADAPTIVE_LAYER_PREFERENCES = Object.freeze({
   PRIMARY: 'primary',

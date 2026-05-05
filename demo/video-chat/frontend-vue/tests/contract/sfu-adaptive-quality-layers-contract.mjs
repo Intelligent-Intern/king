@@ -21,17 +21,17 @@ function read(relativePath) {
 
 async function main() {
   const packageJson = read('package.json');
-  const adaptiveLayers = read('src/domain/realtime/sfu/adaptiveQualityLayers.js');
-  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
-  const renderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.js');
-  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
+  const adaptiveLayers = read('src/domain/realtime/sfu/adaptiveQualityLayers.ts');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts');
+  const renderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.ts');
+  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
   const sfuGateway = read('../backend-king-php/domain/realtime/realtime_sfu_gateway.php');
@@ -97,7 +97,7 @@ async function main() {
     'CallWorkspaceView must inject sfuTransportState into socket lifecycle helpers before adaptive layer messages arrive',
   );
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/adaptiveQualityLayers.js')).href;
+  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/adaptiveQualityLayers.ts')).href;
   const adaptiveModule = await import(moduleUrl);
   assert.equal(
     adaptiveModule.sfuLayerPreferenceForRemoteSurfaceRole('fullscreen'),

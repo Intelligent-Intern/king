@@ -95,12 +95,12 @@ function decodeMovingChromaDelta(WaveletVideoEncoder, WaveletVideoDecoder, profi
 }
 
 async function main() {
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
 
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_DELTA_FRAME_BYTES', 'motion payload delta cap');
   requireContains(runtimeConfig, 'SFU_WLVC_MAX_KEYFRAME_FRAME_BYTES', 'motion payload keyframe cap');
@@ -139,8 +139,8 @@ async function main() {
 
   try {
     const { WaveletVideoDecoder, WaveletVideoEncoder } = await server.ssrLoadModule('/src/lib/wavelet/codec.ts');
-    const workspaceConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
-    const motionConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+    const workspaceConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
+    const motionConfig = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
     const profiles = workspaceConfig.SFU_VIDEO_QUALITY_PROFILES;
     const maxDeltaBytes = motionConfig.SFU_WLVC_MAX_DELTA_FRAME_BYTES;
 

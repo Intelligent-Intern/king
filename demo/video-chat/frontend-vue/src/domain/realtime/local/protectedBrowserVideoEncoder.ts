@@ -3,18 +3,18 @@ import {
   closePublisherVideoFrame,
   createPublisherVideoFrameSourceReader,
   PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND,
-} from './publisherVideoFrameSource.js';
+} from './publisherVideoFrameSource.ts';
 import {
   highResolutionNowMs,
   markPublisherFrameTraceStage,
   publisherFrameTraceMetrics,
   roundedStageMs,
-} from './publisherFrameTrace.js';
-import { resolveProfileReadbackIntervalMs } from './videoFrameSizing.js';
+} from './publisherFrameTrace.ts';
+import { resolveProfileReadbackIntervalMs } from './videoFrameSizing.ts';
 import {
   createBrowserVideoFrameScaler,
   videoFrameSourceDimensions,
-} from './browserVideoFrameScaler.js';
+} from './browserVideoFrameScaler.ts';
 import {
   browserEncoderConfigKey,
   buildBrowserEncoderConfig,
@@ -22,7 +22,7 @@ import {
   resolveBrowserEncoderFrameSize,
   resolveSupportedBrowserEncoderConfig,
   shouldScaleBrowserFrame,
-} from './browserVideoEncoderConfig.js';
+} from './browserVideoEncoderConfig.ts';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 export const PROTECTED_BROWSER_VIDEO_RUNTIME_ID = 'wlvc_sfu';

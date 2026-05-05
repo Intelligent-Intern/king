@@ -18,17 +18,17 @@ function requireNotContains(source, needle, label) {
   assert.ok(!source.includes(needle), `[client-console-warning-diagnostics-contract] unexpected ${label}`);
 }
 
-const diagnostics = read('src/support/clientDiagnostics.js');
-const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-const nativeAudioBridgeFailureReporter = read('src/domain/realtime/native/audioBridgeFailureReporter.js');
-const nativeAudioBridgeRecovery = read('src/domain/realtime/native/audioBridgeRecovery.js');
-const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.js');
-const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-const videoConnectionStatus = read('src/domain/realtime/sfu/videoConnectionStatus.js');
-const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
+const diagnostics = read('src/support/clientDiagnostics.ts');
+const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+const nativeAudioBridgeFailureReporter = read('src/domain/realtime/native/audioBridgeFailureReporter.ts');
+const nativeAudioBridgeRecovery = read('src/domain/realtime/native/audioBridgeRecovery.ts');
+const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+const videoConnectionStatus = read('src/domain/realtime/sfu/videoConnectionStatus.ts');
+const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
 
 requireContains(diagnostics, 'export function bindClientConsoleWarningDiagnostics()', 'console warning diagnostics binder');
 requireContains(diagnostics, 'bindClientConsoleWarningDiagnostics();', 'workspace diagnostics config binds console warning capture');

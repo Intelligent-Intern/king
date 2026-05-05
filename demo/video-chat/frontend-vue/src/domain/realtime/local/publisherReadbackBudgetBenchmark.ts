@@ -1,11 +1,11 @@
-import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.js';
+import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.ts';
 import {
   DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
   DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND,
   resolveDomCanvasCompatibilityProfile,
-} from './domCanvasFallbackPolicy.js';
-import { PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND } from './publisherVideoFrameSource.js';
-import { resolveContainFrameSizeFromDimensions } from './videoFrameSizing.js';
+} from './domCanvasFallbackPolicy.ts';
+import { PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND } from './publisherVideoFrameSource.ts';
+import { resolveContainFrameSizeFromDimensions } from './videoFrameSizing.ts';
 
 const MEGAPIXEL = 1_000_000;
 

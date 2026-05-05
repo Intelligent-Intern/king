@@ -54,22 +54,22 @@ try {
   }
 
   const requiredHelperFiles = [
-    'chatRuntime.js',
-    'clientDiagnostics.js',
-    'lifecycle.js',
-    'mediaSecurityRuntime.js',
-    'mediaStack.js',
-    'moderationSync.js',
-    'nativeStack.js',
-    'orchestration.js',
-    'participantUi.js',
-    'roomState.js',
-    'routeResolution.js',
-    'runtimeHealth.js',
-    'runtimeSwitching.js',
-    'sfuTransport.js',
-    'socketLifecycle.js',
-    'videoLayout.js',
+    'chatRuntime.ts',
+    'clientDiagnostics.ts',
+    'lifecycle.ts',
+    'mediaSecurityRuntime.ts',
+    'mediaStack.ts',
+    'moderationSync.ts',
+    'nativeStack.ts',
+    'orchestration.ts',
+    'participantUi.ts',
+    'roomState.ts',
+    'routeResolution.ts',
+    'runtimeHealth.ts',
+    'runtimeSwitching.ts',
+    'sfuTransport.ts',
+    'socketLifecycle.ts',
+    'videoLayout.ts',
   ];
   for (const fileName of requiredHelperFiles) {
     assert.ok(fs.existsSync(path.resolve(workspaceHelpersRoot, fileName)), `workspace helper file missing: ${fileName}`);
@@ -78,11 +78,11 @@ try {
   assert.ok(!workspaceView.includes('moderationSyncQueue'), 'CallWorkspaceView.vue must not own moderation sync queues');
   assert.ok(!workspaceView.includes('let moderationSyncTimer'), 'CallWorkspaceView.vue must not own moderation sync timers');
 
-  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   assert.ok(participantUi.includes("import { createCallWorkspaceModerationSync } from './moderationSync';"), 'participant UI must delegate moderation sync queue handling');
   assert.ok(participantUi.includes('consumeQueuedModerationSyncEntries,'), 'participant UI must expose consumeQueuedModerationSyncEntries for lifecycle cleanup');
 
-  const helperFiles = fs.readdirSync(workspaceHelpersRoot).filter((name) => name.endsWith('.js') && !name.endsWith('.extracted.js'));
+  const helperFiles = fs.readdirSync(workspaceHelpersRoot).filter((name) => name.endsWith('.ts') && !name.endsWith('.extracted.js'));
   assert.ok(helperFiles.length >= 12, `workspace helper surface must remain modular (got ${helperFiles.length} helper modules)`);
 
   assert.ok(fs.existsSync(workspaceViewPath), 'CallWorkspaceView.vue must exist');

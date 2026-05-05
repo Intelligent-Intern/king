@@ -52,9 +52,8 @@ function activityScoreForUser(activityByUserId, userId, nowMs = Date.now()) {
     : (activityByUserId && typeof activityByUserId === 'object' ? activityByUserId[userId] : null);
   if (!entry || typeof entry !== 'object') return 0;
 
-  if (Number.isFinite(Number(entry.score2s))) return Number(entry.score2s);
-  if (Number.isFinite(Number(entry.score_2s))) return Number(entry.score_2s);
-  if (Number.isFinite(Number(entry.score))) return Number(entry.score);
+  const rollingScore = rollingActivityScore(entry);
+  if (rollingScore > 0) return rollingScore;
 
   const lastActiveMs = Number(entry.lastActiveMs || entry.updated_at_ms || 0);
   if (!Number.isFinite(lastActiveMs) || lastActiveMs <= 0) return 0;
@@ -62,6 +61,33 @@ function activityScoreForUser(activityByUserId, userId, nowMs = Date.now()) {
   if (ageMs >= 15000) return 0;
   const weight = Number.isFinite(Number(entry.weight)) ? Number(entry.weight) : 0.5;
   return (1 - (ageMs / 15000)) * Math.max(0.25, Math.min(1, weight)) * 100;
+}
+
+function normalizedScore(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return null;
+  return Math.max(0, Math.min(100, score));
+}
+
+export function rollingActivityScore(entry) {
+  if (!entry || typeof entry !== 'object') return 0;
+  const score2s = normalizedScore(entry.topkScore2s ?? entry.topk_score_2s ?? entry.score2s ?? entry.score_2s);
+  const score5s = normalizedScore(entry.topkScore5s ?? entry.topk_score_5s ?? entry.score5s ?? entry.score_5s);
+  const score15s = normalizedScore(entry.topkScore15s ?? entry.topk_score_15s ?? entry.score15s ?? entry.score_15s);
+  const score = normalizedScore(entry.score);
+  if (score2s === null && score5s === null && score15s === null) return score ?? 0;
+
+  let weightedTotal = 0;
+  let weightTotal = 0;
+  const add = (value, weight) => {
+    if (value === null) return;
+    weightedTotal += value * weight;
+    weightTotal += weight;
+  };
+  add(score2s, 0.5);
+  add(score5s, 0.3);
+  add(score15s, 0.2);
+  return weightTotal > 0 ? weightedTotal / weightTotal : 0;
 }
 
 function normalizeParticipant(row) {
@@ -134,7 +160,15 @@ export function selectCallLayoutParticipants({
   if (pinnedUserIds.length > 0) {
     mainUserId = pinnedUserIds[0];
   } else if (!layout.automationPaused && ['active_speaker_main', 'most_active_window', 'round_robin_active'].includes(layout.strategy)) {
-    mainUserId = rankedByActivity.find((id) => clippedVisibleIds.includes(id)) || mainUserId;
+    const topActivityUserId = rankedByActivity.find((id) => clippedVisibleIds.includes(id)) || 0;
+    const existingMainId = Number(mainUserId || 0);
+    if (existingMainId > 0 && clippedVisibleIds.includes(existingMainId)) {
+      const existingScore = activityScoreForUser(activityByUserId, existingMainId, nowMs);
+      const topScore = activityScoreForUser(activityByUserId, topActivityUserId, nowMs);
+      mainUserId = existingScore >= Math.max(18, topScore * 0.82) ? existingMainId : topActivityUserId;
+    } else {
+      mainUserId = topActivityUserId || mainUserId;
+    }
   }
   if (!Number.isInteger(mainUserId) || mainUserId <= 0 || !byUserId.has(mainUserId)) {
     const localUserId = Number(currentUserId);

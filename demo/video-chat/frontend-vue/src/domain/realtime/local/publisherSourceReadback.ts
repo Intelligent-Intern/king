@@ -1,37 +1,37 @@
 import {
   detectPublisherCapturePipelineCapabilities,
   PUBLISHER_CAPTURE_BACKENDS,
-} from './capturePipelineCapabilities.js';
-import { createPublisherCaptureWorkerReadbackController } from './publisherCaptureWorkerReadback.js';
+} from './capturePipelineCapabilities.ts';
+import { createPublisherCaptureWorkerReadbackController } from './publisherCaptureWorkerReadback.ts';
 import {
   DOM_CANVAS_COMPATIBILITY_READBACK_METHOD,
   DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND,
   domCanvasCompatibilityReadbackIntervalMs,
   resolveDomCanvasCompatibilityFrameSize,
   resolveDomCanvasCompatibilityVideoFrameSize,
-} from './domCanvasFallbackPolicy.js';
+} from './domCanvasFallbackPolicy.ts';
 import {
   canUsePublisherVideoFrameSource,
   closePublisherVideoFrame,
   createPublisherVideoFrameSourceReader,
   PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND,
-} from './publisherVideoFrameSource.js';
+} from './publisherVideoFrameSource.ts';
 import {
   copyVideoFrameToRgbaImageData,
   resolveVideoFrameCopyFrameSize,
-} from './publisherVideoFrameCopy.js';
+} from './publisherVideoFrameCopy.ts';
 import {
   highResolutionNowMs,
   markPublisherFrameTraceStage,
   publisherFrameFailureDetails,
   roundedStageMs,
-} from './publisherFrameTrace.js';
+} from './publisherFrameTrace.ts';
 import {
   resolveFramedFrameSizeFromDimensions,
   resolveProfileReadbackIntervalMs,
   resolvePublisherFramingTarget,
   resolvePublisherFrameSize,
-} from './videoFrameSizing.js';
+} from './videoFrameSizing.ts';
 
 const OFFSCREEN_CANVAS_WORKER_READBACK = PUBLISHER_CAPTURE_BACKENDS.OFFSCREEN_CANVAS_WORKER;
 const ZERO_COPY_CAPTURE_GATE_STAGE = 'video_frame_zero_copy_gate';
