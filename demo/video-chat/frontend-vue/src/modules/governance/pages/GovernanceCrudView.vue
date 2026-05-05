@@ -13,6 +13,8 @@
           :placeholder="t('governance.search', { entity: pluralLabel })"
         />
       </label>
+      <span v-if="loading" class="governance-state">{{ t('common.loading') }}</span>
+      <span v-if="loadError" class="governance-inline-error">{{ loadError }}</span>
     </template>
 
     <AdminTableFrame class="governance-table-wrap">
@@ -86,6 +88,7 @@
       :relationships="modalRelationships"
       :relation-selections="relationSelections"
       :error="formError"
+      :saving="mutationPending"
       :maximized="modalMaximized"
       @update:maximized="modalMaximized = $event"
       @close="closeModal"
@@ -110,7 +113,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
@@ -121,14 +124,18 @@ import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat'
 import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
-import { descriptorAllowsAction, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
+import { descriptorAllowsAction, GOVERNANCE_CRUD_DESCRIPTORS, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
 import { createEntitySummaryCache, normalizeEntitySummary } from '../entitySummaryCache.js';
+import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
+import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
 import { entryAllowsAccess } from '../../navigationBuilder.js';
 import { firstRouteActionByKind, routeActionLabel, routeActionsForContext } from '../../routeActions.js';
 
 const route = useRoute();
+const router = useRouter();
+const governancePersistence = createGovernanceCrudPersistence({ router });
 const rowsByScope = reactive({});
 const query = ref('');
 const page = ref(1);
@@ -140,12 +147,18 @@ const relationNavigatorOpen = ref(false);
 const relationNavigatorRelation = ref(null);
 const relationNavigatorMaximized = ref(false);
 const formError = ref('');
+const loadError = ref('');
+const loading = ref(false);
+const mutationPending = ref(false);
 const form = reactive({ id: '' });
 const relationSelections = reactive({});
 const entitySummaryCache = createEntitySummaryCache();
+let loadRequestToken = 0;
 
 const scopeKey = computed(() => String(route.name || route.path));
 const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
+const entityKey = computed(() => String(crudDescriptor.value.entity_key || '').trim());
+const usesBackend = computed(() => isPersistedGovernanceEntity(entityKey.value));
 const catalogRows = computed(() => buildGovernanceCatalogRows(workspaceModuleRegistry, scopeKey.value));
 const rows = computed(() => {
   if (!Array.isArray(rowsByScope[scopeKey.value])) {
@@ -199,6 +212,10 @@ watch(() => route.fullPath, () => {
   closeModal();
 });
 
+watch(() => [entityKey.value, sessionState.sessionToken], () => {
+  loadPersistedRowsForEntity(entityKey.value);
+}, { immediate: true });
+
 watch(filteredRows, () => {
   if (page.value > pageCount.value) {
     page.value = pageCount.value;
@@ -206,9 +223,8 @@ watch(filteredRows, () => {
 });
 
 watch(visibleRows, () => {
-  const entityKey = String(crudDescriptor.value.entity_key || '').trim();
-  if (entityKey !== '') {
-    entitySummaryCache.upsertRows(entityKey, visibleRows.value);
+  if (entityKey.value !== '') {
+    entitySummaryCache.upsertRows(entityKey.value, visibleRows.value);
   }
 }, { immediate: true });
 
@@ -339,7 +355,44 @@ function closeModal() {
   formError.value = '';
 }
 
-function submitModal() {
+async function loadPersistedRowsForEntity(targetEntityKey) {
+  const targetKey = String(targetEntityKey || '').trim();
+  if (!isPersistedGovernanceEntity(targetKey)) {
+    if (targetKey === entityKey.value) {
+      loading.value = false;
+      loadError.value = '';
+    }
+    return;
+  }
+
+  const descriptor = GOVERNANCE_CRUD_DESCRIPTORS[targetKey];
+  const routeKey = `admin-governance-${targetKey}`;
+  const isCurrentEntity = targetKey === entityKey.value;
+  const token = isCurrentEntity ? ++loadRequestToken : loadRequestToken;
+  if (isCurrentEntity) {
+    loading.value = true;
+    loadError.value = '';
+  }
+
+  try {
+    const persistedRows = await governancePersistence.listRows(descriptor);
+    if (isCurrentEntity && token !== loadRequestToken) return;
+    rowsByScope[routeKey] = persistedRows;
+    entitySummaryCache.upsertRows(targetKey, persistedRows);
+  } catch (error) {
+    if (isCurrentEntity && token === loadRequestToken) {
+      rowsByScope[routeKey] = [];
+      loadError.value = error instanceof Error ? error.message : t('governance.load_failed');
+    }
+  } finally {
+    if (isCurrentEntity && token === loadRequestToken) {
+      loading.value = false;
+    }
+  }
+}
+
+async function submitModal() {
+  if (mutationPending.value) return;
   const missingField = modalFields.value.find((field) => (
     field.required === true && String(form[field.key] || '').trim() === ''
   ));
@@ -349,7 +402,12 @@ function submitModal() {
   }
 
   const now = new Date().toISOString();
-  const payload = formPayload();
+  const payload = mutationPayload();
+  if (usesBackend.value) {
+    await submitPersistedRow(payload);
+    return;
+  }
+
   if (modalMode.value === 'edit') {
     const existing = rows.value.find((row) => row.id === form.id);
     if (existing) {
@@ -362,12 +420,51 @@ function submitModal() {
   closeModal();
 }
 
-function deleteRow(row) {
+async function submitPersistedRow(payload) {
+  mutationPending.value = true;
+  formError.value = '';
+  try {
+    const savedRow = modalMode.value === 'edit'
+      ? await governancePersistence.updateRow(crudDescriptor.value, form.id, payload)
+      : await governancePersistence.createRow(crudDescriptor.value, payload);
+    if (!savedRow) {
+      throw new Error(t('governance.save_failed'));
+    }
+    const existingIndex = rows.value.findIndex((row) => row.id === savedRow.id);
+    if (existingIndex >= 0) {
+      rows.value.splice(existingIndex, 1, savedRow);
+    } else {
+      rows.value.unshift(savedRow);
+    }
+    entitySummaryCache.upsertSummary(entityKey.value, savedRow);
+    closeModal();
+  } catch (error) {
+    formError.value = error instanceof Error ? error.message : t('governance.save_failed');
+  } finally {
+    mutationPending.value = false;
+  }
+}
+
+async function deleteRow(row) {
   if (isRowReadonly(row)) return;
+  if (usesBackend.value) {
+    if (mutationPending.value) return;
+    mutationPending.value = true;
+    loadError.value = '';
+    try {
+      await governancePersistence.deleteRow(crudDescriptor.value, row.id);
+    } catch (error) {
+      loadError.value = error instanceof Error ? error.message : t('governance.delete_failed');
+      mutationPending.value = false;
+      return;
+    }
+    mutationPending.value = false;
+  }
   const index = rows.value.findIndex((candidate) => candidate.id === row.id);
   if (index >= 0) {
     rows.value.splice(index, 1);
   }
+  entitySummaryCache.removeSummary(entityKey.value, row.id);
 }
 
 function formPayload() {
@@ -376,6 +473,15 @@ function formPayload() {
     if (field.key === 'status') return [field.key, normalizeStatus(value)];
     return [field.key, value];
   }));
+}
+
+function mutationPayload() {
+  const payload = formPayload();
+  const relationships = relationSelectionSnapshot();
+  if (Object.keys(relationships).length > 0) {
+    payload.relationships = relationships;
+  }
+  return payload;
 }
 
 function rowFromPayload(payload, id, updatedAt) {
@@ -414,6 +520,10 @@ function rowSelectionSummary(row, entityKey = '') {
 }
 
 function openRelationNavigator(relationship) {
+  const targetEntity = String(relationship?.target_entity || '').trim();
+  if (isPersistedGovernanceEntity(targetEntity)) {
+    loadPersistedRowsForEntity(targetEntity);
+  }
   relationNavigatorRelation.value = relationship;
   relationNavigatorMaximized.value = false;
   relationNavigatorOpen.value = true;
@@ -466,7 +576,9 @@ function relationRowsForEntity(entityKey) {
 }
 
 function canCreateRelationDraft(entityKey) {
-  return ['groups', 'organizations', 'roles', 'grants', 'policies', 'compliance'].includes(String(entityKey || '').trim());
+  const key = String(entityKey || '').trim();
+  if (isPersistedGovernanceEntity(key)) return false;
+  return ['roles', 'grants', 'policies', 'compliance'].includes(key);
 }
 
 function createRelationDraft(entityKey, payload = {}) {
@@ -505,13 +617,13 @@ function rowActionTitle(action) {
   return key !== '' ? t(key, { entity: singularLabel.value }) : String(action?.key || '');
 }
 
-function handleRowAction(action, row) {
+async function handleRowAction(action, row) {
   if (action.kind === 'edit') {
     openEditModal(row);
     return;
   }
   if (action.kind === 'delete') {
-    deleteRow(row);
+    await deleteRow(row);
   }
 }
 
@@ -580,6 +692,17 @@ function formatDate(value) {
   padding: 18px 12px;
   text-align: center;
   color: var(--text-muted);
+}
+
+.governance-state,
+.governance-inline-error {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.governance-inline-error {
+  color: var(--color-ffb5b5);
 }
 
 .governance-readonly-label {
