@@ -508,6 +508,9 @@ Non-goals for this sprint:
     - [x] Localization contract now covers date-time formatting examples for
       `en`, `de`, `ar`, `fa`, and `ps`, and guards those tables against
       pinned English/German Intl formatters.
+    - [x] Module navigation/settings panel ordering uses a shared
+      locale-aware collation helper, with the active session locale passed
+      through the module access context.
 
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
