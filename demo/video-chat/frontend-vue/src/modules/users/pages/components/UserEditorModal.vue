@@ -12,7 +12,7 @@
     title-class=""
     :body-class="avatarEditorOpen ? 'users-avatar-modal-body' : 'users-modal-body'"
     footer-class="users-modal-footer"
-    close-label="Close user modal"
+    :close-label="t('users.close_user_modal')"
     maximizable
     :maximized="editorMaximized"
     @update:maximized="editorMaximized = $event"
@@ -22,12 +22,12 @@
       <template v-if="!avatarEditorOpen">
         <form id="userEditorForm" class="users-edit-form" autocomplete="off" @submit.prevent="$emit('submit-form')">
           <label v-if="form.mode === 'create'" class="users-field">
-            <span>Email</span>
+            <span>{{ t('users.email') }}</span>
             <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
           </label>
 
           <section v-else class="users-field users-field-wide">
-            <span>Emails</span>
+            <span>{{ t('users.emails') }}</span>
             <div class="users-email-list">
               <article
                 v-for="emailRow in userEmailRows"
@@ -38,9 +38,9 @@
                   <div class="users-email-value">{{ emailRow.email }}</div>
                   <div class="users-email-meta">
                     <span class="tag" :class="emailRow.is_verified ? 'ok' : 'warn'">
-                      {{ emailRow.is_verified ? 'confirmed' : 'unconfirmed' }}
+                      {{ emailRow.is_verified ? t('users.email_confirmed') : t('users.email_unconfirmed') }}
                     </span>
-                    <span v-if="emailRow.is_primary" class="tag ok">primary</span>
+                    <span v-if="emailRow.is_primary" class="tag ok">{{ t('users.email_primary') }}</span>
                   </div>
                 </div>
                 <AppIconButton
@@ -51,7 +51,7 @@
                   @click="$emit('delete-pending-email', emailRow)"
                 />
               </article>
-              <p v-if="userEmailRows.length === 0" class="users-email-empty">No emails configured.</p>
+              <p v-if="userEmailRows.length === 0" class="users-email-empty">{{ t('users.no_emails_configured') }}</p>
             </div>
             <div class="users-email-create">
               <input
@@ -59,7 +59,7 @@
                 class="input"
                 type="email"
                 autocomplete="email"
-                placeholder="Add new email"
+                :placeholder="t('users.add_new_email')"
                 :disabled="formSaving || userEmailSubmitting || userEmailLoading"
               />
               <button
@@ -68,44 +68,44 @@
                 :disabled="formSaving || userEmailSubmitting || userEmailLoading"
                 @click="$emit('create-pending-email')"
               >
-                {{ userEmailSubmitting ? 'Sending…' : 'Send confirmation' }}
+                {{ userEmailSubmitting ? t('users.sending') : t('users.send_confirmation') }}
               </button>
             </div>
           </section>
 
           <label class="users-field">
-            <span>Display name</span>
+            <span>{{ t('users.display_name') }}</span>
             <input v-model.trim="form.display_name" class="input" type="text" />
           </label>
 
           <label v-if="form.mode === 'create'" class="users-field">
-            <span>Password</span>
+            <span>{{ t('users.password') }}</span>
             <input v-model="form.password" class="input" type="password" autocomplete="new-password" />
           </label>
 
           <label v-if="form.mode === 'create'" class="users-field">
-            <span>Repeat password</span>
+            <span>{{ t('users.repeat_password') }}</span>
             <input v-model="form.password_repeat" class="input" type="password" autocomplete="new-password" />
           </label>
 
           <label class="users-field">
-            <span>Role</span>
+            <span>{{ t('users.role') }}</span>
             <AppSelect v-model="form.role" :disabled="!canEditRole">
-              <option value="user">user</option>
-              <option value="admin">admin</option>
+              <option value="user">{{ t('users.role_user') }}</option>
+              <option value="admin">{{ t('users.role_admin') }}</option>
             </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
-            <span>Status</span>
+            <span>{{ t('users.status') }}</span>
             <AppSelect v-model="form.status" :disabled="!canEditStatus">
-              <option value="active">active</option>
-              <option value="disabled">disabled</option>
+              <option value="active">{{ t('users.status_active') }}</option>
+              <option value="disabled">{{ t('users.status_disabled') }}</option>
             </AppSelect>
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
-            <span>Time format</span>
+            <span>{{ t('users.time_format') }}</span>
             <AppSelect v-model="form.time_format">
               <option value="24h">24h</option>
               <option value="12h">12h</option>
@@ -113,7 +113,7 @@
           </label>
 
           <label v-if="form.mode === 'edit'" class="users-field">
-            <span>Theme</span>
+            <span>{{ t('users.theme') }}</span>
             <AppSelect v-model="form.theme">
               <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
                 {{ theme.label }}
@@ -122,7 +122,7 @@
           </label>
 
           <section class="users-field">
-            <span>Theme editor</span>
+            <span>{{ t('users.theme_editor') }}</span>
             <label class="users-checkbox-row">
               <input v-model="themeEditorChecked" type="checkbox" :disabled="themeEditorDisabled" />
               <span>{{ themeEditorLabel }}</span>
@@ -131,11 +131,11 @@
 
           <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
             <div class="users-avatar-preview-wrap">
-              <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
+              <img class="users-avatar-preview" :src="avatarPreviewSrc" :alt="t('users.avatar_preview_alt')" />
             </div>
             <div class="users-avatar-edit-actions">
               <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="$emit('open-avatar-editor')">
-                Change avatar
+                {{ t('users.change_avatar') }}
               </button>
             </div>
           </section>
@@ -144,14 +144,14 @@
 
       <template v-else>
         <div class="users-avatar-preview-wrap">
-          <img class="users-avatar-preview users-avatar-preview-large" :src="avatarEditorPreviewSrc" alt="Avatar preview" />
+          <img class="users-avatar-preview users-avatar-preview-large" :src="avatarEditorPreviewSrc" :alt="t('users.avatar_preview')" />
         </div>
         <label class="users-avatar-file">
-          <span>Upload avatar</span>
+          <span>{{ t('users.upload_avatar') }}</span>
           <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="$emit('avatar-file-select', $event)" />
         </label>
         <section class="users-avatar-defaults">
-          <span>Set default</span>
+          <span>{{ t('users.set_default') }}</span>
           <div class="users-avatar-defaults-actions">
             <button
               v-for="option in defaultAvatarOptions"
@@ -165,7 +165,7 @@
             </button>
           </div>
         </section>
-        <p class="users-avatar-hint">Upload a file or pick one default avatar.</p>
+        <p class="users-avatar-hint">{{ t('users.avatar_hint') }}</p>
       </template>
     </template>
 
@@ -181,17 +181,18 @@
         :disabled="formSaving"
         @click="avatarEditorOpen && $emit('save-avatar-changes')"
       >
-        {{ formSaving ? 'Saving...' : (avatarEditorOpen ? 'Save avatar' : dialogSubmitLabel) }}
+        {{ formSaving ? t('common.saving') : (avatarEditorOpen ? t('users.save_avatar') : dialogSubmitLabel) }}
       </button>
     </template>
   </AppModalShell>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue';
 import AppIconButton from '../../../../components/AppIconButton.vue';
 import AppModalShell from '../../../../components/AppModalShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
+import { t } from '../../../localization/i18nRuntime.js';
+import { useUserEditorModal } from './useUserEditorModal.js';
 
 const props = defineProps({
   open: {
@@ -287,33 +288,13 @@ const emit = defineEmits([
   'save-avatar-changes',
 ]);
 
-const editorMaximized = ref(false);
-
-watch(() => props.open, (open) => {
-  if (!open) {
-    editorMaximized.value = false;
-  }
-});
-
-const emailDraftModel = computed({
-  get: () => props.userEmailDraft,
-  set: (value) => emit('update:userEmailDraft', value),
-});
-
-const roleAutomaticallyEditsThemes = computed(() => String(props.form?.role || '').trim() === 'admin');
-const themeEditorChecked = computed({
-  get: () => roleAutomaticallyEditsThemes.value || props.form.theme_editor_enabled === true,
-  set: (value) => {
-    if (roleAutomaticallyEditsThemes.value) return;
-    props.form.theme_editor_enabled = value === true;
-  },
-});
-const themeEditorDisabled = computed(() => !props.canEditThemeEditor || roleAutomaticallyEditsThemes.value);
-const themeEditorLabel = computed(() => (
-  roleAutomaticallyEditsThemes.value
-    ? 'Admins can create and edit themes automatically'
-    : 'Allow this user to create and edit themes'
-));
+const {
+  editorMaximized,
+  emailDraftModel,
+  themeEditorChecked,
+  themeEditorDisabled,
+  themeEditorLabel,
+} = useUserEditorModal({ props, emit, t });
 </script>
 
 <style scoped src="../admin/UsersView.css"></style>
