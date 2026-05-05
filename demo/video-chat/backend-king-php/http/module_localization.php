@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/localization/translation_imports.php';
 require_once __DIR__ . '/../support/auth_request.php';
+require_once __DIR__ . '/../support/tenant_context.php';
 
 function videochat_localization_actor_is_superadmin(array $apiAuthContext): bool
 {
@@ -16,6 +17,24 @@ function videochat_localization_csv_from_payload(array $payload): string
     return (string) ($payload['csv'] ?? ($payload['content'] ?? ''));
 }
 
+/**
+ * @return array<int, string>
+ */
+function videochat_localization_namespaces_from_query(array $queryParams): array
+{
+    $raw = (string) ($queryParams['namespaces'] ?? ($queryParams['namespace'] ?? ''));
+    $namespaces = [];
+    foreach (explode(',', $raw) as $namespace) {
+        $normalized = trim($namespace);
+        if ($normalized === '' || preg_match('/^[a-z][a-z0-9_.-]{0,119}$/', $normalized) !== 1) {
+            continue;
+        }
+        $namespaces[] = $normalized;
+    }
+
+    return array_values(array_unique($namespaces));
+}
+
 function videochat_handle_localization_routes(
     string $path,
     string $method,
@@ -26,6 +45,47 @@ function videochat_handle_localization_routes(
     callable $decodeJsonBody,
     callable $openDatabase
 ): ?array {
+    if ($path === '/api/localization/resources') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/localization/resources.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $queryParams = videochat_request_query_params($request);
+        $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+        $requestedLocale = (string) ($queryParams['locale'] ?? (($apiAuthContext['user'] ?? [])['locale'] ?? 'en'));
+        $namespaces = videochat_localization_namespaces_from_query($queryParams);
+
+        try {
+            $pdo = $openDatabase();
+            $payload = videochat_localization_payload($pdo, $requestedLocale);
+            $locale = (string) ($payload['locale'] ?? videochat_default_locale_code());
+            $defaultLocale = videochat_default_locale_code();
+            $resources = videochat_fetch_translation_resources($pdo, $locale, $tenantId > 0 ? $tenantId : null, $namespaces);
+            $fallbackResources = $locale === $defaultLocale
+                ? $resources
+                : videochat_fetch_translation_resources($pdo, $defaultLocale, $tenantId > 0 ? $tenantId : null, $namespaces);
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'locale' => $locale,
+                'direction' => (string) ($payload['direction'] ?? 'ltr'),
+                'tenant_id' => $tenantId > 0 ? $tenantId : null,
+                'namespaces' => $namespaces,
+                'resources' => $resources,
+                'fallback_locale' => $defaultLocale,
+                'fallback_resources' => $fallbackResources,
+                'supported_locales' => is_array($payload['supported_locales'] ?? null) ? $payload['supported_locales'] : [],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'localization_resources_failed', 'Could not load translation resources.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
     if (!str_starts_with($path, '/api/admin/localization')) {
         return null;
     }
