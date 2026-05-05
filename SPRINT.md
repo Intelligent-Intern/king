@@ -610,7 +610,7 @@ Non-goals for this sprint:
     - [x] Header/search/table/pagination duplication is reduced.
     - [x] No call CSS or call components are modified.
 
-19. [ ] `[non-call-module-extraction]` Move existing non-call features into modules.
+19. [x] `[non-call-module-extraction]` Move existing non-call features into modules.
 
     Scope:
     - Move Administration shell pages into `src/modules/administration`.
@@ -624,11 +624,11 @@ Non-goals for this sprint:
       clearly named shared workspace module.
 
     Done when:
-    - [ ] All listed non-call feature areas expose module descriptors.
-    - [ ] Existing route URLs still resolve.
-    - [ ] Existing role checks still apply.
-    - [ ] Navigation is generated from module metadata for these areas.
-    - [ ] No files under excluded call-related paths are edited.
+    - [x] All listed non-call feature areas expose module descriptors.
+    - [x] Existing route URLs still resolve.
+    - [x] Existing role checks still apply.
+    - [x] Navigation is generated from module metadata for these areas.
+    - [x] No files under excluded call-related paths are edited.
 
 20. [x] `[module-permissions-and-governance-link]` Wire modules to permissions and Governance.
 
