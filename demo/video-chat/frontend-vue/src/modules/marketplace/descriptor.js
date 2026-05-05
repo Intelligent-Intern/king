@@ -8,6 +8,7 @@ export default {
       name: 'admin-administration-marketplace',
       roles: ['admin'],
       pageTitle: 'Marketplace',
+      pageTitle_key: 'navigation.administration.marketplace',
       source_path: 'modules/marketplace/pages/AdminMarketplaceView.vue',
       loader: () => import('./pages/AdminMarketplaceView.vue'),
     },
