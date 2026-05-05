@@ -12,6 +12,7 @@ import {
   loadWorkspaceAppearance,
   themeColorsForId,
 } from './domain/workspace/appearance';
+import { syncI18nDocumentState } from './modules/localization/i18nRuntime.js';
 
 const THEME_PRESETS = {
   dark: {
@@ -177,6 +178,7 @@ function startBuildVersionGuard() {
 watchEffect(() => {
   applyTheme(sessionState.theme);
   applyTimeFormat(sessionState.timeFormat);
+  syncI18nDocumentState(sessionState.locale, sessionState.direction);
   applyWorkspaceBrandingDom();
 });
 

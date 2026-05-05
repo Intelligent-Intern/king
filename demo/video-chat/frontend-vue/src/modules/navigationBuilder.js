@@ -111,6 +111,7 @@ export function buildModuleRouteRecords(registry) {
         module_key: route.module_key,
         source_path: route.source_path,
         required_permissions: requiredPermissions,
+        i18nNamespaces: normalizeStringList(route.i18n_namespaces),
       },
     };
   });

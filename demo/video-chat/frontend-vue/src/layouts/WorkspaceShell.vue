@@ -697,6 +697,10 @@ import {
   localizationLanguageDirection,
   normalizeLocalizationLanguage,
 } from '../support/localizationOptions';
+import {
+  ensureI18nResources,
+  syncI18nDocumentState,
+} from '../modules/localization/i18nRuntime.js';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
   appearanceState,
@@ -732,7 +736,6 @@ const placeholderAvatar = '/assets/orgas/kingrt/avatar-placeholder.svg';
 const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
-const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const DEFAULT_SETTINGS_TILE = 'personal.about';
 
@@ -861,23 +864,6 @@ const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || p
 
 function normalizeSettingsLanguage(value) {
   return normalizeLocalizationLanguage(value);
-}
-
-function readStoredSettingsLanguage() {
-  if (typeof localStorage === 'undefined') return 'en';
-  return normalizeSettingsLanguage(localStorage.getItem(SETTINGS_LANGUAGE_STORAGE_KEY));
-}
-
-function storeSettingsLanguage(language) {
-  if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(SETTINGS_LANGUAGE_STORAGE_KEY, normalizeSettingsLanguage(language));
-}
-
-function applySettingsLanguage(language) {
-  if (typeof document === 'undefined') return;
-  const normalized = normalizeSettingsLanguage(language);
-  document.documentElement.lang = normalized;
-  document.documentElement.dir = localizationLanguageDirection(normalized);
 }
 
 function normalizePostLogoutLandingUrl(value) {
@@ -1897,7 +1883,7 @@ watch(
 );
 
 onMounted(() => {
-  applySettingsLanguage(sessionState.locale || readStoredSettingsLanguage());
+  syncI18nDocumentState(sessionState.locale, sessionState.direction);
   void loadWorkspaceAppearance({ force: true }).then(() => {
     resetSettingsDraft();
   });
@@ -1965,7 +1951,7 @@ function resetSettingsDraft() {
   settingsDraft.theme = normalizeWorkspaceThemeId(sessionState.theme || 'dark');
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
-  settingsDraft.language = normalizeSettingsLanguage(sessionState.locale || readStoredSettingsLanguage());
+  settingsDraft.language = normalizeSettingsLanguage(sessionState.locale || 'en');
   settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
 }
@@ -2130,8 +2116,9 @@ async function saveSettings() {
       return;
     }
 
-    storeSettingsLanguage(saveResult.user?.locale || language);
-    applySettingsLanguage(saveResult.user?.locale || language);
+    const savedLanguage = normalizeSettingsLanguage(saveResult.user?.locale || language);
+    await ensureI18nResources({ locale: savedLanguage, force: true });
+    syncI18nDocumentState(savedLanguage, sessionState.direction);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();

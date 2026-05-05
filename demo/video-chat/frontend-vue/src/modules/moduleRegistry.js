@@ -52,7 +52,11 @@ export function createModuleRegistry(descriptors = []) {
     },
     routes() {
       return modules.flatMap((descriptor) => (
-        descriptor.routes.map((route) => ({ ...route, module_key: descriptor.module_key }))
+        descriptor.routes.map((route) => ({
+          ...route,
+          module_key: descriptor.module_key,
+          i18n_namespaces: [...descriptor.i18n_namespaces],
+        }))
       ));
     },
     navigation() {
