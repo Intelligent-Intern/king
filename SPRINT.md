@@ -1,6 +1,6 @@
 # King Active Issues
 
-## Sprint: Video Chat Localization And RTL Foundation
+## Sprint: Video Chat Localization, RTL, And Modular Workspace Foundation
 
 Branch:
 - `feature/videochat-localization-sprint`
@@ -11,6 +11,28 @@ Base context:
 - Reference source for first supported locales:
   - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/*.json`
   - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/index.ts`
+- Reference source for the module architecture:
+  - `/home/jochen/projects/academy/intelligent-intern/services/app/src/modules/*/manifest.ts`
+  - `/home/jochen/projects/academy/intelligent-intern/services/api/src/modules/README.md`
+  - `/home/jochen/projects/academy/intelligent-intern/services/api/src/modules/_template/manifest.json`
+- Intelligent Intern modules are descriptor-based. King should follow that
+  descriptor contract instead of treating imported route files as the module
+  source of truth.
+
+Current execution boundary:
+- The module/refactor track in this sprint must not touch video-call runtime
+  code yet.
+- Excluded paths for the module/refactor track:
+  - `demo/video-chat/frontend-vue/src/domain/calls/**`
+  - `demo/video-chat/frontend-vue/src/domain/realtime/**`
+  - `demo/video-chat/frontend-vue/src/lib/sfu/**`
+  - `demo/video-chat/frontend-vue/src/lib/wasm/**`
+  - `demo/video-chat/frontend-vue/src/lib/wavelet/**`
+- Calendar booking, public call join, SFU, screen sharing, call management,
+  call dashboard, and call workspace stay outside the first module extraction.
+- Existing localization stories that mention call surfaces remain planned, but
+  they must not be used as permission to move or refactor call code in this
+  module wave.
 
 Initial supported languages:
 - Source inventory found these locale files:
@@ -44,6 +66,17 @@ Sprint goal:
 - Keep tenant isolation: localization resources may be platform-provided or
   tenant-overridden, but tenants must not read or mutate each other's language
   resources.
+- Add a modular workspace foundation so localization is not hard-wired into one
+  shell. Non-call workspace areas should move toward dynamically loaded modules
+  with reusable admin/settings/CRUD components.
+- Create a `modules` directory for the video-chat frontend, following the
+  Intelligent Intern descriptor pattern, and split existing non-call areas into
+  modules where they can be registered, loaded, and permission-gated
+  independently.
+- Add the King pipeline-orchestrator OO surface first. Backend module routes
+  will call normal HTTP routes, the route handler will publish a backend event
+  to the orchestrator, and the orchestrator will start the module pipeline.
+  We are not making every frontend action event-based.
 
 Non-goals for this sprint:
 - Machine translation generation.
@@ -52,6 +85,8 @@ Non-goals for this sprint:
 - Physical database-per-locale sharding.
 - Adding new business languages beyond the locale files found in the existing
   Intelligent Intern website source.
+- Moving or refactoring video-call runtime code during the first module wave.
+- Turning the module system into a plugin marketplace in this sprint.
 
 ## Architecture Decisions
 
@@ -121,6 +156,100 @@ Non-goals for this sprint:
   arrows, must mirror or swap under RTL.
 - Canvas/video content must not be mirrored accidentally. Screen sharing and
   camera video remain visually correct; only UI chrome mirrors.
+
+6. King pipeline orchestrator OO contract
+- The procedural orchestrator API already carries the native runtime:
+  `king_pipeline_orchestrator_run`, `dispatch`, `register_tool`,
+  `register_handler`, `worker_run_next`, `resume_run`, `get_run`, and
+  `cancel_run`.
+- Add an OO facade over the same native kernel before descriptor-driven backend
+  modules depend on it:
+  - `King\PipelineOrchestrator::run()`
+  - `King\PipelineOrchestrator::dispatch()`
+  - `King\PipelineOrchestrator::registerTool()`
+  - `King\PipelineOrchestrator::registerHandler()`
+  - `King\PipelineOrchestrator::configureLogging()`
+  - `King\PipelineOrchestrator::workerRunNext()`
+  - `King\PipelineOrchestrator::resumeRun()`
+  - `King\PipelineOrchestrator::getRun()`
+  - `King\PipelineOrchestrator::cancelRun()`
+- The OO surface is not a weaker userland wrapper. It must bind to the same
+  native orchestrator functions and preserve durable tool definitions,
+  process-local handler registration, file-worker, remote-peer, recovery, and
+  run-snapshot semantics.
+
+7. Descriptor-based backend module contract
+- Backend modules are descriptor-based.
+- A backend module descriptor defines:
+  - `module_key`
+  - `version`
+  - `permissions`
+  - `routes`
+  - `events`
+  - `pipelines`
+  - `tools`
+  - `handlers`
+  - `i18n_namespaces`
+  - optional `settings`
+- Routes remain the external ingress contract. A route is called over HTTP,
+  validates/authenticates normally, creates a normalized backend module event,
+  and submits the event to `King\PipelineOrchestrator`.
+- The backend event includes module key, route key, event name, actor/session
+  context, tenant context, request payload, query/path params, correlation ID,
+  and idempotency key when available.
+- The orchestrator starts the descriptor-selected pipeline as a backend module
+  run. Tool handlers are still registered per process and must fail closed when
+  a worker or remote peer cannot satisfy handler readiness.
+- We do not turn every frontend click/action into an event stream. The route is
+  the boundary; the backend emits one event for the accepted route command.
+
+8. Frontend module contract
+- Add `demo/video-chat/frontend-vue/src/modules`.
+- Each module lives under `src/modules/<module_key>` and exposes a descriptor.
+- The frontend descriptor follows the Intelligent Intern shape:
+  - `module_key`
+  - `version`
+  - `permissions`
+  - `routes` or `pages`
+  - `navigation`
+  - `settings_panels` when needed
+  - `i18n_namespaces`
+  - async component loaders
+- Module views/widgets must be loaded through descriptor-driven dynamic imports
+  such as `defineAsyncComponent` or route-level dynamic `import()`.
+- The core router/navigation/settings shell may read module descriptors, but it
+  must not directly import module view implementations.
+- Modules may import shared components and support helpers. Shared components
+  must not import feature modules.
+- Module keys are stable contracts and are used by permissions, localization
+  namespaces, navigation, and future marketplace/module administration.
+
+9. Non-call module split
+- First module extraction targets only non-call workspace areas:
+  - `administration`
+  - `governance`
+  - `users`
+  - `marketplace`
+  - `workspace_settings`
+  - `localization`
+  - `theme_editor`
+- The existing `domain/calls` and `domain/realtime` trees remain in place until
+  a separate call-specific module sprint is approved.
+- Moving a feature into a module must preserve route paths, permissions,
+  persisted settings, and public contracts.
+
+10. Reusable component contract
+- Build reusable UI components before copying screen-specific layouts:
+  - admin page frame
+  - CRUD table frame
+  - searchable toolbar
+  - pagination footer
+  - maximizable modal shell
+  - settings panel frame
+  - file upload/import preview frame
+- Feature modules consume these shared components instead of duplicating
+  header/table/modal/pagination code.
+- Shared components stay feature-neutral and below the 800-line target.
 
 ## Active Issues
 
@@ -372,17 +501,184 @@ Non-goals for this sprint:
     - [ ] Production health and deploy smoke pass.
     - [ ] Rollback notes identify which migration changes are additive.
 
+14. [x] `[king-pipeline-orchestrator-oo-surface]` Add the King OO orchestrator facade.
+
+    Scope:
+    - Add `King\PipelineOrchestrator` as a native OO facade over the existing
+      pipeline-orchestrator kernel.
+    - Mirror the current procedural surface with static methods:
+      `run`, `dispatch`, `registerTool`, `registerHandler`,
+      `configureLogging`, `workerRunNext`, `resumeRun`, `getRun`, and
+      `cancelRun`.
+    - Keep all current durability semantics: tool definitions are durable,
+      executable handlers are process-local, file-worker and remote-peer
+      execution must re-register handlers, and missing handler readiness fails
+      closed.
+    - Update stubs, docs, and PHPT proof.
+
+    Done when:
+    - [x] `class_exists(King\PipelineOrchestrator::class)` is true.
+    - [x] The OO methods map to the same native functions as the procedural
+      API.
+    - [x] OO `registerTool` + `registerHandler` + `run` can execute a local
+      userland-backed pipeline.
+    - [x] OO `getRun` reads the persisted run snapshot.
+    - [x] Procedural and OO signatures stay documented in `stubs/king.php`.
+
+15. [ ] `[backend-module-descriptor-runtime]` Add descriptor-based backend module routing to orchestrator.
+
+    Scope:
+    - Add backend module descriptors for non-call modules.
+    - Define descriptor fields for routes, events, pipelines, tools, handlers,
+      permissions, localization namespaces, and settings.
+    - Keep HTTP routes as the external contract.
+    - Route handler normalizes an accepted request into one backend module
+      event and submits the descriptor-selected pipeline through
+      `King\PipelineOrchestrator`.
+    - Do not make every frontend action event-based; events are emitted at the
+      backend route boundary.
+
+    Done when:
+    - [ ] A descriptor can define one route-to-event-to-pipeline mapping.
+    - [ ] The backend can resolve a route descriptor without direct hard-coded
+      module handler imports.
+    - [ ] Submitted orchestrator run snapshots include module key, route key,
+      event name, actor/session context, and correlation ID.
+    - [ ] Missing descriptor, unauthorized module, unknown tool, and missing
+      handler readiness fail closed with stable error codes.
+    - [ ] No call-related excluded paths are edited.
+
+16. [ ] `[module-inventory-and-boundaries]` Inventory non-call modules and shared component candidates.
+
+    Scope:
+    - Map current non-call frontend areas to target modules:
+      `administration`, `governance`, `users`, `marketplace`,
+      `workspace_settings`, `localization`, and `theme_editor`.
+    - Identify all current direct imports from router, navigation, shell, and
+      settings modal into non-call feature views.
+    - Identify repeated page patterns: header, create button, search, table,
+      pagination, modal, maximized modal, upload/import, settings panel.
+    - Confirm excluded call-related paths remain untouched for this module
+      wave.
+
+    Done when:
+    - [ ] Inventory lists every non-call feature area and its target module.
+    - [ ] Shared component candidate list exists with current source owners.
+    - [ ] Route and navigation compatibility map exists.
+    - [ ] Explicit no-touch list for call-related paths is included in the
+      execution checklist.
+
+17. [ ] `[frontend-module-runtime]` Add module registry and dynamic loading.
+
+    Scope:
+    - Add `src/modules` and a small module registry.
+    - Define a frontend module descriptor contract based on the Intelligent
+      Intern descriptor pattern.
+    - Support dynamic page/widget loading through descriptor loaders.
+    - Let router/navigation/settings consume registered module metadata.
+    - Keep existing routes stable while changing where route components are
+      loaded from.
+
+    Done when:
+    - [ ] Module descriptors can register routes, navigation entries,
+      permissions, settings panels, and i18n namespaces.
+    - [ ] Router can consume module routes without direct feature imports.
+    - [ ] Navigation can consume module navigation metadata.
+    - [ ] Settings can consume module settings-panel metadata.
+    - [ ] Build proves module dynamic imports are valid.
+
+18. [ ] `[shared-admin-components]` Extract reusable non-call UI building blocks.
+
+    Scope:
+    - Add shared components for admin page frame, searchable toolbar,
+      table/pagination frame, CRUD modal, maximizable modal shell, and settings
+      panel frame.
+    - Keep components feature-neutral and usable by governance, marketplace,
+      user management, localization administration, and theme administration.
+    - Move repeated CSS into shared admin/workspace CSS only where it is not
+      call-specific.
+
+    Done when:
+    - [ ] Governance CRUD and localization administration use the shared page
+      and table frames.
+    - [ ] Maximizable modal behavior is centralized.
+    - [ ] Header/search/table/pagination duplication is reduced.
+    - [ ] No call CSS or call components are modified.
+
+19. [ ] `[non-call-module-extraction]` Move existing non-call features into modules.
+
+    Scope:
+    - Move Administration shell pages into `src/modules/administration`.
+    - Move Governance CRUD scaffolding into `src/modules/governance`.
+    - Move User Management into `src/modules/users` after shared components
+      exist.
+    - Move Marketplace administration into `src/modules/marketplace`.
+    - Move Theme Editor and Localization Administration into module-owned
+      entries.
+    - Move personal Settings panels into `src/modules/workspace_settings` or a
+      clearly named shared workspace module.
+
+    Done when:
+    - [ ] All listed non-call feature areas expose module descriptors.
+    - [ ] Existing route URLs still resolve.
+    - [ ] Existing role checks still apply.
+    - [ ] Navigation is generated from module metadata for these areas.
+    - [ ] No files under excluded call-related paths are edited.
+
+20. [ ] `[module-permissions-and-governance-link]` Wire modules to permissions and Governance.
+
+    Scope:
+    - Define module keys for the new non-call modules.
+    - Add module metadata suitable for future group rights and time-limited
+      rights.
+    - Connect module availability to Governance module/permission concepts
+      without implementing the full tenancy permission engine in this story.
+    - Keep the contract ready for organization and group assignment.
+
+    Done when:
+    - [ ] Each non-call module has a stable key and permission namespace.
+    - [ ] Module metadata can be listed in Governance.
+    - [ ] Disabled modules do not appear in navigation.
+    - [ ] Unauthorized users cannot resolve module routes.
+    - [ ] Time-limited rights have an explicit metadata slot, even if full
+      enforcement is finished in the tenancy sprint.
+
+21. [ ] `[module-contract-tests-and-smoke]` Prove dynamic modules and non-call refactor.
+
+    Scope:
+    - Add tests or smoke checks for module descriptor registration.
+    - Add browser smoke for Administration, Governance, User Management,
+      Marketplace, Settings, Localization, and Theme Editor.
+    - Add a guard that module-refactor changes do not touch excluded call
+      paths.
+    - Keep localization and RTL proof compatible with module loading.
+
+    Done when:
+    - [ ] Build passes with dynamic module imports.
+    - [ ] Browser smoke proves non-call navigation and settings pages still
+      render.
+    - [ ] Route compatibility smoke covers old and new module-backed paths.
+    - [ ] Diff/path guard reports no edits to call-related excluded paths for
+      this module wave.
+
 ## Subagent Execution Plan
 
 Rules for all agents:
 - Work on `feature/videochat-localization-sprint`.
 - Do not push.
 - Keep write ownership disjoint.
-- Do not grow `CallWorkspaceView.vue`; extract into focused modules.
+- Do not grow `CallWorkspaceView.vue`. For this module/refactor wave, do not
+  edit it at all.
+- Later call-localization work must extract into focused modules instead of
+  adding code to `CallWorkspaceView.vue`, but that is outside the first
+  non-call module wave.
 - Keep source files below 800 lines where possible; if touching an oversized
   file, move code downward into helpers.
 - Use stable translation keys; do not use raw visible text as identifiers.
 - Preserve existing behavior and tenant isolation.
+- For the module/refactor track, do not edit video-call-related paths:
+  `src/domain/calls/**`, `src/domain/realtime/**`, `src/lib/sfu/**`,
+  `src/lib/wasm/**`, or `src/lib/wavelet/**`.
 
 Agent A: Backend schema, settings, and lookup
 - Owns:
@@ -416,37 +712,103 @@ Agent C: Frontend i18n runtime and settings language UI
 
 Agent D: Frontend string key conversion
 - Owns:
-  - admin/user/calls/calendar/tenant/settings child components and templates
+  - admin/user/tenant/settings child components and templates during the
+    non-call module wave
   - translation fallback seed files
 - Must not edit backend CSV/schema.
 - Must coordinate with Agent C key loader but can add keys.
+- Calls/calendar string conversion remains deferred until the call-related
+  paths are explicitly unblocked.
 
 Agent E: RTL layout and visual proof
 - Owns:
-  - CSS/layout files
+  - non-call CSS/layout files during the first module wave
   - direction-aware icon helpers
   - Playwright screenshots/smoke specs
 - Must not change translation storage.
 - Must prove RTL layout across desktop/tablet/mobile using at least `ar` and
   one of `fa`, `ps`, or `sgd`.
+- Must not edit call CSS/layout files in this wave.
 
 Agent F: Public pages, emails, and error mapping
 - Owns:
-  - public booking/join localization
-  - localized email template handling
+  - localized non-call email template handling first
   - API error-code to UI-message mapping
   - placeholder validation tests
 - Must coordinate with Agent A for locale lookup and with Agent D for keys.
+- Public booking/join localization is deferred until call-related paths are
+  explicitly unblocked.
+
+Agent G: Frontend module runtime and registry
+- Owns:
+  - new `demo/video-chat/frontend-vue/src/modules/registry*`
+  - new module descriptor contract helpers
+  - router/navigation/settings metadata integration
+- Must not edit non-registry feature pages except for import wiring.
+- Must not edit call-related excluded paths.
+
+Agent H: Shared non-call admin components
+- Owns:
+  - new shared admin/workspace components under
+    `demo/video-chat/frontend-vue/src/components`
+  - shared non-call admin CSS
+  - reusable modal/table/pagination/settings panel frames
+- Must not edit call CSS or call components.
+
+Agent I: Administration, localization, theme, and marketplace modules
+- Owns:
+  - `src/modules/administration`
+  - `src/modules/localization`
+  - `src/modules/theme_editor`
+  - `src/modules/marketplace`
+  - migration of existing non-call administration pages into module descriptors
+- Must preserve existing route URLs and admin-only access.
+
+Agent J: Governance and users modules
+- Owns:
+  - `src/modules/governance`
+  - `src/modules/users`
+  - migration of Governance CRUD and User Management into module descriptors
+  - module metadata for Governance module/permission listing
+- Must use shared admin components from Agent H where available.
+
+Agent K: Workspace settings module extraction
+- Owns:
+  - `src/modules/workspace_settings`
+  - personal settings panels: About Me, Credentials + E-Mail, Theme selection,
+    Localization selection
+  - settings-panel registration through module metadata
+- May touch `WorkspaceShell.vue` only for wiring/removal of direct panel
+  imports.
+- Must not change call workspace behavior.
+
+Agent L: King orchestrator OO and backend descriptor bridge
+- Owns:
+  - `extension/**` changes for `King\PipelineOrchestrator`
+  - `stubs/king.php` orchestrator OO declarations
+  - `documentation/11-pipeline-orchestrator-tools/README.md`
+  - new PHPT proof for the OO facade
+  - backend descriptor-to-orchestrator bridge scaffolding after the OO facade
+    is proven
+- Must not weaken procedural orchestrator semantics.
+- Must not edit call-related excluded paths in the module bridge work.
 
 Recommended order:
-1. Agent A defines schema/contracts and locale/session payload.
-2. Agent C builds frontend runtime against stub/fallback resources.
-3. Agent B adds CSV admin upload/import.
-4. Agent D converts strings by namespace.
-5. Agent F localizes public pages/emails/errors.
-6. Agent E runs RTL sweep and browser proof in parallel after C has direction
+1. Agent L adds and proves `King\PipelineOrchestrator`.
+2. Agent A defines schema/contracts and locale/session payload.
+3. Agent C builds frontend runtime against stub/fallback resources.
+4. Agent B adds CSV admin upload/import.
+5. Agent L adds backend descriptor-to-orchestrator bridge scaffolding.
+6. Agent G adds module registry and dynamic loading contract.
+7. Agent H extracts reusable non-call admin/settings components.
+8. Agents I, J, and K move non-call features into modules with disjoint write
+   scopes.
+9. Agent D converts strings by namespace, starting with module-backed non-call
+   surfaces.
+10. Agent F localizes public pages/emails/errors.
+11. Agent E runs RTL sweep and browser proof in parallel after C has direction
    plumbing.
-7. Integration owner runs full lint/build/contracts/browser smoke, resolves
+12. Integration owner runs full lint/build/contracts/browser smoke, resolves
    merge conflicts, and deploys only after green checks.
 
 ## Acceptance Bar
@@ -463,3 +825,15 @@ Recommended order:
 - Non-superadmin CSV upload is impossible.
 - Existing deployed single-language behavior remains usable while localization
   rolls out.
+- `King\PipelineOrchestrator` exists as an OO facade over the native
+  orchestrator kernel.
+- Backend module descriptors can map an accepted HTTP route to one orchestrator
+  event and pipeline run.
+- Non-call workspace areas are moving behind module descriptors in
+  `src/modules`.
+- Module-backed routes/navigation/settings load dynamically and keep existing
+  route URLs stable.
+- Reusable admin/settings/CRUD components replace duplicated non-call page
+  scaffolding.
+- The first module-refactor wave does not modify video-call-related excluded
+  paths.
