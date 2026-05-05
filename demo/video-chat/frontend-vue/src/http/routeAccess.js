@@ -60,17 +60,29 @@ export function sessionPermissionKeys(tenantPermissions = {}) {
   }
   if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_organizations === true) {
     output.add('governance.organizations.create');
+    output.add('governance.organizations.update');
+    output.add('governance.organizations.delete');
   }
   if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_groups === true) {
     output.add('governance.groups.create');
+    output.add('governance.groups.update');
+    output.add('governance.groups.delete');
   }
   if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_permission_grants === true) {
     output.add('governance.audit_log.export');
     output.add('governance.audit_log.read');
     output.add('governance.compliance.create');
+    output.add('governance.compliance.update');
+    output.add('governance.compliance.delete');
     output.add('governance.grants.create');
+    output.add('governance.grants.update');
+    output.add('governance.grants.delete');
     output.add('governance.policies.create');
+    output.add('governance.policies.update');
+    output.add('governance.policies.delete');
     output.add('governance.roles.create');
+    output.add('governance.roles.update');
+    output.add('governance.roles.delete');
   }
   if (tenantPermissions?.tenant_admin === true || tenantPermissions?.export_import === true) {
     output.add('governance.data_portability.export');

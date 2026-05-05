@@ -19,25 +19,26 @@
   >
     <template #body>
       <form id="governanceCrudForm" class="governance-form" autocomplete="off" @submit.prevent="$emit('submit')">
-        <label class="governance-field">
-          <span>{{ t('governance.name') }}</span>
-          <input v-model.trim="form.name" class="input" type="text" autocomplete="off" />
-        </label>
-        <label class="governance-field">
-          <span>{{ t('governance.key') }}</span>
-          <input v-model.trim="form.key" class="input" type="text" autocomplete="off" />
-        </label>
-        <label class="governance-field governance-field-wide">
-          <span>{{ t('governance.description') }}</span>
-          <textarea v-model.trim="form.description" class="input governance-textarea" rows="4"></textarea>
-        </label>
-        <label class="governance-field">
-          <span>{{ t('governance.status') }}</span>
-          <AppSelect v-model="form.status">
-            <option value="active">{{ t('governance.status_active') }}</option>
-            <option value="draft">{{ t('governance.status_draft') }}</option>
-            <option value="disabled">{{ t('governance.status_disabled') }}</option>
+        <label v-for="field in fields" :key="field.key" :class="fieldClass(field)">
+          <span>{{ fieldLabel(field) }}</span>
+          <textarea
+            v-if="field.type === 'textarea'"
+            v-model.trim="form[field.key]"
+            class="input governance-textarea"
+            rows="4"
+          ></textarea>
+          <AppSelect v-else-if="field.type === 'enum'" v-model="form[field.key]">
+            <option v-for="option in field.options || []" :key="option.value" :value="option.value">
+              {{ optionLabel(option) }}
+            </option>
           </AppSelect>
+          <input
+            v-else
+            v-model.trim="form[field.key]"
+            class="input"
+            :type="inputType(field)"
+            :autocomplete="field.autocomplete || 'off'"
+          />
         </label>
       </form>
       <p v-if="error" class="governance-form-error">{{ error }}</p>
@@ -74,6 +75,10 @@ defineProps({
     type: Object,
     required: true,
   },
+  fields: {
+    type: Array,
+    default: () => [],
+  },
   saving: {
     type: Boolean,
     default: false,
@@ -89,6 +94,27 @@ defineProps({
 });
 
 defineEmits(['close', 'submit', 'update:maximized']);
+
+function fieldLabel(field) {
+  const key = String(field?.label_key || '').trim();
+  return key !== '' ? t(key) : String(field?.key || '');
+}
+
+function optionLabel(option) {
+  const key = String(option?.label_key || '').trim();
+  return key !== '' ? t(key) : String(option?.label || option?.value || '');
+}
+
+function inputType(field) {
+  return String(field?.input_type || 'text').trim() || 'text';
+}
+
+function fieldClass(field) {
+  return {
+    'governance-field': true,
+    'governance-field-wide': field?.wide === true || field?.type === 'textarea',
+  };
+}
 </script>
 
 <style scoped>
