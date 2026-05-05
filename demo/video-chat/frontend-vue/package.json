@@ -35,6 +35,7 @@
     "test:e2e:online-sfu-hd": "node tests/e2e/online-sfu-hd-acceptance.mjs",
     "test:e2e:online-sfu-pressure": "node tests/e2e/online-sfu-pressure-acceptance.mjs",
     "test:e2e:production-socket-proxy-budget": "node tests/e2e/production-socket-proxy-budget.mjs",
+    "test:e2e:public-localization": "playwright test tests/e2e/public-localization.spec.js",
     "preview": "vite preview",
     "test:unit:native-audio-bridge": "node tests/unit/native-audio-bridge.test.mjs",
     "test:e2e": "playwright test",
