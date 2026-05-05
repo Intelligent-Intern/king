@@ -388,6 +388,9 @@ Sprint goal:
      endpoint for users, groups, organizations, roles, grants, policies, and
      data portability jobs; frontend persistence exposes the same one-call
      batch loader for relation-summary hydration.
+   - Summary cache now hydrates nested relationship summaries into their real
+     target entity cache and can collapse multi-entity missing ids into one
+     `/api/governance/summaries` request payload.
    - Remaining work: add batch summary endpoints and included summaries for
      any Administration entities that still do not have backend summary rows.
 
@@ -604,6 +607,8 @@ Sprint goal:
      contract remains blocked locally by missing `pdo_sqlite`.
    - Extended relation-stack and user-editor contracts for persisted async
      inline group creation from User Management instead of fake local drafts.
+   - Extended summary-cache contracts for nested relationship hydration and
+     multi-entity missing summary request collapse.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: batch summary loading and responsive/e2e modal stack
      proof.
@@ -654,6 +659,9 @@ Sprint goal:
     - Persisted inline group creation from User Management passes
       user-editor, relation-stack, and governance persistence contracts plus
       `npm run build`. Build still only reports the known large
+      `CallWorkspaceView` chunk warning.
+    - Summary-cache contract passes for nested relationship hydration and
+      multi-entity batch requests; frontend build remains green with the known
       `CallWorkspaceView` chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation

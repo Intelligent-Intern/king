@@ -22,11 +22,32 @@ assert.equal(summary.name, 'Core Team', 'summary must expose display label');
 
 cache.upsertRows('groups', [summary]);
 assert.equal(cache.getSummary('groups', 'group:core')?.name, 'Core Team', 'cache must return hydrated summaries');
+cache.upsertSummary('groups', {
+  id: 'group:members',
+  name: 'Member Group',
+  relationships: {
+    members: [
+      { entity_key: 'users', id: '7', name: 'Ada Member', key: 'ada@example.test', status: 'active' },
+    ],
+  },
+});
+assert.equal(cache.getSummary('users', '7')?.name, 'Ada Member', 'nested relationship summaries must hydrate the target entity cache');
 assert.deepEqual(cache.missingIds('groups', ['group:core', 'group:ops']), ['group:ops'], 'cache must detect missing ids only');
 assert.deepEqual(
   cache.buildBatchSummaryRequest('groups', ['group:core', 'group:ops']),
   { entity_key: 'groups', ids: ['group:ops'] },
   'batch summary requests must include only missing ids',
+);
+assert.deepEqual(
+  cache.buildBatchSummaryRequests([
+    { entity_key: 'groups', ids: ['group:core', 'group:ops'] },
+    { entity_key: 'users', ids: ['7', '8'] },
+  ]),
+  [
+    { entity_key: 'groups', ids: ['group:ops'] },
+    { entity_key: 'users', ids: ['8'] },
+  ],
+  'multi-entity batch summary requests must include only unresolved ids',
 );
 
 let fetchCalls = 0;
@@ -43,6 +64,26 @@ await cache.loadMissingSummaries('groups', ['group:core', 'group:ops'], async (r
 });
 assert.equal(fetchCalls, 1, 'missing summaries must be fetched in one batch');
 assert.equal(cache.getSummary('groups', 'group:ops')?.name, 'Operations', 'batch payload must hydrate included summaries');
+
+let multiFetchCalls = 0;
+const grouped = await cache.loadMissingSummaryRequests([
+  { entity_key: 'groups', ids: ['group:core', 'group:ops'] },
+  { entity_key: 'users', ids: ['7', '8'] },
+], async (request) => {
+  multiFetchCalls += 1;
+  assert.deepEqual(request, { requests: [{ entity_key: 'users', ids: ['8'] }] }, 'multi-entity fetch must collapse missing ids into one backend request');
+  return {
+    result: {
+      included: {
+        users: [
+          { id: '8', name: 'Grace Member', key: 'grace@example.test', status: 'active' },
+        ],
+      },
+    },
+  };
+});
+assert.equal(multiFetchCalls, 1, 'multi-entity missing summaries must use one batch call');
+assert.deepEqual(grouped.users.map((row) => row.id), ['7', '8'], 'multi-entity batch results must return hydrated summaries by entity');
 
 await cache.loadMissingSummaries('groups', ['group:core', 'group:ops'], async () => {
   throw new Error('already hydrated rows must not refetch');
