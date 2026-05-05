@@ -418,6 +418,8 @@ Non-goals for this sprint:
      runtime, settings, import UI, and translation-key coverage contracts.
    - [x] Shared modal shell default close/maximize/restore labels use
      localization keys.
+   - [x] Shared navigation and pagination default labels/aria labels use
+     localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
