@@ -157,6 +157,8 @@ function participantActivityScore(userId, nowMs = Date.now()) {
   if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 0;
   const entry = participantActivityByUserId[normalizedUserId];
   if (!entry || typeof entry !== 'object') return 0;
+  if (Number.isFinite(Number(entry.topkScore2s))) return Number(entry.topkScore2s);
+  if (Number.isFinite(Number(entry.topk_score_2s))) return Number(entry.topk_score_2s);
   if (Number.isFinite(Number(entry.score2s))) return Number(entry.score2s);
   if (Number.isFinite(Number(entry.score_2s))) return Number(entry.score_2s);
   if (Number.isFinite(Number(entry.score))) return Number(entry.score);
@@ -191,6 +193,9 @@ function applyParticipantActivityPayload(activity, participant = null) {
     score_2s: Number(activity?.score_2s ?? activity?.score2s ?? 0),
     score_5s: Number(activity?.score_5s ?? activity?.score5s ?? 0),
     score_15s: Number(activity?.score_15s ?? activity?.score15s ?? 0),
+    topk_score_2s: Number(activity?.topk_score_2s ?? activity?.topkScore2s ?? activity?.score_2s ?? activity?.score2s ?? 0),
+    topk_score_5s: Number(activity?.topk_score_5s ?? activity?.topkScore5s ?? activity?.score_5s ?? activity?.score5s ?? 0),
+    topk_score_15s: Number(activity?.topk_score_15s ?? activity?.topkScore15s ?? activity?.score_15s ?? activity?.score15s ?? 0),
     isSpeaking: Boolean(activity?.is_speaking ?? activity?.isSpeaking ?? false),
   };
 }

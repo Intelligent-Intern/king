@@ -26,12 +26,12 @@ function readFromRepo(relativePath) {
 }
 
 async function main() {
-  const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
-  const publisherPipeline = readFromFrontend('src/domain/realtime/local/publisherPipeline.js');
-  const publisherFrameTrace = readFromFrontend('src/domain/realtime/local/publisherFrameTrace.js');
+  const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.ts');
+  const publisherPipeline = readFromFrontend('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameTrace = readFromFrontend('src/domain/realtime/local/publisherFrameTrace.ts');
   const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
-  const sfuTransport = readFromFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = readFromFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuTransport = readFromFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = readFromFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   const framePayload = readFromFrontend('src/lib/sfu/framePayload.ts');
   const kingSfuStore = readFromRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
@@ -57,7 +57,7 @@ async function main() {
   });
 
   try {
-    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
+    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
     const budgets = config.SFU_VIDEO_QUALITY_PROFILE_BUDGETS;
 
     for (const profileId of ['rescue', 'realtime', 'balanced', 'quality']) {

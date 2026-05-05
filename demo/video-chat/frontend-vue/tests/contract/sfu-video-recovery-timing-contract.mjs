@@ -24,16 +24,16 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 
 try {
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
-  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
-  const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
-  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.ts');
+  const remotePeers = read('src/domain/realtime/sfu/remotePeers.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const template = read('src/domain/realtime/CallWorkspaceView.template.html');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');

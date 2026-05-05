@@ -23,9 +23,9 @@ function requireContains(source, needle, message) {
 async function main() {
   const sprint = readRepo('SPRINT.md');
   const packageJson = readFrontend('package.json');
-  const jitter = readFrontend('src/domain/realtime/sfu/remoteJitterBuffer.js');
-  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');
-  const remotePeers = readFrontend('src/domain/realtime/sfu/remotePeers.js');
+  const jitter = readFrontend('src/domain/realtime/sfu/remoteJitterBuffer.ts');
+  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.ts');
+  const remotePeers = readFrontend('src/domain/realtime/sfu/remotePeers.ts');
 
   requireContains(sprint, '5. [x] `[native-render-and-jitter-buffer]`', 'sprint issue 5 must be checked');
   requireContains(packageJson, 'sfu-receiver-jitter-buffer-contract.mjs', 'SFU contract script includes receiver jitter buffer');
@@ -40,7 +40,7 @@ async function main() {
   requireContains(frameDecode, "decodeSfuFrameForPeer(publisherId, peer, nextFrame, { fromJitterBuffer: true })", 'jitter drain re-enters decode without rebufferring');
   requireContains(remotePeers, 'remoteJitterBufferByTrack: {}', 'remote peer continuity state owns jitter buffers');
 
-  const jitterUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteJitterBuffer.js')).href;
+  const jitterUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteJitterBuffer.ts')).href;
   const module = await import(jitterUrl);
   const peer = {
     lastSfuFrameSequenceByTrack: { camera: 10 },

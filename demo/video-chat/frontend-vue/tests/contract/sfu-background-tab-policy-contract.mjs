@@ -22,9 +22,9 @@ function read(relativePath) {
 
 async function main() {
   const packageJson = read('package.json');
-  const foregroundReconnect = read('src/support/foregroundReconnect.js');
-  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.js');
-  const policy = read('src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.js');
+  const foregroundReconnect = read('src/support/foregroundReconnect.ts');
+  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
+  const policy = read('src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
 
   requireContains(packageJson, 'sfu-background-tab-policy-contract.mjs', 'SFU contract suite includes background-tab policy proof');
   requireContains(foregroundReconnect, 'backgroundContextFor', 'foreground helper passes structured background context');
@@ -33,7 +33,7 @@ async function main() {
   requireContains(foregroundReconnect, "handleBackground({ type: 'document_hidden' })", 'visibility hidden is explicit');
   requireContains(foregroundReconnect, "handleForeground({ type: 'document_visible' })", 'visibility foreground is explicit');
   requireContains(foregroundReconnect, "window.addEventListener('blur', handleBackground)", 'blur remains tracked for reconnect without necessarily pausing video');
-  requireContains(lifecycle, "import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.js';", 'lifecycle imports SFU background policy');
+  requireContains(lifecycle, "import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';", 'lifecycle imports SFU background policy');
   requireContains(lifecycle, 'sfuBackgroundTabPolicy.pauseVideoForBackground(context)', 'background event applies SFU video pause policy');
   requireContains(lifecycle, 'void sfuBackgroundTabPolicy.resumeVideoAfterForeground(context)', 'foreground event resumes SFU video publishing');
   requireContains(policy, 'pause_sfu_video_keep_audio_status', 'background policy documents audio/status fallback');
@@ -53,7 +53,7 @@ async function main() {
   });
 
   try {
-    const module = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.js');
+    const module = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/backgroundTabPolicy.ts');
     const diagnostics = [];
     const calls = {
       publish: 0,

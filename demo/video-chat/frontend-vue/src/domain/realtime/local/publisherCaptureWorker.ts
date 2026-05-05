@@ -1,8 +1,8 @@
-import { PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES } from './publisherCaptureWorkerProtocol.js';
+import { PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES } from './publisherCaptureWorkerProtocol.ts';
 import {
   normalizePublisherFramingTarget,
   resolveFramedFrameSizeFromDimensions,
-} from './videoFrameSizing.js';
+} from './videoFrameSizing.ts';
 
 let workerGeneration = 0;
 let captureCanvas = null;

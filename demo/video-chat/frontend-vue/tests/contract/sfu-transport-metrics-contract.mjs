@@ -72,8 +72,8 @@ try {
   requireContains(sfuClient, 'sfu_queue_age_budget_exceeded', 'sfu client enforces queue-age budget before send');
   requireContains(sfuClient, 'sfu_buffer_budget_exceeded', 'sfu client enforces websocket buffered budget before critical pressure');
 
-  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
   requireContains(sfuPublisherControl, "eventType: 'sfu_frame_send_failed'", 'workspace exact-stage send failure backend diagnostic');
   requireContains(sfuPublisherControl, 'transport_path: failureTransportPath', 'workspace failed frame send diagnostic includes transport path');
@@ -81,15 +81,15 @@ try {
   requireContains(sfuPublisherControl, 'stage: failureStage', 'workspace failed frame send diagnostic includes exact stage');
   requireContains(sfuPublisherControl, 'source: failureSource', 'workspace failed frame send diagnostic includes exact source');
 
-  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
-  const publisherFrameTrace = readFrontend('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameTrace = readFrontend('src/domain/realtime/local/publisherFrameTrace.ts');
   const publisherPathMetrics = `${publisherPipeline}\n${publisherFrameTrace}`;
   requireContains(publisherPathMetrics, 'draw_image_ms: drawImageMs', 'publisher records DOM draw timing');
   requireContains(publisherPathMetrics, 'readback_ms: readbackMs', 'publisher records canvas readback timing');
   requireContains(publisherPathMetrics, 'encode_ms: encodeMs', 'publisher records WLVC encode timing');
   requireContains(publisherPipeline, 'videoProfile.maxEncodedBytesPerFrame', 'publisher enforces profile encoded byte budget');
 
-  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');
+  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.ts');
   requireContains(frameDecode, 'sfu_receiver_render_sample', 'receiver records render latency sample');
   requireContains(frameDecode, 'receiver_render_latency_ms', 'receiver render sample includes render latency');
 

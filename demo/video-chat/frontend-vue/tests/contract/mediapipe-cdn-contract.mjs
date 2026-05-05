@@ -35,12 +35,12 @@ function assertNoJsdelivrAssetSource(source, label) {
 }
 
 try {
-  const backend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendMediapipe.js'));
+  const backend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendMediapipe.ts'));
   assertNoJsdelivrAssetSource(backend, 'MediaPipe backend');
   assert.ok(backend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'MediaPipe backend must support deploy-time CDN origin');
   assert.ok(backend.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'MediaPipe backend must use the vendored CDN path');
 
-  const tfjsBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendTfjs.js'));
+  const tfjsBackend = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/backendTfjs.ts'));
   assertNoJsdelivrAssetSource(tfjsBackend, 'TensorFlow fallback backend');
   assert.ok(tfjsBackend.includes('VITE_VIDEOCHAT_CDN_ORIGIN'), 'TensorFlow fallback backend must support deploy-time CDN origin');
   assert.ok(tfjsBackend.includes('/cdn/vendor/tensorflow/'), 'TensorFlow fallback backend must use the vendored CDN path');

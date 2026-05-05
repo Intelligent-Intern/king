@@ -20,13 +20,13 @@ function read(relativePath) {
 }
 
 async function main() {
-  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const publisherPipelineSendFailures = read('src/domain/realtime/local/publisherPipelineSendFailures.js');
+  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherPipelineSendFailures = read('src/domain/realtime/local/publisherPipelineSendFailures.ts');
   const publisherSendPath = `${publisherPipeline}\n${publisherPipelineSendFailures}`;
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
 
   requireContains(publisherBackpressureController, 'export const PUBLISHER_BACKPRESSURE_ACTIONS', 'central publisher action vocabulary');
   requireContains(publisherBackpressureController, 'export function decidePublisherBackpressureAction', 'pure publisher decision function');
