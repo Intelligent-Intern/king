@@ -395,6 +395,42 @@ assert_admin_session_payload() {
   '
 }
 
+assert_admin_localization_preview_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("localization CSV preview payload status is not ok");
+    }
+    $preview = $payload["result"]["preview"] ?? null;
+    if (!is_array($preview)) {
+        fail("localization CSV preview payload missing preview");
+    }
+    if (($preview["ok"] ?? null) !== true) {
+        fail("localization CSV preview did not pass validation");
+    }
+    if ((int) ($preview["valid_rows"] ?? 0) < 1) {
+        fail("localization CSV preview must include at least one valid row");
+    }
+    if ((int) ($preview["error_count"] ?? 0) !== 0) {
+        fail("localization CSV preview must not include validation errors");
+    }
+    $summary = is_array($preview["summary"] ?? null) ? $preview["summary"] : [];
+    $locales = is_array($summary["locales"] ?? null) ? $summary["locales"] : [];
+    $namespaces = is_array($summary["namespaces"] ?? null) ? $summary["namespaces"] : [];
+    if (!in_array("de", $locales, true)) {
+        fail("localization CSV preview missing de locale summary");
+    }
+    if (!in_array("deploy_smoke", $namespaces, true)) {
+        fail("localization CSV preview missing deploy_smoke namespace summary");
+    }
+  '
+}
+
 assert_admin_video_operations_payload() {
   php -r '
     function fail(string $message): void {
@@ -460,12 +496,25 @@ verify_admin_operations() {
       ;;
   esac
 
-  local token session_payload infrastructure_payload operations_payload
+  local token session_payload csv_preview_request csv_preview_payload infrastructure_payload operations_payload
   token="$(admin_session_token)"
   ADMIN_SMOKE_SESSION_TOKEN="${token}"
   session_payload="$(admin_get_json "admin session" "https://${DEPLOY_API_DOMAIN}/api/auth/session" "${token}")"
   printf '%s' "${session_payload}" | assert_admin_session_payload
   log "admin session: authenticated default locale payload verified"
+
+  csv_preview_request="$(
+    php -r '
+      echo json_encode([
+          "file_name" => "deploy-smoke-preview.csv",
+          "csv" => "locale,namespace,resource_key,value\n"
+              . "de,deploy_smoke,ready,Bereit\n",
+      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    '
+  )"
+  csv_preview_payload="$(admin_post_json "admin localization CSV preview" "https://${DEPLOY_API_DOMAIN}/api/admin/localization/imports/preview" "${token}" "${csv_preview_request}")"
+  printf '%s' "${csv_preview_payload}" | assert_admin_localization_preview_payload
+  log "admin localization CSV preview: superadmin preview verified without commit"
 
   infrastructure_payload="$(admin_get_json "admin infrastructure" "https://${DEPLOY_API_DOMAIN}/api/admin/infrastructure" "${token}")"
   printf '%s' "${infrastructure_payload}" | assert_admin_infrastructure_payload
@@ -498,6 +547,34 @@ admin_get_json() {
     sleep 1
   done
 
+  rm -f "${output}"
+  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
+}
+
+admin_post_json() {
+  local label="$1" url="$2" token="$3" payload="$4" output code attempt
+  output="$(mktemp)"
+  for attempt in $(seq 1 30); do
+    code="$(
+      curl -sS --max-time "${TIMEOUT}" \
+        -o "${output}" \
+        -w '%{http_code}' \
+        -X POST \
+        -H "authorization: Bearer ${token}" \
+        -H 'content-type: application/json' \
+        --data "${payload}" \
+        "${url}" || true
+    )"
+    if [[ "${code}" == "200" ]]; then
+      cat "${output}"
+      rm -f "${output}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
+  cat "${output}" >&2 || true
   rm -f "${output}"
   fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
 }

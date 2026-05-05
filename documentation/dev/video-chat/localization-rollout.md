@@ -43,6 +43,8 @@ After deploy:
   temporary smoke session is revoked after the protected checks.
   The smoke also verifies the authenticated session payload, default `en`
   locale, `ltr` direction, and seeded `en`, `de`, `ar`, and `sgd` locales.
+  It then runs a primary-superadmin localization CSV preview against
+  `/api/admin/localization/imports/preview` without committing imported rows.
 - Log in as an existing user and confirm the default locale is English.
 - Switch a test user to `de`, reload, and confirm Settings and navigation stay
   localized.
