@@ -2,7 +2,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  flex: 1 1 320px;
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  min-width: min(240px, 100%);
+  margin-inline-start: auto;
 }
 
 .marketplace-toolbar-search-btn {
