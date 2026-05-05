@@ -48,8 +48,8 @@
         <label class="settings-field">
           <span>{{ t('administration.encryption') }}</span>
           <AppSelect v-model="adminDraft.mail_smtp_encryption">
-            <option value="starttls">STARTTLS</option>
-            <option value="ssl">SSL/TLS</option>
+            <option value="starttls">{{ t('administration.encryption_starttls') }}</option>
+            <option value="ssl">{{ t('administration.encryption_ssl_tls') }}</option>
             <option value="none">{{ t('administration.encryption_none') }}</option>
           </AppSelect>
         </label>
@@ -86,7 +86,13 @@
       </header>
       <section class="settings-recipient-list">
         <div v-for="(recipient, index) in leadRecipients" :key="recipient.id" class="settings-recipient-row">
-          <input v-model.trim="recipient.email" class="input" type="email" placeholder="lead@example.com" autocomplete="email" />
+          <input
+            v-model.trim="recipient.email"
+            class="input"
+            type="email"
+            :placeholder="t('administration.lead_recipient_placeholder')"
+            autocomplete="email"
+          />
           <button
             class="icon-mini-btn danger"
             type="button"
