@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/tenancy/tenant_administration.php';
 require_once __DIR__ . '/../domain/tenancy/governance_group_memberships.php';
 require_once __DIR__ . '/../domain/tenancy/governance_organization_memberships.php';
+require_once __DIR__ . '/../domain/tenancy/governance_permission_grants.php';
 require_once __DIR__ . '/../domain/tenancy/tenant_portability.php';
 require_once __DIR__ . '/../support/auth_request.php';
 
@@ -152,6 +153,19 @@ function videochat_handle_governance_crud_routes(
             $apiAuthContext,
             $jsonResponse,
             $errorResponse,
+            $openDatabase
+        );
+    }
+
+    if (preg_match('#^/api/governance/grants(?:/([^/]+))?$#', $path, $grantMatches) === 1) {
+        return videochat_handle_governance_grant_routes(
+            $method,
+            isset($grantMatches[1]) ? rawurldecode((string) $grantMatches[1]) : '',
+            $request,
+            $apiAuthContext,
+            $jsonResponse,
+            $errorResponse,
+            $decodeJsonBody,
             $openDatabase
         );
     }

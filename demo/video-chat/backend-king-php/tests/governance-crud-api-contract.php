@@ -222,6 +222,39 @@ try {
         'field-only update should preserve group members'
     );
 
+    $createGrant = $dispatch('POST', '/api/governance/grants', $adminAuth, [
+        'name' => 'Contract Group Create Grant',
+        'subject_type' => 'group',
+        'valid_from' => gmdate('c', time() - 60),
+        'valid_until' => gmdate('c', time() + 3600),
+        'relationships' => [
+            'subject' => [
+                ['entity_key' => 'groups', 'id' => $createdGroupId],
+            ],
+            'permission' => [
+                ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.groups.create', 'key' => 'governance.groups.create'],
+            ],
+        ],
+    ]);
+    $createGrantPayload = videochat_governance_crud_decode($createGrant);
+    $createdGrant = (($createGrantPayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createGrant['status'] ?? 0) === 201, 'admin should create governance grant');
+    videochat_governance_crud_assert(is_array($createdGrant), 'created grant row missing');
+    videochat_governance_crud_assert(preg_match('/^[0-9a-f-]{36}$/', (string) ($createdGrant['id'] ?? '')) === 1, 'created grant should expose uuid id');
+    videochat_governance_crud_assert(!array_key_exists('database_id', $createdGrant), 'created grant must not expose internal database id');
+    videochat_governance_crud_assert((string) ($createdGrant['action'] ?? '') === 'create', 'created grant action mismatch');
+    videochat_governance_crud_assert((string) ($createdGrant['resource_type'] ?? '') === 'group', 'created grant resource type mismatch');
+    videochat_governance_crud_assert(
+        (string) (((($createdGrant['relationships'] ?? [])['subject'] ?? [])[0] ?? [])['id'] ?? '') === $createdGroupId,
+        'created grant response should include selected group subject'
+    );
+    $apiGrantedCreate = $dispatch('POST', '/api/governance/groups', $userAuth, [
+        'name' => 'API Granted Group',
+    ]);
+    videochat_governance_crud_assert((int) ($apiGrantedCreate['status'] ?? 0) === 201, 'API-created group grant should allow member to create group');
+    $deleteGrant = $dispatch('DELETE', '/api/governance/grants/' . rawurlencode((string) ($createdGrant['id'] ?? '')), $adminAuth);
+    videochat_governance_crud_assert((int) ($deleteGrant['status'] ?? 0) === 200, 'admin should delete governance grant');
+
     $clearMembers = $dispatch('PATCH', '/api/governance/groups/' . rawurlencode($createdGroupId), $adminAuth, [
         'name' => 'Contract Group Updated',
         'status' => 'archived',

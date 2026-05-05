@@ -404,8 +404,12 @@ Sprint goal:
      `organization_id` persistence path.
    - Organization user relations now create, preserve, and clear active
      `organization_memberships` through `relationships.users`.
-   - Remaining work: organization memberships, grants, policies, export/import
-     job APIs, and recursive relation mutations for modules/permissions.
+   - Added `/api/governance/grants` CRUD on top of tenant-scoped
+     `permission_grants`, with public UUIDs, label/description metadata,
+     subject/permission/resource relation summaries, and valid-from/until
+     windows that feed the existing permission evaluator.
+   - Remaining work: policies, export/import job APIs, and recursive relation
+     mutations for modules/permissions from group and role editors.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -507,6 +511,9 @@ Sprint goal:
     - Extended Governance CRUD API and persistence contracts for
       `/api/governance/users`, user summary normalization, persisted group
       members, invalid member validation, and clearing member relations.
+    - Extended Governance CRUD contracts for persisted grants, public grant
+      UUIDs, group-subject grants that allow member actions, and aggregate
+      subject/resource relation hydration.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

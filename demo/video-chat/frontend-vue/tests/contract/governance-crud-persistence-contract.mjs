@@ -18,6 +18,7 @@ async function source(relativePath) {
 
 assert.equal(isPersistedGovernanceEntity('groups'), true, 'groups must be treated as backend-backed');
 assert.equal(isPersistedGovernanceEntity('organizations'), true, 'organizations must be treated as backend-backed');
+assert.equal(isPersistedGovernanceEntity('grants'), true, 'grants must be treated as backend-backed');
 assert.equal(isPersistedGovernanceEntity('roles'), false, 'roles must remain local until their backend API exists');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.groups.endpoint, '/api/governance/groups', 'groups must target the governance backend endpoint');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.organizations.endpoint, '/api/governance/organizations', 'organizations must target the governance backend endpoint');
@@ -72,6 +73,9 @@ const viewSource = await source('src/modules/governance/pages/GovernanceCrudView
 assert.match(viewSource, /createGovernanceCrudPersistence/, 'governance CRUD view must use backend persistence');
 assert.match(viewSource, /loadPersistedRowsForEntity/, 'governance CRUD view must load backend-backed entities');
 assert.match(viewSource, /loadGovernanceUserRows/, 'governance CRUD view must hydrate user relation rows');
+assert.match(viewSource, /loadRowsForRelationTarget/, 'governance CRUD view must hydrate aggregate relation targets');
+assert.match(viewSource, /subjects'.*users.*groups.*organizations/s, 'subject pickers must hydrate users, groups, and organizations');
+assert.match(viewSource, /resources'.*groups.*organizations/s, 'resource pickers must hydrate persisted group and organization resources');
 assert.match(viewSource, /submitPersistedRow/, 'governance CRUD view must persist backend-backed create and update actions');
 assert.match(viewSource, /isPersistedGovernanceEntity\(key\)\)\s*return false/, 'relation drafts must not fake-create backend-backed entities locally');
 
