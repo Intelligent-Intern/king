@@ -555,7 +555,7 @@ Non-goals for this sprint:
    - [x] Browser smoke covers public booking in `en`, `de`, `ar`, and one
      additional RTL locale from the website source.
 
-10. [ ] `[locale-aware-formatting]` Centralize date, time, number, list, and sorting behavior.
+10. [x] `[locale-aware-formatting]` Centralize date, time, number, list, and sorting behavior.
 
     Scope:
     - Add frontend formatting helpers for date/time/number/list display.
@@ -587,9 +587,14 @@ Non-goals for this sprint:
       surfaces.
     - [x] User dashboard calendar buckets and appointment form rows use a
       deterministic date-time comparator instead of string `localeCompare`.
+    - [x] Realtime participant, lobby, typing, and layout fallback ordering now
+      use the shared locale-aware collation helper with document locale
+      fallback instead of pinning user-facing sorts to English.
+    - [x] Call workspace timestamp display now uses the shared localized
+      timestamp formatter instead of hard-coded `en-GB`.
 
     Done when:
-    - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
+    - [x] User-facing `localeCompare(..., 'en')` calls are replaced with active
       locale-aware helpers.
     - [x] Date/time formatting uses user locale plus existing time/date
       preferences.
