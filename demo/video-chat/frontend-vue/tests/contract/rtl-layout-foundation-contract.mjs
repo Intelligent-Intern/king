@@ -6,6 +6,7 @@ const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
 const logicalInlineSurfaces = [
   'src/styles/auth.css',
+  'src/styles/shell.css',
   'src/styles/settings.css',
   'src/styles/workspace-shared.css',
   'src/components/admin/AdminPageFrame.vue',
@@ -34,5 +35,10 @@ assert.match(sharedWorkspaceStyles, /text-align:\s*start/, 'shared table cells m
 assert.doesNotMatch(sharedWorkspaceStyles, /text-align:\s*left/, 'shared table cells must not pin left text alignment');
 assert.match(sharedWorkspaceStyles, /html\[dir="rtl"\]\s+\.pager-icon-img\s*\{[^}]*transform:\s*scaleX\(-1\)/s, 'pagination directional icons must mirror in RTL');
 assert.doesNotMatch(sharedWorkspaceStyles, /html\[dir="rtl"\][^{]*(canvas|video)/, 'RTL rules must not mirror canvas or video content');
+
+const shellStyles = await readFile(path.join(root, 'src/styles/shell.css'), 'utf8');
+assert.match(shellStyles, /inset-inline-start:\s*14px/, 'left sidebar overlay must use inline-start positioning');
+assert.match(shellStyles, /inset-inline-end:\s*14px/, 'right sidebar overlay must use inline-end positioning');
+assert.match(shellStyles, /border-inline-start:\s*1px solid var\(--border-subtle\)/, 'navigation submenu separator must use logical inline start');
 
 console.log('[rtl-layout-foundation-contract] PASS');
