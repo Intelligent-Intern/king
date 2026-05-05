@@ -37,9 +37,11 @@ dist/
 !packages/iibin/dist/
 !packages/iibin/dist/**
 .cache/
+.codex
 demo/video-chat/frontend-vue/.vite/
 demo/video-chat/frontend-vue/dist/
 demo/video-chat/frontend-vue/test-results/
+demo/video-chat/frontend-vue/test-results.root-owned/
 demo/video-chat/**/src/lib/wasm/build/
 
 # Local machine-specific environment overrides.
