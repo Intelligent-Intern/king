@@ -36,6 +36,11 @@ assert.doesNotMatch(sharedWorkspaceStyles, /text-align:\s*left/, 'shared table c
 assert.match(sharedWorkspaceStyles, /html\[dir="rtl"\]\s+\.pager-icon-img\s*\{[^}]*transform:\s*scaleX\(-1\)/s, 'pagination directional icons must mirror in RTL');
 assert.doesNotMatch(sharedWorkspaceStyles, /html\[dir="rtl"\][^{]*(canvas|video)/, 'RTL rules must not mirror canvas or video content');
 
+const callStageStyles = await readFile(path.join(root, 'src/domain/realtime/CallWorkspaceStage.css'), 'utf8');
+assert.match(callStageStyles, /\.video-container\.local\s+:deep\(video\)\s*\{[^}]*transform:\s*scaleX\(-1\)/s, 'only local self-preview video should be mirrored');
+assert.match(callStageStyles, /\.workspace-fullscreen-video-slot\s+:deep\(video\[data-call-local-preview="1"\]\)\s*\{[^}]*transform:\s*scaleX\(-1\)/s, 'fullscreen self-preview should keep the intentional mirror');
+assert.doesNotMatch(callStageStyles, /html\[dir="rtl"\][^{]*(canvas|video)/, 'call workspace RTL rules must not mirror remote canvas or video content');
+
 const shellStyles = await readFile(path.join(root, 'src/styles/shell.css'), 'utf8');
 assert.match(shellStyles, /inset-inline-start:\s*14px/, 'left sidebar overlay must use inline-start positioning');
 assert.match(shellStyles, /inset-inline-end:\s*14px/, 'right sidebar overlay must use inline-end positioning');
