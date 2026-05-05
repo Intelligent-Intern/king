@@ -20,8 +20,8 @@
 
 <script setup>
 import { ref } from 'vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
-import WorkspaceAdministrationSettings from '../../layouts/settings/WorkspaceAdministrationSettings.vue';
+import AppPageHeader from '../../../components/AppPageHeader.vue';
+import WorkspaceAdministrationSettings from '../../../layouts/settings/WorkspaceAdministrationSettings.vue';
 
 const administrationSettingsRef = ref(null);
 const saving = ref(false);

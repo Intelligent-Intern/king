@@ -10,9 +10,9 @@
 
 <script setup>
 import { ref } from 'vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
-import { sessionState } from '../../domain/auth/session';
-import WorkspaceThemeSettings from '../../layouts/settings/WorkspaceThemeSettings.vue';
+import AppPageHeader from '../../../components/AppPageHeader.vue';
+import { sessionState } from '../../../domain/auth/session';
+import WorkspaceThemeSettings from '../../../layouts/settings/WorkspaceThemeSettings.vue';
 
 const selectedTheme = ref(sessionState.theme || 'dark');
 </script>
