@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
+
 function videochat_handle_admin_user_account_routes(
     string $path,
     string $method,
@@ -41,6 +43,7 @@ function videochat_handle_admin_user_account_routes(
 
             try {
                 $pdo = $openDatabase();
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
                 $listing = videochat_admin_list_users(
                     $pdo,
                     (string) ($filters['query'] ?? ''),
@@ -48,7 +51,7 @@ function videochat_handle_admin_user_account_routes(
                     (int) ($filters['page_size'] ?? 10),
                     (string) ($filters['order'] ?? 'role_then_name_asc'),
                     (string) ($filters['status'] ?? 'all'),
-                    videochat_tenant_id_from_auth_context($apiAuthContext)
+                    $tenantId
                 );
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
@@ -59,6 +62,7 @@ function videochat_handle_admin_user_account_routes(
             }
 
             $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
+            $rows = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_role_rows($pdo, $tenantId, $rows) : $rows;
             $rows = array_map(
                 static function ($row) use ($actorUserId, $primaryAdminUserId) {
                     if (!is_array($row)) {
@@ -128,7 +132,25 @@ function videochat_handle_admin_user_account_routes(
 
         try {
             $pdo = $openDatabase();
-            $createResult = videochat_admin_create_user($pdo, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
+            $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+            $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+            $roleValidation = videochat_tenancy_governance_validate_user_roles($pdo, $tenantId, $payload);
+            if (!(bool) ($roleValidation['ok'] ?? false)) {
+                return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
+                    'fields' => is_array($roleValidation['errors'] ?? null) ? $roleValidation['errors'] : [],
+                ]);
+            }
+            $createResult = videochat_admin_create_user($pdo, $payload, $tenantId);
+            if ((bool) ($createResult['ok'] ?? false) && $tenantId > 0 && is_array($createResult['user'] ?? null)) {
+                $createdUserId = (int) (($createResult['user'] ?? [])['id'] ?? 0);
+                $roleSync = videochat_tenancy_governance_sync_user_roles($pdo, $tenantId, $createdUserId, $actorUserId, $payload);
+                if (!(bool) ($roleSync['ok'] ?? false)) {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
+                        'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
+                    ]);
+                }
+                $createResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $createResult['user']);
+            }
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
                 'reason' => 'internal_error',
@@ -155,12 +177,13 @@ function videochat_handle_admin_user_account_routes(
 
         return $jsonResponse(201, [
             'status' => 'ok',
-            'result' => [
-                'state' => 'created',
-                'user' => $createResult['user'] ?? null,
-            ],
-            'time' => gmdate('c'),
-        ]);
+                'result' => [
+                    'state' => 'created',
+                    'user' => $createResult['user'] ?? null,
+                    'row' => $createResult['user'] ?? null,
+                ],
+                'time' => gmdate('c'),
+            ]);
     }
 
     if (preg_match('#^/api/admin/users/(\d+)$#', $path, $matches) === 1) {
@@ -168,12 +191,14 @@ function videochat_handle_admin_user_account_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $user = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+                $user = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
                 if ($user === null) {
                     return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
                         'user_id' => $userId,
                     ]);
                 }
+                $user = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, $user) : $user;
 
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
@@ -188,6 +213,18 @@ function videochat_handle_admin_user_account_routes(
                 'status' => 'ok',
                 'result' => [
                     'user' => [
+                        ...$user,
+                        'is_self' => $permissions['is_self'],
+                        'is_primary_admin' => $permissions['is_primary_admin'],
+                        'permissions' => [
+                            'can_change_role' => $permissions['can_change_role'],
+                            'can_change_status' => $permissions['can_change_status'],
+                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
+                            'can_toggle_status' => $permissions['can_toggle_status'],
+                            'can_delete' => $permissions['can_delete'],
+                        ],
+                    ],
+                    'row' => [
                         ...$user,
                         'is_self' => $permissions['is_self'],
                         'is_primary_admin' => $permissions['is_primary_admin'],
@@ -214,8 +251,9 @@ function videochat_handle_admin_user_account_routes(
 
             try {
                 $pdo = $openDatabase();
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
-                $existingUser = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
+                $existingUser = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
                 if ($existingUser === null) {
                     return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
                         'user_id' => $userId,
@@ -285,7 +323,30 @@ function videochat_handle_admin_user_account_routes(
                     ]);
                 }
 
-                $updateResult = videochat_admin_update_user($pdo, $userId, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
+                if (videochat_tenancy_governance_user_payload_has_roles($payload) && $actorUserId > 0 && $actorUserId === $userId) {
+                    return $errorResponse(409, 'admin_user_conflict', 'You cannot change your own governance roles.', [
+                        'fields' => [
+                            'roles' => 'cannot_change_own_governance_roles',
+                        ],
+                    ]);
+                }
+                $roleValidation = videochat_tenancy_governance_validate_user_roles($pdo, $tenantId, $payload);
+                if (!(bool) ($roleValidation['ok'] ?? false)) {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                        'fields' => is_array($roleValidation['errors'] ?? null) ? $roleValidation['errors'] : [],
+                    ]);
+                }
+
+                $updateResult = videochat_admin_update_user($pdo, $userId, $payload, $tenantId);
+                if ((bool) ($updateResult['ok'] ?? false) && $tenantId > 0 && is_array($updateResult['user'] ?? null)) {
+                    $roleSync = videochat_tenancy_governance_sync_user_roles($pdo, $tenantId, $userId, $actorUserId, $payload);
+                    if (!(bool) ($roleSync['ok'] ?? false)) {
+                        return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                            'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
+                        ]);
+                    }
+                    $updateResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $updateResult['user']);
+                }
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
                     'reason' => 'internal_error',
@@ -320,6 +381,7 @@ function videochat_handle_admin_user_account_routes(
                 'result' => [
                     'state' => 'updated',
                     'user' => $updateResult['user'] ?? null,
+                    'row' => $updateResult['user'] ?? null,
                 ],
                 'time' => gmdate('c'),
             ]);
@@ -328,6 +390,7 @@ function videochat_handle_admin_user_account_routes(
         if ($method === 'DELETE') {
             try {
                 $pdo = $openDatabase();
+                $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 if ($actorUserId > 0 && $actorUserId === $userId) {
                     return $errorResponse(409, 'admin_user_conflict', 'You cannot delete your own account.', [
@@ -346,7 +409,10 @@ function videochat_handle_admin_user_account_routes(
                     ]);
                 }
 
-                $deleteResult = videochat_admin_delete_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
+                $deleteResult = videochat_admin_delete_user($pdo, $userId, $tenantId);
+                if ((bool) ($deleteResult['ok'] ?? false) && $tenantId > 0) {
+                    videochat_tenancy_governance_clear_user_roles($pdo, $tenantId, $userId);
+                }
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_delete_failed', 'Could not delete user.', [
                     'reason' => 'internal_error',
