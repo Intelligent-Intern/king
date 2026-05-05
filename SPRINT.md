@@ -526,6 +526,8 @@ Non-goals for this sprint:
     - [x] Module navigation/settings panel ordering uses a shared
       locale-aware collation helper, with the active session locale passed
       through the module access context.
+    - [x] Shared localized number and list display helpers cover LTR/RTL
+      examples and fallback behavior in the localization contract.
 
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
