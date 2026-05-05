@@ -248,6 +248,7 @@ function videochat_handle_governance_crud_routes(
                 $sourceRows = videochat_tenancy_governance_enrich_group_role_rows($pdo, $tenantId, $sourceRows);
             } elseif ($entity === 'organizations') {
                 $sourceRows = videochat_tenancy_governance_enrich_organization_rows($pdo, $tenantId, $sourceRows);
+                $sourceRows = videochat_tenancy_governance_enrich_organization_role_rows($pdo, $tenantId, $sourceRows);
             }
             $rows = videochat_tenancy_governance_public_rows($sourceRows);
 
@@ -284,6 +285,7 @@ function videochat_handle_governance_crud_routes(
                 $row = videochat_tenancy_governance_enrich_group_role_relationships($pdo, $tenantId, $row);
             } elseif ($entity === 'organizations') {
                 $row = videochat_tenancy_governance_enrich_organization_relationships($pdo, $tenantId, $row);
+                $row = videochat_tenancy_governance_enrich_organization_role_relationships($pdo, $tenantId, $row);
             }
             $publicRow = videochat_tenancy_governance_public_row($row);
 
@@ -329,6 +331,10 @@ function videochat_handle_governance_crud_routes(
                 $userValidation = videochat_tenancy_governance_validate_organization_users($pdo, $tenantId, $payload);
                 if (!(bool) ($userValidation['ok'] ?? false)) {
                     return videochat_tenancy_governance_validation_response($errorResponse, $userValidation);
+                }
+                $roleValidation = videochat_tenancy_governance_validate_organization_roles($pdo, $tenantId, $payload);
+                if (!(bool) ($roleValidation['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $roleValidation);
                 }
             }
             $result = videochat_tenancy_create_governance_entity($pdo, $entity, $tenantId, $actorUserId, $payload);
@@ -388,7 +394,18 @@ function videochat_handle_governance_crud_routes(
                 if (!(bool) ($syncResult['ok'] ?? false)) {
                     return videochat_tenancy_governance_validation_response($errorResponse, $syncResult);
                 }
+                $roleSyncResult = videochat_tenancy_governance_sync_organization_roles(
+                    $pdo,
+                    $tenantId,
+                    (int) ($savedRow['database_id'] ?? 0),
+                    $actorUserId,
+                    $payload
+                );
+                if (!(bool) ($roleSyncResult['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $roleSyncResult);
+                }
                 $savedRow = videochat_tenancy_governance_enrich_organization_relationships($pdo, $tenantId, $savedRow);
+                $savedRow = videochat_tenancy_governance_enrich_organization_role_relationships($pdo, $tenantId, $savedRow);
             }
             $row = videochat_tenancy_governance_public_row($savedRow);
 
@@ -466,6 +483,10 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($userValidation['ok'] ?? false)) {
                 return videochat_tenancy_governance_validation_response($errorResponse, $userValidation);
             }
+            $roleValidation = videochat_tenancy_governance_validate_organization_roles($pdo, $tenantId, $payload);
+            if (!(bool) ($roleValidation['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $roleValidation);
+            }
         }
         $result = videochat_tenancy_update_governance_entity($pdo, $entity, $tenantId, $identifier, $payload);
         if (!(bool) ($result['ok'] ?? false)) {
@@ -524,7 +545,18 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($syncResult['ok'] ?? false)) {
                 return videochat_tenancy_governance_validation_response($errorResponse, $syncResult);
             }
+            $roleSyncResult = videochat_tenancy_governance_sync_organization_roles(
+                $pdo,
+                $tenantId,
+                (int) ($savedRow['database_id'] ?? 0),
+                $actorUserId,
+                $payload
+            );
+            if (!(bool) ($roleSyncResult['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $roleSyncResult);
+            }
             $savedRow = videochat_tenancy_governance_enrich_organization_relationships($pdo, $tenantId, $savedRow);
+            $savedRow = videochat_tenancy_governance_enrich_organization_role_relationships($pdo, $tenantId, $savedRow);
         }
         $updatedRow = videochat_tenancy_governance_public_row($savedRow);
 

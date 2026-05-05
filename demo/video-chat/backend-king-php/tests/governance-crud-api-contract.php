@@ -368,6 +368,64 @@ try {
     $deletedRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_group_roles INNER JOIN \"groups\" ON \"groups\".id = governance_group_roles.group_id WHERE \"groups\".public_id = '{$createdGroupId}'")->fetchColumn();
     videochat_governance_crud_assert($deletedRoleAssignmentCount === 0, 'deleting role should remove group role assignments');
 
+    $createOrganizationRole = $dispatch('POST', '/api/governance/roles', $adminAuth, [
+        'name' => 'Contract Organization Role',
+        'key' => 'contract.organization.role',
+        'status' => 'active',
+        'relationships' => [
+            'permissions' => [
+                ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.groups.create', 'key' => 'governance.groups.create'],
+            ],
+        ],
+    ]);
+    $createOrganizationRolePayload = videochat_governance_crud_decode($createOrganizationRole);
+    $createdOrganizationRole = (($createOrganizationRolePayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createOrganizationRole['status'] ?? 0) === 201, 'admin should create organization governance role');
+    videochat_governance_crud_assert(is_array($createdOrganizationRole), 'created organization role row missing');
+    $createdOrganizationRoleId = (string) ($createdOrganizationRole['id'] ?? '');
+    $assignRoleToOrganization = $dispatch('PATCH', '/api/governance/organizations/' . rawurlencode($createdOrganizationId), $adminAuth, [
+        'name' => 'Contract Organization',
+        'status' => 'active',
+        'relationships' => [
+            'users' => [
+                ['entity_key' => 'users', 'id' => (string) $regularUserId],
+            ],
+            'roles' => [
+                ['entity_key' => 'roles', 'id' => $createdOrganizationRoleId],
+            ],
+        ],
+    ]);
+    $assignRoleToOrganizationPayload = videochat_governance_crud_decode($assignRoleToOrganization);
+    videochat_governance_crud_assert((int) ($assignRoleToOrganization['status'] ?? 0) === 200, 'admin should assign governance role to organization');
+    videochat_governance_crud_assert(
+        (string) (((((($assignRoleToOrganizationPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['roles'] ?? [])[0] ?? [])['id'] ?? '') === $createdOrganizationRoleId,
+        'updated organization response should include selected role summary'
+    );
+    $organizationRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_organization_roles INNER JOIN organizations ON organizations.id = governance_organization_roles.organization_id INNER JOIN governance_roles ON governance_roles.id = governance_organization_roles.role_id WHERE organizations.public_id = '{$createdOrganizationId}' AND governance_roles.public_id = '{$createdOrganizationRoleId}'")->fetchColumn();
+    videochat_governance_crud_assert($organizationRoleAssignmentCount === 1, 'organization role assignment should be persisted');
+    $organizationRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants INNER JOIN organizations ON organizations.id = permission_grants.organization_id WHERE organizations.public_id = '{$createdOrganizationId}' AND permission_grants.source = 'organization_roles' AND permission_grants.permission_key = 'governance.groups.create'")->fetchColumn();
+    videochat_governance_crud_assert($organizationRoleGrantCount === 1, 'organization role assignment should expand role permission into evaluator grants');
+    $organizationRoleGrantedCreate = $dispatch('POST', '/api/governance/groups', $userAuth, [
+        'name' => 'Organization Role Granted Group',
+    ]);
+    videochat_governance_crud_assert((int) ($organizationRoleGrantedCreate['status'] ?? 0) === 201, 'organization role permission relation should allow member group creation');
+    $clearOrganizationRole = $dispatch('PATCH', '/api/governance/roles/' . rawurlencode($createdOrganizationRoleId), $adminAuth, [
+        'name' => 'Contract Organization Role',
+        'key' => 'contract.organization.role',
+        'status' => 'active',
+        'relationships' => [
+            'permissions' => [],
+            'modules' => [],
+        ],
+    ]);
+    videochat_governance_crud_assert((int) ($clearOrganizationRole['status'] ?? 0) === 200, 'admin should clear organization role permissions');
+    $clearedOrganizationRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants INNER JOIN organizations ON organizations.id = permission_grants.organization_id WHERE organizations.public_id = '{$createdOrganizationId}' AND permission_grants.source = 'organization_roles'")->fetchColumn();
+    videochat_governance_crud_assert($clearedOrganizationRoleGrantCount === 0, 'clearing role permissions should remove organization role-sourced grants');
+    $deleteOrganizationRole = $dispatch('DELETE', '/api/governance/roles/' . rawurlencode($createdOrganizationRoleId), $adminAuth);
+    videochat_governance_crud_assert((int) ($deleteOrganizationRole['status'] ?? 0) === 200, 'admin should delete organization governance role');
+    $deletedOrganizationRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_organization_roles INNER JOIN organizations ON organizations.id = governance_organization_roles.organization_id WHERE organizations.public_id = '{$createdOrganizationId}'")->fetchColumn();
+    videochat_governance_crud_assert($deletedOrganizationRoleAssignmentCount === 0, 'deleting role should remove organization role assignments');
+
     $groupPermissionCreateOrganization = $dispatch('POST', '/api/governance/organizations', $userAuth, [
         'name' => 'Group Permission Organization',
     ]);

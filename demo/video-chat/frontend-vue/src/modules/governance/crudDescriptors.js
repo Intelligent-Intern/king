@@ -135,6 +135,7 @@ const descriptors = {
       relation('parent_organization', 'organizations', 'governance.relation.parent_organization'),
       relation('groups', 'groups', 'governance.relation.groups', { selection_mode: 'multiple' }),
       relation('users', 'users', 'governance.relation.users', { selection_mode: 'multiple' }),
+      relation('roles', 'roles', 'governance.relation.roles', { selection_mode: 'multiple' }),
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.organizations', 'organization'),
