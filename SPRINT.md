@@ -428,6 +428,10 @@ Non-goals for this sprint:
    - [x] Workspace shell non-call chrome strings and page titles now use
      localization keys, including settings/logout/sidebar actions and
      descriptor `pageTitle_key` metadata for module routes.
+   - [x] Translation-key coverage contract now includes the public goodbye
+     page, appointment settings modal, and shared call list table. Those
+     surfaces no longer carry static English labels, aria labels, titles, or
+     action text.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
