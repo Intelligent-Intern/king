@@ -2,6 +2,12 @@ import { t } from './i18nRuntime.js';
 
 export const API_ERROR_MESSAGE_KEYS = Object.freeze({
   auth_failed: 'errors.api.auth_failed',
+  appointment_slot_unavailable: 'errors.api.appointment_slot_unavailable',
+  call_access_conflict: 'errors.api.call_access_conflict',
+  call_access_expired: 'errors.api.call_access_expired',
+  call_access_forbidden: 'errors.api.call_access_forbidden',
+  call_access_not_found: 'errors.api.call_access_not_found',
+  call_access_validation_failed: 'errors.api.call_access_validation_failed',
   localization_bundle_fetch_failed: 'errors.api.localization_bundle_fetch_failed',
   localization_bundle_list_failed: 'errors.api.localization_bundle_list_failed',
   localization_bundle_not_found: 'errors.api.localization_bundle_not_found',

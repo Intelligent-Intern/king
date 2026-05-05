@@ -218,6 +218,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
+import { localizedApiErrorMessage } from '../../../modules/localization/apiErrorMessages.js';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import {
   applyCallBackgroundPreset as applyBackgroundPreset,
@@ -310,16 +311,6 @@ function admissionSocketUrlForOrigin(origin) {
   }
 
   return buildWebSocketUrl(origin, '/ws', query);
-}
-
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
-  }
-  return fallback;
 }
 
 function clearAdmissionReconnectTimer() {
@@ -638,7 +629,7 @@ async function loadJoinContext() {
   const accessId = normalizeAccessId(route.params.accessId);
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accessId)) {
     state.loadingContext = false;
-    state.contextError = 'Call access id is invalid.';
+    state.contextError = localizedApiErrorMessage({ error: { code: 'call_access_validation_failed' } }, 'Call access id is invalid.');
     return;
   }
 
@@ -651,7 +642,7 @@ async function loadJoinContext() {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
-      state.contextError = extractErrorMessage(payload, 'Could not resolve call access.');
+      state.contextError = localizedApiErrorMessage(payload, 'Could not resolve call access.');
       return;
     }
 

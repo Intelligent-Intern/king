@@ -1,6 +1,7 @@
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { normalizeDateTimeLocale } from '../../../support/dateTimeFormat.js';
+import { localizedApiErrorMessage } from '../../../modules/localization/apiErrorMessages.js';
 
 function requestHeaders(withBody = false, withAuth = true) {
   const headers = { accept: 'application/json' };
@@ -19,14 +20,8 @@ function requestHeaders(withBody = false, withAuth = true) {
 function extractErrorMessage(payload, fallback) {
   const fields = payload?.error?.details?.fields;
   const fieldMessage = formatValidationFields(fields);
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return fieldMessage === '' ? message.trim() : `${message.trim()} ${fieldMessage}`;
-    }
-  }
-
-  return fieldMessage === '' ? fallback : `${fallback} ${fieldMessage}`;
+  const message = localizedApiErrorMessage(payload, fallback);
+  return fieldMessage === '' ? message : `${message} ${fieldMessage}`;
 }
 
 function formatValidationFields(fields) {

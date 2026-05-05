@@ -53,6 +53,8 @@ const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8
 const i18nRuntimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
 const appointmentApiSource = await readFile(path.join(root, 'src/domain/calls/appointment/appointmentCalendarApi.js'), 'utf8');
 const appointmentBookingModalSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentBookingModal.vue'), 'utf8');
+const joinViewSource = await readFile(path.join(root, 'src/domain/calls/access/JoinView.vue'), 'utf8');
+const englishMessagesSource = await readFile(path.join(root, 'src/modules/localization/englishMessages.js'), 'utf8');
 assert.match(routerSource, /applyPublicRouteLocale\(to\)/, 'public routes must resolve locale before rendering');
 assert.match(routerSource, /public:\s*true,\s*i18nNamespaces:\s*\['public'\]/, 'public call routes must declare public i18n namespace');
 assert.match(routerSource, /public:\s*true[\s\S]*ensureI18nResources/, 'public route guard must load translations without requiring auth');
@@ -66,5 +68,17 @@ assert.match(appointmentBookingModalSource, /locale:\s*activeLocale\.value/, 'pu
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('locale',\s*locale\)/, 'FullCalendar must react to public locale changes');
 assert.match(appointmentBookingModalSource, /direction:\s*activeDirection\.value/, 'FullCalendar must initialize with active public text direction');
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('direction',\s*direction\)/, 'FullCalendar must react to public direction changes');
+assert.match(appointmentApiSource, /localizedApiErrorMessage\(payload,\s*fallback\)/, 'public appointment API errors must resolve through stable codes');
+assert.doesNotMatch(appointmentApiSource, /payload\?\.error\?\.message/, 'public appointment API must not display backend English error messages directly');
+assert.match(joinViewSource, /localizedApiErrorMessage\(payload,\s*'Could not resolve call access\.'\)/, 'public join access errors must resolve through stable codes');
+assert.doesNotMatch(joinViewSource, /payload\?\.error\?\.message/, 'public join view must not display backend English error messages directly');
+for (const key of [
+  'errors.api.call_access_expired',
+  'errors.api.call_access_not_found',
+  'errors.api.call_access_validation_failed',
+  'errors.api.appointment_slot_unavailable',
+]) {
+  assert.match(englishMessagesSource, new RegExp(`'${key}'`), `${key} must have an English fallback`);
+}
 
 console.log('[public-pages-localization-contract] PASS');
