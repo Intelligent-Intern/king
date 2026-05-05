@@ -9,6 +9,10 @@ import {
 } from '../domain/auth/session';
 import { workspaceModuleRouteRecords } from '../modules/index.js';
 import {
+  DEFAULT_I18N_NAMESPACES,
+  ensureI18nResources,
+} from '../modules/localization/i18nRuntime.js';
+import {
   routeAllowsRole,
   routeAllowsSessionAccess,
 } from './routeAccess.js';
@@ -101,6 +105,15 @@ const router = createRouter({
 
 export { routeAllowsRole, routeAllowsSessionAccess };
 
+function routeI18nNamespaces(route) {
+  const namespaces = [...DEFAULT_I18N_NAMESPACES];
+  for (const record of route.matched || []) {
+    const routeNamespaces = Array.isArray(record.meta?.i18nNamespaces) ? record.meta.i18nNamespaces : [];
+    namespaces.push(...routeNamespaces);
+  }
+  return [...new Set(namespaces)].sort();
+}
+
 export function resolveAuthorizedRedirect(target, role, routerInstance = router) {
   const fallback = defaultRouteForRole(role);
   const value = String(target || '').trim();
@@ -147,6 +160,13 @@ router.beforeEach(async (to) => {
 
   if (loggedIn && !routeAllowsSessionAccess(to, sessionState)) {
     return defaultRouteForRole(sessionState.role);
+  }
+
+  if (requiresAuth && loggedIn) {
+    await ensureI18nResources({
+      locale: sessionState.locale,
+      namespaces: routeI18nNamespaces(to),
+    });
   }
 
   return true;

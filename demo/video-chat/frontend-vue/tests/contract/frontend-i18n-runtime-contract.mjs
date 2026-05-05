@@ -73,9 +73,16 @@ try {
 }
 
 const runtimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
+const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8');
+const appSource = await readFile(path.join(root, 'src/App.vue'), 'utf8');
+const shellSource = await readFile(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
 assert.match(runtimeSource, /\/api\/localization\/resources/, 'runtime must load backend translation resources');
 assert.match(runtimeSource, /document\.documentElement\.lang/, 'runtime must apply document language');
 assert.match(runtimeSource, /document\.documentElement\.dir/, 'runtime must apply document direction');
 assert.match(runtimeSource, /fallback_resources/, 'runtime must consume backend fallback resources');
+assert.match(routerSource, /await ensureI18nResources/, 'router must load i18n resources before protected views render');
+assert.match(appSource, /syncI18nDocumentState\(sessionState\.locale, sessionState\.direction\)/, 'app shell must keep document lang and dir in sync');
+assert.match(shellSource, /ensureI18nResources\(\{ locale: savedLanguage, force: true \}\)/, 'settings save must refresh runtime translations');
+assert.doesNotMatch(shellSource, /ii_videocall_v1_workspace_language/, 'settings language must not persist a separate localStorage locale');
 
 console.log('[frontend-i18n-runtime-contract] PASS');
