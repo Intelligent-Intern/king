@@ -70,6 +70,20 @@ export function createCallWorkspaceMediaSecurityRuntime({
     return normalizedUserId;
   }
 
+  function mediaSecurityErrorCode(error) {
+    const code = String(error?.code || '').trim().toLowerCase();
+    if (code === 'participant_set_mismatch') return 'participant_set_mismatch';
+    if (code === 'downgrade_attempt') return 'downgrade_attempt';
+
+    const message = String(error?.message || error || '').trim().toLowerCase();
+    if (message.includes('participant_set_mismatch')) return 'participant_set_mismatch';
+    if (message.includes('downgrade_attempt') || message.includes('downgrade')) return 'downgrade_attempt';
+    if (message.includes('wrong_key_id')) return 'wrong_key_id';
+    if (message.includes('wrong_epoch')) return 'wrong_epoch';
+    if (message.includes('malformed_protected_frame')) return 'malformed_protected_frame';
+    return message;
+  }
+
   function remoteMediaSecurityEligibleTargetIds() {
     const seen = new Set();
     const userIds = [];
@@ -550,7 +564,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
     try {
       signal = await session.buildSenderKeySignal(normalizedTargetId);
     } catch (error) {
-      const errorCode = String(error?.message || '').trim().toLowerCase();
+      const errorCode = mediaSecurityErrorCode(error);
       if (errorCode === 'participant_set_mismatch') {
         const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
         state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedTargetId, session));
@@ -657,6 +671,28 @@ export function createCallWorkspaceMediaSecurityRuntime({
         await sendMediaSecuritySenderKey(targetUserId);
       }
     } catch (error) {
+      const errorCode = mediaSecurityErrorCode(error);
+      if (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt') {
+        clearMediaSecuritySignalCaches();
+        requestRoomSnapshot();
+        startMediaSecurityHandshakeWatchdog();
+        scheduleMediaSecurityParticipantSync('sync_participant_set_recover', errorCode === 'downgrade_attempt' || forceRekey);
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'media_security_participant_set_recover',
+          code: 'media_security_participant_set_recover',
+          message: 'Media security participant-set drift was detected and a fresh handshake was scheduled.',
+          payload: {
+            error_code: errorCode,
+            target_user_ids: remoteMediaSecurityTargetIds(),
+            eligible_target_user_ids: remoteMediaSecurityEligibleTargetIds(),
+            media_runtime_path: mediaRuntimePath.value,
+            security: mediaSecuritySessionRef.value?.telemetrySnapshot?.(currentMediaSecurityRuntimePath()) || null,
+          },
+        });
+        return;
+      }
       mediaDebugLog('[MediaSecurity] sync failed', error);
       captureClientDiagnosticError('media_security_sync_failed', error, {
         target_user_ids: remoteMediaSecurityTargetIds(),
@@ -678,11 +714,11 @@ export function createCallWorkspaceMediaSecurityRuntime({
   }
 
   function shouldRecoverMediaSecurityFromFrameError(error) {
-    const message = String(error?.message || error || '').trim().toLowerCase();
-    return message.includes('wrong_key_id')
-      || message.includes('wrong_epoch')
-      || message.includes('participant_set_mismatch')
-      || message.includes('downgrade_attempt');
+    const errorCode = mediaSecurityErrorCode(error);
+    return errorCode === 'wrong_key_id'
+      || errorCode === 'wrong_epoch'
+      || errorCode === 'participant_set_mismatch'
+      || errorCode === 'downgrade_attempt';
   }
 
   function isRemoteNativeFrameError(direction, senderUserId = 0) {
@@ -990,7 +1026,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       }
     } catch (error) {
       mediaDebugLog('[MediaSecurity] signaling failed', error);
-      const errorCode = String(error?.message || error || '').trim().toLowerCase();
+      const errorCode = mediaSecurityErrorCode(error);
       if (
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)

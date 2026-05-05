@@ -402,7 +402,7 @@ export class MediaSecuritySession {
       return true;
     }
     // Backward compatibility for older throw sites that only set message text.
-    return asString(error?.message || error).trim().toLowerCase() === 'participant_set_mismatch';
+    return asString(error?.message || error).trim().toLowerCase().includes('participant_set_mismatch');
   }
 
   async buildSenderKeySignal(targetUserId) {
@@ -483,7 +483,7 @@ export class MediaSecuritySession {
     if (payload.contract_name !== SESSION_CONTRACT_NAME || payload.contract_version !== CONTRACT_VERSION) return false;
     const payloadKexSuite = normalizeKexSuite(payload.kex_suite);
     if (payloadKexSuite === '' || payloadKexSuite !== keyContext.kexSuite || payload.media_suite !== MEDIA_SUITE) {
-      throw new Error('KEX/media suite downgrade attempt detected');
+      throw new Error('KEX/media suite downgrade attempt detected (downgrade_attempt)');
     }
     const participantSetHash = await this.participantHashForPeer(sender);
     const transcriptHash = await this.transcriptHashForPeer({

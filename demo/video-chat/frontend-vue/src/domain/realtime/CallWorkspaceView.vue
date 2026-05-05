@@ -649,6 +649,7 @@ const {
   applyGossipTopologyHint,
   bindGossipDataChannelForNativePeer,
   closeGossipDataChannelForNativePeer,
+  pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
 } = createCallWorkspaceGossipDataLane({
@@ -1514,6 +1515,7 @@ const {
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),
     mediaDebugLog,
     normalizeRoomId,
+    pruneGossipNeighborForUserId,
     redirectInvitedRouteToJoinModal,
     refreshUsersDirectory: (...args) => refreshUsersDirectory(...args),
     refreshUsersDirectoryPresentation: (...args) => refreshUsersDirectoryPresentation(...args),
@@ -2066,6 +2068,7 @@ registerCallWorkspaceLifecycleHelpers({
     reconfigureLocalBackgroundFilterOnly,
     reconfigureLocalTracksFromSelectedDevices,
     reconnectWorkspaceAfterForeground,
+    requestWlvcFullFrameKeyframe,
     refreshCallMediaDevices,
     resolveRouteCallRef,
     setActiveTab,

@@ -13,7 +13,6 @@ extension/autom4te.cache
 extension/build/profiles
 extension/modules
 !extension/modules/
-!extension/modules/king.so
 extension/tests/*.diff
 extension/tests/*.exp
 extension/tests/*.log
