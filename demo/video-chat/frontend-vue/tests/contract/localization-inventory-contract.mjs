@@ -53,6 +53,16 @@ assert.match(
   /same RTL metadata as the website runtime/,
   'inventory must record that app RTL metadata matches the website runtime',
 );
+assert.match(
+  inventory,
+  /Resolved non-call RTL pass/,
+  'inventory must document the resolved non-call RTL pass',
+);
+assert.match(
+  inventory,
+  /Remaining documented physical-coordinate cases/,
+  'inventory must document remaining physical-coordinate RTL cases',
+);
 assert.doesNotMatch(localizationOptions, /'ur'/, 'localization options must not list unsupported ur as RTL');
 assert.match(localizationOptions, /'sgd'/, 'localization options must mark sgd as RTL');
 

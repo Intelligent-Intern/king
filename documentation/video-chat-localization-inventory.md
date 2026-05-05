@@ -140,9 +140,11 @@ breaking clients that already key off error codes.
   `src/modules/users/pages/components/UsersTable.vue`, and
   `src/domain/realtime/workspace/utils.js` format dates with
   `Intl.DateTimeFormat('en-GB', ...)`.
-- `src/support/dateTimeFormat.js` contains manual date formats and one
-  locale-default weekday formatter; it needs to consume the selected locale.
-- `src/modules/navigationBuilder.js` sorts labels with default `localeCompare`.
+- `src/support/dateTimeFormat.js` contains manual date formats for existing
+  user date preferences plus locale-aware date-time and weekday display
+  helpers.
+- `src/modules/navigationBuilder.js` sorts labels through the shared
+  locale-aware collation helper.
 - Realtime participant ordering uses `localeCompare(..., 'en', ...)` in
   `src/domain/realtime/workspace/callWorkspace/roomState.js`,
   `src/domain/realtime/layout/strategies.js`, and
@@ -208,6 +210,25 @@ names, or directional ordering and need logical CSS or explicit RTL review:
 - Low-level/render helpers:
   `src/domain/realtime/background/backendTfjs.js`,
   `src/lib/wasm/wlvc.js`.
+
+Resolved non-call RTL pass:
+- Shared admin/table frames, marketplace/user admin table wrappers,
+  localization errors, auth split panes, settings theme previews, reusable theme
+  preview chrome, shared workspace table/list spacing, shell sidebar overlays,
+  navigation submenu indentation, and shared pagination direction icons now use
+  logical inline CSS or explicit `html[dir="rtl"]` mirroring.
+- Canvas and video content are intentionally not mirrored by the shared RTL
+  rules; remaining canvas/video review belongs to the call-specific RTL pass.
+
+Remaining documented physical-coordinate cases:
+- `src/styles/responsive.css` and `src/modules/users/pages/overview/OverviewView.vue`
+  still contain calendar/sidebar placement coordinates that need responsive
+  calendar proof before conversion.
+- `src/styles/settings.css` crop preview and `src/styles/workspace-shared.css`
+  hand-drawn icon offsets keep physical coordinates because they are geometric,
+  not text-flow direction.
+- `src/styles/call-settings.css`, public join/booking, call management,
+  dashboard, and realtime files remain open for the call-specific RTL pass.
 
 The live call surface is included in this inventory because strings and RTL
 risks must be known, but the current non-call module/refactor sprint must not
