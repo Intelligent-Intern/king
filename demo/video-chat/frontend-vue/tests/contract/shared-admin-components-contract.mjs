@@ -26,11 +26,13 @@ const workspaceStyles = await source('src/styles/workspace-shared.css');
 
 assert.match(pageFrame, /AppPageHeader/, 'shared admin page frame must own the page header');
 assert.match(pageFrame, /admin-page-frame-toolbar/, 'shared admin page frame must own toolbar layout');
+assert.doesNotMatch(pageFrame, /class="section admin-page-frame-head"/, 'admin page header must not inherit the generic surface section band');
 assert.match(pageFrame, /height:\s*100%;/, 'shared admin page frame must stay height-constrained');
 assert.match(pageFrame, /overflow:\s*hidden;/, 'shared admin page frame must keep table overflow inside child scrollers');
 assert.match(pageFrame, /\.admin-page-frame-head,[\s\S]*?\.admin-page-frame-toolbar[\s\S]*?background:\s*transparent;/, 'admin header and toolbar must sit on primary navy instead of a surface band');
 assert.match(pageFrame, /\.admin-page-frame-footer[\s\S]*?background:\s*transparent;/, 'admin footer must not create a surface band around pagination');
 assert.match(pageHeader, /\.app-page-header-actions[\s\S]*?margin-inline-start:\s*auto;[\s\S]*?justify-content:\s*flex-end;/, 'page header actions must stay right-aligned');
+assert.match(pageHeader, /\.app-page-header[\s\S]*?width:\s*100%;[\s\S]*?display:\s*flex;/, 'page header root must own full-width flex alignment');
 assert.match(pageHeader, /\.app-page-header-tour-btn[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/, 'tour button must match CRUD action button height');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
 assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');

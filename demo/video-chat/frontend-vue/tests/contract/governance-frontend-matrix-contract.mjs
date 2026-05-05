@@ -73,6 +73,7 @@ assert.ok(permissionRows.every((row) => row.readonly === true), 'permission cata
 assert.ok(permissionRows.every((row) => row.description_key === 'governance.catalog.permission_description'), 'permission rows must use keyed descriptions');
 
 const governanceCrudSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
+const governanceCrudStyles = await source('src/modules/governance/pages/GovernanceCrudView.css');
 const governanceToolbarSource = await source('src/modules/governance/components/GovernanceCrudToolbar.vue');
 const governanceEmptyStateSource = await source('src/modules/governance/components/GovernanceEmptyState.vue');
 assert.match(governanceCrudSource, /rowsByScope/, 'governance CRUD must keep route-scoped local rows isolated');
@@ -80,6 +81,8 @@ assert.match(governanceCrudSource, /routeActionsForContext/, 'governance CRUD mu
 assert.match(governanceCrudSource, /GovernanceCrudToolbar/, 'governance CRUD must use the standard toolbar component');
 assert.match(governanceCrudSource, /GovernanceEmptyState/, 'governance CRUD must render the standard empty state');
 assert.match(governanceCrudSource, /class="table-empty-row"/, 'governance empty placeholders must opt out of table hover styling');
+assert.match(governanceCrudStyles, /grid-template-columns:[\s\S]*minmax\(0,\s*1fr\)[\s\S]*48px;/, 'governance toolbar must reserve a flexible spacer before the send button');
+assert.match(governanceCrudStyles, /\.governance-toolbar-submit-btn[\s\S]*grid-column:\s*5;/, 'governance toolbar send button must sit in the far-right column');
 assert.match(governanceToolbarSource, /icons\/send\.png/, 'governance toolbar submit must use the shared send icon');
 assert.match(governanceToolbarSource, /governance\.filter\.all_status/, 'governance toolbar must expose status filtering');
 assert.match(governanceToolbarSource, /governance\.filter\.all_scope/, 'governance toolbar must expose scope filtering');

@@ -1,6 +1,6 @@
 <template>
   <section class="view-card admin-page-frame">
-    <AppPageHeader class="section admin-page-frame-head" :title="title">
+    <AppPageHeader class="admin-page-frame-head" :title="title">
       <template v-if="$slots.actions" #actions>
         <slot name="actions" />
       </template>

@@ -187,6 +187,18 @@ async function completeTour() {
 </script>
 
 <style scoped>
+.app-page-header {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  box-sizing: border-box;
+  padding: 12px 10px;
+  background: transparent;
+}
+
 .app-page-header-main {
   flex: 1 1 auto;
   min-width: 0;
