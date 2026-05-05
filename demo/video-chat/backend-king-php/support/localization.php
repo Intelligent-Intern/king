@@ -247,6 +247,33 @@ SQL,
 }
 
 /**
+ * @return array<int, string>
+ */
+function videochat_translation_import_history_migration_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS translation_imports (
+    id TEXT PRIMARY KEY,
+    tenant_id INTEGER REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    imported_by_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    file_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL CHECK (status IN ('committed', 'failed')),
+    row_count INTEGER NOT NULL DEFAULT 0,
+    error_count INTEGER NOT NULL DEFAULT 0,
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    errors_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    committed_at TEXT
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_translation_imports_created_at ON translation_imports(created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_translation_imports_actor ON translation_imports(imported_by_user_id, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_translation_imports_tenant ON translation_imports(tenant_id, created_at DESC)',
+    ];
+}
+
+/**
  * @return array<string, string>
  */
 function videochat_fetch_translation_resources(PDO $pdo, string $locale, ?int $tenantId = null, array $namespaces = []): array
