@@ -46,18 +46,13 @@ defineProps({
 }
 
 .admin-page-frame-head,
-.admin-page-frame-toolbar,
-.admin-page-frame-footer {
-  background: var(--bg-ui-chrome);
-}
-
-.admin-page-frame-head,
 .admin-page-frame-toolbar {
   display: flex;
   gap: 10px;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
+  background: transparent;
 }
 
 .admin-page-frame-toolbar {
@@ -69,5 +64,6 @@ defineProps({
   justify-content: center;
   margin-top: auto;
   padding-inline: 10px;
+  background: transparent;
 }
 </style>
