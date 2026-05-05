@@ -642,14 +642,27 @@ Non-goals for this sprint:
     - [x] Public-localization Playwright smoke covers public booking across
       desktop, tablet, and mobile viewports for `en`, `de`, `ar`, and `fa`,
       including document direction and horizontal overflow checks.
+    - [x] `test:e2e:localization-smoke` now combines public booking/join proof
+      with authenticated Settings/Admin localization proof. It switches the
+      Settings language from `en` to `ar`, verifies the modal flips to RTL
+      before saving, verifies the workspace flips to RTL immediately after
+      saving, and verifies the choice persists after reload.
+    - [x] Authenticated Admin localization smoke captures LTR/RTL screenshots
+      and checks desktop, tablet, and mobile viewport overflow without external
+      translation services.
+    - [x] Missing translation diagnostics no longer mutate reactive render
+      state, so incomplete locale bundles do not trigger Vue recursive update
+      loops while still preserving missing-key counters for tests/dev.
 
     Done when:
-    - [ ] Screenshots show no overlapping text in representative LTR and RTL
+    - [x] Screenshots show no overlapping text in representative LTR and RTL
       locales.
-    - [ ] RTL screenshots show sidebar/nav/modal direction flipped correctly.
-    - [ ] Settings switch persists after reload.
-    - [ ] Public booking and join pages render localized text.
-    - [ ] Smoke can run in CI/local without external translation services.
+    - [x] RTL screenshots show sidebar/nav/modal direction flipped correctly.
+    - [x] Settings switch persists after reload.
+    - [x] Public booking and join pages render localized text.
+    - [x] Smoke can run in CI/local without external translation services.
+    - [ ] Live call workspace UI shell smoke runs without requiring real camera
+      permission.
 
 13. [ ] `[deploy-and-rollout-proof]` Deploy localization safely.
 
