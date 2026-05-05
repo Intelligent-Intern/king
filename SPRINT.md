@@ -1532,7 +1532,8 @@ Non-goals for this sprint:
     - Added `localization-rollout-proof-contract.mjs` and included it in
       `npm run test:contract:localization`; it pins the rollout note, additive
       migration names, schema tables, `users.locale DEFAULT 'en'`, CSV
-      superadmin smoke, deploy-smoke references, and rollback language.
+      superadmin smoke, deploy-smoke references, temporary admin-session
+      cleanup through `/api/auth/logout`, and rollback language.
     - `npm run test:contract:localization` passes frontend/static contracts;
       backend SQLite contracts skip locally because this PHP runtime does not
       include `pdo_sqlite`.
@@ -1544,6 +1545,8 @@ Non-goals for this sprint:
       `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1 VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`.
       Covered HTTP to HTTPS redirect, frontend, CDN vendor assets, API health,
       admin auth boundary, API version, and lobby/SFU WebSocket routing.
+    - `deploy-smoke.sh` now revokes the temporary admin smoke login through
+      `/api/auth/logout` and keeps an exit-trap cleanup path for early failures.
     - `npm run test:e2e:localization-smoke` passes locally: public booking
       locale/direction, localized public join error, Settings language switch
       persistence with RTL flip, Admin Localization viewport stability across

@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VIDEOCHAT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 LOCAL_ENV_FILE="${VIDEOCHAT_DIR}/.env.local"
 TIMEOUT="${VIDEOCHAT_DEPLOY_SMOKE_TIMEOUT:-12}"
+ADMIN_SMOKE_SESSION_TOKEN=""
 
 log() {
   printf '[videochat-deploy-smoke] %s\n' "$*"
@@ -14,6 +15,40 @@ fail() {
   printf '[videochat-deploy-smoke] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+admin_logout_session() {
+  local token="$1" output code
+  [[ -n "${token}" ]] || return 0
+
+  output="$(mktemp)"
+  code="$(
+    curl -sS --max-time "${TIMEOUT}" \
+      -o "${output}" \
+      -w '%{http_code}' \
+      -X POST \
+      -H "authorization: Bearer ${token}" \
+      "https://${DEPLOY_API_DOMAIN}/api/auth/logout" || true
+  )"
+  if [[ "${code}" != "200" ]]; then
+    printf '[videochat-deploy-smoke] admin session cleanup response body:\n' >&2
+    cat "${output}" >&2 || true
+    rm -f "${output}"
+    return 1
+  fi
+
+  rm -f "${output}"
+  log "admin session cleanup: HTTP ${code}"
+}
+
+cleanup_admin_session() {
+  local token="${ADMIN_SMOKE_SESSION_TOKEN:-}"
+  [[ -n "${token}" ]] || return 0
+
+  ADMIN_SMOKE_SESSION_TOKEN=""
+  admin_logout_session "${token}" || log "admin session cleanup failed; smoke session may expire by TTL"
+}
+
+trap cleanup_admin_session EXIT
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
@@ -378,6 +413,7 @@ verify_admin_operations() {
 
   local token infrastructure_payload operations_payload
   token="$(admin_session_token)"
+  ADMIN_SMOKE_SESSION_TOKEN="${token}"
   infrastructure_payload="$(admin_get_json "admin infrastructure" "https://${DEPLOY_API_DOMAIN}/api/admin/infrastructure" "${token}")"
   printf '%s' "${infrastructure_payload}" | assert_admin_infrastructure_payload
   log "admin infrastructure: provider-neutral safe payload verified"
@@ -385,6 +421,9 @@ verify_admin_operations() {
   operations_payload="$(admin_get_json "admin video operations" "https://${DEPLOY_API_DOMAIN}/api/admin/video-operations" "${token}")"
   printf '%s' "${operations_payload}" | assert_admin_video_operations_payload
   log "admin video operations: realtime safe payload verified"
+
+  admin_logout_session "${token}" || fail "admin session cleanup failed"
+  ADMIN_SMOKE_SESSION_TOKEN=""
 }
 
 admin_get_json() {

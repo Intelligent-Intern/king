@@ -13,6 +13,7 @@ const rollout = await source('documentation/dev/video-chat/localization-rollout.
 const migrations = await source('demo/video-chat/backend-king-php/support/localization.php');
 const migrationRegistry = await source('demo/video-chat/backend-king-php/support/database_migrations.php');
 const packageJson = await source('demo/video-chat/frontend-vue/package.json');
+const deploySmoke = await source('demo/video-chat/scripts/deploy-smoke.sh');
 
 for (const requiredText of [
   'npm run test:contract:localization',
@@ -33,6 +34,8 @@ for (const requiredText of [
   'sgd',
   'user_id = 1',
   'CSV',
+  '/api/auth/logout',
+  'temporary smoke session is revoked',
   'additive',
   'code-first',
 ]) {
@@ -49,5 +52,9 @@ assert.match(migrations, /UPDATE users\s+SET locale = 'en'/, 'migration must bac
 assert.match(migrations, /CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_resources_scope_key/, 'translation resource uniqueness must be idempotent');
 assert.match(packageJson, /test:e2e:localization-smoke/, 'package scripts must expose localization smoke proof');
 assert.match(packageJson, /test:contract:localization/, 'package scripts must expose localization contract proof');
+assert.match(deploySmoke, /ADMIN_SMOKE_SESSION_TOKEN/, 'deploy smoke must track temporary admin session for cleanup');
+assert.match(deploySmoke, /trap cleanup_admin_session EXIT/, 'deploy smoke must cleanup admin session on early exit');
+assert.match(deploySmoke, /\/api\/auth\/logout/, 'deploy smoke must revoke the temporary admin session');
+assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 
 console.log('[localization-rollout-proof-contract] PASS');
