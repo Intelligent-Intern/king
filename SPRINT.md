@@ -630,7 +630,7 @@ Non-goals for this sprint:
     - [ ] Navigation is generated from module metadata for these areas.
     - [ ] No files under excluded call-related paths are edited.
 
-20. [ ] `[module-permissions-and-governance-link]` Wire modules to permissions and Governance.
+20. [x] `[module-permissions-and-governance-link]` Wire modules to permissions and Governance.
 
     Scope:
     - Define module keys for the new non-call modules.
@@ -644,7 +644,7 @@ Non-goals for this sprint:
     - [x] Each non-call module has a stable key and permission namespace.
     - [x] Module metadata can be listed in Governance.
     - [x] Disabled modules do not appear in navigation.
-    - [ ] Unauthorized users cannot resolve module routes.
+    - [x] Unauthorized users cannot resolve module routes.
     - [x] Time-limited rights have an explicit metadata slot, even if full
       enforcement is finished in the tenancy sprint.
 
