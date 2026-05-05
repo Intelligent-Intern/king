@@ -310,7 +310,7 @@ async function createGovernanceGroupThroughNestedRelations(page, label) {
   await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).click();
   await expect(relationDialog).toBeVisible();
   await expectModalInsideViewport(page, relationDialog);
-  await relationDialog.getByRole('button', { name: 'Cancel' }).click();
+  await relationDialog.getByRole('button', { name: 'Close' }).click();
   await expect(crudDialog.locator('.crud-relation-stack').filter({ visible: true })).toHaveCount(0);
   await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).filter({ hasText: '1 selected' })).toHaveCount(0);
 

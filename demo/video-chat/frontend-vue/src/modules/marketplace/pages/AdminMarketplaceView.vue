@@ -105,7 +105,6 @@
       </template>
 
       <template #footer>
-        <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">{{ t('common.cancel') }}</button>
         <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="submitForm">
           {{ dialogSubmitLabel }}
         </button>

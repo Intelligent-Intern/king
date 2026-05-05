@@ -62,7 +62,6 @@
     </template>
 
     <template #footer v-if="!relationActive">
-      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn btn-cyan" type="submit" form="governanceCrudForm" :disabled="saving">
         {{ saving ? t('settings.saving') : submitLabel }}
       </button>

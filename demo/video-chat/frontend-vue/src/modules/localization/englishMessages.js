@@ -530,6 +530,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'theme_settings.chat_prompt': 'Design request',
   'theme_settings.chat_prompt_applied': 'Theme request applied to the preview.',
   'theme_settings.chat_prompt_required': 'Enter a design request first.',
+  'theme_settings.close_editor': 'Close editor',
   'theme_settings.color.action': 'Action',
   'theme_settings.color.action_hover': 'Action hover',
   'theme_settings.color.border_subtle': 'Border subtle',

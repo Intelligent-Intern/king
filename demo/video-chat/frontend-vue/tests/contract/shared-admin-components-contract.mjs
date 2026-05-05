@@ -22,6 +22,8 @@ const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarket
 const marketplaceStyles = await source('src/modules/marketplace/pages/AdminMarketplaceView.css');
 const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
+const relationStack = await source('src/modules/governance/components/CrudRelationStack.vue');
+const themeSettings = await source('src/layouts/settings/WorkspaceThemeSettings.vue');
 const modalShell = await source('src/components/AppModalShell.vue');
 const sidePanelShell = await source('src/components/AppSidePanelShell.vue');
 const responsiveStyles = await source('src/styles/responsive.css');
@@ -76,6 +78,17 @@ assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature panel must not h
 assert.match(users, /AdminUserEditorModal/, 'user management must keep the extracted user editor component');
 assert.match(marketplace, /AppSidePanelShell/, 'marketplace CRUD form must use the shared right side panel shell');
 assert.doesNotMatch(marketplace, /marketplace-modal/, 'marketplace CRUD form must not keep the old centered modal markup');
+for (const [name, file] of [
+  ['GovernanceCrudModal', governanceModal],
+  ['CrudRelationStack', relationStack],
+  ['AdminMarketplaceView', marketplace],
+  ['WorkspaceThemeSettings', themeSettings],
+]) {
+  assert.doesNotMatch(file, /common\.cancel/, `${name} must not render generic Cancel buttons in admin workflows`);
+  assert.doesNotMatch(file, />\s*Cancel\s*</, `${name} must not render visible Cancel text in admin workflows`);
+}
+assert.match(relationStack, /governance\.relation_picker\.close/, 'relation picker must use a neutral close label instead of generic cancel');
+assert.match(themeSettings, /theme_settings\.close_editor/, 'theme editor must use a neutral close editor label instead of generic cancel');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
 assert.match(sidePanelShell, /\.app-side-panel[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/, 'CRUD side panels must be anchored to the right edge');

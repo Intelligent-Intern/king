@@ -54,7 +54,7 @@
         </label>
         <p v-if="draftError" class="crud-relation-error">{{ draftError }}</p>
         <div class="crud-relation-create-actions">
-          <button class="btn" type="button" @click="creatingDraft = false">{{ t('common.cancel') }}</button>
+          <button class="btn" type="button" @click="creatingDraft = false">{{ t('governance.relation_picker.close_create') }}</button>
           <button class="btn btn-cyan" type="submit" :disabled="draftSaving">
             {{ draftSaving ? t('common.saving') : t('governance.relation_picker.save_draft') }}
           </button>
@@ -124,7 +124,7 @@
       <button v-if="navigator.stack.value.length > 1" class="btn" type="button" @click="returnToParent">
         {{ t('governance.relation_picker.back') }}
       </button>
-      <button class="btn" type="button" @click="$emit('close')">{{ t('common.cancel') }}</button>
+      <button class="btn" type="button" @click="$emit('close')">{{ t('governance.relation_picker.close') }}</button>
       <button class="btn btn-cyan" type="button" @click="applySelection">
         {{ t('governance.relation_picker.apply') }}
       </button>
