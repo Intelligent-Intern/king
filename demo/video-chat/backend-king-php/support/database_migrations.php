@@ -804,5 +804,15 @@ SQL,
             'name' => '0031_translation_import_history',
             'statements' => videochat_translation_import_history_migration_statements(),
         ],
+        32 => [
+            'name' => '0032_user_profile_social_fields',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN about_me TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN linkedin_url TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN x_url TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN youtube_url TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE users ADD COLUMN messenger_contacts_json TEXT NOT NULL DEFAULT '[]'",
+            ],
+        ],
     ] + videochat_sqlite_tenant_migrations();
 }
