@@ -408,8 +408,11 @@ Sprint goal:
      `permission_grants`, with public UUIDs, label/description metadata,
      subject/permission/resource relation summaries, and valid-from/until
      windows that feed the existing permission evaluator.
-   - Remaining work: policies, export/import job APIs, and recursive relation
-     mutations for modules/permissions from group and role editors.
+   - Group `relationships.permissions` now syncs selected permissions into
+     `permission_grants` with `source = group_permissions`, while preserving
+     manually created grants from the Grants CRUD.
+   - Remaining work: policies, export/import job APIs, module relation
+     expansion, and recursive permission mutations from role editors.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.

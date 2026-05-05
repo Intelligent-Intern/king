@@ -341,16 +341,207 @@ SQL,
     return $summaries;
 }
 
+function videochat_tenancy_governance_group_payload_has_permissions(array $payload): bool
+{
+    $relationships = is_array($payload['relationships'] ?? null) ? $payload['relationships'] : [];
+    return array_key_exists('permissions', $relationships) || array_key_exists('permissions', $payload);
+}
+
+function videochat_tenancy_governance_group_permission_key(array $row): string
+{
+    foreach (['key', 'id', 'name', 'value'] as $key) {
+        $value = trim((string) ($row[$key] ?? ''));
+        if ($value === '') {
+            continue;
+        }
+        if (str_starts_with($value, 'permission:')) {
+            $parts = explode(':', $value);
+            return trim((string) end($parts));
+        }
+        return $value;
+    }
+
+    return '';
+}
+
+function videochat_tenancy_governance_group_permission_data(array $row): array
+{
+    $permissionKey = videochat_tenancy_governance_group_permission_key($row);
+    $parts = array_values(array_filter(explode('.', $permissionKey), static fn (string $part): bool => trim($part) !== ''));
+    $action = $parts !== [] ? videochat_tenancy_normalize_grant_action((string) end($parts)) : '';
+    if ($permissionKey === '' || $action === '') {
+        return ['ok' => false, 'permission_key' => $permissionKey, 'errors' => ['permissions' => 'invalid_permission']];
+    }
+    $resourceSegment = count($parts) >= 2 ? (string) $parts[count($parts) - 2] : 'workspace';
+    $resourceType = match (strtolower(trim(str_replace('-', '_', $resourceSegment)))) {
+        'groups' => 'group',
+        'organizations' => 'organization',
+        'users' => 'user',
+        'grants', 'permission_grants' => 'permission_grant',
+        default => rtrim(strtolower(trim($resourceSegment)), 's'),
+    };
+
+    return [
+        'ok' => true,
+        'permission_key' => $permissionKey,
+        'resource_type' => $resourceType !== '' ? $resourceType : 'workspace',
+        'action' => $action,
+    ];
+}
+
+function videochat_tenancy_governance_group_permission_values(array $payload): array
+{
+    $relationships = is_array($payload['relationships'] ?? null) ? $payload['relationships'] : [];
+    $permissions = array_key_exists('permissions', $relationships) ? $relationships['permissions'] : ($payload['permissions'] ?? []);
+    return is_array($permissions) ? $permissions : [];
+}
+
+function videochat_tenancy_governance_validate_group_permissions(array $payload): array
+{
+    if (!videochat_tenancy_governance_group_payload_has_permissions($payload)) {
+        return ['ok' => true, 'permissions' => []];
+    }
+
+    $permissions = [];
+    foreach (videochat_tenancy_governance_group_permission_values($payload) as $row) {
+        if (!is_array($row)) {
+            return ['ok' => false, 'errors' => ['permissions' => 'invalid_permission']];
+        }
+        $data = videochat_tenancy_governance_group_permission_data($row);
+        if (!(bool) ($data['ok'] ?? false)) {
+            return ['ok' => false, 'errors' => is_array($data['errors'] ?? null) ? $data['errors'] : ['permissions' => 'invalid_permission']];
+        }
+        $permissions[(string) $data['permission_key']] = $data;
+    }
+
+    return ['ok' => true, 'permissions' => array_values($permissions)];
+}
+
+function videochat_tenancy_governance_sync_group_permissions(PDO $pdo, int $tenantId, int $groupId, int $actorUserId, array $payload): array
+{
+    if (!videochat_tenancy_governance_group_payload_has_permissions($payload)) {
+        return ['ok' => true];
+    }
+    $validation = videochat_tenancy_governance_validate_group_permissions($payload);
+    if (!(bool) ($validation['ok'] ?? false)) {
+        return $validation;
+    }
+
+    $delete = $pdo->prepare(
+        "DELETE FROM permission_grants WHERE tenant_id = :tenant_id AND subject_type = 'group' AND group_id = :group_id AND source = 'group_permissions'"
+    );
+    $delete->execute([':tenant_id' => $tenantId, ':group_id' => $groupId]);
+    $exists = $pdo->prepare(
+        <<<'SQL'
+SELECT id
+FROM permission_grants
+WHERE tenant_id = :tenant_id
+  AND subject_type = 'group'
+  AND group_id = :group_id
+  AND resource_type = :resource_type
+  AND resource_id = '*'
+  AND action = :action
+  AND (revoked_at IS NULL OR revoked_at = '')
+LIMIT 1
+SQL
+    );
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO permission_grants(
+    tenant_id, public_id, resource_type, resource_id, action, subject_type, group_id,
+    created_by_user_id, label, description, permission_key, source, created_at, updated_at
+) VALUES(
+    :tenant_id, :public_id, :resource_type, '*', :action, 'group', :group_id,
+    :created_by_user_id, :label, '', :permission_key, 'group_permissions', :created_at, :updated_at
+)
+SQL
+    );
+    $now = gmdate('c');
+    foreach ((array) ($validation['permissions'] ?? []) as $permission) {
+        $exists->execute([
+            ':tenant_id' => $tenantId,
+            ':group_id' => $groupId,
+            ':resource_type' => (string) $permission['resource_type'],
+            ':action' => (string) $permission['action'],
+        ]);
+        if ($exists->fetchColumn() !== false) {
+            continue;
+        }
+        $insert->execute([
+            ':tenant_id' => $tenantId,
+            ':public_id' => videochat_tenancy_generate_public_id(),
+            ':resource_type' => (string) $permission['resource_type'],
+            ':action' => (string) $permission['action'],
+            ':group_id' => $groupId,
+            ':created_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+            ':label' => (string) $permission['permission_key'],
+            ':permission_key' => (string) $permission['permission_key'],
+            ':created_at' => $now,
+            ':updated_at' => $now,
+        ]);
+    }
+
+    return ['ok' => true];
+}
+
+function videochat_tenancy_governance_group_permission_map(PDO $pdo, int $tenantId, array $groupIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $groupIds), static fn (int $id): bool => $id > 0)));
+    if ($tenantId <= 0 || $ids === []) {
+        return [];
+    }
+    $placeholders = [];
+    $params = [':tenant_id' => $tenantId];
+    foreach ($ids as $index => $id) {
+        $name = ':group_id_' . $index;
+        $placeholders[] = $name;
+        $params[$name] = $id;
+    }
+    $query = $pdo->prepare(sprintf(
+        "SELECT group_id, permission_key, resource_type, action FROM permission_grants WHERE tenant_id = :tenant_id AND subject_type = 'group' AND group_id IN (%s) AND resource_id = '*' AND (revoked_at IS NULL OR revoked_at = '') ORDER BY permission_key ASC, id ASC",
+        implode(', ', $placeholders)
+    ));
+    $query->execute($params);
+    $permissionsByGroup = array_fill_keys($ids, []);
+    $seen = [];
+    foreach ($query->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $groupId = (int) ($row['group_id'] ?? 0);
+        $permissionKey = trim((string) ($row['permission_key'] ?? ''));
+        if ($permissionKey === '') {
+            $permissionKey = (string) ($row['resource_type'] ?? 'resource') . '.' . (string) ($row['action'] ?? 'read');
+        }
+        $fingerprint = $groupId . ':' . $permissionKey;
+        if ($groupId <= 0 || isset($seen[$fingerprint])) {
+            continue;
+        }
+        $seen[$fingerprint] = true;
+        $permissionsByGroup[$groupId][] = [
+            'entity_key' => 'permissions',
+            'id' => 'permission:governance:' . $permissionKey,
+            'key' => $permissionKey,
+            'name' => $permissionKey,
+            'status' => 'active',
+        ];
+    }
+
+    return $permissionsByGroup;
+}
+
 function videochat_tenancy_governance_enrich_group_relationships(PDO $pdo, int $tenantId, array $row): array
 {
     $groupId = (int) ($row['database_id'] ?? ($row['id'] ?? 0));
     $members = videochat_tenancy_governance_group_member_map($pdo, $tenantId, [$groupId]);
+    $permissions = videochat_tenancy_governance_group_permission_map($pdo, $tenantId, [$groupId]);
     $organizationId = (int) ($row['organization_database_id'] ?? 0);
     $organizations = videochat_tenancy_governance_organization_summary_map($pdo, $tenantId, [$organizationId]);
     $row['relationships'] = [
         ...(is_array($row['relationships'] ?? null) ? $row['relationships'] : []),
         'organization' => isset($organizations[$organizationId]) ? [$organizations[$organizationId]] : [],
         'members' => $members[$groupId] ?? [],
+        'permissions' => $permissions[$groupId] ?? [],
     ];
 
     return $row;
@@ -361,15 +552,17 @@ function videochat_tenancy_governance_enrich_group_rows(PDO $pdo, int $tenantId,
     $groupIds = array_map(static fn (array $row): int => (int) ($row['database_id'] ?? 0), $rows);
     $organizationIds = array_map(static fn (array $row): int => (int) ($row['organization_database_id'] ?? 0), $rows);
     $members = videochat_tenancy_governance_group_member_map($pdo, $tenantId, $groupIds);
+    $permissions = videochat_tenancy_governance_group_permission_map($pdo, $tenantId, $groupIds);
     $organizations = videochat_tenancy_governance_organization_summary_map($pdo, $tenantId, $organizationIds);
 
-    return array_map(static function (array $row) use ($members, $organizations): array {
+    return array_map(static function (array $row) use ($members, $permissions, $organizations): array {
         $groupId = (int) ($row['database_id'] ?? 0);
         $organizationId = (int) ($row['organization_database_id'] ?? 0);
         $row['relationships'] = [
             ...(is_array($row['relationships'] ?? null) ? $row['relationships'] : []),
             'organization' => isset($organizations[$organizationId]) ? [$organizations[$organizationId]] : [],
             'members' => $members[$groupId] ?? [],
+            'permissions' => $permissions[$groupId] ?? [],
         ];
         return $row;
     }, $rows);

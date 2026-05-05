@@ -22,6 +22,13 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0035_permission_grant_public_metadata',
             'statements' => videochat_permission_grant_public_metadata_statements(),
         ],
+        36 => [
+            'name' => '0036_permission_grant_source',
+            'statements' => [
+                'ALTER TABLE permission_grants ADD COLUMN source TEXT NOT NULL DEFAULT \'manual\'',
+                'CREATE INDEX IF NOT EXISTS idx_permission_grants_subject_source ON permission_grants(tenant_id, subject_type, group_id, organization_id, user_id, source)',
+            ],
+        ],
     ];
 }
 
