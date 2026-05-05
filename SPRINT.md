@@ -424,7 +424,7 @@ Sprint goal:
      catalogs, and the backend summary route is contract-pinned for users,
      groups, organizations, roles, grants, policies, and data portability jobs.
 
-6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
+6. [x] [governance-backend-apis] Wire backend CRUD APIs for governance entities
    onto tenant-scoped resource/action permissions.
 
    Done when:
@@ -500,8 +500,12 @@ Sprint goal:
    - Nested `relationships.groups[].relationships.permissions/modules` from
      admin user create/update now sync into group-sourced evaluator grants
      instead of being dropped at the user membership boundary.
-   - Remaining work: broaden direct-role UI affordances only where non-admin
-     profile or delegation screens need them.
+   - Closed 2026-05-05: backend scope is complete for the sprint contract.
+     Governance groups, organizations, memberships, grants, policies, roles,
+     role assignments, user/group assignment expansion, and data portability
+     jobs are routed through tenant-scoped King PHP handlers and the
+     permission evaluator. Any future non-admin delegation/profile role
+     affordance is UI scope, not a blocker for the backend API Done-When.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -744,6 +748,12 @@ Sprint goal:
       recipients, User editor relation providers, and governance backend
       summary entity support. `npm run build` passes with the known
       `CallWorkspaceView` chunk warning.
+    - Governance backend API closeout: `php -l` passes for the tenancy router,
+      Governance group/organization membership handlers, permission grants,
+      policies, data portability jobs, roles, role assignments, summaries, and
+      the CRUD API contract. `node tests/contract/governance-crud-persistence-contract.mjs`
+      passes. `governance-crud-api-contract.sh` still skips locally because
+      `pdo_sqlite` is not installed for `php`.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
