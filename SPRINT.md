@@ -1539,6 +1539,11 @@ Non-goals for this sprint:
     - `demo/video-chat/scripts/check-deploy-idempotency.sh`, `bash -n
       demo/video-chat/scripts/deploy-smoke.sh`, and `bash -n
       demo/video-chat/scripts/deploy.sh` pass.
+    - `npm run test:e2e:localization-smoke` passes locally: public booking
+      locale/direction, localized public join error, Settings language switch
+      persistence with RTL flip, Admin Localization viewport stability across
+      LTR/RTL breakpoints, and RTL call workspace shell without camera
+      permission.
     - Remaining work requires an explicit production or production-like deploy
       run: migration idempotency on the deploy target, default-English login,
       primary-superadmin CSV upload smoke, production health, and deploy smoke.
