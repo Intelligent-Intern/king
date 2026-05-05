@@ -359,7 +359,7 @@ Non-goals for this sprint:
    - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
    - `npm run build` in `demo/video-chat/frontend-vue`
 
-5. [ ] `[settings-language-ui]` Replace the current Regional stub with full language settings.
+5. [x] `[settings-language-ui]` Replace the current Regional stub with full language settings.
 
    Scope:
    - Add a clear Language/Localization area under Settings.
@@ -370,11 +370,19 @@ Non-goals for this sprint:
    - Make settings modal itself work in RTL and on mobile/tablet.
 
    Done when:
-   - [ ] Settings lets each user select any supported website-source locale.
-   - [ ] The old `en/de/fr/es` local-storage-only list is gone.
-   - [ ] Language save calls backend settings and updates session/i18n state.
-   - [ ] Settings modal can be maximized/restored in both LTR and RTL.
-   - [ ] Mobile/tablet settings remain full-screen and scroll correctly.
+   - [x] Settings lets each user select any supported website-source locale.
+   - [x] The old `en/de/fr/es` local-storage-only list is gone.
+   - [x] Language save calls backend settings and updates session/i18n state.
+   - [x] Settings modal can be maximized/restored in both LTR and RTL.
+   - [x] Mobile/tablet settings remain full-screen and scroll correctly.
+
+   Proof:
+   - `demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue`
+   - `demo/video-chat/frontend-vue/src/modules/workspace_settings/descriptor.js`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/module-registry-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/module-navigation-builder-contract.mjs`
+   - `npm run build` in `demo/video-chat/frontend-vue`
 
 6. [ ] `[frontend-string-coverage]` Convert app UI to translation keys.
 
