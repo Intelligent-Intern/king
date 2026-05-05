@@ -383,7 +383,7 @@ Sprint goal:
    - Contract and Playwright coverage now prove paged mass selection, nested
      back/apply, cancel/reopen, and submitted nested relationship payloads.
 
-5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
+5. [x] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
 
    Done when:
@@ -416,8 +416,13 @@ Sprint goal:
    - Governance module/permission catalog rows now carry explicit
      `entity_key` values so relation payloads keep type information through
      recursive User Management selections.
-   - Remaining work: add batch summary endpoints and included summaries for
-     any Administration entities that still do not have backend summary rows.
+   - Closed 2026-05-05: the summary-cache contract now covers the remaining
+     Administration row surfaces (Users, Marketplace, Localization, Theme
+     Management, Administration lead recipients) and proves their row templates
+     do not issue per-row request calls. The User editor relation provider is
+     pinned to preloaded role/group/theme rows and local module/permission
+     catalogs, and the backend summary route is contract-pinned for users,
+     groups, organizations, roles, grants, policies, and data portability jobs.
 
 6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
    onto tenant-scoped resource/action permissions.
@@ -733,6 +738,12 @@ Sprint goal:
       `npm run test:contract:governance-relation-stack`,
       `node tests/contract/module-governance-catalog-contract.mjs`, and
       `npm run build`; build still reports only the known chunk warning.
+    - Administration summary-loading proof closes the N+1 summary issue:
+      `npm run test:contract:governance-summary-cache` passes and now covers
+      Users, Marketplace, Localization, Theme Management, Administration lead
+      recipients, User editor relation providers, and governance backend
+      summary entity support. `npm run build` passes with the known
+      `CallWorkspaceView` chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
