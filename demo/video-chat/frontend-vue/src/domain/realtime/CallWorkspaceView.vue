@@ -682,7 +682,7 @@ function sendSocketFrame(payload) {
 
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
-    setNotice('Could not request room snapshot while websocket is offline.', 'error');
+    setNotice(t('calls.workspace.snapshot_request_offline'), 'error');
   }
 }
 
@@ -1083,7 +1083,7 @@ const mediaStack = createCallWorkspaceMediaStack({
       void syncControlStateToPeers();
       publishLocalActivitySample(true);
       if (!active && reason === 'ended') {
-        setNotice('Screen sharing ended.', 'ok');
+        setNotice(t('calls.workspace.screen_sharing_ended'), 'ok');
       }
     },
     clearMediaSecuritySfuPublisherSeen,

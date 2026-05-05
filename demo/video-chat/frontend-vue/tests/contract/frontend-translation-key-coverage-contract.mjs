@@ -32,7 +32,10 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/dashboard/compose.js',
   'src/domain/calls/dashboard/enterCall.js',
   'src/domain/calls/dashboard/joinInvite.js',
+  'src/domain/realtime/CallWorkspaceView.vue',
   'src/domain/realtime/CallWorkspaceView.template.html',
+  'src/domain/realtime/workspace/callWorkspace/chatRuntime.js',
+  'src/domain/realtime/workspace/callWorkspace/routeResolution.js',
   'src/modules/users/pages/overview/OverviewView.template.html',
 ]);
 
