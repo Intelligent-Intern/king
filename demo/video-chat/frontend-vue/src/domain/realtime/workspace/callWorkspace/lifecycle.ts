@@ -38,6 +38,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     reconfigureLocalBackgroundFilterOnly,
     reconfigureLocalTracksFromSelectedDevices,
     reconnectWorkspaceAfterForeground,
+    requestWlvcFullFrameKeyframe,
     refreshCallMediaDevices,
     resolveRouteCallRef,
     setActiveTab,
@@ -74,6 +75,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     nativeAudioBridgeBlockDiagnosticsSent,
     nativeAudioSecurityBannerMessage,
     nativeAudioSecurityTelemetrySnapshot,
+    remotePeersRef,
     rightSidebarCollapsed,
     routeCallRef,
     serverRoomId,
@@ -111,7 +113,9 @@ export function registerCallWorkspaceLifecycleHelpers({
   const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
     callbacks: {
       captureClientDiagnostic,
+      getRemotePeerCount: () => remotePeersRef?.value?.size || 0,
       publishLocalTracks,
+      requestWlvcFullFrameKeyframe,
       stopLocalEncodingPipeline,
     },
     refs: {

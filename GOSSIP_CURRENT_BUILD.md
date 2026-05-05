@@ -48,9 +48,15 @@ The current frontend build has:
 - Active clients can emit sanitized `gossip/telemetry/snapshot` ops-lane messages; the backend validates and aggregates room-level counters and transport labels without storing media, SDP, ICE, socket, token, or secret fields.
 - Telemetry aggregates now derive rollout-gate readiness metrics for duplicate rate, TTL exhaustion rate, late-drop rate, topology repair rate, RTC readiness, neighbor readiness, and topology epoch readiness.
 - The frontend consumes sanitized `gossip/telemetry/ack` aggregate/gate payloads through a focused rollout-gate helper and emits diagnostic-only `gossip_rollout_gate_state` events.
-- Rollout gates keep `off` inert, keep `shadow` observational, and only mark active gossip allowed when explicit active mode, RTC/topology readiness, and clean telemetry thresholds are all present.
+- Rollout gates keep `off` inert, keep `shadow` observational, and only mark active gossip allowed when explicit active mode, RTC/topology readiness, clean gossip telemetry thresholds, healthy SFU baseline counters, and media-security recovery readiness are all present.
+- Active gossip media publish/receive is blocked when sanitized SFU baseline gates report participant-set recovery storms, protected-frame decrypt bursts, keyframe storms, stale-target prune storms, encoder lifecycle close storms, or send-backpressure abort storms.
+- Background-tab SFU policy now separates preview-only throttling from remote publisher obligations. Hidden tabs with remote peers preserve the publisher obligation, request `sfu_background_tab_publisher_marker`, and emit `sfu_background_tab_publisher_obligation_preserved`.
+- The three-user KingRT regression harness imports production layout/background/media-security/keyframe/gossip/browser-encoder helpers and replays participant churn, background publisher behavior, stale target prune, keyframe coalescing, encoder lifecycle close, and protected-frame recovery diagnostics.
+- Shadow mode records sanitized `gossip_data_lane_shadow_would_publish` diagnostics and `would_publish_frames` telemetry without publishing media payloads.
+- The A/K rollout gate is implemented and contract-covered locally, but active gossip remains blocked for media until fresh multi-user live telemetry confirms the SFU-baseline and media-security buckets are clean.
 - The standalone four-peer local gossip harness remains available at `demo/video-chat/frontend-vue/public/gossip-harness.html`, has adjustable fanout with default degree 4, and clamps fanout to degree 3..5 plus the available peer degree.
 - Executable regression coverage for the decentralized controller boundary and RTCDataChannel adapter expectations.
+- The live `experiments/fix-signalling-unit` deploy remains SFU-first with gossip inactive by default; current live hardening focused on media-security participant-set recovery, active-speaker/layout stabilization, and static asset packaging needed for the deployed call shell.
 
 ## What Is Still Simulated
 
@@ -101,18 +107,23 @@ The missing live integration is:
 - Request server topology repair after assigned neighbor carrier loss. Complete on the ops lane with cooldown in active mode.
 - Consume server replacement topology hints after repair. Complete for `call/gossip-topology` and direct `topology_hint` messages.
 - Expose telemetry proving the peer fanout shape. Complete for controller/workspace/RTC transport counters.
-- Keep live gossip workspace wiring outside the `CallWorkspaceView.vue` monolith. Complete through `workspace/callWorkspace/gossipDataLane.js`.
-- Keep shell/sidebar viewport computed state outside the `CallWorkspaceView.vue` monolith. Complete through `workspace/callWorkspace/shellViewport.js`.
+- Keep live gossip workspace wiring outside the `CallWorkspaceView.vue` monolith. Complete through `workspace/callWorkspace/gossipDataLane.ts`.
+- Keep shell/sidebar viewport computed state outside the `CallWorkspaceView.vue` monolith. Complete through `workspace/callWorkspace/shellViewport.ts`.
 
 ## Verification
 
 Current passing checks:
 
 - `npm run test:contract:gossip`
+- `node tests/contract/gossip-sfu-baseline-rollout-gate-contract.mjs`
+- `node tests/standalone/kingrt-three-user-regression-harness.mjs`
+- `node tests/contract/kingrt-three-user-regression-harness-contract.mjs`
+- `node tests/contract/sfu-background-tab-policy-contract.mjs`
 - `npm run test:contract:native-webrtc`
 - `npm run test:contract:refactor-commit-boundaries`
 - `npm run test:contract:build-size`
 - `npm run test:contract:client-diagnostics`
+- `node tests/contract/kingrt-avatar-placeholder-contract.mjs`
 - `npm run build`
 - `./demo/video-chat/backend-king-php/tests/realtime-gossipmesh-runtime-contract.sh`
 - `make -C extension test TESTS=tests/748-native-toolchain-linker-selector-contract.phpt`
@@ -319,8 +330,8 @@ Status: complete.
 
 Changes:
 
-- Moved live gossip data-lane orchestration from `CallWorkspaceView.vue` into `src/domain/realtime/workspace/callWorkspace/gossipDataLane.js`.
-- Moved shell/sidebar viewport computed state into `src/domain/realtime/workspace/callWorkspace/shellViewport.js`.
+- Moved live gossip data-lane orchestration from `CallWorkspaceView.vue` into `src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts`.
+- Moved shell/sidebar viewport computed state into `src/domain/realtime/workspace/callWorkspace/shellViewport.ts`.
 - Kept the call workspace public wiring surface to five callbacks: topology hint ingestion, outbound gossip publication, native peer binding, native peer cleanup, and teardown.
 - Updated gossip contracts to accept the helper-module implementation location while preserving the behavioral checks.
 - Updated the refactor-boundary contract to require the new gossip and shell viewport helpers.
@@ -640,3 +651,160 @@ Verification:
 Known gap:
 
 - Windows selectors are now explicit in the build/prerequisite scripts, but a real Windows CI runner is still needed to validate the full native extension build on Windows.
+
+### Step 21: Live SFU-First Deploy Stabilization Notes
+
+Status: complete for the current live deploy pass.
+
+Changes:
+
+- Kept gossip production behavior conservative: the deployed call path remains SFU-first and does not make gossip carry primary media while `VITE_VIDEOCHAT_GOSSIP_DATA_LANE` is not explicitly `active`.
+- Deployed `experiments/fix-signalling-unit` to `app.kingrt.com` with backend, WS, SFU, TURN, and edge containers rebuilt from source rather than checked-in build artifacts.
+- Fixed the backend container build so the PHP `king.so` extension is compiled inside the Linux image instead of copying a local host module.
+- Fixed the edge build context so `packages/iibin/dist` is available to the frontend build inside Docker.
+- Preserved `VIDEOCHAT_V1_ALLOW_INSECURE_WS` propagation in the deploy script for the current KingRT deployment shape.
+- Added local ignored deploy/log helpers for repeatable source deploys and remote log capture.
+- Pulled live deploy diagnostics and identified media-security participant-set drift as a dominant SFU decode/reconnect cascade source.
+- Hardened frontend media-security error normalization so descriptive errors such as `Participant set mismatch detected (participant_set_mismatch)` now enter the participant-set recovery path instead of bubbling into `media_security_sync_failed`.
+- Added a sync-level participant-set recovery branch that clears stale media-security signal caches, requests a room snapshot, restarts the handshake watchdog, and schedules a fresh participant sync.
+- Restored the stabilized active-speaker/layout logic from the stabilization branch: rolling top-k scores, backend sample history, migration `0030_call_activity_sample_history`, and frontend hysteresis for main-speaker selection.
+- Added the missing deployed KingRT avatar placeholder asset at `public/assets/orgas/kingrt/avatar-placeholder.svg` and a contract so the UI path cannot silently 404 again.
+- Added a `.gitignore` exception for the required KingRT avatar SVG because the repo has a broad `*.svg` ignore.
+
+Verification:
+
+- `npm run build` passed in `demo/video-chat/frontend-vue`.
+- `node tests/contract/kingrt-avatar-placeholder-contract.mjs` passed.
+- `php demo/video-chat/backend-king-php/tests/realtime-activity-layout-contract.php` passed.
+- `php -l demo/video-chat/backend-king-php/domain/realtime/realtime_activity_layout.php` passed.
+- `php -l demo/video-chat/backend-king-php/support/database_migrations.php` passed.
+- Live health check passed: `https://api.app.kingrt.com/health` reported `status: ok` and asset version `20260505155254`.
+- Live avatar check passed: `https://app.kingrt.com/assets/orgas/kingrt/avatar-placeholder.svg?v=20260505154826` returned `200 OK` with `Content-Type: image/svg+xml`.
+
+Known gap:
+
+- This pass did not enable gossip as the primary media path. It kept the live call deploy SFU-first while reducing security/keyframe churn and preserving the gossip rollout guardrails.
+- Fresh live diagnostics immediately after redeploy mostly contained pre-deploy client rows. A new multi-user call run is still needed to confirm the participant-set recovery counters replace the previous `media_security_sync_failed` bursts.
+- A fresh live multi-user run must also confirm sanitized `gossip/telemetry/ack` gate buckets stay below thresholds for participant-set recovery, protected-frame decrypt bursts, keyframe storms, stale-target prunes, encoder lifecycle closes, and send-backpressure aborts before active gossip carries media.
+- Remote backend logs showed intermittent SQLite `database is locked` during login under the 24-worker HTTP startup pattern. That is a separate backend concurrency hardening item and not a gossip data-plane change.
+
+### Step 22: Three-Participant Log Stabilization Contracts
+
+Status: deployed.
+
+Changes:
+
+- Contracted participant-set mismatch recovery so verbose browser/runtime errors normalize to `participant_set_mismatch`, clear stale media-security signal caches, request an authoritative room snapshot, restart the handshake watchdog, and schedule `sync_participant_set_recover`.
+- Kept sender-key suite downgrade failures machine-readable by including the stable `downgrade_attempt` code in the thrown error message.
+- Added stale target pruning through the live gossip data lane. A `target_not_in_room` recovery now removes SFU remotes, closes the native gossip data channel, deletes the assigned gossip neighbor, clears topology-repair debounce state, and emits `gossip_assigned_neighbor_pruned`.
+- Added remote keyframe request coalescing in the publisher backpressure controller. Duplicate full-frame requests for the same reason/sender/publisher inside the active recovery window now emit `sfu_remote_full_keyframe_request_coalesced` instead of repeatedly resetting the encoder.
+- Classified expected WebCodecs encode-after-close races as `sfu_browser_encoder_lifecycle_close` warning diagnostics with a distinct close reason, while leaving true encode failures on `sfu_browser_encoder_frame_failed`.
+
+Verification:
+
+- `npm run test:contract:media-security` passed.
+- `npm run test:contract:gossip` passed.
+- `npm run test:contract:sfu` passed. Vite printed sandbox-only HMR `listen EPERM` warnings, but every contract reported PASS and the command exited 0.
+- `node tests/contract/kingrt-avatar-placeholder-contract.mjs` passed.
+- `php demo/video-chat/backend-king-php/tests/realtime-activity-layout-contract.php` passed.
+- `npm run build` passed in `demo/video-chat/frontend-vue`.
+- Redeploy passed with production asset version `20260505161617`.
+- Live health check passed: `https://api.app.kingrt.com/health` reported `status: ok` and asset version `20260505161617`.
+- Live frontend check passed: `https://app.kingrt.com/` returned `200 OK` with `X-KingRT-Asset-Version: 20260505161617`.
+- Live avatar check passed: `https://app.kingrt.com/assets/orgas/kingrt/avatar-placeholder.svg?v=20260505154826` returned `200 OK` with `Content-Type: image/svg+xml`.
+- Post-deploy log bundle collected at `demo/video-chat/deploy-logs/20260505T161718Z.tar.gz`.
+
+Known gap:
+
+- This pass reduces the dominant three-user cascades seen in the deploy logs, but it is still SFU-first. A fresh live three-user call after redeploy is needed to confirm the old `media_security_sync_failed`, decoder-waiting-keyframe, and lifecycle-close bursts are replaced by bounded recovery diagnostics.
+- The post-deploy log bundle still includes the known SQLite `database is locked` login failure. That maps to `GOSSIP_PLANNING.md` item I and remains unresolved in this pass.
+
+### Step 23: SQLite Login Lock Hardening
+
+Status: implemented locally; not redeployed in this step yet.
+
+Changes:
+
+- Added shared SQLite lock helpers in `database_core.php`: a 15s busy timeout, transient lock classification, and bounded jitter retry delay calculation.
+- Serialized SQLite bootstrap/demo seeding with a per-database `.bootstrap.lock` file lock before migrations and fixed demo rows run.
+- Reused the shared transient-lock detector in server bootstrap retries.
+- Hardened `/api/auth/login` so transient SQLite lock exhaustion returns retryable `auth_login_retryable_locked` with HTTP 503 instead of the previous generic `auth_login_failed` HTTP 500.
+- Added `tests/auth-sqlite-lock-contract.php`, which holds an exclusive SQLite lock, calls the real login route, and verifies the retryable 503 contract.
+
+Verification:
+
+- `php tests/auth-sqlite-lock-contract.php` passed.
+- `php tests/session-auth-contract.php` passed.
+- `php -l support/database.php` passed.
+- `php -l support/database_core.php` passed.
+- `php -l http/module_auth_session.php` passed.
+- `php -l server.php` passed.
+
+Known gap:
+
+- `php tests/videochat-integration-matrix-http-contract.php` currently fails before login-lock coverage with `demo user blueprint missing role moderator`. That appears unrelated to the SQLite lock change and remains a separate fixture/seed expectation.
+
+### Local Update: GOSSIP_PLANNING C/F/H SFU Recovery Contracts
+
+Status: implemented locally; not redeployed or live browser-verified yet.
+
+Changes:
+
+- C: Added a shared SFU keyframe recovery coordinator so duplicate per-publisher full-frame requests coalesce across receiver feedback and SFU recovery paths, with coalesced/emitted diagnostics and cleanup after a rendered keyframe.
+- F: Added receiver-count-aware SFU send budgeting so backpressure/profile decisions include buffered amount, receiver count, chunk count, active profile, and receiver-count budget diagnostics.
+- H: Added a publisher-scoped stall recovery ladder that attempts resubscribe, keyframe request, and security resync before full SFU socket reconnect, with per-publisher/reason/step backoff diagnostics.
+
+Verification:
+
+- `node tests/contract/sfu-gossip-planning-cfh-contract.mjs` passed.
+- `node tests/contract/sfu-publisher-backpressure-controller-contract.mjs` passed.
+- `node tests/contract/sfu-keyframe-cache-pacing-contract.mjs` passed.
+- `node tests/contract/sfu-media-recovery-control-contract.mjs` passed.
+- `node tests/contract/sfu-browser-ws-send-drain-contract.mjs` passed.
+- `node tests/contract/sfu-receiver-feedback-loop-contract.mjs` passed.
+- `npm run build` passed in `demo/video-chat/frontend-vue`.
+
+Known gap:
+
+- A fresh redeployed live 3-user browser call is still needed to confirm keyframe storms, send-drain abort storms, and remote-video stall reconnects are replaced by bounded coordinator, receiver-budget, and recovery-ladder diagnostics.
+- Active gossip remains SFU-success-mirrored/off by default; when gossip becomes a primary media path, its missing-frame recovery and independent publication path still need to inherit the same keyframe coordinator, stall ladder, and sender budget.
+
+### Step 24: WebCodecs Encoder Lifecycle Generation Hardening
+
+Status: implemented locally; not redeployed in this step yet.
+
+Changes:
+
+- Completed `GOSSIP_PLANNING.md` item D beyond lifecycle classification: protected browser encoder encode attempts now use an active generation guard, stale async output/error callbacks are ignored, and close/reconfigure invalidates in-flight generations before stale completions can affect active state.
+- Contract coverage now pins profile-switch close, transport-reconnect close, and background-pause close handling.
+
+Verification:
+
+- `node demo/video-chat/frontend-vue/tests/contract/sfu-protected-browser-encoder-contract.mjs` passed.
+- `git diff --check -- demo/video-chat/frontend-vue/src/domain/realtime/local/protectedBrowserVideoEncoder.ts demo/video-chat/frontend-vue/tests/contract/sfu-protected-browser-encoder-contract.mjs` passed.
+
+Known gap:
+
+- Needs a fresh live multi-user browser run to confirm profile switches, transport reconnects, and background-tab pauses produce bounded `sfu_browser_encoder_lifecycle_close` warnings instead of renewed `sfu_browser_encoder_frame_failed` bursts.
+
+### Local Update: Background Publisher And Three-User Harness
+
+Status: implemented locally; live browser verification pending.
+
+Changes:
+
+- Updated background-tab publishing semantics so preview-only hidden tabs may pause local video, while hidden tabs with remote peers preserve the SFU publisher obligation and request `sfu_background_tab_publisher_marker`.
+- Added `sfu_background_tab_publisher_obligation_preserved` diagnostics with browser visibility state, active publisher layer, remote peer count, and intentional-pause status.
+- Added `tests/standalone/kingrt-three-user-regression-harness.mjs` for a three-participant KingRT replay using production strategy/runtime helpers.
+- Added `tests/contract/kingrt-three-user-regression-harness-contract.mjs` to run the harness and prevent synthetic-only replacement.
+- Extended `sfu-background-tab-policy-contract.mjs` to cover remote-publisher preservation and preview-only throttling separately.
+
+Verification:
+
+- `node tests/standalone/kingrt-three-user-regression-harness.mjs` passed.
+- `node tests/contract/kingrt-three-user-regression-harness-contract.mjs` passed.
+- `node tests/contract/sfu-background-tab-policy-contract.mjs` passed.
+
+Known gap:
+
+- A real live/browser three-tab call is still needed to verify browser media timing with one foreground participant and two background publishers, and to confirm fresh live logs show bounded keyframe-marker/protected-frame recovery diagnostics.

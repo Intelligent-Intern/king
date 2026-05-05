@@ -50,6 +50,9 @@ demo/video-chat/**/src/lib/wasm/build/
 .env.local
 *.env.local
 demo/video-chat/docker-compose.deploy.local.yml
+demo/video-chat/scripts/deploy.local.sh
+demo/video-chat/scripts/*.local.sh
+demo/video-chat/deploy-logs/
 
 # model-inference backend: ephemeral sqlite + object-store + GGUF fixture
 # installed on demand via
@@ -120,6 +123,7 @@ demo/video-chat/backend-king-php/.local/
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/logo.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icon.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/king_logo-withslogan.svg
+!demo/video-chat/frontend-vue/public/assets/orgas/kingrt/avatar-placeholder.svg
 !demo/video-chat/frontend-vue/public/assets/orgas/kingrt/icons/*.png
 !mock/assets/orgas/intelligent-intern/logo.svg
 !mock/assets/orgas/intelligent-intern/icon.svg

@@ -8,6 +8,11 @@ function firstLiveVideoTrack(stream) {
   return tracks.find((track) => String(track?.readyState || '').toLowerCase() === 'live') || null;
 }
 
+function normalizedRemotePeerCount(value) {
+  const count = Number(value || 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
 function shouldPauseSfuVideoForBackground(context = {}, documentRef = null) {
   const reason = String(context?.reason || '').trim().toLowerCase();
   if (context?.hidden === true || documentIsHidden(documentRef)) return true;
@@ -25,7 +30,9 @@ export function createSfuBackgroundTabPolicy({
 
   const {
     captureClientDiagnostic = () => {},
+    getRemotePeerCount = () => 0,
     publishLocalTracks = async () => false,
+    requestWlvcFullFrameKeyframe = () => false,
     stopLocalEncodingPipeline = () => {},
   } = callbacks;
 
@@ -42,14 +49,48 @@ export function createSfuBackgroundTabPolicy({
   }
 
   function diagnosticPayload(reason, track) {
+    const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
     return {
       reason: String(reason || ''),
-      background_video_policy: 'pause_sfu_video_keep_audio_status',
+      background_video_policy: remotePeerCount > 0
+        ? 'preserve_remote_publisher_with_keyframe_marker'
+        : 'pause_local_preview_video_keep_audio_status',
       browser_visibility_state: String(documentRef?.visibilityState || ''),
+      background_pause_intentional: remotePeerCount <= 0,
+      active_publisher_layer: remotePeerCount > 0 ? 'primary_keyframe_marker' : 'none',
+      remote_peer_count: remotePeerCount,
       track_id: String(track?.id || ''),
       outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
       media_runtime_path: String(mediaRuntimePath.value || ''),
     };
+  }
+
+  function preserveRemotePublisherObligationForBackground(context = {}, videoTrack = null) {
+    const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
+    if (remotePeerCount <= 0) return false;
+
+    const requested = requestWlvcFullFrameKeyframe('sfu_background_tab_publisher_marker', {
+      requested_action: 'force_full_keyframe',
+      background_publish_policy: 'preserve_remote_publisher_with_keyframe_marker',
+      background_pause_intentional: false,
+      browser_visibility_state: String(documentRef?.visibilityState || ''),
+      remote_peer_count: remotePeerCount,
+      track_id: String(videoTrack?.id || ''),
+    });
+
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_background_tab_publisher_obligation_preserved',
+      code: 'sfu_background_tab_publisher_obligation_preserved',
+      message: 'Background tab kept the SFU publisher obligation active for remote participants and requested a fresh keyframe marker.',
+      payload: {
+        ...diagnosticPayload(context?.reason || 'background', videoTrack),
+        keyframe_marker_requested: Boolean(requested),
+      },
+      immediate: true,
+    });
+    return true;
   }
 
   function pauseVideoForBackground(context = {}) {
@@ -59,6 +100,7 @@ export function createSfuBackgroundTabPolicy({
 
     const videoTrack = firstLiveVideoTrack(localStreamRef.value);
     if (!videoTrack) return false;
+    if (preserveRemotePublisherObligationForBackground(context, videoTrack)) return true;
 
     backgroundVideoPaused = true;
     backgroundVideoPausedAtMs = Date.now();

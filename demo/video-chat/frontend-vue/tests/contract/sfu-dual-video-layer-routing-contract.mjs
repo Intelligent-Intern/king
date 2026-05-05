@@ -41,16 +41,16 @@ try {
 
   requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary', frameSize })", 'browser publisher builds a primary encoder config from source-oriented frame size');
   requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail', frameSize })", 'browser publisher builds a thumbnail encoder config from source-oriented frame size');
-  requireContains(browserPublisher, 'const createThumbnailEncoder = () => new VideoEncoderCtor({', 'browser publisher creates a second thumbnail encoder');
+  requireContains(browserPublisher, 'const createThumbnailEncoder = (encoderGeneration) => new VideoEncoderCtor({', 'browser publisher creates a generation-bound second thumbnail encoder');
   requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'thumbnail encoder receives a scaled VideoFrame derived from the direct source frame');
-  requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });', 'thumbnail encoder consumes the scaled VideoFrame before close');
+  requireContains(browserPublisher, 'activeThumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });', 'thumbnail encoder consumes the scaled VideoFrame before close');
   assert.ok(
-    browserPublisher.indexOf('encoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });')
+    browserPublisher.indexOf('activePrimaryEncoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });')
       < browserPublisher.indexOf('closePublisherVideoFrame(result.frame)'),
     'primary encode must happen before source VideoFrame close',
   );
   assert.ok(
-    browserPublisher.indexOf('thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });')
+    browserPublisher.indexOf('activeThumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });')
       < browserPublisher.indexOf('closePublisherVideoFrame(thumbnailFrame)'),
     'thumbnail encode must happen before scaled thumbnail VideoFrame close',
   );

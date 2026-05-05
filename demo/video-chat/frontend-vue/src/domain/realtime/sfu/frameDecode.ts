@@ -32,6 +32,7 @@ import {
   REMOTE_SFU_JITTER_BUFFER_HOLD_MS,
   shouldBufferRemoteFrameForJitter,
 } from './remoteJitterBuffer';
+import { clearSfuKeyframeRecoveryCoordinator } from './keyframeRecoveryCoordinator.ts';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -992,6 +993,12 @@ export function createSfuFrameDecodeHelpers({
       if (decoded && decoded.data) {
         if (renderDecodedSfuFrame(peer, decoded, frame) && frameMetadata.type === 'keyframe' && !isSelectiveTileFrame) {
           peer.needsKeyframe = false;
+          clearSfuKeyframeRecoveryCoordinator(peer, {
+            publisherId,
+            publisherUserId,
+            reason: peer.lastReceiverFeedbackPressureReason || 'sfu_receiver_keyframe_required',
+            trackId: frame?.trackId,
+          });
         }
         drainRemoteJitterBuffer(publisherId, peer, frame);
       } else {

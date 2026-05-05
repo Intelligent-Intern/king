@@ -46,6 +46,10 @@ async function main() {
   requireContains(publisherPipeline, 'keyframe_retry_after_ms', 'publisher reports retry delay after payload pressure');
   requireContains(sfuPublisherControl, 'requestWlvcFullFrameKeyframe', 'publisher controller exposes remote full-frame keyframe recovery');
   requireContains(sfuPublisherControl, 'wlvcRemoteKeyframeRequestUntilMs', 'publisher controller stores remote keyframe request window');
+  requireContains(sfuPublisherControl, 'wlvcRemoteKeyframeRequestLastByKey', 'publisher controller coalesces duplicate remote keyframe requests by reason and publisher identity');
+  requireContains(sfuPublisherControl, "eventType: 'sfu_remote_full_keyframe_request_coalesced'", 'publisher controller emits a durable diagnostic when duplicate keyframe requests are coalesced');
+  requireContains(sfuPublisherControl, 'keyframe_request_coalesce_window_ms', 'publisher controller diagnostics preserve the keyframe coalesce window');
+  requireContains(sfuPublisherControl, 'requestUntilMs > nowMs && lastRequestedAtMs > 0', 'publisher controller must skip encoder resets while an equivalent keyframe recovery window is already active');
   requireContains(sfuPublisherControl, 'keyframe_retry_after_ms', 'publisher controller diagnostics preserve keyframe retry pacing');
   requireContains(framePayload, 'budget_min_keyframe_retry_ms', 'binary frame metadata preserves keyframe retry budget');
   requireContains(kingSfuStore, 'budget_min_keyframe_retry_ms', 'King SFU relay preserves keyframe retry budget metadata');

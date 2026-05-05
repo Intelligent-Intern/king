@@ -7,6 +7,7 @@ import {
   resolveSfuRecoveryRequestedAction,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
+import { runSfuPublisherStallRecoveryLadder } from '../../sfu/stallRecoveryLadder.ts';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
@@ -121,6 +122,57 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       peer.lastSubscribeRetryReason = String(reason || '').trim();
     }
     return true;
+  }
+
+  function recoverSfuPublisherBeforeReconnect(publisherId, peer, reason, nowMs = Date.now(), payload = {}) {
+    return runSfuPublisherStallRecoveryLadder({
+      captureClientDiagnostic,
+      peer,
+      publisherId,
+      reason,
+      nowMs,
+      payload: {
+        remote_peer_count: remotePeersRef.value.size,
+        connected_participant_count: connectedParticipantUsers.value.length,
+        sfu_connected: sfuConnected.value,
+        connection_state: connectionState.value,
+        media_runtime_path: mediaRuntimePath.value,
+        ...payload,
+      },
+      resubscribe: (targetPublisherId, recoveryReason, recoveryNowMs) => retrySfuSubscription(
+        targetPublisherId,
+        peer,
+        recoveryReason,
+        recoveryNowMs,
+      ),
+      requestKeyframe: (_targetPublisherId, recoveryReason, recoveryNowMs) => sendRemoteSfuVideoQualityPressure(
+        peer,
+        publisherId,
+        recoveryReason,
+        recoveryNowMs,
+        {
+          ...payload,
+          requested_action: 'force_full_keyframe',
+          request_full_keyframe: true,
+          recovery_ladder_step: 'keyframe',
+        },
+      ),
+      securityResync: () => {
+        const publisherUserId = Number(peer?.userId || 0);
+        if (!Number.isInteger(publisherUserId) || publisherUserId <= 0) return false;
+        return sendSocketFrame({
+          type: 'call/media-security-sync-request',
+          target_user_id: publisherUserId,
+          payload: {
+            kind: 'sfu-publisher-stall-security-resync',
+            publisher_id: String(publisherId || ''),
+            reason: normalizeSfuRecoveryReason(reason, 'sfu_publisher_stall_security_resync'),
+            requester_user_id: Number(currentUserId.value || 0),
+            media_runtime_path: mediaRuntimePath.value,
+          },
+        });
+      },
+    });
   }
 
   function remoteVideoReconnectThresholdMs() {
@@ -320,11 +372,20 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             },
             immediate: true,
           });
-          retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);
+          recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs, {
+            frozen_age_ms: frozenAgeMs,
+            receive_gap_ms: receiveGapMs,
+            recovery_ladder_trigger: 'decoder_waiting_keyframe',
+          });
           continue;
         }
-        retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);
+        const targetedFrozenRecovery = recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_frozen', nowMs, {
+          frozen_age_ms: frozenAgeMs,
+          receive_gap_ms: receiveGapMs,
+          recovery_ladder_trigger: 'remote_video_frozen',
+        });
         const socketRestarted = canRestartFrozenVideo
+          && !targetedFrozenRecovery.recovered
           ? requestSfuSocketRestartForPeer('remote_video_frozen', peer, {
             publisher_id: publisherId,
             publisher_user_id: Number(peer.userId || 0),
@@ -425,10 +486,13 @@ export function createCallWorkspaceRuntimeHealthHelpers({
         immediate: true,
       });
 
-      if (retrySfuSubscription(publisherId, peer, 'remote_video_never_started', nowMs)) {
-        // The preceding backend diagnostic carries the stalled publisher details.
-      }
+      const targetedStallRecovery = recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_never_started', nowMs, {
+        age_ms: stalledAgeMs,
+        stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+        recovery_ladder_trigger: 'remote_video_never_started',
+      });
       const socketRestarted = canRestartNeverStartedVideo
+        && !targetedStallRecovery.recovered
         ? requestSfuSocketRestartForPeer('remote_video_never_started', peer, {
           publisher_id: publisherId,
           publisher_user_id: Number(peer.userId || 0),
