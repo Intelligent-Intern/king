@@ -276,6 +276,14 @@ Sprint goal:
      and mobile.
    - The `?` tour action is available through the shared header action model.
 
+   Progress 2026-05-05:
+   - Governance CRUD now derives create-button visibility and label from route
+     action metadata instead of rendering the legacy generic create button on
+     every Governance page.
+   - Readonly/no-create routes such as modules, permissions, audit log, and
+     data portability no longer expose the wrong visible create button through
+     `GovernanceCrudView.vue`.
+
 3. [ ] [governance-crud-descriptors] Replace the placeholder governance CRUD
    logic with entity-specific CRUD descriptors for users, groups,
    organizations, roles, grants, policies, export/import jobs, compliance,
