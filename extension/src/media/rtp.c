@@ -152,6 +152,9 @@ static SSL_CTX *king_dtls_ctx_create(char *fp_out, size_t fp_len)
     if (!ctx) return NULL;
 
     /* Generate 2048-bit RSA key */
+#if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3 && !defined(LIBRESSL_VERSION_NUMBER)
+    EVP_PKEY *pkey = EVP_RSA_gen(2048);
+#else
     EVP_PKEY *pkey = EVP_PKEY_new();
     BIGNUM   *bn   = BN_new();
     RSA      *rsa  = RSA_new();
@@ -159,6 +162,11 @@ static SSL_CTX *king_dtls_ctx_create(char *fp_out, size_t fp_len)
     RSA_generate_key_ex(rsa, 2048, bn, NULL);
     EVP_PKEY_assign_RSA(pkey, rsa);
     BN_free(bn);
+#endif
+    if (!pkey) {
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
 
     /* Self-signed certificate */
     X509 *cert = X509_new();
@@ -777,7 +785,7 @@ PHP_FUNCTION(king_rtp_send)
 #endif
 
     struct addrinfo hints = {0}, *res = NULL;
-    char ps[8]; snprintf(ps, sizeof(ps), "%ld", (long)port);
+    char ps[8]; snprintf(ps, sizeof(ps), ZEND_LONG_FMT, (zend_long) port);
     hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
     if (getaddrinfo(host, ps, &hints, &res) != 0 || !res) RETURN_FALSE;
 

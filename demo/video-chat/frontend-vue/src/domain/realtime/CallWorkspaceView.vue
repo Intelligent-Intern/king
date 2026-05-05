@@ -645,6 +645,7 @@ function sendSocketFrame(payload) {
   }
 }
 const {
+  applyGossipTelemetryAck,
   applyGossipTopologyHint,
   bindGossipDataChannelForNativePeer,
   closeGossipDataChannelForNativePeer,
@@ -1484,6 +1485,7 @@ const {
 } = createCallWorkspaceSocketHelpers({
   callbacks: {
     applyCallLayoutPayload: (...args) => applyCallLayoutPayload(...args),
+    applyGossipTelemetryAck,
     applyGossipTopologyHint,
     applyLobbySnapshot,
     applyParticipantActivityPayload: (...args) => applyParticipantActivityPayload(...args),

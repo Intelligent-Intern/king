@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '../..')
 const harnessPath = path.join(root, 'public/gossip-harness.html')
+const packagePath = path.join(root, 'package.json')
 const html = fs.readFileSync(harnessPath, 'utf8')
+const packageJson = fs.readFileSync(packagePath, 'utf8')
 
 function assert(condition, message) {
   if (!condition) {
@@ -29,6 +31,34 @@ const faultModes = [
   'ops_heartbeat_loss',
   'ops_carrier_loss',
 ]
+
+requireContains('<title>GossipMesh Task 0 - 4-Peer Local Video Harness</title>', 'standalone harness title must identify the four-peer local test')
+requireContains('Start 4-Peer Mesh', 'standalone harness must expose the four-peer mesh start action')
+requireContains("const PEER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];", 'standalone harness must keep exactly four named local peers')
+requireContains('const DEFAULT_FANOUT = 4;', 'local harness must default to fanout degree 4')
+requireContains('const MAX_FANOUT = 5;', 'local harness must keep hard fanout cap 5')
+requireContains('v-model.number="fanout"', 'local harness must expose an adjustable numeric fanout control')
+requireContains(':max="MAX_FANOUT"', 'fanout control must be bounded by the hard cap')
+requireRegex(
+  /function effectiveFanout\(allPeerIds\)[\s\S]*Math\.min\(MAX_FANOUT,\s*Math\.max\(1,\s*requestedFanout\)\)[\s\S]*Math\.min\(boundedByHardCap,\s*Math\.max\(0,\s*allPeerIds\.length - 1\)\)/,
+  'effective fanout must clamp to both hard cap and available peer degree',
+)
+requireRegex(
+  /return rotated\.slice\(0,\s*effectiveFanout\(allPeerIds\)\)/,
+  'neighbor selection must use adjustable effective fanout',
+)
+requireRegex(
+  /neighbors\.slice\(0,\s*effectiveFanout\(peers\.value\.map\(\(peer\) => peer\.id\)\)\)/,
+  'data forwarding must use adjustable effective fanout',
+)
+requireRegex(
+  /fanout:\s*effectiveFanout\(nextPeers\.map\(\(peer\) => peer\.id\)\)/,
+  'topology event must report the effective bounded fanout',
+)
+assert(
+  packageJson.includes('node tests/contract/gossip-harness-faults-contract.mjs'),
+  'npm run test:contract:gossip must include the standalone harness regression contract',
+)
 
 for (const mode of faultModes) {
   requireContains(`value="${mode}"`, `fault mode option is missing: ${mode}`)

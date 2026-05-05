@@ -74,6 +74,29 @@ function videochat_realtime_handle_secondary_websocket_command(
         return $signalingResult;
     }
 
+    $gossipRepairCommand = videochat_gossipmesh_decode_topology_repair_request($frame);
+    $gossipRepairResult = videochat_realtime_handle_gossipmesh_topology_repair_command(
+        $gossipRepairCommand,
+        $websocket,
+        $presenceState,
+        $presenceConnection,
+        $openDatabase
+    );
+    if ($gossipRepairResult !== null) {
+        return $gossipRepairResult;
+    }
+
+    $gossipTelemetryCommand = videochat_gossipmesh_decode_telemetry_snapshot($frame);
+    $gossipTelemetryResult = videochat_realtime_handle_gossipmesh_telemetry_snapshot_command(
+        $gossipTelemetryCommand,
+        $websocket,
+        $presenceState,
+        $presenceConnection
+    );
+    if ($gossipTelemetryResult !== null) {
+        return $gossipTelemetryResult;
+    }
+
     $reactionCommand = videochat_reaction_decode_client_frame($frame);
     $reactionResult = videochat_realtime_handle_reaction_websocket_command(
         $reactionCommand,
@@ -354,6 +377,238 @@ function videochat_realtime_handle_signaling_websocket_command(
             'time' => gmdate('c'),
         ]
     );
+    return videochat_realtime_secondary_handled_result();
+}
+
+function videochat_realtime_gossipmesh_repair_error_reason(string $errorCode): string
+{
+    return match ($errorCode) {
+        'invalid_json', 'invalid_command', 'invalid_payload' => 'The topology repair request payload is invalid.',
+        'invalid_lane' => 'Topology repair requests must use the ops lane.',
+        'forbidden_media_or_signaling_field' => 'Topology repair requests must not carry media, SDP, ICE, socket, or secret fields.',
+        'missing_context' => 'The topology repair request is missing call, room, or peer context.',
+        'invalid_lost_neighbor' => 'The topology repair request must name a lost neighbor other than the authenticated peer.',
+        'context_mismatch' => 'The topology repair request does not match the authenticated websocket call and room context.',
+        'unauthenticated_peer' => 'The topology repair peer_id does not match the authenticated websocket user.',
+        'sender_not_in_room' => 'The authenticated websocket user is not an active member of the requested room.',
+        'topology_unavailable' => 'A replacement gossip topology could not be produced.',
+        default => 'Topology repair failed.',
+    };
+}
+
+function videochat_realtime_send_gossipmesh_repair_error(
+    mixed $websocket,
+    array $presenceConnection,
+    array $command,
+    string $errorCode
+): void {
+    videochat_presence_send_frame(
+        $websocket,
+        [
+            'type' => 'system/error',
+            'code' => 'gossip_topology_repair_failed',
+            'message' => 'Could not repair GossipMesh topology.',
+            'details' => [
+                'error' => $errorCode,
+                'reason' => videochat_realtime_gossipmesh_repair_error_reason($errorCode),
+                'type' => VIDEOCHAT_GOSSIPMESH_TOPOLOGY_REPAIR_TYPE,
+                'room_id' => (string) ($command['room_id'] ?? ($presenceConnection['room_id'] ?? '')),
+                'call_id' => (string) ($command['call_id'] ?? videochat_realtime_connection_call_id($presenceConnection)),
+                'peer_id' => (string) ($command['peer_id'] ?? ''),
+                'user_id' => (int) ($presenceConnection['user_id'] ?? 0),
+            ],
+            'time' => gmdate('c'),
+        ]
+    );
+}
+
+function videochat_realtime_handle_gossipmesh_topology_repair_command(
+    array $repairCommand,
+    mixed $websocket,
+    array &$presenceState,
+    array $presenceConnection,
+    callable $openDatabase
+): ?array {
+    if (!(bool) ($repairCommand['ok'] ?? false)) {
+        if ((string) ($repairCommand['error'] ?? '') === 'unsupported_type') {
+            return null;
+        }
+
+        videochat_realtime_send_gossipmesh_repair_error(
+            $websocket,
+            $presenceConnection,
+            $repairCommand,
+            (string) ($repairCommand['error'] ?? 'invalid_command')
+        );
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    $roomId = videochat_presence_normalize_room_id((string) ($repairCommand['room_id'] ?? ''), '');
+    $connectionRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), '');
+    $callId = videochat_realtime_normalize_call_id((string) ($repairCommand['call_id'] ?? ''), '');
+    $connectionCallId = videochat_realtime_connection_call_id($presenceConnection);
+    $userId = (int) ($presenceConnection['user_id'] ?? 0);
+    $peerId = videochat_gossipmesh_safe_id($repairCommand['peer_id'] ?? '');
+    if (
+        $roomId === ''
+        || $callId === ''
+        || $connectionRoomId === ''
+        || $connectionCallId === ''
+        || $roomId !== $connectionRoomId
+        || $callId !== $connectionCallId
+    ) {
+        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'context_mismatch');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    if ($userId <= 0 || $peerId !== (string) $userId) {
+        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'unauthenticated_peer');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    $sessionId = trim((string) ($presenceConnection['session_id'] ?? ''));
+    $isLocalMember = videochat_realtime_presence_has_room_membership($presenceState, $roomId, $userId, $sessionId);
+    $isDbMember = $isLocalMember ? true : videochat_realtime_db_room_has_joined_user($openDatabase, $presenceConnection, $roomId, $userId);
+    if (!$isDbMember) {
+        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'sender_not_in_room');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    $participants = videochat_realtime_merge_room_participants(
+        videochat_presence_room_participants($presenceState, $roomId),
+        videochat_realtime_db_room_participants($openDatabase, $presenceConnection)
+    );
+    $members = videochat_gossipmesh_members_from_room_participants($participants);
+    $healthRecord = videochat_gossipmesh_record_topology_health_observation($repairCommand);
+    $healthObservations = videochat_gossipmesh_load_recent_topology_health_observations($roomId, $callId);
+    $healthObservations[] = (array) ($healthRecord['observation'] ?? []);
+    $avoidPairs = videochat_gossipmesh_recent_failed_pair_map($healthObservations);
+    try {
+        $topologyPlan = videochat_gossipmesh_plan_topology($callId, $roomId, $members, [
+            'seed' => $callId . ':' . $roomId . ':' . (string) ($repairCommand['lost_peer_id'] ?? ''),
+            'max_neighbors' => VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS,
+            'forward_count' => VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
+            'avoid_pairs' => $avoidPairs,
+        ]);
+        $payload = videochat_gossipmesh_call_topology_payload(
+            $topologyPlan,
+            $peerId,
+            (string) ($repairCommand['reason'] ?? 'topology_repair')
+        );
+    } catch (Throwable) {
+        videochat_realtime_send_gossipmesh_repair_error($websocket, $presenceConnection, $repairCommand, 'topology_unavailable');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    videochat_presence_send_frame($websocket, $payload);
+    return videochat_realtime_secondary_handled_result();
+}
+
+function videochat_realtime_gossipmesh_telemetry_error_reason(string $errorCode): string
+{
+    return match ($errorCode) {
+        'invalid_json', 'invalid_command', 'invalid_payload' => 'The telemetry snapshot payload is invalid.',
+        'invalid_lane' => 'Gossip telemetry snapshots must use the ops lane.',
+        'forbidden_media_or_signaling_field' => 'Gossip telemetry snapshots must not carry media, SDP, ICE, socket, token, or secret fields.',
+        'missing_context' => 'The telemetry snapshot is missing call, room, or peer context.',
+        'context_mismatch' => 'The telemetry snapshot does not match the authenticated websocket call and room context.',
+        'unauthenticated_peer' => 'The telemetry snapshot peer_id does not match the authenticated websocket user.',
+        default => 'Gossip telemetry snapshot failed.',
+    };
+}
+
+function videochat_realtime_send_gossipmesh_telemetry_error(
+    mixed $websocket,
+    array $presenceConnection,
+    array $command,
+    string $errorCode
+): void {
+    videochat_presence_send_frame(
+        $websocket,
+        [
+            'type' => 'system/error',
+            'code' => 'gossip_telemetry_snapshot_failed',
+            'message' => 'Could not accept GossipMesh telemetry snapshot.',
+            'details' => [
+                'error' => $errorCode,
+                'reason' => videochat_realtime_gossipmesh_telemetry_error_reason($errorCode),
+                'type' => VIDEOCHAT_GOSSIPMESH_TELEMETRY_SNAPSHOT_TYPE,
+                'room_id' => (string) ($command['room_id'] ?? ($presenceConnection['room_id'] ?? '')),
+                'call_id' => (string) ($command['call_id'] ?? videochat_realtime_connection_call_id($presenceConnection)),
+                'peer_id' => (string) ($command['peer_id'] ?? ''),
+                'user_id' => (int) ($presenceConnection['user_id'] ?? 0),
+            ],
+            'time' => gmdate('c'),
+        ]
+    );
+}
+
+function videochat_realtime_handle_gossipmesh_telemetry_snapshot_command(
+    array $telemetryCommand,
+    mixed $websocket,
+    array &$presenceState,
+    array $presenceConnection
+): ?array {
+    if (!(bool) ($telemetryCommand['ok'] ?? false)) {
+        if ((string) ($telemetryCommand['error'] ?? '') === 'unsupported_type') {
+            return null;
+        }
+
+        videochat_realtime_send_gossipmesh_telemetry_error(
+            $websocket,
+            $presenceConnection,
+            $telemetryCommand,
+            (string) ($telemetryCommand['error'] ?? 'invalid_command')
+        );
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    $roomId = videochat_presence_normalize_room_id((string) ($telemetryCommand['room_id'] ?? ''), '');
+    $connectionRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? ''), '');
+    $callId = videochat_realtime_normalize_call_id((string) ($telemetryCommand['call_id'] ?? ''), '');
+    $connectionCallId = videochat_realtime_connection_call_id($presenceConnection);
+    $userId = (int) ($presenceConnection['user_id'] ?? 0);
+    $peerId = videochat_gossipmesh_safe_id($telemetryCommand['peer_id'] ?? '');
+
+    if (
+        $roomId === ''
+        || $callId === ''
+        || $connectionRoomId === ''
+        || $connectionCallId === ''
+        || $roomId !== $connectionRoomId
+        || $callId !== $connectionCallId
+    ) {
+        videochat_realtime_send_gossipmesh_telemetry_error($websocket, $presenceConnection, $telemetryCommand, 'context_mismatch');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    if ($userId <= 0 || $peerId !== (string) $userId) {
+        videochat_realtime_send_gossipmesh_telemetry_error($websocket, $presenceConnection, $telemetryCommand, 'unauthenticated_peer');
+        return videochat_realtime_secondary_handled_result();
+    }
+
+    $aggregate = videochat_gossipmesh_aggregate_telemetry_snapshot($presenceState, [
+        ...$telemetryCommand,
+        'room_id' => $roomId,
+        'call_id' => $callId,
+        'peer_id' => $peerId,
+    ]);
+
+    videochat_presence_send_frame(
+        $websocket,
+        [
+            'type' => 'gossip/telemetry/ack',
+            'lane' => 'ops',
+            'room_id' => $roomId,
+            'call_id' => $callId,
+            'peer_id' => $peerId,
+            'peer_count' => (int) ($aggregate['peer_count'] ?? 0),
+            'transports' => is_array($aggregate['transports'] ?? null) ? $aggregate['transports'] : [],
+            'rollout_gate' => is_array($aggregate['rollout_gate'] ?? null) ? $aggregate['rollout_gate'] : [],
+            'time' => gmdate('c'),
+        ]
+    );
+
     return videochat_realtime_secondary_handled_result();
 }
 

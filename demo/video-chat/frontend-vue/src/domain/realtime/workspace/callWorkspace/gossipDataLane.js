@@ -1,6 +1,7 @@
 import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
 import { GOSSIP_DATA_LANE_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
+import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
 
 export function createCallWorkspaceGossipDataLane({
@@ -27,6 +28,8 @@ export function createCallWorkspaceGossipDataLane({
   const assignedGossipNativeNeighborIds = new Set();
   const liveGossipFrameSequenceByTrack = new Map();
   const gossipTopologyRepairRequestedAtByPeerId = new Map();
+  let lastGossipTelemetrySnapshotSentAtMs = 0;
+  let lastGossipRolloutGateState = null;
 
   function localPeerId() {
     return String(currentUserId() || '').trim();
@@ -95,6 +98,14 @@ export function createCallWorkspaceGossipDataLane({
           },
         });
       },
+      onTelemetry: (event) => {
+        const controller = liveGossipController;
+        const peerId = String(event?.peerId || localPeerId()).trim();
+        const counter = String(event?.counter || '').trim();
+        if (!controller || peerId === '' || counter === '') return;
+        controller.recordTransportTelemetry?.(peerId, counter, Math.max(1, Number(event?.increment || 1)));
+        emitGossipTelemetrySnapshot('transport_telemetry');
+      },
     });
     return gossipDataChannelTransport;
   }
@@ -116,6 +127,7 @@ export function createCallWorkspaceGossipDataLane({
       liveGossipControllerKey = '';
       assignedGossipNativeNeighborIds.clear();
       gossipTopologyRepairRequestedAtByPeerId.clear();
+      lastGossipTelemetrySnapshotSentAtMs = 0;
       gossipDataChannelTransport?.close();
       gossipDataChannelTransport = null;
     }
@@ -193,6 +205,8 @@ export function createCallWorkspaceGossipDataLane({
     const lastRequestedAtMs = Number(gossipTopologyRepairRequestedAtByPeerId.get(normalizedPeerId) || 0);
     if ((nowMs - lastRequestedAtMs) < 3000) return false;
     gossipTopologyRepairRequestedAtByPeerId.set(normalizedPeerId, nowMs);
+    const controller = ensureLiveGossipController();
+    controller?.recordTransportTelemetry?.(localPeerId(), 'topology_repairs_requested', 1);
     const sent = sendSocketFrame({
       type: 'gossip/topology-repair/request',
       lane: 'ops',
@@ -222,6 +236,33 @@ export function createCallWorkspaceGossipDataLane({
         sent,
       },
     });
+    return sent;
+  }
+
+  function emitGossipTelemetrySnapshot(reason = 'periodic') {
+    if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;
+    const controller = ensureLiveGossipController();
+    const peerId = localPeerId();
+    if (!controller || peerId === '' || peerId === '0') return false;
+    const nowMs = Date.now();
+    if ((nowMs - lastGossipTelemetrySnapshotSentAtMs) < 5000) return false;
+    const snapshot = controller.createTelemetrySnapshot?.(peerId, {
+      dataLaneMode: GOSSIP_DATA_LANE_CONFIG.mode,
+      diagnosticsLabel: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+      rolloutStrategy: 'sfu_first_explicit',
+    });
+    if (!snapshot) return false;
+    const sent = sendSocketFrame({
+      type: 'gossip/telemetry/snapshot',
+      lane: 'ops',
+      payload: {
+        ...snapshot,
+        reason: String(reason || 'periodic'),
+      },
+    });
+    if (sent) {
+      lastGossipTelemetrySnapshotSentAtMs = nowMs;
+    }
     return sent;
   }
 
@@ -267,6 +308,7 @@ export function createCallWorkspaceGossipDataLane({
       }
     }
     const boundCount = bindAssignedGossipNativeNeighbors();
+    emitGossipTelemetrySnapshot('topology_hint_applied');
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
@@ -360,6 +402,7 @@ export function createCallWorkspaceGossipDataLane({
       roi_norm_height: Math.max(0, Number(frame.roiNormHeight || 0)),
     };
     controller.publishFrame(peerId, msg);
+    emitGossipTelemetrySnapshot('local_publish');
     return true;
   }
 
@@ -441,6 +484,32 @@ export function createCallWorkspaceGossipDataLane({
     gossipDataChannelTransport?.close(String(peerId || ''));
   }
 
+  function applyGossipTelemetryAck(payload) {
+    const type = String(payload?.type || '').trim().toLowerCase();
+    if (type !== 'gossip/telemetry/ack') return false;
+    const gateState = deriveGossipRolloutGateState(payload, {
+      mode: GOSSIP_DATA_LANE_CONFIG.mode,
+    });
+    lastGossipRolloutGateState = gateState;
+    captureClientDiagnostic({
+      category: 'media',
+      level: gateState.active_allowed ? 'info' : 'warning',
+      eventType: 'gossip_rollout_gate_state',
+      code: 'gossip_rollout_gate_state',
+      message: 'Gossip rollout gate evaluated sanitized telemetry aggregates.',
+      payload: {
+        ...gateState,
+        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+      },
+    });
+    return true;
+  }
+
+  function getGossipRolloutGateState() {
+    return lastGossipRolloutGateState ? { ...lastGossipRolloutGateState } : null;
+  }
+
   function teardownGossipDataLane() {
     if (typeof unsubscribeLiveGossipDelivery === 'function') {
       unsubscribeLiveGossipDelivery();
@@ -452,14 +521,18 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipFrameSequenceByTrack.clear();
     assignedGossipNativeNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();
+    lastGossipRolloutGateState = null;
+    lastGossipTelemetrySnapshotSentAtMs = 0;
     gossipDataChannelTransport?.close();
     gossipDataChannelTransport = null;
   }
 
   return {
+    applyGossipTelemetryAck,
     applyGossipTopologyHint,
     bindGossipDataChannelForNativePeer,
     closeGossipDataChannelForNativePeer,
+    getGossipRolloutGateState,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,
   };

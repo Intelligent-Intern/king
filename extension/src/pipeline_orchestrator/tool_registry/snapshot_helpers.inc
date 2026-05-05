@@ -94,7 +94,7 @@ static zend_string *king_orchestrator_build_attempt_identity_for_snapshot(
 
     return strpprintf(
         0,
-        "%s:attempt-%ld",
+        "%s:attempt-" ZEND_LONG_FMT,
         run_id,
         attempt_number > 0 ? attempt_number : 1
     );
@@ -122,7 +122,7 @@ static zend_string *king_orchestrator_build_failure_identity_for_snapshot(
     attempt_identity = king_orchestrator_build_attempt_identity_for_snapshot(run_state);
     failure_identity = strpprintf(
         0,
-        "%s:%s:%s:%ld",
+        "%s:%s:%s:" ZEND_LONG_FMT,
         ZSTR_VAL(attempt_identity),
         ZSTR_VAL(run_state->status),
         run_state->error_category != NULL ? ZSTR_VAL(run_state->error_category) : "backend",

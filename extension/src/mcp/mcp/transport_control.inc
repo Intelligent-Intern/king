@@ -54,10 +54,10 @@ static zend_string *king_mcp_build_transport_target(king_mcp_state *state)
         && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
 
     if (needs_brackets) {
-        return strpprintf(0, "tcp://[%s]:%ld", host, state->port);
+        return strpprintf(0, "tcp://[%s]:" ZEND_LONG_FMT, host, state->port);
     }
 
-    return strpprintf(0, "tcp://%s:%ld", host, state->port);
+    return strpprintf(0, "tcp://%s:" ZEND_LONG_FMT, host, state->port);
 }
 
 static zend_long king_mcp_default_transport_timeout_ms(void)

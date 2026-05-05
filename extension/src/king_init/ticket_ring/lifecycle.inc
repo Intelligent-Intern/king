@@ -73,8 +73,8 @@ static int king_ticket_ring_open_file_backed_fallback(bool *created)
     snprintf(
         king_globals.ticket_ring_name,
         sizeof(king_globals.ticket_ring_name),
-        "/tmp/king_ticket_ring_%ld_%d",
-        (long) getuid(),
+        "/tmp/king_ticket_ring_" ZEND_LONG_FMT "_%d",
+        (zend_long) getuid(),
         king_ini_module_number
     );
 
@@ -113,8 +113,8 @@ static int king_ticket_ring_init(void)
     snprintf(
         king_globals.ticket_ring_name,
         sizeof(king_globals.ticket_ring_name),
-        "/king_ticket_ring_%ld_%d",
-        (long) getuid(),
+        "/king_ticket_ring_" ZEND_LONG_FMT "_%d",
+        (zend_long) getuid(),
         king_ini_module_number
     );
 

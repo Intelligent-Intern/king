@@ -150,7 +150,7 @@ static zend_result king_server_http3_build_wire_request(
 
     authority = state->authority != NULL
         ? zend_string_copy(state->authority)
-        : strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+        : strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
     if (state->scheme != NULL && ZSTR_LEN(state->scheme) > 0) {
         scheme = ZSTR_VAL(state->scheme);
     }
@@ -310,7 +310,7 @@ static zend_result king_server_http3_prepare_response_state(
     state->headers = safe_emalloc(header_count, sizeof(*state->headers), 0);
     state->owned_strings = safe_emalloc(header_count * 2, sizeof(*state->owned_strings), 0);
 
-    status_string = strpprintf(0, "%ld", status);
+    status_string = strpprintf(0, ZEND_LONG_FMT, status);
     state->headers[index].name = (const uint8_t *) ":status";
     state->headers[index].name_len = sizeof(":status") - 1;
     state->headers[index].value = (const uint8_t *) ZSTR_VAL(status_string);
@@ -361,4 +361,3 @@ static zend_result king_server_http3_prepare_response_state(
     state->initialized = true;
     return SUCCESS;
 }
-

@@ -228,7 +228,7 @@ static zend_string *king_orchestrator_remote_build_target(void)
     if (needs_brackets) {
         return strpprintf(
             0,
-            "tcp://[%s]:%ld",
+            "tcp://[%s]:" ZEND_LONG_FMT,
             host,
             king_mcp_orchestrator_config.orchestrator_remote_port
         );
@@ -236,7 +236,7 @@ static zend_string *king_orchestrator_remote_build_target(void)
 
     return strpprintf(
         0,
-        "tcp://%s:%ld",
+        "tcp://%s:" ZEND_LONG_FMT,
         host,
         king_mcp_orchestrator_config.orchestrator_remote_port
     );
@@ -522,7 +522,7 @@ static zend_result king_orchestrator_exec_control_parse(
         snprintf(
             message,
             sizeof(message),
-            "%s() option 'max_concurrency' must be <= the configured orchestrator_loop_concurrency_default (%ld).",
+            "%s() option 'max_concurrency' must be <= the configured orchestrator_loop_concurrency_default (" ZEND_LONG_FMT ").",
             function_name,
             king_mcp_orchestrator_config.orchestrator_loop_concurrency_default
         );

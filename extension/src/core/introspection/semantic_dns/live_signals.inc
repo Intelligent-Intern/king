@@ -310,10 +310,10 @@ static zend_string *king_semantic_dns_build_probe_transport_target(
     }
 
     if (memchr(ZSTR_VAL(host), ':', ZSTR_LEN(host)) != NULL) {
-        return strpprintf(0, "tcp://[%s]:%ld", ZSTR_VAL(host), port);
+        return strpprintf(0, "tcp://[%s]:" ZEND_LONG_FMT, ZSTR_VAL(host), port);
     }
 
-    return strpprintf(0, "tcp://%s:%ld", ZSTR_VAL(host), port);
+    return strpprintf(0, "tcp://%s:" ZEND_LONG_FMT, ZSTR_VAL(host), port);
 }
 
 static bool king_semantic_dns_probe_service_live_state(

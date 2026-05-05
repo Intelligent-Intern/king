@@ -83,8 +83,8 @@ static zend_bool king_autoscaling_monitor_tick(void)
         snprintf(
             king_autoscaling_runtime.last_warning,
             sizeof(king_autoscaling_runtime.last_warning),
-            "Autoscaling controller is in cooldown for %ld more second(s).",
-            (long) cooldown_remaining
+            "Autoscaling controller is in cooldown for " ZEND_LONG_FMT " more second(s).",
+            (zend_long) cooldown_remaining
         );
         king_autoscaling_set_runtime_string(
             king_autoscaling_runtime.last_action_kind,
@@ -478,7 +478,7 @@ int king_autoscaling_runtime_persist_state(void)
         return SUCCESS;
     }
 
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%ld", state_path, (long) getpid());
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp." ZEND_LONG_FMT, state_path, (zend_long) getpid());
     stream = fopen(tmp_path, "wb");
     if (stream == NULL) {
         snprintf(
@@ -501,14 +501,14 @@ int king_autoscaling_runtime_persist_state(void)
         king_autoscaling_managed_node_t *node = &king_autoscaling_runtime.managed_nodes[index];
         fprintf(
             stream,
-            "node\t%ld\t%d\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%s\t%s\n",
-            (long) node->server_id,
+            "node\t" ZEND_LONG_FMT "\t%d\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t%s\t%s\t%s\n",
+            (zend_long) node->server_id,
             node->active ? 1 : 0,
-            (long) node->created_at,
-            (long) node->registered_at,
-            (long) node->ready_at,
-            (long) node->draining_at,
-            (long) node->deleted_at,
+            (zend_long) node->created_at,
+            (zend_long) node->registered_at,
+            (zend_long) node->ready_at,
+            (zend_long) node->draining_at,
+            (zend_long) node->deleted_at,
             king_autoscaling_node_lifecycle_to_string(node->lifecycle_state),
             node->provider_status,
             node->name

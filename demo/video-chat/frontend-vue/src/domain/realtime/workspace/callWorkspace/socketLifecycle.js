@@ -13,6 +13,7 @@ export function createCallWorkspaceSocketHelpers({
 }) {
   const {
     applyCallLayoutPayload,
+    applyGossipTelemetryAck = () => false,
     applyGossipTopologyHint = () => false,
     applyLobbySnapshot,
     applyParticipantActivityPayload,
@@ -295,6 +296,11 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'topology_hint') {
       applyGossipTopologyHint(payload);
+      return;
+    }
+
+    if (type === 'gossip/telemetry/ack') {
+      applyGossipTelemetryAck(payload);
       return;
     }
 

@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const controllerPath = path.join(frontendRoot, 'src/lib/gossipmesh/gossipController.ts')
+const routingPath = path.join(frontendRoot, 'src/lib/gossipmesh/routing.ts')
 const rtcTransportPath = path.join(frontendRoot, 'src/lib/gossipmesh/rtcDataChannelTransport.ts')
 const source = fs.readFileSync(controllerPath, 'utf8')
+const routing = fs.readFileSync(routingPath, 'utf8')
 const rtcTransport = fs.readFileSync(rtcTransportPath, 'utf8')
 
 function assert(condition, message) {
@@ -42,6 +44,23 @@ const forward = methodBody('private forward')
 const handleData = methodBody('handleData')
 
 assert(
+  /export const MIN_EXPANDER_FANOUT = 3/.test(routing) && /export const DEFAULT_FANOUT = 4/.test(routing),
+  'production gossip routing must use min degree 3 and default degree 4',
+)
+assert(
+  /export const MAX_FANOUT = 5/.test(routing),
+  'production gossip routing must retain hard fanout cap 5',
+)
+assert(
+  /Math\.min\(MAX_FANOUT,\s*Math\.max\(MIN_EXPANDER_FANOUT,\s*Math\.floor\(Number\(fanout\) \|\| DEFAULT_FANOUT\)\)\)/.test(routing),
+  'neighbor selection must clamp fanout to the expander minimum and hard cap',
+)
+assert(
+  /import \{ DEFAULT_FANOUT, computeTtl, selectNeighbors as selectDeterministicNeighbors \} from '\.\/routing'/.test(source),
+  'controller must use the shared production fanout default from routing.ts',
+)
+
+assert(
   !/for\s*\(\s*const\s+\[[^\]]+\]\s+of\s+this\.peers\.entries\(\)\s*\)/.test(publishFrame),
   'publishFrame must not iterate every peer; it should only seed the publisher neighbor set',
 )
@@ -54,7 +73,7 @@ assert(
   'controller must expose an injectable data transport for RTCDataChannel wiring',
 )
 assert(
-  /this\.dataTransport\.sendData\(neighborId,\s*\{\s*\.\.\.msg,\s*ttl\s*\},\s*fromPeerId\)/.test(forward),
+  /this\.dataTransport\.sendData\(neighborId,\s*\{\s*\.\.\.msg,\s*ttl,\s*last_hop_sent_at_ms:\s*forwardedAtMs\s*\},\s*fromPeerId\)/.test(forward),
   'forward() must send only to selected neighbors through the data transport',
 )
 assert(
