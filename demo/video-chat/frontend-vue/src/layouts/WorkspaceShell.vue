@@ -426,10 +426,6 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
-        <WorkspaceThemeSettings v-model="settingsDraft.theme" :saving="settingsState.saving || settingsState.loading" />
-      </section>
-
       <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
@@ -443,37 +439,26 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'session'" class="settings-panel">
-        <section class="settings-section">
-          <h4>Logout Landing</h4>
-          <p>Choose the same-origin page users should see after leaving or logging out.</p>
-          <div class="settings-row settings-row-single">
-            <label class="settings-field">
-              <span>Landing page path</span>
-              <input
-                v-model.trim="settingsDraft.postLogoutLandingUrl"
-                class="input"
-                type="text"
-                inputmode="url"
-                placeholder="/call-goodbye"
-                autocomplete="off"
-              />
-            </label>
-            <div class="settings-field settings-field-action">
-              <span>Default</span>
-              <button class="btn" type="button" @click="resetPostLogoutLandingUrl">
-                Reset to default
-              </button>
-            </div>
-          </div>
-        </section>
+      <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
+        <WorkspaceThemeSettings
+          v-model="settingsDraft.theme"
+          :saving="settingsState.saving || settingsState.loading"
+          selection-only
+        />
       </section>
 
-      <section v-else-if="activeSettingsTile === 'regional'" class="settings-panel">
+      <section v-else-if="activeSettingsTile === 'localization'" class="settings-panel">
         <section class="settings-section">
-          <h4>Regional Time</h4>
-          <p>Select how date and time should be displayed across the workspace.</p>
+          <h4>Localization</h4>
           <div class="settings-row">
+            <label class="settings-field">
+              <span>Application language</span>
+              <AppSelect v-model="settingsDraft.language">
+                <option v-for="language in settingsLanguageOptions" :key="language.code" :value="language.code">
+                  {{ language.label }}
+                </option>
+              </AppSelect>
+            </label>
             <label class="settings-field">
               <span>Time format</span>
               <AppSelect v-model="settingsDraft.timeFormat">
@@ -491,14 +476,6 @@
             </label>
           </div>
         </section>
-      </section>
-
-      <section v-else-if="activeSettingsTile === 'administration'" class="settings-panel">
-        <WorkspaceAdministrationSettings ref="administrationSettingsRef" />
-      </section>
-
-      <section v-else-if="activeSettingsTile === 'apps'" class="settings-panel">
-        <div class="settings-upload-status">Apps settings coming soon.</div>
       </section>
 
       <section v-else class="settings-panel">
@@ -704,7 +681,6 @@
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
-import WorkspaceAdministrationSettings from './settings/WorkspaceAdministrationSettings.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import {
@@ -715,6 +691,11 @@ import {
   uploadSessionAvatar,
 } from '../domain/auth/session';
 import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
+import {
+  SUPPORTED_LOCALIZATION_LANGUAGES,
+  localizationLanguageDirection,
+  normalizeLocalizationLanguage,
+} from '../support/localizationOptions';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
   appearanceState,
@@ -751,7 +732,6 @@ const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
-const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
 
 const pageTitle = computed(() => {
   const routeTitle = typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '';
@@ -762,7 +742,11 @@ const pageTitle = computed(() => {
     '/admin/users': 'Nutzer',
     '/admin/governance': 'Governance',
     '/admin/governance/users': 'Nutzer',
-    '/admin/marketplace': 'Marketplace',
+    '/admin/administration': 'Administration',
+    '/admin/administration/marketplace': 'Marketplace',
+    '/admin/administration/localization': 'Localization',
+    '/admin/administration/app-configuration': 'App Configuration',
+    '/admin/administration/theme-editor': 'Theme Editor',
     '/admin/calls': 'Video Call Management',
     '/user/dashboard': 'My Video Calls',
   };
@@ -777,7 +761,8 @@ const pageSubtitle = computed(() => {
 });
 const showWorkspaceHeader = computed(() => (
   !route.path.startsWith('/admin/governance')
-  && !['/admin/users', '/admin/marketplace', '/admin/calls'].includes(route.path)
+  && !route.path.startsWith('/admin/administration')
+  && !['/admin/users', '/admin/calls'].includes(route.path)
   && !isCallWorkspace.value
 ));
 
@@ -853,23 +838,19 @@ const settingsState = reactive({
   avatarStatus: '',
 });
 const activeSettingsTile = ref('about-me');
-const administrationSettingsRef = ref(null);
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
-  { id: 'credentials-email', label: 'Credentials + Email' },
-  { id: 'session', label: 'Session' },
-  { id: 'regional', label: 'Regional' },
+  { id: 'credentials-email', label: 'Credentials + E-Mail' },
   { id: 'theme', label: 'Theme' },
-  { id: 'administration', label: 'Administration' },
-  { id: 'apps', label: 'Apps' },
+  { id: 'localization', label: 'Localization' },
 ]));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
+const settingsLanguageOptions = SUPPORTED_LOCALIZATION_LANGUAGES;
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
 function normalizeSettingsLanguage(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return SUPPORTED_SETTINGS_LANGUAGES.includes(normalized) ? normalized : 'en';
+  return normalizeLocalizationLanguage(value);
 }
 
 function readStoredSettingsLanguage() {
@@ -884,7 +865,9 @@ function storeSettingsLanguage(language) {
 
 function applySettingsLanguage(language) {
   if (typeof document === 'undefined') return;
-  document.documentElement.lang = normalizeSettingsLanguage(language);
+  const normalized = normalizeSettingsLanguage(language);
+  document.documentElement.lang = normalized;
+  document.documentElement.dir = localizationLanguageDirection(normalized);
 }
 
 function normalizePostLogoutLandingUrl(value) {
@@ -1973,10 +1956,6 @@ function resetSettingsDraft() {
   settingsDraft.avatarDataUrl = '';
 }
 
-function resetPostLogoutLandingUrl() {
-  settingsDraft.postLogoutLandingUrl = '';
-}
-
 function setAvatarStatus(message = '') {
   settingsState.avatarStatus = message;
 }
@@ -2059,20 +2038,6 @@ async function saveSettings() {
   settingsState.message = '';
   settingsState.avatarStatus = '';
 
-  if (activeSettingsTile.value === 'administration') {
-    settingsState.saving = true;
-    try {
-      const result = await administrationSettingsRef.value?.save?.();
-      settingsState.message = result?.message || (result?.ok ? 'Administration settings saved.' : 'Could not save administration settings.');
-      if (result?.ok) {
-        settingsState.open = false;
-      }
-    } finally {
-      settingsState.saving = false;
-    }
-    return;
-  }
-
   const displayName = settingsDraft.displayName.trim();
   const theme = normalizeWorkspaceThemeId(settingsDraft.theme);
   const rawTimeFormat = settingsDraft.timeFormat.trim();
@@ -2102,7 +2067,7 @@ async function saveSettings() {
     return;
   }
 
-  if (!SUPPORTED_SETTINGS_LANGUAGES.includes(language)) {
+  if (!settingsLanguageOptions.some((option) => option.code === language)) {
     settingsState.message = 'Unsupported language selected.';
     return;
   }
