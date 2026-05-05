@@ -5,10 +5,16 @@ import {
   GOVERNANCE_CRUD_DESCRIPTORS,
 } from '../../src/modules/governance/crudDescriptors.js';
 import {
+  dataPortabilityModalFields,
+  dataPortabilityPayloadFromForm,
+  isDataPortabilityActionKind,
+} from '../../src/modules/governance/dataPortabilityUi.js';
+import {
   governanceCrudRowsFromPayload,
   isPersistedGovernanceEntity,
   normalizeGovernanceCrudRow,
 } from '../../src/modules/governance/governanceCrudPersistenceHelpers.js';
+import { ENGLISH_MESSAGES } from '../../src/modules/localization/englishMessages.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
@@ -28,6 +34,30 @@ assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.organizations.endpoint, '/api/governanc
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.roles.endpoint, '/api/governance/roles', 'roles must target the governance backend endpoint');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.policies.endpoint, '/api/governance/policies', 'policies must target the governance backend endpoint');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS['data-portability'].endpoint, '/api/governance/data-portability-jobs', 'data portability must target the governance backend endpoint');
+assert.equal(isDataPortabilityActionKind('export'), true, 'data portability must support export action kind');
+assert.equal(isDataPortabilityActionKind('import'), true, 'data portability must support import action kind');
+assert.deepEqual(
+  dataPortabilityModalFields('data-portability', 'export', []).map((field) => field.key),
+  ['scope_type'],
+  'export jobs must ask for scope but not a generic create payload',
+);
+assert.deepEqual(
+  dataPortabilityModalFields('data-portability', 'import', []).map((field) => field.key),
+  ['scope_type', 'bundle_json'],
+  'import jobs must collect an explicit bundle JSON dry-run payload',
+);
+assert.deepEqual(
+  dataPortabilityPayloadFromForm('export', { scope_type: 'user' }, { user: [] }).payload,
+  { job_type: 'export', scope_type: 'user', relationships: { user: [] } },
+  'export payload must preserve user scope and relationship snapshot',
+);
+assert.equal(
+  dataPortabilityPayloadFromForm('import', { scope_type: 'organization', bundle_json: '{bad' }, {}).error_key,
+  'governance.data_portability.invalid_bundle_json',
+  'import payload must reject invalid JSON before posting',
+);
+assert.equal(ENGLISH_MESSAGES['governance.status_completed'], 'completed', 'job completed status must have an English label');
+assert.equal(ENGLISH_MESSAGES['governance.field.scope_type'], 'Scope', 'portability scope field must have an English label');
 
 const normalized = normalizeGovernanceCrudRow({
   id: '00000000-0000-4000-8000-000000000301',
@@ -84,5 +114,7 @@ assert.match(viewSource, /subjects'.*users.*groups.*organizations/s, 'subject pi
 assert.match(viewSource, /resources'.*groups.*organizations/s, 'resource pickers must hydrate persisted group and organization resources');
 assert.match(viewSource, /submitPersistedRow/, 'governance CRUD view must persist backend-backed create and update actions');
 assert.match(viewSource, /isPersistedGovernanceEntity\(key\)\)\s*return false/, 'relation drafts must not fake-create backend-backed entities locally');
+assert.match(viewSource, /portabilityActions/, 'data portability must render explicit export and import route actions');
+assert.match(viewSource, /downloadPortabilityExport/, 'completed export jobs must trigger a JSON download from the returned job result');
 
 console.log('[governance-crud-persistence-contract] PASS');

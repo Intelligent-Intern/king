@@ -16,6 +16,11 @@ const JOB_TYPE_OPTIONS = Object.freeze([
   { value: 'import', label_key: 'governance.option.import' },
 ]);
 
+const PORTABILITY_SCOPE_OPTIONS = Object.freeze([
+  { value: 'organization', label_key: 'governance.option.organization' },
+  { value: 'user', label_key: 'governance.option.user' },
+]);
+
 const SEVERITY_OPTIONS = Object.freeze([
   { value: 'low', label_key: 'governance.option.low' },
   { value: 'medium', label_key: 'governance.option.medium' },
@@ -222,7 +227,8 @@ const descriptors = {
     endpoint: '/api/governance/data-portability-jobs',
     fields: Object.freeze([
       enumField('job_type', 'governance.field.job_type', JOB_TYPE_OPTIONS, { required: true, default: 'export' }),
-      enumField('status', 'governance.status', STATUS_OPTIONS, { default: 'draft' }),
+      enumField('scope_type', 'governance.field.scope_type', PORTABILITY_SCOPE_OPTIONS, { required: true, default: 'organization' }),
+      enumField('status', 'governance.status', STATUS_OPTIONS, { readonly: true, default: 'queued' }),
       textField('description', 'governance.description', { type: 'textarea', wide: true }),
     ]),
     relationships: Object.freeze([
@@ -231,8 +237,9 @@ const descriptors = {
     ]),
     table_columns: Object.freeze([
       column('job_type', 'governance.field.job_type', { cell: 'primary', width: '22%' }),
+      column('scope_type', 'governance.field.scope_type', { width: '14%' }),
       column('status', 'governance.status', { cell: 'status', width: '12%' }),
-      column('description', 'governance.description', { cell: 'description', width: '38%' }),
+      column('description', 'governance.description', { cell: 'description', width: '30%' }),
       column('updatedAt', 'governance.updated', { cell: 'datetime', width: '18%' }),
     ]),
     allowed_actions: Object.freeze(['export', 'import']),

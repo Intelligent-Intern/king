@@ -44,7 +44,7 @@ function videochat_tenancy_governance_portability_permission_decision(PDO $pdo, 
     return ['ok' => false, 'reason' => 'not_granted'];
 }
 
-function videochat_tenancy_governance_portability_scope(PDO $pdo, int $tenantId, array $payload): array
+function videochat_tenancy_governance_portability_scope(PDO $pdo, int $tenantId, array $payload, int $actorUserId = 0): array
 {
     $relationships = is_array($payload['relationships'] ?? null) ? $payload['relationships'] : [];
     $user = is_array($relationships['user'] ?? null) && array_is_list($relationships['user']) ? ($relationships['user'][0] ?? null) : null;
@@ -71,6 +71,14 @@ function videochat_tenancy_governance_portability_scope(PDO $pdo, int $tenantId,
     $scopeType = in_array((string) ($payload['scope_type'] ?? 'organization'), ['user', 'organization'], true)
         ? (string) ($payload['scope_type'] ?? 'organization')
         : 'organization';
+    if ($scopeType === 'user' && $actorUserId > 0) {
+        $validation = videochat_tenancy_governance_validate_user_ids($pdo, $tenantId, [$actorUserId], 'user');
+        if (!(bool) ($validation['ok'] ?? false)) {
+            return ['ok' => false, 'errors' => ['user' => 'not_found']];
+        }
+        return ['ok' => true, 'scope_type' => 'user', 'scope_user_id' => $actorUserId, 'scope_organization_id' => 0];
+    }
+
     return ['ok' => true, 'scope_type' => $scopeType, 'scope_user_id' => 0, 'scope_organization_id' => 0];
 }
 
@@ -125,20 +133,64 @@ function videochat_tenancy_governance_portability_public_row(PDO $pdo, int $tena
             $relationships['organization'] = [$organizations[$organizationId]];
         }
     }
+    $result = videochat_tenancy_governance_portability_public_result((string) ($row['result_json'] ?? '{}'), $jobType);
+    $description = (string) ($row['failure_reason'] ?? '');
+    $tableCount = is_array($result['tables'] ?? null) ? count((array) $result['tables']) : (int) ($result['table_count'] ?? 0);
+    $descriptionKey = '';
+    $descriptionParams = ['tables' => $tableCount];
+    if ($description === '') {
+        if ($jobType === 'export') {
+            $descriptionKey = 'governance.data_portability.export_ready';
+        } elseif ((bool) ($result['accepted'] ?? false)) {
+            $descriptionKey = 'governance.data_portability.import_dry_run_passed';
+        } else {
+            $descriptionKey = 'governance.data_portability.import_dry_run_failed';
+        }
+    }
 
     return [
         'id' => $id,
         'key' => $id,
         'job_type' => $jobType,
         'name' => ucfirst($jobType) . ' ' . $status,
-        'description' => (string) ($row['failure_reason'] ?? ''),
+        'description' => $description,
+        'description_key' => $descriptionKey,
+        'description_params' => $descriptionParams,
         'status' => $status,
         'scope_type' => $scopeType,
         'schema_version' => (string) ($row['schema_version'] ?? ''),
+        'result' => $result,
         'updatedAt' => (string) ($row['updated_at'] ?? ''),
         'created_at' => (string) ($row['created_at'] ?? ''),
         'completed_at' => (string) ($row['completed_at'] ?? ''),
         'relationships' => $relationships,
+    ];
+}
+
+function videochat_tenancy_governance_portability_public_result(string $resultJson, string $jobType): array
+{
+    $decoded = json_decode($resultJson !== '' ? $resultJson : '{}', true);
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    unset($decoded['tenant_id'], $decoded['scope_user_id'], $decoded['scope_organization_id']);
+    if ($jobType === 'export') {
+        return [
+            'schema_version' => (string) ($decoded['schema_version'] ?? 'tenant-export.v1'),
+            'scope_type' => in_array((string) ($decoded['scope_type'] ?? 'organization'), ['user', 'organization'], true)
+                ? (string) $decoded['scope_type']
+                : 'organization',
+            'tables' => is_array($decoded['tables'] ?? null) ? $decoded['tables'] : [],
+            'generated_at' => (string) ($decoded['generated_at'] ?? ''),
+        ];
+    }
+
+    return [
+        'dry_run' => (bool) ($decoded['dry_run'] ?? true),
+        'accepted' => (bool) ($decoded['accepted'] ?? false),
+        'errors' => is_array($decoded['errors'] ?? null) ? $decoded['errors'] : [],
+        'table_count' => (int) ($decoded['table_count'] ?? 0),
     ];
 }
 
@@ -210,7 +262,7 @@ function videochat_handle_governance_portability_routes(
         if (!(bool) ($permission['ok'] ?? false)) {
             return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
         }
-        $scope = videochat_tenancy_governance_portability_scope($pdo, $tenantId, $payload);
+        $scope = videochat_tenancy_governance_portability_scope($pdo, $tenantId, $payload, $actorUserId);
         if (!(bool) ($scope['ok'] ?? false)) {
             return videochat_tenancy_governance_validation_response($errorResponse, $scope);
         }

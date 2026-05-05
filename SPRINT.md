@@ -580,6 +580,16 @@ Sprint goal:
     - Import validates schema, tenant isolation, references, and dry-run output
       before mutation.
 
+    Progress 2026-05-05:
+    - Added explicit Data Portability route-action buttons for export/import
+      instead of generic create, with scoped export payloads and import bundle
+      JSON validation before POST.
+    - Governance job rows now expose sanitized export/dry-run result payloads
+      without internal tenant/user/organization database ids, and user-scoped
+      jobs without a selected user resolve to the authenticated user.
+    - Frontend contracts and build pass; backend CRUD contract still skips in
+      this local runtime because `pdo_sqlite` is not installed.
+
 12. [ ] [rollout-proof] Keep deployment proof and release notes current for
     the governance/admin sprint.
 
