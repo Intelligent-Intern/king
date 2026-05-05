@@ -1,5 +1,6 @@
 const STATUS_OPTIONS = Object.freeze([
   { value: 'active', label_key: 'governance.status_active' },
+  { value: 'archived', label_key: 'governance.status_archived' },
   { value: 'draft', label_key: 'governance.status_draft' },
   { value: 'disabled', label_key: 'governance.status_disabled' },
 ]);
