@@ -15,7 +15,11 @@ const excludedRoots = new Set([
 const explicitlyIncludedFiles = new Set([
   'src/domain/calls/access/GoodbyeView.vue',
   'src/domain/calls/access/JoinView.vue',
+  'src/domain/calls/admin/CallsView.template.html',
+  'src/domain/calls/admin/CallsView.vue',
   'src/domain/calls/admin/cancelDelete.js',
+  'src/domain/calls/admin/compose.js',
+  'src/domain/calls/admin/enterCall.js',
   'src/domain/calls/appointment/AppointmentBookingModal.vue',
   'src/domain/calls/appointment/AppointmentConfigPanel.vue',
   'src/domain/calls/appointment/AppointmentSettingsModal.vue',
@@ -23,6 +27,11 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/chat/archive.js',
   'src/domain/calls/components/ChatArchiveModal.vue',
   'src/domain/calls/components/ListTable.vue',
+  'src/domain/calls/dashboard/UserDashboardView.template.html',
+  'src/domain/calls/dashboard/UserDashboardView.vue',
+  'src/domain/calls/dashboard/compose.js',
+  'src/domain/calls/dashboard/enterCall.js',
+  'src/domain/calls/dashboard/joinInvite.js',
 ]);
 
 function normalizeRelative(filePath) {
@@ -47,7 +56,10 @@ async function collectSourceFiles(directory) {
       files.push(...await collectSourceFiles(filePath));
       continue;
     }
-    if (entry.isFile() && /\.(vue|js)$/.test(entry.name)) {
+    if (entry.isFile() && (
+      /\.(vue|js)$/.test(entry.name)
+      || (/\.html$/.test(entry.name) && explicitlyIncludedFiles.has(normalizeRelative(filePath)))
+    )) {
       files.push(filePath);
     }
   }
@@ -76,7 +88,7 @@ for (const sourceFile of sourceFiles) {
   for (const match of source.matchAll(/\b(?:label_key|pageTitle_key|entitySingular_key|entityPlural_key|labelKey|titleKey|statusKey):\s*['"]([a-z0-9_.-]+)['"]/g)) {
     usedKeys.add(match[1]);
   }
-  if (/\.vue$/.test(relativePath) && !rawTextExcludedFiles.has(relativePath)) {
+  if (/\.(vue|html)$/.test(relativePath) && !rawTextExcludedFiles.has(relativePath)) {
     for (const match of source.matchAll(/(?<![:@\w-])(?:aria-label|placeholder|title)=["']([^"'{]*[A-Za-z][^"']*)["']/g)) {
       rawTextViolations.push(`${relativePath}:${lineNumberFor(source, match.index)} static ${match[0]}`);
     }

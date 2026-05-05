@@ -15,6 +15,7 @@ import {
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
   compareDateTimeStrings,
   formatDateDisplay,

@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 function resolveJoinTarget(joinContext) {
   const callAccess = joinContext?.call_access;
@@ -47,7 +48,7 @@ export function createJoinInviteController({
 
     const code = String(joinState.code || '').trim();
     if (code === '') {
-      joinState.error = 'Invite code is required.';
+      joinState.error = t('calls.invite.code_required');
       return;
     }
 
@@ -65,10 +66,10 @@ export function createJoinInviteController({
       const scope = String(joinContext?.scope || '');
 
       closeJoinModal();
-      setNotice('ok', `Invite redeemed for ${scope || 'invite'} context.`);
+      setNotice('ok', t('calls.invite.redeemed_notice', { scope: scope || t('calls.invite.default_scope') }));
       await openRedeemedInvitePreview(joinTarget);
     } catch (error) {
-      joinState.error = error instanceof Error ? error.message : 'Could not redeem invite code.';
+      joinState.error = error instanceof Error ? error.message : t('calls.invite.redeem_failed');
     } finally {
       joinState.submitting = false;
     }

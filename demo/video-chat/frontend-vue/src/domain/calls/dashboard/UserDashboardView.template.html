@@ -4,10 +4,10 @@
         v-model="queryDraft"
         class="input"
         type="text"
-        placeholder="Search call title"
+        :placeholder="t('calls.admin.search_placeholder')"
         @keydown.enter.prevent="applyFilters"
       />
-      <button class="btn" type="button" @click="applyFilters">Search</button>
+      <button class="btn" type="button" @click="applyFilters">{{ t('common.search') }}</button>
     </section>
 
     <section v-if="noticeMessage" class="section calls-banner" :class="noticeKindClass">
@@ -27,10 +27,10 @@
       />
 
       <section v-if="!loadingCalls && calls.length === 0" class="section calls-empty">
-        No calls match the active filters.
+        {{ t('calls.admin.empty') }}
       </section>
       <section v-if="loadingCalls" class="section calls-empty">
-        Loading calls...
+        {{ t('calls.admin.loading_calls') }}
       </section>
       <section v-if="callsError" class="section calls-empty calls-error">
         {{ callsError }}
@@ -39,33 +39,33 @@
 
     <section v-else class="table-wrap calls-calendar-wrap">
       <section v-if="loadingCalendar" class="section calls-empty">
-        Loading calendar view...
+        {{ t('calls.admin.loading_calendar') }}
       </section>
       <section v-else-if="calendarError" class="section calls-empty calls-error">
         {{ calendarError }}
       </section>
       <section v-else-if="calendarBuckets.length === 0" class="section calls-empty">
-        No calendar entries for the active filters.
+        {{ t('calls.user.calendar_empty') }}
       </section>
       <section v-else class="calls-calendar-grid">
         <article v-for="bucket in calendarBuckets" :key="bucket.key" class="calls-calendar-day">
           <header class="calls-calendar-day-head">
             <h4>{{ bucket.label }}</h4>
-            <span>{{ bucket.rows.length }} calls</span>
+            <span>{{ t('calls.user.bucket_call_count', { count: bucket.rows.length }) }}</span>
           </header>
           <ul class="calls-calendar-list">
             <li v-for="call in bucket.rows" :key="call.id" class="calls-calendar-item">
               <div class="calls-calendar-item-meta">
                 <strong>{{ call.title || call.id }}</strong>
                 <span>{{ formatRange(call.starts_at, call.ends_at) }}</span>
-                <span>{{ call.owner?.display_name || 'Unknown owner' }}</span>
+                <span>{{ call.owner?.display_name || t('calls.user.unknown_owner') }}</span>
               </div>
               <div class="actions-inline">
                 <button
                   v-if="isEditable(call)"
                   class="icon-mini-btn"
                   type="button"
-                  title="Edit call"
+                  :title="t('calls.actions.edit')"
                   @click="openCompose('edit', call)"
                 >
                   <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
@@ -73,7 +73,7 @@
                 <button
                   class="icon-mini-btn"
                   type="button"
-                  title="Open chat archive"
+                  :title="t('calls.actions.open_chat_archive')"
                   @click="openChatArchive(call)"
                 >
                   <img src="/assets/orgas/kingrt/icons/chat.png" alt="" />
@@ -82,7 +82,7 @@
                   v-if="isInvitable(call)"
                   class="icon-mini-btn"
                   type="button"
-                  title="Enter video call"
+                  :title="t('calls.actions.enter')"
                   @click="openEnterCallModal(call)"
                 >
                   <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
@@ -99,7 +99,7 @@
         :page="pagination.page"
         :page-count="pagination.pageCount"
         :total="pagination.total"
-        total-label="total"
+        :total-label="t('calls.admin.pagination_total')"
         :has-prev="pagination.hasPrev"
         :has-next="pagination.hasNext"
         :disabled="loadingCalls"
@@ -107,15 +107,15 @@
       />
     </section>
 
-    <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
+    <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" :aria-label="t('calls.enter.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeEnterCallModal"></div>
       <div class="calls-modal-dialog calls-modal-dialog-enter">
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4 class="calls-enter-title">Enter Video Call</h4>
+            <h4 class="calls-enter-title">{{ t('calls.enter.title') }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeEnterCallModal">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeEnterCallModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
@@ -126,22 +126,22 @@
               <div class="calls-enter-preview-frame">
                 <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
                 <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
-                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
+                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">{{ t('calls.enter.preparing_preview') }}</p>
               </div>
             </section>
 
             <section class="calls-enter-right calls-enter-right-settings">
               <div class="call-left-settings">
-                <section class="call-left-settings-block" aria-label="Camera">
-                  <div class="call-left-settings-title">Camera</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.camera')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.camera') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="user-enter-call-camera-select"
-                      aria-label="Camera"
+                      :aria-label="t('calls.enter.camera')"
                       :model-value="callMediaPrefs.selectedCameraId"
                       @update:model-value="setCallCameraDevice"
                     >
-                      <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                      <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('calls.enter.no_camera_detected') : t('calls.enter.select_camera') }}</option>
                       <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                         {{ camera.label }}
                       </option>
@@ -149,23 +149,23 @@
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Mic">
-                  <div class="call-left-settings-title">Mic</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.microphone')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.mic') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="user-enter-call-mic-select"
-                      aria-label="Mic"
+                      :aria-label="t('calls.enter.microphone')"
                       :model-value="callMediaPrefs.selectedMicrophoneId"
                       @update:model-value="setCallMicrophoneDevice"
                     >
-                      <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                      <option value="">{{ callMediaPrefs.microphones.length === 0 ? t('calls.enter.no_microphone_detected') : t('calls.enter.select_microphone') }}</option>
                       <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                         {{ microphone.label }}
                       </option>
                     </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
-                    <label for="user-enter-call-mic-volume">Volume</label>
+                    <label for="user-enter-call-mic-volume">{{ t('calls.enter.volume') }}</label>
                     <div class="call-left-volume-row">
                       <input
                         id="user-enter-call-mic-volume"
@@ -182,23 +182,23 @@
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Speaker">
-                  <div class="call-left-settings-title">Speaker</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.speaker')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.speaker') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="user-enter-call-speaker-select"
-                      aria-label="Speaker"
+                      :aria-label="t('calls.enter.speaker')"
                       :model-value="callMediaPrefs.selectedSpeakerId"
                       @update:model-value="setCallSpeakerDevice"
                     >
-                      <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                      <option value="">{{ callMediaPrefs.speakers.length === 0 ? t('calls.enter.no_speaker_detected') : t('calls.enter.select_speaker') }}</option>
                       <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                         {{ speaker.label }}
                       </option>
                     </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
-                    <label for="user-enter-call-speaker-volume">Volume</label>
+                    <label for="user-enter-call-speaker-volume">{{ t('calls.enter.volume') }}</label>
                     <div class="call-left-volume-row">
                       <input
                         id="user-enter-call-speaker-volume"
@@ -215,21 +215,21 @@
                   </div>
                   <div class="call-left-settings-field">
                     <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                      Play test sound
+                      {{ t('calls.enter.play_test_sound') }}
                     </button>
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Background blur">
-                  <div class="call-left-settings-title">Background blur</div>
-                  <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.background_blur')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.background_blur') }}</div>
+                  <div class="call-left-blur-controls" role="group" :aria-label="t('calls.enter.background_blur_controls')">
                     <button
                       class="call-left-blur-btn"
                       :class="{ active: isBackgroundPresetActive('light') }"
                       type="button"
                       :aria-pressed="isBackgroundPresetActive('light')"
-                      aria-label="Blur"
-                      title="Blur"
+                      :aria-label="t('calls.enter.blur')"
+                      :title="t('calls.enter.blur')"
                       @click="applyBackgroundPreset('light')"
                     >
                       <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
@@ -239,8 +239,8 @@
                       :class="{ active: isBackgroundPresetActive('strong') }"
                       type="button"
                       :aria-pressed="isBackgroundPresetActive('strong')"
-                      aria-label="Strong blur"
-                      title="Strong blur"
+                      :aria-label="t('calls.enter.strong_blur')"
+                      :title="t('calls.enter.strong_blur')"
                       @click="applyBackgroundPreset('strong')"
                     >
                       <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
@@ -272,31 +272,31 @@
             :disabled="enterCallState.loading || enterCallState.waitingForAdmission"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
           >
-            {{ enterCallState.loading ? 'Joining...' : 'Join call' }}
+            {{ enterCallState.loading ? t('public.join.joining') : t('calls.enter.join_call') }}
           </button>
         </footer>
       </div>
     </div>
 
-    <div class="calls-modal" :hidden="!joinState.open" role="dialog" aria-modal="true" aria-label="Join invite modal">
+    <div class="calls-modal" :hidden="!joinState.open" role="dialog" aria-modal="true" :aria-label="t('calls.invite.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeJoinModal"></div>
       <div class="calls-modal-dialog calls-modal-dialog-small">
         <header class="calls-modal-header">
-          <h4>Join with invite</h4>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeJoinModal">
+          <h4>{{ t('calls.invite.title') }}</h4>
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeJoinModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div class="calls-modal-body">
           <label class="field">
-            <span>Invite code</span>
+            <span>{{ t('calls.invite.code') }}</span>
             <input
               v-model="joinState.code"
               class="input"
               type="text"
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              aria-label="Invite code"
+              :placeholder="t('calls.invite.code_placeholder')"
+              :aria-label="t('calls.invite.code')"
               autocomplete="off"
               autocapitalize="off"
               spellcheck="false"
@@ -310,15 +310,15 @@
         </div>
 
         <footer class="calls-modal-footer">
-          <button class="btn" type="button" :disabled="joinState.submitting" @click="closeJoinModal">Close</button>
+          <button class="btn" type="button" :disabled="joinState.submitting" @click="closeJoinModal">{{ t('common.close') }}</button>
           <button class="btn btn-cyan" type="button" :disabled="joinState.submitting" @click="submitJoinInvite">
-            {{ joinState.submitting ? 'Joining...' : 'Join' }}
+            {{ joinState.submitting ? t('public.join.joining') : t('calls.invite.join') }}
           </button>
         </footer>
       </div>
     </div>
 
-    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
+    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" :aria-label="t('calls.compose.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
         <header class="calls-modal-header calls-modal-header-enter">
@@ -326,7 +326,7 @@
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
@@ -334,32 +334,32 @@
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
             <label class="field calls-field-wide">
-              <span>Title</span>
-              <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
+              <span>{{ t('calls.compose.title_label') }}</span>
+              <input v-model="composeState.title" class="input" type="text" :placeholder="t('calls.compose.title_placeholder')" />
             </label>
             <label class="field">
-              <span>Starts at</span>
+              <span>{{ t('calls.compose.starts_at') }}</span>
               <input
                 v-model="composeState.startsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call starts at"
+                :aria-label="t('calls.compose.starts_at_aria')"
               />
             </label>
             <label class="field">
-              <span>Ends at</span>
+              <span>{{ t('calls.compose.ends_at') }}</span>
               <input
                 v-model="composeState.endsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call ends at"
+                :aria-label="t('calls.compose.ends_at_aria')"
               />
             </label>
             <label class="field calls-field-wide">
-              <span>Access mode</span>
-              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
-                <option value="invite_only">Invite only</option>
-                <option value="free_for_all">Free for all</option>
+              <span>{{ t('calls.compose.access_mode') }}</span>
+              <AppSelect v-model="composeState.accessMode" :aria-label="t('calls.compose.access_mode_aria')">
+                <option value="invite_only">{{ t('calls.compose.invite_only') }}</option>
+                <option value="free_for_all">{{ t('calls.compose.free_for_all') }}</option>
               </AppSelect>
             </label>
           </section>
@@ -371,24 +371,24 @@
                 type="checkbox"
                 @change="handleReplaceParticipantsToggle"
               />
-              <span>Replace participant list during edit</span>
+              <span>{{ t('calls.compose.replace_participants') }}</span>
             </label>
           </section>
 
           <section v-if="shouldSendParticipants" class="calls-participants-grid">
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>Registered users</h5>
-                <label class="calls-search small" aria-label="Participant search">
+                <h5>{{ t('calls.compose.registered_users') }}</h5>
+                <label class="calls-search small" :aria-label="t('calls.compose.participant_search_aria')">
                   <input
                     v-model.trim="composeParticipants.query"
                     class="input"
                     type="search"
-                    placeholder="Search users"
+                    :placeholder="t('calls.compose.search_users_placeholder')"
                     @keydown.enter.prevent="applyParticipantSearch"
                   />
                   <button class="btn btn-cyan" type="button" :disabled="composeParticipants.loading" @click="applyParticipantSearch">
-                    Search
+                    {{ t('common.search') }}
                   </button>
                 </label>
               </header>
@@ -412,7 +412,7 @@
                   <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
                 </label>
                 <p v-if="!composeParticipants.loading && composeParticipants.rows.length === 0" class="calls-empty-inline">
-                  No users in this page.
+                  {{ t('calls.compose.no_users') }}
                 </p>
               </section>
 
@@ -423,10 +423,10 @@
                   :disabled="!composeParticipants.hasPrev || composeParticipants.loading"
                   @click="goToParticipantPage(composeParticipants.page - 1)"
                 >
-                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" :alt="t('common.previous')" />
                 </button>
                 <div class="page-info">
-                  Page {{ composeParticipants.page }} / {{ composeParticipants.pageCount }}
+                  {{ t('calls.compose.page_status', { page: composeParticipants.page, pageCount: composeParticipants.pageCount }) }}
                 </div>
                 <button
                   class="pager-btn pager-icon-btn"
@@ -434,15 +434,15 @@
                   :disabled="!composeParticipants.hasNext || composeParticipants.loading"
                   @click="goToParticipantPage(composeParticipants.page + 1)"
                 >
-                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" :alt="t('common.next')" />
                 </button>
               </div>
             </article>
 
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>External participants</h5>
-                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
+                <h5>{{ t('calls.compose.external_participants') }}</h5>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">{{ t('calls.compose.add_row') }}</button>
               </header>
 
               <section class="calls-external-list">
@@ -451,33 +451,33 @@
                     v-model="row.display_name"
                     class="input"
                     type="text"
-                    placeholder="Display name"
-                    :aria-label="`External participant ${index + 1} display name`"
+                    :placeholder="t('calls.compose.display_name_placeholder')"
+                    :aria-label="t('calls.compose.external_display_name_aria', { number: index + 1 })"
                   />
                   <input
                     v-model="row.email"
                     class="input"
                     type="email"
-                    placeholder="guest@example.com"
-                    :aria-label="`External participant ${index + 1} email`"
+                    :placeholder="t('calls.compose.email_placeholder')"
+                    :aria-label="t('calls.compose.external_email_aria', { number: index + 1 })"
                   />
                   <button
                     class="icon-mini-btn danger"
                     type="button"
-                    title="Remove external participant"
-                    :aria-label="`Remove external participant row ${index + 1}`"
+                    :title="t('calls.compose.remove_external_participant')"
+                    :aria-label="t('calls.compose.remove_external_participant_row', { number: index + 1 })"
                     @click="removeExternalRow(index)"
                   >
                     <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
                   </button>
                 </div>
-                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">No external participants configured.</p>
+                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">{{ t('calls.compose.no_external_participants') }}</p>
               </section>
             </article>
           </section>
 
           <section v-else-if="composeState.mode === 'edit'" class="calls-inline-hint">
-            Existing participants remain unchanged for this edit.
+            {{ t('calls.compose.participants_unchanged') }}
           </section>
 
           <section v-if="composeState.error" class="calls-inline-error">
@@ -487,7 +487,7 @@
 
         <footer class="calls-modal-footer">
           <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
-            {{ composeState.submitting ? 'Saving...' : composeSubmitLabel }}
+            {{ composeState.submitting ? t('common.saving') : composeSubmitLabel }}
           </button>
         </footer>
       </div>
