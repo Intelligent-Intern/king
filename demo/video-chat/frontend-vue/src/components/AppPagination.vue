@@ -8,7 +8,9 @@
     >
       <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
     </button>
-    <div class="page-info">Page {{ page }} / {{ normalizedPageCount }} · {{ total }} {{ totalLabel }}</div>
+    <div class="page-info">
+      {{ t('pagination.page_info', { page, pageCount: normalizedPageCount, total, totalLabel }) }}
+    </div>
     <button
       class="pager-btn pager-icon-btn"
       type="button"
@@ -22,6 +24,7 @@
 
 <script setup>
 import { computed, useAttrs } from 'vue';
+import { t } from '../modules/localization/i18nRuntime.js';
 
 defineOptions({ inheritAttrs: false });
 

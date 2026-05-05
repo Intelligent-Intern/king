@@ -5,8 +5,8 @@
         v-if="showLeftSidebarRestoreButton"
         class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay app-page-header-sidebar-btn"
         type="button"
-        title="Show sidebar"
-        aria-label="Show sidebar"
+        :title="t('common.show_sidebar')"
+        :aria-label="t('common.show_sidebar')"
         @click="showLeftSidebarFromHeader"
       >
         <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
@@ -26,6 +26,7 @@
 
 <script setup>
 import { computed, inject, useAttrs } from 'vue';
+import { t } from '../modules/localization/i18nRuntime.js';
 
 defineOptions({ inheritAttrs: false });
 

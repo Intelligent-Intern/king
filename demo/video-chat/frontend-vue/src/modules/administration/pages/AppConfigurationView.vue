@@ -1,9 +1,9 @@
 <template>
   <section class="view-card administration-view">
-    <AppPageHeader class="section administration-head" title="App Configuration">
+    <AppPageHeader class="section administration-head" :title="t('administration.app_configuration')">
       <template #actions>
         <button class="btn btn-cyan" type="button" :disabled="saving" @click="saveConfiguration">
-          {{ saving ? 'Saving...' : 'Save configuration' }}
+          {{ saving ? t('settings.saving') : t('administration.save_configuration') }}
         </button>
       </template>
     </AppPageHeader>
@@ -22,6 +22,7 @@
 import { ref } from 'vue';
 import AppPageHeader from '../../../components/AppPageHeader.vue';
 import WorkspaceAdministrationSettings from '../../../layouts/settings/WorkspaceAdministrationSettings.vue';
+import { t } from '../../localization/i18nRuntime.js';
 
 const administrationSettingsRef = ref(null);
 const saving = ref(false);
@@ -36,10 +37,10 @@ async function saveConfiguration() {
   try {
     const result = await administrationSettingsRef.value?.save?.();
     savedOk.value = result?.ok !== false;
-    message.value = result?.message || (savedOk.value ? 'Configuration saved.' : 'Could not save configuration.');
+    message.value = result?.message || (savedOk.value ? t('administration.configuration_saved') : t('administration.configuration_save_failed'));
   } catch (error) {
     savedOk.value = false;
-    message.value = error instanceof Error ? error.message : 'Could not save configuration.';
+    message.value = error instanceof Error ? error.message : t('administration.configuration_save_failed');
   } finally {
     saving.value = false;
   }

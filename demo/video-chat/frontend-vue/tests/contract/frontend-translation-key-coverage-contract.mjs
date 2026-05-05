@@ -7,11 +7,17 @@ const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const sourceFiles = [
   'src/layouts/WorkspaceNavigation.vue',
   'src/layouts/WorkspaceShell.vue',
+  'src/components/AppPageHeader.vue',
+  'src/components/AppPagination.vue',
   'src/modules/administration/descriptor.js',
+  'src/modules/administration/pages/AppConfigurationView.vue',
   'src/modules/governance/descriptor.js',
+  'src/modules/governance/pages/GovernanceCrudModal.vue',
+  'src/modules/governance/pages/GovernanceCrudView.vue',
   'src/modules/localization/descriptor.js',
   'src/modules/marketplace/descriptor.js',
   'src/modules/theme_editor/descriptor.js',
+  'src/modules/theme_editor/pages/ThemeEditorView.vue',
   'src/modules/users/descriptor.js',
   'src/modules/workspace_settings/descriptor.js',
 ];

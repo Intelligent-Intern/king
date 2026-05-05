@@ -1,16 +1,16 @@
 <template>
   <AdminPageFrame class="governance-crud-view" :title="title">
     <template #actions>
-      <button class="btn btn-cyan" type="button" @click="openCreateModal">Create new</button>
+      <button class="btn btn-cyan" type="button" @click="openCreateModal">{{ t('governance.create_new') }}</button>
     </template>
 
     <template #toolbar>
-      <label class="search-field search-field-main" :aria-label="`Search ${pluralLabel}`">
+      <label class="search-field search-field-main" :aria-label="t('governance.search', { entity: pluralLabel })">
         <input
           v-model.trim="query"
           class="input"
           type="search"
-          :placeholder="`Search ${pluralLabel}`"
+          :placeholder="t('governance.search', { entity: pluralLabel })"
         />
       </label>
     </template>
@@ -19,37 +19,37 @@
       <table class="governance-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Key</th>
-            <th>Status</th>
-            <th>Beschreibung</th>
-            <th>Updated</th>
-            <th class="governance-actions-col">Actions</th>
+            <th>{{ t('governance.name') }}</th>
+            <th>{{ t('governance.key') }}</th>
+            <th>{{ t('governance.status') }}</th>
+            <th>{{ t('governance.description') }}</th>
+            <th>{{ t('governance.updated') }}</th>
+            <th class="governance-actions-col">{{ t('governance.actions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in pagedRows" :key="row.id">
-            <td data-label="Name">
+            <td :data-label="t('governance.name')">
               <div class="governance-name">{{ row.name }}</div>
               <div class="governance-subline">{{ singularLabel }}</div>
             </td>
-            <td data-label="Key">{{ row.key || 'n/a' }}</td>
-            <td data-label="Status">
+            <td :data-label="t('governance.key')">{{ row.key || 'n/a' }}</td>
+            <td :data-label="t('governance.status')">
               <span class="tag" :class="statusClass(row.status)">{{ row.status }}</span>
             </td>
-            <td data-label="Beschreibung">{{ row.description || 'n/a' }}</td>
-            <td data-label="Updated">{{ formatDate(row.updatedAt) }}</td>
-            <td data-label="Actions">
-              <span v-if="row.readonly" class="governance-readonly-label">System</span>
+            <td :data-label="t('governance.description')">{{ row.description || 'n/a' }}</td>
+            <td :data-label="t('governance.updated')">{{ formatDate(row.updatedAt) }}</td>
+            <td :data-label="t('governance.actions')">
+              <span v-if="row.readonly" class="governance-readonly-label">{{ t('governance.system') }}</span>
               <div v-else class="actions-inline">
                 <AppIconButton
                   icon="/assets/orgas/kingrt/icons/gear.png"
-                  :title="`Edit ${singularLabel}`"
+                  :title="t('governance.edit_entity', { entity: singularLabel })"
                   @click="openEditModal(row)"
                 />
                 <AppIconButton
                   icon="/assets/orgas/kingrt/icons/remove_user.png"
-                  :title="`Delete ${singularLabel}`"
+                  :title="t('governance.delete_entity', { entity: singularLabel })"
                   danger
                   @click="deleteRow(row)"
                 />
@@ -57,7 +57,7 @@
             </td>
           </tr>
           <tr v-if="filteredRows.length === 0">
-            <td colspan="6" class="governance-empty-cell">No entries match the current filter.</td>
+            <td colspan="6" class="governance-empty-cell">{{ t('governance.empty_filter') }}</td>
           </tr>
         </tbody>
       </table>
@@ -99,6 +99,7 @@ import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../index.js';
+import { t } from '../../localization/i18nRuntime.js';
 
 const route = useRoute();
 const rowsByScope = reactive({});
@@ -146,10 +147,10 @@ const pagedRows = computed(() => {
 });
 const modalTitle = computed(() => (
   modalMode.value === 'edit'
-    ? `Edit ${singularLabel.value}`
-    : `Create ${singularLabel.value}`
+    ? t('governance.modal.edit', { entity: singularLabel.value })
+    : t('governance.modal.create', { entity: singularLabel.value })
 ));
-const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? 'Save changes' : 'Create'));
+const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? t('common.save_changes') : t('governance.create')));
 
 watch(() => route.fullPath, () => {
   query.value = '';
@@ -200,7 +201,7 @@ function closeModal() {
 function submitModal() {
   const name = form.name.trim();
   if (name === '') {
-    formError.value = 'Name is required.';
+    formError.value = t('governance.name_required');
     return;
   }
 
