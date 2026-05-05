@@ -642,10 +642,10 @@ Non-goals for this sprint:
 
     Done when:
     - [x] Each non-call module has a stable key and permission namespace.
-    - [ ] Module metadata can be listed in Governance.
+    - [x] Module metadata can be listed in Governance.
     - [x] Disabled modules do not appear in navigation.
     - [ ] Unauthorized users cannot resolve module routes.
-    - [ ] Time-limited rights have an explicit metadata slot, even if full
+    - [x] Time-limited rights have an explicit metadata slot, even if full
       enforcement is finished in the tenancy sprint.
 
 21. [ ] `[module-contract-tests-and-smoke]` Prove dynamic modules and non-call refactor.
