@@ -1,5 +1,5 @@
 <template>
-  <nav class="nav" aria-label="Main navigation">
+  <nav class="nav" :aria-label="t('navigation.main')">
     <template v-for="item in visibleItems" :key="item.key || item.to">
       <section v-if="item.children" class="nav-group" :class="{ active: isActive(item), open: isExpanded(item) }">
         <div class="nav-parent-row">
