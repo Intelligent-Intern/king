@@ -562,13 +562,18 @@ Non-goals for this sprint:
     - [x] Governance, Marketplace, and Users tables pass active user
       `dateFormat` and `timeFormat` preferences into the shared localized
       date-time formatter.
+    - [x] Shared date-range display now uses localized date-time formatting,
+      including browser document locale fallback for existing call/calendar
+      surfaces.
+    - [x] User dashboard calendar buckets and appointment form rows use a
+      deterministic date-time comparator instead of string `localeCompare`.
 
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
       locale-aware helpers.
     - [x] Date/time formatting uses user locale plus existing time/date
       preferences.
-    - [ ] Calendar and dashboard sort order remains deterministic.
+    - [x] Calendar and dashboard sort order remains deterministic.
     - [x] Contract tests cover representative LTR and RTL formatting examples,
       including `en`, `de`, `ar`, `fa`, and `ps`.
 
