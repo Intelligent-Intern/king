@@ -696,13 +696,11 @@ function videochat_handle_user_routes(
 
             return $jsonResponse(200, [
                 'status' => 'ok',
-                'settings' => [
-                    'display_name' => (string) ($userSettings['display_name'] ?? ''),
-                    'time_format' => (string) ($userSettings['time_format'] ?? '24h'),
-                    'date_format' => (string) ($userSettings['date_format'] ?? 'dmy_dot'),
-                    'theme' => (string) ($userSettings['theme'] ?? 'dark'),
-                    'avatar_path' => $userSettings['avatar_path'] ?? null,
-                    'post_logout_landing_url' => (string) ($userSettings['post_logout_landing_url'] ?? ''),
+                'settings' => videochat_user_settings_payload($userSettings),
+                'localization' => [
+                    'locale' => (string) ($userSettings['locale'] ?? 'en'),
+                    'direction' => (string) ($userSettings['direction'] ?? 'ltr'),
+                    'supported_locales' => is_array($userSettings['supported_locales'] ?? null) ? $userSettings['supported_locales'] : [],
                 ],
                 'user' => $userSettings,
                 'time' => gmdate('c'),
@@ -754,13 +752,11 @@ function videochat_handle_user_routes(
             'status' => 'ok',
             'result' => [
                 'state' => 'updated',
-                'settings' => [
-                    'display_name' => (string) ($updatedUser['display_name'] ?? ''),
-                    'time_format' => (string) ($updatedUser['time_format'] ?? '24h'),
-                    'date_format' => (string) ($updatedUser['date_format'] ?? 'dmy_dot'),
-                    'theme' => (string) ($updatedUser['theme'] ?? 'dark'),
-                    'avatar_path' => $updatedUser['avatar_path'] ?? null,
-                    'post_logout_landing_url' => (string) ($updatedUser['post_logout_landing_url'] ?? ''),
+                'settings' => $updatedUser !== null ? videochat_user_settings_payload($updatedUser) : [],
+                'localization' => [
+                    'locale' => (string) ($updatedUser['locale'] ?? 'en'),
+                    'direction' => (string) ($updatedUser['direction'] ?? 'ltr'),
+                    'supported_locales' => is_array($updatedUser['supported_locales'] ?? null) ? $updatedUser['supported_locales'] : [],
                 ],
                 'user' => $updatedUser,
             ],

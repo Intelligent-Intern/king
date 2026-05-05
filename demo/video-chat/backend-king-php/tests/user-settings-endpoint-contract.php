@@ -143,6 +143,12 @@ SQL
     $getPayload = videochat_user_settings_endpoint_decode($getResponse);
     videochat_user_settings_endpoint_assert((string) ($getPayload['status'] ?? '') === 'ok', 'GET settings payload status mismatch');
     videochat_user_settings_endpoint_assert(is_array($getPayload['settings'] ?? null), 'GET settings payload should include settings object');
+    videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['locale'] ?? '') === 'en', 'GET settings locale default mismatch');
+    videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['direction'] ?? '') === 'ltr', 'GET settings direction mismatch');
+    videochat_user_settings_endpoint_assert(
+        count((array) ((($getPayload['localization'] ?? [])['supported_locales'] ?? []))) >= 28,
+        'GET settings supported locale metadata missing'
+    );
 
     $patchInvalidJson = videochat_handle_user_routes(
         '/api/user/settings',
@@ -174,6 +180,7 @@ SQL
             'body' => json_encode([
                 'time_format' => '99h',
                 'date_format' => 'broken',
+                'locale' => 'unknown',
                 'post_logout_landing_url' => 'https://evil.example/logout',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
@@ -200,6 +207,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['date_format'] ?? '') === 'must_be_supported_date_format',
         'PATCH invalid-value date_format field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['locale'] ?? '') === 'must_be_supported_locale',
+        'PATCH invalid-value locale field mismatch'
     );
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['post_logout_landing_url'] ?? '') === 'must_be_same_origin_path',
@@ -244,6 +255,7 @@ SQL
                 'time_format' => '12h',
                 'date_format' => 'mdy_slash',
                 'theme' => 'light',
+                'locale' => 'sgd',
                 'avatar_path' => ' /avatars/endpoint-user-updated.png ',
                 'post_logout_landing_url' => ' /call-goodbye?from=settings ',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -276,6 +288,14 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['theme'] ?? '')) === 'light',
         'PATCH valid theme mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['locale'] ?? '')) === 'sgd',
+        'PATCH valid locale mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['direction'] ?? '')) === 'rtl',
+        'PATCH valid direction mismatch'
     );
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['avatar_path'] ?? '')) === '/avatars/endpoint-user-updated.png',
@@ -331,6 +351,18 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['theme'] ?? '')) === 'light',
         'session-check should reflect updated theme'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['locale'] ?? '')) === 'sgd',
+        'session-check should reflect updated locale'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) ((($sessionPayload['user'] ?? [])['direction'] ?? '')) === 'rtl',
+        'session-check should reflect updated direction'
+    );
+    videochat_user_settings_endpoint_assert(
+        count((array) ((($sessionPayload['user'] ?? [])['supported_locales'] ?? []))) >= 28,
+        'session-check should include supported locale metadata'
     );
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['avatar_path'] ?? '')) === '/avatars/endpoint-user-updated.png',
