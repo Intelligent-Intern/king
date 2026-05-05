@@ -547,11 +547,17 @@ Non-goals for this sprint:
       examples and fallback behavior in the localization contract.
     - [x] Shared weekday-short formatting uses the requested locale with LTR
       and RTL contract examples.
+    - [x] Shared localized date-time display now combines active locale,
+      localized numerals/time display, and the saved user `date_format` /
+      `time_format` preferences.
+    - [x] Governance, Marketplace, and Users tables pass active user
+      `dateFormat` and `timeFormat` preferences into the shared localized
+      date-time formatter.
 
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
       locale-aware helpers.
-    - [ ] Date/time formatting uses user locale plus existing time/date
+    - [x] Date/time formatting uses user locale plus existing time/date
       preferences.
     - [ ] Calendar and dashboard sort order remains deterministic.
     - [x] Contract tests cover representative LTR and RTL formatting examples,
