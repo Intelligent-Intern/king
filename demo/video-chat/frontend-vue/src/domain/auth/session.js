@@ -21,6 +21,18 @@ function normalizeTheme(value) {
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
+function normalizeMessengerContacts(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((contact) => {
+      const source = contact && typeof contact === 'object' ? contact : {};
+      return {
+        channel: normalizeString(source.channel).toLowerCase(),
+        handle: normalizeString(source.handle),
+      };
+    })
+    .filter((contact) => contact.channel !== '' && contact.handle !== '');
+}
 function errorCodeFromPayload(payload) {
   const code = payload && typeof payload === 'object' ? payload?.error?.code : '';
   return typeof code === 'string' ? code.trim() : '';
@@ -109,6 +121,11 @@ export const sessionState = reactive({
   tenantRole: '',
   tenantPermissions: {},
   postLogoutLandingUrl: '',
+  aboutMe: '',
+  linkedinUrl: '',
+  xUrl: '',
+  youtubeUrl: '',
+  messengerContacts: [],
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -154,6 +171,11 @@ function resetUserFields() {
   sessionState.tenantRole = '';
   sessionState.tenantPermissions = {};
   sessionState.postLogoutLandingUrl = '';
+  sessionState.aboutMe = '';
+  sessionState.linkedinUrl = '';
+  sessionState.xUrl = '';
+  sessionState.youtubeUrl = '';
+  sessionState.messengerContacts = [];
   sessionState.status = '';
 }
 function setRecoveryState(state, reason = '', message = '') {
@@ -194,6 +216,11 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.tenantPermissions = tenantSnapshot.permissions;
   sessionState.canEditThemes = role === 'admin' || user.can_edit_themes === true || tenantSnapshot.permissions.edit_themes === true;
   sessionState.postLogoutLandingUrl = normalizePostLogoutLandingUrl(user.post_logout_landing_url);
+  sessionState.aboutMe = normalizeString(user.about_me);
+  sessionState.linkedinUrl = normalizeString(user.linkedin_url);
+  sessionState.xUrl = normalizeString(user.x_url);
+  sessionState.youtubeUrl = normalizeString(user.youtube_url);
+  sessionState.messengerContacts = normalizeMessengerContacts(user.messenger_contacts);
   sessionState.status = normalizeString(user.status);
 }
 function normalizePostLogoutLandingUrl(value) {
