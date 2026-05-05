@@ -492,6 +492,10 @@ Non-goals for this sprint:
    - [x] Mail template placeholder contract covers defaults, invalid
      configured templates, valid configured templates, and reset-to-default
      behavior.
+   - [x] Translation CSV preview/commit rejects non-English rows that remove
+     placeholders from the English canonical value, whether that canonical
+     value already exists in `translation_resources` or appears in the same
+     CSV file.
 
    Done when:
    - [ ] API error payloads still expose stable codes and do not depend on
@@ -499,7 +503,7 @@ Non-goals for this sprint:
    - [ ] Public booking confirmation email can be sent in the selected/public
      locale.
    - [ ] Owner notification email can use owner locale.
-   - [ ] CSV import rejects translations that remove required placeholders.
+   - [x] CSV import rejects translations that remove required placeholders.
    - [ ] Email contract tests cover placeholder preservation and locale
      fallback.
 
