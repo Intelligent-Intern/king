@@ -7,7 +7,11 @@ $root = dirname(__DIR__, 2);
 function source(string $path): string
 {
     global $root;
-    $source = file_get_contents($root . '/' . $path);
+    $absolutePath = $root . '/' . $path;
+    if (!is_file($absolutePath)) {
+        throw new RuntimeException('Could not read ' . $path);
+    }
+    $source = file_get_contents($absolutePath);
     if (!is_string($source)) {
         throw new RuntimeException('Could not read ' . $path);
     }
@@ -49,7 +53,7 @@ $provenanceNeedles = [
     'The current wavelet decoder is stronger because it bounds the V-channel payload slice by the declared byte count and rejects payload-length mismatch.',
     'The current Kalman filter is stronger because it multiplies the Kalman gain by `SInv`, computes process-noise `dt4` locally, and removes stale module-level `dt2`/`dt3`/`dt4` constants.',
     '`codec-test.md` and `src/lib/wavelet/README.md` were removed from the active frontend tree and replaced by canonical docs under `documentation/dev/`.',
-    '`mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain in the current frontend.',
+    '`mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain as TypeScript modules in the current frontend.',
     'The duplicate legacy `demo/video-chat/frontend/src/lib/**` experiment tree is not reintroduced; the active tree is `demo/video-chat/frontend-vue/**`.',
 ];
 foreach ($provenanceNeedles as $needle) {
@@ -83,8 +87,8 @@ require_not_contains($kalmanFilter, 'const dt2 = 1');
 require_not_contains($kalmanFilter, 'const dt3 = 1');
 require_not_contains($kalmanFilter, 'const dt4 = 1');
 
-require_contains('demo/video-chat/frontend-vue/src/domain/realtime/mediaRuntimeCapabilities.js', 'export async function detectMediaRuntimeCapabilities()');
-require_contains('demo/video-chat/frontend-vue/src/domain/realtime/mediaRuntimeTelemetry.js', 'export function appendMediaRuntimeTransitionEvent(event = {})');
+require_contains('demo/video-chat/frontend-vue/src/domain/realtime/mediaRuntimeCapabilities.ts', 'export async function detectMediaRuntimeCapabilities()');
+require_contains('demo/video-chat/frontend-vue/src/domain/realtime/mediaRuntimeTelemetry.ts', 'export function appendMediaRuntimeTransitionEvent(event = {})');
 require_contains('documentation/dev/video-chat-codec-test.md', 'cd demo/video-chat/frontend-vue');
 require_not_contains('documentation/dev/video-chat-codec-test.md', '/Users/sasha');
 require_contains('documentation/dev/video-chat-wavelet-codec.md', 'Pure TypeScript Haar DWT wavelet codec');
