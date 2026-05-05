@@ -1,6 +1,8 @@
+import { CALL_WORKSPACE_MESSAGES } from './callWorkspaceMessages.js';
 import { USERS_OVERVIEW_MESSAGES } from './usersOverviewMessages.js';
 
 export const ENGLISH_MESSAGES = Object.freeze({
+  ...CALL_WORKSPACE_MESSAGES,
   ...USERS_OVERVIEW_MESSAGES,
   'common.cancel': 'Cancel',
   'common.close': 'Close',

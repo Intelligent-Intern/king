@@ -32,6 +32,7 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/dashboard/compose.js',
   'src/domain/calls/dashboard/enterCall.js',
   'src/domain/calls/dashboard/joinInvite.js',
+  'src/domain/realtime/CallWorkspaceView.template.html',
   'src/modules/users/pages/overview/OverviewView.template.html',
 ]);
 
@@ -42,8 +43,12 @@ function normalizeRelative(filePath) {
 function isExcluded(filePath) {
   const relativePath = normalizeRelative(filePath);
   if (explicitlyIncludedFiles.has(relativePath)) return false;
-  return [...excludedRoots].some((excludedRoot) => (
+  const excluded = [...excludedRoots].some((excludedRoot) => (
     relativePath === excludedRoot || relativePath.startsWith(`${excludedRoot}/`)
+  ));
+  if (!excluded) return false;
+  return ![...explicitlyIncludedFiles].some((includedFile) => (
+    includedFile.startsWith(`${relativePath}/`)
   ));
 }
 

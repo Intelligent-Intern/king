@@ -50,6 +50,7 @@ import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWork
 import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspace/participantUi';
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
+import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceMediaSecurityRuntime } from './workspace/callWorkspace/mediaSecurityRuntime';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
 import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace/lifecycle';
@@ -228,6 +229,7 @@ import {
   defaultNativeAudioBridgeFailureMessage,
 } from './workspace/callWorkspace/mediaSecurityTargets';
 import { createSfuTransportState } from './workspace/callWorkspace/sfuTransport';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -556,54 +558,17 @@ const shouldConnectSfu = computed(() => (
   && activeSocketCallId.value !== ''
   && activeRoomId.value === desiredRoomId.value
 ));
-const isShellLeftSidebarCollapsed = computed(() => {
-  const candidate = workspaceSidebarState?.leftSidebarCollapsed;
-  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
-    return Boolean(candidate.value);
-  }
-  return Boolean(candidate);
-});
-const isShellTabletViewport = computed(() => {
-  const candidate = workspaceSidebarState?.isTabletViewport;
-  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
-    return Boolean(candidate.value);
-  }
-  return Boolean(candidate);
-});
-const isShellTabletSidebarOpen = computed(() => {
-  const candidate = workspaceSidebarState?.isTabletSidebarOpen;
-  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
-    return Boolean(candidate.value);
-  }
-  return Boolean(candidate);
-});
-const isShellMobileViewport = computed(() => {
-  const candidate = workspaceSidebarState?.isMobileViewport;
-  if (candidate && typeof candidate === 'object' && 'value' in candidate) {
-    return Boolean(candidate.value);
-  }
-  return Boolean(candidate);
-});
-const isCompactLayoutViewport = computed(() => (
-  isShellMobileViewport.value
-  || isShellTabletViewport.value
-));
-const isCompactHeaderVisible = computed(() => (
-  isCompactViewport.value
-  && isCompactLayoutViewport.value
-));
-const isCompactMiniStripAbove = computed(() => (
-  isCompactLayoutViewport.value
-  && compactMiniStripPlacement.value === 'above'
-));
-const showLeftSidebarRestoreButton = computed(() => {
-  if (isCompactHeaderVisible.value || isShellMobileViewport.value) {
-    return false;
-  }
-  if (isShellTabletViewport.value) {
-    return !isShellTabletSidebarOpen.value;
-  }
-  return !isCompactViewport.value && isShellLeftSidebarCollapsed.value;
+const {
+  isCompactHeaderVisible,
+  isCompactMiniStripAbove,
+  isCompactLayoutViewport,
+  isShellMobileViewport,
+  isShellTabletViewport,
+  showLeftSidebarRestoreButton,
+} = createCallWorkspaceCompactChrome({
+  compactMiniStripPlacement,
+  isCompactViewport,
+  workspaceSidebarState,
 });
 
 let canProtectCurrentNativeTargets = () => false;
