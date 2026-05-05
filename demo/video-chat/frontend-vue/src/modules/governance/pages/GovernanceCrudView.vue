@@ -2,6 +2,15 @@
   <AdminPageFrame class="governance-crud-view" :title="title">
     <template #actions>
       <button v-if="createAction" class="btn btn-cyan" type="button" @click="openCreateModal">{{ createButtonLabel }}</button>
+      <button
+        v-for="action in portabilityActions"
+        :key="action.key"
+        class="btn"
+        type="button"
+        @click="openPortabilityModal(action)"
+      >
+        {{ routeActionLabel(action, t, action.key) }}
+      </button>
     </template>
 
     <template #toolbar>
@@ -125,6 +134,15 @@ import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { descriptorAllowsAction, GOVERNANCE_CRUD_DESCRIPTORS, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
+import {
+  dataPortabilityModalFields,
+  dataPortabilityModalTitle,
+  dataPortabilityPayloadFromForm,
+  dataPortabilitySubmitLabel,
+  downloadPortabilityExport,
+  isDataPortabilityActionKind,
+  isDataPortabilityEntity,
+} from '../dataPortabilityUi.js';
 import { createEntitySummaryCache, normalizeEntitySummary } from '../entitySummaryCache.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
 import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence.js';
@@ -174,9 +192,14 @@ const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key'
 const routeActionContext = computed(() => moduleAccessContextFromSession(sessionState));
 const availableRouteActions = computed(() => routeActionsForContext(route, routeActionContext.value));
 const tableColumns = computed(() => crudDescriptor.value.table_columns || []);
-const modalFields = computed(() => (crudDescriptor.value.fields || []).filter((field) => (
+const descriptorModalFields = computed(() => (crudDescriptor.value.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'
 )));
+const modalFields = computed(() => dataPortabilityModalFields(
+  entityKey.value,
+  modalMode.value,
+  descriptorModalFields.value,
+));
 const modalRelationships = computed(() => crudDescriptor.value.relationships || []);
 const rowActions = computed(() => (crudDescriptor.value.row_actions || []).filter((action) => (
   entryAllowsAccess(action, routeActionContext.value, action.required_permissions)
@@ -188,6 +211,12 @@ const createAction = computed(() => (
     ? firstRouteActionByKind(availableRouteActions.value, 'create')
     : null
 ));
+const portabilityActions = computed(() => {
+  if (!isDataPortabilityEntity(entityKey.value)) return [];
+  return availableRouteActions.value.filter((action) => (
+    isDataPortabilityActionKind(action.kind) && descriptorAllowsAction(crudDescriptor.value, action.kind)
+  ));
+});
 const createButtonLabel = computed(() => routeActionLabel(createAction.value, t, t('governance.create')));
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
@@ -199,12 +228,18 @@ const pagedRows = computed(() => {
   const offset = (page.value - 1) * pageSize;
   return filteredRows.value.slice(offset, offset + pageSize);
 });
-const modalTitle = computed(() => (
-  modalMode.value === 'edit'
+const modalTitle = computed(() => {
+  const portabilityTitleKey = dataPortabilityModalTitle(entityKey.value, modalMode.value);
+  if (portabilityTitleKey !== '') return t(portabilityTitleKey);
+  return modalMode.value === 'edit'
     ? t('governance.modal.edit', { entity: singularLabel.value })
-    : t('governance.modal.create', { entity: singularLabel.value })
-));
-const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value));
+    : t('governance.modal.create', { entity: singularLabel.value });
+});
+const modalSubmitLabel = computed(() => {
+  const portabilitySubmitKey = dataPortabilitySubmitLabel(entityKey.value, modalMode.value);
+  if (portabilitySubmitKey !== '') return t(portabilitySubmitKey);
+  return modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value;
+});
 
 watch(() => route.fullPath, () => {
   query.value = '';
@@ -342,6 +377,15 @@ function openCreateModal() {
   modalOpen.value = true;
 }
 
+function openPortabilityModal(action) {
+  if (!isDataPortabilityActionKind(action?.kind)) return;
+  modalMode.value = String(action.kind);
+  modalMaximized.value = false;
+  resetForm();
+  form.job_type = modalMode.value;
+  modalOpen.value = true;
+}
+
 function openEditModal(row) {
   modalMode.value = 'edit';
   modalMaximized.value = false;
@@ -419,8 +463,13 @@ async function submitModal() {
     return;
   }
 
+  const preparedPayload = prepareMutationPayload();
+  if (!preparedPayload.ok) {
+    formError.value = t(preparedPayload.error_key || 'governance.save_failed');
+    return;
+  }
   const now = new Date().toISOString();
-  const payload = mutationPayload();
+  const payload = preparedPayload.payload;
   if (usesBackend.value) {
     await submitPersistedRow(payload);
     return;
@@ -455,6 +504,9 @@ async function submitPersistedRow(payload) {
       rows.value.unshift(savedRow);
     }
     entitySummaryCache.upsertSummary(entityKey.value, savedRow);
+    if (isDataPortabilityEntity(entityKey.value) && modalMode.value === 'export') {
+      downloadPortabilityExport(savedRow);
+    }
     closeModal();
   } catch (error) {
     formError.value = error instanceof Error ? error.message : t('governance.save_failed');
@@ -493,13 +545,16 @@ function formPayload() {
   }));
 }
 
-function mutationPayload() {
-  const payload = formPayload();
+function prepareMutationPayload() {
   const relationships = relationSelectionSnapshot();
+  if (isDataPortabilityEntity(entityKey.value) && isDataPortabilityActionKind(modalMode.value)) {
+    return dataPortabilityPayloadFromForm(modalMode.value, form, relationships);
+  }
+  const payload = formPayload();
   if (Object.keys(relationships).length > 0) {
     payload.relationships = relationships;
   }
-  return payload;
+  return { ok: true, payload };
 }
 
 function rowFromPayload(payload, id, updatedAt) {
@@ -671,12 +726,22 @@ function goToPage(nextPage) {
 
 function normalizeStatus(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  return ['active', 'archived', 'draft', 'disabled'].includes(normalized) ? normalized : 'active';
+  return [
+    'active',
+    'archived',
+    'completed',
+    'draft',
+    'disabled',
+    'failed',
+    'queued',
+    'running',
+  ].includes(normalized) ? normalized : 'active';
 }
 
 function statusClass(status) {
-  if (status === 'active') return 'ok';
-  if (status === 'disabled') return 'danger';
+  const normalized = normalizeStatus(status);
+  if (['active', 'completed'].includes(normalized)) return 'ok';
+  if (['disabled', 'failed'].includes(normalized)) return 'danger';
   return 'warn';
 }
 
@@ -684,8 +749,12 @@ function statusLabel(status) {
   const normalized = normalizeStatus(status);
   if (normalized === 'active') return t('governance.status_active');
   if (normalized === 'archived') return t('governance.status_archived');
+  if (normalized === 'completed') return t('governance.status_completed');
   if (normalized === 'draft') return t('governance.status_draft');
   if (normalized === 'disabled') return t('governance.status_disabled');
+  if (normalized === 'failed') return t('governance.status_failed');
+  if (normalized === 'queued') return t('governance.status_queued');
+  if (normalized === 'running') return t('governance.status_running');
   return String(status || '');
 }
 

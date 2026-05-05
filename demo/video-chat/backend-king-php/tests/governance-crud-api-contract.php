@@ -191,6 +191,10 @@ try {
     videochat_governance_crud_assert(is_array($createdExportJob), 'created export job row missing');
     videochat_governance_crud_assert((string) ($createdExportJob['job_type'] ?? '') === 'export', 'created export job type mismatch');
     videochat_governance_crud_assert((string) ($createdExportJob['status'] ?? '') === 'completed', 'created export job should complete synchronously');
+    $createdExportResult = (array) ($createdExportJob['result'] ?? []);
+    videochat_governance_crud_assert((string) ($createdExportResult['schema_version'] ?? '') === 'tenant-export.v1', 'created export job should expose downloadable schema version');
+    videochat_governance_crud_assert(is_array($createdExportResult['tables'] ?? null), 'created export job should expose downloadable table manifest');
+    videochat_governance_crud_assert(!array_key_exists('tenant_id', $createdExportResult), 'export job public result must not expose internal tenant ids');
     videochat_governance_crud_assert(
         (string) (((($createdExportJob['relationships'] ?? [])['organization'] ?? [])[0] ?? [])['id'] ?? '') === $createdOrganizationId,
         'created export job response should include selected organization summary'
@@ -221,6 +225,22 @@ try {
     videochat_governance_crud_assert((int) ($invalidImportJob['status'] ?? 0) === 422, 'import job without bundle should fail validation');
     $importCountAfterValidation = (int) $pdo->query("SELECT COUNT(*) FROM tenant_import_jobs WHERE tenant_id = {$tenantId}")->fetchColumn();
     videochat_governance_crud_assert($importCountAfterValidation === $importCountBeforeValidation, 'invalid import request must not create a failed job row');
+
+    $createImportJob = $dispatch('POST', '/api/governance/data-portability-jobs', $adminAuth, [
+        'job_type' => 'import',
+        'relationships' => [
+            'organization' => [
+                ['entity_key' => 'organizations', 'id' => $createdOrganizationId],
+            ],
+        ],
+        'bundle' => $createdExportResult,
+    ]);
+    $createImportJobPayload = videochat_governance_crud_decode($createImportJob);
+    $createdImportJob = (($createImportJobPayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createImportJob['status'] ?? 0) === 201, 'admin should create accepted import dry-run job');
+    videochat_governance_crud_assert(is_array($createdImportJob), 'created import job row missing');
+    videochat_governance_crud_assert((string) ($createdImportJob['job_type'] ?? '') === 'import', 'created import job type mismatch');
+    videochat_governance_crud_assert((bool) (((array) ($createdImportJob['result'] ?? []))['accepted'] ?? false) === true, 'import dry-run result should expose accepted=true');
 
     $createGroup = $dispatch('POST', '/api/governance/groups', $adminAuth, [
         'name' => 'Contract Group',
