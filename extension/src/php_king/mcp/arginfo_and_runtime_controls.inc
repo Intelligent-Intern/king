@@ -46,10 +46,7 @@ static zend_result king_mcp_set_transfer_error(
 
 static uint64_t king_monotonic_time_ms(void)
 {
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
+    return (uint64_t) (zend_hrtime() / 1000000ULL);
 }
 
 static zend_result king_mcp_validate_runtime_control_option(

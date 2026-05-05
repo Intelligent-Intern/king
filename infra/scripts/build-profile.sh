@@ -47,7 +47,70 @@ LSQUIC_BOOTSTRAP_SCRIPT="${SCRIPT_DIR}/bootstrap-lsquic.sh"
 LSQUIC_RUNTIME_SCRIPT="${SCRIPT_DIR}/build-lsquic-runtime.sh"
 PHPIZE_GENERATED_LIST="${SCRIPT_DIR}/phpize-generated-files.list"
 PROFILE_DIR="${EXT_DIR}/build/profiles/${PROFILE}"
-JOBS="${JOBS:-$(nproc)}"
+
+default_jobs() {
+    local count=""
+
+    if command -v nproc >/dev/null 2>&1; then
+        nproc
+        return
+    fi
+
+    if command -v sysctl >/dev/null 2>&1; then
+        count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+        if [[ "${count}" =~ ^[0-9]+$ ]] && [[ "${count}" -gt 0 ]]; then
+            printf '%s\n' "${count}"
+            return
+        fi
+    fi
+
+    getconf _NPROCESSORS_ONLN 2>/dev/null || printf '%s\n' 1
+}
+
+host_os() {
+    case "$(uname -s)" in
+        Darwin)
+            printf '%s\n' "darwin"
+            ;;
+        Linux)
+            printf '%s\n' "linux"
+            ;;
+        *)
+            uname -s | tr '[:upper:]' '[:lower:]'
+            ;;
+    esac
+}
+
+lsquic_runtime_library_name() {
+    case "$(host_os)" in
+        darwin)
+            printf '%s\n' "liblsquic.dylib"
+            ;;
+        *)
+            printf '%s\n' "liblsquic.so"
+            ;;
+    esac
+}
+
+boringssl_static_link_libs() {
+    case "$(host_os)" in
+        darwin)
+            printf '%s %s %s\n' \
+                "${lsquic_runtime_prefix}/boringssl/lib/libssl.a" \
+                "${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a" \
+                "-lc++"
+            ;;
+        *)
+            printf '%s %s %s %s\n' \
+                "-Wl,--exclude-libs,ALL" \
+                "${lsquic_runtime_prefix}/boringssl/lib/libssl.a" \
+                "${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a" \
+                "-lstdc++"
+            ;;
+    esac
+}
+
+JOBS="${JOBS:-$(default_jobs)}"
 
 BASE_CFLAGS="${CFLAGS:-}"
 BASE_CPPFLAGS="${CPPFLAGS:-}"
@@ -362,11 +425,11 @@ stage_lsquic_runtime() {
         return 0
     fi
 
-    runtime_library="${lsquic_runtime_prefix}/lib/liblsquic.so"
+    runtime_library="${lsquic_runtime_prefix}/lib/$(lsquic_runtime_library_name)"
     runtime_metadata="${lsquic_runtime_prefix}/king-lsquic-runtime.env"
 
     mkdir -p "${PROFILE_DIR}/runtime"
-    install -m 0644 "${runtime_library}" "${PROFILE_DIR}/runtime/liblsquic.so"
+    install -m 0644 "${runtime_library}" "${PROFILE_DIR}/runtime/$(lsquic_runtime_library_name)"
     if [[ -f "${runtime_metadata}" ]]; then
         install -m 0644 "${runtime_metadata}" "${PROFILE_DIR}/runtime/king-lsquic-runtime.env"
     fi
@@ -422,7 +485,7 @@ if [[ -n "${lsquic_runtime_prefix}" ]]; then
         KING_LSQUIC_INCLUDE_DIR="${lsquic_runtime_prefix}/include/lsquic"
         KING_LSQUIC_LIBRARY_DIR="${lsquic_runtime_prefix}/lib"
         KING_BORINGSSL_CFLAGS="-DKING_BORINGSSL_STATIC_LINK=1"
-        KING_BORINGSSL_LIBS="-Wl,--exclude-libs,ALL ${lsquic_runtime_prefix}/boringssl/lib/libssl.a ${lsquic_runtime_prefix}/boringssl/lib/libcrypto.a -lstdc++"
+        KING_BORINGSSL_LIBS="$(boringssl_static_link_libs)"
     )
 fi
 

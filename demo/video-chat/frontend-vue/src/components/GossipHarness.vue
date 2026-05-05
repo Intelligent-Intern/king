@@ -104,6 +104,13 @@ async function initPeers(): Promise<void> {
   running.value = true
 
   const ctrl = new GossipController(`room_1`, `call_1`)
+  ctrl.setDataLaneConfig({
+    mode: 'active',
+    enabled: true,
+    publish: true,
+    receive: true,
+    diagnosticsLabel: 'gossip_data_active',
+  })
   controller.value = ctrl
   const panes: PeerPane[] = []
 

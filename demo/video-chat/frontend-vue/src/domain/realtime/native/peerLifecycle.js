@@ -2,6 +2,7 @@ export function createNativePeerLifecycleHelpers({
   bumpMediaRenderVersion,
   clearNativePeerAudioTrackDeadline,
   clearRemoteVideoContainer,
+  closeGossipDataChannelForNativePeer = () => false,
   isNativeWebRtcRuntimePath,
   mediaDebugLog,
   nativeAudioBridgeQuarantineByUserId,
@@ -106,6 +107,7 @@ export function createNativePeerLifecycleHelpers({
     if (!peer) return;
 
     clearNativePeerAudioTrackDeadline(peer);
+    closeGossipDataChannelForNativePeer(normalizedTargetUserId);
     clearNativeOfferRetry(peer);
     if (peer.pc) {
       try {

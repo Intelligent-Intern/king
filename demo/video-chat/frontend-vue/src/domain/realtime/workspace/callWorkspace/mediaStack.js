@@ -256,6 +256,7 @@ export function createCallWorkspaceMediaStack(options) {
       maybeFallbackToNativeRuntime: callbacks.maybeFallbackToNativeRuntime,
       mediaDebugLog: callbacks.mediaDebugLog,
       noteWlvcSourceReadbackSuccess: sfuTransport.noteWlvcSourceReadbackSuccess,
+      publishLocalEncodedFrameToGossip: callbacks.publishLocalEncodedFrameToGossip,
       reconfigureLocalTracksFromSelectedDevices: callbacks.reconfigureLocalTracksFromSelectedDevices,
       renderCallVideoLayout: () => renderCallVideoLayout(),
       resetBackgroundRuntimeMetrics: callbacks.resetBackgroundRuntimeMetrics,

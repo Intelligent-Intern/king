@@ -9,6 +9,7 @@
 #include "include/telemetry/telemetry.h"
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
+#include "Zend/zend_hrtime.h"
 #include "zend_smart_str.h"
 #include <time.h>
 #include <unistd.h>

@@ -478,12 +478,34 @@ int king_rtp_dtls_do_accept(king_rtp_socket_t *sock,
     }
     freeaddrinfo(res);
 
+    struct timeval tv = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
+#if defined(OPENSSL_IS_BORINGSSL)
+    (void) setsockopt(pfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    (void) setsockopt(pfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
+
     /* DTLS over the connected socket */
     SSL *ssl = SSL_new(sock->ssl_ctx);
+#if defined(OPENSSL_IS_BORINGSSL)
+    BIO *bio = BIO_new_socket(pfd, BIO_NOCLOSE);
+#else
     BIO *bio = BIO_new_dgram(pfd, BIO_NOCLOSE);
+#endif
+    if (ssl == NULL || bio == NULL) {
+        if (ssl != NULL) {
+            SSL_free(ssl);
+        }
+        if (bio != NULL) {
+            BIO_free(bio);
+        }
+        close(pfd);
+        snprintf(errbuf, errbuf_len, "DTLS BIO creation failed");
+        return -1;
+    }
 
-    struct timeval tv = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
+#if !defined(OPENSSL_IS_BORINGSSL)
     BIO_ctrl(bio, BIO_CTRL_DGRAM_SET_RECV_TIMEOUT, 0, &tv);
+#endif
     SSL_set_bio(ssl, bio, bio);
     SSL_set_accept_state(ssl);
 

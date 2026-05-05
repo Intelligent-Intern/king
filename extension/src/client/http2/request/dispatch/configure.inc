@@ -100,9 +100,11 @@ static zend_result king_http2_request_configure_handle(
 )
 {
     king_http2_libcurl.curl_easy_reset_fn(easy_handle);
+    response->error_buffer[0] = '\0';
 
     if (king_http2_libcurl.curl_easy_setopt_fn(easy_handle, CURLOPT_URL, url_str) != CURLE_OK
         || king_http2_libcurl.curl_easy_setopt_fn(easy_handle, CURLOPT_CUSTOMREQUEST, method_str) != CURLE_OK
+        || king_http2_libcurl.curl_easy_setopt_fn(easy_handle, CURLOPT_ERRORBUFFER, response->error_buffer) != CURLE_OK
         || king_http2_libcurl.curl_easy_setopt_fn(
             easy_handle,
             CURLOPT_HTTP_VERSION,

@@ -9,6 +9,7 @@ export function createNativePeerFactory({
   currentUserId,
   ensureNativeAudioBridgeSecurityReady = async () => false,
   ensureNativePeerConnectionRef,
+  bindGossipDataChannelForNativePeer = () => false,
   isNativeWebRtcRuntimePath,
   markParticipantActivity = () => {},
   markRaw,
@@ -45,6 +46,7 @@ export function createNativePeerFactory({
 
     const existing = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
     if (existing) {
+      bindGossipDataChannelForNativePeer(existing);
       synchronizeNativePeerMediaElements(existing);
       scheduleNativeOfferRetry(existing, 'peer_roster_sync');
       return existing;
@@ -222,6 +224,7 @@ export function createNativePeerFactory({
     });
 
     setNativePeerConnection(normalizedTargetUserId, peer);
+    bindGossipDataChannelForNativePeer(peer);
     synchronizeNativePeerMediaElements(peer);
     if (shouldSyncNativeLocalTracksBeforeOffer(peer)) {
       void syncNativePeerLocalTracks(peer);

@@ -253,10 +253,7 @@ static zend_long king_orchestrator_remote_line_limit(void)
 
 static uint64_t king_orchestrator_monotonic_time_ms(void)
 {
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
+    return (uint64_t) (zend_hrtime() / 1000000ULL);
 }
 
 static zend_long king_orchestrator_control_timeout_budget_ms(
