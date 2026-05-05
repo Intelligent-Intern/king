@@ -180,7 +180,7 @@ import {
   SUPPORTED_LOCALIZATION_LANGUAGES,
   localizationLanguageDirection,
 } from '../../../support/localizationOptions';
-import { localizedApiErrorMessage } from '../apiErrorMessages.js';
+import { buildLocalizedApiError } from '../apiErrorMessages.js';
 import { t } from '../i18nRuntime.js';
 
 const pageSize = 10;
@@ -277,9 +277,7 @@ async function apiJson(path, options = {}) {
   const payload = await readJsonResponse(response);
   if (!response.ok || !payload || payload.status !== 'ok') {
     const fallback = options.fallback || t('localization.admin.request_failed');
-    const errorMessage = localizedApiErrorMessage(payload, fallback);
-    const error = new Error(errorMessage);
-    error.payload = payload;
+    const error = buildLocalizedApiError(payload, fallback, response.status);
     error.status = response.status;
     throw error;
   }
