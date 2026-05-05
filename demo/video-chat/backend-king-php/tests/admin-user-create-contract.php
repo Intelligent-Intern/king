@@ -271,7 +271,18 @@ SQL
                         ['entity_key' => 'roles', 'id' => $rolePublicId],
                     ],
                     'groups' => [
-                        ['entity_key' => 'groups', 'id' => $groupPublicId],
+                        [
+                            'entity_key' => 'groups',
+                            'id' => $groupPublicId,
+                            'relationships' => [
+                                'permissions' => [
+                                    ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.organizations.create', 'key' => 'governance.organizations.create'],
+                                ],
+                                'modules' => [
+                                    ['entity_key' => 'modules', 'id' => 'module:governance', 'key' => 'governance'],
+                                ],
+                            ],
+                        ],
                     ],
                 ],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -303,6 +314,14 @@ SQL
     videochat_admin_user_create_assert($userRoleAssignmentCount === 1, 'created user governance role should be persisted');
     $userGroupAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId} AND group_id = {$groupId} AND subject_type = 'user' AND status = 'active'")->fetchColumn();
     videochat_admin_user_create_assert($userGroupAssignmentCount === 1, 'created user governance group should be persisted');
+    $userGroupPermissionGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'group_permissions' AND subject_type = 'group' AND group_id = {$groupId} AND permission_key = 'governance.organizations.create'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupPermissionGrantCount === 1, 'nested user group permissions should sync to group grants');
+    $userGroupModuleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'group_modules' AND subject_type = 'group' AND group_id = {$groupId} AND permission_key = 'module.governance.read'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupModuleGrantCount === 1, 'nested user group modules should sync to group grants');
+    $userGroupPermissionGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'organization', '*', 'create');
+    videochat_admin_user_create_assert((bool) ($userGroupPermissionGrant['ok'] ?? false), 'nested group permission should be evaluated for created user');
+    $userGroupModuleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'module', 'governance', 'read');
+    videochat_admin_user_create_assert((bool) ($userGroupModuleGrant['ok'] ?? false), 'nested group module should be evaluated for created user');
     $userRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'user_roles' AND subject_type = 'user' AND user_id = {$createdRoleUserId} AND permission_key = 'governance.groups.create'")->fetchColumn();
     videochat_admin_user_create_assert($userRoleGrantCount === 1, 'created user governance role should expand into evaluator grant');
     $userRoleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'group', '*', 'create');

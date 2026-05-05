@@ -157,7 +157,7 @@ function videochat_handle_admin_user_account_routes(
                         'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
                     ]);
                 }
-                $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $createdUserId, $payload);
+                $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $createdUserId, $payload, $actorUserId);
                 if (!(bool) ($groupSync['ok'] ?? false)) {
                     return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
                         'fields' => is_array($groupSync['errors'] ?? null) ? $groupSync['errors'] : [],
@@ -374,7 +374,7 @@ function videochat_handle_admin_user_account_routes(
                             'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
                         ]);
                     }
-                    $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $userId, $payload);
+                    $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $userId, $payload, $actorUserId);
                     if (!(bool) ($groupSync['ok'] ?? false)) {
                         return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
                             'fields' => is_array($groupSync['errors'] ?? null) ? $groupSync['errors'] : [],

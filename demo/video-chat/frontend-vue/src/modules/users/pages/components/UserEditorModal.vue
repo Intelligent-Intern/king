@@ -222,7 +222,7 @@
     :selections="relationSelections"
     :row-provider="relationRowsForEntity"
     :maximized="relationStackMaximized"
-    :show-nested-relations="false"
+    :show-nested-relations="relationStackShowsNestedRelations"
     @update:maximized="relationStackMaximized = $event"
     @close="closeRelationStack"
     @apply="applyRelationSelection"
@@ -235,6 +235,8 @@ import AppIconButton from '../../../../components/AppIconButton.vue';
 import AppModalShell from '../../../../components/AppModalShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
 import CrudRelationStack from '../../../governance/components/CrudRelationStack.vue';
+import { buildGovernanceCatalogRows } from '../../../governanceCatalog.js';
+import { workspaceModuleRegistry } from '../../../index.js';
 import { t } from '../../../localization/i18nRuntime.js';
 import { useUserEditorModal } from './useUserEditorModal.js';
 
@@ -252,7 +254,7 @@ const governanceRoleRelation = Object.freeze({
 });
 const governanceGroupRelation = Object.freeze({
   key: 'governance_groups',
-  target_entity: 'governance_groups',
+  target_entity: 'groups',
   label_key: 'governance.relation.groups',
   selection_mode: 'multiple',
 });
@@ -391,12 +393,14 @@ const governanceRoleRows = computed(() => props.governanceRoleOptions.map((role)
   key: String(role.key || role.id || ''),
   name: String(role.name || role.key || role.id || ''),
   status: String(role.status || 'active'),
+  relationships: role.relationships,
 })).filter((role) => role.id !== ''));
 const governanceGroupRows = computed(() => props.governanceGroupOptions.map((group) => ({
   id: String(group.id || ''),
   key: String(group.key || group.id || ''),
   name: String(group.name || group.key || group.id || ''),
   status: String(group.status || 'active'),
+  relationships: group.relationships,
 })).filter((group) => group.id !== ''));
 const currentRoleLabel = computed(() => (
   selectedRow(roleRows.value, props.form.role)?.name || String(props.form.role || '')
@@ -418,6 +422,7 @@ const relationSelections = computed(() => ({
   governance_groups: selectedRowsByValues(governanceGroupRows.value, props.form.governance_groups),
   theme: selectedRows(themeRows.value, props.form.theme),
 }));
+const relationStackShowsNestedRelations = computed(() => activeRelation.value?.key === 'governance_groups');
 
 const {
   editorMaximized,
@@ -438,18 +443,27 @@ function selectedRows(rows, value) {
 }
 
 function selectedRowsByValues(rows, values) {
-  const normalizedValues = new Set((Array.isArray(values) ? values : [])
-    .map((value) => String(value?.id || value?.key || value || '').trim())
-    .filter(Boolean));
-  return rows.filter((row) => normalizedValues.has(row.id) || normalizedValues.has(row.key));
+  return (Array.isArray(values) ? values : [])
+    .map((value) => {
+      const id = String(value?.id || value?.key || value || '').trim();
+      const row = rows.find((candidate) => candidate.id === id || candidate.key === id) || {};
+      return id === '' ? null : { ...row, ...(typeof value === 'object' ? value : { id, key: id }) };
+    })
+    .filter(Boolean);
 }
 
 function relationRowsForEntity(entityKey) {
   if (entityKey === 'user_roles') return roleRows.value;
   if (entityKey === 'governance_roles') return governanceRoleRows.value;
-  if (entityKey === 'governance_groups') return governanceGroupRows.value;
+  if (entityKey === 'groups') return governanceGroupRows.value;
+  if (entityKey === 'roles') return governanceRoleRows.value;
+  if (entityKey === 'modules' || entityKey === 'permissions') return governanceCatalogRows(entityKey);
   if (entityKey === 'user_themes') return themeRows.value;
   return [];
+}
+
+function governanceCatalogRows(entityKey) {
+  return buildGovernanceCatalogRows(workspaceModuleRegistry, `admin-governance-${entityKey}`);
 }
 
 function openRelation(relation) {
@@ -481,6 +495,7 @@ function applyRelationSelection(payload) {
         key: String(selectedRow?.key || selectedRow?.id || '').trim(),
         name: String(selectedRow?.name || selectedRow?.key || selectedRow?.id || '').trim(),
         status: String(selectedRow?.status || 'active'),
+        relationships: selectedRow?.relationships,
       }))
       .filter((selectedRow) => selectedRow.id !== '');
   }
@@ -491,6 +506,7 @@ function applyRelationSelection(payload) {
         key: String(selectedRow?.key || selectedRow?.id || '').trim(),
         name: String(selectedRow?.name || selectedRow?.key || selectedRow?.id || '').trim(),
         status: String(selectedRow?.status || 'active'),
+        relationships: selectedRow?.relationships,
       }))
       .filter((selectedRow) => selectedRow.id !== '');
   }
