@@ -332,7 +332,7 @@ Non-goals for this sprint:
    - `demo/video-chat/backend-king-php/tests/localization-import-contract.sh`
    - `node demo/video-chat/frontend-vue/tests/contract/localization-import-ui-contract.mjs`
 
-4. [ ] `[frontend-i18n-runtime]` Add frontend translation runtime.
+4. [x] `[frontend-i18n-runtime]` Add frontend translation runtime.
 
    Scope:
    - Create a video-chat i18n module with locale state, direction state,
@@ -343,13 +343,21 @@ Non-goals for this sprint:
    - Replace the local-only language storage stub in `WorkspaceShell.vue`.
 
    Done when:
-   - [ ] User language selection persists and survives reload/login refresh.
-   - [ ] Locale switch updates visible UI without requiring logout.
-   - [ ] Missing keys are detectable in dev/test and fall back to English in
+   - [x] User language selection persists and survives reload/login refresh.
+   - [x] Locale switch updates visible UI without requiring logout.
+   - [x] Missing keys are detectable in dev/test and fall back to English in
      production.
-   - [ ] Interpolation supports named placeholders and escapes values.
-   - [ ] Frontend unit contracts cover fallback, missing keys, params, and RTL
+   - [x] Interpolation supports named placeholders and escapes values.
+   - [x] Frontend unit contracts cover fallback, missing keys, params, and RTL
      direction.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/http/module_localization.php`
+   - `demo/video-chat/backend-king-php/tests/localization-resources-contract.sh`
+   - `demo/video-chat/frontend-vue/src/modules/localization/i18nRuntime.js`
+   - `node demo/video-chat/frontend-vue/tests/contract/frontend-i18n-runtime-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
+   - `npm run build` in `demo/video-chat/frontend-vue`
 
 5. [ ] `[settings-language-ui]` Replace the current Regional stub with full language settings.
 
