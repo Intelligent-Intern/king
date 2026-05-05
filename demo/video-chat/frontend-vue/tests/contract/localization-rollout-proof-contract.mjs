@@ -35,6 +35,8 @@ for (const requiredText of [
   'user_id = 1',
   'CSV',
   '/api/auth/logout',
+  '/api/localization/resources',
+  'without tenant context',
   '/api/admin/localization/imports/preview',
   'without committing imported rows',
   'temporary smoke session is revoked',
@@ -61,6 +63,9 @@ assert.match(deploySmoke, /trap cleanup_admin_session EXIT/, 'deploy smoke must 
 assert.match(deploySmoke, /\/api\/auth\/logout/, 'deploy smoke must revoke the temporary admin session');
 assert.match(deploySmoke, /VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en/, 'deploy smoke must default the authenticated locale smoke to English');
 assert.match(deploySmoke, /\/api\/auth\/session/, 'deploy smoke must verify authenticated session payload');
+assert.match(deploySmoke, /public_get_json/, 'deploy smoke must report public JSON response bodies on failure');
+assert.match(deploySmoke, /\/api\/localization\/resources\?locale=de&namespaces=common/, 'deploy smoke must verify public localization resources');
+assert.match(deploySmoke, /public localization payload must not include tenant context/, 'deploy smoke must prove public localization has no tenant context');
 assert.match(deploySmoke, /supported locale missing/, 'deploy smoke must verify seeded rollout locales');
 assert.match(deploySmoke, /admin session payload localization mismatch/, 'deploy smoke must aggregate authenticated localization payload failures');
 assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deploy smoke must exercise superadmin localization CSV preview');

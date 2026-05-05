@@ -41,6 +41,8 @@ After deploy:
 - Run `demo/video-chat/scripts/deploy-smoke.sh`.
   Its admin operations smoke logs out through `/api/auth/logout`, so the
   temporary smoke session is revoked after the protected checks.
+  Public smoke verifies `/api/localization/resources` can serve global
+  translation resources without tenant context.
   The smoke also verifies the authenticated session payload, default `en`
   locale, `ltr` direction, and seeded `en`, `de`, `ar`, and `sgd` locales.
   It then runs a primary-superadmin localization CSV preview against

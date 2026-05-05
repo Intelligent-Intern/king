@@ -91,6 +91,28 @@ SQL
         'fallback resource should include English default'
     );
 
+    $publicResponse = videochat_handle_localization_routes(
+        '/api/localization/resources',
+        'GET',
+        ['method' => 'GET', 'uri' => '/api/localization/resources?locale=de&namespaces=common'],
+        [],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_localization_resources_assert(is_array($publicResponse), 'public resource route should return a response');
+    videochat_localization_resources_assert((int) ($publicResponse['status'] ?? 0) === 200, 'public resource route status mismatch');
+    $publicPayload = videochat_localization_resources_decode($publicResponse);
+    videochat_localization_resources_assert(
+        (string) (($publicPayload['resources'] ?? [])['common.save'] ?? '') === 'Speichern',
+        'public resource route should return global translations'
+    );
+    videochat_localization_resources_assert(
+        (string) (($publicPayload['resources'] ?? [])['common.save'] ?? '') !== 'Mandant Speichern',
+        'public resource route must not expose tenant overrides without auth context'
+    );
+
     $unsupportedResponse = videochat_handle_localization_routes(
         '/api/localization/resources',
         'GET',

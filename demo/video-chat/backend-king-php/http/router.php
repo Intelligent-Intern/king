@@ -98,6 +98,10 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if ($requestPath === '/api/localization/resources') {
+            return true;
+        }
+
         if (preg_match('#^/api/workspace/branding-files/[^/]+$#', $requestPath) === 1) {
             return true;
         }
