@@ -6,6 +6,7 @@ import themeEditor from './theme_editor/descriptor.js';
 import users from './users/descriptor.js';
 import workspaceSettings from './workspace_settings/descriptor.js';
 import { createModuleRegistry } from './moduleRegistry.js';
+import { buildModuleRouteRecords } from './navigationBuilder.js';
 
 export const workspaceModuleDescriptors = [
   administration,
@@ -18,5 +19,6 @@ export const workspaceModuleDescriptors = [
 ];
 
 export const workspaceModuleRegistry = createModuleRegistry(workspaceModuleDescriptors);
+export const workspaceModuleRouteRecords = buildModuleRouteRecords(workspaceModuleRegistry);
 
 export { createModuleRegistry, normalizeModuleDescriptor } from './moduleRegistry.js';
