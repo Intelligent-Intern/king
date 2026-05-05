@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/tenant_migrations.php';
+require_once __DIR__ . '/localization.php';
 function videochat_sqlite_migrations(): array
 {
     return [
@@ -794,6 +795,10 @@ SQL,
             'statements' => [
                 "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
             ],
+        ],
+        30 => [
+            'name' => '0030_localization_foundation',
+            'statements' => videochat_localization_migration_statements(),
         ],
     ] + videochat_sqlite_tenant_migrations();
 }
