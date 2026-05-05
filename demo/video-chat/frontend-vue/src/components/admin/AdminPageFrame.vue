@@ -39,8 +39,8 @@ defineProps({
 }
 
 .admin-page-frame > :first-child {
-  border-top-left-radius: 0;
-  border-top-right-radius: 5px;
+  border-start-start-radius: 0;
+  border-start-end-radius: 5px;
 }
 
 .admin-page-frame-head,
@@ -66,7 +66,6 @@ defineProps({
   display: flex;
   justify-content: center;
   margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
 }
 </style>
