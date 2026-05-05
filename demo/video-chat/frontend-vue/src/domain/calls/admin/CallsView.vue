@@ -21,6 +21,7 @@ import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
   applyCallBackgroundPreset,
   callMediaPrefs,
@@ -200,8 +201,8 @@ const {
   calendarError,
 } = callListStore;
 const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
-  ? 'Schedule video call'
-  : 'New video call'));
+  ? t('calls.admin.schedule_video_call')
+  : t('calls.admin.new_video_call')));
 const deleteAllCallsBusy = ref(false);
 const canDeleteAllCalls = computed(() => !deleteAllCallsBusy.value && !loadingCalls.value);
 
