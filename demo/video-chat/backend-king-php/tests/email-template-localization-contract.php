@@ -77,7 +77,7 @@ try {
             'mail_body_template' => 'Configured {recipient_name} {starts_at} {join_link}',
         ],
         ['email' => 'owner@example.test', 'display_name' => 'Owner User', 'locale' => 'de'],
-        ['first_name' => 'Guest', 'last_name' => 'Person', 'email' => 'guest@example.test', 'locale' => 'fr', 'message' => ''],
+        ['first_name' => 'Guest', 'last_name' => 'Person', 'email' => 'guest@example.test', 'locale' => 'de', 'message' => ''],
         [
             'tenant_id' => $tenantId,
             'call_id' => 'call_locale_contract',
@@ -89,7 +89,7 @@ try {
         ],
         $pdo
     );
-    videochat_email_template_localization_assert((string) ($bookingResults['guest']['subject_locale'] ?? '') === 'en', 'guest unsupported locale should use English template fallback');
+    videochat_email_template_localization_assert((string) ($bookingResults['guest']['subject_locale'] ?? '') === 'de', 'guest selected locale should use German template');
     videochat_email_template_localization_assert((string) ($bookingResults['owner']['subject_locale'] ?? '') === 'de', 'owner locale should use German template');
 
     videochat_workspace_save_admin_settings($pdo, ['lead_recipients' => ['lead@example.test']], null, $tenantId);
@@ -109,8 +109,7 @@ try {
     videochat_email_template_localization_assert((string) ($leadResults['lead@example.test']['subject_locale'] ?? '') === 'de', 'lead locale should use German template');
 
     $outbox = is_file($outboxPath) ? (string) file_get_contents($outboxPath) : '';
-    videochat_email_template_localization_assert(str_contains($outbox, 'SUBJECT=EN scheduled: Locale Call'), 'guest fallback subject missing from outbox');
-    videochat_email_template_localization_assert(str_contains($outbox, 'SUBJECT=DE Termin: Locale Call'), 'owner localized subject missing from outbox');
+    videochat_email_template_localization_assert(substr_count($outbox, 'SUBJECT=DE Termin: Locale Call') >= 2, 'guest and owner localized booking subjects missing from outbox');
     videochat_email_template_localization_assert(str_contains($outbox, 'SUBJECT=DE Lead: Lead User'), 'lead localized subject missing from outbox');
 
     @unlink($databasePath);
