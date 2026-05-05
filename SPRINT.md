@@ -1553,8 +1553,14 @@ Non-goals for this sprint:
     - Full online smoke with remote SSH skipped now cleans up its admin session
       but correctly fails before protected admin checks on the current deployed
       app because `/api/auth/session` does not yet return `user.locale`
-      (`expected en, got ""`). This is the deploy-target proof gap the
-      localization rollout must close.
+      (`locale expected en, got <missing>; direction expected ltr, got
+      <missing>; supported locale missing en/de/ar/sgd`). This is the
+      deploy-target proof gap the localization rollout must close.
+    - Follow-up deployed-session diagnostic confirms the current production
+      session user keys omit `locale`, `direction`, and `supported_locales`;
+      `logout` still returns HTTP 200 and cleans up the smoke session. Current
+      deployed health reports `asset_version=20260505040619` and
+      `/api/version` reports `video-chat-backend-king-php 1.0.6-beta`.
     - `npm run test:e2e:localization-smoke` passes locally: public booking
       locale/direction, localized public join error, Settings language switch
       persistence with RTL flip, Admin Localization viewport stability across

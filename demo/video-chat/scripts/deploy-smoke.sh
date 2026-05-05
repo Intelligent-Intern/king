@@ -362,15 +362,21 @@ assert_admin_session_payload() {
     if (!is_array($user)) {
         fail("admin session payload missing user");
     }
-    if ($expectedLocale !== "" && (string) ($user["locale"] ?? "") !== $expectedLocale) {
-        fail("admin session locale mismatch: expected " . $expectedLocale . ", got " . (string) ($user["locale"] ?? ""));
+    $errors = [];
+    $localeValue = array_key_exists("locale", $user) ? (string) $user["locale"] : "<missing>";
+    if ($expectedLocale !== "" && $localeValue !== $expectedLocale) {
+        $errors[] = "locale expected " . $expectedLocale . ", got " . $localeValue;
     }
-    if ($expectedLocale === "en" && (string) ($user["direction"] ?? "") !== "ltr") {
-        fail("admin session default English direction must be ltr");
+
+    $directionValue = array_key_exists("direction", $user) ? (string) $user["direction"] : "<missing>";
+    if ($expectedLocale === "en" && $directionValue !== "ltr") {
+        $errors[] = "direction expected ltr, got " . $directionValue;
     }
+
     $supported = $user["supported_locales"] ?? [];
     if (!is_array($supported)) {
-        fail("admin session supported_locales missing");
+        $errors[] = "supported_locales missing";
+        $supported = [];
     }
     $codes = [];
     foreach ($supported as $locale) {
@@ -380,8 +386,11 @@ assert_admin_session_payload() {
     }
     foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
         if (!in_array($requiredLocale, $codes, true)) {
-            fail("admin session supported locale missing: " . $requiredLocale);
+            $errors[] = "supported locale missing " . $requiredLocale;
         }
+    }
+    if ($errors !== []) {
+        fail("admin session payload localization mismatch: " . implode("; ", $errors));
     }
   '
 }

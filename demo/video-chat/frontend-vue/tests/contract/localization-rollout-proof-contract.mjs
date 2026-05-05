@@ -59,7 +59,8 @@ assert.match(deploySmoke, /trap cleanup_admin_session EXIT/, 'deploy smoke must 
 assert.match(deploySmoke, /\/api\/auth\/logout/, 'deploy smoke must revoke the temporary admin session');
 assert.match(deploySmoke, /VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en/, 'deploy smoke must default the authenticated locale smoke to English');
 assert.match(deploySmoke, /\/api\/auth\/session/, 'deploy smoke must verify authenticated session payload');
-assert.match(deploySmoke, /admin session supported locale missing/, 'deploy smoke must verify seeded rollout locales');
+assert.match(deploySmoke, /supported locale missing/, 'deploy smoke must verify seeded rollout locales');
+assert.match(deploySmoke, /admin session payload localization mismatch/, 'deploy smoke must aggregate authenticated localization payload failures');
 assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 
 console.log('[localization-rollout-proof-contract] PASS');
