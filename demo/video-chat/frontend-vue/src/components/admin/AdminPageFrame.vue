@@ -31,11 +31,13 @@ defineProps({
 
 <style scoped>
 .admin-page-frame {
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
   background: transparent;
+  overflow: hidden;
 }
 
 .admin-page-frame > :first-child {

@@ -264,7 +264,7 @@ Sprint goal:
    - Visible page action bars still need to consume descriptor actions through
      Issues 2 and 3.
 
-2. [ ] [standard-admin-frame] Create a standard admin/governance page contract
+2. [x] [standard-admin-frame] Create a standard admin/governance page contract
    for h1/title, action bar, search, table, pagination, scroll ownership, and
    help/tour icon.
 
@@ -294,6 +294,16 @@ Sprint goal:
    - Administration Marketplace, App Configuration, and Theme Editor now use
      the shared `AdminPageFrame`; Marketplace tables use `AdminTableFrame`
      instead of local table wrappers.
+   - `AdminPageFrame` is now height-constrained and overflow-hidden so
+     `AdminTableFrame` owns overflowing table scroll instead of clipping rows
+     behind the shell.
+   - Non-call tablet/mobile shells now keep the workspace viewport-constrained,
+     so admin table overflow stays inside the table frame without moving the
+     document, left navigation, header, or footer chrome.
+   - Playwright covers Governance admin scroll ownership on desktop, tablet,
+     and mobile.
+
+   Completed 2026-05-05.
 
 3. [x] [governance-crud-descriptors] Replace the placeholder governance CRUD
    logic with entity-specific CRUD descriptors for users, groups,
@@ -552,7 +562,7 @@ Sprint goal:
    - `admin-i18n-hardening-contract.mjs` pins the catalog localization
      contract alongside the existing translation-key coverage guard.
 
-10. [ ] [frontend-governance-test-matrix] Add frontend tests for the new admin
+10. [x] [frontend-governance-test-matrix] Add frontend tests for the new admin
     logic.
 
     Done when:
@@ -635,12 +645,16 @@ Sprint goal:
    - Extended relation-stack contracts and Playwright e2e for paged permission
      mass selection, search pagination reset, cancel/reopen behavior, and the
      resulting two-permission group relationship payload.
-   - Added desktop/mobile readonly catalog e2e coverage for Governance modules
-     and permissions, proving descriptor catalog rows render through search
-     while create/new/edit/delete controls and the actions column stay absent.
-   - Remaining work depends on the recursive relation picker and backend
-     governance APIs: batch summary loading and explicit scroll-ownership e2e
-     proof beyond the current modal viewport checks.
+   - Added desktop/tablet/mobile readonly catalog e2e coverage for Governance
+     modules and permissions, proving descriptor catalog rows render through
+     search while create/new/edit/delete controls and the actions column stay
+     absent.
+   - Expanded the Governance Playwright matrix to desktop, tablet, and mobile;
+     it now covers nested relation creation, Governance group CRUD relation
+     payloads, readonly catalogs, modal viewport constraints, and admin
+     scroll ownership.
+
+   Completed 2026-05-05.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -710,6 +724,13 @@ Sprint goal:
     - Readonly catalog e2e hardening brings
       `npm run test:e2e:governance-relations` to six desktop/mobile cases and
       passes alongside `npm run test:contract:governance-relation-stack`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
+    - Admin scroll ownership hardening brings
+      `npm run test:e2e:governance-relations` to twelve desktop/tablet/mobile
+      cases and passes alongside `node tests/contract/shared-admin-components-contract.mjs`,
+      `node tests/contract/rtl-layout-foundation-contract.mjs`,
+      `npm run test:contract:governance-relation-stack`,
       `node tests/contract/module-governance-catalog-contract.mjs`, and
       `npm run build`; build still reports only the known chunk warning.
 

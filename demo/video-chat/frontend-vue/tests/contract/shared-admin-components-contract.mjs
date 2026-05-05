@@ -19,10 +19,17 @@ const marketplace = await source('src/modules/marketplace/pages/AdminMarketplace
 const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
 const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
+const responsiveStyles = await source('src/styles/responsive.css');
+const workspaceStyles = await source('src/styles/workspace-shared.css');
 
 assert.match(pageFrame, /AppPageHeader/, 'shared admin page frame must own the page header');
 assert.match(pageFrame, /admin-page-frame-toolbar/, 'shared admin page frame must own toolbar layout');
+assert.match(pageFrame, /height:\s*100%;/, 'shared admin page frame must stay height-constrained');
+assert.match(pageFrame, /overflow:\s*hidden;/, 'shared admin page frame must keep table overflow inside child scrollers');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
+assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');
+assert.match(responsiveStyles, /\.shell\.tablet-mode:not\(\.call-workspace-mode\)[\s\S]*?overflow:\s*hidden;/, 'non-call tablet shell must keep page scroll out of the document');
+assert.match(responsiveStyles, /\.shell\.mobile-mode:not\(\.call-workspace-mode\)[\s\S]*?overflow:\s*hidden;/, 'non-call mobile shell must keep page scroll out of the document');
 
 for (const [name, file] of [
   ['GovernanceCrudView', governance],
