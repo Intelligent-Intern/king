@@ -44,6 +44,11 @@ export function sessionPermissionKeys(tenantPermissions = {}) {
   collectPermissionKeys(tenantPermissions, output);
 
   if (tenantPermissions?.manage_users === true) output.add('users.read');
+  if (tenantPermissions?.manage_users === true) {
+    output.add('users.create');
+    output.add('users.update');
+    output.add('users.delete');
+  }
   if (
     tenantPermissions?.tenant_admin === true
     || tenantPermissions?.manage_organizations === true
@@ -52,6 +57,24 @@ export function sessionPermissionKeys(tenantPermissions = {}) {
     || tenantPermissions?.export_import === true
   ) {
     output.add('governance.read');
+  }
+  if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_organizations === true) {
+    output.add('governance.organizations.create');
+  }
+  if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_groups === true) {
+    output.add('governance.groups.create');
+  }
+  if (tenantPermissions?.tenant_admin === true || tenantPermissions?.manage_permission_grants === true) {
+    output.add('governance.audit_log.export');
+    output.add('governance.audit_log.read');
+    output.add('governance.compliance.create');
+    output.add('governance.grants.create');
+    output.add('governance.policies.create');
+    output.add('governance.roles.create');
+  }
+  if (tenantPermissions?.tenant_admin === true || tenantPermissions?.export_import === true) {
+    output.add('governance.data_portability.export');
+    output.add('governance.data_portability.import');
   }
   if (tenantPermissions?.edit_themes === true) output.add('theme_editor.admin');
 

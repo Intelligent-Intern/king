@@ -97,11 +97,13 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import { sessionState } from '../../../domain/auth/session';
+import { moduleAccessContextFromSession } from '../../../http/routeAccess.js';
 import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
+import { firstRouteActionByKind, routeActionLabel, routeActionsForContext } from '../../routeActions.js';
 
 const route = useRoute();
 const rowsByScope = reactive({});
@@ -132,12 +134,10 @@ const visibleRows = computed(() => [...catalogRows.value, ...rows.value]);
 const title = computed(() => routeLabel('pageTitle', 'pageTitle_key', t('navigation.governance')));
 const singularLabel = computed(() => routeLabel('entitySingular', 'entitySingular_key', title.value));
 const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key', title.value));
-const routeActions = computed(() => (Array.isArray(route.meta?.actions) ? route.meta.actions : []));
-const createAction = computed(() => routeActions.value.find((action) => action.kind === 'create') || null);
-const createButtonLabel = computed(() => {
-  const key = String(createAction.value?.label_key || '').trim();
-  return key !== '' ? t(key) : t('governance.create');
-});
+const routeActionContext = computed(() => moduleAccessContextFromSession(sessionState));
+const availableRouteActions = computed(() => routeActionsForContext(route, routeActionContext.value));
+const createAction = computed(() => firstRouteActionByKind(availableRouteActions.value, 'create'));
+const createButtonLabel = computed(() => routeActionLabel(createAction.value, t, t('governance.create')));
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
   if (needle === '') return visibleRows.value;
