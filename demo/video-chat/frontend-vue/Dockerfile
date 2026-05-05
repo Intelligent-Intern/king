@@ -47,6 +47,7 @@ COPY demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/pack
 RUN npm ci
 
 COPY demo/video-chat/frontend-vue/ ./
+COPY packages/iibin/dist/ /packages/iibin/dist/
 RUN npm run build
 
 EXPOSE 5174

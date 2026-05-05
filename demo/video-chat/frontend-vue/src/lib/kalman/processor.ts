@@ -3,9 +3,9 @@
  * Integrates wavelet compression and Kalman filtering with WebRTC
  */
 
-import { createVideoEnhancer, VideoEnhancer } from './video.js'
-import type { EnhancedFrame, QualityMetrics } from './video.js'
-import { debugLog, debugWarn } from '../../support/debugLogs.js'
+import { createVideoEnhancer, VideoEnhancer } from './video.ts'
+import type { EnhancedFrame, QualityMetrics } from './video.ts'
+import { debugLog, debugWarn } from '../../support/debugLogs.ts'
 
 export interface WebRTCVideoProcessorConfig {
   enabled: boolean

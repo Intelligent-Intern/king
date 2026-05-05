@@ -58,8 +58,8 @@ foreach ($unsupportedShared as $field) {
 }
 
 require_contains('Client-only stateless retry diagnostic', $clientDiag, '"stateless_retry_enable"');
-require_contains('Client fail-closed message', $clientDiag, 'cannot apply quic.%s=%ld with the active LSQUIC HTTP/3 backend');
-require_contains('Server fail-closed message', $serverDiag, 'cannot apply quic.%s=%ld with the active LSQUIC HTTP/3 server backend');
+require_contains('Client fail-closed message', $clientDiag, 'cannot apply quic.%s=" ZEND_LONG_FMT " with the active LSQUIC HTTP/3 backend');
+require_contains('Server fail-closed message', $serverDiag, 'cannot apply quic.%s=" ZEND_LONG_FMT " with the active LSQUIC HTTP/3 server backend');
 require_contains('Client whole-second ping diagnostic', $clientDiag, 'LSQUIC exposes ping period in whole seconds');
 require_contains('Server whole-second ping diagnostic', $serverDiag, 'LSQUIC exposes ping period in whole seconds');
 

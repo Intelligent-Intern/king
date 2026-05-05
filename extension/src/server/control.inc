@@ -89,7 +89,7 @@ static zend_result king_server_control_validate_stream_id(
 
     if (zend_hash_index_exists(&session->cancelled_streams, (zend_ulong) stream_id)) {
         king_server_control_set_errorf(
-            "%s() cannot operate on locally cancelled stream %ld.",
+            "%s() cannot operate on locally cancelled stream " ZEND_LONG_FMT ".",
             function_name,
             stream_id
         );

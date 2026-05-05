@@ -86,9 +86,9 @@ class CopylessVideoFrame {
 }
 
 try {
-  const detectorSource = read('src/domain/realtime/local/capturePipelineCapabilities.js');
-  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
-  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
+  const detectorSource = read('src/domain/realtime/local/capturePipelineCapabilities.ts');
+  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
   requireContains(detectorSource, 'MediaStreamTrackProcessor', 'MediaStreamTrackProcessor detection');
   requireContains(detectorSource, "prototypeMethod(VideoFrameCtor, 'copyTo')", 'VideoFrame.copyTo detection');
   requireContains(detectorSource, "prototypeMethod(VideoFrameCtor, 'close')", 'VideoFrame.close detection');
@@ -101,7 +101,7 @@ try {
   requireContains(captureProfileConstraints, 'detectPublisherCapturePipelineCapabilities()', 'local capture diagnostics probe browser capability state');
   requireContains(captureProfileConstraints, 'publisherCaptureCapabilityDiagnosticPayload(captureCapabilities)', 'local capture diagnostics include capability payload');
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/capturePipelineCapabilities.js')).href;
+  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/capturePipelineCapabilities.ts')).href;
   const {
     PUBLISHER_CAPTURE_BACKENDS,
     detectPublisherCapturePipelineCapabilities,

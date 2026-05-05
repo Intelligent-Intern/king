@@ -520,7 +520,7 @@ static zend_result king_http1_build_redirect_url(
     }
 
     if (port != 80) {
-        smart_str_append_printf(&buffer, ":%ld", port);
+        smart_str_append_printf(&buffer, ":" ZEND_LONG_FMT, port);
     }
 
     if (location_len >= 2 && location[0] == '/' && location[1] == '/') {
@@ -596,7 +596,7 @@ static zend_result king_http1_build_origin_key(
     }
     smart_str_append_printf(
         &origin,
-        ":%ld|ka=%d|nd=%d",
+        ":" ZEND_LONG_FMT "|ka=%d|nd=%d",
         port,
         options != NULL && options->tcp_keepalive_enable ? 1 : 0,
         options != NULL && options->tcp_nodelay_enable ? 1 : 0

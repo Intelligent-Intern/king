@@ -74,13 +74,13 @@ function createController(createPublisherBackpressureController, overrides = {})
 }
 
 async function main() {
-  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const runtimeConfigPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const runtimeConfigPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
 
   requireContains(runtimeConfig, 'SFU_AUTO_QUALITY_RECOVERY_NEXT', 'runtime config defines upward profile order');
   requireContains(sfuTransport, 'wlvcSourceReadbackStableStartedAtMs', 'SFU transport state stores the readback stable window');

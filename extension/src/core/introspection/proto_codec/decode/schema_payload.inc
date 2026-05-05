@@ -238,7 +238,7 @@ static bool king_proto_runtime_decode_schema_payload(
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "Decoding error: Required field '%s' (tag %ld) not found in payload for schema '%s'.",
+            "Decoding error: Required field '%s' (tag " ZEND_LONG_FMT ") not found in payload for schema '%s'.",
             ZSTR_VAL(field->name),
             field->tag,
             ZSTR_VAL(schema_name)

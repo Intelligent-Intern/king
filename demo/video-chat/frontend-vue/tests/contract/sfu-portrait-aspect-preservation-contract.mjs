@@ -38,15 +38,15 @@ function assertAspectClose(actualWidth, actualHeight, sourceWidth, sourceHeight,
 
 async function main() {
   const packageJson = read('package.json');
-  const videoFrameSizing = read('src/domain/realtime/local/videoFrameSizing.js');
-  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
-  const browserVideoFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.js');
-  const captureWorker = read('src/domain/realtime/local/publisherCaptureWorker.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const videoFrameSizing = read('src/domain/realtime/local/videoFrameSizing.ts');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const browserVideoFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.ts');
+  const captureWorker = read('src/domain/realtime/local/publisherCaptureWorker.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
-  const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.ts');
+  const remotePeers = read('src/domain/realtime/sfu/remotePeers.ts');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');
 
   requireContains(packageJson, 'sfu-portrait-aspect-preservation-contract.mjs', 'SFU contract suite includes portrait preservation proof');
@@ -80,9 +80,9 @@ async function main() {
   });
 
   try {
-    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
-    const sizing = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.js');
-    const domPolicy = await server.ssrLoadModule('/src/domain/realtime/local/domCanvasFallbackPolicy.js');
+    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
+    const sizing = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.ts');
+    const domPolicy = await server.ssrLoadModule('/src/domain/realtime/local/domCanvasFallbackPolicy.ts');
     const portraitSource = { width: 1080, height: 1920 };
     const landscapeSource = { width: 1920, height: 1080 };
 

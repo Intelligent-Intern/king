@@ -5,9 +5,9 @@ static void king_autoscaling_build_node_name(char *buffer, size_t buffer_size)
     snprintf(
         buffer,
         buffer_size,
-        "%s-%ld-%zu",
+        "%s-" ZEND_LONG_FMT "-%zu",
         (prefix != NULL && prefix[0] != '\0') ? prefix : "king-node",
-        (long) time(NULL),
+        (zend_long) time(NULL),
         king_autoscaling_runtime.managed_node_count + 1
     );
 }
@@ -208,7 +208,7 @@ static const long king_autoscaling_hetzner_delete_retry_delay_us = 100000;
 
 static zend_bool king_autoscaling_http_status_is_retryable_delete(long http_code)
 {
-    return http_code == 429 || (http_code >= 500 && http_code <= 599);
+    return (zend_long) http_code == 429 || ((zend_long) http_code >= 500 && (zend_long) http_code <= 599);
 }
 
 static zend_result king_autoscaling_hetzner_delete_node(
@@ -240,9 +240,9 @@ static zend_result king_autoscaling_hetzner_delete_node(
     snprintf(
         url,
         sizeof(url),
-        "%s/servers/%ld",
+        "%s/servers/" ZEND_LONG_FMT,
         king_autoscaling_runtime.config.api_endpoint,
-        (long) node->server_id
+        (zend_long) node->server_id
     );
 
     for (attempt = 1; attempt <= king_autoscaling_hetzner_delete_max_attempts; attempt++) {
@@ -263,15 +263,15 @@ static zend_result king_autoscaling_hetzner_delete_node(
         }
 
         if (
-            (http_code >= 200 && http_code < 300)
-            || http_code == 404
-            || http_code == 410
+            ((zend_long) http_code >= 200 && (zend_long) http_code < 300)
+            || (zend_long) http_code == 404
+            || (zend_long) http_code == 410
         ) {
             smart_str_free(&response);
             return SUCCESS;
         }
 
-        if (king_autoscaling_http_status_is_retryable_delete(http_code)
+        if (king_autoscaling_http_status_is_retryable_delete((zend_long) http_code)
             && attempt < king_autoscaling_hetzner_delete_max_attempts
         ) {
             smart_str_free(&response);
@@ -282,11 +282,11 @@ static zend_result king_autoscaling_hetzner_delete_node(
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "%s for %ld returned HTTP %ld after %ld attempt(s).",
+            "%s for " ZEND_LONG_FMT " returned HTTP " ZEND_LONG_FMT " after " ZEND_LONG_FMT " attempt(s).",
             effective_error_context,
-            (long) node->server_id,
-            http_code,
-            attempt
+            (zend_long) node->server_id,
+            (zend_long) http_code,
+            (zend_long) attempt
         );
         smart_str_free(&response);
         return FAILURE;
@@ -296,10 +296,10 @@ static zend_result king_autoscaling_hetzner_delete_node(
     snprintf(
         king_autoscaling_runtime.last_error,
         sizeof(king_autoscaling_runtime.last_error),
-        "%s for %ld failed after %ld attempt(s).",
+        "%s for " ZEND_LONG_FMT " failed after " ZEND_LONG_FMT " attempt(s).",
         effective_error_context,
-        (long) node->server_id,
-        king_autoscaling_hetzner_delete_max_attempts
+        (zend_long) node->server_id,
+        (zend_long) king_autoscaling_hetzner_delete_max_attempts
     );
     return FAILURE;
 }
@@ -485,12 +485,12 @@ static zend_result king_autoscaling_hetzner_scale_up(uint32_t count)
 
         smart_str_free(&payload);
 
-        if (http_code < 200 || http_code >= 300) {
+        if ((zend_long) http_code < 200 || (zend_long) http_code >= 300) {
             snprintf(
                 king_autoscaling_runtime.last_error,
                 sizeof(king_autoscaling_runtime.last_error),
-                "Hetzner create server request returned HTTP %ld.",
-                http_code
+                "Hetzner create server request returned HTTP " ZEND_LONG_FMT ".",
+                (zend_long) http_code
             );
             smart_str_free(&response);
             return FAILURE;
@@ -573,9 +573,9 @@ int king_autoscaling_provider_rollback_stale_pending_node(time_t now)
     snprintf(
         message,
         sizeof(message),
-        "Stale Hetzner node %ld exceeded the %ld second pending-node timeout while waiting for %s.",
-        (long) node->server_id,
-        (long) king_autoscaling_runtime.config.idle_node_timeout_sec,
+        "Stale Hetzner node " ZEND_LONG_FMT " exceeded the " ZEND_LONG_FMT " second pending-node timeout while waiting for %s.",
+        (zend_long) node->server_id,
+        (zend_long) king_autoscaling_runtime.config.idle_node_timeout_sec,
         phase != NULL ? phase : "pending lifecycle completion"
     );
     snprintf(
@@ -610,8 +610,8 @@ int king_autoscaling_provider_rollback_stale_pending_node(time_t now)
             snprintf(
                 king_autoscaling_runtime.last_error,
                 sizeof(king_autoscaling_runtime.last_error),
-                "Failed to persist autoscaling state after rolling back stale Hetzner node %ld.",
-                (long) node->server_id
+                "Failed to persist autoscaling state after rolling back stale Hetzner node " ZEND_LONG_FMT ".",
+                (zend_long) node->server_id
             );
         }
         return -1;

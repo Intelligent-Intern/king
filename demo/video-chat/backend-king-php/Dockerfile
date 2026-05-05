@@ -1,6 +1,33 @@
 ARG VIDEOCHAT_BACKEND_PHP_IMAGE=php:8.4-cli-trixie
 ARG VIDEOCHAT_BACKEND_PHP_VERSION=8.4
 ARG VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION=0
+FROM ${VIDEOCHAT_BACKEND_PHP_IMAGE} AS king-extension-build
+
+WORKDIR /src
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ${PHPIZE_DEPS} \
+        libcurl4-openssl-dev \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY extension/ /src/extension/
+
+RUN set -eux; \
+    cd /src/extension; \
+    rm -f Makefile Makefile.fragments Makefile.objects config.h config.h.in config.log config.nice config.status configure configure.ac king.la libtool run-tests.php; \
+    rm -rf .libs autom4te.cache build modules; \
+    find . -type f \( -name '*.dep' -o -name '*.lo' -o -name '*.o' -o -name '*.la' -o -name '.dirstamp' \) -delete; \
+    phpize --clean >/dev/null 2>&1 || true; \
+    phpize; \
+    ./configure --enable-king; \
+    find . -type f -exec sed -i 's#/Users/sasha/king/extension#/src/extension#g' {} +; \
+    make -j"$(nproc)"; \
+    mkdir -p /opt/king; \
+    cp modules/king.so /opt/king/king.so; \
+    test -f /opt/king/king.so
+
 FROM ${VIDEOCHAT_BACKEND_PHP_IMAGE}
 
 WORKDIR /app
@@ -10,29 +37,11 @@ ARG VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION
 ARG TARGETARCH
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libsqlite3-dev \
+    && apt-get install -y --no-install-recommends libcurl4 libsqlite3-dev \
     && docker-php-ext-install pdo_sqlite \
     && rm -rf /var/lib/apt/lists/*
 
-RUN --mount=type=bind,source=.,target=/src,readonly \
-    set -eux; \
-    mkdir -p /opt/king; \
-    package_dir="/src/dist/docker-packages/php${VIDEOCHAT_BACKEND_PHP_VERSION}/linux-${TARGETARCH}"; \
-    archive=""; \
-    if [ -d "${package_dir}" ]; then \
-        archive="$(find "${package_dir}" -maxdepth 1 -type f -name '*.tar.gz' | head -n 1 || true)"; \
-    fi; \
-    if [ "${VIDEOCHAT_BACKEND_PREFER_WORKTREE_EXTENSION}" = "1" ] && [ -f /src/extension/modules/king.so ]; then \
-        cp /src/extension/modules/king.so /opt/king/king.so; \
-    elif [ -n "${archive}" ] && [ -f "${archive}" ]; then \
-        tar -xzf "${archive}" -C /opt/king --strip-components=2 --wildcards '*/modules/king.so'; \
-    elif [ -f /src/extension/modules/king.so ]; then \
-        cp /src/extension/modules/king.so /opt/king/king.so; \
-    else \
-        echo "Missing king extension artifact: expected ${package_dir}/*.tar.gz or /src/extension/modules/king.so" >&2; \
-        exit 1; \
-    fi; \
-    test -f /opt/king/king.so
+COPY --from=king-extension-build /opt/king/king.so /opt/king/king.so
 
 COPY demo/video-chat/backend-king-php/ /app/
 

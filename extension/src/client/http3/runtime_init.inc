@@ -11,7 +11,7 @@ static zend_result king_http3_runtime_open_udp_socket(
     memset(runtime, 0, sizeof(*runtime));
     runtime->socket_fd = -1;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", (long) target->port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, (zend_long) target->port);
 
     memset(&hints, 0, sizeof(hints));
     hints.ai_socktype = SOCK_DGRAM;

@@ -3,9 +3,9 @@
  * Combines wavelet compression with Kalman filtering for improved video quality
  */
 
-import { createEncoder, createDecoder, WaveletVideoEncoder, WaveletVideoDecoder } from '../wavelet/codec.js'
-import type { FrameData, DecodedFrame } from '../wavelet/codec.js'
-import { createKalmanFilter, VideoKalmanFilter } from './filter.js'
+import { createEncoder, createDecoder, WaveletVideoEncoder, WaveletVideoDecoder } from '../wavelet/codec.ts'
+import type { FrameData, DecodedFrame } from '../wavelet/codec.ts'
+import { createKalmanFilter, VideoKalmanFilter } from './filter.ts'
 
 export interface VideoEnhancerConfig {
   waveletQuality: number

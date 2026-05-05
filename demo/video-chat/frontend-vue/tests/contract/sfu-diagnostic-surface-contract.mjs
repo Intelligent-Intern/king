@@ -21,14 +21,14 @@ function read(relativePath) {
 
 try {
   const packageJson = read('package.json');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
   const transportSample = read('src/lib/sfu/sfuClientTransportSample.ts');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const diagnosticsSurface = read('src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.js');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const diagnosticsSurface = read('src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.ts');
 
   requireContains(packageJson, 'sfu-diagnostic-surface-contract.mjs', 'SFU contract suite includes diagnostic surface proof');
 
@@ -76,7 +76,7 @@ try {
     publisherCaptureDiagnosticSurface,
     publisherDroppedSourceFrameDiagnosticSurface,
     publisherQualityTransitionDiagnosticSurface,
-  } = await import('../../src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.js');
+  } = await import('../../src/domain/realtime/workspace/callWorkspace/publisherDiagnosticsSurface.ts');
 
   assert.deepEqual(publisherCaptureDiagnosticSurface({
     publisher_source_backend: 'video_frame_copy_to_rgba',

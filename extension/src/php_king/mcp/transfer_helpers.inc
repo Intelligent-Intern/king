@@ -285,7 +285,7 @@ static zend_string *king_mcp_read_stream_payload(
                 snprintf(
                     message,
                     sizeof(message),
-                    "%s() failed: maximum message size (%ld bytes) exceeded.",
+                    "%s() failed: maximum message size (" ZEND_LONG_FMT " bytes) exceeded.",
                     function_name,
                     king_mcp_orchestrator_config.mcp_max_message_size_bytes
                 );

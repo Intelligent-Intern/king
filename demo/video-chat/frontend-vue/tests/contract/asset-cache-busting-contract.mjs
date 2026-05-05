@@ -42,7 +42,7 @@ try {
   assert.ok(app.includes("const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';"), 'app must compare against the edge build-version header');
   assert.ok(app.includes('window.location.reload();'), 'app must hard-reload stale tabs after a deploy');
 
-  const assetVersionSupport = readUtf8(path.join(frontendRoot, 'src/support/assetVersion.js'));
+  const assetVersionSupport = readUtf8(path.join(frontendRoot, 'src/support/assetVersion.ts'));
   assert.ok(assetVersionSupport.includes("const INVALIDATE_TYPES = new Set(['assets/invalidate', 'assets.invalidate']);"), 'asset version helper must understand websocket invalidation frames');
   assert.ok(assetVersionSupport.includes("query.set('asset_version', BUILD_VERSION);"), 'asset version helper must append the frontend build version to websocket queries');
   assert.ok(assetVersionSupport.includes("closeReason !== 'asset_version_mismatch'"), 'asset version helper must react to websocket close reasons from stale builds');
@@ -52,18 +52,18 @@ try {
   assert.ok(assetVersionSupport.includes('failed to fetch dynamically imported module'), 'asset version helper must detect stale dynamic import failures');
   assert.ok(assetVersionSupport.includes('ASSET_LOAD_FAILURE_RELOAD_STORAGE_KEY'), 'asset version helper must prevent stale chunk reload loops');
 
-  const clientDiagnostics = readUtf8(path.join(frontendRoot, 'src/support/clientDiagnostics.js'));
+  const clientDiagnostics = readUtf8(path.join(frontendRoot, 'src/support/clientDiagnostics.ts'));
   assert.ok(clientDiagnostics.includes('handleAssetLoadFailure'), 'global client diagnostics must invoke asset-load recovery for stale chunks');
   assert.ok(clientDiagnostics.includes("'vite:preloadError'"), 'global client diagnostics must handle Vite preload errors from stale chunks');
 
-  const adminSync = readUtf8(path.join(frontendRoot, 'src/support/adminSyncSocket.js'));
+  const adminSync = readUtf8(path.join(frontendRoot, 'src/support/adminSyncSocket.ts'));
   assert.ok(adminSync.includes('appendAssetVersionQuery'), 'admin sync websocket must advertise the current asset version');
   assert.ok(adminSync.includes('handleAssetVersionSocketPayload'), 'admin sync websocket must reload on invalidation frames');
 
-  const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/api.js'));
+  const workspaceApi = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/api.ts'));
   assert.ok(workspaceApi.includes('appendAssetVersionQuery'), 'call workspace websocket URLs must advertise the current asset version');
 
-  const workspaceSocketLifecycle = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.js'));
+  const workspaceSocketLifecycle = readUtf8(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts'));
   assert.ok(workspaceSocketLifecycle.includes('failOverAfterAssetVersionProbe'), 'call workspace websocket must probe live asset version before failover on pre-open failure');
 
   const sfuClient = readUtf8(path.join(frontendRoot, 'src/lib/sfu/sfuClient.ts'));

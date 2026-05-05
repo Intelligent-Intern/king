@@ -29,7 +29,7 @@ int kg_validate_positive_long(zval *value, zend_long *target)
     
     if (Z_LVAL_P(value) <= 0) {
         zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, 
-            "Configuration parameter must be a positive integer, %ld given.", 
+            "Configuration parameter must be a positive integer, " ZEND_LONG_FMT " given.",
             Z_LVAL_P(value));
         return FAILURE;
     }

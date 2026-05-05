@@ -81,9 +81,14 @@ static zend_result king_server_http3_ensure_lsquic_ready(void)
     char module_runtime_candidate[PATH_MAX];
     char module_local_candidate[PATH_MAX];
     const char *candidates[] = {
+#if defined(__APPLE__)
+        "liblsquic.dylib",
+#endif
         "liblsquic.so.4",
         "liblsquic.so",
+#if !defined(__APPLE__)
         "liblsquic.dylib",
+#endif
         NULL
     };
     size_t i;
@@ -107,7 +112,11 @@ static zend_result king_server_http3_ensure_lsquic_ready(void)
         && king_server_http3_lsquic_build_module_relative_candidate(
             module_runtime_candidate,
             sizeof(module_runtime_candidate),
+#if defined(__APPLE__)
+            "king/runtime/liblsquic.dylib"
+#else
             "king/runtime/liblsquic.so"
+#endif
         ) == SUCCESS) {
         king_server_http3_lsquic.handle = dlopen(module_runtime_candidate, RTLD_LAZY | RTLD_LOCAL);
     }
@@ -116,7 +125,11 @@ static zend_result king_server_http3_ensure_lsquic_ready(void)
         && king_server_http3_lsquic_build_module_relative_candidate(
             module_local_candidate,
             sizeof(module_local_candidate),
+#if defined(__APPLE__)
+            "liblsquic.dylib"
+#else
             "liblsquic.so"
+#endif
         ) == SUCCESS) {
         king_server_http3_lsquic.handle = dlopen(module_local_candidate, RTLD_LAZY | RTLD_LOCAL);
     }

@@ -152,6 +152,9 @@ static SSL_CTX *king_dtls_ctx_create(char *fp_out, size_t fp_len)
     if (!ctx) return NULL;
 
     /* Generate 2048-bit RSA key */
+#if defined(OPENSSL_VERSION_MAJOR) && OPENSSL_VERSION_MAJOR >= 3 && !defined(LIBRESSL_VERSION_NUMBER)
+    EVP_PKEY *pkey = EVP_RSA_gen(2048);
+#else
     EVP_PKEY *pkey = EVP_PKEY_new();
     BIGNUM   *bn   = BN_new();
     RSA      *rsa  = RSA_new();
@@ -159,6 +162,11 @@ static SSL_CTX *king_dtls_ctx_create(char *fp_out, size_t fp_len)
     RSA_generate_key_ex(rsa, 2048, bn, NULL);
     EVP_PKEY_assign_RSA(pkey, rsa);
     BN_free(bn);
+#endif
+    if (!pkey) {
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
 
     /* Self-signed certificate */
     X509 *cert = X509_new();
@@ -478,12 +486,34 @@ int king_rtp_dtls_do_accept(king_rtp_socket_t *sock,
     }
     freeaddrinfo(res);
 
+    struct timeval tv = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
+#if defined(OPENSSL_IS_BORINGSSL)
+    (void) setsockopt(pfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    (void) setsockopt(pfd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+#endif
+
     /* DTLS over the connected socket */
     SSL *ssl = SSL_new(sock->ssl_ctx);
+#if defined(OPENSSL_IS_BORINGSSL)
+    BIO *bio = BIO_new_socket(pfd, BIO_NOCLOSE);
+#else
     BIO *bio = BIO_new_dgram(pfd, BIO_NOCLOSE);
+#endif
+    if (ssl == NULL || bio == NULL) {
+        if (ssl != NULL) {
+            SSL_free(ssl);
+        }
+        if (bio != NULL) {
+            BIO_free(bio);
+        }
+        close(pfd);
+        snprintf(errbuf, errbuf_len, "DTLS BIO creation failed");
+        return -1;
+    }
 
-    struct timeval tv = { timeout_ms / 1000, (timeout_ms % 1000) * 1000 };
+#if !defined(OPENSSL_IS_BORINGSSL)
     BIO_ctrl(bio, BIO_CTRL_DGRAM_SET_RECV_TIMEOUT, 0, &tv);
+#endif
     SSL_set_bio(ssl, bio, bio);
     SSL_set_accept_state(ssl);
 
@@ -755,7 +785,7 @@ PHP_FUNCTION(king_rtp_send)
 #endif
 
     struct addrinfo hints = {0}, *res = NULL;
-    char ps[8]; snprintf(ps, sizeof(ps), "%ld", (long)port);
+    char ps[8]; snprintf(ps, sizeof(ps), ZEND_LONG_FMT, (zend_long) port);
     hints.ai_family = AF_UNSPEC; hints.ai_socktype = SOCK_DGRAM;
     if (getaddrinfo(host, ps, &hints, &res) != 0 || !res) RETURN_FALSE;
 

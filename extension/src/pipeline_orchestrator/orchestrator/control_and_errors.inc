@@ -228,7 +228,7 @@ static zend_string *king_orchestrator_remote_build_target(void)
     if (needs_brackets) {
         return strpprintf(
             0,
-            "tcp://[%s]:%ld",
+            "tcp://[%s]:" ZEND_LONG_FMT,
             host,
             king_mcp_orchestrator_config.orchestrator_remote_port
         );
@@ -236,7 +236,7 @@ static zend_string *king_orchestrator_remote_build_target(void)
 
     return strpprintf(
         0,
-        "tcp://%s:%ld",
+        "tcp://%s:" ZEND_LONG_FMT,
         host,
         king_mcp_orchestrator_config.orchestrator_remote_port
     );
@@ -253,10 +253,7 @@ static zend_long king_orchestrator_remote_line_limit(void)
 
 static uint64_t king_orchestrator_monotonic_time_ms(void)
 {
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
+    return king_hrtime_ms();
 }
 
 static zend_long king_orchestrator_control_timeout_budget_ms(
@@ -420,6 +417,7 @@ static zend_result king_orchestrator_validate_positive_long_option(
     return SUCCESS;
 }
 
+
 static zend_result king_orchestrator_exec_control_parse(
     zval *options,
     const char *function_name,
@@ -525,7 +523,7 @@ static zend_result king_orchestrator_exec_control_parse(
         snprintf(
             message,
             sizeof(message),
-            "%s() option 'max_concurrency' must be <= the configured orchestrator_loop_concurrency_default (%ld).",
+            "%s() option 'max_concurrency' must be <= the configured orchestrator_loop_concurrency_default (" ZEND_LONG_FMT ").",
             function_name,
             king_mcp_orchestrator_config.orchestrator_loop_concurrency_default
         );
@@ -663,4 +661,3 @@ static zend_result king_orchestrator_exec_control_check(
 
     return SUCCESS;
 }
-

@@ -15,7 +15,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects a 32-bit signed integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects a 32-bit signed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );
@@ -35,7 +35,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects a 32-bit signed integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects a 32-bit signed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     resolved_enum_value
                 );
@@ -49,7 +49,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects an unsigned 32-bit integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects an unsigned 32-bit integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );
@@ -62,7 +62,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects an unsigned 64-bit integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects an unsigned 64-bit integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );
@@ -75,7 +75,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects an unsigned 32-bit fixed integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects an unsigned 32-bit fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );
@@ -88,7 +88,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects a 32-bit signed fixed integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects a 32-bit signed fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );
@@ -101,7 +101,7 @@ static bool king_proto_runtime_validate_field_value_range(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects an unsigned 64-bit fixed integer, but got %ld.",
+                    "Encoding failed: Field '%s' expects an unsigned 64-bit fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
                 );

@@ -21,8 +21,8 @@ function read(relativePath) {
 
 try {
   const packageJson = read('package.json');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const videoFrameCopy = read('src/domain/realtime/local/publisherVideoFrameCopy.js');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const videoFrameCopy = read('src/domain/realtime/local/publisherVideoFrameCopy.ts');
 
   requireContains(packageJson, 'sfu-zero-copy-readback-gate-contract.mjs', 'SFU contract suite includes zero-copy readback gate');
   requireContains(sourceReadback, 'ZERO_COPY_CAPTURE_GATE_STAGE', 'source readback defines zero-copy capture gate stage');
@@ -34,7 +34,7 @@ try {
   );
   requireContains(videoFrameCopy, 'resolveVideoFrameCopyFrameSize', 'copy helper can align VideoFrame copy to source dimensions');
 
-  const copyModuleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.js')).href;
+  const copyModuleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.ts')).href;
   const copyModule = await import(copyModuleUrl);
   const frame = {
     displayWidth: 960,

@@ -7,7 +7,11 @@ $root = dirname(__DIR__, 2);
 function read_source(string $path): string
 {
     global $root;
-    $source = file_get_contents($root . '/' . $path);
+    $absolutePath = $root . '/' . $path;
+    if (!is_file($absolutePath)) {
+        throw new RuntimeException('Could not read ' . $path);
+    }
+    $source = file_get_contents($absolutePath);
     if (!is_string($source)) {
         throw new RuntimeException('Could not read ' . $path);
     }
@@ -36,7 +40,7 @@ function require_no_direct_console_in_hotpath(string $relativePath): void
     }
 }
 
-$debugLogs = 'demo/video-chat/frontend-vue/src/support/debugLogs.js';
+$debugLogs = 'demo/video-chat/frontend-vue/src/support/debugLogs.ts';
 require_contains($debugLogs, 'export const VIDEOCHAT_DEBUG_LOGS = parseEnvFlag(import.meta.env.VITE_VIDEOCHAT_DEBUG_LOGS, false);');
 require_contains($debugLogs, 'export function debugLog(...args)');
 require_contains($debugLogs, 'export function debugWarn(...args)');
@@ -70,15 +74,15 @@ foreach ($hotpathDirs as $dir) {
     }
 }
 
-require_contains('demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts', "import { debugWarn } from '../../support/debugLogs.js'");
+require_contains('demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts', "import { debugWarn } from '../../support/debugLogs.ts'");
 require_contains('demo/video-chat/frontend-vue/src/lib/wasm/wasm-codec.ts', "debugWarn('[WASM Codec] Failed to load:', err)");
-require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/webrtc-shim.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.js'");
+require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/webrtc-shim.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.ts'");
 require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/webrtc-shim.ts', "debugLog('[WaveletCodec] Starting WASM init...')");
 require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/webrtc-shim.ts', "debugWarn('[WaveletCodec] Decode error:', error)");
-require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/transform.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.js'");
-require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/processor-pipeline.ts', "import { debugWarn } from '../../support/debugLogs.js'");
+require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/transform.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.ts'");
+require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/processor-pipeline.ts', "import { debugWarn } from '../../support/debugLogs.ts'");
 require_contains('demo/video-chat/frontend-vue/src/lib/wavelet/processor-pipeline.ts', "debugWarn('[Wavelet] Frame error:', e)");
-require_contains('demo/video-chat/frontend-vue/src/lib/kalman/processor.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.js'");
+require_contains('demo/video-chat/frontend-vue/src/lib/kalman/processor.ts', "import { debugLog, debugWarn } from '../../support/debugLogs.ts'");
 require_contains('demo/video-chat/frontend-vue/src/lib/kalman/processor.ts', "debugLog('[VideoProcessor]', {");
 require_contains('demo/video-chat/frontend-vue/src/lib/kalman/processor.ts', "debugWarn('Failed to decode frame:', error)");
 

@@ -9,7 +9,7 @@ static void king_server_http1_build_request(
     zval headers;
     zend_string *authority;
 
-    authority = strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+    authority = strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
 
     array_init(request);
     add_assoc_string(request, "method", "GET");
@@ -253,4 +253,3 @@ static zend_long king_server_http1_resolve_timeout_ms(king_client_session_t *ses
 
     return KING_SERVER_HTTP1_DEFAULT_TIMEOUT_MS;
 }
-

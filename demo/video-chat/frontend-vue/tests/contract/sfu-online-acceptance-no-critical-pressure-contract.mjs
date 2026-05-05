@@ -23,7 +23,7 @@ try {
   const packageJson = read('package.json');
   const pressureGate = read('tests/e2e/online-sfu-pressure-acceptance.mjs');
   const harness = read('tests/e2e/helpers/nativeAudioTransferHarness.js');
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
 
   requireContains(
     packageJson,

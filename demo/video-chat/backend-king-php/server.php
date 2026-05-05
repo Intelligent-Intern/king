@@ -77,13 +77,13 @@ for ($attempt = 1; $attempt <= $maxBootstrapAttempts; $attempt += 1) {
         break;
     } catch (Throwable $error) {
         $message = $error->getMessage();
-        $isSqliteLock = stripos($message, 'database is locked') !== false;
+        $isSqliteLock = videochat_sqlite_is_transient_lock($error);
         $isTransientBootstrapRace =
             stripos($message, 'unique constraint failed: users.email') !== false
             || stripos($message, 'bad parameter or other api misuse') !== false
             || stripos($message, 'database schema is locked') !== false;
         if (($isSqliteLock || $isTransientBootstrapRace) && $attempt < $maxBootstrapAttempts) {
-            usleep(100_000);
+            usleep(videochat_sqlite_retry_delay_us($attempt));
             continue;
         }
         $log('database bootstrap failed: ' . $message);

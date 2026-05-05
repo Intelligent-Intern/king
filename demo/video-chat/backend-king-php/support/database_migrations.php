@@ -601,6 +601,12 @@ SQL,
                 "ALTER TABLE sessions ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
             ],
         ],
+        30 => [
+            'name' => '0030_call_activity_sample_history',
+            'statements' => [
+                "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
+            ],
+        ],
     ];
 }
 

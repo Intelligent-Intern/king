@@ -399,8 +399,8 @@ PHP_FUNCTION(king_autoscaling_register_node)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld is unknown to the autoscaling controller.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " is unknown to the autoscaling controller.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }
@@ -409,8 +409,8 @@ PHP_FUNCTION(king_autoscaling_register_node)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld is already deleted.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " is already deleted.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }
@@ -458,8 +458,8 @@ PHP_FUNCTION(king_autoscaling_mark_node_ready)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld is unknown to the autoscaling controller.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " is unknown to the autoscaling controller.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }
@@ -476,16 +476,16 @@ PHP_FUNCTION(king_autoscaling_mark_node_ready)
             snprintf(
                 king_autoscaling_runtime.last_error,
                 sizeof(king_autoscaling_runtime.last_error),
-                "Managed node %ld must register before it can become ready.",
-                (long) server_id
+                "Managed node " ZEND_LONG_FMT " must register before it can become ready.",
+                (zend_long) server_id
             );
             RETURN_FALSE;
         case KING_AUTOSCALING_NODE_DRAINING:
             snprintf(
                 king_autoscaling_runtime.last_error,
                 sizeof(king_autoscaling_runtime.last_error),
-                "Managed node %ld is draining and cannot be re-admitted directly.",
-                (long) server_id
+                "Managed node " ZEND_LONG_FMT " is draining and cannot be re-admitted directly.",
+                (zend_long) server_id
             );
             RETURN_FALSE;
         case KING_AUTOSCALING_NODE_DELETED:
@@ -493,8 +493,8 @@ PHP_FUNCTION(king_autoscaling_mark_node_ready)
             snprintf(
                 king_autoscaling_runtime.last_error,
                 sizeof(king_autoscaling_runtime.last_error),
-                "Managed node %ld is already deleted.",
-                (long) server_id
+                "Managed node " ZEND_LONG_FMT " is already deleted.",
+                (zend_long) server_id
             );
             RETURN_FALSE;
     }
@@ -532,8 +532,8 @@ PHP_FUNCTION(king_autoscaling_drain_node)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld is unknown to the autoscaling controller.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " is unknown to the autoscaling controller.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }
@@ -546,8 +546,8 @@ PHP_FUNCTION(king_autoscaling_drain_node)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld is not ready and cannot be drained.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " is not ready and cannot be drained.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }
@@ -560,8 +560,8 @@ PHP_FUNCTION(king_autoscaling_drain_node)
         snprintf(
             king_autoscaling_runtime.last_error,
             sizeof(king_autoscaling_runtime.last_error),
-            "Managed node %ld cannot be drained because the cluster is already at its configured floor.",
-            (long) server_id
+            "Managed node " ZEND_LONG_FMT " cannot be drained because the cluster is already at its configured floor.",
+            (zend_long) server_id
         );
         RETURN_FALSE;
     }

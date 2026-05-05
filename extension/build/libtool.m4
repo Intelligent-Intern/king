@@ -1065,21 +1065,19 @@ _LT_EOF
     ])
     case $host_os in
     rhapsody* | darwin1.[[012]])
-      _lt_dar_allow_undefined='$wl-undefined ${wl}suppress' ;;
+      _lt_dar_allow_undefined='$wl-undefined ${wl}dynamic_lookup' ;;
     darwin1.*)
-      _lt_dar_allow_undefined='$wl-flat_namespace $wl-undefined ${wl}suppress' ;;
+      _lt_dar_allow_undefined='$wl-undefined ${wl}dynamic_lookup' ;;
     darwin*)
       case $MACOSX_DEPLOYMENT_TARGET,$host in
         10.[[012]],*|,*powerpc*-darwin[[5-8]]*)
-          _lt_dar_allow_undefined='$wl-flat_namespace $wl-undefined ${wl}suppress' ;;
+          _lt_dar_allow_undefined='$wl-undefined ${wl}dynamic_lookup' ;;
         *)
           _lt_dar_allow_undefined='$wl-undefined ${wl}dynamic_lookup' ;;
       esac
     ;;
   esac
-    if test yes = "$lt_cv_apple_cc_single_mod"; then
-      _lt_dar_single_mod='$single_module'
-    fi
+    _lt_dar_single_mod=''
     if test yes = "$lt_cv_ld_exported_symbols_list"; then
       _lt_dar_export_syms=' $wl-exported_symbols_list,$output_objdir/$libname-symbols.expsym'
     else

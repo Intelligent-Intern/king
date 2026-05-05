@@ -141,10 +141,10 @@ static zend_string *king_server_websocket_build_authority(
         memchr(host, ':', host_len) != NULL
         && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']')
     ) {
-        return strpprintf(0, "[%.*s]:%ld", (int) host_len, host, port);
+        return strpprintf(0, "[%.*s]:" ZEND_LONG_FMT, (int) host_len, host, port);
     }
 
-    return strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+    return strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
 }
 
 static zend_bool king_server_websocket_is_secure(
@@ -331,7 +331,7 @@ zend_result king_server_websocket_upgrade_session(
 
     if (zend_hash_index_exists(&session->server_upgraded_streams, (zend_ulong) stream_id)) {
         king_server_control_set_errorf(
-            "%s() stream %ld is already upgraded locally.",
+            "%s() stream " ZEND_LONG_FMT " is already upgraded locally.",
             function_name,
             stream_id
         );
@@ -358,7 +358,7 @@ zend_result king_server_websocket_upgrade_session(
     );
     request_target = on_wire_upgrade
         ? zend_string_copy(session->server_pending_request_target)
-        : strpprintf(0, "/stream/%ld", stream_id);
+        : strpprintf(0, "/stream/" ZEND_LONG_FMT, stream_id);
     url = strpprintf(
         0,
         "%s://%s%s",
@@ -456,7 +456,7 @@ zend_result king_server_websocket_upgrade_session(
         zend_list_close(websocket_resource_handle);
         zend_string_release(authority);
         king_server_control_set_errorf(
-            "%s() failed to record the local WebSocket upgrade for stream %ld.",
+            "%s() failed to record the local WebSocket upgrade for stream " ZEND_LONG_FMT ".",
             function_name,
             stream_id
         );

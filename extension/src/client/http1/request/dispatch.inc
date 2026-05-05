@@ -168,12 +168,12 @@ zend_result king_http1_request_dispatch(
             if (port == 80) {
                 snprintf(host_header, sizeof(host_header), "[%s]", ZSTR_VAL(parsed_url->host));
             } else {
-                snprintf(host_header, sizeof(host_header), "[%s]:%ld", ZSTR_VAL(parsed_url->host), port);
+                snprintf(host_header, sizeof(host_header), "[%s]:" ZEND_LONG_FMT, ZSTR_VAL(parsed_url->host), port);
             }
         } else if (port == 80) {
             snprintf(host_header, sizeof(host_header), "%s", ZSTR_VAL(parsed_url->host));
         } else {
-            snprintf(host_header, sizeof(host_header), "%s:%ld", ZSTR_VAL(parsed_url->host), port);
+            snprintf(host_header, sizeof(host_header), "%s:" ZEND_LONG_FMT, ZSTR_VAL(parsed_url->host), port);
         }
 
         smart_str_append(&request_buffer, current_method);

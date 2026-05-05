@@ -9,7 +9,7 @@ static void king_server_http2_build_request(
     zval headers;
     zend_string *authority;
 
-    authority = strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+    authority = strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
 
     array_init(request);
     add_assoc_string(request, "method", "GET");
@@ -44,10 +44,10 @@ static zend_string *king_server_http2_build_authority(
         memchr(host, ':', host_len) != NULL
         && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']')
     ) {
-        return strpprintf(0, "[%.*s]:%ld", (int) host_len, host, port);
+        return strpprintf(0, "[%.*s]:" ZEND_LONG_FMT, (int) host_len, host, port);
     }
 
-    return strpprintf(0, "%.*s:%ld", (int) host_len, host, port);
+    return strpprintf(0, "%.*s:" ZEND_LONG_FMT, (int) host_len, host, port);
 }
 
 static zend_result king_server_http2_set_socket_endpoint(
@@ -230,11 +230,11 @@ static zend_result king_server_http2_open_listener_socket(
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, port);
     gai_status = getaddrinfo(host, port_buffer, &hints, &results);
     if (gai_status != 0) {
         king_server_local_set_errorf(
-            "%s() failed to resolve the HTTP/2 listen target '%s:%ld' (getaddrinfo code %d).",
+            "%s() failed to resolve the HTTP/2 listen target '%s:" ZEND_LONG_FMT "' (getaddrinfo code %d).",
             function_name,
             host,
             port,
@@ -273,7 +273,7 @@ static zend_result king_server_http2_open_listener_socket(
 
     freeaddrinfo(results);
     king_server_local_set_errorf(
-        "%s() failed to bind the on-wire HTTP/2 listener on '%s:%ld' (errno %d).",
+        "%s() failed to bind the on-wire HTTP/2 listener on '%s:" ZEND_LONG_FMT "' (errno %d).",
         function_name,
         host,
         port,
@@ -319,4 +319,3 @@ static void king_server_http2_request_state_dtor(
         zend_string_release(state->authority);
     }
 }
-

@@ -20,12 +20,16 @@ static zend_result king_http2_multi_collect_transfer_meta(
                 transfer_label
             );
         } else {
+            const char *curl_detail = king_http2_curl_error_detail(
+                transfer->curl_code,
+                &transfer->response
+            );
             king_http2_throw(
-                king_http2_map_curl_exception(transfer->curl_code),
+                king_http2_map_curl_exception_with_detail(transfer->curl_code, curl_detail),
                 "%s() %s libcurl HTTP/2 transfer failed: %s",
                 function_name,
                 transfer_label,
-                king_http2_libcurl.curl_easy_strerror_fn(transfer->curl_code)
+                curl_detail
             );
         }
 
@@ -163,4 +167,3 @@ static zend_result king_http2_multi_attach_pushes(
 
     return SUCCESS;
 }
-

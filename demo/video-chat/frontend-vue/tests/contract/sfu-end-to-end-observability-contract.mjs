@@ -25,8 +25,8 @@ function main() {
   const packageJson = readFrontend('package.json');
   const transportSample = readFrontend('src/lib/sfu/sfuClientTransportSample.ts');
   const sfuClient = readFrontend('src/lib/sfu/sfuClient.ts');
-  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.js');
-  const diagnostics = readFrontend('src/support/clientDiagnostics.js');
+  const frameDecode = readFrontend('src/domain/realtime/sfu/frameDecode.ts');
+  const diagnostics = readFrontend('src/support/clientDiagnostics.ts');
 
   requireContains(sprint, '6. [x] `[end-to-end-media-pressure-observability]`', 'sprint issue 6 must be checked');
   requireContains(packageJson, 'sfu-end-to-end-observability-contract.mjs', 'SFU contract suite includes observability proof');

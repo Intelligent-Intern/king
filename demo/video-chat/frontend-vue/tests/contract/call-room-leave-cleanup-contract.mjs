@@ -15,7 +15,7 @@ function requireContains(source, needle, label) {
   assert.ok(source.includes(needle), `[call-room-leave-cleanup-contract] missing ${label}`);
 }
 
-const socketLifecycle = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
+const socketLifecycle = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const realtimeWebsocket = read('demo/video-chat/backend-king-php/http/module_realtime_websocket.php');
 const realtimeRoomSnapshot = read('demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php');
 

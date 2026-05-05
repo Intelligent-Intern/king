@@ -20,9 +20,9 @@ function read(relativePath) {
 }
 
 try {
-  const policySource = read('src/domain/realtime/local/domCanvasFallbackPolicy.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const frameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const policySource = read('src/domain/realtime/local/domCanvasFallbackPolicy.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const frameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const packageJson = read('package.json');
 
   requireContains(policySource, 'DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND', 'DOM compatibility source label');
@@ -53,7 +53,7 @@ try {
   requireContains(frameTrace, 'trace_dom_canvas_compatibility_throttle_ms', 'trace exposes DOM compatibility throttle timing');
   requireContains(packageJson, 'sfu-dom-canvas-last-resort-contract.mjs', 'SFU suite includes DOM last-resort proof');
 
-  const policyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/domCanvasFallbackPolicy.js')).href;
+  const policyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/domCanvasFallbackPolicy.ts')).href;
   const policy = await import(policyUrl);
   const profile = {
     frameWidth: 1280,

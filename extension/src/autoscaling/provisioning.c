@@ -10,6 +10,7 @@
  */
 #include "php_king.h"
 #include "include/autoscaling/autoscaling.h"
+#include "include/runtime/libcurl_candidates.h"
 #include "autoscaling/autoscaling_internal.h"
 
 #include "Zend/zend_smart_str.h"

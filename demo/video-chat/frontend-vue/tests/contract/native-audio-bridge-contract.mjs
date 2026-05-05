@@ -9,12 +9,12 @@ import {
   nativeSdpAudioSummary,
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
-} from '../../src/domain/realtime/native/audioBridgeHelpers.js';
+} from '../../src/domain/realtime/native/audioBridgeHelpers.ts';
 import {
   canTransitionNativeAudioBridgeState,
   createNativeAudioBridgeStateHelpers,
   NATIVE_AUDIO_BRIDGE_STATES,
-} from '../../src/domain/realtime/native/audioBridgeState.js';
+} from '../../src/domain/realtime/native/audioBridgeState.ts';
 
 function fail(message) {
   throw new Error(`[native-audio-bridge-contract] FAIL: ${message}`);
@@ -94,7 +94,7 @@ try {
   assert.equal(audioBridgeStateHelpers.setNativePeerAudioBridgeState(peer, NATIVE_AUDIO_BRIDGE_STATES.PLAYING, ''), true, 'audio bridge state helper allows playback after track arrival');
   assert.equal(audioBridgeStatusVersion.value > 0, true, 'audio bridge state helper bumps reactive status version when state changes');
 
-  const mediaSecurity = readFrontend('src/domain/realtime/media/security.js');
+  const mediaSecurity = readFrontend('src/domain/realtime/media/security.ts');
   requireContains(mediaSecurity, 'this.nativeFrameErrorHandler', 'media security session stores native frame error callback');
   requireContains(mediaSecurity, "function nativeEncodedFrameAadTrackId(trackKind = 'data')", 'native frame AAD uses stable track ids');
   requireContains(mediaSecurity, 'asString(header.runtime_path)', 'native replay counters are scoped by runtime path');
@@ -105,19 +105,19 @@ try {
   requireContains(mediaSecurity, 'handler({', 'native frame transform error callbacks receive structured diagnostics');
 
   const workspace = readFrontend('src/domain/realtime/CallWorkspaceView.vue');
-  const mediaSecurityRuntime = readFrontend('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-  const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.js');
-  const peerFactory = readFrontend('src/domain/realtime/native/peerFactory.js');
-  const peerLifecycle = readFrontend('src/domain/realtime/native/peerLifecycle.js');
-  const signaling = readFrontend('src/domain/realtime/native/signaling.js');
-  const audioBridgeRecovery = readFrontend('src/domain/realtime/native/audioBridgeRecovery.js');
-  const audioBridgeFailureReporter = readFrontend('src/domain/realtime/native/audioBridgeFailureReporter.js');
-  const audioBridgeState = readFrontend('src/domain/realtime/native/audioBridgeState.js');
-  const nativeStack = readFrontend('src/domain/realtime/workspace/callWorkspace/nativeStack.js');
-  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const mediaSecurityRuntime = readFrontend('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.ts');
+  const peerFactory = readFrontend('src/domain/realtime/native/peerFactory.ts');
+  const peerLifecycle = readFrontend('src/domain/realtime/native/peerLifecycle.ts');
+  const signaling = readFrontend('src/domain/realtime/native/signaling.ts');
+  const audioBridgeRecovery = readFrontend('src/domain/realtime/native/audioBridgeRecovery.ts');
+  const audioBridgeFailureReporter = readFrontend('src/domain/realtime/native/audioBridgeFailureReporter.ts');
+  const audioBridgeState = readFrontend('src/domain/realtime/native/audioBridgeState.ts');
+  const nativeStack = readFrontend('src/domain/realtime/workspace/callWorkspace/nativeStack.ts');
+  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  const runtimeConfig = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  const runtimeConfig = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   requireContains(mediaSecurityRuntime, 'onNativeFrameError: handleNativeMediaSecurityFrameError', 'workspace wires native frame error callback');
   requireContains(runtimeConfig, 'NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS', 'native frame transform diagnostics are throttled');
   requireContains(mediaSecurityRuntime, "async function ensureNativeAudioBridgeSecurityReady(peer, reason = 'native_audio_negotiation')", 'native bridge gates negotiation on active media security');
@@ -184,7 +184,7 @@ try {
     false,
     'workspace must not grow native-stack callback lists for runtime guard wiring',
   );
-  requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.js'), "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
+  requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/orchestration.ts'), "resyncNativeAudioBridgePeerAfterSecurityReady(targetUserId, 'native_bridge_availability_changed')", 'audio bridge availability watcher resyncs peers');
   requireContains(audioBridgeRecovery, "import { reportClientDiagnostic } from '../../../support/clientDiagnostics';", 'native audio recovery can report diagnostics without CallWorkspace callback growth');
   requireContains(audioBridgeRecovery, 'captureClientDiagnostic = captureNativeAudioBridgeDiagnostic', 'native audio recovery defaults missing diagnostics callback');
   requireContains(audioBridgeRecovery, 'Diagnostics must not create secondary media recovery failures.', 'native audio diagnostic fallback is fail-closed');

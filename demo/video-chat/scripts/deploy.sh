@@ -505,6 +505,11 @@ sync_checkout() {
     --exclude 'demo/video-chat/frontend-vue/dist/' \
     --exclude 'demo/video-chat/frontend-vue/test-results*/' \
     --exclude 'demo/video-chat/backend-king-php/.local/' \
+    --exclude 'extension/.libs/' \
+    --exclude 'extension/autom4te.cache/' \
+    --exclude 'extension/build/' \
+    --exclude 'extension/modules/' \
+    --exclude 'dist/' \
     --exclude 'target/' \
     --exclude '.pytest_cache/' \
     --exclude '.mypy_cache/' \
@@ -641,6 +646,7 @@ write_remote_runtime_files() {
   local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
+  local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
@@ -665,6 +671,7 @@ write_remote_runtime_files() {
   otel_protocol_q="$(shell_quote "${VIDEOCHAT_OTEL_EXPORTER_PROTOCOL:-grpc}")"
   otel_metrics_q="$(shell_quote "${VIDEOCHAT_OTEL_METRICS_ENABLE:-}")"
   otel_logs_q="$(shell_quote "${VIDEOCHAT_OTEL_LOGS_ENABLE:-}")"
+  allow_insecure_ws_q="$(shell_quote "${VIDEOCHAT_V1_ALLOW_INSECURE_WS:-${VITE_VIDEOCHAT_ALLOW_INSECURE_WS:-}}")"
 
   log "Writing remote production env, secrets, and cert renewal hook"
   remote_bash <<REMOTE
@@ -694,6 +701,7 @@ OTEL_ENDPOINT=${otel_endpoint_q}
 OTEL_PROTOCOL=${otel_protocol_q}
 OTEL_METRICS=${otel_metrics_q}
 OTEL_LOGS=${otel_logs_q}
+ALLOW_INSECURE_WS=${allow_insecure_ws_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 SECRETS_DIR="\${VIDEOCHAT_DIR}/secrets"
 LOCAL_COMPOSE="\${VIDEOCHAT_DIR}/docker-compose.deploy.local.yml"
@@ -724,7 +732,7 @@ ASSET_VERSION="\$(date -u +%Y%m%d%H%M%S)"
 # Machine-specific file; never commit.
 VIDEOCHAT_V1_PUBLIC_HOST=\${DOMAIN}
 VIDEOCHAT_V1_PUBLIC_SCHEME=https
-VIDEOCHAT_V1_ALLOW_INSECURE_WS=
+VIDEOCHAT_V1_ALLOW_INSECURE_WS=\${ALLOW_INSECURE_WS}
 
 VIDEOCHAT_V1_FRONTEND_PORT=5176
 VIDEOCHAT_V1_FRONTEND_BIND=127.0.0.1
@@ -919,6 +927,7 @@ start_production_https() {
   local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
+  local allow_insecure_ws_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
@@ -940,6 +949,7 @@ start_production_https() {
   otel_protocol_q="$(shell_quote "${VIDEOCHAT_OTEL_EXPORTER_PROTOCOL:-grpc}")"
   otel_metrics_q="$(shell_quote "${VIDEOCHAT_OTEL_METRICS_ENABLE:-}")"
   otel_logs_q="$(shell_quote "${VIDEOCHAT_OTEL_LOGS_ENABLE:-}")"
+  allow_insecure_ws_q="$(shell_quote "${VIDEOCHAT_V1_ALLOW_INSECURE_WS:-${VITE_VIDEOCHAT_ALLOW_INSECURE_WS:-}}")"
 
   log "Starting production King HTTPS edge"
   remote_bash <<REMOTE
@@ -965,6 +975,7 @@ OTEL_ENDPOINT=${otel_endpoint_q}
 OTEL_PROTOCOL=${otel_protocol_q}
 OTEL_METRICS=${otel_metrics_q}
 OTEL_LOGS=${otel_logs_q}
+ALLOW_INSECURE_WS=${allow_insecure_ws_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
 LOCAL_ENV="\${VIDEOCHAT_DIR}/.env.local"
 cd "\${VIDEOCHAT_DIR}"
@@ -984,7 +995,7 @@ set_env_value() {
 
 set_env_value VIDEOCHAT_V1_PUBLIC_HOST "\${DOMAIN}"
 set_env_value VIDEOCHAT_V1_PUBLIC_SCHEME https
-set_env_value VIDEOCHAT_V1_ALLOW_INSECURE_WS ""
+set_env_value VIDEOCHAT_V1_ALLOW_INSECURE_WS "\${ALLOW_INSECURE_WS}"
 set_env_value VIDEOCHAT_V1_FRONTEND_PORT 5176
 set_env_value VIDEOCHAT_V1_FRONTEND_BIND 127.0.0.1
 set_env_value VIDEOCHAT_V1_BACKEND_PORT 18080

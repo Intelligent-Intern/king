@@ -718,9 +718,9 @@ int king_orchestrator_claim_next_run(
             snprintf(
                 claimed_path,
                 claimed_path_len,
-                "%s/claimed-%ld-%s",
+                "%s/claimed-" ZEND_LONG_FMT "-%s",
                 king_mcp_orchestrator_config.orchestrator_worker_queue_path,
-                (long) getpid(),
+                (zend_long) getpid(),
                 selected_name
             );
 

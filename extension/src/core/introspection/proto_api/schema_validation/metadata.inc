@@ -97,7 +97,7 @@ static int king_proto_validate_schema_field_metadata(
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "Schema '%s': Duplicate tag %ld.",
+            "Schema '%s': Duplicate tag " ZEND_LONG_FMT ".",
             ZSTR_VAL(schema_name),
             Z_LVAL_P(state->tag)
         );

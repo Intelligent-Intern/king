@@ -179,7 +179,7 @@ static int king_orchestrator_persist_state_locked(void)
         return SUCCESS;
     }
 
-    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp.%ld", state_path, (long) getpid());
+    snprintf(tmp_path, sizeof(tmp_path), "%s.tmp." ZEND_LONG_FMT, state_path, (zend_long) getpid());
     if (king_orchestrator_state_path_validate_existing(state_path) != SUCCESS) {
         return FAILURE;
     }
@@ -255,11 +255,11 @@ static int king_orchestrator_persist_state_locked(void)
 
         fprintf(
             stream,
-            "run\t%s\t%s\t%ld\t%ld\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%s\t%ld\t%ld\t%s\t%s\n",
+            "run\t%s\t%s\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t%s\t%s\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t%s\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT "\t%s\t%s\n",
             ZSTR_VAL(run_state->run_id),
             ZSTR_VAL(run_state->status),
-            (long) run_state->started_at,
-            (long) run_state->finished_at,
+            (zend_long) run_state->started_at,
+            (zend_long) run_state->finished_at,
             run_state->initial_data_b64 != NULL ? ZSTR_VAL(run_state->initial_data_b64) : "",
             run_state->pipeline_b64 != NULL ? ZSTR_VAL(run_state->pipeline_b64) : "",
             run_state->options_b64 != NULL ? ZSTR_VAL(run_state->options_b64) : "",
@@ -269,19 +269,19 @@ static int king_orchestrator_persist_state_locked(void)
             run_state->error_category != NULL ? ZSTR_VAL(run_state->error_category) : "",
             run_state->retry_disposition != NULL ? ZSTR_VAL(run_state->retry_disposition) : "",
             run_state->error_backend != NULL ? ZSTR_VAL(run_state->error_backend) : "",
-            (long) run_state->error_step_index,
-            (long) run_state->completed_step_count,
+            (zend_long) run_state->error_step_index,
+            (zend_long) run_state->completed_step_count,
             run_state->execution_backend != NULL ? ZSTR_VAL(run_state->execution_backend) : "",
             run_state->queue_phase != NULL ? ZSTR_VAL(run_state->queue_phase) : "",
-            (long) run_state->enqueued_at,
-            (long) run_state->last_claimed_at,
-            (long) run_state->last_recovered_at,
-            (long) run_state->last_remote_attempt_at,
-            (long) run_state->claim_count,
-            (long) run_state->recovery_count,
+            (zend_long) run_state->enqueued_at,
+            (zend_long) run_state->last_claimed_at,
+            (zend_long) run_state->last_recovered_at,
+            (zend_long) run_state->last_remote_attempt_at,
+            (zend_long) run_state->claim_count,
+            (zend_long) run_state->recovery_count,
             run_state->last_recovery_reason != NULL ? ZSTR_VAL(run_state->last_recovery_reason) : "",
-            (long) run_state->remote_attempt_count,
-            (long) run_state->last_claimed_by_pid,
+            (zend_long) run_state->remote_attempt_count,
+            (zend_long) run_state->last_claimed_by_pid,
             run_state->telemetry_parent_context_b64 != NULL
                 ? ZSTR_VAL(run_state->telemetry_parent_context_b64)
                 : "",

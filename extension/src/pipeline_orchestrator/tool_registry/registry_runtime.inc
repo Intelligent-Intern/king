@@ -344,7 +344,7 @@ zend_string *king_orchestrator_pipeline_run_begin(
         initial_status = "running";
     }
 
-    run_id = strpprintf(0, "run-%ld", king_orchestrator_next_run_id++);
+    run_id = strpprintf(0, "run-" ZEND_LONG_FMT, king_orchestrator_next_run_id++);
     run_state = pemalloc(sizeof(*run_state), 1);
     memset(run_state, 0, sizeof(*run_state));
 

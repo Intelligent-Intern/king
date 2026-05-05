@@ -20,7 +20,7 @@ function read(relativePath) {
 }
 
 try {
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   requireContains(publisherFrameTrace, 'publisher_frame_trace_id', 'publisher trace id metric');
   requireContains(publisherFrameTrace, 'publisher_path_trace_stages', 'publisher trace stage chain metric');
   requireContains(publisherFrameTrace, 'trace_get_user_media_frame_delivery_ms', 'getUserMedia delivery timing metric');
@@ -40,7 +40,7 @@ try {
   requireContains(publisherFrameTrace, 'trace_protected_frame_wrap_ms', 'protected frame wrap timing metric');
   requireContains(publisherFrameTrace, 'buildPublisherTransportStageMetrics', 'publisher transport metrics builder');
 
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   requireContains(publisherPipeline, "from './publisherFrameTrace'", 'publisher pipeline imports trace helper');
   requireContains(publisherPipeline, 'createPublisherFrameTrace({', 'publisher creates a frame trace before readback');
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'get_user_media_frame_delivery'", 'publisher records getUserMedia frame delivery timing');
@@ -49,7 +49,7 @@ try {
   requireContains(publisherPipeline, "markPublisherFrameTraceStage(trace, 'protected_frame_skipped'", 'publisher records skipped protected wrap timing');
   requireContains(publisherPipeline, 'buildPublisherTransportStageMetrics({', 'publisher centralizes path trace metrics');
 
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
   requireContains(sourceReadback, "markPublisherFrameTraceStage(trace, 'video_frame_processor_read'", 'source readback records VideoFrame processor timing');
   requireContains(sourceReadback, "markPublisherFrameTraceStage(trace, 'video_frame_copy_to_rgba'", 'source readback records VideoFrame RGBA copy timing');
   requireContains(sourceReadback, "'offscreen_worker_draw_image'", 'source readback records Offscreen worker draw timing');
@@ -90,7 +90,7 @@ try {
   requireContains(sendFailureDetails, 'publisherFrameTraceId', 'send failures preserve publisher trace id');
   requireContains(sendFailureDetails, 'publisherPathTraceStages', 'send failures preserve publisher trace stages');
 
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   requireContains(publisherBackpressureController, 'publisher_frame_trace_id: publisherFrameTraceId', 'workspace diagnostics include publisher trace id');
   requireContains(publisherBackpressureController, 'publisher_path_trace_stages: publisherPathTraceStages', 'workspace diagnostics include publisher trace stage chain');
   requireContains(publisherBackpressureController, 'source_delivery_ms: sourceDeliveryMs', 'workspace diagnostics include source delivery timing');

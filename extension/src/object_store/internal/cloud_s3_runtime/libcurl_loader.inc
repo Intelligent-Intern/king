@@ -79,7 +79,7 @@ static zend_result king_object_store_load_libcurl_symbol(void **target, const ch
 
 static zend_result king_object_store_ensure_libcurl_ready(void)
 {
-    const char *const candidates[] = {"libcurl.so.4", "libcurl.so", NULL};
+    const char *const candidates[] = {KING_LIBCURL_RUNTIME_CANDIDATES};
     size_t index;
 
     if (king_object_store_libcurl.ready) {
@@ -103,7 +103,8 @@ static zend_result king_object_store_ensure_libcurl_ready(void)
         snprintf(
             king_object_store_libcurl.load_error,
             sizeof(king_object_store_libcurl.load_error),
-            "Failed to load libcurl.so.4 or libcurl.so for cloud object-store operations."
+            "Failed to load %s for cloud object-store operations.",
+            KING_LIBCURL_RUNTIME_CANDIDATE_NAMES
         );
         return FAILURE;
     }
@@ -165,4 +166,3 @@ static zend_result king_object_store_ensure_libcurl_ready(void)
     king_object_store_libcurl.ready = 1;
     return SUCCESS;
 }
-

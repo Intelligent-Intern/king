@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createMediaSecuritySession } from '../../src/domain/realtime/media/security.js';
-import { measureProtectedSfuFrameBudget } from '../../src/domain/realtime/media/protectedFrameBudget.js';
+import { createMediaSecuritySession } from '../../src/domain/realtime/media/security.ts';
+import { measureProtectedSfuFrameBudget } from '../../src/domain/realtime/media/protectedFrameBudget.ts';
 
 function fail(message) {
   throw new Error(`[sfu-security-throughput-budget-contract] FAIL: ${message}`);
@@ -23,12 +23,12 @@ function read(relativePath) {
 }
 
 async function main() {
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const protectedBudget = read('src/domain/realtime/media/protectedFrameBudget.js');
-  const workspaceConfig = read('src/domain/realtime/workspace/config.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const protectedBudget = read('src/domain/realtime/media/protectedFrameBudget.ts');
+  const workspaceConfig = read('src/domain/realtime/workspace/config.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 
   requireContains(runtimeConfig, 'export const SFU_PROTECTED_MEDIA_ENABLED = true;', 'protected SFU media is enabled');
   requireContains(protectedBudget, 'measureProtectedSfuFrameBudget', 'protected media budget helper');
