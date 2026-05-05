@@ -26,7 +26,7 @@ assert.deepEqual(
   'unimplemented governance scopes must not invent catalog rows',
 );
 
-const governanceSource = await readFile(path.join(root, 'src/domain/governance/GovernanceCrudView.vue'), 'utf8');
+const governanceSource = await readFile(path.join(root, 'src/modules/governance/pages/GovernanceCrudView.vue'), 'utf8');
 assert.match(governanceSource, /buildGovernanceCatalogRows/, 'Governance CRUD must consume descriptor catalog rows');
 assert.match(governanceSource, /row\.readonly/, 'Governance CRUD must treat descriptor catalog rows as readonly');
 

@@ -1,22 +1,22 @@
 const governanceRoutes = [
   ['users', 'Nutzer', 'Nutzer', 'Nutzer', 'domain/users/admin/UsersView.vue'],
-  ['groups', 'Gruppen', 'Gruppe', 'Gruppen', 'domain/governance/GovernanceCrudView.vue'],
-  ['organizations', 'Organisationen', 'Organisation', 'Organisationen', 'domain/governance/GovernanceCrudView.vue'],
-  ['modules', 'Module', 'Modul', 'Module', 'domain/governance/GovernanceCrudView.vue'],
-  ['permissions', 'Rechte', 'Recht', 'Rechte', 'domain/governance/GovernanceCrudView.vue'],
-  ['roles', 'Rollen', 'Rolle', 'Rollen', 'domain/governance/GovernanceCrudView.vue'],
-  ['grants', 'Freigaben', 'Freigabe', 'Freigaben', 'domain/governance/GovernanceCrudView.vue'],
-  ['policies', 'Richtlinien', 'Richtlinie', 'Richtlinien', 'domain/governance/GovernanceCrudView.vue'],
-  ['audit-log', 'Audit Log', 'Audit Entry', 'Audit Entries', 'domain/governance/GovernanceCrudView.vue'],
-  ['data-portability', 'Export / Import', 'Export / Import Job', 'Export / Import Jobs', 'domain/governance/GovernanceCrudView.vue'],
-  ['compliance', 'Compliance', 'Compliance Rule', 'Compliance Rules', 'domain/governance/GovernanceCrudView.vue'],
+  ['groups', 'Gruppen', 'Gruppe', 'Gruppen', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['organizations', 'Organisationen', 'Organisation', 'Organisationen', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['modules', 'Module', 'Modul', 'Module', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['permissions', 'Rechte', 'Recht', 'Rechte', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['roles', 'Rollen', 'Rolle', 'Rollen', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['grants', 'Freigaben', 'Freigabe', 'Freigaben', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['policies', 'Richtlinien', 'Richtlinie', 'Richtlinien', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['audit-log', 'Audit Log', 'Audit Entry', 'Audit Entries', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['data-portability', 'Export / Import', 'Export / Import Job', 'Export / Import Jobs', 'modules/governance/pages/GovernanceCrudView.vue'],
+  ['compliance', 'Compliance', 'Compliance Rule', 'Compliance Rules', 'modules/governance/pages/GovernanceCrudView.vue'],
 ];
 
 function governanceLoader(sourcePath) {
   if (sourcePath === 'domain/users/admin/UsersView.vue') {
     return () => import('../../domain/users/admin/UsersView.vue');
   }
-  return () => import('../../domain/governance/GovernanceCrudView.vue');
+  return () => import('./pages/GovernanceCrudView.vue');
 }
 
 export default {

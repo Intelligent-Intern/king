@@ -53,8 +53,8 @@
 </template>
 
 <script setup>
-import AppModalShell from '../../components/AppModalShell.vue';
-import AppSelect from '../../components/AppSelect.vue';
+import AppModalShell from '../../../components/AppModalShell.vue';
+import AppSelect from '../../../components/AppSelect.vue';
 
 defineProps({
   open: {
