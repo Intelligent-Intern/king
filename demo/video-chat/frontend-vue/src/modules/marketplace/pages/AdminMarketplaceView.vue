@@ -118,10 +118,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import AppIconButton from '../../components/AppIconButton.vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
-import AppPagination from '../../components/AppPagination.vue';
-import AppSelect from '../../components/AppSelect.vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
+import AppPageHeader from '../../../components/AppPageHeader.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AppSelect from '../../../components/AppSelect.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
 

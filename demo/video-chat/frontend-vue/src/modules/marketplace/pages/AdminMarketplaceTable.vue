@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import AppIconButton from '../../components/AppIconButton.vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
 
 const CATEGORY_LABELS = {
   whiteboard: 'Whiteboard',
