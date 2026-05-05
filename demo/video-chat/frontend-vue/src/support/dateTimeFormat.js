@@ -57,6 +57,18 @@ export function normalizeDateTimeLocale(value) {
   return normalizeLocalizationLanguage(value);
 }
 
+function activeDocumentLocale() {
+  if (typeof document === 'undefined') {
+    return '';
+  }
+  return String(document.documentElement?.lang || '').trim();
+}
+
+function resolveDateTimeLocale(value) {
+  const explicitLocale = typeof value === 'string' && value.trim() !== '' ? value : activeDocumentLocale();
+  return normalizeDateTimeLocale(explicitLocale);
+}
+
 function formatDateParts(date, format) {
   const year = String(date.getFullYear());
   const month = pad2(date.getMonth() + 1);
@@ -166,7 +178,7 @@ export function formatLocalizedDateTimeDisplay(value, options = {}) {
     return typeof value === 'string' && value.trim() !== '' ? value : fallback;
   }
 
-  const locale = normalizeDateTimeLocale(options.locale);
+  const locale = resolveDateTimeLocale(options.locale);
   try {
     const dateDisplay = formatLocalizedDateParts(date, normalizeDateFormat(options.dateFormat), locale);
     const timeDisplay = new Intl.DateTimeFormat(locale, {
@@ -183,12 +195,13 @@ export function formatLocalizedDateTimeDisplay(value, options = {}) {
 export function formatDateRangeDisplay(startsAt, endsAt, options = {}) {
   const separator = typeof options.separator === 'string' && options.separator !== '' ? options.separator : ' -> ';
   const sharedOptions = {
+    locale: options.locale,
     dateFormat: options.dateFormat,
     timeFormat: options.timeFormat,
     fallback: typeof options.fallback === 'string' ? options.fallback : 'n/a',
   };
 
-  return `${formatDateTimeDisplay(startsAt, sharedOptions)}${separator}${formatDateTimeDisplay(endsAt, sharedOptions)}`;
+  return `${formatLocalizedDateTimeDisplay(startsAt, sharedOptions)}${separator}${formatLocalizedDateTimeDisplay(endsAt, sharedOptions)}`;
 }
 
 export function formatWeekdayShort(value, options = {}) {
@@ -199,10 +212,29 @@ export function formatWeekdayShort(value, options = {}) {
   }
 
   try {
-    return new Intl.DateTimeFormat(normalizeDateTimeLocale(options.locale), { weekday: 'short' }).format(date);
+    return new Intl.DateTimeFormat(resolveDateTimeLocale(options.locale), { weekday: 'short' }).format(date);
   } catch {
     return fallback;
   }
+}
+
+export function compareDateTimeStrings(left, right) {
+  const leftText = String(left || '').trim();
+  const rightText = String(right || '').trim();
+  if (leftText === rightText) {
+    return 0;
+  }
+  const leftTime = Date.parse(leftText);
+  const rightTime = Date.parse(rightText);
+  const leftValid = Number.isFinite(leftTime);
+  const rightValid = Number.isFinite(rightTime);
+  if (leftValid && rightValid && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  if (leftValid !== rightValid) {
+    return leftValid ? -1 : 1;
+  }
+  return leftText < rightText ? -1 : 1;
 }
 
 export function fullCalendarEventTimeFormat(timeFormat) {

@@ -81,6 +81,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { loadAppointmentBlocks, saveAppointmentBlocks } from './appointmentCalendarApi';
 import AppointmentSettingsModal from './AppointmentSettingsModal.vue';
 import AppointmentSlotRowsForm from './AppointmentSlotRowsForm.vue';
+import { compareDateTimeStrings } from '../../../support/dateTimeFormat';
 
 const emit = defineEmits(['saved']);
 const panelEl = ref(null);
@@ -291,7 +292,7 @@ function formRowsToBlocks({ includeBooked = false } = {}) {
     });
   }
 
-  return blocks.sort((left, right) => String(left.starts_at).localeCompare(String(right.starts_at)));
+  return blocks.sort((left, right) => compareDateTimeStrings(left.starts_at, right.starts_at));
 }
 
 function syncCalendarFromFormRows() {
