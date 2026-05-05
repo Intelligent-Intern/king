@@ -33,11 +33,11 @@
               <div class="governance-name">{{ row.name }}</div>
               <div class="governance-subline">{{ singularLabel }}</div>
             </td>
-            <td :data-label="t('governance.key')">{{ row.key || 'n/a' }}</td>
+            <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
             <td :data-label="t('governance.status')">
-              <span class="tag" :class="statusClass(row.status)">{{ row.status }}</span>
+              <span class="tag" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span>
             </td>
-            <td :data-label="t('governance.description')">{{ row.description || 'n/a' }}</td>
+            <td :data-label="t('governance.description')">{{ row.description || t('common.not_available') }}</td>
             <td :data-label="t('governance.updated')">{{ formatDate(row.updatedAt) }}</td>
             <td :data-label="t('governance.actions')">
               <span v-if="row.readonly" class="governance-readonly-label">{{ t('governance.system') }}</span>
@@ -254,9 +254,17 @@ function statusClass(status) {
   return 'warn';
 }
 
+function statusLabel(status) {
+  const normalized = normalizeStatus(status);
+  if (normalized === 'active') return t('governance.status_active');
+  if (normalized === 'draft') return t('governance.status_draft');
+  if (normalized === 'disabled') return t('governance.status_disabled');
+  return String(status || '');
+}
+
 function formatDate(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'n/a';
+  if (Number.isNaN(date.getTime())) return t('common.not_available');
   return new Intl.DateTimeFormat('de-DE', {
     dateStyle: 'medium',
     timeStyle: 'short',

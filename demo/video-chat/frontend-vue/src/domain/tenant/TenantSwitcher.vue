@@ -1,5 +1,5 @@
 <template>
-  <section class="tenant-switcher" aria-label="Tenant context">
+  <section class="tenant-switcher" :aria-label="t('tenant.context_aria')">
     <span class="tenant-switcher-label">{{ currentLabel }}</span>
     <select
       class="tenant-switcher-select"
@@ -17,6 +17,7 @@
 <script setup>
 import { computed, onMounted, reactive } from 'vue';
 import { loadAvailableTenants, sessionState, switchActiveTenant } from '../auth/session';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 const state = reactive({
   loading: false,
@@ -24,7 +25,7 @@ const state = reactive({
   tenants: [],
 });
 
-const currentLabel = computed(() => sessionState.tenantLabel || 'Workspace');
+const currentLabel = computed(() => sessionState.tenantLabel || t('tenant.workspace'));
 
 async function loadTenants() {
   if (!sessionState.sessionToken) return;

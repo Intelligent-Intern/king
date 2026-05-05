@@ -1,20 +1,20 @@
 <template>
   <section class="view-card tenant-admin-view">
-    <AppPageHeader class="section" title="Tenant Administration" />
+    <AppPageHeader class="section" :title="t('tenant.admin_title')" />
     <section class="toolbar tenant-admin-toolbar">
       <div>
-        <strong>{{ sessionState.tenantLabel || 'Workspace' }}</strong>
-        <span>{{ sessionState.tenantRole || 'member' }}</span>
+        <strong>{{ sessionState.tenantLabel || t('tenant.workspace') }}</strong>
+        <span>{{ sessionState.tenantRole || t('tenant.member') }}</span>
       </div>
-      <button class="btn" type="button" :disabled="state.loading" @click="loadContext">Refresh</button>
+      <button class="btn" type="button" :disabled="state.loading" @click="loadContext">{{ t('tenant.refresh') }}</button>
     </section>
     <section class="tenant-admin-grid">
       <article class="tenant-admin-panel">
-        <h2>Organizations</h2>
+        <h2>{{ t('tenant.organizations') }}</h2>
         <p v-for="organization in state.organizations" :key="organization.id">{{ organization.name }}</p>
       </article>
       <article class="tenant-admin-panel">
-        <h2>Groups</h2>
+        <h2>{{ t('tenant.groups') }}</h2>
         <p v-for="group in state.groups" :key="group.id">{{ group.name }}</p>
       </article>
     </section>
@@ -26,6 +26,7 @@ import { onMounted, reactive } from 'vue';
 import AppPageHeader from '../../components/AppPageHeader.vue';
 import { sessionState } from '../auth/session';
 import { fetchBackend } from '../../support/backendFetch';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 const state = reactive({
   loading: false,
@@ -45,7 +46,7 @@ async function loadContext() {
     });
     const payload = await response.json();
     if (!response.ok || payload?.status !== 'ok') {
-      throw new Error('Could not load tenant context.');
+      throw new Error(t('tenant.load_context_failed'));
     }
     state.organizations = Array.isArray(payload.organizations) ? payload.organizations : [];
     state.groups = Array.isArray(payload.groups) ? payload.groups : [];
