@@ -592,7 +592,7 @@ Non-goals for this sprint:
     - [x] Settings can consume module settings-panel metadata.
     - [x] Build proves module dynamic imports are valid.
 
-18. [ ] `[shared-admin-components]` Extract reusable non-call UI building blocks.
+18. [x] `[shared-admin-components]` Extract reusable non-call UI building blocks.
 
     Scope:
     - Add shared components for admin page frame, searchable toolbar,
@@ -604,11 +604,11 @@ Non-goals for this sprint:
       call-specific.
 
     Done when:
-    - [ ] Governance CRUD and localization administration use the shared page
+    - [x] Governance CRUD and localization administration use the shared page
       and table frames.
-    - [ ] Maximizable modal behavior is centralized.
-    - [ ] Header/search/table/pagination duplication is reduced.
-    - [ ] No call CSS or call components are modified.
+    - [x] Maximizable modal behavior is centralized.
+    - [x] Header/search/table/pagination duplication is reduced.
+    - [x] No call CSS or call components are modified.
 
 19. [ ] `[non-call-module-extraction]` Move existing non-call features into modules.
 
