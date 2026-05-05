@@ -78,7 +78,7 @@ static bool king_proto_runtime_parse_map_input_key(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects bool map keys 0 or 1, but got %ld.",
+                    "Encoding failed: Field '%s' expects bool map keys 0 or 1, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     numeric_key
                 );
@@ -116,7 +116,7 @@ static bool king_proto_runtime_parse_map_input_key(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects a 32-bit signed integer map key, but got %ld.",
+                    "Encoding failed: Field '%s' expects a 32-bit signed integer map key, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     numeric_key
                 );
@@ -153,7 +153,7 @@ static bool king_proto_runtime_parse_map_input_key(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Field '%s' expects an unsigned 32-bit map key, but got %ld.",
+                    "Encoding failed: Field '%s' expects an unsigned 32-bit map key, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(field->name),
                     numeric_key
                 );

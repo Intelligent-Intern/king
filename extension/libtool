@@ -419,6 +419,27 @@ inherit_rpath=no
 # Whether libtool must link a program against all its dependency libraries.
 link_all_deplibs=no
 
+# King keeps generated extension build files in the repository, so a checkout
+# may carry libtool templates generated on a different host. Select the native
+# linker contract at invocation time to avoid passing ELF-only soname flags to
+# Apple's ld while preserving Linux shared-object naming.
+case "`uname -s 2>/dev/null || echo unknown`" in
+  Darwin)
+    version_type=darwin
+    with_gnu_ld=no
+    archive_cmds="\$CC -dynamiclib \$allow_undefined_flag -o \$lib \$libobjs \$deplibs \$compiler_flags -install_name \$rpath/\$soname \$verstring"
+    archive_expsym_cmds="\$SED 's,^,_,' < \$export_symbols > \$output_objdir/\${libname}-symbols.expsym~\$CC -dynamiclib \$allow_undefined_flag -o \$lib \$libobjs \$deplibs \$compiler_flags -install_name \$rpath/\$soname \$verstring"
+    module_cmds="\$CC \$allow_undefined_flag -o \$lib -bundle \$libobjs \$deplibs \$compiler_flags"
+    module_expsym_cmds="\$SED 's,^,_,' < \$export_symbols > \$output_objdir/\${libname}-symbols.expsym~\$CC \$allow_undefined_flag -o \$lib -bundle \$libobjs \$deplibs \$compiler_flags"
+    allow_undefined_flag="-undefined dynamic_lookup"
+    no_undefined_flag="-undefined dynamic_lookup"
+    hardcode_libdir_flag_spec=""
+    hardcode_direct=no
+    hardcode_shlibpath_var=unsupported
+    finish_cmds=""
+    ;;
+esac
+
 # Set to "yes" if exported symbols are required.
 always_export_symbols=no
 

@@ -17,7 +17,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects a 32-bit signed integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects a 32-bit signed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
@@ -31,7 +31,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects an unsigned 32-bit integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects an unsigned 32-bit integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
@@ -45,7 +45,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects an unsigned 64-bit integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects an unsigned 64-bit integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
@@ -59,7 +59,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects an unsigned 32-bit fixed integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects an unsigned 32-bit fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
@@ -73,7 +73,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects a 32-bit signed fixed integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects a 32-bit signed fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)
@@ -87,7 +87,7 @@ static bool king_proto_runtime_persist_integer_default_value(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Schema '%s': Field '%s' default expects an unsigned 64-bit fixed integer, but got %ld.",
+                    "Schema '%s': Field '%s' default expects an unsigned 64-bit fixed integer, but got " ZEND_LONG_FMT ".",
                     ZSTR_VAL(schema_name),
                     ZSTR_VAL(field->name),
                     Z_LVAL_P(value)

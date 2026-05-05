@@ -19,7 +19,7 @@ zend_result king_websocket_state_send(
 
     if (ZSTR_LEN(payload) > (size_t) state->max_payload_size) {
         king_websocket_set_error(
-            "%s() payload size %zu exceeds max_payload_size %ld.",
+            "%s() payload size %zu exceeds max_payload_size " ZEND_LONG_FMT ".",
             function_name,
             ZSTR_LEN(payload),
             state->max_payload_size
@@ -486,7 +486,7 @@ PHP_FUNCTION(king_client_websocket_send)
 
     if (data_len > (size_t) state->max_payload_size) {
         king_websocket_set_error(
-            "king_client_websocket_send() payload size %zu exceeds max_payload_size %ld.",
+            "king_client_websocket_send() payload size %zu exceeds max_payload_size " ZEND_LONG_FMT ".",
             data_len,
             state->max_payload_size
         );
@@ -540,7 +540,7 @@ PHP_FUNCTION(king_websocket_send)
 
     if (message_len > (size_t) state->max_payload_size) {
         king_websocket_set_error(
-            "king_websocket_send() payload size %zu exceeds max_payload_size %ld.",
+            "king_websocket_send() payload size %zu exceeds max_payload_size " ZEND_LONG_FMT ".",
             message_len,
             state->max_payload_size
         );

@@ -120,14 +120,15 @@ export function createSfuLifecycleHelpers({
         captureClientDiagnostic({
           category: 'media',
           level: 'error',
-          eventType: 'sfu_subscribe_failed',
-          code: 'sfu_subscribe_failed',
-          message: 'SFU subscribe failed.',
+          eventType: 'sfu_connect_exhausted',
+          code: 'sfu_connect_exhausted',
+          message: 'SFU connection retries were exhausted before the call became active.',
           payload: {
             lane: 'ops',
-            publisher_id: publisherId,
-            publisher_user_id: publisherUserId,
-            track_count: Array.isArray(event?.tracks) ? event.tracks.length : 0,
+            retry_count: state.sfuConnectRetryCount,
+            retry_max: sfuConnectMaxRetries,
+            media_runtime_path: refs.mediaRuntimePath.value,
+            connection_state: refs.connectionState.value,
           },
           immediate: true,
         });

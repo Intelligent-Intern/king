@@ -104,8 +104,8 @@ static bool king_semantic_dns_listener_snapshot_path_init(void)
     if (snprintf(
             king_semantic_dns_runtime.listener_state_path,
             sizeof(king_semantic_dns_runtime.listener_state_path),
-            "/tmp/king_semantic_dns_state/listener_state.%ld.bin",
-            (long) getpid()
+            "/tmp/king_semantic_dns_state/listener_state." ZEND_LONG_FMT ".bin",
+            (zend_long) getpid()
         ) >= (int) sizeof(king_semantic_dns_runtime.listener_state_path)) {
         king_semantic_dns_runtime.listener_state_path[0] = '\0';
         return false;

@@ -11,8 +11,35 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
+function king_http1_find_python3_binary(): ?string
+{
+    $path = getenv('PATH');
+    if (!is_string($path) || $path === '') {
+        return null;
+    }
+
+    foreach (explode(PATH_SEPARATOR, $path) as $directory) {
+        if ($directory === '') {
+            continue;
+        }
+
+        $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+        if (is_file($candidate) && is_executable($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return null;
+}
+
+$python3 = king_http1_find_python3_binary();
+if ($python3 === null) {
+    echo "skip python3 with socket.SO_REUSEPORT is required";
+    return;
+}
+
 $checkReusePort = @proc_open(
-    ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
+    [$python3, '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
     [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
@@ -87,7 +114,23 @@ finally:
     sock.close()
 PY;
 
-    $command = ['python3', '-c', $script, (string) $port];
+    $python3 = null;
+    foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+        if ($directory === '') {
+            continue;
+        }
+
+        $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+        if (is_file($candidate) && is_executable($candidate)) {
+            $python3 = $candidate;
+            break;
+        }
+    }
+    if ($python3 === null) {
+        throw new RuntimeException('python3 is required for duplicate bind probe');
+    }
+
+    $command = [$python3, '-c', $script, (string) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],

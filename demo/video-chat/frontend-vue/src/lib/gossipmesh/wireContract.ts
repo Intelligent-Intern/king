@@ -6,6 +6,14 @@
 export const LANE_OPS = 'ops' as const
 export const LANE_DATA = 'data' as const
 export type Lane = typeof LANE_OPS | typeof LANE_DATA
+export const GOSSIP_DATA_CODEC_IIBIN = 'iibin' as const
+export const GOSSIP_DATA_ENVELOPE_CONTRACT = 'king-video-chat-gossipmesh-iibin-media-envelope' as const
+export const GOSSIP_CONTROL_OBJECT_STORE_CONTRACT = 'king-object-store-gossipmesh-control-plane' as const
+export const GOSSIP_NATIVE_TRANSPORT_PRIORITY = Object.freeze([
+  'rtc_datachannel',
+  'king_lsquic_http3',
+  'king_websocket_binary',
+] as const)
 
 export const OPS_MESSAGE_TYPES = Object.freeze([
   'hello',
@@ -32,6 +40,25 @@ export interface LaneTaggedMessage {
   lane?: Lane
   type: string
   [key: string]: unknown
+}
+
+export interface TopologyHintNeighbor {
+  peer_id: string
+  transport?: 'rtc_datachannel' | 'in_memory' | 'king_lsquic_http3' | 'king_websocket_binary'
+  codec?: typeof GOSSIP_DATA_CODEC_IIBIN
+  envelope_contract?: typeof GOSSIP_DATA_ENVELOPE_CONTRACT
+  priority?: number
+}
+
+export interface TopologyHintMessage extends LaneTaggedMessage {
+  lane: typeof LANE_OPS
+  type: 'topology_hint'
+  room_id: string
+  call_id: string
+  peer_id: string
+  topology_epoch: number
+  neighbors: TopologyHintNeighbor[]
+  reconnect_reason?: string
 }
 
 /**
