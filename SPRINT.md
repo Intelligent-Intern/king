@@ -441,6 +441,9 @@ Non-goals for this sprint:
    - [x] Public join flow labels, media controls, admission status messages,
      and join/access fallback errors now use localization keys and are covered
      by public-page and translation-key contracts.
+   - [x] Admin cancel/delete controller notices, validation errors, and default
+     cancel templates now use localization keys and are covered by the
+     translation-key coverage contract.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
