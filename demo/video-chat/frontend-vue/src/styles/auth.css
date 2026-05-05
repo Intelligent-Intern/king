@@ -53,7 +53,7 @@
 }
 
 .ii-authSplit__brand {
-  border-right: 1px solid var(--ii-border);
+  border-inline-end: 1px solid var(--ii-border);
   background:
     radial-gradient(700px 420px at 35% 30%, color-mix(in srgb, var(--ii-accent) 18%, transparent), transparent 62%),
     radial-gradient(700px 420px at 55% 75%, color-mix(in srgb, var(--ii-accent) 10%, transparent), transparent 64%),
@@ -210,7 +210,7 @@
   }
 
   .ii-authSplit__brand {
-    border-right: none;
+    border-inline-end: none;
     border-bottom: 1px solid var(--ii-border);
   }
 

@@ -470,7 +470,7 @@
 
 .settings-theme-preview-left-pane {
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
@@ -559,8 +559,7 @@
   flex: 1 1 auto;
   min-height: 0;
   padding-top: 0;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
   overflow: auto;
 }
 
@@ -614,8 +613,7 @@
   display: flex;
   justify-content: center;
   margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
 }
 
 .settings-theme-preview-calendar-mock {
