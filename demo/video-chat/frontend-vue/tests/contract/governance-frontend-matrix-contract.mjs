@@ -91,7 +91,8 @@ assert.doesNotMatch(governanceCrudSource, /v-for="row in pagedRows"[\s\S]{0,500}
 assert.doesNotMatch(governanceCrudSource, /<select[\s\S]*group/i, 'governance CRUD must not introduce raw relation selects');
 
 const modalSource = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
-assert.match(modalSource, /AppModalShell/, 'governance CRUD modal must use the shared maximizable modal shell');
+assert.match(modalSource, /AppSidePanelShell/, 'governance CRUD form must use the shared maximizable side panel shell');
+assert.doesNotMatch(modalSource, /AppModalShell/, 'governance CRUD form must not open as a centered modal');
 assert.match(governanceCrudSource, /governance\.modal\.create/, 'governance modal create title must be keyed by the parent view');
 assert.match(governanceCrudSource, /governance\.modal\.edit/, 'governance modal edit title must be keyed by the parent view');
 assert.doesNotMatch(modalSource, />Create new</, 'governance modal must not hardcode generic create text');

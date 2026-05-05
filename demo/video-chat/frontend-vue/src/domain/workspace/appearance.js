@@ -119,7 +119,9 @@ export function applyWorkspaceBrandingDom(root = null) {
     '.settings-title-wrap img',
     '.calls-modal-header-enter-logo',
     '.call-owner-edit-logo',
-    '.marketplace-modal-head-logo',
+    '.governance-side-panel-head-logo',
+    '.marketplace-side-panel-head-logo',
+    '.users-side-panel-head-logo',
   ].join(',')).forEach((image) => {
     image.setAttribute('src', modalLogo);
   });

@@ -1,18 +1,18 @@
 <template>
-  <AppModalShell
+  <AppSidePanelShell
     :open="open"
     :title="activeDialogTitle"
     :aria-label="activeDialogTitle"
-    root-class-name="users-modal"
-    backdrop-class="users-modal-backdrop"
-    dialog-class="users-modal-dialog"
-    header-class="users-modal-head users-modal-head-brand"
-    header-left-class="users-modal-head-left"
-    logo-class="users-modal-head-logo"
+    root-class-name="users-side-panel"
+    backdrop-class="users-side-panel-backdrop"
+    dialog-class="users-side-panel-dialog"
+    header-class="users-side-panel-head"
+    header-left-class="users-side-panel-head-left"
+    logo-class="users-side-panel-head-logo"
     title-class=""
-    :body-class="relationStackOpen ? 'users-modal-body users-modal-body-relation' : (avatarEditorOpen ? 'users-avatar-modal-body' : 'users-modal-body')"
-    footer-class="users-modal-footer"
-    :close-label="t('users.close_user_modal')"
+    :body-class="relationStackOpen ? 'users-side-panel-body users-side-panel-body-relation' : (avatarEditorOpen ? 'users-avatar-side-panel-body' : 'users-side-panel-body')"
+    footer-class="users-side-panel-footer"
+    :close-label="t('users.close_user_panel')"
     maximizable
     :maximized="editorMaximized"
     @update:maximized="editorMaximized = $event"
@@ -228,13 +228,13 @@
         {{ formSaving ? t('common.saving') : (avatarEditorOpen ? t('users.save_avatar') : dialogSubmitLabel) }}
       </button>
     </template>
-  </AppModalShell>
+  </AppSidePanelShell>
 </template>
 
 <script setup>
 import { computed, reactive, ref } from 'vue';
 import AppIconButton from '../../../../components/AppIconButton.vue';
-import AppModalShell from '../../../../components/AppModalShell.vue';
+import AppSidePanelShell from '../../../../components/AppSidePanelShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
 import { sessionState } from '../../../../domain/auth/session.js';
 import { moduleAccessContextFromSession } from '../../../../http/routeAccess.js';

@@ -16,8 +16,14 @@ function readSource(relativePath) {
 }
 
 try {
-  const adminCalls = readSource('src/domain/calls/admin/CallsView.vue');
-  const userCalls = readSource('src/domain/calls/dashboard/UserDashboardView.vue');
+  const adminCalls = [
+    readSource('src/domain/calls/admin/CallsView.vue'),
+    readSource('src/domain/calls/admin/CallsView.template.html'),
+  ].join('\n');
+  const userCalls = [
+    readSource('src/domain/calls/dashboard/UserDashboardView.vue'),
+    readSource('src/domain/calls/dashboard/UserDashboardView.template.html'),
+  ].join('\n');
   const callTable = readSource('src/domain/calls/components/ListTable.vue');
   const chatArchive = readSource('src/domain/calls/components/ChatArchiveModal.vue');
   const adminUserEditor = readSource('src/modules/users/pages/components/UserEditorModal.vue');
@@ -40,7 +46,8 @@ try {
   }
 
   assert.match(chatArchive, /<AppModalShell/, 'chat archive modal must stay on the shared modal shell');
-  assert.match(adminUserEditor, /<AppModalShell/, 'admin user editor modal must stay on the shared modal shell');
+  assert.match(adminUserEditor, /<AppSidePanelShell/, 'admin user editor must use the shared CRUD side panel shell');
+  assert.doesNotMatch(adminUserEditor, /<AppModalShell/, 'admin user editor must not open as a centered modal');
   assert.match(adminUsers, /<AdminPageFrame/, 'admin user management must stay on the shared admin page frame');
 
   process.stdout.write('[shared-ui-primitives-contract] PASS\n');
