@@ -20,16 +20,86 @@ export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   SOCKET_RESTART: 'socket_restart',
 });
 
-function normalizedNumber(value, fallback = 0) {
+export type PublisherBackpressureAction =
+  typeof PUBLISHER_BACKPRESSURE_ACTIONS[keyof typeof PUBLISHER_BACKPRESSURE_ACTIONS];
+
+export type PublisherBackpressureKind =
+  | 'pre_encode_buffer'
+  | 'encode_backpressure'
+  | 'send_failure'
+  | 'source_readback_failure'
+  | 'payload_pressure'
+  | 'runtime_encode_error'
+  | 'receiver_feedback'
+  | string;
+
+export interface PublisherBackpressureStageTelemetry {
+  reason?: string;
+  kind?: PublisherBackpressureKind;
+  bufferedAmount?: number | string;
+  queueAgeMs?: number | string;
+  encodeMs?: number | string;
+  payloadBytes?: number | string;
+  receiverRenderLatencyMs?: number | string;
+  subscriberSendLatencyMs?: number | string;
+  skipCount?: number | string;
+  sendFailureCount?: number | string;
+  sourceReadbackFailureCount?: number | string;
+  payloadPressureCount?: number | string;
+  encodeFailureCount?: number | string;
+  sustainedBackpressureMs?: number | string;
+}
+
+export interface PublisherBackpressureConfig {
+  highWaterBytes?: number | string;
+  lowWaterBytes?: number | string;
+  criticalBytes?: number | string;
+  skipThreshold?: number | string;
+  sendFailureThreshold?: number | string;
+  encodeFailureThreshold?: number | string;
+  motionDeltaProfileDownshiftThreshold?: number | string;
+  backpressureWindowMs?: number | string;
+  hardResetAfterMs?: number | string;
+  maxQueueAgeMs?: number | string;
+  maxEncodeMs?: number | string;
+  maxPayloadBytes?: number | string;
+  receiverLagPressureMs?: number | string;
+  subscriberSendPressureMs?: number | string;
+}
+
+export interface PublisherBackpressureDecision {
+  kind: string;
+  reason: string;
+  actions: PublisherBackpressureAction[];
+  stage_telemetry: {
+    buffered_amount: number;
+    queue_age_ms: number;
+    encode_ms: number;
+    payload_bytes: number;
+    receiver_render_latency_ms: number;
+    subscriber_send_latency_ms: number;
+    skip_count: number;
+    send_failure_count: number;
+    source_readback_failure_count: number;
+    payload_pressure_count: number;
+    encode_failure_count: number;
+    sustained_backpressure_ms: number;
+  };
+}
+
+function normalizedNumber(value: unknown, fallback = 0): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : fallback;
 }
 
-function addAction(actions, action) {
+function addAction(actions: PublisherBackpressureAction[], action: PublisherBackpressureAction): void {
   if (!actions.includes(action)) actions.push(action);
 }
 
-export function decidePublisherBackpressureAction(stageTelemetry = {}, config = {}) {
+export function decidePublisherBackpressureAction(
+  stageTelemetry: PublisherBackpressureStageTelemetry = {},
+  config: PublisherBackpressureConfig = {},
+): PublisherBackpressureDecision {
   const reason = String(stageTelemetry.reason || 'publisher_backpressure').trim().toLowerCase();
   const kind = String(stageTelemetry.kind || reason || 'publisher_backpressure').trim().toLowerCase();
   const bufferedAmount = normalizedNumber(stageTelemetry.bufferedAmount);
@@ -61,7 +131,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const maxPayloadBytes = Math.max(0, normalizedNumber(config.maxPayloadBytes));
   const receiverLagPressureMs = Math.max(0, normalizedNumber(config.receiverLagPressureMs));
   const subscriberSendPressureMs = Math.max(0, normalizedNumber(config.subscriberSendPressureMs));
-  const actions = [];
+  const actions: PublisherBackpressureAction[] = [];
 
   const socketHigh = bufferedAmount >= highWaterBytes
     || (skipCount > 0 && bufferedAmount >= lowWaterBytes)

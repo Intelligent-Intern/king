@@ -1,4 +1,5 @@
 import { IIBINDecoder, IIBINEncoder, MessageType } from '../../../../../../packages/iibin/dist/index.js'
+import type { GossipFrameMessage } from './gossipController'
 
 export const GOSSIP_IIBIN_ENVELOPE_CONTRACT = 'king-video-chat-gossipmesh-iibin-media-envelope'
 export const GOSSIP_IIBIN_CODEC_ID = 'iibin'
@@ -11,14 +12,14 @@ export const GOSSIP_NATIVE_TRANSPORT_STACK = Object.freeze([
 
 export interface GossipDataPlaneCodec {
   readonly codecId: typeof GOSSIP_IIBIN_CODEC_ID
-  encode(msg: any): ArrayBuffer
-  decode(data: ArrayBuffer): any
+  encode(msg: GossipFrameMessage): ArrayBuffer
+  decode(data: ArrayBuffer): GossipFrameMessage
 }
 
 export class GossipIibinCodec implements GossipDataPlaneCodec {
   readonly codecId = GOSSIP_IIBIN_CODEC_ID
 
-  encode(msg: any): ArrayBuffer {
+  encode(msg: GossipFrameMessage): ArrayBuffer {
     return new IIBINEncoder().encode({
       type: MessageType.VIDEO_MESSAGE,
       id: String(msg?.frame_id || msg?.frameId || msg?.route_id || ''),
@@ -33,7 +34,7 @@ export class GossipIibinCodec implements GossipDataPlaneCodec {
     })
   }
 
-  decode(data: ArrayBuffer): any {
+  decode(data: ArrayBuffer): GossipFrameMessage {
     const decoded = new IIBINDecoder(data).decode()
     if (decoded?.metadata?.contract !== GOSSIP_IIBIN_ENVELOPE_CONTRACT) {
       throw new Error('gossip_iibin_contract_mismatch')
@@ -41,7 +42,7 @@ export class GossipIibinCodec implements GossipDataPlaneCodec {
     if (decoded?.metadata?.codec_id !== GOSSIP_IIBIN_CODEC_ID) {
       throw new Error('gossip_iibin_codec_mismatch')
     }
-    return decoded.data
+    return decoded.data as GossipFrameMessage
   }
 }
 

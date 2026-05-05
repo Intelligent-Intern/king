@@ -1,4 +1,9 @@
-import type { GossipDataTransport, GossipTelemetryCounters, GossipTransportKind } from './gossipController'
+import type {
+  GossipDataTransport,
+  GossipFrameMessage,
+  GossipTelemetryCounters,
+  GossipTransportKind,
+} from './gossipController'
 import { GOSSIP_IIBIN_CODEC, type GossipDataPlaneCodec } from './iibinCodec'
 
 export interface GossipRtcDataChannelTransportOptions {
@@ -6,7 +11,7 @@ export interface GossipRtcDataChannelTransportOptions {
   label?: string
   maxQueuedMessages?: number
   codec?: GossipDataPlaneCodec
-  onDataMessage: (msg: any, fromPeerId: string) => void
+  onDataMessage: (msg: GossipFrameMessage, fromPeerId: string) => void
   onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
   onTelemetry?: (event: GossipTransportTelemetryEvent) => void
 }
@@ -40,7 +45,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
   private readonly label: string
   private readonly maxQueuedMessages: number
   private readonly codec: GossipDataPlaneCodec
-  private readonly onDataMessage: (msg: any, fromPeerId: string) => void
+  private readonly onDataMessage: (msg: GossipFrameMessage, fromPeerId: string) => void
   private readonly onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
   private readonly onTelemetry?: (event: GossipTransportTelemetryEvent) => void
   private readonly channels: Map<string, NeighborChannel> = new Map()
@@ -77,7 +82,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     return channel
   }
 
-  sendData(targetPeerId: string, msg: any, fromPeerId: string): void {
+  sendData(targetPeerId: string, msg: GossipFrameMessage, fromPeerId: string): void {
     if (fromPeerId !== this.localPeerId) return
     const serialized = this.codec.encode(msg)
     const entry = this.channels.get(targetPeerId)
