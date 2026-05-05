@@ -24,6 +24,7 @@ for (const route of routes) {
   assert.equal(route.meta.requiresAuth, true, `${route.name} must require auth`);
   assert.ok(route.meta.module_key, `${route.name} must carry module key metadata`);
   assert.ok(Array.isArray(route.meta.required_permissions), `${route.name} must carry permission metadata`);
+  assert.ok(Array.isArray(route.meta.i18nNamespaces), `${route.name} must carry i18n namespace metadata`);
   assert.equal(typeof route.component, 'function', `${route.name} must keep its descriptor loader`);
   assert.ok(!String(route.meta.source_path || '').startsWith('domain/calls/'), `${route.name} must not route calls`);
 }
