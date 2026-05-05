@@ -39,6 +39,8 @@ override behavior, and RTL locale metadata.
 After deploy:
 
 - Run `demo/video-chat/scripts/deploy-smoke.sh`.
+  Its admin operations smoke logs out through `/api/auth/logout`, so the
+  temporary smoke session is revoked after the protected checks.
 - Log in as an existing user and confirm the default locale is English.
 - Switch a test user to `de`, reload, and confirm Settings and navigation stay
   localized.
