@@ -1,8 +1,8 @@
 <template>
   <AppModalShell
     :open="open"
-    title="Calendar Settings"
-    aria-label="Appointment calendar settings"
+    :title="t('appointment_settings.title')"
+    :aria-label="t('appointment_settings.dialog_aria')"
     dialog-class="calls-modal-dialog appointment-settings-dialog"
     body-class="calls-modal-body appointment-settings-body"
     footer-class="calls-modal-footer appointment-settings-footer"
@@ -10,16 +10,16 @@
   >
     <template #body>
       <label class="field">
-        <span>Slot size</span>
+        <span>{{ t('appointment_settings.slot_size') }}</span>
         <select v-model.number="draft.slot_minutes" class="input">
           <option v-for="minutes in slotMinuteOptions" :key="minutes" :value="minutes">
-            {{ minutes }} minutes
+            {{ t('appointment_settings.minutes', { minutes }) }}
           </option>
         </select>
       </label>
 
       <label class="field">
-        <span>Invitation calendar text</span>
+        <span>{{ t('appointment_settings.invitation_text') }}</span>
         <textarea
           v-model.trim="draft.invitation_text"
           class="calls-textarea appointment-settings-text"
@@ -30,9 +30,9 @@
     </template>
 
     <template #footer>
-      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">Cancel</button>
+      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn btn-cyan" type="button" :disabled="saving" @click="confirm">
-        {{ saving ? 'Saving...' : 'Save' }}
+        {{ saving ? t('common.saving') : t('common.save') }}
       </button>
     </template>
   </AppModalShell>
@@ -41,6 +41,7 @@
 <script setup>
 import { reactive, watch } from 'vue';
 import AppModalShell from '../../../components/AppModalShell.vue';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
   open: {

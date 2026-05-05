@@ -12,6 +12,11 @@ const excludedRoots = new Set([
   'src/lib/wasm',
   'src/lib/wavelet',
 ]);
+const explicitlyIncludedFiles = new Set([
+  'src/domain/calls/access/GoodbyeView.vue',
+  'src/domain/calls/appointment/AppointmentSettingsModal.vue',
+  'src/domain/calls/components/ListTable.vue',
+]);
 
 function normalizeRelative(filePath) {
   return path.relative(root, filePath).split(path.sep).join('/');
@@ -19,6 +24,7 @@ function normalizeRelative(filePath) {
 
 function isExcluded(filePath) {
   const relativePath = normalizeRelative(filePath);
+  if (explicitlyIncludedFiles.has(relativePath)) return false;
   return [...excludedRoots].some((excludedRoot) => (
     relativePath === excludedRoot || relativePath.startsWith(`${excludedRoot}/`)
   ));
