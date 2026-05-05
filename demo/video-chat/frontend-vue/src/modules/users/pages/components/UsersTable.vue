@@ -60,6 +60,8 @@
 
 <script setup>
 import AppIconButton from '../../../../components/AppIconButton.vue';
+import { sessionState } from '../../../../domain/auth/session';
+import { formatLocalizedDateTimeDisplay } from '../../../../support/dateTimeFormat';
 import { t } from '../../../localization/i18nRuntime.js';
 
 defineProps({
@@ -84,17 +86,11 @@ defineProps({
 defineEmits(['edit-user', 'toggle-user-status', 'delete-user']);
 
 function formatDateTime(value) {
-  const text = typeof value === 'string' ? value.trim() : '';
-  if (text === '') return t('common.not_available');
-  const date = new Date(text);
-  if (Number.isNaN(date.getTime())) return text;
-  return new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
+  return formatLocalizedDateTimeDisplay(value, {
+    locale: sessionState.locale,
+    timeFormat: sessionState.timeFormat,
+    fallback: t('common.not_available'),
+  });
 }
 
 function roleLabel(role) {

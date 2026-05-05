@@ -96,6 +96,8 @@ import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
+import { sessionState } from '../../../domain/auth/session';
+import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../index.js';
@@ -265,12 +267,11 @@ function statusLabel(status) {
 }
 
 function formatDate(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return t('common.not_available');
-  return new Intl.DateTimeFormat('de-DE', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(date);
+  return formatLocalizedDateTimeDisplay(value, {
+    locale: sessionState.locale,
+    timeFormat: sessionState.timeFormat,
+    fallback: t('common.not_available'),
+  });
 }
 </script>
 
