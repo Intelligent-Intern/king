@@ -6,6 +6,7 @@ function normalizeGovernanceRows(payload, resultKey) {
 
 function normalizeGovernanceRow(row) {
   const normalized = {
+    entity_key: String(row?.entity_key || '').trim(),
     id: String(row?.id || '').trim(),
     key: String(row?.key || row?.id || '').trim(),
     name: String(row?.name || row?.key || row?.id || '').trim(),

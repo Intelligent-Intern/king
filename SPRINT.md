@@ -361,8 +361,11 @@ Sprint goal:
    - User Management filters the nested group relation stack to the supported
      permission/module hops so unsupported organization/member/role links are
      not shown from the user editor.
-   - Remaining work: responsive/e2e proof for deeper nested create/select/back
-     flows across desktop and mobile modal layouts.
+   - Playwright now covers the User Management nested relation path on desktop
+     and mobile: create a missing group, select a nested permission, return to
+     the unsaved user draft, and submit the resulting user payload.
+   - Remaining work: broaden responsive/e2e proof to Governance CRUD modal
+     stacks that start outside User Management.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -394,6 +397,9 @@ Sprint goal:
    - Summary cache now hydrates nested relationship summaries into their real
      target entity cache and can collapse multi-entity missing ids into one
      `/api/governance/summaries` request payload.
+   - Governance module/permission catalog rows now carry explicit
+     `entity_key` values so relation payloads keep type information through
+     recursive User Management selections.
    - Remaining work: add batch summary endpoints and included summaries for
      any Administration entities that still do not have backend summary rows.
 
@@ -614,6 +620,9 @@ Sprint goal:
      multi-entity missing summary request collapse.
    - Extended relation-stack contracts for caller-filtered nested relation
      hops, including the User Management group -> modules/permissions limit.
+   - Added Playwright e2e proof for desktop/mobile User Management relation
+     stack create/select/back/submit, and extended catalog/user contracts so
+     nested permission payloads retain `entity_key`.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: batch summary loading and responsive/e2e modal stack
      proof.
@@ -670,6 +679,9 @@ Sprint goal:
       `CallWorkspaceView` chunk warning.
     - Relation-stack and user-editor contracts pass for caller-filtered nested
       relation hops; frontend build remains green with the known chunk warning.
+    - `npm run test:e2e:governance-relations` passes on desktop and mobile;
+      user-editor, relation-stack, and module-governance catalog contracts
+      pass after preserving catalog `entity_key` in nested relation payloads.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
