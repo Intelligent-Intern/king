@@ -9,6 +9,22 @@ export default {
       roles: ['admin'],
       pageTitle: 'Marketplace',
       pageTitle_key: 'navigation.administration.marketplace',
+      actions: [
+        {
+          key: 'marketplace.apps.create',
+          label_key: 'marketplace.add_app',
+          kind: 'create',
+          resource_type: 'marketplace_app',
+          required_permissions: ['marketplace.admin'],
+        },
+        {
+          key: 'marketplace.apps.tour',
+          label_key: 'onboarding.take_the_tour',
+          kind: 'tour',
+          resource_type: 'marketplace_app',
+          required_permissions: ['marketplace.admin'],
+        },
+      ],
       source_path: 'modules/marketplace/pages/AdminMarketplaceView.vue',
       loader: () => import('./pages/AdminMarketplaceView.vue'),
     },

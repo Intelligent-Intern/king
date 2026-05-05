@@ -86,6 +86,35 @@ export function entryRequiredPermissions(entry, modulePermissions = []) {
   return ownPermissions.length > 0 ? ownPermissions : normalizeStringList(modulePermissions);
 }
 
+const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'configure', 'inspect', 'tour', 'custom']);
+
+export function normalizeActionMetadata(action = {}, fallbackPermissions = []) {
+  const key = normalizeString(action.key);
+  if (key === '') return null;
+
+  const rawKind = normalizeString(action.kind).toLowerCase();
+  const kind = ACTION_KINDS.has(rawKind) ? rawKind : 'custom';
+
+  return {
+    key,
+    label: normalizeString(action.label),
+    label_key: normalizeString(action.label_key),
+    icon: normalizeString(action.icon),
+    kind,
+    resource_type: normalizeString(action.resource_type),
+    required_permissions: entryRequiredPermissions(action, fallbackPermissions),
+    readonly_reason_key: normalizeString(action.readonly_reason_key),
+    enabled_when: normalizeString(action.enabled_when),
+  };
+}
+
+export function routeActionMetadata(route = {}, fallbackPermissions = []) {
+  if (!Array.isArray(route.actions)) return [];
+  return route.actions
+    .map((action) => normalizeActionMetadata(action, fallbackPermissions))
+    .filter(Boolean);
+}
+
 export function entryAllowsAccess(entry, contextInput = {}, modulePermissions = []) {
   const context = accessContext(contextInput);
   const moduleKey = normalizeString(entry.module_key);
@@ -101,6 +130,7 @@ export function buildModuleRouteRecords(registry) {
 
   return registry.routes().map((route) => {
     const requiredPermissions = entryRequiredPermissions(route, modulePermissions.get(route.module_key));
+    const actions = routeActionMetadata(route, requiredPermissions);
 
     return {
       path: routeChildPath(route.path),
@@ -119,6 +149,8 @@ export function buildModuleRouteRecords(registry) {
         source_path: route.source_path,
         required_permissions: requiredPermissions,
         i18nNamespaces: normalizeStringList(route.i18n_namespaces),
+        actions,
+        readonly_reason_key: normalizeString(route.readonly_reason_key),
       },
     };
   });

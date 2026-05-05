@@ -47,7 +47,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   moduleAccessContextFromSession({ role: 'admin', tenantPermissions: {} }),
-  { role: 'admin', permissions: [], allPermissions: true },
+  { role: 'admin', locale: '', permissions: [], allPermissions: true },
   'legacy admin sessions without tenant permissions must stay compatible',
 );
 assert.equal(

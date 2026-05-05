@@ -40,6 +40,143 @@ const governanceEntityKeys = {
   compliance: ['governance.entity.compliance_rule', 'governance.entity.compliance_rules'],
 };
 
+const governanceReadonlyReasons = {
+  modules: 'governance.readonly.system_catalog',
+  permissions: 'governance.readonly.system_catalog',
+};
+
+const governanceActions = {
+  users: [
+    {
+      key: 'governance.users.create',
+      label_key: 'users.new_user',
+      kind: 'create',
+      resource_type: 'user',
+      required_permissions: ['users.create'],
+    },
+  ],
+  groups: [
+    {
+      key: 'governance.groups.create',
+      label_key: 'governance.action.create_group',
+      kind: 'create',
+      resource_type: 'group',
+      required_permissions: ['governance.groups.create'],
+    },
+  ],
+  organizations: [
+    {
+      key: 'governance.organizations.create',
+      label_key: 'governance.action.create_organization',
+      kind: 'create',
+      resource_type: 'organization',
+      required_permissions: ['governance.organizations.create'],
+    },
+  ],
+  modules: [
+    {
+      key: 'governance.modules.inspect',
+      label_key: 'governance.action.inspect_catalog',
+      kind: 'inspect',
+      resource_type: 'module',
+      required_permissions: ['governance.read'],
+      readonly_reason_key: 'governance.readonly.system_catalog',
+    },
+  ],
+  permissions: [
+    {
+      key: 'governance.permissions.inspect',
+      label_key: 'governance.action.inspect_catalog',
+      kind: 'inspect',
+      resource_type: 'permission',
+      required_permissions: ['governance.read'],
+      readonly_reason_key: 'governance.readonly.system_catalog',
+    },
+  ],
+  roles: [
+    {
+      key: 'governance.roles.create',
+      label_key: 'governance.action.create_role',
+      kind: 'create',
+      resource_type: 'role',
+      required_permissions: ['governance.roles.create'],
+    },
+  ],
+  grants: [
+    {
+      key: 'governance.grants.create',
+      label_key: 'governance.action.add_grant',
+      kind: 'create',
+      resource_type: 'permission_grant',
+      required_permissions: ['governance.grants.create'],
+    },
+  ],
+  policies: [
+    {
+      key: 'governance.policies.create',
+      label_key: 'governance.action.create_policy',
+      kind: 'create',
+      resource_type: 'policy',
+      required_permissions: ['governance.policies.create'],
+    },
+  ],
+  'audit-log': [
+    {
+      key: 'governance.audit_log.inspect',
+      label_key: 'governance.action.inspect_audit_log',
+      kind: 'inspect',
+      resource_type: 'audit_log',
+      required_permissions: ['governance.audit_log.read'],
+    },
+    {
+      key: 'governance.audit_log.export',
+      label_key: 'governance.action.export_audit_log',
+      kind: 'export',
+      resource_type: 'audit_log',
+      required_permissions: ['governance.audit_log.export'],
+    },
+  ],
+  'data-portability': [
+    {
+      key: 'governance.data_portability.export',
+      label_key: 'governance.action.export_data',
+      kind: 'export',
+      resource_type: 'tenant_export_job',
+      required_permissions: ['governance.data_portability.export'],
+    },
+    {
+      key: 'governance.data_portability.import',
+      label_key: 'governance.action.import_data',
+      kind: 'import',
+      resource_type: 'tenant_import_job',
+      required_permissions: ['governance.data_portability.import'],
+    },
+  ],
+  compliance: [
+    {
+      key: 'governance.compliance.create',
+      label_key: 'governance.action.create_compliance_rule',
+      kind: 'create',
+      resource_type: 'compliance_rule',
+      required_permissions: ['governance.compliance.create'],
+    },
+  ],
+};
+
+function tourAction(slug) {
+  return {
+    key: `governance.${slug}.tour`,
+    label_key: 'onboarding.take_the_tour',
+    kind: 'tour',
+    resource_type: `governance.${slug}`,
+    required_permissions: ['governance.read'],
+  };
+}
+
+function governanceRouteActions(slug) {
+  return [...(governanceActions[slug] || []), tourAction(slug)];
+}
+
 function governanceLoader(sourcePath) {
   if (sourcePath === 'modules/users/pages/admin/UsersView.vue') {
     return () => import('../users/pages/admin/UsersView.vue');
@@ -61,6 +198,8 @@ export default {
     entitySingular_key: governanceEntityKeys[slug]?.[0] || '',
     entityPlural,
     entityPlural_key: governanceEntityKeys[slug]?.[1] || '',
+    readonly_reason_key: governanceReadonlyReasons[slug] || '',
+    actions: governanceRouteActions(slug),
     source_path: sourcePath,
     loader: governanceLoader(sourcePath),
   })),
