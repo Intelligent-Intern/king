@@ -162,7 +162,7 @@ export function formatWeekdayShort(value, options = {}) {
   }
 
   try {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date);
+    return new Intl.DateTimeFormat(normalizeDateTimeLocale(options.locale), { weekday: 'short' }).format(date);
   } catch {
     return fallback;
   }

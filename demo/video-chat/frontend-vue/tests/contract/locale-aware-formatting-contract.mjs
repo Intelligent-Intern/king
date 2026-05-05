@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   formatLocalizedDateTimeDisplay,
+  formatWeekdayShort,
   normalizeDateTimeLocale,
 } from '../../src/support/dateTimeFormat.js';
 import { compareLocalizedStrings } from '../../src/support/localeCollation.js';
@@ -58,6 +59,15 @@ assert.equal(
 );
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
+assert.equal(
+  formatWeekdayShort(sampleIso, { locale: 'de', fallback: '' }),
+  new Intl.DateTimeFormat('de', { weekday: 'short' }).format(sampleDate),
+);
+assert.equal(
+  formatWeekdayShort(sampleIso, { locale: 'ar', fallback: '' }),
+  new Intl.DateTimeFormat('ar', { weekday: 'short' }).format(sampleDate),
+);
+assert.equal(formatWeekdayShort('', { locale: 'de', fallback: 'n/a' }), 'n/a');
 assert.equal(
   formatLocalizedNumberDisplay(1234.5, { locale: 'de', minimumFractionDigits: 1, maximumFractionDigits: 1 }),
   new Intl.NumberFormat('de', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(1234.5),
