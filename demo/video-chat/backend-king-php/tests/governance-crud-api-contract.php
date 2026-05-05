@@ -290,6 +290,55 @@ try {
     );
     $moduleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $regularUserId, 'module', 'governance', 'read');
     videochat_governance_crud_assert((bool) ($moduleGrant['ok'] ?? false), 'group module relation should grant module read access');
+
+    $createRole = $dispatch('POST', '/api/governance/roles', $adminAuth, [
+        'name' => 'Contract Role',
+        'key' => 'contract.role',
+        'status' => 'active',
+        'relationships' => [
+            'permissions' => [
+                ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.groups.create', 'key' => 'governance.groups.create'],
+            ],
+            'modules' => [
+                ['entity_key' => 'modules', 'id' => 'module:governance', 'key' => 'governance'],
+            ],
+        ],
+    ]);
+    $createRolePayload = videochat_governance_crud_decode($createRole);
+    $createdRole = (($createRolePayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createRole['status'] ?? 0) === 201, 'admin should create governance role');
+    videochat_governance_crud_assert(is_array($createdRole), 'created role row missing');
+    videochat_governance_crud_assert(preg_match('/^[0-9a-f-]{36}$/', (string) ($createdRole['id'] ?? '')) === 1, 'created role should expose uuid id');
+    videochat_governance_crud_assert(!array_key_exists('database_id', $createdRole), 'created role must not expose internal database id');
+    videochat_governance_crud_assert(
+        (string) (((($createdRole['relationships'] ?? [])['permissions'] ?? [])[0] ?? [])['key'] ?? '') === 'governance.groups.create',
+        'created role response should include selected permission summary'
+    );
+    videochat_governance_crud_assert(
+        (string) (((($createdRole['relationships'] ?? [])['modules'] ?? [])[0] ?? [])['key'] ?? '') === 'governance',
+        'created role response should include selected module summary'
+    );
+    $createdRoleId = (string) ($createdRole['id'] ?? '');
+    $rolePermissionCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_role_permissions INNER JOIN governance_roles ON governance_roles.id = governance_role_permissions.role_id WHERE governance_roles.public_id = '{$createdRoleId}' AND governance_role_permissions.permission_key = 'governance.groups.create'")->fetchColumn();
+    videochat_governance_crud_assert($rolePermissionCount === 1, 'created role permission should be persisted');
+    $updateRole = $dispatch('PATCH', '/api/governance/roles/' . rawurlencode($createdRoleId), $adminAuth, [
+        'name' => 'Contract Role',
+        'key' => 'contract.role',
+        'status' => 'active',
+        'relationships' => [
+            'permissions' => [],
+            'modules' => [],
+        ],
+    ]);
+    $updateRolePayload = videochat_governance_crud_decode($updateRole);
+    videochat_governance_crud_assert((int) ($updateRole['status'] ?? 0) === 200, 'admin should update governance role');
+    videochat_governance_crud_assert(
+        count((array) (((($updateRolePayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['permissions'] ?? [])) === 0,
+        'updated role should clear permission relation'
+    );
+    $deleteRole = $dispatch('DELETE', '/api/governance/roles/' . rawurlencode($createdRoleId), $adminAuth);
+    videochat_governance_crud_assert((int) ($deleteRole['status'] ?? 0) === 200, 'admin should delete governance role');
+
     $groupPermissionCreateOrganization = $dispatch('POST', '/api/governance/organizations', $userAuth, [
         'name' => 'Group Permission Organization',
     ]);
