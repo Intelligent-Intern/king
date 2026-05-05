@@ -201,8 +201,9 @@ async function seedAuthenticatedAdmin(page, requestLog) {
   });
 }
 
-async function expectModalInsideViewport(page, selector) {
-  const box = await page.locator(selector).boundingBox();
+async function expectModalInsideViewport(page, target) {
+  const locator = typeof target === 'string' ? page.locator(target).filter({ visible: true }).first() : target;
+  const box = await locator.boundingBox();
   expect(box).not.toBeNull();
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
@@ -228,9 +229,9 @@ async function createUserThroughNestedGroupRelation(page, label) {
   await fillRequiredUserFields(userDialog, label);
 
   await userDialog.locator('.users-field').filter({ hasText: /^Groups/ }).locator('button.users-relation-link').click();
-  const relationDialog = page.locator('.crud-relation-dialog');
+  const relationDialog = page.locator('.crud-relation-dialog').filter({ visible: true }).first();
   await expect(relationDialog).toBeVisible();
-  await expectModalInsideViewport(page, '.crud-relation-dialog');
+  await expectModalInsideViewport(page, relationDialog);
   await expect(relationDialog.getByRole('button', { name: /Permissions/ })).toBeVisible();
   await expect(relationDialog.getByRole('button', { name: /Modules/ })).toBeVisible();
   await expect(relationDialog.getByRole('button', { name: /Members/ })).toHaveCount(0);
@@ -252,6 +253,41 @@ async function createUserThroughNestedGroupRelation(page, label) {
 
   await expect(userDialog.locator('button.users-relation-link').filter({ hasText: `Created ${label} Group` })).toBeVisible();
   await userDialog.getByRole('button', { name: 'Create user' }).click();
+}
+
+async function selectCatalogRelation(relationDialog, catalogLabel) {
+  await relationDialog.getByPlaceholder('Search related records').fill(catalogLabel);
+  const catalogRow = relationDialog.locator('tbody tr').filter({ hasText: catalogLabel }).first();
+  await expect(catalogRow).toBeVisible();
+  await catalogRow.locator('input[type="checkbox"]').check();
+  await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
+}
+
+async function createGovernanceGroupThroughNestedRelations(page, label) {
+  await page.goto('/admin/governance/groups');
+  await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
+  await page.getByRole('button', { name: 'Create group' }).click();
+  const crudDialog = page.getByRole('dialog', { name: 'Create Group' });
+  await expect(crudDialog).toBeVisible();
+  await expectModalInsideViewport(page, crudDialog.locator('.governance-modal-dialog'));
+
+  await crudDialog.locator('.governance-field').filter({ hasText: 'Name' }).locator('input').fill(`Governance ${label} Group`);
+  await crudDialog.locator('.governance-field').filter({ hasText: 'Key' }).locator('input').fill(`governance-${label}-group`);
+
+  await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Permissions' }).click();
+  const relationDialog = page.locator('.crud-relation-dialog').filter({ visible: true }).first();
+  await expect(relationDialog).toBeVisible();
+  await expectModalInsideViewport(page, relationDialog);
+  await selectCatalogRelation(relationDialog, 'governance.read');
+  await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Permissions' }).filter({ hasText: '1 selected' })).toBeVisible();
+
+  await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).click();
+  await expect(relationDialog).toBeVisible();
+  await expectModalInsideViewport(page, relationDialog);
+  await selectCatalogRelation(relationDialog, 'governance');
+  await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).filter({ hasText: '1 selected' })).toBeVisible();
+
+  await crudDialog.getByRole('button', { name: 'Create group' }).click();
 }
 
 for (const scenario of [
@@ -281,6 +317,37 @@ for (const scenario of [
           {
             entity_key: 'permissions',
             key: 'governance.read',
+          },
+        ],
+      },
+    });
+  });
+
+  test(`governance groups CRUD relation stack submits nested catalog payload on ${scenario.name}`, async ({ page }) => {
+    const requestLog = [];
+    await page.setViewportSize(scenario.viewport);
+    await seedAuthenticatedAdmin(page, requestLog);
+
+    await createGovernanceGroupThroughNestedRelations(page, scenario.name);
+
+    const groupCreate = requestLog.find((entry) => (
+      entry.type === 'group-create' && entry.body.name === `Governance ${scenario.name} Group`
+    ));
+    expect(groupCreate?.body).toMatchObject({
+      name: `Governance ${scenario.name} Group`,
+      key: `governance-${scenario.name}-group`,
+      status: 'active',
+      relationships: {
+        permissions: [
+          {
+            entity_key: 'permissions',
+            key: 'governance.read',
+          },
+        ],
+        modules: [
+          {
+            entity_key: 'modules',
+            key: 'governance',
           },
         ],
       },

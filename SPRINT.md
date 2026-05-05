@@ -364,8 +364,11 @@ Sprint goal:
    - Playwright now covers the User Management nested relation path on desktop
      and mobile: create a missing group, select a nested permission, return to
      the unsaved user draft, and submit the resulting user payload.
-   - Remaining work: broaden responsive/e2e proof to Governance CRUD modal
-     stacks that start outside User Management.
+   - Playwright now also covers Governance group CRUD modal stacks outside User
+     Management on desktop and mobile, including nested permission/module
+     catalog selection and the persisted nested relationship payload.
+   - Remaining work: broaden recursive proof to deeper back/cancel and paged
+     mass-selection edge cases.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -623,9 +626,12 @@ Sprint goal:
    - Added Playwright e2e proof for desktop/mobile User Management relation
      stack create/select/back/submit, and extended catalog/user contracts so
      nested permission payloads retain `entity_key`.
+   - Extended Playwright e2e proof to Governance group CRUD modal stacks on
+     desktop/mobile, covering nested permission/module catalog selection,
+     visible modal viewport constraints, and submitted relationship payloads.
    - Remaining work depends on the recursive relation picker and backend
-     governance APIs: batch summary loading and responsive/e2e modal stack
-     proof.
+     governance APIs: batch summary loading and deeper back/cancel/pagination
+     edge-case proof.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -682,6 +688,10 @@ Sprint goal:
     - `npm run test:e2e:governance-relations` passes on desktop and mobile;
       user-editor, relation-stack, and module-governance catalog contracts
       pass after preserving catalog `entity_key` in nested relation payloads.
+    - `npm run test:e2e:governance-relations` now covers four desktop/mobile
+      cases across User Management and Governance group CRUD relation stacks;
+      user-editor, relation-stack, module-governance catalog contracts, and
+      `npm run build` pass with the same known `CallWorkspaceView` chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
