@@ -47,6 +47,7 @@ export const LOCALIZATION_FALLBACK_GAP_POLICY = Object.freeze({
     'localization',
     'marketplace',
     'navigation',
+    'onboarding',
     'page',
     'pagination',
     'public',
