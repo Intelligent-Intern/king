@@ -367,8 +367,12 @@ Sprint goal:
      group editor can reopen selected relations without row-by-row lookups.
    - Governance organization responses now include parent-organization and
      user summaries for the same reopen-without-N+1 contract.
+   - Added `/api/governance/summaries` as a permission-checked batch summary
+     endpoint for users, groups, organizations, roles, grants, policies, and
+     data portability jobs; frontend persistence exposes the same one-call
+     batch loader for relation-summary hydration.
    - Remaining work: add batch summary endpoints and included summaries for
-     organizations, grants, policies, and export/import jobs.
+     any Administration entities that still do not have backend summary rows.
 
 6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
    onto tenant-scoped resource/action permissions.

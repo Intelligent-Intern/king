@@ -213,6 +213,21 @@ try {
         'data portability job list should include created export job'
     );
 
+    $summaryBatch = $dispatch('POST', '/api/governance/summaries', $adminAuth, [
+        'requests' => [
+            ['entity_key' => 'organizations', 'ids' => [$createdOrganizationId]],
+            ['entity_key' => 'data-portability', 'ids' => [$createdExportJobId]],
+        ],
+    ]);
+    $summaryBatchPayload = videochat_governance_crud_decode($summaryBatch);
+    $summaryIncluded = (array) (($summaryBatchPayload['result'] ?? [])['included'] ?? []);
+    $organizationSummaries = (array) ($summaryIncluded['organizations'] ?? []);
+    $portabilitySummaries = (array) ($summaryIncluded['data-portability'] ?? []);
+    videochat_governance_crud_assert((int) ($summaryBatch['status'] ?? 0) === 200, 'admin should batch load governance summaries');
+    videochat_governance_crud_assert((string) (($organizationSummaries[0] ?? [])['id'] ?? '') === $createdOrganizationId, 'summary batch should include requested organization');
+    videochat_governance_crud_assert((string) (($portabilitySummaries[0] ?? [])['id'] ?? '') === $createdExportJobId, 'summary batch should include requested portability job');
+    videochat_governance_crud_assert(!array_key_exists('database_id', (array) ($organizationSummaries[0] ?? [])), 'summary rows must not expose internal database ids');
+
     $importCountBeforeValidation = (int) $pdo->query("SELECT COUNT(*) FROM tenant_import_jobs WHERE tenant_id = {$tenantId}")->fetchColumn();
     $invalidImportJob = $dispatch('POST', '/api/governance/data-portability-jobs', $adminAuth, [
         'job_type' => 'import',
