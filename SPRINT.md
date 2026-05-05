@@ -429,8 +429,12 @@ Sprint goal:
      active role permission/module relations into `permission_grants` with
      `source = group_roles`; role update/delete resyncs assigned groups so
      stale role-sourced grants are removed.
-   - Remaining work: assigning Governance roles directly to users and
-     organizations where the domain contract needs direct-role grants.
+   - Organization `relationships.roles` now persists role assignments and
+     expands active role permission/module relations into organization-scoped
+     evaluator grants with `source = organization_roles`; role update/delete
+     resyncs assigned organizations.
+   - Remaining work: assigning Governance roles directly to users where the
+     domain contract needs direct-user grants.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -547,6 +551,9 @@ Sprint goal:
    - Extended Governance CRUD API and descriptors for group role assignment,
      role-sourced evaluator grants, and cleanup when role permissions or roles
      are removed.
+   - Extended Governance CRUD API and descriptors for organization role
+     assignment, organization-sourced evaluator grants, and cleanup when role
+     permissions or roles are removed.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

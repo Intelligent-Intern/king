@@ -391,6 +391,13 @@ SQL
                 return $assignmentSync;
             }
         }
+        if (function_exists('videochat_tenancy_governance_sync_organizations_for_role')) {
+            $assignmentSync = videochat_tenancy_governance_sync_organizations_for_role($pdo, $tenantId, (int) ($role['id'] ?? 0), $actorUserId);
+            if (!(bool) ($assignmentSync['ok'] ?? false)) {
+                $pdo->rollBack();
+                return $assignmentSync;
+            }
+        }
         $pdo->commit();
         return ['ok' => true, 'row' => videochat_tenancy_fetch_governance_role($pdo, $tenantId, (string) ($existing['public_id'] ?? $identifier))];
     } catch (Throwable $error) {
@@ -410,15 +417,29 @@ function videochat_tenancy_delete_governance_role(PDO $pdo, int $tenantId, strin
     $assignedGroupIds = function_exists('videochat_tenancy_governance_group_ids_for_role')
         ? videochat_tenancy_governance_group_ids_for_role($pdo, $tenantId, (int) ($existing['id'] ?? 0))
         : [];
+    $assignedOrganizationIds = function_exists('videochat_tenancy_governance_organization_ids_for_role')
+        ? videochat_tenancy_governance_organization_ids_for_role($pdo, $tenantId, (int) ($existing['id'] ?? 0))
+        : [];
     $pdo->beginTransaction();
     try {
         $deleteAssignments = $pdo->prepare('DELETE FROM governance_group_roles WHERE tenant_id = :tenant_id AND role_id = :role_id');
         $deleteAssignments->execute([':tenant_id' => $tenantId, ':role_id' => (int) ($existing['id'] ?? 0)]);
+        $deleteOrganizationAssignments = $pdo->prepare('DELETE FROM governance_organization_roles WHERE tenant_id = :tenant_id AND role_id = :role_id');
+        $deleteOrganizationAssignments->execute([':tenant_id' => $tenantId, ':role_id' => (int) ($existing['id'] ?? 0)]);
         $delete = $pdo->prepare('DELETE FROM governance_roles WHERE tenant_id = :tenant_id AND id = :id');
         $delete->execute([':tenant_id' => $tenantId, ':id' => (int) ($existing['id'] ?? 0)]);
         if (function_exists('videochat_tenancy_governance_sync_group_role_grants')) {
             foreach ($assignedGroupIds as $groupId) {
                 $sync = videochat_tenancy_governance_sync_group_role_grants($pdo, $tenantId, (int) $groupId, 0);
+                if (!(bool) ($sync['ok'] ?? false)) {
+                    $pdo->rollBack();
+                    return $sync;
+                }
+            }
+        }
+        if (function_exists('videochat_tenancy_governance_sync_organization_role_grants')) {
+            foreach ($assignedOrganizationIds as $organizationId) {
+                $sync = videochat_tenancy_governance_sync_organization_role_grants($pdo, $tenantId, (int) $organizationId, 0);
                 if (!(bool) ($sync['ok'] ?? false)) {
                     $pdo->rollBack();
                     return $sync;
