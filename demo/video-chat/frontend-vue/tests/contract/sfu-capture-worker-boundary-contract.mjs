@@ -20,16 +20,16 @@ function read(relativePath) {
 }
 
 try {
-  const workerSource = read('src/domain/realtime/local/publisherCaptureWorker.js');
-  const workerClientSource = read('src/domain/realtime/local/publisherCaptureWorkerClient.js');
-  const protocolSource = read('src/domain/realtime/local/publisherCaptureWorkerProtocol.js');
+  const workerSource = read('src/domain/realtime/local/publisherCaptureWorker.ts');
+  const workerClientSource = read('src/domain/realtime/local/publisherCaptureWorkerClient.ts');
+  const protocolSource = read('src/domain/realtime/local/publisherCaptureWorkerProtocol.ts');
   const combinedBoundarySource = `${workerSource}\n${workerClientSource}\n${protocolSource}`;
 
   requireContains(protocolSource, 'PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES', 'shared capture worker message protocol');
   requireContains(protocolSource, 'kingrt/publisher-capture-worker/readback', 'readback message type');
   requireContains(protocolSource, 'publisherCaptureWorkerTransferListForInit', 'init transfer list helper');
   requireContains(protocolSource, 'publisherCaptureWorkerTransferListForReadback', 'readback transfer list helper');
-  requireContains(workerClientSource, "new URL('./publisherCaptureWorker.js', import.meta.url)", 'module worker URL factory');
+  requireContains(workerClientSource, "new URL('./publisherCaptureWorker.ts', import.meta.url)", 'module worker URL factory');
   requireContains(workerClientSource, "type: 'module'", 'module worker construction');
   requireContains(workerClientSource, 'canUsePublisherCaptureWorker', 'worker capability gate');
   requireContains(workerSource, 'resolveFramedFrameSizeFromDimensions', 'worker owns aspect-preserving and crop-aware frame sizing');
@@ -47,8 +47,8 @@ try {
   assert.equal(/\bfrom ['"]vue['"]/.test(combinedBoundarySource), false, 'capture worker boundary must not import Vue');
   assert.equal(/CallWorkspace|workspace\/callWorkspace|WorkspaceShell/.test(combinedBoundarySource), false, 'capture worker boundary must not import workspace state');
 
-  const protocolUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerProtocol.js')).href;
-  const clientUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerClient.js')).href;
+  const protocolUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerProtocol.ts')).href;
+  const clientUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerClient.ts')).href;
   const protocol = await import(protocolUrl);
   const client = await import(clientUrl);
 

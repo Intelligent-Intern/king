@@ -7,8 +7,8 @@ import {
   SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
   SFU_WLVC_MOTION_DELTA_STABLE_SAMPLE_COUNT,
   SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
-} from './runtimeConfig.js';
-import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
+} from './runtimeConfig.ts';
+import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
@@ -17,6 +17,7 @@ export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CADENCE_THROTTLE: 'cadence_throttle',
   PROFILE_DOWNSHIFT: 'profile_downshift',
   REQUEST_KEYFRAME: 'request_keyframe',
+  SOCKET_RESTART: 'socket_restart',
 });
 
 function normalizedNumber(value, fallback = 0) {
@@ -105,7 +106,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
-    if (socketCritical || (serverIngressLatencyExceeded && sendFailureCount >= sendFailureThreshold)) {
+    if (socketCritical || serverIngressLatencyExceeded) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
     }
   } else if (kind === 'source_readback_failure') {
@@ -709,10 +710,23 @@ export function createPublisherBackpressureController({
     const restartReason = restartServerIngressLag
       ? 'sfu_ingress_latency_budget_exceeded'
       : 'sfu_send_buffer_stuck';
-    if (
-      decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)
-      || restartServerIngressLag
-    ) {
+    const restartPayload = {
+      reason: restartReason,
+      buffered_amount: normalizedBuffered,
+      send_failure_count: state.wlvcFrameSendFailureCount,
+      sustained_backpressure_ms: sustainedBackpressureMs,
+      queue_age_ms: queueAgeMs,
+      budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+      king_receive_latency_ms: kingReceiveLatencyMs,
+      outgoing_video_quality_profile: currentProfile,
+      media_runtime_path: getMediaRuntimePath(),
+    };
+    if (restartServerIngressLag) {
+      if (restartSfuAfterVideoStall(restartReason, restartPayload)) {
+        resetWlvcFrameSendFailureCounters();
+        return;
+      }
+    } else if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)) {
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -721,15 +735,7 @@ export function createPublisherBackpressureController({
         message: 'Socket restart requested by backpressure controller but blocked; data-lane issues must use keyframe/layer/route recovery.',
         payload: {
           lane: 'data',
-          reason: restartReason,
-          buffered_amount: normalizedBuffered,
-          send_failure_count: state.wlvcFrameSendFailureCount,
-          sustained_backpressure_ms: sustainedBackpressureMs,
-          queue_age_ms: queueAgeMs,
-          budget_max_queue_age_ms: budgetMaxQueueAgeMs,
-          king_receive_latency_ms: kingReceiveLatencyMs,
-          outgoing_video_quality_profile: currentProfile,
-          media_runtime_path: getMediaRuntimePath(),
+          ...restartPayload,
         },
         immediate: true,
       });
@@ -983,7 +989,7 @@ export function createPublisherBackpressureController({
 
     const carrierState = getCarrierState?.();
     const carrierLost = carrierState?.isLost?.() ?? false;
-    const reconnectAllowed = carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
+    const reconnectAllowed = !carrierState || carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
 
     if (!reconnectAllowed) {
       captureClientDiagnostic({

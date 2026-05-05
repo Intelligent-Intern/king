@@ -16,11 +16,11 @@ function assert(condition, message) {
 }
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
-const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.js')
+const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
-const nativeStack = read('src/domain/realtime/workspace/callWorkspace/nativeStack.js')
-const peerFactory = read('src/domain/realtime/native/peerFactory.js')
-const peerLifecycle = read('src/domain/realtime/native/peerLifecycle.js')
+const nativeStack = read('src/domain/realtime/workspace/callWorkspace/nativeStack.ts')
+const peerFactory = read('src/domain/realtime/native/peerFactory.ts')
+const peerLifecycle = read('src/domain/realtime/native/peerLifecycle.ts')
 const packageJson = read('package.json')
 
 assert(

@@ -16,7 +16,7 @@ function assert(condition, message) {
 }
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
-const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.js')
+const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const controller = read('src/lib/gossipmesh/gossipController.ts')
 const transport = read('src/lib/gossipmesh/rtcDataChannelTransport.ts')

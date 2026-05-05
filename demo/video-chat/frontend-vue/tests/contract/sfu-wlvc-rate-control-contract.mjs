@@ -26,12 +26,12 @@ function readRepo(relativePath) {
 }
 
 async function main() {
-  const workspaceConfig = readFrontend('src/domain/realtime/workspace/config.js');
-  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
-  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const workspaceConfig = readFrontend('src/domain/realtime/workspace/config.ts');
+  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.ts');
+  const sfuTransport = readFrontend('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = readFrontend('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
   const sfuClient = readFrontend('src/lib/sfu/sfuClient.ts');
   const outboundFrameBudget = readFrontend('src/lib/sfu/outboundFrameBudget.ts');
   const framePayload = readFrontend('src/lib/sfu/framePayload.ts');
@@ -71,7 +71,7 @@ async function main() {
   });
 
   try {
-    const { SFU_VIDEO_QUALITY_PROFILE_BUDGETS } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
+    const { SFU_VIDEO_QUALITY_PROFILE_BUDGETS } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
     for (const [profileId, budget] of Object.entries(SFU_VIDEO_QUALITY_PROFILE_BUDGETS)) {
       assert.ok(budget.payloadSoftLimitRatio >= 0.5, `${profileId} soft payload ratio must be enforceable`);
       assert.ok(budget.payloadSoftLimitRatio < 1, `${profileId} soft payload ratio must trip before hard cap`);

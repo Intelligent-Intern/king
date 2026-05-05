@@ -20,11 +20,11 @@ function read(relativePath) {
 }
 
 try {
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
 
   requireContains(publisherPipeline, 'planSelectiveTilePatch(imageData, previousFullFrameImageData', 'publisher attempts selective tile patch before full-frame fallback');
   requireContains(publisherPipeline, 'planBackgroundSnapshotPatch(imageData, previousFullFrameImageData', 'publisher attempts background snapshot patch before repeated full-frame bursts');

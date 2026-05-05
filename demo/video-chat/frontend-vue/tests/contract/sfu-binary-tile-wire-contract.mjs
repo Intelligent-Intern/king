@@ -42,7 +42,7 @@ try {
 
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   requireContains(publisherPipeline, "runtimeId: 'wlvc_sfu'", 'publisher sends explicit runtime id');
   requireContains(publisherPipeline, 'codecId: currentSfuCodecId', 'publisher sends explicit codec id');
   requireContains(sfuMessageHandler, 'normalizeTilePatchMetadata(tileMetadataInput)', 'inbound frame path uses centralized tile metadata normalization');

@@ -26,10 +26,10 @@ function readRepo(relativePath) {
 }
 
 async function main() {
-  const workspaceConfig = readFrontend('src/domain/realtime/workspace/config.js');
-  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.js');
-  const sourceReadback = readFrontend('src/domain/realtime/local/publisherSourceReadback.js');
-  const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const workspaceConfig = readFrontend('src/domain/realtime/workspace/config.ts');
+  const publisherPipeline = readFrontend('src/domain/realtime/local/publisherPipeline.ts');
+  const sourceReadback = readFrontend('src/domain/realtime/local/publisherSourceReadback.ts');
+  const runtimeSwitching = readFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
   const framePayload = readFrontend('src/lib/sfu/framePayload.ts');
   const backendStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -56,7 +56,7 @@ async function main() {
   });
 
   try {
-    const { SFU_VIDEO_QUALITY_PROFILE_BUDGETS } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
+    const { SFU_VIDEO_QUALITY_PROFILE_BUDGETS } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
     for (const [profileId, budget] of Object.entries(SFU_VIDEO_QUALITY_PROFILE_BUDGETS)) {
       assert.ok(budget.maxDrawImageMs > 0, `${profileId} draw budget must be positive`);
       assert.ok(budget.maxReadbackMs > 0, `${profileId} readback budget must be positive`);

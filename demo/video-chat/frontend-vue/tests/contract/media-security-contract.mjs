@@ -7,7 +7,7 @@ import {
   createMediaSecuritySession,
   MEDIA_SECURITY_SIGNAL_TYPES,
   mediaSecurityInternalsForTests,
-} from '../../src/domain/realtime/media/security.js';
+} from '../../src/domain/realtime/media/security.ts';
 
 function fail(message) {
   throw new Error(`[media-security-frontend-contract] FAIL: ${message}`);
@@ -402,16 +402,16 @@ try {
     'receiver must reject protected frames when codec identity mismatches the transport envelope',
   );
 
-  const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.js');
-  const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.js');
-  const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.js');
-  const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.js');
-  const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const mediaSecurityParticipantSetSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityParticipantSet.js');
-  const securitySource = read('../../src/domain/realtime/media/security.js');
-  const securityCoreSource = read('../../src/domain/realtime/media/securityCore.js');
+  const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.ts');
+  const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.ts');
+  const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.ts');
+  const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.ts');
+  const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const mediaSecurityParticipantSetSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityParticipantSet.ts');
+  const securitySource = read('../../src/domain/realtime/media/security.ts');
+  const securityCoreSource = read('../../src/domain/realtime/media/securityCore.ts');
   assert.match(mediaSecurityRuntimeSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'media-security runtime must expose a scheduled participant sync helper');
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'media-security runtime must resync after session context resets');
   assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');

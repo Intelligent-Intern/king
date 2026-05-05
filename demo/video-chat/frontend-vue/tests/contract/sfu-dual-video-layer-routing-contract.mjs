@@ -26,14 +26,14 @@ function readRepo(relativePath) {
 
 try {
   const packageJson = read('package.json');
-  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
   const sfuClientTransportSample = read('src/lib/sfu/sfuClientTransportSample.ts');
-  const remoteJitterBuffer = read('src/domain/realtime/sfu/remoteJitterBuffer.js');
-  const remoteRenderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const remoteJitterBuffer = read('src/domain/realtime/sfu/remoteJitterBuffer.ts');
+  const remoteRenderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
   const sfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   const sfuSubscriberBudget = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 

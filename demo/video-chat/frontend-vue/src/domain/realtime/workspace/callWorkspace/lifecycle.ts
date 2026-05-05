@@ -1,4 +1,4 @@
-import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.js';
+import { createSfuBackgroundTabPolicy } from './backgroundTabPolicy.ts';
 
 export function registerCallWorkspaceLifecycleHelpers({
   vue,

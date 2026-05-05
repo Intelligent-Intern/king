@@ -1,4 +1,4 @@
-import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.js';
+import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.ts';
 
 export function canUsePublisherCaptureWorker(capabilities = {}) {
   return Boolean(
@@ -21,7 +21,7 @@ export function preferredCaptureWorkerBackend(capabilities = {}) {
 
 export function createPublisherCaptureWorker({
   WorkerCtor = typeof Worker !== 'undefined' ? Worker : null,
-  workerUrl = new URL('./publisherCaptureWorker.js', import.meta.url),
+  workerUrl = new URL('./publisherCaptureWorker.ts', import.meta.url),
   name = 'kingrt-publisher-capture-worker',
 } = {}) {
   if (typeof WorkerCtor !== 'function') {
