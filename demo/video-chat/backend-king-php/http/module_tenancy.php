@@ -10,6 +10,7 @@ require_once __DIR__ . '/../domain/tenancy/governance_policies.php';
 require_once __DIR__ . '/../domain/tenancy/governance_portability_jobs.php';
 require_once __DIR__ . '/../domain/tenancy/governance_roles.php';
 require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
+require_once __DIR__ . '/../domain/tenancy/governance_summaries.php';
 require_once __DIR__ . '/../domain/tenancy/tenant_portability.php';
 require_once __DIR__ . '/../support/auth_request.php';
 
@@ -157,6 +158,18 @@ function videochat_handle_governance_crud_routes(
             $apiAuthContext,
             $jsonResponse,
             $errorResponse,
+            $openDatabase
+        );
+    }
+
+    if ($path === '/api/governance/summaries') {
+        return videochat_handle_governance_summary_routes(
+            $method,
+            $request,
+            $apiAuthContext,
+            $jsonResponse,
+            $errorResponse,
+            $decodeJsonBody,
             $openDatabase
         );
     }

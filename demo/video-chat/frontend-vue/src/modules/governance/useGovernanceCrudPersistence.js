@@ -80,6 +80,10 @@ export function createGovernanceCrudPersistence({ router } = {}) {
     return governanceCrudRowsFromPayload(payload, 'users');
   }
 
+  async function fetchSummaryBatch(request) {
+    return apiRequest('/api/governance/summaries', { method: 'POST', body: request });
+  }
+
   async function createRow(descriptor, body) {
     const payload = await apiRequest(descriptorEndpoint(descriptor), { method: 'POST', body });
     return governanceCrudRowFromPayload(payload);
@@ -99,6 +103,7 @@ export function createGovernanceCrudPersistence({ router } = {}) {
   return {
     listRows,
     listUserSummaries,
+    fetchSummaryBatch,
     createRow,
     updateRow,
     deleteRow,

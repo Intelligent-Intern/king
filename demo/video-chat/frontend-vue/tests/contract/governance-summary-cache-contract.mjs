@@ -53,4 +53,8 @@ assert.match(viewSource, /createEntitySummaryCache/, 'governance CRUD view must 
 assert.match(viewSource, /entitySummaryCache\.upsertRows/, 'governance CRUD view must hydrate summaries in batches');
 assert.doesNotMatch(viewSource, /v-for="row in pagedRows"[\s\S]{0,800}fetch\(/, 'row rendering must not fetch relation summaries per row');
 
+const persistenceSource = await source('src/modules/governance/useGovernanceCrudPersistence.js');
+assert.match(persistenceSource, /fetchSummaryBatch/, 'governance persistence must expose a batch summary loader');
+assert.match(persistenceSource, /\/api\/governance\/summaries/, 'batch summaries must use the governance summaries endpoint');
+
 console.log('[governance-summary-cache-contract] PASS');
