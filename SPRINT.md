@@ -625,7 +625,7 @@ Non-goals for this sprint:
     - [x] Tests fail if a configured RTL locale does not set RTL.
     - [x] Tests fail if required email placeholders are missing.
 
-12. [ ] `[localization-browser-smoke]` Add browser proof.
+12. [x] `[localization-browser-smoke]` Add browser proof.
 
     Scope:
     - Desktop, tablet, mobile.
@@ -653,6 +653,9 @@ Non-goals for this sprint:
     - [x] Missing translation diagnostics no longer mutate reactive render
       state, so incomplete locale bundles do not trigger Vue recursive update
       loops while still preserving missing-key counters for tests/dev.
+    - [x] Live call workspace shell smoke now runs in RTL with fake
+      WebSocket/media devices across desktop and mobile without requiring real
+      camera permission.
 
     Done when:
     - [x] Screenshots show no overlapping text in representative LTR and RTL
@@ -661,7 +664,7 @@ Non-goals for this sprint:
     - [x] Settings switch persists after reload.
     - [x] Public booking and join pages render localized text.
     - [x] Smoke can run in CI/local without external translation services.
-    - [ ] Live call workspace UI shell smoke runs without requiring real camera
+    - [x] Live call workspace UI shell smoke runs without requiring real camera
       permission.
 
 13. [ ] `[deploy-and-rollout-proof]` Deploy localization safely.
