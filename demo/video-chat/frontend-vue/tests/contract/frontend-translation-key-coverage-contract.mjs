@@ -14,6 +14,7 @@ const excludedRoots = new Set([
 ]);
 const explicitlyIncludedFiles = new Set([
   'src/domain/calls/access/GoodbyeView.vue',
+  'src/domain/calls/access/JoinView.vue',
   'src/domain/calls/appointment/AppointmentConfigPanel.vue',
   'src/domain/calls/appointment/AppointmentSettingsModal.vue',
   'src/domain/calls/appointment/AppointmentSlotRowsForm.vue',
