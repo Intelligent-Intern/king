@@ -425,6 +425,9 @@ Non-goals for this sprint:
    - [x] Translation-key coverage contract now rejects static English
      template text and static label/placeholder/title attributes in the
      localized non-call Vue surfaces.
+   - [x] Workspace shell non-call chrome strings and page titles now use
+     localization keys, including settings/logout/sidebar actions and
+     descriptor `pageTitle_key` metadata for module routes.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
