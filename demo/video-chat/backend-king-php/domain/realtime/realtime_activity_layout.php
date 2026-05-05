@@ -73,10 +73,18 @@ CREATE TABLE IF NOT EXISTS call_participant_activity (
     source TEXT NOT NULL DEFAULT 'client_observed',
     updated_at_ms INTEGER NOT NULL,
     updated_at TEXT NOT NULL,
+    sample_history_json TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (call_id, user_id)
 )
 SQL
     );
+    try {
+        $pdo->exec("ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'");
+    } catch (Throwable $error) {
+        if (!str_contains(strtolower($error->getMessage()), 'duplicate column name')) {
+            throw $error;
+        }
+    }
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_call_participant_activity_room_score ON call_participant_activity(room_id, updated_at_ms)');
 }
 
@@ -220,18 +228,90 @@ function videochat_activity_decay_score(float $rawScore, int $updatedAtMs, int $
     return round($rawScore * (1.0 - ($ageMs / $windowMs)), 3);
 }
 
+function videochat_activity_decode_sample_history(mixed $value): array
+{
+    $decoded = is_string($value) && $value !== '' ? json_decode($value, true) : [];
+    if (!is_array($decoded)) {
+        return [];
+    }
+
+    $samples = [];
+    foreach ($decoded as $sample) {
+        if (!is_array($sample)) {
+            continue;
+        }
+        $updatedAtMs = (int) ($sample['updated_at_ms'] ?? 0);
+        if ($updatedAtMs <= 0) {
+            continue;
+        }
+        $samples[] = [
+            'raw_score' => videochat_activity_clamp_float($sample['raw_score'] ?? 0, 0.0, 100.0),
+            'updated_at_ms' => $updatedAtMs,
+        ];
+    }
+    usort($samples, static fn (array $left, array $right): int => ((int) $left['updated_at_ms']) <=> ((int) $right['updated_at_ms']));
+    return $samples;
+}
+
+function videochat_activity_append_sample_history(mixed $historyJson, float $rawScore, int $updatedAtMs): string
+{
+    $samples = videochat_activity_decode_sample_history($historyJson);
+    $cutoffMs = $updatedAtMs - 15000;
+    $samples = array_values(array_filter(
+        $samples,
+        static fn (array $sample): bool => (int) ($sample['updated_at_ms'] ?? 0) >= $cutoffMs
+    ));
+    $samples[] = [
+        'raw_score' => round(videochat_activity_clamp_float($rawScore, 0.0, 100.0), 3),
+        'updated_at_ms' => $updatedAtMs,
+    ];
+    if (count($samples) > 64) {
+        $samples = array_slice($samples, -64);
+    }
+    return json_encode($samples, JSON_UNESCAPED_SLASHES) ?: '[]';
+}
+
+function videochat_activity_topk_rolling_score(array $samples, int $windowMs, int $nowMs, float $fallbackScore, int $fallbackUpdatedAtMs): float
+{
+    $decayed = [];
+    foreach ($samples as $sample) {
+        $updatedAtMs = (int) ($sample['updated_at_ms'] ?? 0);
+        $rawScore = videochat_activity_clamp_float($sample['raw_score'] ?? 0, 0.0, 100.0);
+        $score = videochat_activity_decay_score($rawScore, $updatedAtMs, $windowMs, $nowMs);
+        if ($score > 0.0) {
+            $decayed[] = $score;
+        }
+    }
+    if ($decayed === []) {
+        return videochat_activity_decay_score($fallbackScore, $fallbackUpdatedAtMs, $windowMs, $nowMs);
+    }
+    rsort($decayed, SORT_NUMERIC);
+    $top = array_slice($decayed, 0, 3);
+    return round(array_sum($top) / 3, 3);
+}
+
 function videochat_activity_row_payload(array $row, ?int $nowUnixMs = null): array
 {
     $nowMs = videochat_activity_now_ms($nowUnixMs);
     $updatedAtMs = (int) ($row['updated_at_ms'] ?? 0);
     $rawScore = videochat_activity_clamp_float($row['raw_score'] ?? 0, 0.0, 100.0);
+    $samples = videochat_activity_decode_sample_history($row['sample_history_json'] ?? '[]');
+    if ($samples === [] && $updatedAtMs > 0) {
+        $samples[] = ['raw_score' => $rawScore, 'updated_at_ms' => $updatedAtMs];
+    }
+    $score2s = videochat_activity_topk_rolling_score($samples, 2000, $nowMs, $rawScore, $updatedAtMs);
+    $score5s = videochat_activity_topk_rolling_score($samples, 5000, $nowMs, $rawScore, $updatedAtMs);
+    $score15s = videochat_activity_topk_rolling_score($samples, 15000, $nowMs, $rawScore, $updatedAtMs);
 
     return [
         'user_id' => (int) ($row['user_id'] ?? 0),
         'score' => round($rawScore, 3),
-        'score_2s' => videochat_activity_decay_score($rawScore, $updatedAtMs, 2000, $nowMs),
-        'score_5s' => videochat_activity_decay_score($rawScore, $updatedAtMs, 5000, $nowMs),
-        'score_15s' => videochat_activity_decay_score($rawScore, $updatedAtMs, 15000, $nowMs),
+        'score_2s' => $score2s,
+        'score_5s' => $score5s,
+        'score_15s' => $score15s,
+        'topk_score_2s' => $score2s,
+        'topk_score_5s' => $score5s,
+        'topk_score_15s' => $score15s,
         'audio_level' => videochat_activity_clamp_float($row['audio_level'] ?? 0, 0.0, 1.0),
         'motion_score' => videochat_activity_clamp_float($row['motion_score'] ?? 0, 0.0, 1.0),
         'gesture_score' => videochat_activity_clamp_float($row['gesture_score'] ?? 0, 0.0, 1.0),
@@ -272,10 +352,11 @@ function videochat_activity_apply_command(PDO $pdo, array $presenceState, array 
     $nowMs = videochat_activity_now_ms($nowUnixMs);
     $score = videochat_activity_score_from_command($command);
     $updatedAt = gmdate('c', (int) floor($nowMs / 1000));
+    $sampleHistoryJson = '[]';
     $upsert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO call_participant_activity(call_id, room_id, user_id, raw_score, audio_level, motion_score, gesture_score, is_speaking, source, updated_at_ms, updated_at)
-VALUES(:call_id, :room_id, :user_id, :raw_score, :audio_level, :motion_score, :gesture_score, :is_speaking, :source, :updated_at_ms, :updated_at)
+INSERT INTO call_participant_activity(call_id, room_id, user_id, raw_score, audio_level, motion_score, gesture_score, is_speaking, source, updated_at_ms, updated_at, sample_history_json)
+VALUES(:call_id, :room_id, :user_id, :raw_score, :audio_level, :motion_score, :gesture_score, :is_speaking, :source, :updated_at_ms, :updated_at, :sample_history_json)
 ON CONFLICT(call_id, user_id) DO UPDATE SET
     room_id = excluded.room_id,
     raw_score = excluded.raw_score,
@@ -285,7 +366,8 @@ ON CONFLICT(call_id, user_id) DO UPDATE SET
     is_speaking = excluded.is_speaking,
     source = excluded.source,
     updated_at_ms = excluded.updated_at_ms,
-    updated_at = excluded.updated_at
+    updated_at = excluded.updated_at,
+    sample_history_json = excluded.sample_history_json
 SQL
     );
     $params = [
@@ -300,6 +382,7 @@ SQL
         ':source' => $score['source'],
         ':updated_at_ms' => $nowMs,
         ':updated_at' => $updatedAt,
+        ':sample_history_json' => $sampleHistoryJson,
     ];
 
     $payload = videochat_activity_row_payload([
@@ -308,6 +391,7 @@ SQL
         'is_speaking' => $score['is_speaking'] ? 1 : 0,
         'updated_at_ms' => $nowMs,
         'updated_at' => $updatedAt,
+        'sample_history_json' => videochat_activity_append_sample_history('[]', (float) $score['raw_score'], $nowMs),
     ], $nowMs);
     $event = [
         'type' => 'participant/activity',
@@ -319,7 +403,7 @@ SQL
     ];
     try {
         videochat_activity_layout_bootstrap($pdo);
-        $existing = $pdo->prepare('SELECT raw_score, updated_at_ms FROM call_participant_activity WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
+        $existing = $pdo->prepare('SELECT raw_score, updated_at_ms, sample_history_json FROM call_participant_activity WHERE call_id = :call_id AND user_id = :user_id LIMIT 1');
         $existing->execute([':call_id' => $callId, ':user_id' => $userId]);
         $previous = $existing->fetch(PDO::FETCH_ASSOC);
         if (is_array($previous)) {
@@ -328,9 +412,21 @@ SQL
             if ($ageMs >= 0 && $ageMs < 250 && (float) $score['raw_score'] <= ($previousScore + 12.0)) {
                 return ['ok' => true, 'error' => '', 'event' => null, 'emitted' => false, 'coalesced' => true];
             }
+            $sampleHistoryJson = videochat_activity_append_sample_history((string) ($previous['sample_history_json'] ?? '[]'), (float) $score['raw_score'], $nowMs);
+        } else {
+            $sampleHistoryJson = videochat_activity_append_sample_history('[]', (float) $score['raw_score'], $nowMs);
         }
+        $params[':sample_history_json'] = $sampleHistoryJson;
 
         $upsert->execute($params);
+        $event['activity'] = videochat_activity_row_payload([
+            'user_id' => $userId,
+            ...$score,
+            'is_speaking' => $score['is_speaking'] ? 1 : 0,
+            'updated_at_ms' => $nowMs,
+            'updated_at' => $updatedAt,
+            'sample_history_json' => $sampleHistoryJson,
+        ], $nowMs);
     } catch (Throwable $error) {
         if (!videochat_activity_is_transient_database_lock($error)) {
             throw $error;
@@ -556,7 +652,7 @@ function videochat_activity_select_layout(array $participants, array $activityRo
     foreach ($activityRows as $row) {
         $userId = (int) ($row['user_id'] ?? 0);
         if ($userId > 0) {
-            $activityByUserId[$userId] = (float) ($row['score_2s'] ?? $row['score'] ?? 0);
+            $activityByUserId[$userId] = (float) ($row['topk_score_2s'] ?? $row['score_2s'] ?? $row['score'] ?? 0);
         }
     }
 

@@ -45,8 +45,9 @@ try {
   requireContains(runtimeConfig, "'call/media-quality-pressure'", 'targeted remote quality-pressure signaling type');
 
   requireContains(runtimeHealth, "setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);", 'remote recovery status update');
-  requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);", 'frozen video resubscribe retry');
-  requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);", 'fresh receive/keyframe-wait resubscribe retry');
+  requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_frozen', nowMs", 'frozen video targets publisher recovery ladder before reconnect');
+  requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs", 'fresh receive/keyframe-wait targets publisher recovery ladder before reconnect');
+  requireContains(runtimeHealth, 'resubscribe: (targetPublisherId, recoveryReason, recoveryNowMs) => retrySfuSubscription(', 'publisher recovery ladder starts with resubscribe retry');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');

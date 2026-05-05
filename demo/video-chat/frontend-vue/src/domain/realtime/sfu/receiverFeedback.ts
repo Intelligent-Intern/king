@@ -5,6 +5,7 @@ import {
   shouldSendSfuLayerPreference,
   visibleParticipantCountForPeer,
 } from './adaptiveQualityLayers';
+import { coordinateSfuKeyframeRecoveryRequest } from './keyframeRecoveryCoordinator.ts';
 
 const RECEIVER_FEEDBACK_MIN_INTERVAL_MS = 4000;
 const RECEIVER_RENDER_LAG_PRESSURE_MS = 900;
@@ -84,6 +85,26 @@ export function createSfuReceiverFeedback({
 
   function maybeSendReceiverKeyframeFeedback(peer, publisherId, frame, reason, extraPayload = {}) {
     const nowMs = Date.now();
+    const coordinated = coordinateSfuKeyframeRecoveryRequest(peer, {
+      publisherId,
+      publisherUserId: frame?.publisherUserId || peer?.userId || 0,
+      reason,
+      trackId: frame?.trackId,
+    }, nowMs);
+    if (!coordinated.emit) {
+      return maybeSendReceiverFeedback(peer, publisherId, 'sfu_receiver_keyframe_request_coalesced', nowMs, {
+        publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0),
+        frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
+        original_reason: String(reason || 'sfu_receiver_keyframe_required'),
+        requested_action: 'coalesce_full_keyframe',
+        request_full_keyframe: false,
+        keyframe_recovery_owner: 'sfu_per_publisher_keyframe_coordinator',
+        keyframe_recovery_request_key: coordinated.requestKey,
+        keyframe_recovery_request_until_ms: coordinated.requestUntilMs,
+        keyframe_recovery_coalesce_window_ms: coordinated.coalesceWindowMs,
+        ...extraPayload,
+      });
+    }
     return maybeSendReceiverFeedback(peer, publisherId, String(reason || 'sfu_receiver_keyframe_required'), nowMs, {
       publisher_user_id: normalizePositiveNumber(frame?.publisherUserId || 0),
       frame_sequence: normalizePositiveNumber(frame?.frameSequence || 0),
@@ -91,6 +112,10 @@ export function createSfuReceiverFeedback({
       requested_action: 'force_full_keyframe',
       request_full_keyframe: true,
       requested_video_layer: 'primary',
+      keyframe_recovery_owner: 'sfu_per_publisher_keyframe_coordinator',
+      keyframe_recovery_request_key: coordinated.requestKey,
+      keyframe_recovery_request_until_ms: coordinated.requestUntilMs,
+      keyframe_recovery_coalesce_window_ms: coordinated.coalesceWindowMs,
       ...extraPayload,
     });
   }

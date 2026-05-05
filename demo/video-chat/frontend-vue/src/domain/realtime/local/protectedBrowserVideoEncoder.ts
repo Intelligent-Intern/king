@@ -49,6 +49,26 @@ function normalizedFrameKind(value) {
   return String(value || '').trim().toLowerCase() === 'key' ? 'keyframe' : 'delta';
 }
 
+function browserEncoderLifecycleCloseError(error) {
+  const name = String(error?.name || '').trim().toLowerCase();
+  const message = String(error?.message || error || '').trim().toLowerCase();
+  return (
+    (name === 'aborterror' && message.includes('close'))
+    || message.includes('aborted due to close')
+    || message.includes("cannot call 'encode' on a closed codec")
+    || message.includes('cannot call encode on a closed codec')
+    || message.includes('closed codec')
+  );
+}
+
+function normalizeProtectedBrowserVideoEncoderCloseReason(reason) {
+  const normalized = String(reason || '').trim().toLowerCase();
+  if (normalized.includes('profile')) return 'protected_browser_video_profile_switch_close';
+  if (normalized.includes('reconnect') || normalized.includes('transport')) return 'protected_browser_video_transport_reconnect_close';
+  if (normalized.includes('background') || normalized.includes('pause')) return 'protected_browser_video_background_pause_close';
+  return normalized || 'protected_browser_video_encoder_closed';
+}
+
 function copyEncodedChunkToArrayBuffer(chunk) {
   const byteLength = positiveInteger(chunk?.byteLength, 0);
   if (byteLength <= 0 || typeof chunk?.copyTo !== 'function') return null;
@@ -240,6 +260,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   let thumbnailConfig = null;
   let encoder = null;
   let thumbnailEncoder = null;
+  let activeEncoderGeneration = 0;
+  let activeEncoderCloseReason = '';
   let activeEncoderConfigKey = '';
   let thumbnailCadence = 1;
   let encoderEnabledDiagnosticSent = false;
@@ -267,8 +289,15 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     });
   };
 
-  const createPrimaryEncoder = () => new VideoEncoderCtor({
+  const isCurrentEncoderGeneration = (generation) => (
+    !closed
+      && generation === activeEncoderGeneration
+      && encoder
+      && thumbnailEncoder
+  );
+  const createPrimaryEncoder = (encoderGeneration) => new VideoEncoderCtor({
     output(chunk) {
+      if (encoderGeneration !== activeEncoderGeneration) return;
       const data = copyEncodedChunkToArrayBuffer(chunk);
       if (!data) return;
       encodedChunks.push({
@@ -278,6 +307,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       });
     },
     error(error) {
+      if (encoderGeneration !== activeEncoderGeneration) return;
       encoderError = error;
       captureClientDiagnosticError('sfu_browser_encoder_error', error, {
         codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
@@ -289,8 +319,9 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     },
   });
 
-  const createThumbnailEncoder = () => new VideoEncoderCtor({
+  const createThumbnailEncoder = (encoderGeneration) => new VideoEncoderCtor({
     output(chunk) {
+      if (encoderGeneration !== activeEncoderGeneration) return;
       const data = copyEncodedChunkToArrayBuffer(chunk);
       if (!data) return;
       thumbnailEncodedChunks.push({
@@ -300,6 +331,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       });
     },
     error(error) {
+      if (encoderGeneration !== activeEncoderGeneration) return;
       thumbnailEncoderError = error;
       disableThumbnailEncoder('sfu_browser_thumbnail_encoder_error', error);
     },
@@ -348,6 +380,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     }
     const nextPrimaryConfig = await resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedPrimaryConfig);
     const nextThumbnailConfig = await resolveSupportedBrowserEncoderConfig(VideoEncoderCtor, requestedThumbnailConfig);
+    if (closed) return null;
     if (!nextPrimaryConfig || !nextThumbnailConfig) {
       captureUnsupportedBrowserEncoderConfig({
         requestedPrimaryConfig,
@@ -365,11 +398,20 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       String(frameSize.framingMode || ''),
     ].join('|');
     if (encoder && thumbnailEncoder && activeEncoderConfigKey === nextConfigKey) {
-      return { config, thumbnailConfig, frameSize, changed: false };
+      return {
+        config,
+        thumbnailConfig,
+        frameSize,
+        changed: false,
+        encoder,
+        thumbnailEncoder,
+        encoderGeneration: activeEncoderGeneration,
+      };
     }
 
-    const nextEncoder = createPrimaryEncoder();
-    const nextThumbnailEncoder = createThumbnailEncoder();
+    const nextEncoderGeneration = activeEncoderGeneration + 1;
+    const nextEncoder = createPrimaryEncoder(nextEncoderGeneration);
+    const nextThumbnailEncoder = createThumbnailEncoder(nextEncoderGeneration);
     try {
       nextEncoder.configure(nextPrimaryConfig);
       nextThumbnailEncoder.configure(nextThumbnailConfig);
@@ -388,8 +430,10 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       throw error;
     }
 
-    closeBrowserEncoder(encoder);
-    closeBrowserEncoder(thumbnailEncoder);
+    const previousEncoder = encoder;
+    const previousThumbnailEncoder = thumbnailEncoder;
+    activeEncoderGeneration = nextEncoderGeneration;
+    activeEncoderCloseReason = 'protected_browser_video_profile_switch_close';
     encoder = nextEncoder;
     thumbnailEncoder = nextThumbnailEncoder;
     config = nextPrimaryConfig;
@@ -405,6 +449,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     thumbnailEncodedChunks.length = 0;
     thumbnailFrameCount = 0;
     forceNextSecurityKeyframe = true;
+    closeBrowserEncoder(previousEncoder);
+    closeBrowserEncoder(previousThumbnailEncoder);
 
     mediaDebugLog(
       '[SFU] Protected browser encoder configured',
@@ -442,10 +488,20 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       },
     });
     encoderEnabledDiagnosticSent = true;
-    return { config, thumbnailConfig, frameSize, changed: true };
+    return {
+      config,
+      thumbnailConfig,
+      frameSize,
+      changed: true,
+      encoder,
+      thumbnailEncoder,
+      encoderGeneration: activeEncoderGeneration,
+    };
   };
 
   const close = async (reason = 'protected_browser_video_encoder_closed') => {
+    activeEncoderCloseReason = normalizeProtectedBrowserVideoEncoderCloseReason(reason);
+    activeEncoderGeneration += 1;
     closed = true;
     if (refs.encodeIntervalRef.value) {
       clearTimeout(refs.encodeIntervalRef.value);
@@ -456,8 +512,16 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     } catch {
       // source reader shutdown is best-effort during publisher teardown
     }
-    closeBrowserEncoder(encoder);
-    closeBrowserEncoder(thumbnailEncoder);
+    encodedChunks.length = 0;
+    thumbnailEncodedChunks.length = 0;
+    encoderError = null;
+    thumbnailEncoderError = null;
+    const closingEncoder = encoder;
+    const closingThumbnailEncoder = thumbnailEncoder;
+    encoder = null;
+    thumbnailEncoder = null;
+    closeBrowserEncoder(closingEncoder);
+    closeBrowserEncoder(closingThumbnailEncoder);
   };
 
   const profileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== String(pipelineProfileId || '');
@@ -747,8 +811,16 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   async function runTick() {
     const startedAtMs = highResolutionNowMs();
     try {
-      if (closed || !isWlvcRuntimePath() || profileChanged()) {
-        await close('protected_browser_video_profile_changed');
+      if (closed) {
+        await close('protected_browser_video_encoder_closed');
+        return;
+      }
+      if (profileChanged()) {
+        await close('protected_browser_video_profile_switch_close');
+        return;
+      }
+      if (!isWlvcRuntimePath()) {
+        await close('protected_browser_video_transport_reconnect_close');
         return;
       }
       if (browserEncoderCompatibilityFallbackActive()) {
@@ -814,8 +886,12 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       if (!result.ok || !result.frame) return;
       try {
         const encoderState = await ensureBrowserEncodersForFrame(result.frame);
+        if (!encoderState) return;
         const activeConfig = encoderState.config;
         const activeThumbnailConfig = encoderState.thumbnailConfig;
+        const activePrimaryEncoder = encoderState.encoder;
+        const activeThumbnailEncoder = encoderState.thumbnailEncoder;
+        const encoderGeneration = encoderState.encoderGeneration;
         const frameSize = encoderState.frameSize;
         const sourceFrameSize = videoFrameSourceDimensions(result.frame);
         const trace = {
@@ -852,6 +928,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         let primaryFrame = null;
         let thumbnailFrame = null;
         try {
+          if (!isCurrentEncoderGeneration(encoderGeneration)) return;
           if (shouldScaleBrowserFrame(sourceFrameSize, frameSize)) {
             primaryFrame = primaryFrameScaler.createScaledFrame(result.frame, {
               width: activeConfig.width,
@@ -862,9 +939,11 @@ export async function createProtectedBrowserVideoEncoderPublisher({
               sourceCropHeight: frameSize.sourceCropHeight,
             });
           }
-          encoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });
+          if (!isCurrentEncoderGeneration(encoderGeneration)) return;
+          activePrimaryEncoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });
           if (shouldEncodeThumbnail) {
             try {
+              if (!isCurrentEncoderGeneration(encoderGeneration)) return;
               thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame, {
                 width: activeThumbnailConfig.width,
                 height: activeThumbnailConfig.height,
@@ -873,7 +952,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
                 sourceCropWidth: frameSize.sourceCropWidth,
                 sourceCropHeight: frameSize.sourceCropHeight,
               });
-              thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });
+              if (!isCurrentEncoderGeneration(encoderGeneration)) return;
+              activeThumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });
             } catch (thumbnailEncodeError) {
               disableThumbnailEncoder('sfu_browser_thumbnail_encode_failed', thumbnailEncodeError);
             }
@@ -882,10 +962,12 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           closePublisherVideoFrame(thumbnailFrame);
           closePublisherVideoFrame(primaryFrame);
         }
-        await encoder.flush();
+        await activePrimaryEncoder.flush();
+        if (!isCurrentEncoderGeneration(encoderGeneration)) return;
         if (shouldEncodeThumbnail && !thumbnailEncoderDisabled) {
           try {
-            await thumbnailEncoder.flush();
+            await activeThumbnailEncoder.flush();
+            if (!isCurrentEncoderGeneration(encoderGeneration)) return;
           } catch (thumbnailFlushError) {
             disableThumbnailEncoder('sfu_browser_thumbnail_flush_failed', thumbnailFlushError);
           }
@@ -960,6 +1042,28 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         closePublisherVideoFrame(result.frame);
       }
     } catch (error) {
+      if (browserEncoderLifecycleCloseError(error)) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'sfu_browser_encoder_lifecycle_close',
+          code: 'sfu_browser_encoder_lifecycle_close',
+          message: 'Browser encoder closed during an expected lifecycle transition; restarting compatibility publisher without reporting a fatal encode failure.',
+          payload: {
+            codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+            track_id: videoTrack.id,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            lifecycle_close: true,
+            lifecycle_close_reason: activeEncoderCloseReason,
+            encoder_generation: activeEncoderGeneration,
+            error_name: String(error?.name || ''),
+            error_message: String(error?.message || error || ''),
+          },
+        });
+        await close('protected_browser_video_encoder_lifecycle_close');
+        onProtectedBrowserEncoderFailure(new Error('sfu_browser_encoder_lifecycle_close'));
+        return;
+      }
       captureClientDiagnosticError('sfu_browser_encoder_frame_failed', error, {
         codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         track_id: videoTrack.id,

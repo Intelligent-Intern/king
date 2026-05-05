@@ -75,6 +75,30 @@ $members = [
         'invite_state' => 'moderator',
         'relay_score' => 70,
     ],
+    [
+        'participant_id' => 'left-6',
+        'user_id' => '60',
+        'display_name' => 'Left User',
+        'invite_state' => 'allowed',
+        'left_at' => '2026-05-04T00:05:00Z',
+        'relay_score' => 95,
+    ],
+    [
+        'participant_id' => 'forced-left-7',
+        'user_id' => '70',
+        'display_name' => 'Forced Left',
+        'admitted' => true,
+        'invite_state' => 'left',
+        'relay_score' => 95,
+    ],
+    [
+        'participant_id' => 'state-left-8',
+        'user_id' => '80',
+        'display_name' => 'State Left',
+        'invite_state' => 'allowed',
+        'state' => 'left',
+        'relay_score' => 95,
+    ],
 ];
 
 $plan = videochat_gossipmesh_plan_topology('call-alpha', 'room-alpha', $members, [
@@ -97,7 +121,7 @@ videochat_gossipmesh_test_assert(
     'protected envelope contract must be advertised'
 );
 videochat_gossipmesh_test_assert(count($plan['members']) === 3, 'only admitted members without forbidden payload fields are eligible');
-videochat_gossipmesh_test_assert($plan['rejected_members'] === 2, 'pending and secret-bearing members must be rejected');
+videochat_gossipmesh_test_assert($plan['rejected_members'] === 5, 'pending, secret-bearing, and left members must be rejected');
 videochat_gossipmesh_test_assert($plan['ttl'] === 3, 'small room TTL estimate mismatch');
 videochat_gossipmesh_test_assert($plan['forward_count'] === VIDEOCHAT_GOSSIPMESH_MIN_EXPANDER_FANOUT, 'requested forward_count below expander minimum must clamp to 3');
 videochat_gossipmesh_test_assert(VIDEOCHAT_GOSSIPMESH_MIN_EXPANDER_FANOUT === 3, 'backend minimum expander fanout must be 3');
@@ -187,6 +211,38 @@ foreach ($plan['topology'] as $memberId => $neighbors) {
 
 videochat_gossipmesh_test_assert($plan['relay_candidates'][0] === 'owner-1', 'relay candidates should rank by relay score');
 videochat_gossipmesh_test_assert(!in_array('queued-3', $plan['relay_candidates'], true), 'queued users must not be relay candidates');
+videochat_gossipmesh_test_assert(!in_array('left-6', $plan['relay_candidates'], true), 'left users must not be relay candidates');
+videochat_gossipmesh_test_assert(!in_array('forced-left-7', $plan['relay_candidates'], true), 'left state must override admitted=true for relay candidates');
+videochat_gossipmesh_test_assert(!in_array('state-left-8', $plan['relay_candidates'], true), 'left state must override allowed invite_state for relay candidates');
+
+$roomParticipantMembers = videochat_gossipmesh_members_from_room_participants([
+    [
+        'user_id' => 10,
+        'display_name' => 'Owner',
+        'call_role' => 'owner',
+        'invite_state' => 'allowed',
+    ],
+    [
+        'user_id' => 20,
+        'display_name' => 'Left Participant',
+        'invite_state' => 'allowed',
+        'left_at' => '2026-05-04T00:10:00Z',
+    ],
+    [
+        'user_id' => 30,
+        'display_name' => 'Participant',
+        'state' => 'joined',
+    ],
+]);
+$roomParticipantPlan = videochat_gossipmesh_plan_topology('call-room-participants', 'room-alpha', $roomParticipantMembers, [
+    'seed' => 'room-participant-left-contract',
+    'max_neighbors' => 3,
+    'forward_count' => 3,
+]);
+$roomParticipantIds = array_map(static fn(array $member): string => $member['id'], $roomParticipantPlan['members']);
+sort($roomParticipantIds);
+videochat_gossipmesh_test_assert($roomParticipantIds === ['10', '30'], 'room participant conversion must preserve left markers for pruning');
+videochat_gossipmesh_test_assert(!array_key_exists('20', $roomParticipantPlan['topology']), 'left room participants must not receive topology assignments');
 
 $first = videochat_gossipmesh_accept_frame_once([], 'owner-1', 1, 2);
 videochat_gossipmesh_test_assert($first['accepted'] === true && $first['duplicate'] === false, 'first frame should be accepted');
@@ -392,6 +448,40 @@ $freshFailedPairs = videochat_gossipmesh_recent_failed_pair_map([$healthObservat
 $expiredFailedPairs = videochat_gossipmesh_recent_failed_pair_map([$healthObservation], 1_120_001);
 videochat_gossipmesh_test_assert(($freshFailedPairs[videochat_gossipmesh_link_pair_key('10', '20')] ?? false) === true, 'fresh topology health observation must produce avoided failed pair');
 videochat_gossipmesh_test_assert($expiredFailedPairs === [], 'expired topology health observation must leave cooldown map');
+
+$staleTargetObservation = videochat_gossipmesh_sanitize_topology_health_observation([
+    ...$repairCommand,
+    'lost_peer_id' => '20',
+    'reason' => 'target_not_in_room',
+], 1_000_000);
+$decodedStaleTargetObservation = videochat_gossipmesh_decode_topology_health_observation(
+    json_encode($staleTargetObservation, JSON_UNESCAPED_SLASHES) ?: '',
+    'room-alpha',
+    'call-alpha',
+    1_000_001,
+    (string) ($staleTargetObservation['object_key'] ?? '')
+);
+videochat_gossipmesh_test_assert((string) (($decodedStaleTargetObservation ?? [])['reason'] ?? '') === 'target_not_in_room', 'readback decode must preserve stale target repair reason');
+$staleTargetAvoidPairs = videochat_gossipmesh_recent_failed_pair_map([(array) $decodedStaleTargetObservation], 1_000_001);
+videochat_gossipmesh_test_assert(($staleTargetAvoidPairs[videochat_gossipmesh_excluded_peer_pair_key('20')] ?? false) === true, 'target_not_in_room observations must mark the stale target for exclusion');
+$staleTargetRepairPlan = videochat_gossipmesh_plan_topology('call-alpha', 'room-alpha', [
+    ['participant_id' => '10', 'user_id' => '10', 'invite_state' => 'allowed', 'relay_score' => 80],
+    ['participant_id' => '20', 'user_id' => '20', 'invite_state' => 'allowed', 'relay_score' => 100],
+    ['participant_id' => '30', 'user_id' => '30', 'invite_state' => 'allowed', 'relay_score' => 70],
+    ['participant_id' => '40', 'user_id' => '40', 'invite_state' => 'allowed', 'relay_score' => 60],
+], [
+    'seed' => 'stale-target-repair',
+    'max_neighbors' => 3,
+    'forward_count' => 3,
+    'avoid_pairs' => $staleTargetAvoidPairs,
+]);
+$staleTargetRepairMemberIds = array_map(static fn(array $member): string => $member['id'], $staleTargetRepairPlan['members']);
+videochat_gossipmesh_test_assert(!in_array('20', $staleTargetRepairMemberIds, true), 'target_not_in_room stale target must be removed from repair members');
+videochat_gossipmesh_test_assert(!array_key_exists('20', $staleTargetRepairPlan['topology']), 'target_not_in_room stale target must not receive topology assignments');
+foreach ($staleTargetRepairPlan['topology'] as $neighbors) {
+    videochat_gossipmesh_test_assert(!in_array('20', $neighbors, true), 'target_not_in_room stale target must never be assigned as a neighbor');
+}
+videochat_gossipmesh_test_assert(!in_array('20', $staleTargetRepairPlan['relay_candidates'], true), 'target_not_in_room stale target must not be a relay candidate');
 
 $avoidPlan = videochat_gossipmesh_plan_topology('call-alpha', 'room-alpha', [
     ['participant_id' => '10', 'user_id' => '10', 'invite_state' => 'allowed'],

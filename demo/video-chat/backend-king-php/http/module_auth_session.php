@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/database_core.php';
 require_once __DIR__ . '/../domain/users/user_emails.php';
 
 function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
 {
-    $message = strtolower($error->getMessage());
-    return str_contains($message, 'database is locked')
-        || str_contains($message, 'database schema is locked');
+    return videochat_sqlite_is_transient_lock($error);
 }
 
 function videochat_handle_auth_session_routes(
@@ -67,7 +66,8 @@ function videochat_handle_auth_session_routes(
             ]);
         }
 
-        $maxLoginAttempts = 5;
+        $maxLoginAttempts = 8;
+        $lastLoginLockError = null;
         for ($loginAttempt = 1; $loginAttempt <= $maxLoginAttempts; $loginAttempt += 1) {
             try {
             $pdo = $openDatabase();
@@ -195,12 +195,19 @@ SQL
                 'time' => gmdate('c'),
             ]);
             } catch (Throwable $error) {
-                if (
-                    $loginAttempt < $maxLoginAttempts
-                    && videochat_auth_session_is_transient_sqlite_lock($error)
-                ) {
-                    usleep(100_000 * $loginAttempt);
-                    continue;
+                if (videochat_auth_session_is_transient_sqlite_lock($error)) {
+                    $lastLoginLockError = $error;
+                    if ($loginAttempt < $maxLoginAttempts) {
+                        usleep(videochat_sqlite_retry_delay_us($loginAttempt));
+                        continue;
+                    }
+
+                    error_log('[video-chat][auth] login retryable sqlite lock: ' . get_class($error) . ': ' . $error->getMessage());
+                    return $errorResponse(503, 'auth_login_retryable_locked', 'Login is temporarily busy; retry shortly.', [
+                        'reason' => 'sqlite_busy',
+                        'retryable' => true,
+                        'retry_after_seconds' => 2,
+                    ]);
                 }
 
                 error_log('[video-chat][auth] login failed: ' . get_class($error) . ': ' . $error->getMessage());
@@ -208,6 +215,15 @@ SQL
                     'reason' => 'internal_error',
                 ]);
             }
+        }
+
+        if ($lastLoginLockError instanceof Throwable) {
+            error_log('[video-chat][auth] login retryable sqlite lock exhausted: ' . get_class($lastLoginLockError) . ': ' . $lastLoginLockError->getMessage());
+            return $errorResponse(503, 'auth_login_retryable_locked', 'Login is temporarily busy; retry shortly.', [
+                'reason' => 'sqlite_busy',
+                'retryable' => true,
+                'retry_after_seconds' => 2,
+            ]);
         }
 
         return $errorResponse(500, 'auth_login_failed', 'Login failed due to a backend error.', [

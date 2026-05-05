@@ -77,6 +77,7 @@ export interface GossipTelemetryCounters {
   rtc_datachannel_sends: number
   in_memory_harness_sends: number
   topology_repairs_requested: number
+  would_publish_frames: number
 }
 
 export interface GossipPeer {
@@ -715,6 +716,7 @@ export class GossipController {
       rtc_datachannel_sends: 0,
       in_memory_harness_sends: 0,
       topology_repairs_requested: 0,
+      would_publish_frames: 0,
     }
   }
 

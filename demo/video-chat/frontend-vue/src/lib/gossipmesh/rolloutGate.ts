@@ -12,6 +12,14 @@ const COUNTER_NAMES = [
   'rtc_datachannel_sends',
   'in_memory_harness_sends',
   'topology_repairs_requested',
+  'would_publish_frames',
+  'participant_set_recoveries',
+  'participant_set_recovery_in_flight',
+  'protected_decrypt_failures',
+  'keyframe_requests',
+  'stale_target_prunes',
+  'encoder_lifecycle_closes',
+  'send_backpressure_aborts',
 ];
 
 const FORBIDDEN_GATE_FIELDS = new Set([
@@ -50,6 +58,13 @@ const DEFAULT_THRESHOLDS = {
   maxTtlExhaustionRate: 0.01,
   maxLateDropRate: 0.01,
   maxRepairRate: 0.05,
+  maxParticipantSetRecoveryRate: 0.02,
+  maxParticipantSetRecoveryInFlight: 0,
+  maxProtectedFrameDecryptFailureRate: 0.01,
+  maxKeyframeRequestRate: 0.08,
+  maxStaleTargetPruneRate: 0.02,
+  maxEncoderLifecycleCloseRate: 0.01,
+  maxSendBackpressureAbortRate: 0.01,
 };
 
 export function deriveGossipRolloutGateState(input = {}, options = {}) {
@@ -76,6 +91,31 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
   const ttlExhaustionRate = sanitizeRate(backendGate?.ttl_exhaustion_rate, boundedRate(aggregate.totals.ttl_exhausted, forwardDenominator));
   const lateDropRate = sanitizeRate(backendGate?.late_drop_rate, boundedRate(aggregate.totals.late_drops, sentReceiveDenominator));
   const repairRate = sanitizeRate(backendGate?.repair_rate, boundedRate(aggregate.totals.topology_repairs_requested, repairDenominator));
+  const baselineDenominator = Math.max(1, aggregate.baseline_sample_count || sentReceiveDenominator);
+  const participantSetRecoveryRate = sanitizeRate(
+    backendGate?.participant_set_recovery_rate,
+    boundedRate(aggregate.totals.participant_set_recoveries, baselineDenominator),
+  );
+  const protectedFrameDecryptFailureRate = sanitizeRate(
+    backendGate?.protected_decrypt_failure_rate,
+    boundedRate(aggregate.totals.protected_decrypt_failures, baselineDenominator),
+  );
+  const keyframeRequestRate = sanitizeRate(
+    backendGate?.keyframe_request_rate,
+    boundedRate(aggregate.totals.keyframe_requests, baselineDenominator),
+  );
+  const staleTargetPruneRate = sanitizeRate(
+    backendGate?.stale_target_prune_rate,
+    boundedRate(aggregate.totals.stale_target_prunes, baselineDenominator),
+  );
+  const encoderLifecycleCloseRate = sanitizeRate(
+    backendGate?.encoder_lifecycle_close_rate,
+    boundedRate(aggregate.totals.encoder_lifecycle_closes, baselineDenominator),
+  );
+  const sendBackpressureAbortRate = sanitizeRate(
+    backendGate?.send_backpressure_abort_rate,
+    boundedRate(aggregate.totals.send_backpressure_aborts, baselineDenominator),
+  );
   const rtcReady = aggregate.peer_count >= thresholds.minPeerCount
     && aggregate.rtc_peer_count >= aggregate.peer_count
     && aggregate.min_neighbor_count >= thresholds.minNeighborCount
@@ -86,7 +126,26 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
       && ttlExhaustionRate <= thresholds.maxTtlExhaustionRate
       && lateDropRate <= thresholds.maxLateDropRate
       && repairRate <= thresholds.maxRepairRate);
-  const activeAllowed = requestedMode === 'active' && rtcReady && telemetryReady;
+  const participantSetRecoveryInFlight = aggregate.totals.participant_set_recovery_in_flight;
+  const mediaSecurityRecoveryReady = participantSetRecoveryInFlight <= thresholds.maxParticipantSetRecoveryInFlight
+    && participantSetRecoveryRate <= thresholds.maxParticipantSetRecoveryRate
+    && protectedFrameDecryptFailureRate <= thresholds.maxProtectedFrameDecryptFailureRate;
+  const sfuBaselineHealthy = mediaSecurityRecoveryReady
+    && keyframeRequestRate <= thresholds.maxKeyframeRequestRate
+    && staleTargetPruneRate <= thresholds.maxStaleTargetPruneRate
+    && encoderLifecycleCloseRate <= thresholds.maxEncoderLifecycleCloseRate
+    && sendBackpressureAbortRate <= thresholds.maxSendBackpressureAbortRate;
+  const blockingBuckets = [];
+  if (!rtcReady) blockingBuckets.push('rtc_topology_unready');
+  if (!telemetryReady) blockingBuckets.push('gossip_telemetry_noisy');
+  if (participantSetRecoveryInFlight > thresholds.maxParticipantSetRecoveryInFlight) blockingBuckets.push('participant_set_recovery_in_flight');
+  if (participantSetRecoveryRate > thresholds.maxParticipantSetRecoveryRate) blockingBuckets.push('participant_set_recovery_storm');
+  if (protectedFrameDecryptFailureRate > thresholds.maxProtectedFrameDecryptFailureRate) blockingBuckets.push('protected_decrypt_burst');
+  if (keyframeRequestRate > thresholds.maxKeyframeRequestRate) blockingBuckets.push('keyframe_storm');
+  if (staleTargetPruneRate > thresholds.maxStaleTargetPruneRate) blockingBuckets.push('stale_target_prune_storm');
+  if (encoderLifecycleCloseRate > thresholds.maxEncoderLifecycleCloseRate) blockingBuckets.push('encoder_lifecycle_close_storm');
+  if (sendBackpressureAbortRate > thresholds.maxSendBackpressureAbortRate) blockingBuckets.push('send_backpressure_abort_storm');
+  const activeAllowed = requestedMode === 'active' && rtcReady && telemetryReady && sfuBaselineHealthy && mediaSecurityRecoveryReady;
   const decision = requestedMode === 'shadow'
     ? 'shadow_observe'
     : (activeAllowed ? 'active_allowed_diagnostic' : 'sfu_first_explicit');
@@ -100,6 +159,9 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     sfu_first: !activeAllowed,
     rtc_ready: rtcReady,
     telemetry_ready: telemetryReady,
+    sfu_baseline_healthy: sfuBaselineHealthy,
+    media_security_recovery_ready: mediaSecurityRecoveryReady,
+    blocking_buckets: blockingBuckets,
     peer_count: aggregate.peer_count,
     rtc_peer_count: aggregate.rtc_peer_count,
     min_neighbor_count: aggregate.min_neighbor_count,
@@ -108,6 +170,13 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     ttl_exhaustion_rate: ttlExhaustionRate,
     late_drop_rate: lateDropRate,
     repair_rate: repairRate,
+    participant_set_recovery_rate: participantSetRecoveryRate,
+    participant_set_recovery_in_flight: participantSetRecoveryInFlight,
+    protected_decrypt_failure_rate: protectedFrameDecryptFailureRate,
+    keyframe_request_rate: keyframeRequestRate,
+    stale_target_prune_rate: staleTargetPruneRate,
+    encoder_lifecycle_close_rate: encoderLifecycleCloseRate,
+    send_backpressure_abort_rate: sendBackpressureAbortRate,
     thresholds,
     counters: aggregate.totals,
   };
@@ -123,6 +192,9 @@ function inertGateState(reason) {
     sfu_first: true,
     rtc_ready: false,
     telemetry_ready: false,
+    sfu_baseline_healthy: false,
+    media_security_recovery_ready: false,
+    blocking_buckets: [reason],
     reason,
     peer_count: 0,
     rtc_peer_count: 0,
@@ -132,6 +204,13 @@ function inertGateState(reason) {
     ttl_exhaustion_rate: 0,
     late_drop_rate: 0,
     repair_rate: 0,
+    participant_set_recovery_rate: 0,
+    participant_set_recovery_in_flight: 0,
+    protected_decrypt_failure_rate: 0,
+    keyframe_request_rate: 0,
+    stale_target_prune_rate: 0,
+    encoder_lifecycle_close_rate: 0,
+    send_backpressure_abort_rate: 0,
     thresholds: DEFAULT_THRESHOLDS,
     counters: emptyCounters(),
   };
@@ -139,6 +218,12 @@ function inertGateState(reason) {
 
 function sanitizeAggregate(input) {
   const rolloutGate = input.rollout_gate && typeof input.rollout_gate === 'object' ? input.rollout_gate : null;
+  const sfuBaseline = input.sfu_baseline_health && typeof input.sfu_baseline_health === 'object'
+    ? input.sfu_baseline_health
+    : (input.sfu_baseline && typeof input.sfu_baseline === 'object' ? input.sfu_baseline : null);
+  const mediaSecurityBaseline = input.media_security_readiness && typeof input.media_security_readiness === 'object'
+    ? input.media_security_readiness
+    : (input.media_security && typeof input.media_security === 'object' ? input.media_security : null);
   const peers = input.peers && typeof input.peers === 'object' ? Object.values(input.peers) : [];
   const peerCount = clampInt(input.peer_count ?? peers.length, 0, 1000);
   const transports = input.transports && typeof input.transports === 'object' ? input.transports : {};
@@ -146,6 +231,13 @@ function sanitizeAggregate(input) {
   const peerNeighborCounts = peers.map((peer) => clampInt(peer?.neighbor_count, 0, 1000)).filter((value) => value > 0);
   const peerTopologyEpochs = peers.map((peer) => clampInt(peer?.topology_epoch, 0, 1_000_000_000));
   const totals = sanitizeCounters(input.totals || input.counters || {});
+  mergeBaselineCounters(totals, sfuBaseline);
+  mergeBaselineCounters(totals, mediaSecurityBaseline);
+  const baselineSampleCount = clampInt(
+    sfuBaseline?.sample_count ?? sfuBaseline?.baseline_sample_count ?? rolloutGate?.baseline_sample_count,
+    0,
+    1_000_000_000,
+  );
 
   if (rolloutGate) {
     return {
@@ -153,6 +245,7 @@ function sanitizeAggregate(input) {
       rtc_peer_count: rtcPeerCount || clampInt(rolloutGate.rtc_peer_count, 0, 1000),
       min_neighbor_count: clampInt(rolloutGate.min_neighbor_count, peerNeighborCounts.length > 0 ? Math.min(...peerNeighborCounts) : 0, 1000),
       max_topology_epoch: clampInt(rolloutGate.max_topology_epoch, peerTopologyEpochs.length > 0 ? Math.max(...peerTopologyEpochs) : 0, 1_000_000_000),
+      baseline_sample_count: baselineSampleCount,
       totals,
     };
   }
@@ -162,8 +255,28 @@ function sanitizeAggregate(input) {
     rtc_peer_count: rtcPeerCount,
     min_neighbor_count: peerNeighborCounts.length > 0 ? Math.min(...peerNeighborCounts) : clampInt(input.neighbor_count, 0, 1000),
     max_topology_epoch: peerTopologyEpochs.length > 0 ? Math.max(...peerTopologyEpochs) : clampInt(input.topology_epoch, 0, 1_000_000_000),
+    baseline_sample_count: baselineSampleCount,
     totals,
   };
+}
+
+function mergeBaselineCounters(totals, baseline) {
+  if (!baseline || typeof baseline !== 'object') return;
+  const aliases = {
+    participant_set_recoveries: ['participant_set_recoveries', 'participant_set_recovery_events', 'media_security_participant_set_recoveries'],
+    participant_set_recovery_in_flight: ['participant_set_recovery_in_flight', 'media_security_recovery_in_flight'],
+    protected_decrypt_failures: ['protected_decrypt_failures', 'protected_frame_decrypt_failures', 'sfu_protected_frame_decrypt_failed'],
+    keyframe_requests: ['keyframe_requests', 'full_keyframe_requests', 'sfu_remote_full_keyframe_requests'],
+    stale_target_prunes: ['stale_target_prunes', 'target_not_in_room_prunes', 'gossip_assigned_neighbor_prunes'],
+    encoder_lifecycle_closes: ['encoder_lifecycle_closes', 'protected_browser_video_encoder_closes'],
+    send_backpressure_aborts: ['send_backpressure_aborts', 'sfu_send_backpressure_aborts'],
+  };
+  for (const [target, keys] of Object.entries(aliases)) {
+    const value = keys.reduce((sum, key) => sum + clampInt(baseline[key], 0, 1_000_000_000), 0);
+    if (value > 0) {
+      totals[target] = clampInt(totals[target] + value, 0, 1_000_000_000);
+    }
+  }
 }
 
 function sanitizeCounters(input) {
