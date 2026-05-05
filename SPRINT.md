@@ -280,7 +280,7 @@ Non-goals for this sprint:
    - `documentation/video-chat-localization-inventory.md`
    - `node demo/video-chat/frontend-vue/tests/contract/localization-inventory-contract.mjs`
 
-2. [ ] `[localization-schema-and-settings]` Add backend locale schema and persistent user preference.
+2. [x] `[localization-schema-and-settings]` Add backend locale schema and persistent user preference.
 
    Scope:
    - Add migrations for supported locales and translation resources.
@@ -291,14 +291,21 @@ Non-goals for this sprint:
    - Keep tenant-aware resource lookup for future tenant overrides.
 
    Done when:
-   - [ ] Fresh DB seeds all discovered website locales with direction
+   - [x] Fresh DB seeds all discovered website locales with direction
      metadata.
-   - [ ] Existing DB migration backfills user locale without data loss.
-   - [ ] User settings validates locale values and rejects unsupported ones.
-   - [ ] Session payload includes `locale`, `direction`, and supported locale
+   - [x] Existing DB migration backfills user locale without data loss.
+   - [x] User settings validates locale values and rejects unsupported ones.
+   - [x] Session payload includes `locale`, `direction`, and supported locale
      metadata.
-   - [ ] Backend contracts cover valid locale update, invalid locale rejection,
+   - [x] Backend contracts cover valid locale update, invalid locale rejection,
      and session persistence.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/support/localization.php`
+   - `demo/video-chat/backend-king-php/tests/localization-schema-contract.sh`
+   - `demo/video-chat/backend-king-php/tests/user-settings-contract.sh`
+   - `demo/video-chat/backend-king-php/tests/user-settings-endpoint-contract.sh`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
 
 3. [ ] `[translation-csv-admin]` Build superadmin CSV upload and import.
 
