@@ -276,8 +276,13 @@ tbody tr {
   background: var(--bg-row);
 }
 
-tbody tr:hover {
+tbody tr:not(.table-empty-row):hover {
   background: var(--bg-row-hover);
+}
+
+tbody tr.table-empty-row,
+tbody tr.table-empty-row:hover {
+  background: transparent;
 }
 
 .tag {
