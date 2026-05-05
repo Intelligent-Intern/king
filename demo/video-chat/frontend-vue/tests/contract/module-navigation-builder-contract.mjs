@@ -86,4 +86,10 @@ assert.match(navigationSource, /useWorkspaceModuleStore/, 'workspace navigation 
 assert.doesNotMatch(navigationSource, /label:\s*['"]Marketplace['"]/, 'workspace navigation must not hardcode module nav labels');
 assert.match(navigationSource, /callNavigationItems/, 'workspace navigation may keep call navigation outside module descriptors');
 
+const shellSource = await readFile(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
+assert.match(shellSource, /settingsPanelsFor/, 'settings modal must consume module settings panel metadata');
+assert.match(shellSource, /DEFAULT_SETTINGS_TILE = ['"]personal\.about['"]/, 'settings modal must use descriptor panel keys');
+assert.doesNotMatch(shellSource, /id:\s*['"]about-me['"]/, 'settings modal must not hardcode legacy about tile ids');
+assert.doesNotMatch(shellSource, /id:\s*['"]credentials-email['"]/, 'settings modal must not hardcode legacy credentials tile ids');
+
 console.log('[module-navigation-builder-contract] PASS');

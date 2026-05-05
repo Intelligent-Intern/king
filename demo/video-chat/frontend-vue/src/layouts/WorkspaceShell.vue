@@ -272,7 +272,7 @@
           />
 
           <section class="sidebar-profile avatar-only">
-            <button class="sidebar-avatar-trigger" type="button" aria-label="Open settings" @click="openSettingsModal('about-me')">
+            <button class="sidebar-avatar-trigger" type="button" aria-label="Open settings" @click="openSettingsModal()">
               <img
                 class="sidebar-avatar-image"
                 :src="profileAvatarSrc"
@@ -332,7 +332,7 @@
                 >
                   New call
                 </button>
-                <button v-else class="btn" type="button" @click="openSettingsModal('about-me')">Settings</button>
+                <button v-else class="btn" type="button" @click="openSettingsModal()">Settings</button>
               </div>
             </div>
           </section>
@@ -384,7 +384,7 @@
         </button>
       </div>
 
-      <section v-if="activeSettingsTile === 'about-me'" class="settings-panel">
+      <section v-if="activeSettingsTile === 'personal.about'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
             <span>Display name</span>
@@ -426,7 +426,7 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
+      <section v-else-if="activeSettingsTile === 'personal.credentials'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
             <span>Primary email</span>
@@ -439,7 +439,7 @@
         </div>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
+      <section v-else-if="activeSettingsTile === 'personal.theme'" class="settings-panel">
         <WorkspaceThemeSettings
           v-model="settingsDraft.theme"
           :saving="settingsState.saving || settingsState.loading"
@@ -447,7 +447,7 @@
         />
       </section>
 
-      <section v-else-if="activeSettingsTile === 'localization'" class="settings-panel">
+      <section v-else-if="activeSettingsTile === 'personal.localization'" class="settings-panel">
         <section class="settings-section">
           <h4>Localization</h4>
           <div class="settings-row">
@@ -683,6 +683,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
+import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 import {
   logoutSession,
   postLogoutRedirectTarget,
@@ -716,6 +717,7 @@ import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/med
 
 const router = useRouter();
 const route = useRoute();
+const moduleStore = useWorkspaceModuleStore();
 const applyBackgroundPreset = applyCallBackgroundPreset;
 const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const leftSidebarCollapsed = ref(false);
@@ -732,6 +734,7 @@ const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
+const DEFAULT_SETTINGS_TILE = 'personal.about';
 
 const pageTitle = computed(() => {
   const routeTitle = typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '';
@@ -837,13 +840,11 @@ const settingsState = reactive({
   message: '',
   avatarStatus: '',
 });
-const activeSettingsTile = ref('about-me');
-const settingsTiles = computed(() => ([
-  { id: 'about-me', label: 'About Me' },
-  { id: 'credentials-email', label: 'Credentials + E-Mail' },
-  { id: 'theme', label: 'Theme' },
-  { id: 'localization', label: 'Localization' },
-]));
+const activeSettingsTile = ref(DEFAULT_SETTINGS_TILE);
+const settingsTiles = computed(() => moduleStore.settingsPanelsFor({ role: sessionState.role }).map((panel) => ({
+  id: panel.key,
+  label: panel.label,
+})));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
 const settingsLanguageOptions = SUPPORTED_LOCALIZATION_LANGUAGES;
 
@@ -1807,6 +1808,10 @@ provide('workspaceSidebarState', {
   callLayoutControls: callLayoutSidebarState,
 });
 
+watch(settingsTiles, () => {
+  activeSettingsTile.value = normalizeSettingsTile(activeSettingsTile.value);
+}, { immediate: true });
+
 watch([isMobileViewport, isMobileSidebarOpen], () => {
   syncMobileScrollLock();
 }, { immediate: true });
@@ -1962,7 +1967,9 @@ function setAvatarStatus(message = '') {
 
 function normalizeSettingsTile(tileId) {
   const normalized = String(tileId || '').trim();
-  const fallback = 'about-me';
+  const fallback = settingsTiles.value.some((tile) => tile.id === DEFAULT_SETTINGS_TILE)
+    ? DEFAULT_SETTINGS_TILE
+    : settingsTiles.value[0]?.id || DEFAULT_SETTINGS_TILE;
   if (normalized === '') return fallback;
   return settingsTiles.value.some((tile) => tile.id === normalized) ? normalized : fallback;
 }
@@ -1980,11 +1987,11 @@ function closeSettingsModal() {
   settingsState.loading = false;
   settingsState.message = '';
   settingsState.avatarStatus = '';
-  activeSettingsTile.value = 'about-me';
+  activeSettingsTile.value = normalizeSettingsTile(DEFAULT_SETTINGS_TILE);
   resetSettingsDraft();
 }
 
-function openSettingsModal(tileId = 'about-me') {
+function openSettingsModal(tileId = DEFAULT_SETTINGS_TILE) {
   activeSettingsTile.value = normalizeSettingsTile(tileId);
   if (settingsState.open) return;
   settingsState.open = true;
