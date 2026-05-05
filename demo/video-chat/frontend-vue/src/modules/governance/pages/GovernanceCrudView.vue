@@ -1,7 +1,7 @@
 <template>
   <AdminPageFrame class="governance-crud-view" :title="title">
     <template #actions>
-      <button class="btn btn-cyan" type="button" @click="openCreateModal">{{ t('governance.create_new') }}</button>
+      <button v-if="createAction" class="btn btn-cyan" type="button" @click="openCreateModal">{{ createButtonLabel }}</button>
     </template>
 
     <template #toolbar>
@@ -132,6 +132,12 @@ const visibleRows = computed(() => [...catalogRows.value, ...rows.value]);
 const title = computed(() => routeLabel('pageTitle', 'pageTitle_key', t('navigation.governance')));
 const singularLabel = computed(() => routeLabel('entitySingular', 'entitySingular_key', title.value));
 const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key', title.value));
+const routeActions = computed(() => (Array.isArray(route.meta?.actions) ? route.meta.actions : []));
+const createAction = computed(() => routeActions.value.find((action) => action.kind === 'create') || null);
+const createButtonLabel = computed(() => {
+  const key = String(createAction.value?.label_key || '').trim();
+  return key !== '' ? t(key) : t('governance.create');
+});
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
   if (needle === '') return visibleRows.value;
@@ -152,7 +158,7 @@ const modalTitle = computed(() => (
     ? t('governance.modal.edit', { entity: singularLabel.value })
     : t('governance.modal.create', { entity: singularLabel.value })
 ));
-const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? t('common.save_changes') : t('governance.create')));
+const modalSubmitLabel = computed(() => (modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value));
 
 watch(() => route.fullPath, () => {
   query.value = '';
@@ -183,6 +189,7 @@ function resetForm(row = null) {
 }
 
 function openCreateModal() {
+  if (!createAction.value) return;
   modalMode.value = 'create';
   modalMaximized.value = false;
   resetForm();

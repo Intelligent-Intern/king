@@ -107,4 +107,13 @@ const navigationBuilderSource = await readFile(path.join(root, 'src/modules/navi
 assert.match(navigationBuilderSource, /routeActionMetadata/, 'route action metadata must be normalized centrally');
 assert.match(navigationBuilderSource, /meta:[\s\S]*actions,/, 'generated route records must expose actions in route meta');
 
+const governanceCrudSource = await readFile(path.join(root, 'src/modules/governance/pages/GovernanceCrudView.vue'), 'utf8');
+assert.match(governanceCrudSource, /route\.meta\?\.actions/, 'governance CRUD must read descriptor route actions');
+assert.match(governanceCrudSource, /createAction/, 'governance CRUD must derive create visibility from route actions');
+assert.doesNotMatch(
+  governanceCrudSource,
+  /openCreateModal">\{\{\s*t\('governance\.create_new'\)\s*\}\}/,
+  'governance CRUD must not render the legacy unconditional generic create button',
+);
+
 console.log('[module-action-metadata-contract] PASS');
