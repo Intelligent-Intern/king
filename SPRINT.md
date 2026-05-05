@@ -648,7 +648,7 @@ Non-goals for this sprint:
     - [x] Time-limited rights have an explicit metadata slot, even if full
       enforcement is finished in the tenancy sprint.
 
-21. [ ] `[module-contract-tests-and-smoke]` Prove dynamic modules and non-call refactor.
+21. [x] `[module-contract-tests-and-smoke]` Prove dynamic modules and non-call refactor.
 
     Scope:
     - Add tests or smoke checks for module descriptor registration.
@@ -660,7 +660,7 @@ Non-goals for this sprint:
 
     Done when:
     - [x] Build passes with dynamic module imports.
-    - [ ] Browser smoke proves non-call navigation and settings pages still
+    - [x] Browser smoke proves non-call navigation and settings pages still
       render.
     - [x] Route compatibility smoke covers old and new module-backed paths.
     - [x] Diff/path guard reports no edits to call-related excluded paths for
