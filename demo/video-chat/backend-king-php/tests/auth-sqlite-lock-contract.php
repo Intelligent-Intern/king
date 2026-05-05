@@ -37,11 +37,13 @@ try {
     );
     videochat_auth_sqlite_lock_assert(
         is_string($authSessionSource)
-            && str_contains($authSessionSource, '$maxLoginAttempts = 8')
+            && str_contains($authSessionSource, '$maxLoginAttempts = 20')
+            && str_contains($authSessionSource, "BEGIN IMMEDIATE")
+            && str_contains($authSessionSource, 'videochat_auth_session_rollback_if_open')
             && str_contains($authSessionSource, 'auth_login_retryable_locked')
             && str_contains($authSessionSource, "'retryable' => true")
             && str_contains($authSessionSource, "'retry_after_seconds' => 2"),
-        'login lock exhaustion must be retryable and distinct from invalid credentials',
+        'login lock exhaustion must use explicit write locks, rollback cleanup, and retryable errors',
     );
 
     $databasePath = sys_get_temp_dir() . '/videochat-auth-sqlite-lock-' . bin2hex(random_bytes(6)) . '.sqlite';

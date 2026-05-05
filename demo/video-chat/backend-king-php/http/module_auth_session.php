@@ -10,6 +10,21 @@ function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
     return videochat_sqlite_is_transient_lock($error);
 }
 
+function videochat_auth_session_rollback_if_open(PDO $pdo): void
+{
+    try {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+    } catch (Throwable) {
+        try {
+            $pdo->exec('ROLLBACK');
+        } catch (Throwable) {
+            // The connection may already have closed or rolled back after a failed SQLite write.
+        }
+    }
+}
+
 function videochat_handle_auth_session_routes(
     string $path,
     string $method,
@@ -66,13 +81,13 @@ function videochat_handle_auth_session_routes(
             ]);
         }
 
-        $maxLoginAttempts = 8;
+        $maxLoginAttempts = 20;
         $lastLoginLockError = null;
         for ($loginAttempt = 1; $loginAttempt <= $maxLoginAttempts; $loginAttempt += 1) {
             try {
-            $pdo = $openDatabase();
-            $userQuery = $pdo->prepare(
-                <<<'SQL'
+                $pdo = $openDatabase();
+                $userQuery = $pdo->prepare(
+                    <<<'SQL'
 SELECT
     users.id,
     users.email,
@@ -103,98 +118,106 @@ ORDER BY
     users.id ASC
 LIMIT 1
 SQL
-            );
-            $userQuery->execute([':email' => $email]);
-            $user = $userQuery->fetch();
+                );
+                $userQuery->execute([':email' => $email]);
+                $user = $userQuery->fetch();
 
-            $storedHash = is_array($user) && is_string($user['password_hash'] ?? null)
-                ? trim((string) $user['password_hash'])
-                : '';
-            $userIsActive = is_array($user) && ((string) ($user['status'] ?? 'disabled')) === 'active';
-            if (
-                !is_array($user)
-                || !$userIsActive
-                || $storedHash === ''
-                || !password_verify($password, $storedHash)
-            ) {
-                return $errorResponse(401, 'auth_invalid_credentials', 'Invalid email or password.');
-            }
-
-            if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
-                $rehash = password_hash($password, PASSWORD_DEFAULT);
-                if (!is_string($rehash) || $rehash === '') {
-                    throw new RuntimeException('Could not refresh password hash.');
+                $storedHash = is_array($user) && is_string($user['password_hash'] ?? null)
+                    ? trim((string) $user['password_hash'])
+                    : '';
+                $userIsActive = is_array($user) && ((string) ($user['status'] ?? 'disabled')) === 'active';
+                if (
+                    !is_array($user)
+                    || !$userIsActive
+                    || $storedHash === ''
+                    || !password_verify($password, $storedHash)
+                ) {
+                    return $errorResponse(401, 'auth_invalid_credentials', 'Invalid email or password.');
                 }
 
-                $rehashQuery = $pdo->prepare(
-                    'UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id'
-                );
-                $rehashQuery->execute([
-                    ':password_hash' => $rehash,
-                    ':updated_at' => gmdate('c'),
-                    ':id' => (int) $user['id'],
-                ]);
-            }
+                $ttlSeconds = (int) (getenv('VIDEOCHAT_SESSION_TTL_SECONDS') ?: 43_200);
+                if ($ttlSeconds < 60) {
+                    $ttlSeconds = 60;
+                } elseif ($ttlSeconds > 2_592_000) {
+                    $ttlSeconds = 2_592_000;
+                }
 
-            $ttlSeconds = (int) (getenv('VIDEOCHAT_SESSION_TTL_SECONDS') ?: 43_200);
-            if ($ttlSeconds < 60) {
-                $ttlSeconds = 60;
-            } elseif ($ttlSeconds > 2_592_000) {
-                $ttlSeconds = 2_592_000;
-            }
+                $sessionId = $issueSessionId();
+                $issuedAt = gmdate('c');
+                $expiresAt = gmdate('c', time() + $ttlSeconds);
+                $clientIp = trim((string) ($request['remote_address'] ?? ''));
+                $userAgent = substr(videochat_request_header_value($request, 'user-agent'), 0, 500);
 
-            $sessionId = $issueSessionId();
-            $issuedAt = gmdate('c');
-            $expiresAt = gmdate('c', time() + $ttlSeconds);
-            $clientIp = trim((string) ($request['remote_address'] ?? ''));
-            $userAgent = substr(videochat_request_header_value($request, 'user-agent'), 0, 500);
+                $pdo->exec('BEGIN IMMEDIATE');
 
-            $sessionInsert = $pdo->prepare(
-                <<<'SQL'
+                if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
+                    $rehash = password_hash($password, PASSWORD_DEFAULT);
+                    if (!is_string($rehash) || $rehash === '') {
+                        throw new RuntimeException('Could not refresh password hash.');
+                    }
+
+                    $rehashQuery = $pdo->prepare(
+                        'UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id'
+                    );
+                    $rehashQuery->execute([
+                        ':password_hash' => $rehash,
+                        ':updated_at' => gmdate('c'),
+                        ':id' => (int) $user['id'],
+                    ]);
+                }
+
+                $sessionInsert = $pdo->prepare(
+                    <<<'SQL'
 INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
 VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
 SQL
-            );
-            $sessionInsert->execute([
-                ':id' => $sessionId,
-                ':user_id' => (int) $user['id'],
-                ':issued_at' => $issuedAt,
-                ':expires_at' => $expiresAt,
-                ':client_ip' => $clientIp === '' ? null : $clientIp,
-                ':user_agent' => $userAgent === '' ? null : $userAgent,
-            ]);
+                );
+                $sessionInsert->execute([
+                    ':id' => $sessionId,
+                    ':user_id' => (int) $user['id'],
+                    ':issued_at' => $issuedAt,
+                    ':expires_at' => $expiresAt,
+                    ':client_ip' => $clientIp === '' ? null : $clientIp,
+                    ':user_agent' => $userAgent === '' ? null : $userAgent,
+                ]);
 
-            $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+                $pdo->commit();
 
-            return $jsonResponse(200, [
-                'status' => 'ok',
-                'session' => [
-                    'id' => $sessionId,
-                    'token' => $sessionId,
-                    'token_type' => 'session_id',
-                    'issued_at' => $issuedAt,
-                    'expires_at' => $expiresAt,
-                    'expires_in_seconds' => $ttlSeconds,
-                ],
-                'user' => [
-                    'id' => (int) $user['id'],
-                    'email' => (string) $user['email'],
-                    'display_name' => (string) $user['display_name'],
-                    'role' => (string) ($user['role_slug'] ?? 'user'),
-                    'status' => (string) $user['status'],
-                    'time_format' => (string) ($user['time_format'] ?? '24h'),
-                    'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
-                    'theme' => (string) ($user['theme'] ?? 'dark'),
-                    'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
-                    'post_logout_landing_url' => is_string($user['post_logout_landing_url'] ?? null)
-                        ? trim((string) $user['post_logout_landing_url'])
-                        : '',
-                    'account_type' => $accountType,
-                    'is_guest' => $accountType === 'guest',
-                ],
-                'time' => gmdate('c'),
-            ]);
+                $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'session' => [
+                        'id' => $sessionId,
+                        'token' => $sessionId,
+                        'token_type' => 'session_id',
+                        'issued_at' => $issuedAt,
+                        'expires_at' => $expiresAt,
+                        'expires_in_seconds' => $ttlSeconds,
+                    ],
+                    'user' => [
+                        'id' => (int) $user['id'],
+                        'email' => (string) $user['email'],
+                        'display_name' => (string) $user['display_name'],
+                        'role' => (string) ($user['role_slug'] ?? 'user'),
+                        'status' => (string) $user['status'],
+                        'time_format' => (string) ($user['time_format'] ?? '24h'),
+                        'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
+                        'theme' => (string) ($user['theme'] ?? 'dark'),
+                        'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
+                        'post_logout_landing_url' => is_string($user['post_logout_landing_url'] ?? null)
+                            ? trim((string) $user['post_logout_landing_url'])
+                            : '',
+                        'account_type' => $accountType,
+                        'is_guest' => $accountType === 'guest',
+                    ],
+                    'time' => gmdate('c'),
+                ]);
             } catch (Throwable $error) {
+                if (isset($pdo) && $pdo instanceof PDO) {
+                    videochat_auth_session_rollback_if_open($pdo);
+                }
+
                 if (videochat_auth_session_is_transient_sqlite_lock($error)) {
                     $lastLoginLockError = $error;
                     if ($loginAttempt < $maxLoginAttempts) {
