@@ -366,6 +366,20 @@ Sprint goal:
    - Mutations call the backend permission evaluator with resource/action/time.
    - Tests cover allowed, denied, expired, revoked, and wrong-tenant cases.
 
+   Progress 2026-05-05:
+   - Added tenant-scoped `/api/governance/groups` and
+     `/api/governance/organizations` list/read/create/update/delete route
+     handling on the King PHP backend.
+   - Group and organization mutations now resolve the active tenant and actor,
+     expose public UUID row ids without internal database ids, reject
+     wrong-tenant identifiers, and call the existing time-windowed
+     `permission_grants` evaluator after checking compatibility tenant
+     permission aliases.
+   - Added route-level RBAC for `/api/governance/` so authenticated users reach
+     resource/action permission checks instead of broad admin-only path checks.
+   - Remaining work: memberships, grants, policies, export/import job APIs, and
+     frontend wiring from Governance CRUD to these persisted endpoints.
+
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
 
@@ -456,6 +470,9 @@ Sprint goal:
     - Added `user-editor-relation-controls-contract.mjs` for backend-backed
       user editor Role/Theme `+1` relation controls and legacy payload
       compatibility.
+    - Added `governance-crud-api-contract.php` for groups/organizations API
+      RBAC, tenant isolation, allowed/denied mutation checks, expired grants,
+      revoked grants, wrong-tenant identifiers, and UUID row ids.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
@@ -476,6 +493,13 @@ Sprint goal:
     - Contract and build output are recorded after each implementation slice.
     - No release artifact directories are deployed.
     - Any known skipped tests are documented with reason and next action.
+
+    Progress 2026-05-05:
+    - Governance backend slice syntax checks passed for tenant administration,
+      tenancy routes, RBAC, and the new governance CRUD contract.
+    - `governance-crud-api-contract.sh` currently skips in this local PHP
+      runtime because `pdo_sqlite` is not installed; the contract is present
+      and will execute in a SQLite-enabled backend test runtime.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
