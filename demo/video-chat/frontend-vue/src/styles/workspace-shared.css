@@ -113,7 +113,7 @@
 
 @media (min-width: 1181px) {
   .shell.left-collapsed .main {
-    padding-left: 10px;
+    padding-inline-start: 10px;
   }
 
   .shell.left-collapsed .workspace {
@@ -171,7 +171,7 @@
 
 .section-head-title {
   min-width: 0;
-  padding-left: 2px;
+  padding-inline-start: 2px;
 }
 
 .section-head-left .show-sidebar-inline.show-left-sidebar-overlay {
@@ -260,7 +260,7 @@ table {
 
 th,
 td {
-  text-align: left;
+  text-align: start;
   padding: 9px 10px;
   border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
@@ -440,7 +440,7 @@ html[dir="rtl"] .pager-icon-img {
 
 .right-list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   display: grid;
   gap: 4px;
 }
