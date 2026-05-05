@@ -52,6 +52,14 @@ function videochat_workspace_default_lead_body_template(): string
         . "Remote address: {remote_addr}\n"
         . "User agent: {user_agent}\n";
 }
+function videochat_workspace_required_lead_subject_placeholders(): array
+{
+    return ['name'];
+}
+function videochat_workspace_required_lead_body_placeholders(): array
+{
+    return ['name', 'email'];
+}
 function videochat_workspace_default_theme_colors(string $themeId = 'dark'): array
 {
     if ($themeId === 'light') {
@@ -433,11 +441,23 @@ function videochat_workspace_validate_admin_payload(array $payload, string $stor
     } else {
         if (array_key_exists('lead_subject_template', $payload)) {
             $subject = videochat_appointment_clean_text($payload['lead_subject_template'], 300);
-            $settings['lead_subject_template'] = $subject === '' ? videochat_workspace_default_lead_subject_template() : $subject;
+            $subject = $subject === '' ? videochat_workspace_default_lead_subject_template() : $subject;
+            $missing = videochat_appointment_missing_template_placeholders($subject, videochat_workspace_required_lead_subject_placeholders());
+            if ($missing !== []) {
+                $errors['lead_subject_template'] = videochat_appointment_missing_placeholder_error($missing);
+            } else {
+                $settings['lead_subject_template'] = $subject;
+            }
         }
         if (array_key_exists('lead_body_template', $payload)) {
             $body = videochat_appointment_clean_multiline_text($payload['lead_body_template'], 4000);
-            $settings['lead_body_template'] = $body === '' ? videochat_workspace_default_lead_body_template() : $body;
+            $body = $body === '' ? videochat_workspace_default_lead_body_template() : $body;
+            $missing = videochat_appointment_missing_template_placeholders($body, videochat_workspace_required_lead_body_placeholders());
+            if ($missing !== []) {
+                $errors['lead_body_template'] = videochat_appointment_missing_placeholder_error($missing);
+            } else {
+                $settings['lead_body_template'] = $body;
+            }
         }
     }
     foreach (['sidebar' => 'sidebar_logo', 'modal' => 'modal_logo'] as $kind => $fieldPrefix) {

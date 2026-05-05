@@ -56,6 +56,32 @@ function videochat_appointment_truthy(mixed $value): bool
     return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
 }
 
+function videochat_appointment_template_placeholders(mixed $template): array
+{
+    preg_match_all('/\{([A-Za-z][A-Za-z0-9_]*)\}/', (string) $template, $matches);
+    $placeholders = array_values(array_unique(array_map('strval', $matches[1] ?? [])));
+    sort($placeholders);
+    return $placeholders;
+}
+
+function videochat_appointment_missing_template_placeholders(mixed $template, array $required): array
+{
+    $present = array_flip(videochat_appointment_template_placeholders($template));
+    $missing = [];
+    foreach ($required as $placeholder) {
+        $key = trim((string) $placeholder);
+        if ($key !== '' && !isset($present[$key])) {
+            $missing[] = $key;
+        }
+    }
+    return $missing;
+}
+
+function videochat_appointment_missing_placeholder_error(array $missing): string
+{
+    return 'missing_required_placeholders:' . implode(',', array_values($missing));
+}
+
 function videochat_appointment_normalize_public_id(mixed $value): string
 {
     $publicId = strtolower(trim((string) $value));
@@ -96,6 +122,16 @@ function videochat_appointment_normalize_smtp_encryption(mixed $value): string
 function videochat_default_appointment_email_subject_template(): string
 {
     return 'Video call scheduled: {call_title}';
+}
+
+function videochat_required_appointment_email_subject_placeholders(): array
+{
+    return ['call_title'];
+}
+
+function videochat_required_appointment_email_body_placeholders(): array
+{
+    return ['recipient_name', 'starts_at', 'join_link'];
 }
 
 function videochat_default_appointment_email_body_template(): string
@@ -275,11 +311,23 @@ function videochat_validate_appointment_settings_payload(mixed $payload): array
         $settings['mail_body_template'] = videochat_default_appointment_email_body_template();
     } elseif (array_key_exists('mail_subject_template', $payload)) {
         $subject = videochat_appointment_clean_text($payload['mail_subject_template'], 300);
-        $settings['mail_subject_template'] = $subject === '' ? videochat_default_appointment_email_subject_template() : $subject;
+        $subject = $subject === '' ? videochat_default_appointment_email_subject_template() : $subject;
+        $missing = videochat_appointment_missing_template_placeholders($subject, videochat_required_appointment_email_subject_placeholders());
+        if ($missing !== []) {
+            $errors['mail_subject_template'] = videochat_appointment_missing_placeholder_error($missing);
+        } else {
+            $settings['mail_subject_template'] = $subject;
+        }
     }
     if (!videochat_appointment_truthy($payload['mail_templates_reset'] ?? false) && array_key_exists('mail_body_template', $payload)) {
         $body = videochat_appointment_clean_multiline_text($payload['mail_body_template'], 4000);
-        $settings['mail_body_template'] = $body === '' ? videochat_default_appointment_email_body_template() : $body;
+        $body = $body === '' ? videochat_default_appointment_email_body_template() : $body;
+        $missing = videochat_appointment_missing_template_placeholders($body, videochat_required_appointment_email_body_placeholders());
+        if ($missing !== []) {
+            $errors['mail_body_template'] = videochat_appointment_missing_placeholder_error($missing);
+        } else {
+            $settings['mail_body_template'] = $body;
+        }
     }
 
     return [
