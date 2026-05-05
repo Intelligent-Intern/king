@@ -13,7 +13,7 @@
       <header :class="headerClass">
         <div :class="headerLeftClass">
           <slot name="header-prefix">
-            <img v-if="showLogo" :class="logoClass" :src="logoSrc" alt="" />
+            <img v-if="showLogo" :class="logoClass" :src="effectiveLogoSrc" alt="" />
           </slot>
           <div class="app-modal-title-block">
             <slot name="title">
@@ -45,6 +45,7 @@
 <script setup>
 import { computed, useAttrs } from 'vue';
 import AppIconButton from './AppIconButton.vue';
+import { appearanceState } from '../domain/workspace/appearance';
 
 defineOptions({ inheritAttrs: false });
 
@@ -111,7 +112,7 @@ const props = defineProps({
   },
   logoSrc: {
     type: String,
-    default: '/assets/orgas/kingrt/logo.svg',
+    default: '',
   },
   closeIcon: {
     type: String,
@@ -130,6 +131,10 @@ const props = defineProps({
 defineEmits(['close']);
 
 const attrs = useAttrs();
+const effectiveLogoSrc = computed(() => {
+  const configured = String(props.logoSrc || '').trim();
+  return configured !== '' ? configured : appearanceState.modalLogoPath;
+});
 const rootAttrs = computed(() => {
   const { class: _class, ...rest } = attrs;
   return rest;

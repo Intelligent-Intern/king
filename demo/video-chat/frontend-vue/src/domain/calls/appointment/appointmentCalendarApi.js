@@ -16,14 +16,43 @@ function requestHeaders(withBody = false, withAuth = true) {
 }
 
 function extractErrorMessage(payload, fallback) {
+  const fields = payload?.error?.details?.fields;
+  const fieldMessage = formatValidationFields(fields);
   if (payload && typeof payload === 'object') {
     const message = payload?.error?.message;
     if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
+      return fieldMessage === '' ? message.trim() : `${message.trim()} ${fieldMessage}`;
     }
   }
 
-  return fallback;
+  return fieldMessage === '' ? fallback : `${fallback} ${fieldMessage}`;
+}
+
+function formatValidationFields(fields) {
+  if (!fields || typeof fields !== 'object') return '';
+
+  const messages = new Set();
+  for (const [field, reason] of Object.entries(fields)) {
+    const key = String(field || '');
+    const value = String(reason || '');
+    if (value === 'overlapping_blocks') {
+      messages.add('Slots must not overlap.');
+    } else if (value === 'overlaps_booked_slot') {
+      messages.add('A saved slot overlaps an already booked call.');
+    } else if (value === 'required_valid_future_range') {
+      messages.add('Every slot needs a valid start and end time.');
+    } else if (value === 'block_too_long') {
+      messages.add('A single availability block can be at most one day long.');
+    } else if (value === 'too_many_blocks') {
+      messages.add('At most 200 slots can be saved at once.');
+    } else if (value === 'required_array' || value === 'must_be_object') {
+      messages.add('The slot data is incomplete.');
+    } else if (value === 'field_not_supported') {
+      messages.add(`Unsupported settings field: ${key}.`);
+    }
+  }
+
+  return [...messages].join(' ');
 }
 
 export async function appointmentApiRequest(path, {
@@ -65,25 +94,38 @@ export async function loadAppointmentBlocks() {
   return payload?.result || { blocks: [], public_path: '' };
 }
 
-export async function saveAppointmentBlocks(blocks) {
+export async function saveAppointmentBlocks(blocks, settings = null) {
   const payload = await appointmentApiRequest('/api/appointment-calendar/blocks', {
     method: 'PUT',
-    body: { blocks },
+    body: settings && typeof settings === 'object' ? { blocks, settings } : { blocks },
   });
   return payload?.result || { blocks: [], public_path: '' };
 }
 
-export async function loadPublicAppointmentSlots(ownerUserId) {
-  const ownerId = Number.parseInt(String(ownerUserId), 10) || 0;
-  const payload = await appointmentApiRequest(`/api/appointment-calendar/public/${ownerId}`, {
+export async function loadAppointmentSettings() {
+  const payload = await appointmentApiRequest('/api/appointment-calendar/settings');
+  return payload?.result || { settings: null, public_path: '' };
+}
+
+export async function saveAppointmentSettings(settings) {
+  const payload = await appointmentApiRequest('/api/appointment-calendar/settings', {
+    method: 'PATCH',
+    body: settings && typeof settings === 'object' ? settings : {},
+  });
+  return payload?.result || { settings: null, public_path: '' };
+}
+
+export async function loadPublicAppointmentSlots(calendarId) {
+  const publicCalendarId = encodeURIComponent(String(calendarId || '').trim());
+  const payload = await appointmentApiRequest(`/api/appointment-calendar/public/${publicCalendarId}`, {
     auth: false,
   });
   return payload?.result || { owner: null, slots: [] };
 }
 
-export async function bookPublicAppointment(ownerUserId, form) {
-  const ownerId = Number.parseInt(String(ownerUserId), 10) || 0;
-  const payload = await appointmentApiRequest(`/api/appointment-calendar/public/${ownerId}/book`, {
+export async function bookPublicAppointment(calendarId, form) {
+  const publicCalendarId = encodeURIComponent(String(calendarId || '').trim());
+  const payload = await appointmentApiRequest(`/api/appointment-calendar/public/${publicCalendarId}/book`, {
     method: 'POST',
     auth: false,
     body: form,

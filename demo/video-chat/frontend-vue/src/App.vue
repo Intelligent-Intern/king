@@ -7,6 +7,11 @@ import { onBeforeUnmount, onMounted, watchEffect } from 'vue';
 import { RouterView } from 'vue-router';
 import { probeBackendRuntime } from './support/runtime';
 import { sessionState } from './domain/auth/session';
+import {
+  applyWorkspaceBrandingDom,
+  loadWorkspaceAppearance,
+  themeColorsForId,
+} from './domain/workspace/appearance';
 
 const THEME_PRESETS = {
   dark: {
@@ -82,7 +87,7 @@ function applyTheme(themeValue) {
   if (typeof document === 'undefined') return;
 
   const theme = String(themeValue || '').trim().toLowerCase();
-  const palette = theme === 'light' ? THEME_PRESETS.light : THEME_PRESETS.dark;
+  const palette = themeColorsForId(theme) || (theme === 'light' ? THEME_PRESETS.light : THEME_PRESETS.dark);
 
   for (const [key, value] of Object.entries(palette)) {
     document.documentElement.style.setProperty(key, value);
@@ -172,10 +177,12 @@ function startBuildVersionGuard() {
 watchEffect(() => {
   applyTheme(sessionState.theme);
   applyTimeFormat(sessionState.timeFormat);
+  applyWorkspaceBrandingDom();
 });
 
 onMounted(() => {
   startBuildVersionGuard();
+  void loadWorkspaceAppearance({ force: true });
   void probeBackendRuntime();
 });
 

@@ -17,115 +17,126 @@
   >
     <template #body>
       <template v-if="!avatarEditorOpen">
-        <label v-if="form.mode === 'create'" class="users-field">
-          <span>Email</span>
-          <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
-        </label>
+        <form id="userEditorForm" class="users-edit-form" autocomplete="off" @submit.prevent="$emit('submit-form')">
+          <label v-if="form.mode === 'create'" class="users-field">
+            <span>Email</span>
+            <input v-model.trim="form.email" class="input" type="email" autocomplete="email" />
+          </label>
 
-        <section v-else class="users-field users-field-wide">
-          <span>Emails</span>
-          <div class="users-email-list">
-            <article
-              v-for="emailRow in userEmailRows"
-              :key="emailRow.id"
-              class="users-email-row"
-            >
-              <div class="users-email-main">
-                <div class="users-email-value">{{ emailRow.email }}</div>
-                <div class="users-email-meta">
-                  <span class="tag" :class="emailRow.is_verified ? 'ok' : 'warn'">
-                    {{ emailRow.is_verified ? 'confirmed' : 'unconfirmed' }}
-                  </span>
-                  <span v-if="emailRow.is_primary" class="tag ok">primary</span>
+          <section v-else class="users-field users-field-wide">
+            <span>Emails</span>
+            <div class="users-email-list">
+              <article
+                v-for="emailRow in userEmailRows"
+                :key="emailRow.id"
+                class="users-email-row"
+              >
+                <div class="users-email-main">
+                  <div class="users-email-value">{{ emailRow.email }}</div>
+                  <div class="users-email-meta">
+                    <span class="tag" :class="emailRow.is_verified ? 'ok' : 'warn'">
+                      {{ emailRow.is_verified ? 'confirmed' : 'unconfirmed' }}
+                    </span>
+                    <span v-if="emailRow.is_primary" class="tag ok">primary</span>
+                  </div>
                 </div>
-              </div>
-              <AppIconButton
-                v-if="!emailRow.is_verified"
-                icon="/assets/orgas/kingrt/icons/remove_user.png"
-                :disabled="formSaving || userEmailMutatingId === emailRow.id"
-                danger
-                @click="$emit('delete-pending-email', emailRow)"
+                <AppIconButton
+                  v-if="!emailRow.is_verified"
+                  icon="/assets/orgas/kingrt/icons/remove_user.png"
+                  :disabled="formSaving || userEmailMutatingId === emailRow.id"
+                  danger
+                  @click="$emit('delete-pending-email', emailRow)"
+                />
+              </article>
+              <p v-if="userEmailRows.length === 0" class="users-email-empty">No emails configured.</p>
+            </div>
+            <div class="users-email-create">
+              <input
+                v-model.trim="emailDraftModel"
+                class="input"
+                type="email"
+                autocomplete="email"
+                placeholder="Add new email"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
               />
-            </article>
-            <p v-if="userEmailRows.length === 0" class="users-email-empty">No emails configured.</p>
-          </div>
-          <div class="users-email-create">
-            <input
-              v-model.trim="emailDraftModel"
-              class="input"
-              type="email"
-              autocomplete="email"
-              placeholder="Add new email"
-              :disabled="formSaving || userEmailSubmitting || userEmailLoading"
-            />
-            <button
-              class="btn"
-              type="button"
-              :disabled="formSaving || userEmailSubmitting || userEmailLoading"
-              @click="$emit('create-pending-email')"
-            >
-              {{ userEmailSubmitting ? 'Sending…' : 'Send confirmation' }}
-            </button>
-          </div>
-        </section>
+              <button
+                class="btn"
+                type="button"
+                :disabled="formSaving || userEmailSubmitting || userEmailLoading"
+                @click="$emit('create-pending-email')"
+              >
+                {{ userEmailSubmitting ? 'Sending…' : 'Send confirmation' }}
+              </button>
+            </div>
+          </section>
 
-        <label class="users-field">
-          <span>Display name</span>
-          <input v-model.trim="form.display_name" class="input" type="text" />
-        </label>
+          <label class="users-field">
+            <span>Display name</span>
+            <input v-model.trim="form.display_name" class="input" type="text" />
+          </label>
 
-        <label v-if="form.mode === 'create'" class="users-field">
-          <span>Password</span>
-          <input v-model="form.password" class="input" type="password" autocomplete="new-password" />
-        </label>
+          <label v-if="form.mode === 'create'" class="users-field">
+            <span>Password</span>
+            <input v-model="form.password" class="input" type="password" autocomplete="new-password" />
+          </label>
 
-        <label v-if="form.mode === 'create'" class="users-field">
-          <span>Repeat password</span>
-          <input v-model="form.password_repeat" class="input" type="password" autocomplete="new-password" />
-        </label>
+          <label v-if="form.mode === 'create'" class="users-field">
+            <span>Repeat password</span>
+            <input v-model="form.password_repeat" class="input" type="password" autocomplete="new-password" />
+          </label>
 
-        <label class="users-field">
-          <span>Role</span>
-          <AppSelect v-model="form.role" :disabled="!canEditRole">
-            <option value="user">user</option>
-            <option value="admin">admin</option>
-          </AppSelect>
-        </label>
+          <label class="users-field">
+            <span>Role</span>
+            <AppSelect v-model="form.role" :disabled="!canEditRole">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </AppSelect>
+          </label>
 
-        <label v-if="form.mode === 'edit'" class="users-field">
-          <span>Status</span>
-          <AppSelect v-model="form.status" :disabled="!canEditStatus">
-            <option value="active">active</option>
-            <option value="disabled">disabled</option>
-          </AppSelect>
-        </label>
+          <label v-if="form.mode === 'edit'" class="users-field">
+            <span>Status</span>
+            <AppSelect v-model="form.status" :disabled="!canEditStatus">
+              <option value="active">active</option>
+              <option value="disabled">disabled</option>
+            </AppSelect>
+          </label>
 
-        <label v-if="form.mode === 'edit'" class="users-field">
-          <span>Time format</span>
-          <AppSelect v-model="form.time_format">
-            <option value="24h">24h</option>
-            <option value="12h">12h</option>
-          </AppSelect>
-        </label>
+          <label v-if="form.mode === 'edit'" class="users-field">
+            <span>Time format</span>
+            <AppSelect v-model="form.time_format">
+              <option value="24h">24h</option>
+              <option value="12h">12h</option>
+            </AppSelect>
+          </label>
 
-        <label v-if="form.mode === 'edit'" class="users-field">
-          <span>Theme</span>
-          <AppSelect v-model="form.theme">
-            <option value="dark">dark</option>
-            <option value="light">light</option>
-          </AppSelect>
-        </label>
+          <label v-if="form.mode === 'edit'" class="users-field">
+            <span>Theme</span>
+            <AppSelect v-model="form.theme">
+              <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
+                {{ theme.label }}
+              </option>
+            </AppSelect>
+          </label>
 
-        <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
-          <div class="users-avatar-preview-wrap">
-            <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
-          </div>
-          <div class="users-avatar-edit-actions">
-            <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="$emit('open-avatar-editor')">
-              Change avatar
-            </button>
-          </div>
-        </section>
+          <section class="users-field">
+            <span>Theme editor</span>
+            <label class="users-checkbox-row">
+              <input v-model="themeEditorChecked" type="checkbox" :disabled="themeEditorDisabled" />
+              <span>{{ themeEditorLabel }}</span>
+            </label>
+          </section>
+
+          <section v-if="form.mode === 'edit'" class="users-field users-field-wide users-avatar-edit-row">
+            <div class="users-avatar-preview-wrap">
+              <img class="users-avatar-preview" :src="avatarPreviewSrc" alt="User avatar preview" />
+            </div>
+            <div class="users-avatar-edit-actions">
+              <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="$emit('open-avatar-editor')">
+                Change avatar
+              </button>
+            </div>
+          </section>
+        </form>
       </template>
 
       <template v-else>
@@ -162,9 +173,10 @@
     <template #footer>
       <button
         class="btn btn-cyan"
-        type="button"
+        :type="avatarEditorOpen ? 'button' : 'submit'"
+        :form="avatarEditorOpen ? undefined : 'userEditorForm'"
         :disabled="formSaving"
-        @click="$emit(avatarEditorOpen ? 'save-avatar-changes' : 'submit-form')"
+        @click="avatarEditorOpen && $emit('save-avatar-changes')"
       >
         {{ formSaving ? 'Saving...' : (avatarEditorOpen ? 'Save avatar' : dialogSubmitLabel) }}
       </button>
@@ -247,6 +259,17 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  canEditThemeEditor: {
+    type: Boolean,
+    default: true,
+  },
+  themeOptions: {
+    type: Array,
+    default: () => [
+      { id: 'dark', label: 'dark' },
+      { id: 'light', label: 'light' },
+    ],
+  },
 });
 
 const emit = defineEmits([
@@ -265,6 +288,21 @@ const emailDraftModel = computed({
   get: () => props.userEmailDraft,
   set: (value) => emit('update:userEmailDraft', value),
 });
+
+const roleAutomaticallyEditsThemes = computed(() => String(props.form?.role || '').trim() === 'admin');
+const themeEditorChecked = computed({
+  get: () => roleAutomaticallyEditsThemes.value || props.form.theme_editor_enabled === true,
+  set: (value) => {
+    if (roleAutomaticallyEditsThemes.value) return;
+    props.form.theme_editor_enabled = value === true;
+  },
+});
+const themeEditorDisabled = computed(() => !props.canEditThemeEditor || roleAutomaticallyEditsThemes.value);
+const themeEditorLabel = computed(() => (
+  roleAutomaticallyEditsThemes.value
+    ? 'Admins can create and edit themes automatically'
+    : 'Allow this user to create and edit themes'
+));
 </script>
 
 <style scoped src="../admin/UsersView.css"></style>

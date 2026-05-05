@@ -34,6 +34,12 @@
   padding: var(--settings-dialog-padding);
 }
 
+.settings-dialog.is-maximized {
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
+}
+
 .settings-header {
   margin: calc(var(--settings-dialog-padding) * -1) calc(var(--settings-dialog-padding) * -1) 0;
   display: flex;
@@ -45,6 +51,12 @@
   border: 0;
   border-radius: 0;
   background: var(--brand-bg);
+}
+
+.settings-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .settings-title-wrap {

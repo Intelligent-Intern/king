@@ -1,6 +1,6 @@
 <template>
   <main class="appointment-booking-page">
-    <AppointmentBookingModal :open="true" :owner-id="ownerId" @close="close" />
+    <AppointmentBookingModal :open="true" :calendar-id="calendarId" @close="close" />
   </main>
 </template>
 
@@ -11,7 +11,7 @@ import AppointmentBookingModal from './AppointmentBookingModal.vue';
 
 const route = useRoute();
 const router = useRouter();
-const ownerId = computed(() => Number.parseInt(String(route.params.ownerId || ''), 10) || 0);
+const calendarId = computed(() => String(route.params.calendarId || '').trim());
 
 function close() {
   router.replace('/login');

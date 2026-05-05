@@ -1,9 +1,11 @@
 .calls-view {
+  height: 100%;
   min-height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--bg-ui-chrome);
   gap: 0;
+  overflow: hidden;
 }
 
 .calls-header {
@@ -55,7 +57,7 @@
 
 .calls-view-tabs {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   background: var(--border-subtle);
 }
@@ -152,40 +154,77 @@
 }
 
 .calls-calendar-wrap {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
+  height: 100%;
   padding: 10px 10px 10px;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .calls-calendar-shell {
   position: relative;
   min-height: 0;
+  height: 100%;
+  min-height: 760px;
   display: grid;
 }
 
-.calls-calendar-appointment-btn {
+.calls-calendar-loading {
   position: absolute;
   z-index: 2;
   top: 18px;
   right: 18px;
-  width: 34px;
-  height: 34px;
-  background: var(--color-0f3a52);
-}
-
-.calls-calendar-appointment-btn img {
-  width: 17px;
-  height: 17px;
+  margin: 0;
 }
 
 .calls-calendar-full {
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface-strong);
   padding: 10px;
+  overflow: hidden;
+}
+
+.calls-calendar-full :deep(.fc),
+.calls-calendar-full :deep(.fc-view-harness),
+.calls-calendar-full :deep(.fc-view-harness-active) {
+  width: 100%;
+  min-height: 0;
+  height: 100% !important;
+}
+
+.calls-calendar-full :deep(.fc-timegrid-slot) {
+  height: 3em;
+}
+
+.calls-calendar-full :deep(.fc-timegrid-col:not(:first-child)),
+.calls-calendar-full :deep(.fc-col-header-cell:not(:first-child)) {
+  box-shadow: inset 1px 0 0 var(--border-subtle);
+}
+
+.calls-personal-calendar-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  padding: 10px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.calls-personal-calendar-wrap :deep(.appointment-config-panel) {
+  min-height: 760px;
 }
 
 .calls-pagination-wrap {
