@@ -272,6 +272,10 @@ function videochat_handle_governance_crud_routes(
                 if (!(bool) ($permissionValidation['ok'] ?? false)) {
                     return videochat_tenancy_governance_validation_response($errorResponse, $permissionValidation);
                 }
+                $moduleValidation = videochat_tenancy_governance_validate_group_modules($payload);
+                if (!(bool) ($moduleValidation['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $moduleValidation);
+                }
             } elseif ($entity === 'organizations') {
                 $userValidation = videochat_tenancy_governance_validate_organization_users($pdo, $tenantId, $payload);
                 if (!(bool) ($userValidation['ok'] ?? false)) {
@@ -302,6 +306,16 @@ function videochat_handle_governance_crud_routes(
                 );
                 if (!(bool) ($permissionSyncResult['ok'] ?? false)) {
                     return videochat_tenancy_governance_validation_response($errorResponse, $permissionSyncResult);
+                }
+                $moduleSyncResult = videochat_tenancy_governance_sync_group_modules(
+                    $pdo,
+                    $tenantId,
+                    (int) ($savedRow['database_id'] ?? 0),
+                    $actorUserId,
+                    $payload
+                );
+                if (!(bool) ($moduleSyncResult['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $moduleSyncResult);
                 }
                 $savedRow = videochat_tenancy_governance_enrich_group_relationships($pdo, $tenantId, $savedRow);
             } elseif ($entity === 'organizations') {
@@ -379,6 +393,10 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($permissionValidation['ok'] ?? false)) {
                 return videochat_tenancy_governance_validation_response($errorResponse, $permissionValidation);
             }
+            $moduleValidation = videochat_tenancy_governance_validate_group_modules($payload);
+            if (!(bool) ($moduleValidation['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $moduleValidation);
+            }
         } elseif ($entity === 'organizations') {
             $userValidation = videochat_tenancy_governance_validate_organization_users($pdo, $tenantId, $payload);
             if (!(bool) ($userValidation['ok'] ?? false)) {
@@ -409,6 +427,16 @@ function videochat_handle_governance_crud_routes(
             );
             if (!(bool) ($permissionSyncResult['ok'] ?? false)) {
                 return videochat_tenancy_governance_validation_response($errorResponse, $permissionSyncResult);
+            }
+            $moduleSyncResult = videochat_tenancy_governance_sync_group_modules(
+                $pdo,
+                $tenantId,
+                (int) ($savedRow['database_id'] ?? 0),
+                $actorUserId,
+                $payload
+            );
+            if (!(bool) ($moduleSyncResult['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $moduleSyncResult);
             }
             $savedRow = videochat_tenancy_governance_enrich_group_relationships($pdo, $tenantId, $savedRow);
         } elseif ($entity === 'organizations') {
