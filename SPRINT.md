@@ -422,6 +422,9 @@ Non-goals for this sprint:
      localization keys.
    - [x] Remaining Login, Administration mail, and Marketplace non-call
      placeholders/options use localization keys.
+   - [x] Translation-key coverage contract now rejects static English
+     template text and static label/placeholder/title attributes in the
+     localized non-call Vue surfaces.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
