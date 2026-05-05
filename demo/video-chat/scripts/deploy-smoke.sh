@@ -82,6 +82,21 @@ expect_http_code() {
   log "${label}: HTTP ${code}"
 }
 
+public_get_json() {
+  local label="$1" url="$2" output code
+  output="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o "${output}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
+    cat "${output}" >&2 || true
+    rm -f "${output}"
+    fail "${label}: expected HTTP 200, got ${code:-none}"
+  fi
+
+  cat "${output}"
+  rm -f "${output}"
+}
+
 assert_public_health_payload() {
   php -r '
     $raw = stream_get_contents(STDIN);
@@ -103,6 +118,47 @@ assert_public_health_payload() {
     if (!is_string($payload["asset_version"] ?? null) || $payload["asset_version"] === "") {
         fwrite(STDERR, "health asset_version is missing\n");
         exit(1);
+    }
+  '
+}
+
+assert_public_localization_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("public localization payload status is not ok");
+    }
+    if ((string) ($payload["locale"] ?? "") !== "de") {
+        fail("public localization locale mismatch");
+    }
+    if ((string) ($payload["direction"] ?? "") !== "ltr") {
+        fail("public localization direction mismatch");
+    }
+    if (($payload["tenant_id"] ?? null) !== null) {
+        fail("public localization payload must not include tenant context");
+    }
+    $supported = $payload["supported_locales"] ?? [];
+    if (!is_array($supported)) {
+        fail("public localization supported_locales missing");
+    }
+    $codes = [];
+    foreach ($supported as $locale) {
+        if (is_array($locale) && is_string($locale["code"] ?? null)) {
+            $codes[] = $locale["code"];
+        }
+    }
+    foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
+        if (!in_array($requiredLocale, $codes, true)) {
+            fail("public localization supported locale missing: " . $requiredLocale);
+        }
+    }
+    if (!is_array($payload["resources"] ?? null) || !is_array($payload["fallback_resources"] ?? null)) {
+        fail("public localization resources and fallback_resources must be objects");
     }
   '
 }
@@ -599,9 +655,13 @@ expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
 
-health_payload="$(curl -fsS --max-time "${TIMEOUT}" "https://${DEPLOY_API_DOMAIN}/health")"
+health_payload="$(public_get_json "api health" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload
 log "api health: public allow-list payload verified"
+
+localization_payload="$(public_get_json "api localization resources" "https://${DEPLOY_API_DOMAIN}/api/localization/resources?locale=de&namespaces=common")"
+printf '%s' "${localization_payload}" | assert_public_localization_payload
+log "api localization resources: public global payload verified"
 
 expect_http_code admin-runtime-auth-boundary 401 "https://${DEPLOY_API_DOMAIN}/api/admin/runtime"
 expect_http_code api-version 200 "https://${DEPLOY_API_DOMAIN}/api/version"

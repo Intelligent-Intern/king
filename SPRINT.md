@@ -1554,6 +1554,15 @@ Non-goals for this sprint:
       preview smoke against `/api/admin/localization/imports/preview` and does
       not call the commit endpoint, so production-like CSV proof can run
       without importing rows.
+    - `/api/localization/resources` is now a public global-resource endpoint
+      for anonymous/public UI localization, while tenant overrides still require
+      authenticated tenant context. `deploy-smoke.sh` verifies the public
+      `de`/`common` resource payload has no tenant context and exposes seeded
+      rollout locales.
+    - Current deployed app fails the new public localization smoke with HTTP
+      401 on `/api/localization/resources?locale=de&namespaces=common`,
+      confirming the production backend is still on the pre-public-localization
+      router behavior until redeploy.
     - Full online smoke with remote SSH skipped now cleans up its admin session
       but correctly fails before protected admin checks on the current deployed
       app because `/api/auth/session` does not yet return `user.locale`
