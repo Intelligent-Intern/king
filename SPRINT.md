@@ -538,12 +538,14 @@ Non-goals for this sprint:
    - [x] Public booking and join routes load i18n resources without requiring
      an authenticated session and apply document `lang` / `dir`, including RTL
      locales.
+   - [x] Public booking slot labels, FullCalendar locale, and booking submit
+     payload use the active public locale.
 
    Done when:
    - [x] Public pages choose language from explicit route/query/cookie/browser
      fallback in a deterministic order.
    - [x] Public pages support RTL locales.
-   - [ ] Public booking slots and date/time formatting use the active locale.
+   - [x] Public booking slots and date/time formatting use the active locale.
    - [ ] Invalid/expired access paths show localized safe error text.
    - [ ] Browser smoke covers public booking in `en`, `de`, `ar`, and one
      additional RTL locale from the website source.
