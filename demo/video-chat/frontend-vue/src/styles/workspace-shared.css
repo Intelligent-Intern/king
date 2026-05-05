@@ -190,33 +190,33 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--text-primary);
   padding: 0 12px;
   outline: none;
 }
 
 .input::placeholder {
-  color: var(--color-4f5a6b);
+  color: var(--text-muted);
 }
 
 .input:focus,
 .select:focus {
-  border-color: var(--bg-tab-hover);
+  border-color: var(--brand-cyan-hover);
 }
 
 .input[type='date'],
 .input[type='time'],
 .input[type='datetime-local'] {
-  border-color: var(--color-133262);
-  background-color: var(--color-0b1324);
-  color: var(--color-f7f7f7);
+  border-color: var(--border-subtle);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   color-scheme: dark;
 }
 
 .input[type='date']:focus,
 .input[type='time']:focus,
 .input[type='datetime-local']:focus {
-  border-color: var(--color-3f79d6);
+  border-color: var(--brand-cyan-hover);
 }
 
 .input[type='date']::-webkit-datetime-edit,

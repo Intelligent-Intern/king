@@ -55,6 +55,10 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0042_workspace_theme_palette_refresh',
             'statements' => videochat_workspace_theme_refresh_statements(),
         ],
+        43 => [
+            'name' => '0043_workspace_theme_styleguide_palette',
+            'statements' => videochat_workspace_theme_refresh_statements(),
+        ],
     ];
 }
 
