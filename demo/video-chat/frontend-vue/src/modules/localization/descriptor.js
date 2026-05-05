@@ -8,8 +8,8 @@ export default {
       name: 'admin-administration-localization',
       roles: ['admin'],
       pageTitle: 'Localization',
-      source_path: 'domain/administration/AdministrationLocalizationView.vue',
-      loader: () => import('../../domain/administration/AdministrationLocalizationView.vue'),
+      source_path: 'modules/localization/pages/AdministrationLocalizationView.vue',
+      loader: () => import('./pages/AdministrationLocalizationView.vue'),
     },
   ],
   navigation: [
