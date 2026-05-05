@@ -77,11 +77,11 @@
           </label>
           <label class="marketplace-field">
             <span>{{ t('marketplace.manufacturer') }}</span>
-            <input v-model.trim="form.manufacturer" class="input" type="text" placeholder="Intelligent Intern" />
+            <input v-model.trim="form.manufacturer" class="input" type="text" :placeholder="t('marketplace.manufacturer_placeholder')" />
           </label>
           <label class="marketplace-field">
             <span>{{ t('marketplace.website') }}</span>
-            <input v-model.trim="form.website" class="input" type="url" placeholder="https://example.com" />
+            <input v-model.trim="form.website" class="input" type="url" :placeholder="t('marketplace.website_placeholder')" />
           </label>
           <label class="marketplace-field">
             <span>{{ t('marketplace.category') }}</span>

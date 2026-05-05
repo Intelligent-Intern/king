@@ -24,7 +24,7 @@
                 inputmode="email"
                 autocomplete="username"
                 :aria-label="t('users.email')"
-                placeholder="name@company.com"
+                :placeholder="t('auth.email_placeholder')"
               />
               <div class="ii-fieldError" :hidden="!emailError">{{ emailError }}</div>
             </div>
@@ -38,7 +38,7 @@
                 type="password"
                 autocomplete="current-password"
                 :aria-label="t('users.password')"
-                placeholder="••••••••••"
+                :placeholder="t('auth.password_placeholder')"
               />
               <div class="ii-fieldError" :hidden="!passwordError">{{ passwordError }}</div>
             </div>
