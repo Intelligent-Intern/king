@@ -159,6 +159,7 @@ try {
                 'email' => 'create-contract-user@intelligent-intern.com',
                 'display_name' => 'Create Contract User',
                 'password' => 'create-contract-password',
+                'theme_editor_enabled' => true,
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -185,11 +186,15 @@ try {
         (string) ($createdUser['role'] ?? '') === 'user',
         'create payload role should default to user'
     );
+    videochat_admin_user_create_assert(
+        ($createdUser['theme_editor_enabled'] ?? null) === true,
+        'create payload should expose theme editor permission'
+    );
 
     $pdo = videochat_open_sqlite_pdo($databasePath);
     $persistedUser = $pdo->prepare(
         <<<'SQL'
-SELECT users.email, roles.slug AS role_slug
+SELECT users.email, users.theme_editor_enabled, roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
 WHERE lower(users.email) = lower(:email)
@@ -202,6 +207,10 @@ SQL
     videochat_admin_user_create_assert(
         (string) ($persistedRow['role_slug'] ?? '') === 'user',
         'persisted user role should default to user'
+    );
+    videochat_admin_user_create_assert(
+        (int) ($persistedRow['theme_editor_enabled'] ?? 0) === 1,
+        'persisted user should keep theme editor permission'
     );
 
     $duplicateResponse = videochat_handle_user_routes(

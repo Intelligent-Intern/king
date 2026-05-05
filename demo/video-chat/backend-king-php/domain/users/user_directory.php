@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 /**
  * @return array{
  *   ok: bool,
@@ -82,6 +84,7 @@ function videochat_admin_user_list_filters(array $queryParams): array
  *     status: string,
  *     time_format: string,
  *     theme: string,
+ *     theme_editor_enabled: bool,
  *     avatar_path: ?string,
  *     created_at: string,
  *     updated_at: string
@@ -96,7 +99,8 @@ function videochat_admin_list_users(
     int $page,
     int $pageSize,
     string $order = 'role_then_name_asc',
-    string $status = 'all'
+    string $status = 'all',
+    ?int $tenantId = null
 ): array
 {
     $effectivePage = max(1, $page);
@@ -113,6 +117,12 @@ function videochat_admin_list_users(
     $search = trim($query);
     $whereParts = [];
     $params = [];
+    $tenantJoin = '';
+    if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id')) {
+        $tenantJoin = 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id';
+        $whereParts[] = 'tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\'';
+        $params[':tenant_id'] = $tenantId;
+    }
     if ($search !== '') {
         $whereParts[] = <<<'SQL'
 (
@@ -138,6 +148,7 @@ SQL;
 SELECT COUNT(*)
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 {$where}
 SQL;
     $countStatement = $pdo->prepare($countSql);
@@ -153,12 +164,14 @@ SELECT
     users.status,
     users.time_format,
     users.theme,
+    users.theme_editor_enabled,
     users.avatar_path,
     users.created_at,
     users.updated_at,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 {$where}
 ORDER BY
     CASE roles.slug
@@ -192,6 +205,7 @@ SQL;
             'status' => (string) ($row['status'] ?? 'disabled'),
             'time_format' => (string) ($row['time_format'] ?? '24h'),
             'theme' => (string) ($row['theme'] ?? 'dark'),
+            'theme_editor_enabled' => ((int) ($row['theme_editor_enabled'] ?? 0)) === 1,
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
             'created_at' => (string) ($row['created_at'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
@@ -275,7 +289,8 @@ function videochat_user_directory_list(
     int $page,
     int $pageSize,
     string $order = 'name_asc',
-    int $excludeUserId = 0
+    int $excludeUserId = 0,
+    ?int $tenantId = null
 ): array
 {
     $effectivePage = max(1, $page);
@@ -286,6 +301,12 @@ function videochat_user_directory_list(
     $search = trim($query);
     $whereParts = ['users.status = :status'];
     $params = [':status' => 'active'];
+    $tenantJoin = '';
+    if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id')) {
+        $tenantJoin = 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id';
+        $whereParts[] = 'tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\'';
+        $params[':tenant_id'] = $tenantId;
+    }
     if ($search !== '') {
         $whereParts[] = <<<'SQL'
 (
@@ -308,6 +329,7 @@ SQL;
 SELECT COUNT(*)
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 {$where}
 SQL;
     $countStatement = $pdo->prepare($countSql);
@@ -327,6 +349,7 @@ SELECT
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 {$where}
 ORDER BY
     lower(users.display_name) {$displayNameDirection},

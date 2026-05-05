@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 function videochat_generate_uuid_v4(): string
 {
     try {
@@ -120,23 +122,31 @@ function videochat_validate_create_invite_code_payload(array $payload): array
 /**
  * @return array{id: string, name: string}|null
  */
-function videochat_fetch_active_room_context(PDO $pdo, string $roomId): ?array
+function videochat_fetch_active_room_context(PDO $pdo, string $roomId, ?int $tenantId = null): ?array
 {
     $trimmedRoomId = trim($roomId);
     if ($trimmedRoomId === '') {
         return null;
     }
 
+    $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'rooms', 'tenant_id')
+        ? '  AND tenant_id = :tenant_id'
+        : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT id, name
 FROM rooms
 WHERE id = :id
   AND status = 'active'
+{$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':id' => $trimmedRoomId]);
+    $params = [':id' => $trimmedRoomId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;

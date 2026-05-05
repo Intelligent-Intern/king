@@ -7,7 +7,8 @@ function videochat_create_call_access_link_for_user(
     string $callId,
     int $authUserId,
     string $authRole,
-    array $options = []
+    array $options = [],
+    ?int $tenantId = null
 ): array {
     $normalizedCallId = trim($callId);
     if ($normalizedCallId === '') {
@@ -30,7 +31,7 @@ function videochat_create_call_access_link_for_user(
         ];
     }
 
-    $callFetch = videochat_get_call_for_user($pdo, $normalizedCallId, $authUserId, $authRole);
+    $callFetch = videochat_get_call_for_user($pdo, $normalizedCallId, $authUserId, $authRole, $tenantId);
     if (!(bool) ($callFetch['ok'] ?? false)) {
         return [
             'ok' => false,
@@ -123,7 +124,7 @@ function videochat_create_call_access_link_for_user(
     if ($isOpenLinkRequest) {
         $participantEmail = null;
     } elseif ($targetUserId > 0) {
-        $targetUser = videochat_fetch_active_user_for_call_access($pdo, $targetUserId, null);
+        $targetUser = videochat_fetch_active_user_for_call_access($pdo, $targetUserId, null, $tenantId);
         if (!is_array($targetUser)) {
             return [
                 'ok' => false,
@@ -138,7 +139,7 @@ function videochat_create_call_access_link_for_user(
         if ($targetEmail !== '') {
             $participantEmail = $targetEmail;
         } else {
-            $authUser = videochat_fetch_active_user_for_call_access($pdo, $authUserId, null);
+            $authUser = videochat_fetch_active_user_for_call_access($pdo, $authUserId, null, $tenantId);
             $participantEmail = is_array($authUser)
                 ? videochat_normalize_call_access_email((string) ($authUser['email'] ?? ''))
                 : '';
@@ -212,8 +213,12 @@ SQL
             $accessId = strtolower(trim((string) $existing['id']));
         } else {
             $accessId = videochat_generate_call_access_uuid();
+            $tenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id')
+                ? ', tenant_id'
+                : '';
+            $tenantValue = $tenantColumn !== '' ? ', :tenant_id' : '';
             $insert = $pdo->prepare(
-                <<<'SQL'
+                <<<SQL
 INSERT INTO call_access_links(
     id,
     call_id,
@@ -224,7 +229,7 @@ INSERT INTO call_access_links(
     created_at,
     expires_at,
     last_used_at,
-    consumed_at
+    consumed_at{$tenantColumn}
 ) VALUES(
     :id,
     :call_id,
@@ -235,11 +240,11 @@ INSERT INTO call_access_links(
     :created_at,
     :expires_at,
     NULL,
-    NULL
+    NULL{$tenantValue}
 )
 SQL
             );
-            $insert->execute([
+            $insertParams = [
                 ':id' => $accessId,
                 ':call_id' => $normalizedCallId,
                 ':participant_user_id' => $targetUserId > 0 ? $targetUserId : null,
@@ -247,7 +252,11 @@ SQL
                 ':created_by_user_id' => $authUserId,
                 ':created_at' => gmdate('c'),
                 ':expires_at' => $expiresAt,
-            ]);
+            ];
+            if ($tenantColumn !== '') {
+                $insertParams[':tenant_id'] = $tenantId;
+            }
+            $insert->execute($insertParams);
         }
 
         $touch = $pdo->prepare(
@@ -258,7 +267,7 @@ SQL
             ':last_used_at' => gmdate('c'),
         ]);
 
-        $accessLink = videochat_fetch_call_access_link($pdo, $accessId);
+        $accessLink = videochat_fetch_call_access_link($pdo, $accessId, $tenantId);
         if (!is_array($accessLink)) {
             $pdo->rollBack();
             return [
@@ -307,7 +316,8 @@ function videochat_resolve_call_access_for_user(
     PDO $pdo,
     string $accessId,
     int $authUserId,
-    string $authRole
+    string $authRole,
+    ?int $tenantId = null
 ): array {
     $normalizedAccessId = videochat_normalize_call_access_id($accessId);
     if ($normalizedAccessId === '') {
@@ -330,7 +340,7 @@ function videochat_resolve_call_access_for_user(
         ];
     }
 
-    $accessLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId);
+    $accessLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId, $tenantId);
     if (!is_array($accessLink)) {
         return [
             'ok' => false,
@@ -369,7 +379,7 @@ function videochat_resolve_call_access_for_user(
     }
 
     $callId = trim((string) ($accessLink['call_id'] ?? ''));
-    $callFetch = videochat_get_call_for_user($pdo, $callId, $authUserId, $authRole);
+    $callFetch = videochat_get_call_for_user($pdo, $callId, $authUserId, $authRole, $tenantId);
     if (!(bool) ($callFetch['ok'] ?? false)) {
         return [
             'ok' => false,
@@ -399,7 +409,7 @@ function videochat_resolve_call_access_for_user(
         ':last_used_at' => gmdate('c'),
     ]);
 
-    $freshLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId);
+    $freshLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId, $tenantId);
     if (!is_array($freshLink)) {
         $freshLink = $accessLink;
     }

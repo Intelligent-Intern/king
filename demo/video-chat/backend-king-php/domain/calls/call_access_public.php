@@ -46,7 +46,8 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         }
     }
 
-    $call = videochat_fetch_call_for_update($pdo, (string) ($accessLink['call_id'] ?? ''));
+    $tenantId = is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null;
+    $call = videochat_fetch_call_for_update($pdo, (string) ($accessLink['call_id'] ?? ''), $tenantId);
     if (!is_array($call)) {
         return [
             'ok' => false,
@@ -85,7 +86,8 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
     $targetUser = videochat_fetch_active_user_for_call_access(
         $pdo,
         $linkedUserId,
-        $participantEmail === '' ? null : $participantEmail
+        $participantEmail === '' ? null : $participantEmail,
+        $tenantId
     );
 
     $touch = $pdo->prepare(
@@ -96,7 +98,7 @@ function videochat_resolve_call_access_public(PDO $pdo, string $accessId): array
         ':last_used_at' => gmdate('c'),
     ]);
 
-    $freshLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId);
+    $freshLink = videochat_fetch_call_access_link($pdo, $normalizedAccessId, $tenantId);
     if (!is_array($freshLink)) {
         $freshLink = $accessLink;
     }

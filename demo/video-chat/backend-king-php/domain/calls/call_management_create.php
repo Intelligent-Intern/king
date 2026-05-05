@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): array
+require_once __DIR__ . '/../../support/tenant_migrations.php';
+
+function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload, ?int $tenantId = null): array
 {
     $validation = videochat_validate_create_call_payload($payload);
     if (!(bool) $validation['ok']) {
@@ -30,7 +32,7 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
         static fn (int $id): bool => $id > 0
     ));
     $requestedInternalIds = array_values(array_unique($requestedInternalIds));
-    $activeInternalUsers = videochat_active_internal_users($pdo, $requestedInternalIds);
+    $activeInternalUsers = videochat_active_internal_users($pdo, $requestedInternalIds, $tenantId);
     if (count($activeInternalUsers) !== count($requestedInternalIds)) {
         return [
             'ok' => false,
@@ -112,34 +114,47 @@ function videochat_create_call(PDO $pdo, int $ownerUserId, array $payload): arra
 
     $pdo->beginTransaction();
     try {
+        $effectiveTenantId = is_int($tenantId) && $tenantId > 0 ? $tenantId : null;
+        $roomTenantColumn = $effectiveTenantId !== null && videochat_tenant_table_has_column($pdo, 'rooms', 'tenant_id')
+            ? ', tenant_id'
+            : '';
+        $roomTenantValue = $roomTenantColumn !== '' ? ', :tenant_id' : '';
         $insertRoom = $pdo->prepare(
-            <<<'SQL'
-INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at)
-VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at)
+            <<<SQL
+INSERT OR IGNORE INTO rooms(id, name, visibility, status, created_by_user_id, created_at, updated_at{$roomTenantColumn})
+VALUES(:id, :name, 'private', 'active', :created_by_user_id, :created_at, :updated_at{$roomTenantValue})
 SQL
         );
-        $insertRoom->execute([
+        $roomParams = [
             ':id' => $callRoomId,
             ':name' => (string) $data['title'],
             ':created_by_user_id' => (int) $owner['id'],
             ':created_at' => $createdAt,
             ':updated_at' => $createdAt,
-        ]);
+        ];
+        if ($roomTenantColumn !== '') {
+            $roomParams[':tenant_id'] = $effectiveTenantId;
+        }
+        $insertRoom->execute($roomParams);
 
+        $callTenantColumn = $effectiveTenantId !== null && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+            ? ', tenant_id'
+            : '';
+        $callTenantValue = $callTenantColumn !== '' ? ', :tenant_id' : '';
         $insertCall = $pdo->prepare(
-            <<<'SQL'
+            <<<SQL
 INSERT INTO calls(
     id, room_id, title, access_mode, owner_user_id, status, starts_at, ends_at,
     schedule_timezone, schedule_date, schedule_duration_minutes, schedule_all_day,
-    cancelled_at, cancel_reason, cancel_message, created_at, updated_at
+    cancelled_at, cancel_reason, cancel_message, created_at, updated_at{$callTenantColumn}
 ) VALUES(
     :id, :room_id, :title, :access_mode, :owner_user_id, :status, :starts_at, :ends_at,
     :schedule_timezone, :schedule_date, :schedule_duration_minutes, :schedule_all_day,
-    NULL, NULL, NULL, :created_at, :updated_at
+    NULL, NULL, NULL, :created_at, :updated_at{$callTenantValue}
 )
 SQL
         );
-        $insertCall->execute([
+        $callParams = [
             ':id' => $callId,
             ':room_id' => $callRoomId,
             ':title' => (string) $data['title'],
@@ -154,7 +169,11 @@ SQL
             ':schedule_all_day' => (bool) ($schedule['all_day'] ?? false) ? 1 : 0,
             ':created_at' => $createdAt,
             ':updated_at' => $createdAt,
-        ]);
+        ];
+        if ($callTenantColumn !== '') {
+            $callParams[':tenant_id'] = $effectiveTenantId;
+        }
+        $insertCall->execute($callParams);
 
         $insertParticipant = $pdo->prepare(
             <<<'SQL'
@@ -209,6 +228,7 @@ SQL
         'errors' => [],
         'call' => [
             'id' => $callId,
+            'tenant_id' => $effectiveTenantId,
             'room_id' => $callRoomId,
             'title' => (string) $data['title'],
             'access_mode' => (string) $data['access_mode'],

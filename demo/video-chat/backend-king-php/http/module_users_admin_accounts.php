@@ -47,7 +47,8 @@ function videochat_handle_admin_user_account_routes(
                     (int) ($filters['page'] ?? 1),
                     (int) ($filters['page_size'] ?? 10),
                     (string) ($filters['order'] ?? 'role_then_name_asc'),
-                    (string) ($filters['status'] ?? 'all')
+                    (string) ($filters['status'] ?? 'all'),
+                    videochat_tenant_id_from_auth_context($apiAuthContext)
                 );
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
@@ -71,6 +72,7 @@ function videochat_handle_admin_user_account_routes(
                         'permissions' => [
                             'can_change_role' => $permissions['can_change_role'],
                             'can_change_status' => $permissions['can_change_status'],
+                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
                             'can_toggle_status' => $permissions['can_toggle_status'],
                             'can_delete' => $permissions['can_delete'],
                         ],
@@ -126,7 +128,7 @@ function videochat_handle_admin_user_account_routes(
 
         try {
             $pdo = $openDatabase();
-            $createResult = videochat_admin_create_user($pdo, $payload);
+            $createResult = videochat_admin_create_user($pdo, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
                 'reason' => 'internal_error',
@@ -166,7 +168,7 @@ function videochat_handle_admin_user_account_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $user = videochat_admin_fetch_user_by_id($pdo, $userId);
+                $user = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
                 if ($user === null) {
                     return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
                         'user_id' => $userId,
@@ -192,6 +194,7 @@ function videochat_handle_admin_user_account_routes(
                         'permissions' => [
                             'can_change_role' => $permissions['can_change_role'],
                             'can_change_status' => $permissions['can_change_status'],
+                            'can_change_theme_editor' => $permissions['can_change_theme_editor'],
                             'can_toggle_status' => $permissions['can_toggle_status'],
                             'can_delete' => $permissions['can_delete'],
                         ],
@@ -212,7 +215,7 @@ function videochat_handle_admin_user_account_routes(
             try {
                 $pdo = $openDatabase();
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
-                $existingUser = videochat_admin_fetch_user_by_id($pdo, $userId);
+                $existingUser = videochat_admin_fetch_user_by_id($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
                 if ($existingUser === null) {
                     return $errorResponse(404, 'admin_user_not_found', 'The requested user does not exist.', [
                         'user_id' => $userId,
@@ -274,7 +277,15 @@ function videochat_handle_admin_user_account_routes(
                     }
                 }
 
-                $updateResult = videochat_admin_update_user($pdo, $userId, $payload);
+                if (array_key_exists('theme_editor_enabled', $payload) && $actorUserId > 0 && $actorUserId === $userId) {
+                    return $errorResponse(409, 'admin_user_conflict', 'You cannot change your own theme editor access.', [
+                        'fields' => [
+                            'theme_editor_enabled' => 'cannot_change_own_theme_editor_access',
+                        ],
+                    ]);
+                }
+
+                $updateResult = videochat_admin_update_user($pdo, $userId, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [
                     'reason' => 'internal_error',
@@ -335,7 +346,7 @@ function videochat_handle_admin_user_account_routes(
                     ]);
                 }
 
-                $deleteResult = videochat_admin_delete_user($pdo, $userId);
+                $deleteResult = videochat_admin_delete_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_delete_failed', 'Could not delete user.', [
                     'reason' => 'internal_error',
