@@ -4,6 +4,7 @@ import { createParticipantActivityState } from './participantActivityState';
 import { createCallWorkspaceModerationSync } from './moderationSync';
 import { createVideoFullscreenToggle } from './videoFullscreenToggle';
 import { isScreenShareMediaSource, isScreenShareUserId, screenShareUserIdForOwner } from '../../screenShareIdentity.js';
+import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
 
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
@@ -570,7 +571,7 @@ const lobbyRows = computed(() => {
     sortTs: Number(row.requested_unix_ms || 0),
   })).sort((left, right) => {
     if (left.sortTs !== right.sortTs) return left.sortTs - right.sortTs;
-    return String(left.display_name || '').localeCompare(String(right.display_name || ''), 'en', { sensitivity: 'base' });
+    return compareLocalizedStrings(left.display_name, right.display_name);
   });
 });
 
@@ -599,7 +600,7 @@ const typingUsers = computed(() => {
   const nowMs = Date.now();
   return Object.values(rows)
     .filter((entry) => Number(entry.expiresAtMs || 0) > nowMs)
-    .sort((left, right) => String(left.displayName || '').localeCompare(String(right.displayName || ''), 'en', { sensitivity: 'base' }))
+    .sort((left, right) => compareLocalizedStrings(left.displayName, right.displayName))
     .map((entry) => String(entry.displayName || '').trim())
     .filter(Boolean);
 });
