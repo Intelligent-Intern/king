@@ -122,6 +122,7 @@ const descriptors = {
     relationships: Object.freeze([
       relation('organization', 'organizations', 'governance.relation.organization'),
       relation('members', 'users', 'governance.relation.members', { selection_mode: 'multiple' }),
+      relation('roles', 'roles', 'governance.relation.roles', { selection_mode: 'multiple' }),
       relation('modules', 'modules', 'governance.relation.modules', { selection_mode: 'multiple' }),
       relation('permissions', 'permissions', 'governance.relation.permissions', { selection_mode: 'multiple' }),
     ]),

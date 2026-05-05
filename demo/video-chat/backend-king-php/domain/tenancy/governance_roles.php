@@ -350,7 +350,7 @@ SQL
     }
 }
 
-function videochat_tenancy_update_governance_role(PDO $pdo, int $tenantId, string $identifier, array $payload): array
+function videochat_tenancy_update_governance_role(PDO $pdo, int $tenantId, int $actorUserId, string $identifier, array $payload): array
 {
     $existing = videochat_tenancy_fetch_governance_role($pdo, $tenantId, $identifier);
     if (!is_array($existing)) {
@@ -384,6 +384,13 @@ SQL
             $pdo->rollBack();
             return $sync;
         }
+        if (function_exists('videochat_tenancy_governance_sync_groups_for_role')) {
+            $assignmentSync = videochat_tenancy_governance_sync_groups_for_role($pdo, $tenantId, (int) ($role['id'] ?? 0), $actorUserId);
+            if (!(bool) ($assignmentSync['ok'] ?? false)) {
+                $pdo->rollBack();
+                return $assignmentSync;
+            }
+        }
         $pdo->commit();
         return ['ok' => true, 'row' => videochat_tenancy_fetch_governance_role($pdo, $tenantId, (string) ($existing['public_id'] ?? $identifier))];
     } catch (Throwable $error) {
@@ -400,9 +407,32 @@ function videochat_tenancy_delete_governance_role(PDO $pdo, int $tenantId, strin
     if (!is_array($existing)) {
         return ['ok' => false, 'reason' => 'not_found'];
     }
-    $delete = $pdo->prepare('DELETE FROM governance_roles WHERE tenant_id = :tenant_id AND id = :id');
-    $delete->execute([':tenant_id' => $tenantId, ':id' => (int) ($existing['id'] ?? 0)]);
-    return ['ok' => true, 'row' => $existing];
+    $assignedGroupIds = function_exists('videochat_tenancy_governance_group_ids_for_role')
+        ? videochat_tenancy_governance_group_ids_for_role($pdo, $tenantId, (int) ($existing['id'] ?? 0))
+        : [];
+    $pdo->beginTransaction();
+    try {
+        $deleteAssignments = $pdo->prepare('DELETE FROM governance_group_roles WHERE tenant_id = :tenant_id AND role_id = :role_id');
+        $deleteAssignments->execute([':tenant_id' => $tenantId, ':role_id' => (int) ($existing['id'] ?? 0)]);
+        $delete = $pdo->prepare('DELETE FROM governance_roles WHERE tenant_id = :tenant_id AND id = :id');
+        $delete->execute([':tenant_id' => $tenantId, ':id' => (int) ($existing['id'] ?? 0)]);
+        if (function_exists('videochat_tenancy_governance_sync_group_role_grants')) {
+            foreach ($assignedGroupIds as $groupId) {
+                $sync = videochat_tenancy_governance_sync_group_role_grants($pdo, $tenantId, (int) $groupId, 0);
+                if (!(bool) ($sync['ok'] ?? false)) {
+                    $pdo->rollBack();
+                    return $sync;
+                }
+            }
+        }
+        $pdo->commit();
+        return ['ok' => true, 'row' => $existing];
+    } catch (Throwable $error) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $error;
+    }
 }
 
 function videochat_handle_governance_role_routes(
@@ -467,7 +497,7 @@ function videochat_handle_governance_role_routes(
         }
         $result = $method === 'POST'
             ? videochat_tenancy_create_governance_role($pdo, $tenantId, $actorUserId, $payload)
-            : videochat_tenancy_update_governance_role($pdo, $tenantId, $identifier, $payload);
+            : videochat_tenancy_update_governance_role($pdo, $tenantId, $actorUserId, $identifier, $payload);
         if (!(bool) ($result['ok'] ?? false)) {
             return videochat_tenancy_governance_validation_response($errorResponse, $result);
         }

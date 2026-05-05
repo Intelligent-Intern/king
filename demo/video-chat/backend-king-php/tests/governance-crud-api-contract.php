@@ -321,6 +321,31 @@ try {
     $createdRoleId = (string) ($createdRole['id'] ?? '');
     $rolePermissionCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_role_permissions INNER JOIN governance_roles ON governance_roles.id = governance_role_permissions.role_id WHERE governance_roles.public_id = '{$createdRoleId}' AND governance_role_permissions.permission_key = 'governance.groups.create'")->fetchColumn();
     videochat_governance_crud_assert($rolePermissionCount === 1, 'created role permission should be persisted');
+
+    $assignRoleToGroup = $dispatch('PATCH', '/api/governance/groups/' . rawurlencode($createdGroupId), $adminAuth, [
+        'name' => 'Contract Group Updated',
+        'status' => 'archived',
+        'relationships' => [
+            'roles' => [
+                ['entity_key' => 'roles', 'id' => $createdRoleId],
+            ],
+        ],
+    ]);
+    $assignRoleToGroupPayload = videochat_governance_crud_decode($assignRoleToGroup);
+    videochat_governance_crud_assert((int) ($assignRoleToGroup['status'] ?? 0) === 200, 'admin should assign governance role to group');
+    videochat_governance_crud_assert(
+        (string) (((((($assignRoleToGroupPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['roles'] ?? [])[0] ?? [])['id'] ?? '') === $createdRoleId,
+        'updated group response should include selected role summary'
+    );
+    $groupRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_group_roles INNER JOIN \"groups\" ON \"groups\".id = governance_group_roles.group_id INNER JOIN governance_roles ON governance_roles.id = governance_group_roles.role_id WHERE \"groups\".public_id = '{$createdGroupId}' AND governance_roles.public_id = '{$createdRoleId}'")->fetchColumn();
+    videochat_governance_crud_assert($groupRoleAssignmentCount === 1, 'group role assignment should be persisted');
+    $groupRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants INNER JOIN \"groups\" ON \"groups\".id = permission_grants.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND permission_grants.source = 'group_roles' AND permission_grants.permission_key = 'governance.groups.create'")->fetchColumn();
+    videochat_governance_crud_assert($groupRoleGrantCount === 1, 'group role assignment should expand role permission into evaluator grants');
+    $roleGrantedCreate = $dispatch('POST', '/api/governance/groups', $userAuth, [
+        'name' => 'Role Granted Group',
+    ]);
+    videochat_governance_crud_assert((int) ($roleGrantedCreate['status'] ?? 0) === 201, 'group role permission relation should allow member group creation');
+
     $updateRole = $dispatch('PATCH', '/api/governance/roles/' . rawurlencode($createdRoleId), $adminAuth, [
         'name' => 'Contract Role',
         'key' => 'contract.role',
@@ -336,8 +361,12 @@ try {
         count((array) (((($updateRolePayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['permissions'] ?? [])) === 0,
         'updated role should clear permission relation'
     );
+    $clearedGroupRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants INNER JOIN \"groups\" ON \"groups\".id = permission_grants.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND permission_grants.source = 'group_roles'")->fetchColumn();
+    videochat_governance_crud_assert($clearedGroupRoleGrantCount === 0, 'clearing role permissions should remove role-sourced group grants');
     $deleteRole = $dispatch('DELETE', '/api/governance/roles/' . rawurlencode($createdRoleId), $adminAuth);
     videochat_governance_crud_assert((int) ($deleteRole['status'] ?? 0) === 200, 'admin should delete governance role');
+    $deletedRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_group_roles INNER JOIN \"groups\" ON \"groups\".id = governance_group_roles.group_id WHERE \"groups\".public_id = '{$createdGroupId}'")->fetchColumn();
+    videochat_governance_crud_assert($deletedRoleAssignmentCount === 0, 'deleting role should remove group role assignments');
 
     $groupPermissionCreateOrganization = $dispatch('POST', '/api/governance/organizations', $userAuth, [
         'name' => 'Group Permission Organization',
