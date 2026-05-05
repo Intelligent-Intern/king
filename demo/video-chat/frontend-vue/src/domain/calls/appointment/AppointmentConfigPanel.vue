@@ -2,11 +2,11 @@
   <article ref="panelEl" class="appointment-config-panel">
     <section class="appointment-config-toolbar">
       <label class="field appointment-link-field">
-        <span>Public booking link</span>
+        <span>{{ t('appointment_config.public_booking_link') }}</span>
         <input class="input" type="text" :value="publicBookingUrl" readonly />
       </label>
       <button class="btn" type="button" :disabled="publicBookingUrl === ''" @click="copyPublicLink">
-        Copy
+        {{ t('common.copy') }}
       </button>
       <button
         class="btn appointment-slot-mode-toggle"
@@ -15,14 +15,14 @@
         :disabled="state.saving || state.loading"
         @click="toggleSlotMode"
       >
-        {{ isRecurringSlotMode ? 'Recurring slots' : 'Only selected dates' }}
+        {{ isRecurringSlotMode ? t('appointment_config.recurring_slots') : t('appointment_config.only_selected_dates') }}
       </button>
       <button class="btn btn-cyan" type="button" :disabled="state.saving || state.loading" @click="openSettingsBeforeSave">
-        {{ state.saving ? 'Saving...' : 'Save slots' }}
+        {{ state.saving ? t('common.saving') : t('appointment_config.save_slots') }}
       </button>
     </section>
 
-    <section class="appointment-config-mode-tabs" role="tablist" aria-label="Personal calendar input mode">
+    <section class="appointment-config-mode-tabs" role="tablist" :aria-label="t('appointment_config.input_mode_aria')">
       <button
         class="tab"
         :class="{ active: state.inputMode === 'calendar' }"
@@ -31,7 +31,7 @@
         :aria-selected="state.inputMode === 'calendar'"
         @click="setInputMode('calendar')"
       >
-        Week Calendar
+        {{ t('appointment_config.week_calendar') }}
       </button>
       <button
         class="tab"
@@ -41,13 +41,13 @@
         :aria-selected="state.inputMode === 'form'"
         @click="setInputMode('form')"
       >
-        Form
+        {{ t('appointment_config.form') }}
       </button>
     </section>
 
     <section class="appointment-config-status" aria-live="polite">
       <section v-if="state.error" class="calls-inline-error">{{ state.error }}</section>
-      <section v-if="state.loading" class="calls-inline-hint">Loading slots...</section>
+      <section v-if="state.loading" class="calls-inline-hint">{{ t('appointment_config.loading_slots') }}</section>
     </section>
 
     <section class="appointment-config-body">
@@ -82,6 +82,7 @@ import { loadAppointmentBlocks, saveAppointmentBlocks } from './appointmentCalen
 import AppointmentSettingsModal from './AppointmentSettingsModal.vue';
 import AppointmentSlotRowsForm from './AppointmentSlotRowsForm.vue';
 import { compareDateTimeStrings } from '../../../support/dateTimeFormat';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 const emit = defineEmits(['saved']);
 const panelEl = ref(null);
@@ -125,7 +126,7 @@ function blockToEvent(block) {
   const booked = Boolean(block?.booked);
   return {
     id: String(block?.id || `slot-${Date.now()}-${Math.random().toString(16).slice(2)}`),
-    title: booked ? 'Booked call' : 'Call slot',
+    title: booked ? t('appointment_config.booked_call') : t('appointment_config.call_slot'),
     start: new Date(String(block?.starts_at || '')),
     end: new Date(String(block?.ends_at || '')),
     editable: !booked,
@@ -183,8 +184,8 @@ function applySettings(nextSettings) {
 function toggleSlotMode() {
   settings.slot_mode = isRecurringSlotMode.value ? 'selected_dates' : 'recurring_weekly';
   state.notice = settings.slot_mode === 'recurring_weekly'
-    ? 'Recurring slots will repeat weekly after saving.'
-    : 'Only selected dates will be offered after saving.';
+    ? t('appointment_config.recurring_notice')
+    : t('appointment_config.selected_dates_notice');
 }
 
 function createFormRow(seed = {}) {
@@ -278,10 +279,10 @@ function formRowsToBlocks({ includeBooked = false } = {}) {
     const start = localDateAndTimeToDate(row.date, row.startTime);
     const end = localDateAndTimeToDate(row.date, row.endTime);
     if (!start || !end) {
-      throw new Error('Every form row needs date, from, and to.');
+      throw new Error(t('appointment_config.row_required'));
     }
     if (end.getTime() <= start.getTime()) {
-      throw new Error('Every form row needs an end time after the start time.');
+      throw new Error(t('appointment_config.row_end_after_start'));
     }
 
     blocks.push({
@@ -324,7 +325,7 @@ function setInputMode(nextMode) {
     try {
       syncCalendarFromFormRows();
     } catch (error) {
-      state.error = error instanceof Error ? error.message : 'Could not read form rows.';
+      state.error = error instanceof Error ? error.message : t('appointment_config.read_form_rows_failed');
       return;
     }
   }
@@ -383,7 +384,7 @@ function copyDaySlots(dateValue) {
 
   if (ranges.length < 1) return;
   copiedDayTemplate.value = { ranges };
-  state.notice = 'Copied.';
+  state.notice = t('common.copied');
   scheduleDayHeaderRefresh();
 }
 
@@ -400,7 +401,7 @@ function insertCopiedSlots(dateValue) {
     }
     calendarInstance.addEvent({
       id: `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      title: 'Call slot',
+      title: t('appointment_config.call_slot'),
       start,
       end,
       editable: true,
@@ -409,7 +410,7 @@ function insertCopiedSlots(dateValue) {
       extendedProps: { booked: false },
     });
   }
-  state.notice = 'Inserted.';
+  state.notice = t('appointment_config.inserted');
   scheduleDayHeaderRefresh();
 }
 
@@ -432,7 +433,7 @@ function renderDayHeader(arg) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `appointment-day-action ${editableSlots.length > 0 ? 'copy' : 'insert'}`;
-    button.textContent = editableSlots.length > 0 ? 'Copy this' : 'Insert';
+    button.textContent = editableSlots.length > 0 ? t('appointment_config.copy_this') : t('appointment_config.insert');
     button.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -488,7 +489,7 @@ async function ensureCalendar() {
       if (!start || !end || end.getTime() <= start.getTime()) return;
       calendarInstance.addEvent({
         id: `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-        title: 'Call slot',
+        title: t('appointment_config.call_slot'),
         start,
         end,
         editable: true,
@@ -527,7 +528,7 @@ async function load() {
     await nextTick();
     scheduleCalendarSizeUpdate(3);
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not load appointment slots.';
+    state.error = error instanceof Error ? error.message : t('appointment_config.load_slots_failed');
   } finally {
     state.loading = false;
   }
@@ -554,11 +555,11 @@ async function save() {
     applySettings(result.settings || settings);
     syncEvents(Array.isArray(result.blocks) ? result.blocks : []);
     syncFormRowsFromBlocks(Array.isArray(result.blocks) ? result.blocks : []);
-    state.notice = 'Saved.';
+    state.notice = t('common.saved');
     state.settingsOpen = false;
     emit('saved');
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not save appointment slots.';
+    state.error = error instanceof Error ? error.message : t('appointment_config.save_slots_failed');
   } finally {
     state.saving = false;
   }
@@ -573,7 +574,7 @@ async function copyPublicLink() {
   if (publicBookingUrl.value === '' || typeof navigator === 'undefined' || !navigator.clipboard) return;
   try {
     await navigator.clipboard.writeText(publicBookingUrl.value);
-    state.notice = 'Copied.';
+    state.notice = t('common.copied');
   } catch {
     state.notice = '';
   }
