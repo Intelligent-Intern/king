@@ -34,9 +34,9 @@
         <label class="governance-field">
           <span>{{ t('governance.status') }}</span>
           <AppSelect v-model="form.status">
-            <option value="active">active</option>
-            <option value="draft">draft</option>
-            <option value="disabled">disabled</option>
+            <option value="active">{{ t('governance.status_active') }}</option>
+            <option value="draft">{{ t('governance.status_draft') }}</option>
+            <option value="disabled">{{ t('governance.status_disabled') }}</option>
           </AppSelect>
         </label>
       </form>
