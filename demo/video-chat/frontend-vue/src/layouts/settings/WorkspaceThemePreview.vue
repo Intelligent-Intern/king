@@ -131,7 +131,7 @@ const previewStyle = computed(() => {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
 }
 
 .theme-preview-brand {

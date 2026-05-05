@@ -5,8 +5,11 @@ import path from 'node:path';
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
 const logicalInlineSurfaces = [
+  'src/styles/auth.css',
+  'src/styles/settings.css',
   'src/components/admin/AdminPageFrame.vue',
   'src/components/admin/AdminTableFrame.vue',
+  'src/layouts/settings/WorkspaceThemePreview.vue',
   'src/modules/marketplace/pages/AdminMarketplaceView.css',
   'src/modules/users/pages/admin/UsersView.css',
   'src/modules/localization/pages/AdministrationLocalizationView.vue',
@@ -15,6 +18,7 @@ const logicalInlineSurfaces = [
 for (const relativePath of logicalInlineSurfaces) {
   const source = await readFile(path.join(root, relativePath), 'utf8');
   assert.doesNotMatch(source, /padding-left:\s*10px|padding-right:\s*10px|padding-left:\s*18px/, `${relativePath} must use logical inline padding for RTL`);
+  assert.doesNotMatch(source, /border-right:\s*1px solid var\(--(?:ii-border|border-subtle)\)/, `${relativePath} must use logical inline borders for RTL`);
 }
 
 const adminPageFrameSource = await readFile(path.join(root, 'src/components/admin/AdminPageFrame.vue'), 'utf8');
