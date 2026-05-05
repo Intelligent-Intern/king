@@ -231,8 +231,9 @@ function toggleMaximized() {
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
   overflow: hidden;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px 0 0 10px;
+  border: 0;
+  border-left: 1px solid var(--border-subtle);
+  border-radius: 0;
   background: var(--bg-surface);
   box-shadow: -18px 0 42px var(--color-rgba-0-0-0-0-42);
   padding: var(--app-side-panel-padding);
@@ -242,6 +243,7 @@ function toggleMaximized() {
   width: 100vw;
   height: 100vh;
   margin: 0;
+  border-left: 1px solid var(--border-subtle);
   border-radius: 0;
 }
 
@@ -321,6 +323,7 @@ function toggleMaximized() {
   .app-side-panel-dialog {
     width: 100vw;
     height: 100vh;
+    border-left: 0;
     border-radius: 0;
   }
 
