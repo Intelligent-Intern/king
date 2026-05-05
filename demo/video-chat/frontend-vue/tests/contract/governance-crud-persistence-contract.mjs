@@ -116,5 +116,6 @@ assert.match(viewSource, /submitPersistedRow/, 'governance CRUD view must persis
 assert.match(viewSource, /isPersistedGovernanceEntity\(key\)\)\s*return false/, 'relation drafts must not fake-create backend-backed entities locally');
 assert.match(viewSource, /portabilityActions/, 'data portability must render explicit export and import route actions');
 assert.match(viewSource, /downloadPortabilityExport/, 'completed export jobs must trigger a JSON download from the returned job result');
+assert.match(viewSource, /downloadPortabilityResult/, 'existing data portability job rows must expose their returned JSON result');
 
 console.log('[governance-crud-persistence-contract] PASS');

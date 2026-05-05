@@ -140,6 +140,7 @@ import {
   dataPortabilityPayloadFromForm,
   dataPortabilitySubmitLabel,
   downloadPortabilityExport,
+  downloadPortabilityResult,
   isDataPortabilityActionKind,
   isDataPortabilityEntity,
 } from '../dataPortabilityUi.js';
@@ -709,6 +710,10 @@ function rowActionTitle(action) {
 }
 
 async function handleRowAction(action, row) {
+  if (action.kind === 'export' && isDataPortabilityEntity(entityKey.value)) {
+    downloadPortabilityResult(row);
+    return;
+  }
   if (action.kind === 'edit') {
     openEditModal(row);
     return;

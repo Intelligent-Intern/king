@@ -587,6 +587,8 @@ Sprint goal:
     - Governance job rows now expose sanitized export/dry-run result payloads
       without internal tenant/user/organization database ids, and user-scoped
       jobs without a selected user resolve to the authenticated user.
+    - Existing export/import job rows expose a result-download row action so
+      users can retrieve a completed job payload after leaving the create flow.
     - Frontend contracts and build pass; backend CRUD contract still skips in
       this local runtime because `pdo_sqlite` is not installed.
 

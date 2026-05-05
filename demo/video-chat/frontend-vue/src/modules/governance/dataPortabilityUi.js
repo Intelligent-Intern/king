@@ -77,13 +77,17 @@ export function dataPortabilityPayloadFromForm(modalMode = '', form = {}, relati
 
 export function downloadPortabilityExport(row = {}) {
   if (!row || row.job_type !== 'export' || row.status !== 'completed') return false;
+  return downloadPortabilityResult(row);
+}
+
+export function downloadPortabilityResult(row = {}) {
   const result = row.result && typeof row.result === 'object' ? row.result : null;
   if (!result || typeof document === 'undefined' || typeof URL === 'undefined') return false;
   const blob = new Blob([`${JSON.stringify(result, null, 2)}\n`], { type: 'application/json' });
   const link = document.createElement('a');
   const objectUrl = URL.createObjectURL(blob);
   link.href = objectUrl;
-  link.download = `${String(row.id || 'tenant-export').replace(/[^A-Za-z0-9_.-]/g, '_')}.json`;
+  link.download = `${String(row.id || 'tenant-portability-job').replace(/[^A-Za-z0-9_.-]/g, '_')}.json`;
   document.body.appendChild(link);
   link.click();
   link.remove();
