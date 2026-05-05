@@ -1,0 +1,29 @@
+{
+  "contract_version": "videochat-tenant-context-v1",
+  "default_tenant": {
+    "public_id": "00000000-0000-4000-8000-000000000001",
+    "slug": "default",
+    "label": "Default Workspace"
+  },
+  "auth_snapshot": {
+    "required": ["id", "uuid", "public_id", "slug", "label", "role", "permissions"],
+    "roles": ["owner", "admin", "member"],
+    "permissions": [
+      "platform_admin",
+      "tenant_admin",
+      "manage_users",
+      "manage_organizations",
+      "manage_groups",
+      "manage_permission_grants",
+      "edit_themes",
+      "export_import"
+    ]
+  },
+  "permission_grants": {
+    "subject_types": ["user", "group", "organization"],
+    "resource_types": ["calendar"],
+    "actions": ["create", "read", "update", "delete", "share", "manage"],
+    "time_bounds": ["valid_from", "valid_until", "revoked_at"]
+  },
+  "export_manifest_schema_version": "videochat-tenant-export-v1"
+}

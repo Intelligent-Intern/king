@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth_request.php';
 require_once __DIR__ . '/auth_session_cache.php';
 require_once __DIR__ . '/auth_rbac.php';
+require_once __DIR__ . '/tenant_context.php';
 
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
@@ -26,10 +27,14 @@ function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $now
         ];
     }
 
+    $activeTenantSelect = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id')
+        ? 'sessions.active_tenant_id AS active_tenant_id,'
+        : 'NULL AS active_tenant_id,';
     $query = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     sessions.id,
+    {$activeTenantSelect}
     sessions.issued_at,
     sessions.expires_at,
     sessions.revoked_at,
@@ -44,6 +49,7 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url AS user_post_logout_landing_url,
     roles.slug AS role_slug
@@ -107,12 +113,27 @@ SQL
         is_string($row['email'] ?? null) ? (string) $row['email'] : '',
         $row['password_hash'] ?? null
     );
+    $tenant = videochat_tenant_context_for_user(
+        $pdo,
+        (int) $row['user_id'],
+        isset($row['active_tenant_id']) ? (int) $row['active_tenant_id'] : null
+    );
+    if ($tenant === null) {
+        return [
+            'ok' => false,
+            'reason' => 'tenant_membership_inactive',
+            'session' => null,
+            'user' => null,
+        ];
+    }
+    $tenantPayload = videochat_tenant_auth_payload($tenant);
 
     return [
         'ok' => true,
         'reason' => 'ok',
         'session' => [
             'id' => (string) $row['id'],
+            'active_tenant_id' => (int) ($tenantPayload['id'] ?? 0),
             'issued_at' => (string) $row['issued_at'],
             'expires_at' => $expiresAt,
             'revoked_at' => null,
@@ -128,6 +149,9 @@ SQL
             'time_format' => is_string($row['time_format'] ?? null) ? (string) $row['time_format'] : '24h',
             'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
             'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
+            'can_edit_themes' => (string) ($row['role_slug'] ?? 'user') === 'admin'
+                || ((int) ($row['theme_editor_enabled'] ?? 0)) === 1
+                || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
             'post_logout_landing_url' => (static function (array $source): string {
                 $sessionUrl = is_string($source['session_post_logout_landing_url'] ?? null)
@@ -142,7 +166,9 @@ SQL
             })($row),
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
+            'tenant' => $tenantPayload,
         ],
+        'tenant' => $tenantPayload,
     ];
 }
 
@@ -175,6 +201,7 @@ function videochat_authenticate_request(PDO $pdo, array $request, string $transp
         'token' => $token,
         'session' => $validation['session'],
         'user' => $validation['user'],
+        'tenant' => $validation['tenant'] ?? null,
     ];
 }
 
@@ -255,7 +282,8 @@ function videochat_rotate_session_token(
     ?int $ttlSeconds = null,
     ?string $clientIp = null,
     ?string $userAgent = null,
-    ?int $nowUnix = null
+    ?int $nowUnix = null,
+    ?int $activeTenantId = null
 ): array {
     $trimmedCurrentSessionId = trim($currentSessionId);
     if ($trimmedCurrentSessionId === '') {
@@ -300,6 +328,17 @@ function videochat_rotate_session_token(
     $issuedAt = gmdate('c', $effectiveNowUnix);
     $expiresAt = gmdate('c', $effectiveNowUnix + $resolvedTtlSeconds);
     $revokedAt = $issuedAt;
+    $tenant = videochat_tenant_context_for_user($pdo, $userId, $activeTenantId);
+    if ($tenant === null) {
+        return [
+            'ok' => false,
+            'reason' => 'tenant_membership_inactive',
+            'replaced_session_id' => $trimmedCurrentSessionId,
+            'revoked_at' => null,
+            'new_session' => null,
+        ];
+    }
+    $resolvedTenantId = (int) ($tenant['id'] ?? 0);
 
     $trimmedClientIp = trim((string) ($clientIp ?? ''));
     $trimmedUserAgent = substr(trim((string) ($userAgent ?? '')), 0, 500);
@@ -354,20 +393,23 @@ SQL
             throw new RuntimeException('Could not issue a distinct session token.');
         }
 
-        $insertNew = $pdo->prepare(
-            <<<'SQL'
-INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
-VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
-SQL
-        );
-        $insertNew->execute([
+        $hasActiveTenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id');
+        $insertSql = $hasActiveTenantColumn
+            ? 'INSERT INTO sessions(id, user_id, active_tenant_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :active_tenant_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)'
+            : 'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)';
+        $insertParams = [
             ':id' => $newSessionId,
             ':user_id' => $userId,
             ':issued_at' => $issuedAt,
             ':expires_at' => $expiresAt,
             ':client_ip' => $trimmedClientIp === '' ? null : $trimmedClientIp,
             ':user_agent' => $trimmedUserAgent === '' ? null : $trimmedUserAgent,
-        ]);
+        ];
+        if ($hasActiveTenantColumn) {
+            $insertParams[':active_tenant_id'] = $resolvedTenantId;
+        }
+        $insertNew = $pdo->prepare($insertSql);
+        $insertNew->execute($insertParams);
 
         if ($startedTransaction && $pdo->inTransaction()) {
             $pdo->commit();
@@ -379,7 +421,8 @@ SQL
             $issuedAt,
             $expiresAt,
             $trimmedClientIp === '' ? null : $trimmedClientIp,
-            $trimmedUserAgent === '' ? null : $trimmedUserAgent
+            $trimmedUserAgent === '' ? null : $trimmedUserAgent,
+            $resolvedTenantId
         );
 
         return [
@@ -394,6 +437,7 @@ SQL
                 'issued_at' => $issuedAt,
                 'expires_at' => $expiresAt,
                 'expires_in_seconds' => $resolvedTtlSeconds,
+                'active_tenant_id' => $resolvedTenantId,
             ],
         ];
     } catch (Throwable) {
@@ -431,7 +475,8 @@ function videochat_issue_session_for_user(
     ?int $ttlSeconds = null,
     ?string $clientIp = null,
     ?string $userAgent = null,
-    ?int $nowUnix = null
+    ?int $nowUnix = null,
+    ?int $activeTenantId = null
 ): array {
     if ($userId <= 0) {
         return [
@@ -456,6 +501,15 @@ function videochat_issue_session_for_user(
     $expiresAt = gmdate('c', $effectiveNow + $resolvedTtlSeconds);
     $trimmedClientIp = trim((string) ($clientIp ?? ''));
     $trimmedUserAgent = substr(trim((string) ($userAgent ?? '')), 0, 500);
+    $tenant = videochat_tenant_context_for_user($pdo, $userId, $activeTenantId);
+    if ($tenant === null) {
+        return [
+            'ok' => false,
+            'reason' => 'tenant_membership_inactive',
+            'session' => null,
+        ];
+    }
+    $resolvedTenantId = (int) ($tenant['id'] ?? 0);
 
     $sessionId = '';
     for ($attempt = 0; $attempt < 5; $attempt++) {
@@ -474,20 +528,23 @@ function videochat_issue_session_for_user(
     }
 
     try {
-        $insert = $pdo->prepare(
-            <<<'SQL'
-INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
-VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
-SQL
-        );
-        $insert->execute([
+        $hasActiveTenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id');
+        $insertSql = $hasActiveTenantColumn
+            ? 'INSERT INTO sessions(id, user_id, active_tenant_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :active_tenant_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)'
+            : 'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)';
+        $insertParams = [
             ':id' => $sessionId,
             ':user_id' => $userId,
             ':issued_at' => $issuedAt,
             ':expires_at' => $expiresAt,
             ':client_ip' => $trimmedClientIp === '' ? null : $trimmedClientIp,
             ':user_agent' => $trimmedUserAgent === '' ? null : $trimmedUserAgent,
-        ]);
+        ];
+        if ($hasActiveTenantColumn) {
+            $insertParams[':active_tenant_id'] = $resolvedTenantId;
+        }
+        $insert = $pdo->prepare($insertSql);
+        $insert->execute($insertParams);
     } catch (Throwable) {
         return [
             'ok' => false,
@@ -501,7 +558,8 @@ SQL
         $issuedAt,
         $expiresAt,
         $trimmedClientIp === '' ? null : $trimmedClientIp,
-        $trimmedUserAgent === '' ? null : $trimmedUserAgent
+        $trimmedUserAgent === '' ? null : $trimmedUserAgent,
+        $resolvedTenantId
     );
 
     return [
@@ -514,6 +572,7 @@ SQL
             'issued_at' => $issuedAt,
             'expires_at' => $expiresAt,
             'expires_in_seconds' => $resolvedTtlSeconds,
+            'active_tenant_id' => $resolvedTenantId,
         ],
     ];
 }

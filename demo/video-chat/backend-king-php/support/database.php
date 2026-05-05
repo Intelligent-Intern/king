@@ -79,7 +79,13 @@ SQL
     $pdo->exec('BEGIN IMMEDIATE');
     try {
         $seededDemoUsers = videochat_seed_demo_users($pdo);
+        if (function_exists('videochat_tenant_backfill_default_memberships')) {
+            videochat_tenant_backfill_default_memberships($pdo);
+        }
         $seededDemoCalls = videochat_seed_demo_calls($pdo);
+        if (function_exists('videochat_tenant_backfill_default_owned_records')) {
+            videochat_tenant_backfill_default_owned_records($pdo);
+        }
         $pdo->exec('COMMIT');
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) {

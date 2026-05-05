@@ -36,7 +36,7 @@ function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
             'id' => 'rest_auth_session',
             'transport' => 'rest',
             'matcher' => 'exact_any',
-            'paths' => ['/api/auth/session', '/api/auth/refresh', '/api/auth/logout'],
+            'paths' => ['/api/auth/session', '/api/auth/refresh', '/api/auth/logout', '/api/auth/tenant'],
             'allowed_roles' => $authenticatedRoles,
         ],
         [
@@ -44,6 +44,27 @@ function videochat_rbac_permission_matrix(string $wsPath = '/ws'): array
             'transport' => 'websocket',
             'matcher' => 'exact',
             'path' => $normalizedWsPath,
+            'allowed_roles' => $authenticatedRoles,
+        ],
+        [
+            'id' => 'rest_workspace_administration',
+            'transport' => 'rest',
+            'matcher' => 'exact',
+            'path' => '/api/admin/workspace-administration',
+            'allowed_roles' => $authenticatedRoles,
+        ],
+        [
+            'id' => 'rest_workspace_administration_items',
+            'transport' => 'rest',
+            'matcher' => 'prefix',
+            'prefix' => '/api/admin/workspace-administration/',
+            'allowed_roles' => $authenticatedRoles,
+        ],
+        [
+            'id' => 'rest_tenant_administration',
+            'transport' => 'rest',
+            'matcher' => 'prefix',
+            'prefix' => '/api/admin/tenancy/',
             'allowed_roles' => $authenticatedRoles,
         ],
         [
