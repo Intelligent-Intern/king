@@ -1,8 +1,8 @@
 <template>
   <AppModalShell
     :open="open"
-    :title="dialogTitle"
-    :aria-label="dialogTitle"
+    :title="activeDialogTitle"
+    :aria-label="activeDialogTitle"
     root-class-name="users-modal"
     backdrop-class="users-modal-backdrop"
     dialog-class="users-modal-dialog"
@@ -10,7 +10,7 @@
     header-left-class="users-modal-head-left"
     logo-class="users-modal-head-logo"
     title-class=""
-    :body-class="avatarEditorOpen ? 'users-avatar-modal-body' : 'users-modal-body'"
+    :body-class="relationStackOpen ? 'users-modal-body users-modal-body-relation' : (avatarEditorOpen ? 'users-avatar-modal-body' : 'users-modal-body')"
     footer-class="users-modal-footer"
     :close-label="t('users.close_user_modal')"
     maximizable
@@ -19,7 +19,21 @@
     @close="$emit('close')"
   >
     <template #body>
-      <template v-if="!avatarEditorOpen">
+      <CrudRelationStack
+        v-if="relationStackOpen"
+        :open="relationStackOpen"
+        :relation="activeRelation"
+        :selections="relationSelections"
+        :row-provider="relationRowsForEntity"
+        :create-draft="createGovernanceRelationRow"
+        :can-create-draft-for-entity="canCreateGovernanceRelationRow"
+        :relation-filter="relationStackRelationFilter"
+        :show-nested-relations="relationStackShowsNestedRelations"
+        @close="closeRelationStack"
+        @apply="applyRelationSelection"
+      />
+
+      <template v-else-if="!avatarEditorOpen">
         <form id="userEditorForm" class="users-edit-form" autocomplete="off" @submit.prevent="$emit('submit-form')">
           <label v-if="form.mode === 'create'" class="users-field">
             <span>{{ t('users.email') }}</span>
@@ -203,7 +217,7 @@
       <p v-if="formError" class="users-form-error">{{ formError }}</p>
     </template>
 
-    <template #footer>
+    <template #footer v-if="!relationStackOpen">
       <button
         class="btn btn-cyan"
         :type="avatarEditorOpen ? 'button' : 'submit'"
@@ -215,21 +229,6 @@
       </button>
     </template>
   </AppModalShell>
-
-  <CrudRelationStack
-    :open="relationStackOpen"
-    :relation="activeRelation"
-    :selections="relationSelections"
-    :row-provider="relationRowsForEntity"
-    :create-draft="createGovernanceRelationRow"
-    :can-create-draft-for-entity="canCreateGovernanceRelationRow"
-    :relation-filter="relationStackRelationFilter"
-    :maximized="relationStackMaximized"
-    :show-nested-relations="relationStackShowsNestedRelations"
-    @update:maximized="relationStackMaximized = $event"
-    @close="closeRelationStack"
-    @apply="applyRelationSelection"
-  />
 </template>
 
 <script setup>
@@ -383,7 +382,6 @@ const emit = defineEmits([
 ]);
 
 const relationStackOpen = ref(false);
-const relationStackMaximized = ref(false);
 const activeRelation = ref(null);
 const governancePersistence = createGovernanceCrudPersistence();
 const relationCreatedRowsByEntity = reactive({
@@ -435,6 +433,11 @@ const relationSelections = computed(() => ({
   theme: selectedRows(themeRows.value, props.form.theme),
 }));
 const relationStackShowsNestedRelations = computed(() => activeRelation.value?.key === 'governance_groups');
+const activeDialogTitle = computed(() => (
+  relationStackOpen.value && activeRelation.value
+    ? t('governance.relation_picker.title', { relation: relationLabel(activeRelation.value) })
+    : props.dialogTitle
+));
 
 const {
   editorMaximized,
@@ -501,6 +504,11 @@ function canCreateGovernanceRelationRow(entityKey) {
   return String(entityKey || '').trim() === 'groups' && props.canEditGovernanceGroups && canCreateGovernanceGroups.value;
 }
 
+function relationLabel(relation) {
+  const key = String(relation?.label_key || '').trim();
+  return key !== '' ? t(key) : String(relation?.key || '');
+}
+
 function relationStackRelationFilter(relation) {
   if (activeRelation.value?.key !== 'governance_groups') return true;
   return ['modules', 'permissions'].includes(String(relation?.target_entity || '').trim());
@@ -525,13 +533,11 @@ function openRelation(relation) {
   if (relation?.key === 'governance_roles' && !props.canEditGovernanceRoles) return;
   if (relation?.key === 'governance_groups' && !props.canEditGovernanceGroups) return;
   activeRelation.value = relation;
-  relationStackMaximized.value = false;
   relationStackOpen.value = true;
 }
 
 function closeRelationStack() {
   relationStackOpen.value = false;
-  relationStackMaximized.value = false;
   activeRelation.value = null;
 }
 

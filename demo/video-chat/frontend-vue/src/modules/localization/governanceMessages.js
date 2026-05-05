@@ -76,7 +76,7 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.option.user': 'User',
   'governance.readonly.system_catalog': 'System catalog entries are managed by module descriptors.',
   'governance.relationships': 'Relationships',
-  'governance.relation_picker.apply': 'Apply selection',
+  'governance.relation_picker.apply': 'Select',
   'governance.relation_picker.back': 'Back',
   'governance.relation_picker.create': 'Create related',
   'governance.relation_picker.empty': 'No related records match the current filter.',

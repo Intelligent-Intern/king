@@ -238,12 +238,12 @@ async function createUserThroughNestedGroupRelation(page, label) {
   await page.goto('/admin/governance/users');
   await expect(page).toHaveURL(/\/admin\/governance\/users$/);
   await page.getByRole('button', { name: 'New user' }).click();
-  const userDialog = page.getByRole('dialog', { name: 'Create user' });
+  const userDialog = page.locator('.users-modal-dialog').filter({ visible: true }).first();
   await expect(userDialog).toBeVisible();
   await fillRequiredUserFields(userDialog, label);
 
   await userDialog.locator('.users-field').filter({ hasText: /^Groups/ }).locator('button.users-relation-link').click();
-  const relationDialog = page.locator('.crud-relation-dialog').filter({ visible: true }).first();
+  const relationDialog = userDialog.locator('.crud-relation-stack').filter({ visible: true }).first();
   await expect(relationDialog).toBeVisible();
   await expectModalInsideViewport(page, relationDialog);
   await expect(relationDialog.getByRole('button', { name: /Permissions/ })).toBeVisible();
@@ -263,7 +263,7 @@ async function createUserThroughNestedGroupRelation(page, label) {
   await expect(permissionRow).toBeVisible();
   await permissionRow.locator('input[type="checkbox"]').check();
   await relationDialog.getByRole('button', { name: 'Back' }).click();
-  await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
+  await relationDialog.getByRole('button', { name: 'Select' }).click();
 
   await expect(userDialog.locator('button.users-relation-link').filter({ hasText: `Created ${label} Group` })).toBeVisible();
   await userDialog.getByRole('button', { name: 'Create user' }).click();
@@ -272,7 +272,7 @@ async function createUserThroughNestedGroupRelation(page, label) {
 async function selectCatalogRelation(relationDialog, catalogLabel) {
   await relationDialog.getByPlaceholder('Search related records').fill(catalogLabel);
   await selectVisibleRelationRow(relationDialog, catalogLabel);
-  await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
+  await relationDialog.getByRole('button', { name: 'Select' }).click();
 }
 
 async function selectVisibleRelationRow(relationDialog, catalogLabel) {
@@ -286,22 +286,22 @@ async function selectPagedPermissionRelations(relationDialog) {
   await relationDialog.getByRole('button', { name: 'Next' }).click();
   await expect(relationDialog.getByText(/Page 2 \/ 2/)).toBeVisible();
   await selectVisibleRelationRow(relationDialog, 'workspace_settings.read');
-  await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
+  await relationDialog.getByRole('button', { name: 'Select' }).click();
 }
 
 async function createGovernanceGroupThroughNestedRelations(page, label) {
   await page.goto('/admin/governance/groups');
   await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
   await page.getByRole('button', { name: 'Create group' }).click();
-  const crudDialog = page.getByRole('dialog', { name: 'Create Group' });
+  const crudDialog = page.locator('.governance-modal-dialog').filter({ visible: true }).first();
   await expect(crudDialog).toBeVisible();
-  await expectModalInsideViewport(page, crudDialog.locator('.governance-modal-dialog'));
+  await expectModalInsideViewport(page, crudDialog);
 
   await crudDialog.locator('.governance-field').filter({ hasText: 'Name' }).locator('input').fill(`Governance ${label} Group`);
   await crudDialog.locator('.governance-field').filter({ hasText: 'Key' }).locator('input').fill(`governance-${label}-group`);
 
   await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Permissions' }).click();
-  const relationDialog = page.locator('.crud-relation-dialog').filter({ visible: true }).first();
+  const relationDialog = crudDialog.locator('.crud-relation-stack').filter({ visible: true }).first();
   await expect(relationDialog).toBeVisible();
   await expectModalInsideViewport(page, relationDialog);
   await selectPagedPermissionRelations(relationDialog);
@@ -311,7 +311,7 @@ async function createGovernanceGroupThroughNestedRelations(page, label) {
   await expect(relationDialog).toBeVisible();
   await expectModalInsideViewport(page, relationDialog);
   await relationDialog.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.locator('.crud-relation-dialog').filter({ visible: true })).toHaveCount(0);
+  await expect(crudDialog.locator('.crud-relation-stack').filter({ visible: true })).toHaveCount(0);
   await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).filter({ hasText: '1 selected' })).toHaveCount(0);
 
   await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).click();

@@ -10,6 +10,8 @@ async function source(relativePath) {
 
 const modalSource = await source('src/modules/users/pages/components/UserEditorModal.vue');
 assert.match(modalSource, /CrudRelationStack/, 'user editor must reuse the shared relation stack');
+assert.match(modalSource, /v-if="relationStackOpen"/, 'user editor relation stack must replace content inside the existing modal');
+assert.doesNotMatch(modalSource, /relationStackMaximized/, 'user editor relation stack must not open a second maximizable modal');
 assert.match(modalSource, /target_entity: 'user_roles'/, 'user role must be exposed as a relation target');
 assert.match(modalSource, /target_entity: 'governance_roles'/, 'governance roles must be exposed as a relation target');
 assert.match(modalSource, /target_entity: 'groups'/, 'governance groups must use the shared Governance group descriptor target');

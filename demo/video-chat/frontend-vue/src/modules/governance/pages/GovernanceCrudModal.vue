@@ -1,15 +1,15 @@
 <template>
   <AppModalShell
     :open="open"
-    :title="title"
-    :aria-label="title"
+    :title="activeTitle"
+    :aria-label="activeTitle"
     root-class-name="governance-modal"
     backdrop-class="governance-modal-backdrop"
     dialog-class="governance-modal-dialog"
     header-class="governance-modal-head governance-modal-head-brand"
     header-left-class="governance-modal-head-left"
     logo-class="governance-modal-head-logo"
-    body-class="governance-modal-body"
+    :body-class="relationActive ? 'governance-modal-body governance-modal-body-relation' : 'governance-modal-body'"
     footer-class="governance-modal-footer"
     :close-label="t('governance.close_modal')"
     maximizable
@@ -18,47 +18,50 @@
     @close="$emit('close')"
   >
     <template #body>
-      <form id="governanceCrudForm" class="governance-form" autocomplete="off" @submit.prevent="$emit('submit')">
-        <label v-for="field in fields" :key="field.key" :class="fieldClass(field)">
-          <span>{{ fieldLabel(field) }}</span>
-          <textarea
-            v-if="field.type === 'textarea'"
-            v-model.trim="form[field.key]"
-            class="input governance-textarea"
-            rows="4"
-          ></textarea>
-          <AppSelect v-else-if="field.type === 'enum'" v-model="form[field.key]">
-            <option v-for="option in field.options || []" :key="option.value" :value="option.value">
-              {{ optionLabel(option) }}
-            </option>
-          </AppSelect>
-          <input
-            v-else
-            v-model.trim="form[field.key]"
-            class="input"
-            :type="inputType(field)"
-            :autocomplete="field.autocomplete || 'off'"
-          />
-        </label>
-      </form>
-      <section v-if="relationships.length > 0" class="governance-relations">
-        <span class="governance-relations-title">{{ t('governance.relationships') }}</span>
-        <button
-          v-for="relationship in relationships"
-          :key="relationship.key"
-          class="governance-relation-link"
-          type="button"
-          @click="$emit('open-relation', relationship)"
-        >
-          <strong>+1</strong>
-          <span>{{ relationshipLabel(relationship) }}</span>
-          <em>{{ relationSummary(relationship) }}</em>
-        </button>
-      </section>
-      <p v-if="error" class="governance-form-error">{{ error }}</p>
+      <slot v-if="relationActive" name="relation" />
+      <template v-else>
+        <form id="governanceCrudForm" class="governance-form" autocomplete="off" @submit.prevent="$emit('submit')">
+          <label v-for="field in fields" :key="field.key" :class="fieldClass(field)">
+            <span>{{ fieldLabel(field) }}</span>
+            <textarea
+              v-if="field.type === 'textarea'"
+              v-model.trim="form[field.key]"
+              class="input governance-textarea"
+              rows="4"
+            ></textarea>
+            <AppSelect v-else-if="field.type === 'enum'" v-model="form[field.key]">
+              <option v-for="option in field.options || []" :key="option.value" :value="option.value">
+                {{ optionLabel(option) }}
+              </option>
+            </AppSelect>
+            <input
+              v-else
+              v-model.trim="form[field.key]"
+              class="input"
+              :type="inputType(field)"
+              :autocomplete="field.autocomplete || 'off'"
+            />
+          </label>
+        </form>
+        <section v-if="relationships.length > 0" class="governance-relations">
+          <span class="governance-relations-title">{{ t('governance.relationships') }}</span>
+          <button
+            v-for="relationship in relationships"
+            :key="relationship.key"
+            class="governance-relation-link"
+            type="button"
+            @click="$emit('open-relation', relationship)"
+          >
+            <strong>+1</strong>
+            <span>{{ relationshipLabel(relationship) }}</span>
+            <em>{{ relationSummary(relationship) }}</em>
+          </button>
+        </section>
+        <p v-if="error" class="governance-form-error">{{ error }}</p>
+      </template>
     </template>
 
-    <template #footer>
+    <template #footer v-if="!relationActive">
       <button class="btn" type="button" :disabled="saving" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn btn-cyan" type="submit" form="governanceCrudForm" :disabled="saving">
         {{ saving ? t('settings.saving') : submitLabel }}
@@ -68,6 +71,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
@@ -113,9 +117,21 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  relationActive: {
+    type: Boolean,
+    default: false,
+  },
+  relationTitle: {
+    type: String,
+    default: '',
+  },
 });
 
 defineEmits(['close', 'submit', 'update:maximized', 'open-relation']);
+
+const activeTitle = computed(() => (
+  props.relationActive && props.relationTitle ? props.relationTitle : props.title
+));
 
 function fieldLabel(field) {
   const key = String(field?.label_key || '').trim();
