@@ -6,19 +6,30 @@
 
 .governance-crud-view .admin-page-frame-toolbar {
   gap: 14px;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) minmax(150px, 180px) minmax(150px, 180px) minmax(0, 1fr) 48px;
+  align-items: center;
+  justify-content: stretch;
+  padding: 10px 10px 25px;
+  background: transparent;
 }
 
 .governance-search-field {
+  width: 100%;
+  min-width: 0;
   flex: 1 1 280px;
   max-width: 360px;
 }
 
 .governance-filter-select {
+  width: 100%;
+  min-width: 0;
   flex: 0 1 180px;
 }
 
 .governance-toolbar-submit-btn {
+  grid-column: 5;
+  justify-self: end;
   width: 48px;
   height: 40px;
   border: 1px solid var(--border-subtle);
@@ -138,6 +149,19 @@
 }
 
 @media (max-width: 760px) {
+  .governance-crud-view .admin-page-frame-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .governance-toolbar-submit-btn {
+    grid-column: auto;
+  }
+
+  .governance-search-field,
+  .governance-filter-select {
+    max-width: none;
+  }
+
   .governance-table {
     table-layout: auto;
     border-collapse: separate;
