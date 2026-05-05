@@ -37,7 +37,7 @@
             <td :data-label="t('governance.status')">
               <span class="tag" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span>
             </td>
-            <td :data-label="t('governance.description')">{{ row.description || t('common.not_available') }}</td>
+            <td :data-label="t('governance.description')">{{ rowDescription(row) }}</td>
             <td :data-label="t('governance.updated')">{{ formatDate(row.updatedAt) }}</td>
             <td :data-label="t('governance.actions')">
               <span v-if="row.readonly" class="governance-readonly-label">{{ t('governance.system') }}</span>
@@ -177,6 +177,33 @@ function routeLabel(key, keyKey, fallback) {
   if (translationKey !== '') return t(translationKey);
   const value = typeof route.meta?.[key] === 'string' ? route.meta[key].trim() : '';
   return value || fallback;
+}
+
+function localizedDescriptionParams(params = {}) {
+  const source = params && typeof params === 'object' ? params : {};
+  const localized = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (key.endsWith('_key')) {
+      const targetKey = key.slice(0, -4);
+      if (String(value || '').trim() !== '') {
+        localized[targetKey] = t(String(value));
+      }
+      continue;
+    }
+    if (!Object.prototype.hasOwnProperty.call(localized, key)) {
+      localized[key] = value;
+    }
+  }
+  return localized;
+}
+
+function rowDescription(row) {
+  const descriptionKey = typeof row?.description_key === 'string' ? row.description_key.trim() : '';
+  if (descriptionKey !== '') {
+    return t(descriptionKey, localizedDescriptionParams(row?.description_params));
+  }
+  const description = typeof row?.description === 'string' ? row.description.trim() : '';
+  return description || t('common.not_available');
 }
 
 function resetForm(row = null) {

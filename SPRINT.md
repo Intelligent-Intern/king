@@ -372,7 +372,7 @@ Sprint goal:
      behavior; frontend `onboarding-tour-contract` covers tour loading, header
      wiring, session state, and badge display.
 
-9. [ ] [admin-i18n-hardening] Close remaining admin/governance i18n escape
+9. [x] [admin-i18n-hardening] Close remaining admin/governance i18n escape
    hatches.
 
    Done when:
@@ -381,6 +381,14 @@ Sprint goal:
    - Governance catalog descriptions render from structured localized fields.
    - Admin/governance action labels, empty states, errors, and readonly reasons
      are all keyed.
+
+   Completed 2026-05-05:
+   - Governance module and permission catalog descriptions now carry
+     `description_key` plus params instead of concatenated English strings.
+   - `GovernanceCrudView.vue` resolves description keys and nested `*_key`
+     params through `t(...)`.
+   - `admin-i18n-hardening-contract.mjs` pins the catalog localization
+     contract alongside the existing translation-key coverage guard.
 
 10. [ ] [frontend-governance-test-matrix] Add frontend tests for the new admin
     logic.
