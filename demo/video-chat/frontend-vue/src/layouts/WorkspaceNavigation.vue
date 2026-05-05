@@ -74,8 +74,22 @@ const emit = defineEmits(['navigate']);
 const expandedGroups = reactive({});
 
 const adminIcon = '/assets/orgas/kingrt/icons/adminon.png';
+const gearIcon = '/assets/orgas/kingrt/icons/gear.png';
 const navigationItems = [
   { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
+  {
+    key: 'administration',
+    to: '/admin/administration',
+    label: 'Administration',
+    icon: gearIcon,
+    roles: ['admin'],
+    children: [
+      { to: '/admin/administration/marketplace', label: 'Marketplace', roles: ['admin'] },
+      { to: '/admin/administration/localization', label: 'Localization', roles: ['admin'] },
+      { to: '/admin/administration/app-configuration', label: 'App Configuration', roles: ['admin'] },
+      { to: '/admin/administration/theme-editor', label: 'Theme Editor', roles: ['admin'] },
+    ],
+  },
   {
     key: 'governance',
     to: '/admin/governance',
@@ -96,7 +110,6 @@ const navigationItems = [
       { to: '/admin/governance/compliance', label: 'Compliance', roles: ['admin'] },
     ],
   },
-  { to: '/admin/marketplace', label: 'Marketplace', icon: '/assets/orgas/kingrt/icons/add_to_call.png', roles: ['admin'] },
   { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
   { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
 ];
