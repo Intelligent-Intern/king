@@ -574,6 +574,8 @@ Non-goals for this sprint:
 
     Scope:
     - Add `src/modules` and a small module registry.
+    - Initial registry scaffold:
+      `demo/video-chat/frontend-vue/src/modules`.
     - Define a frontend module descriptor contract based on the Intelligent
       Intern descriptor pattern.
     - Support dynamic page/widget loading through descriptor loaders.
@@ -582,7 +584,7 @@ Non-goals for this sprint:
       loaded from.
 
     Done when:
-    - [ ] Module descriptors can register routes, navigation entries,
+    - [x] Module descriptors can register routes, navigation entries,
       permissions, settings panels, and i18n namespaces.
     - [ ] Router can consume module routes without direct feature imports.
     - [ ] Navigation can consume module navigation metadata.
