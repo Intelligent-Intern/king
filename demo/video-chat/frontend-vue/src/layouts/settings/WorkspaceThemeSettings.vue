@@ -150,7 +150,7 @@
             </section>
 
             <footer class="settings-theme-editor-actions">
-              <button class="btn" type="button" :disabled="state.saving" @click="cancelEditor">{{ t('common.cancel') }}</button>
+              <button class="btn" type="button" :disabled="state.saving" @click="cancelEditor">{{ t('theme_settings.close_editor') }}</button>
               <button class="btn btn-cyan" type="button" :disabled="state.saving" @click="saveTheme">
                 {{ state.saving ? t('settings.saving') : t('theme_settings.save_theme') }}
               </button>

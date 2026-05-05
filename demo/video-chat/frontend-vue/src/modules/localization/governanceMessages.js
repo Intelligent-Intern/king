@@ -83,6 +83,8 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.relationships': 'Relationships',
   'governance.relation_picker.apply': 'Select',
   'governance.relation_picker.back': 'Back',
+  'governance.relation_picker.close': 'Close',
+  'governance.relation_picker.close_create': 'Close form',
   'governance.relation_picker.create': 'Create related',
   'governance.relation_picker.empty': 'No related records match the current filter.',
   'governance.relation_picker.none_selected': 'None selected',
