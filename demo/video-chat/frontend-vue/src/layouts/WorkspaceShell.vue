@@ -846,7 +846,16 @@ const settingsTiles = computed(() => moduleStore.settingsPanelsFor({ role: sessi
   label: panel.label,
 })));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
-const settingsLanguageOptions = SUPPORTED_LOCALIZATION_LANGUAGES;
+const settingsLanguageOptions = computed(() => {
+  const backendLocales = Array.isArray(sessionState.supportedLocales) && sessionState.supportedLocales.length > 0
+    ? sessionState.supportedLocales
+    : SUPPORTED_LOCALIZATION_LANGUAGES;
+  return backendLocales.map((language) => ({
+    code: normalizeSettingsLanguage(language.code),
+    label: String(language.label || language.code || '').trim() || normalizeSettingsLanguage(language.code).toUpperCase(),
+    direction: language.direction === 'rtl' ? 'rtl' : localizationLanguageDirection(language.code),
+  }));
+});
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
@@ -1888,7 +1897,7 @@ watch(
 );
 
 onMounted(() => {
-  applySettingsLanguage(readStoredSettingsLanguage());
+  applySettingsLanguage(sessionState.locale || readStoredSettingsLanguage());
   void loadWorkspaceAppearance({ force: true }).then(() => {
     resetSettingsDraft();
   });
@@ -1956,7 +1965,7 @@ function resetSettingsDraft() {
   settingsDraft.theme = normalizeWorkspaceThemeId(sessionState.theme || 'dark');
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
-  settingsDraft.language = readStoredSettingsLanguage();
+  settingsDraft.language = normalizeSettingsLanguage(sessionState.locale || readStoredSettingsLanguage());
   settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
 }
@@ -2074,7 +2083,7 @@ async function saveSettings() {
     return;
   }
 
-  if (!settingsLanguageOptions.some((option) => option.code === language)) {
+  if (!settingsLanguageOptions.value.some((option) => option.code === language)) {
     settingsState.message = 'Unsupported language selected.';
     return;
   }
@@ -2107,6 +2116,7 @@ async function saveSettings() {
       theme,
       time_format: timeFormat,
       date_format: dateFormat,
+      locale: language,
       avatar_path: avatarPath,
       post_logout_landing_url: postLogoutLandingUrl,
     });
@@ -2120,8 +2130,8 @@ async function saveSettings() {
       return;
     }
 
-    storeSettingsLanguage(language);
-    applySettingsLanguage(language);
+    storeSettingsLanguage(saveResult.user?.locale || language);
+    applySettingsLanguage(saveResult.user?.locale || language);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();

@@ -50,9 +50,11 @@ for (const rtlLocale of ['ar', 'fa', 'ps', 'sgd']) {
 
 assert.match(
   inventory,
-  /contains `ur` and misses\s+`sgd`/,
-  'inventory must call out the current app RTL metadata mismatch',
+  /same RTL metadata as the website runtime/,
+  'inventory must record that app RTL metadata matches the website runtime',
 );
+assert.doesNotMatch(localizationOptions, /'ur'/, 'localization options must not list unsupported ur as RTL');
+assert.match(localizationOptions, /'sgd'/, 'localization options must mark sgd as RTL');
 
 for (const namespace of [
   'common',

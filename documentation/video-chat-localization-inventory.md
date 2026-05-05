@@ -38,8 +38,7 @@ user preference is implemented.
 
 RTL languages from the website runtime are `ar`, `fa`, `ps`, and `sgd`.
 `demo/video-chat/frontend-vue/src/support/localizationOptions.js` already lists
-the website locale files, but its RTL set currently contains `ur` and misses
-`sgd`. That mismatch has to be fixed in the schema/runtime issue.
+the website locale files and now uses the same RTL metadata.
 
 ## Namespace Plan
 
@@ -129,11 +128,12 @@ breaking clients that already key off error codes.
 
 ## Locale Assumptions Found
 
-- `src/layouts/WorkspaceShell.vue` stores the selected language in
-  `localStorage` under `ii_videocall_v1_workspace_language`; this has to become
-  a persistent backend-backed user setting.
-- `src/support/localizationOptions.js` has the right locale list but the wrong
-  RTL metadata for `sgd`.
+- `src/layouts/WorkspaceShell.vue` still keeps
+  `ii_videocall_v1_workspace_language` as a compatibility fallback, but the
+  settings save now sends `locale` to the backend and the session snapshot owns
+  the selected locale.
+- `src/support/localizationOptions.js` has the right locale list and uses the
+  same RTL metadata as the website runtime.
 - `src/modules/governance/pages/GovernanceCrudView.vue` formats dates with
   `Intl.DateTimeFormat('de-DE', ...)`.
 - `src/modules/marketplace/pages/AdminMarketplaceTable.vue`,
