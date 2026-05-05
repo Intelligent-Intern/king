@@ -398,6 +398,8 @@ Non-goals for this sprint:
    Progress:
    - [x] Theme settings/editor strings are keyed and the editor state/actions
      moved into an options-based `useWorkspaceThemeSettings` composable.
+   - [x] User editor modal labels, placeholders, status text, and avatar text
+     are keyed; modal computed state moved into `useUserEditorModal`.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
