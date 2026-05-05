@@ -42,7 +42,8 @@
             <td data-label="Beschreibung">{{ row.description || 'n/a' }}</td>
             <td data-label="Updated">{{ formatDate(row.updatedAt) }}</td>
             <td data-label="Actions">
-              <div class="actions-inline">
+              <span v-if="row.readonly" class="governance-readonly-label">System</span>
+              <div v-else class="actions-inline">
                 <AppIconButton
                   icon="/assets/orgas/kingrt/icons/gear.png"
                   :title="`Edit ${singularLabel}`"
@@ -97,6 +98,8 @@ import AppIconButton from '../../components/AppIconButton.vue';
 import AppPageHeader from '../../components/AppPageHeader.vue';
 import AppPagination from '../../components/AppPagination.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
+import { buildGovernanceCatalogRows } from '../../modules/governanceCatalog.js';
+import { workspaceModuleRegistry } from '../../modules/index.js';
 
 const route = useRoute();
 const rowsByScope = reactive({});
@@ -116,19 +119,21 @@ const form = reactive({
 });
 
 const scopeKey = computed(() => String(route.name || route.path));
+const catalogRows = computed(() => buildGovernanceCatalogRows(workspaceModuleRegistry, scopeKey.value));
 const rows = computed(() => {
   if (!Array.isArray(rowsByScope[scopeKey.value])) {
     rowsByScope[scopeKey.value] = [];
   }
   return rowsByScope[scopeKey.value];
 });
+const visibleRows = computed(() => [...catalogRows.value, ...rows.value]);
 const title = computed(() => routeLabel('pageTitle', 'Governance'));
 const singularLabel = computed(() => routeLabel('entitySingular', title.value));
 const pluralLabel = computed(() => routeLabel('entityPlural', title.value));
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
-  if (needle === '') return rows.value;
-  return rows.value.filter((row) => (
+  if (needle === '') return visibleRows.value;
+  return visibleRows.value.filter((row) => (
     row.name.toLowerCase().includes(needle)
     || row.key.toLowerCase().includes(needle)
     || row.description.toLowerCase().includes(needle)
@@ -225,6 +230,7 @@ function submitModal() {
 }
 
 function deleteRow(row) {
+  if (row.readonly) return;
   const index = rows.value.findIndex((candidate) => candidate.id === row.id);
   if (index >= 0) {
     rows.value.splice(index, 1);
@@ -348,6 +354,13 @@ function formatDate(value) {
   padding: 18px 12px;
   text-align: center;
   color: var(--text-muted);
+}
+
+.governance-readonly-label {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .governance-crud-footer {
