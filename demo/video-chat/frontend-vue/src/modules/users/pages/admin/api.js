@@ -1,5 +1,5 @@
-import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
-import { logoutSession, refreshSession, sessionState } from '../../auth/session';
+import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
+import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
 
 function requestHeaders(includeBody) {
   const token = String(sessionState.sessionToken || '').trim();

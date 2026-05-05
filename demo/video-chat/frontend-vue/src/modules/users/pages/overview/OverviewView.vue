@@ -7,9 +7,9 @@ import { Calendar } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
-import { logoutSession, refreshSession, sessionState } from '../../auth/session';
-import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
+import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
+import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
+import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../../../support/dateTimeFormat';
 import { deriveStatus, formatUptimeSeconds, generateRoomUuid, isoToLocalInput, localInputToIso, normalizeArray, normalizeNonNegativeInteger, normalizeOwnerHost, tagClassForStatus } from './helpers';
 
 const router = useRouter();

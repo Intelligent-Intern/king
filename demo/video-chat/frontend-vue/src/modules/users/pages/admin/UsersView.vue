@@ -88,22 +88,22 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import AppIconButton from '../../../components/AppIconButton.vue';
-import AppPageHeader from '../../../components/AppPageHeader.vue';
-import AppPagination from '../../../components/AppPagination.vue';
+import AppIconButton from '../../../../components/AppIconButton.vue';
+import AppPageHeader from '../../../../components/AppPageHeader.vue';
+import AppPagination from '../../../../components/AppPagination.vue';
 import AdminUserEditorModal from '../components/UserEditorModal.vue';
 import AdminUsersTable from '../components/UsersTable.vue';
 import { createAdminSyncReloadController } from './syncReload';
 import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
-import { appearanceState, loadWorkspaceAppearance } from '../../workspace/appearance';
+import { appearanceState, loadWorkspaceAppearance } from '../../../../domain/workspace/appearance';
 import {
   applyAdminUserPermissions,
   canDeleteAdminUser,
   canToggleAdminUserStatus,
   resetAdminUserPermissions,
 } from './permissions';
-import { sessionState } from '../../auth/session';
+import { sessionState } from '../../../../domain/auth/session';
 
 const router = useRouter();
 const route = useRoute();

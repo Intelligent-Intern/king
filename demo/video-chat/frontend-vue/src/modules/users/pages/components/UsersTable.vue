@@ -57,7 +57,7 @@
 </template>
 
 <script setup>
-import AppIconButton from '../../../components/AppIconButton.vue';
+import AppIconButton from '../../../../components/AppIconButton.vue';
 
 defineProps({
   rows: {
