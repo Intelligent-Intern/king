@@ -345,7 +345,7 @@
     </div>
   </main>
 
-  <div class="settings-modal" :hidden="!settingsState.open" role="dialog" aria-modal="true" aria-label="Workspace settings">
+  <div class="settings-modal" :hidden="!settingsState.open" role="dialog" aria-modal="true" :aria-label="t('settings.dialog_aria')">
     <div class="settings-backdrop" @click="closeSettingsModal"></div>
     <div
       class="settings-dialog"
@@ -355,26 +355,26 @@
       <header class="settings-header">
         <div class="settings-title-wrap">
           <img :src="modalLogoSrc" alt="" />
-          <h3>Settings</h3>
+          <h3>{{ t('settings.dialog_title') }}</h3>
         </div>
         <div class="settings-header-actions">
           <button
             v-if="isDesktopLikeViewport"
             class="icon-mini-btn"
             type="button"
-            :aria-label="settingsState.maximized ? 'Restore settings size' : 'Maximize settings'"
-            :title="settingsState.maximized ? 'Restore settings size' : 'Maximize settings'"
+            :aria-label="settingsState.maximized ? t('settings.restore_size') : t('settings.maximize')"
+            :title="settingsState.maximized ? t('settings.restore_size') : t('settings.maximize')"
             @click="toggleSettingsMaximized"
           >
             <img :src="settingsState.maximized ? '/assets/orgas/kingrt/icons/backward.png' : '/assets/orgas/kingrt/icons/forward.png'" alt="" />
           </button>
-          <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
+          <button class="icon-mini-btn" type="button" :aria-label="t('settings.close')" @click="closeSettingsModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </div>
       </header>
 
-      <div class="settings-grid" role="tablist" aria-label="Settings categories">
+      <div class="settings-grid" role="tablist" :aria-label="t('settings.category_tabs_aria')">
         <button
           v-for="tile in settingsTiles"
           :key="tile.id"
@@ -391,19 +391,19 @@
       <section v-if="activeSettingsTile === 'personal.about'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
-            <span>Display name</span>
+            <span>{{ t('settings.display_name') }}</span>
             <input v-model.trim="settingsDraft.displayName" class="input" type="text" autocomplete="name" />
           </label>
           <div class="settings-field">
-            <span>Email</span>
+            <span>{{ t('settings.email') }}</span>
             <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
           </div>
         </div>
 
         <div class="settings-row">
           <div class="settings-field">
-            <span>Avatar preview</span>
-            <img class="settings-avatar-preview-lg" :src="settingsAvatarPreviewSrc" alt="Avatar preview" />
+            <span>{{ t('settings.avatar_preview') }}</span>
+            <img class="settings-avatar-preview-lg" :src="settingsAvatarPreviewSrc" :alt="t('settings.avatar_preview')" />
           </div>
           <div class="settings-field">
             <label
@@ -422,8 +422,8 @@
                 accept="image/png,image/jpeg,image/webp"
                 @change="handleAvatarSelect"
               />
-              <span class="settings-dropzone-title">Drop or choose an avatar</span>
-              <span class="settings-dropzone-subtitle">PNG, JPEG, or WEBP. Backend upload is used directly.</span>
+              <span class="settings-dropzone-title">{{ t('settings.avatar_drop_title') }}</span>
+              <span class="settings-dropzone-subtitle">{{ t('settings.avatar_drop_subtitle') }}</span>
             </label>
             <div class="settings-upload-status">{{ settingsState.avatarStatus }}</div>
           </div>
@@ -433,11 +433,11 @@
       <section v-else-if="activeSettingsTile === 'personal.credentials'" class="settings-panel">
         <div class="settings-row">
           <label class="settings-field">
-            <span>Primary email</span>
+            <span>{{ t('settings.primary_email') }}</span>
             <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
           </label>
           <label class="settings-field">
-            <span>Password</span>
+            <span>{{ t('settings.password') }}</span>
             <input class="input" type="text" value="********" disabled autocomplete="off" />
           </label>
         </div>
@@ -453,10 +453,10 @@
 
       <section v-else-if="activeSettingsTile === 'personal.localization'" class="settings-panel">
         <section class="settings-section">
-          <h4>Language</h4>
+          <h4>{{ t('settings.language') }}</h4>
           <div class="settings-row">
             <label class="settings-field">
-              <span>Application language</span>
+              <span>{{ t('settings.application_language') }}</span>
               <AppSelect v-model="settingsDraft.language">
                 <option v-for="language in settingsLanguageOptions" :key="language.code" :value="language.code">
                   {{ language.label }}
@@ -464,7 +464,7 @@
               </AppSelect>
             </label>
             <div class="settings-field">
-              <span>Text direction</span>
+              <span>{{ t('settings.text_direction') }}</span>
               <div class="settings-readonly-value">{{ settingsDraftDirection.toUpperCase() }}</div>
             </div>
           </div>
@@ -473,17 +473,17 @@
 
       <section v-else-if="activeSettingsTile === 'personal.regional'" class="settings-panel">
         <section class="settings-section">
-          <h4>Regional Time</h4>
+          <h4>{{ t('settings.regional_time') }}</h4>
           <div class="settings-row">
             <label class="settings-field">
-              <span>Time format</span>
+              <span>{{ t('settings.time_format') }}</span>
               <AppSelect v-model="settingsDraft.timeFormat">
                 <option value="24h">24h</option>
                 <option value="12h">12h</option>
               </AppSelect>
             </label>
             <label class="settings-field">
-              <span>Date display</span>
+              <span>{{ t('settings.date_display') }}</span>
               <AppSelect v-model="settingsDraft.dateFormat">
                 <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
                   {{ option.label }}
@@ -495,12 +495,12 @@
       </section>
 
       <section v-else class="settings-panel">
-        <div class="settings-upload-status">Select a settings tab.</div>
+        <div class="settings-upload-status">{{ t('settings.select_tab') }}</div>
       </section>
 
       <div class="settings-actions">
         <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="saveSettings">
-          {{ settingsState.saving ? 'Saving…' : 'Save settings' }}
+          {{ settingsState.saving ? t('settings.saving') : t('settings.save_settings') }}
         </button>
       </div>
 
@@ -2028,16 +2028,16 @@ function readFileAsDataUrl(file) {
 async function setAvatarFromFile(file) {
   if (!file) return;
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    setAvatarStatus('Avatar must be PNG, JPEG, or WEBP.');
+    setAvatarStatus(t('settings.avatar_type_invalid'));
     return;
   }
 
   try {
     const dataUrl = await readFileAsDataUrl(file);
     settingsDraft.avatarDataUrl = dataUrl;
-    setAvatarStatus(`Selected ${file.name}. Save to upload.`);
+    setAvatarStatus(t('settings.avatar_selected', { name: file.name }));
   } catch (error) {
-    setAvatarStatus(error instanceof Error ? error.message : 'Could not prepare avatar upload.');
+    setAvatarStatus(error instanceof Error ? error.message : t('settings.avatar_prepare_failed'));
   }
 }
 
@@ -2068,32 +2068,32 @@ async function saveSettings() {
   const postLogoutLandingUrl = normalizePostLogoutLandingUrl(settingsDraft.postLogoutLandingUrl);
 
   if (displayName === '') {
-    settingsState.message = 'Display name is required.';
+    settingsState.message = t('settings.display_name_required');
     return;
   }
 
   if (theme === '') {
-    settingsState.message = 'Theme is required.';
+    settingsState.message = t('settings.theme_required');
     return;
   }
 
   if (!['24h', '12h'].includes(rawTimeFormat)) {
-    settingsState.message = 'Time format must be 24h or 12h.';
+    settingsState.message = t('settings.time_format_invalid');
     return;
   }
 
   if (rawDateFormat === '' || rawDateFormat !== dateFormat) {
-    settingsState.message = 'Please choose a supported date format.';
+    settingsState.message = t('settings.date_format_invalid');
     return;
   }
 
   if (!settingsLanguageOptions.value.some((option) => option.code === language)) {
-    settingsState.message = 'Unsupported language selected.';
+    settingsState.message = t('settings.unsupported_language');
     return;
   }
 
   if (postLogoutLandingUrl === null) {
-    settingsState.message = 'Logout landing page must be a same-origin path like /call-goodbye.';
+    settingsState.message = t('settings.logout_landing_invalid');
     return;
   }
 
@@ -2103,7 +2103,7 @@ async function saveSettings() {
     if (settingsDraft.avatarDataUrl) {
       const uploadResult = await uploadSessionAvatar(settingsDraft.avatarDataUrl);
       if (!uploadResult.ok) {
-        settingsState.message = uploadResult.message || 'Avatar upload failed.';
+        settingsState.message = uploadResult.message || t('settings.avatar_upload_failed');
         if (uploadResult.reason === 'invalid_session') {
           settingsState.open = false;
           router.replace('/login');
@@ -2112,7 +2112,7 @@ async function saveSettings() {
       }
 
       avatarPath = uploadResult.avatarPath || avatarPath;
-      setAvatarStatus('Avatar uploaded on the backend.');
+      setAvatarStatus(t('settings.avatar_uploaded'));
     }
 
     const saveResult = await saveSessionSettings({
@@ -2137,7 +2137,7 @@ async function saveSettings() {
     const savedLanguage = normalizeSettingsLanguage(saveResult.user?.locale || language);
     await ensureI18nResources({ locale: savedLanguage, force: true });
     syncI18nDocumentState(savedLanguage, sessionState.direction);
-    settingsState.message = 'Settings saved.';
+    settingsState.message = t('settings.settings_saved');
     settingsState.open = false;
     resetSettingsDraft();
   } finally {

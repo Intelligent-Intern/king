@@ -25,8 +25,8 @@ assert.match(workspaceShell, /locale: language/, 'settings save must send locale
 assert.doesNotMatch(workspaceShell, /settingsDraft\.language = readStoredSettingsLanguage\(\)/, 'settings draft must not be localStorage-only');
 assert.doesNotMatch(workspaceShell, /SETTINGS_LANGUAGE_STORAGE_KEY|storeSettingsLanguage|readStoredSettingsLanguage/, 'settings language must not use localStorage as source of truth');
 assert.match(workspaceShell, /ensureI18nResources\(\{ locale: savedLanguage, force: true \}\)/, 'settings save must refresh i18n resources immediately');
-assert.match(workspaceShell, /activeSettingsTile === 'personal\.localization'[\s\S]*<h4>Language<\/h4>/, 'localization settings panel must focus on language');
-assert.match(workspaceShell, /activeSettingsTile === 'personal\.regional'[\s\S]*<h4>Regional Time<\/h4>/, 'regional settings panel must be split from language');
+assert.match(workspaceShell, /activeSettingsTile === 'personal\.localization'[\s\S]*<h4>\{\{ t\('settings\.language'\) \}\}<\/h4>/, 'localization settings panel must focus on language');
+assert.match(workspaceShell, /activeSettingsTile === 'personal\.regional'[\s\S]*<h4>\{\{ t\('settings\.regional_time'\) \}\}<\/h4>/, 'regional settings panel must be split from language');
 assert.match(workspaceShell, /:dir="settingsDraftDirection"/, 'settings dialog must apply the selected language direction');
 assert.match(workspaceShell, /settingsDraftDirection = computed\(\(\) => localizationLanguageDirection\(settingsDraft\.language\)\)/, 'settings dialog direction must derive from the selected language');
 assert.match(workspaceSettingsDescriptor, /key: 'personal\.regional'/, 'regional settings panel must be descriptor registered');
