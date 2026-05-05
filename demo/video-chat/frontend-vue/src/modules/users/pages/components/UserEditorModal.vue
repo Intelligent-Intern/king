@@ -221,6 +221,8 @@
     :relation="activeRelation"
     :selections="relationSelections"
     :row-provider="relationRowsForEntity"
+    :create-draft="createGovernanceRelationRow"
+    :can-create-draft-for-entity="canCreateGovernanceRelationRow"
     :maximized="relationStackMaximized"
     :show-nested-relations="relationStackShowsNestedRelations"
     @update:maximized="relationStackMaximized = $event"
@@ -230,11 +232,15 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import AppIconButton from '../../../../components/AppIconButton.vue';
 import AppModalShell from '../../../../components/AppModalShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
+import { sessionState } from '../../../../domain/auth/session.js';
+import { moduleAccessContextFromSession } from '../../../../http/routeAccess.js';
 import CrudRelationStack from '../../../governance/components/CrudRelationStack.vue';
+import { GOVERNANCE_CRUD_DESCRIPTORS } from '../../../governance/crudDescriptors.js';
+import { createGovernanceCrudPersistence } from '../../../governance/useGovernanceCrudPersistence.js';
 import { buildGovernanceCatalogRows } from '../../../governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../../index.js';
 import { t } from '../../../localization/i18nRuntime.js';
@@ -378,6 +384,14 @@ const emit = defineEmits([
 const relationStackOpen = ref(false);
 const relationStackMaximized = ref(false);
 const activeRelation = ref(null);
+const governancePersistence = createGovernanceCrudPersistence();
+const relationCreatedRowsByEntity = reactive({
+  groups: [],
+});
+const canCreateGovernanceGroups = computed(() => {
+  const context = moduleAccessContextFromSession(sessionState);
+  return context.allPermissions === true || context.permissions.includes('governance.groups.create');
+});
 const roleRows = computed(() => [
   { id: 'user', key: 'user', name: t('users.role_user'), status: 'active' },
   { id: 'admin', key: 'admin', name: t('users.role_admin'), status: 'active' },
@@ -395,13 +409,10 @@ const governanceRoleRows = computed(() => props.governanceRoleOptions.map((role)
   status: String(role.status || 'active'),
   relationships: role.relationships,
 })).filter((role) => role.id !== ''));
-const governanceGroupRows = computed(() => props.governanceGroupOptions.map((group) => ({
-  id: String(group.id || ''),
-  key: String(group.key || group.id || ''),
-  name: String(group.name || group.key || group.id || ''),
-  status: String(group.status || 'active'),
-  relationships: group.relationships,
-})).filter((group) => group.id !== ''));
+const governanceGroupRows = computed(() => mergeRowsById([
+  ...relationCreatedRowsByEntity.groups,
+  ...props.governanceGroupOptions.map((group) => normalizeGovernanceOption(group)),
+]));
 const currentRoleLabel = computed(() => (
   selectedRow(roleRows.value, props.form.role)?.name || String(props.form.role || '')
 ));
@@ -464,6 +475,43 @@ function relationRowsForEntity(entityKey) {
 
 function governanceCatalogRows(entityKey) {
   return buildGovernanceCatalogRows(workspaceModuleRegistry, `admin-governance-${entityKey}`);
+}
+
+function normalizeGovernanceOption(row) {
+  return {
+    id: String(row?.id || '').trim(),
+    key: String(row?.key || row?.id || '').trim(),
+    name: String(row?.name || row?.key || row?.id || '').trim(),
+    status: String(row?.status || 'active'),
+    relationships: row?.relationships,
+  };
+}
+
+function mergeRowsById(rows) {
+  const seen = new Set();
+  return rows.map((row) => normalizeGovernanceOption(row)).filter((row) => {
+    if (row.id === '' || seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+}
+
+function canCreateGovernanceRelationRow(entityKey) {
+  return String(entityKey || '').trim() === 'groups' && props.canEditGovernanceGroups && canCreateGovernanceGroups.value;
+}
+
+async function createGovernanceRelationRow(entityKey, payload = {}) {
+  const key = String(entityKey || '').trim();
+  if (!canCreateGovernanceRelationRow(key)) return null;
+  const descriptor = GOVERNANCE_CRUD_DESCRIPTORS[key];
+  if (!descriptor) return null;
+  const savedRow = await governancePersistence.createRow(descriptor, payload);
+  const row = normalizeGovernanceOption(savedRow);
+  if (row.id === '') {
+    return null;
+  }
+  relationCreatedRowsByEntity.groups = mergeRowsById([row, ...relationCreatedRowsByEntity.groups]);
+  return row;
 }
 
 function openRelation(relation) {
