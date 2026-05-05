@@ -455,6 +455,8 @@ Non-goals for this sprint:
      those non-call admin/module surfaces and document direction sync.
    - [x] Shared pagination directional icons mirror under `html[dir="rtl"]`
      without applying RTL transforms to canvas or video content.
+   - [x] Auth split layout, settings theme preview, and reusable theme preview
+     use logical inline borders/padding for RTL-safe separators and lists.
 
    Done when:
    - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
