@@ -1,26 +1,26 @@
 <template>
   <section class="view-card admin-users-view">
-    <AppPageHeader class="section admin-users-head" title="User Management">
+    <AppPageHeader class="section admin-users-head" title="Nutzer">
       <template #actions>
-        <button class="btn btn-cyan" type="button" @click="openCreateUser">New user</button>
+        <button class="btn btn-cyan" type="button" @click="openCreateUser">Neuer Nutzer</button>
       </template>
     </AppPageHeader>
 
     <section class="toolbar admin-users-toolbar">
-      <label class="search-field search-field-main" aria-label="Search users">
+      <label class="search-field search-field-main" aria-label="Nutzer suchen">
         <input
           v-model.trim="queryDraft"
           class="input"
           type="search"
-          placeholder="Search by name, email, or role"
+          placeholder="Nutzer suchen"
         />
       </label>
 
       <AppIconButton
         class="users-toolbar-search-btn"
         icon="/assets/orgas/kingrt/icons/send.png"
-        title="Search users"
-        aria-label="Search users"
+        title="Nutzer suchen"
+        aria-label="Nutzer suchen"
         @click="applySearchNow"
       />
     </section>
@@ -45,7 +45,7 @@
         :page="page"
         :page-count="pageCount"
         :total="pagination.total"
-        total-label="users"
+        total-label="Nutzer"
         :has-prev="pagination.hasPrev"
         :has-next="pagination.hasNext"
         :disabled="loading"

@@ -49,10 +49,78 @@ const routes = [
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {
-        path: 'admin/users',
-        name: 'admin-users',
+        path: 'admin/governance',
+        redirect: '/admin/governance/users',
+      },
+      {
+        path: 'admin/governance/users',
+        name: 'admin-governance-users',
         component: () => import('../domain/users/admin/UsersView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Nutzer' },
+      },
+      {
+        path: 'admin/users',
+        redirect: '/admin/governance/users',
+      },
+      {
+        path: 'admin/governance/groups',
+        name: 'admin-governance-groups',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Gruppen' },
+      },
+      {
+        path: 'admin/governance/organizations',
+        name: 'admin-governance-organizations',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Organisationen' },
+      },
+      {
+        path: 'admin/governance/modules',
+        name: 'admin-governance-modules',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Module' },
+      },
+      {
+        path: 'admin/governance/permissions',
+        name: 'admin-governance-permissions',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Rechte' },
+      },
+      {
+        path: 'admin/governance/roles',
+        name: 'admin-governance-roles',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Rollen' },
+      },
+      {
+        path: 'admin/governance/grants',
+        name: 'admin-governance-grants',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Freigaben' },
+      },
+      {
+        path: 'admin/governance/policies',
+        name: 'admin-governance-policies',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Richtlinien' },
+      },
+      {
+        path: 'admin/governance/audit-log',
+        name: 'admin-governance-audit-log',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Audit Log' },
+      },
+      {
+        path: 'admin/governance/data-portability',
+        name: 'admin-governance-data-portability',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Export / Import' },
+      },
+      {
+        path: 'admin/governance/compliance',
+        name: 'admin-governance-compliance',
+        component: () => import('../domain/governance/GovernancePlaceholderView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'], pageTitle: 'Compliance' },
       },
       {
         path: 'admin/marketplace',
@@ -68,9 +136,7 @@ const routes = [
       },
       {
         path: 'admin/tenancy',
-        name: 'admin-tenancy',
-        component: () => import('../domain/tenant/TenantAdminView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        redirect: '/admin/governance/organizations',
       },
       {
         path: 'user/dashboard',

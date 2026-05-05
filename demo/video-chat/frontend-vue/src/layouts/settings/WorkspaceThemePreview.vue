@@ -10,12 +10,12 @@
           <span>Video Calls</span>
         </a>
         <a href="#" @click.prevent>
-          <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
-          <span>User Management</span>
+          <img src="/assets/orgas/kingrt/icons/adminon.png" alt="" />
+          <span>Governance</span>
         </a>
         <a href="#" @click.prevent>
-          <img src="/assets/orgas/kingrt/icons/users.png" alt="" />
-          <span>Overview</span>
+          <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
+          <span>Nutzer</span>
         </a>
       </nav>
     </aside>
