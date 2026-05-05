@@ -474,7 +474,7 @@ Non-goals for this sprint:
    - [ ] Canvas/video rendering remains visually correct.
    - [ ] Playwright screenshots prove desktop, tablet, and mobile RTL layouts.
 
-8. [ ] `[backend-errors-and-email-localization]` Localize server-driven user text and email templates.
+8. [x] `[backend-errors-and-email-localization]` Localize server-driven user text and email templates.
 
    Scope:
    - Keep machine contracts as error codes.
@@ -505,14 +505,14 @@ Non-goals for this sprint:
    - [x] Email localization contract covers valid localized templates, invalid
      localized templates falling back to English, outbox rendering, and public
      lead template locale selection.
-   - [x] Localization, Marketplace, and Admin Users API clients resolve
-     frontend text from stable backend error codes instead of displaying
-     backend English messages directly. The contract now covers localization,
-     marketplace, users, user-account admin, and workspace-administration
-     endpoint codes.
+   - [x] Localization, Marketplace, Admin Users, and Workspace Administration
+     API clients resolve frontend text from stable backend error codes instead
+     of displaying backend English messages directly. The contract now covers
+     localization, marketplace, users, user-account admin, and
+     workspace-administration endpoint codes.
 
    Done when:
-   - [ ] API error payloads still expose stable codes and do not depend on
+   - [x] API error payloads still expose stable codes and do not depend on
      translated text for logic.
    - [x] Public booking confirmation email can be sent in the selected/public
      locale.
