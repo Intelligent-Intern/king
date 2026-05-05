@@ -400,6 +400,8 @@ Non-goals for this sprint:
      moved into an options-based `useWorkspaceThemeSettings` composable.
    - [x] User editor modal labels, placeholders, status text, and avatar text
      are keyed; modal computed state moved into `useUserEditorModal`.
+   - [x] User management page, table, validation, notices, and destructive
+     confirmations use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
