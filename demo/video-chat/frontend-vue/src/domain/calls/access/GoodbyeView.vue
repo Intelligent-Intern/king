@@ -2,9 +2,9 @@
   <main class="call-goodbye-page">
     <section class="call-goodbye-card">
       <img class="call-goodbye-logo" src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
-      <p class="call-goodbye-text">You have left the video call.</p>
-      <p class="call-goodbye-meta">This exit page can be customized by admin settings later.</p>
-      <button class="btn" type="button" @click="goToLogin">Back to login</button>
+      <p class="call-goodbye-text">{{ t('public.goodbye.left_call') }}</p>
+      <p class="call-goodbye-meta">{{ t('public.goodbye.customizable_hint') }}</p>
+      <button class="btn" type="button" @click="goToLogin">{{ t('public.goodbye.back_to_login') }}</button>
     </section>
   </main>
 </template>
@@ -20,6 +20,7 @@ import {
   postLogoutRedirectTarget,
   sessionState,
 } from '../../auth/session';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 const router = useRouter();
 
