@@ -346,6 +346,46 @@ assert_admin_infrastructure_payload() {
   '
 }
 
+assert_admin_session_payload() {
+  VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en}" php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $expectedLocale = trim((string) getenv("VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE"));
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("admin session payload status is not ok");
+    }
+    $user = $payload["user"] ?? null;
+    if (!is_array($user)) {
+        fail("admin session payload missing user");
+    }
+    if ($expectedLocale !== "" && (string) ($user["locale"] ?? "") !== $expectedLocale) {
+        fail("admin session locale mismatch: expected " . $expectedLocale . ", got " . (string) ($user["locale"] ?? ""));
+    }
+    if ($expectedLocale === "en" && (string) ($user["direction"] ?? "") !== "ltr") {
+        fail("admin session default English direction must be ltr");
+    }
+    $supported = $user["supported_locales"] ?? [];
+    if (!is_array($supported)) {
+        fail("admin session supported_locales missing");
+    }
+    $codes = [];
+    foreach ($supported as $locale) {
+        if (is_array($locale) && is_string($locale["code"] ?? null)) {
+            $codes[] = $locale["code"];
+        }
+    }
+    foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
+        if (!in_array($requiredLocale, $codes, true)) {
+            fail("admin session supported locale missing: " . $requiredLocale);
+        }
+    }
+  '
+}
+
 assert_admin_video_operations_payload() {
   php -r '
     function fail(string $message): void {
@@ -411,9 +451,13 @@ verify_admin_operations() {
       ;;
   esac
 
-  local token infrastructure_payload operations_payload
+  local token session_payload infrastructure_payload operations_payload
   token="$(admin_session_token)"
   ADMIN_SMOKE_SESSION_TOKEN="${token}"
+  session_payload="$(admin_get_json "admin session" "https://${DEPLOY_API_DOMAIN}/api/auth/session" "${token}")"
+  printf '%s' "${session_payload}" | assert_admin_session_payload
+  log "admin session: authenticated default locale payload verified"
+
   infrastructure_payload="$(admin_get_json "admin infrastructure" "https://${DEPLOY_API_DOMAIN}/api/admin/infrastructure" "${token}")"
   printf '%s' "${infrastructure_payload}" | assert_admin_infrastructure_payload
   log "admin infrastructure: provider-neutral safe payload verified"
