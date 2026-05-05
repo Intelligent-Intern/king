@@ -1,3 +1,5 @@
+import { compareLocalizedStrings } from '../support/localeCollation.js';
+
 const DEFAULT_ICON = '/assets/orgas/kingrt/icons/users.png';
 
 const GROUPS = {
@@ -30,11 +32,11 @@ function normalizeStringList(value) {
   return [...new Set(value.map(normalizeString).filter(Boolean))].sort();
 }
 
-function sortByOrderThenLabel(a, b) {
+function sortByOrderThenLabel(a, b, locale = 'en') {
   const orderA = Number.isFinite(Number(a.order)) ? Number(a.order) : 0;
   const orderB = Number.isFinite(Number(b.order)) ? Number(b.order) : 0;
   if (orderA !== orderB) return orderA - orderB;
-  return String(a.label || a.key || a.to || '').localeCompare(String(b.label || b.key || b.to || ''));
+  return compareLocalizedStrings(a.label || a.key || a.to || '', b.label || b.key || b.to || '', { locale });
 }
 
 function routeChildPath(path) {
@@ -124,6 +126,7 @@ export function buildModuleRouteRecords(registry) {
 
 export function buildWorkspaceNavigation(registry, contextInput = {}) {
   const modulePermissions = modulePermissionsByKey(registry);
+  const sortLocale = normalizeString(contextInput.locale);
   const grouped = new Map();
   const flat = [];
 
@@ -165,10 +168,13 @@ export function buildWorkspaceNavigation(registry, contextInput = {}) {
   }
 
   const groups = [...grouped.values()]
-    .map((group) => ({ ...group, children: [...group.children].sort(sortByOrderThenLabel) }))
+    .map((group) => ({ ...group, children: [...group.children].sort((a, b) => sortByOrderThenLabel(a, b, sortLocale)) }))
     .filter((group) => entryAllowsAccess(group, contextInput) && group.children.length > 0);
 
-  return [...flat.sort(sortByOrderThenLabel), ...groups.sort(sortByOrderThenLabel)];
+  return [
+    ...flat.sort((a, b) => sortByOrderThenLabel(a, b, sortLocale)),
+    ...groups.sort((a, b) => sortByOrderThenLabel(a, b, sortLocale)),
+  ];
 }
 
 export function buildSettingsPanels(registry, contextInput = {}) {
@@ -181,5 +187,5 @@ export function buildSettingsPanels(registry, contextInput = {}) {
       required_permissions: entryRequiredPermissions(panel, modulePermissions.get(panel.module_key)),
     }))
     .filter((panel) => entryAllowsAccess(panel, contextInput, panel.required_permissions))
-    .sort(sortByOrderThenLabel);
+    .sort((a, b) => sortByOrderThenLabel(a, b, normalizeString(contextInput.locale)));
 }

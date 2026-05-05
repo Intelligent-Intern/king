@@ -67,6 +67,7 @@ export function moduleAccessContextFromSession(session = {}) {
 
   return {
     role,
+    locale: normalizeString(session.locale),
     permissions: permissionKeys,
     allPermissions: tenantPermissions.platform_admin === true || (role === 'admin' && permissionKeys.length === 0),
   };
