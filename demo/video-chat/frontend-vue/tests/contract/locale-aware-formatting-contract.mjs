@@ -6,6 +6,10 @@ import {
   normalizeDateTimeLocale,
 } from '../../src/support/dateTimeFormat.js';
 import { compareLocalizedStrings } from '../../src/support/localeCollation.js';
+import {
+  formatLocalizedListDisplay,
+  formatLocalizedNumberDisplay,
+} from '../../src/support/localeFormat.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const sampleIso = '2026-01-02T14:05:00Z';
@@ -54,6 +58,24 @@ assert.equal(
 );
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
+assert.equal(
+  formatLocalizedNumberDisplay(1234.5, { locale: 'de', minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+  new Intl.NumberFormat('de', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(1234.5),
+);
+assert.equal(
+  formatLocalizedNumberDisplay(0.25, { locale: 'ar', style: 'percent', maximumFractionDigits: 0 }),
+  new Intl.NumberFormat('ar', { style: 'percent', maximumFractionDigits: 0 }).format(0.25),
+);
+assert.equal(formatLocalizedNumberDisplay('not-a-number', { fallback: 'n/a' }), 'n/a');
+assert.equal(
+  formatLocalizedListDisplay(['Alpha', 'Beta', 'Gamma'], { locale: 'en' }),
+  new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(['Alpha', 'Beta', 'Gamma']),
+);
+assert.equal(
+  formatLocalizedListDisplay(['Alpha', 'Beta', 'Gamma'], { locale: 'ar', type: 'disjunction' }),
+  new Intl.ListFormat('ar', { style: 'long', type: 'disjunction' }).format(['Alpha', 'Beta', 'Gamma']),
+);
+assert.equal(formatLocalizedListDisplay([], { fallback: 'n/a' }), 'n/a');
 assert.equal(
   compareLocalizedStrings('ä', 'z', { locale: 'de' }),
   'ä'.localeCompare('z', 'de', { sensitivity: 'base', numeric: true }),
