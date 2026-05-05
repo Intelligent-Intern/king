@@ -335,6 +335,16 @@ Sprint goal:
    - Settings UI edits these fields without bloating `WorkspaceShell.vue`.
    - Frontend and backend validation/tests cover URL/contact formats.
 
+   Progress 2026-05-05:
+   - Backend migration `0032_user_profile_social_fields` adds `about_me`,
+     LinkedIn, X.com, YouTube, and messenger contact storage.
+   - User settings validation now normalizes profile text, requires HTTPS
+     social URLs on the expected host families, and validates messenger contact
+     channel/handle rows.
+   - User settings payloads expose the new profile fields.
+   - Existing user-settings contracts were extended for valid and invalid
+     profile payloads.
+
 8. [ ] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
    persisted completion badges.
 
