@@ -15,6 +15,7 @@ const sourceFiles = [
   'src/modules/governance/pages/GovernanceCrudModal.vue',
   'src/modules/governance/pages/GovernanceCrudView.vue',
   'src/modules/localization/descriptor.js',
+  'src/modules/localization/pages/AdministrationLocalizationView.vue',
   'src/modules/marketplace/descriptor.js',
   'src/modules/theme_editor/descriptor.js',
   'src/modules/theme_editor/pages/ThemeEditorView.vue',
