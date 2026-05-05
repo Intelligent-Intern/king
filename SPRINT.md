@@ -1,923 +1,465 @@
 # King Active Issues
 
-## Sprint: Video Chat Multi-Tenancy Foundation
+## Sprint: Video Chat Localization And RTL Foundation
 
-Sprint branch:
-- `develop/1.0.8-beta`
+Branch:
+- `feature/videochat-localization-sprint`
 
-Target:
-- `demo/video-chat`
-- KingRT production video chat deployment.
+Base context:
+- Builds on the deployed video-chat tenant/workspace branch.
+- Target application: `demo/video-chat`.
+- Reference source for first supported locales:
+  - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/*.json`
+  - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/index.ts`
 
-Goal:
-- Convert the video-chat application from implicit single-tenant state to
-  explicit tenant isolation across auth, persistence, realtime, public links,
-  administration, organization hierarchies, groups, permissions, themes,
-  calendars, leads, tenant-scoped export/import, and deployment smoke checks.
-- Preserve the current single-tenant production data by migrating it into one
-  default tenant instead of resetting or narrowing existing behavior.
-- Make cross-tenant reads, writes, websocket events, SFU routing, public
-  booking access, and admin operations fail closed by contract.
+Initial supported languages:
+- Source inventory found these locale files:
+  - `am`, `ar`, `bn`, `de`, `en`, `es`, `fa`, `fr`, `ha`, `hi`,
+    `it`, `ja`, `jv`, `ko`, `my`, `pa`, `ps`, `pt`, `ru`, `sgd`,
+    `so`, `th`, `tl`, `tr`, `uk`, `uz`, `vi`, `zh`
+- `en` remains the canonical fallback.
+- RTL locales found in the website source metadata:
+  - `ar`, `fa`, `ps`, `sgd`
 
-Current single-tenant assumptions to remove:
-- `users.email` and account administration are globally scoped.
-- `sessions` carry only a user, not an active tenant.
-- `workspace_administration_settings` has one global row with `id = 1`.
-- Theme presets, logos, lead settings, website leads, appointment calendars,
-  calls, rooms, invites, access sessions, diagnostics, chat, and SFU state are
-  not consistently tenant-bound.
-- Primary admin `user_id = 1` is treated as the operational owner of global
-  workspace settings.
-- Frontend session state has role/user context but no tenant context.
-- Administration is flat: there are no tenant-level organizations,
-  suborganizations, groups, or time-boxed rights.
-- Calendars and other resources are owner-scoped only; they cannot be shared to
-  a group through explicit permission grants.
-- Users and organizations have no scoped export/import path for their own data.
+Important mismatch to fix:
+- Video chat currently has only a local settings language stub with
+  `en/de/fr/es` in `WorkspaceShell.vue`.
+- That stub only writes `document.documentElement.lang` and local storage.
+- It does not persist to the backend, does not load translation resources, does
+  not translate the application, and does not apply RTL layout.
+- The Intelligent Intern website source already ships 28 locale JSON files.
+  Those languages are the first required locale set for this sprint.
 
-Architecture decision:
-- Add tenants as first-class workspaces with an internal `tenant_id` and a
-  public UUID.
-- Keep users as global identities and attach them to tenants through
-  `tenant_memberships`.
-- Move role and operational permissions to tenant membership scope:
-  `owner`, `admin`, `member`, plus per-tenant feature flags such as theme
-  editor access.
-- Model organizations as a tenant-owned tree with root organizations and nested
-  suborganizations. Users can create and administer organizations or
-  suborganizations only when their tenant permissions allow it.
-- Add tenant-owned groups that can include users and organization members.
-- Authorize shared resources through explicit permission grants over users,
-  groups, and organizations. Grants must support `valid_from`, `valid_until`,
-  and revocation metadata so rights can be time-limited.
-- Calendars, calls, settings surfaces, and future shareable resources must use
-  the same grant resolver instead of one-off owner checks.
-- Provide canonical export bundles for user-owned data and organization-owned
-  data. Imports must validate tenant scope, remap IDs, preserve audit metadata,
-  and fail closed on unknown schema versions or foreign-tenant references.
-- Export bundles must be versioned, resumable for large data, and explicit
-  about secrets: credentials and private keys are excluded unless a later
-  approved encrypted-secret export contract is added.
-- Keep platform administration separate from tenant administration. The
-  primary platform admin can create and recover tenants, but tenant data access
-  must still go through an explicit tenant scope.
-- Store the active tenant on sessions and expose it in auth snapshots.
-- Every repository/query path that touches tenant data must receive tenant
-  context from auth or from a validated public token resolver.
-- Existing public UUIDs and invite links remain valid after migration by
-  backfilling them into the default tenant.
+Sprint goal:
+- Make the whole video-chat app multilingual across authenticated workspace,
+  public booking/join pages, admin screens, realtime call UI, settings,
+  emails, validation errors, diagnostics visible to users, and deployment
+  smoke paths.
+- Add a durable localization contract with user language selection under
+  Settings.
+- Let the primary superadmin, `user_id = 1`, upload and manage translation CSV
+  files.
+- Make RTL languages switch the complete app to RTL, not just translated
+  labels.
+- Keep tenant isolation: localization resources may be platform-provided or
+  tenant-overridden, but tenants must not read or mutate each other's language
+  resources.
 
-Out of scope for this sprint:
-- Billing, plan limits, invoicing, and subscription management.
-- Tenant-owned custom domains.
-- Physical database-per-tenant sharding.
-- Self-service public tenant signup.
-- Billing-driven permission packages or seat accounting.
-- Changing the core media codec, SFU quality policy, or appointment UX beyond
-  tenant isolation needs.
-- Cross-product data import from systems outside KingRT video chat.
+Non-goals for this sprint:
+- Machine translation generation.
+- Translation marketplace or translator workflow approvals.
+- Per-call live speech translation.
+- Physical database-per-locale sharding.
+- Adding new business languages beyond the locale files found in the existing
+  Intelligent Intern website source.
+
+## Architecture Decisions
+
+1. Locale model
+- Store each user's selected locale persistently in user settings.
+- Normalize locale tags to a strict allow-list seeded from the Intelligent
+  Intern website locale files.
+- Allow future regional variants such as `de-DE` or `en-US`, but resolve them
+  through base fallbacks until regional overrides exist.
+- Derive text direction from locale metadata. The initial RTL set from the
+  website source is `ar`, `fa`, `ps`, and `sgd`; all other discovered locale
+  files default to LTR unless metadata says otherwise.
+
+2. Translation resource model
+- Use stable message keys, not raw UI text, as the source of truth.
+- English is the canonical fallback and must be complete.
+- Non-English locales may fall back to English per key only when explicitly
+  allowed and reported by coverage tooling.
+- Store translation bundles in backend persistence with:
+  - locale
+  - namespace
+  - key
+  - value
+  - status
+  - source
+  - updated_by_user_id
+  - updated_at
+- Use tenant scope for tenant override bundles only after platform defaults are
+  resolved.
+
+3. CSV contract
+- Superadmin `user_id = 1` can upload CSV language files.
+- CSV upload must support preview, validation, and import.
+- CSV encoding is UTF-8.
+- Required columns:
+  - `locale`
+  - `namespace`
+  - `key`
+  - `value`
+- Optional columns:
+  - `description`
+  - `context`
+  - `status`
+  - `updated_at`
+- Invalid CSV must fail closed with row-level errors and no partial import
+  unless an explicit `dry_run=false` import has passed validation.
+- CSV import must reject unsupported locales, duplicate key rows in the same
+  file, empty keys, empty English canonical values, malformed UTF-8, and cells
+  exceeding configured limits.
+
+4. Runtime delivery
+- Login/session responses expose the selected locale and direction.
+- Frontend loads the active locale bundle before rendering protected views.
+- Public pages resolve language from URL/query/cookie/browser `Accept-Language`
+  and then fall back to platform default.
+- API error envelopes expose stable error codes; frontend maps codes to
+  localized strings instead of localizing server-generated free text.
+- Email templates can be localized by locale and must preserve placeholders.
+
+5. RTL/LTR contract
+- Apply `lang` and `dir` at the app root and document root.
+- Use CSS logical properties where possible: inline/block start/end, margin,
+  padding, border, inset.
+- Sidebar/navigation must flip for RTL without breaking desktop, tablet, and
+  mobile layouts.
+- Icons that imply direction, such as back/forward, chevrons, and timeline
+  arrows, must mirror or swap under RTL.
+- Canvas/video content must not be mirrored accidentally. Screen sharing and
+  camera video remain visually correct; only UI chrome mirrors.
 
 ## Active Issues
 
-1. [ ] `[tenant-inventory-and-contract-map]` Map every tenant-owned surface before schema work.
+1. [ ] `[localization-inventory]` Inventory every user-visible string and locale assumption.
 
    Scope:
-   - Audit tables, REST modules, websocket/SFU handlers, frontend stores, and
-     public endpoints for tenant-owned data.
-   - Classify each table as platform-global, global identity, tenant-owned, or
-     derived/transient.
-   - Classify organization, group, permission-grant, and resource-share
-     surfaces separately from simple tenant-owned records.
-   - Identify all places still assuming `user_id = 1` or one global settings
-     row.
+   - Scan Vue templates, JS modules, PHP response messages, email templates,
+     public pages, validation errors, empty states, button labels, tooltips,
+     aria labels, placeholders, page titles, route labels, realtime call UI,
+     calendar UI, tenant administration, user management, marketplace, and
+     deployment-visible messages.
+   - Identify hard-coded locale sorting such as `localeCompare(..., 'en')`.
+   - Identify CSS and layout rules using physical left/right assumptions.
+   - Compare with Intelligent Intern website locale files and language
+     metadata from the correct website source path.
 
    Done when:
-   - [ ] `SPRINT.md` or a focused tenant map documents the ownership class for
-     each video-chat table.
-   - [ ] Every public endpoint has a tenant-resolution rule.
-   - [ ] Every authenticated endpoint has an active-tenant requirement or a
-     platform-admin exception.
-   - [ ] Cross-tenant leak risks are listed before implementation starts.
+   - [ ] Inventory document lists all frontend, backend, public, and email
+     translation surfaces.
+   - [ ] Initial namespace plan exists for `common`, `auth`, `settings`,
+     `calls`, `call_workspace`, `calendar`, `users`, `tenancy`, `marketplace`,
+     `public_booking`, `emails`, `errors`, and `diagnostics`.
+   - [ ] All discovered Intelligent Intern website locale files are confirmed
+     as the first supported locale set.
+   - [ ] RTL risk map lists every screen with physical left/right layout.
 
-2. [ ] `[tenant-schema-and-backfill]` Add tenant schema and migrate current data.
+2. [ ] `[localization-schema-and-settings]` Add backend locale schema and persistent user preference.
 
    Scope:
-   - Add `tenants`, `tenant_memberships`, `organizations`,
-     `organization_memberships`, `groups`, `group_memberships`, and
-     `permission_grants`.
-   - Add export/import job metadata tables for user and organization data
-     bundles.
-   - Backfill one default tenant for the current production workspace.
-   - Backfill a root organization and default group for the default tenant.
-   - Add tenant references to tenant-owned tables.
-   - Convert global settings tables to tenant-owned settings rows.
-   - Preserve existing users, calls, rooms, invites, calendars, bookings,
-     themes, leads, diagnostics, and public IDs.
+   - Add migrations for supported locales and translation resources.
+   - Add `users.locale` or equivalent user-settings storage.
+   - Return locale and direction in login/session/refresh/settings responses.
+   - Accept locale updates through `/api/user/settings`.
+   - Preserve existing users by defaulting to `en`.
+   - Keep tenant-aware resource lookup for future tenant overrides.
 
    Done when:
-   - [ ] Fresh databases create a default tenant with deterministic seed data.
-   - [ ] Existing databases migrate without dropping production data.
-   - [ ] Existing users become members of the default tenant root organization
-     and default group.
-   - [ ] Foreign keys and indexes support tenant-scoped lookup paths.
-   - [ ] Existing public booking and call links still resolve after migration.
+   - [ ] Fresh DB seeds all discovered website locales with direction
+     metadata.
+   - [ ] Existing DB migration backfills user locale without data loss.
+   - [ ] User settings validates locale values and rejects unsupported ones.
+   - [ ] Session payload includes `locale`, `direction`, and supported locale
+     metadata.
+   - [ ] Backend contracts cover valid locale update, invalid locale rejection,
+     and session persistence.
 
-3. [ ] `[tenant-organization-group-permissions]` Add hierarchical organizations, groups, and time-limited grants.
+3. [ ] `[translation-csv-admin]` Build superadmin CSV upload and import.
 
    Scope:
-   - Let tenant admins create, edit, archive, and nest organizations.
-   - Let permitted users create suborganizations inside organizations they can
-     administer.
-   - Let tenant admins create groups, add/remove users, and optionally bind
-     groups to organization scopes.
-   - Add a grant resolver for resource permissions with subject types `user`,
-     `group`, and `organization`, resource types such as `calendar`, and
-     time-boxed validity.
-   - Make appointment calendars grantable to groups without exposing unrelated
-     calendars or tenant settings.
+   - Add backend CSV parser and validator.
+   - Add preview endpoint for superadmin `user_id = 1`.
+   - Add commit endpoint for validated imports.
+   - Add list/detail endpoints for translation bundles and import history.
+   - Add Settings / Administration UI for upload, preview, errors, and commit.
+   - Restrict upload/import to primary superadmin only.
 
    Done when:
-   - [ ] Organization trees support parent/child constraints and cannot cross
-     tenants.
-   - [ ] Group memberships cannot reference users outside the tenant.
-   - [ ] Permission grants support create/read/update/delete/share-style
-     actions, `valid_from`, `valid_until`, and revocation.
-   - [ ] Calendar access can be granted to a group and expires at the configured
-     time.
-   - [ ] The grant resolver has negative tests for expired, revoked, wrong
-     tenant, wrong group, and wrong organization access.
+   - [ ] Non-admins and admins with IDs other than `1` cannot upload language
+     CSV files.
+   - [ ] CSV preview returns row-level errors without mutating data.
+   - [ ] Import is atomic and audited.
+   - [ ] Duplicate keys and unsupported locales fail validation.
+   - [ ] Imported translations are visible after session refresh without
+     redeploy.
 
-4. [ ] `[tenant-auth-session-context]` Carry active tenant through authentication.
+4. [ ] `[frontend-i18n-runtime]` Add frontend translation runtime.
 
    Scope:
-   - Add active tenant to `sessions`.
-   - Return tenant ID, tenant UUID, tenant label, membership role, and
-     tenant-scoped permissions in login/session/refresh responses.
-   - Add a tenant switch endpoint for users with multiple memberships.
-   - Reject sessions whose user is not active in the requested tenant.
+   - Create a video-chat i18n module with locale state, direction state,
+     fallback merge, async bundle loading, and `t(key, params)` interpolation.
+   - Load translation resources before protected views render.
+   - Integrate with session state and settings save.
+   - Apply `document.documentElement.lang` and `document.documentElement.dir`.
+   - Replace the local-only language storage stub in `WorkspaceShell.vue`.
 
    Done when:
-   - [ ] Session validation returns both global user identity and tenant
-     membership context.
-   - [ ] Login selects the user's default tenant or returns a typed
-     tenant-selection response when needed.
-   - [ ] Session refresh preserves or revalidates the active tenant.
-   - [ ] Deactivating a membership revokes or blocks affected sessions.
+   - [ ] User language selection persists and survives reload/login refresh.
+   - [ ] Locale switch updates visible UI without requiring logout.
+   - [ ] Missing keys are detectable in dev/test and fall back to English in
+     production.
+   - [ ] Interpolation supports named placeholders and escapes values.
+   - [ ] Frontend unit contracts cover fallback, missing keys, params, and RTL
+     direction.
 
-5. [ ] `[tenant-rbac-and-admin-split]` Split platform admin from tenant admin.
+5. [ ] `[settings-language-ui]` Replace the current Regional stub with full language settings.
 
    Scope:
-   - Replace global `admin` behavior with explicit platform-admin and
-     tenant-admin checks.
-   - Scope user management to the active tenant.
-   - Allow tenant admins to invite, activate, deactivate, and permission users
-     inside their tenant only.
-   - Apply group-derived and time-limited grants after tenant membership checks.
-   - Keep platform admin recovery routes narrowly scoped and audited.
+   - Add a clear Language/Localization area under Settings.
+   - Keep Regional Time for date/time format but split language from date/time.
+   - Show supported languages from backend metadata, not a hard-coded stale
+     list.
+   - Apply RTL immediately after saving an RTL language.
+   - Make settings modal itself work in RTL and on mobile/tablet.
 
    Done when:
-   - [ ] Tenant admins cannot see or mutate users outside their tenant.
-   - [ ] Platform admin routes are distinct from tenant admin routes.
-   - [ ] Theme editor permission is tenant-scoped.
-   - [ ] Time-limited grants are enforced consistently in REST and websocket
-     admission.
-   - [ ] RBAC contract tests include forbidden cross-tenant attempts.
+   - [ ] Settings lets each user select any supported website-source locale.
+   - [ ] The old `en/de/fr/es` local-storage-only list is gone.
+   - [ ] Language save calls backend settings and updates session/i18n state.
+   - [ ] Settings modal can be maximized/restored in both LTR and RTL.
+   - [ ] Mobile/tablet settings remain full-screen and scroll correctly.
 
-6. [ ] `[tenant-scoped-repositories]` Tenant-bind all REST data access.
+6. [ ] `[frontend-string-coverage]` Convert app UI to translation keys.
 
    Scope:
-   - Calls, rooms, participants, invite codes, call access links, chat archive,
-     attachments, diagnostics, marketplace/admin data, appointment blocks,
-     bookings, settings, leads, and themes must use tenant predicates.
-   - Resource-level access must consult direct, group, and organization grants
-     where a resource is shareable.
-   - Add small helper APIs for tenant-required query parameters instead of
-     repeating ad hoc SQL snippets.
-   - Keep public responses minimal and tenant-safe.
+   - Convert navigation, page titles, settings, tenant administration, user
+     management, marketplace, call management, user dashboard, public booking,
+     join flow, appointment configuration, call workspace, modals, toasts,
+     form labels, placeholders, aria labels, and tooltips.
+   - Do not grow `CallWorkspaceView.vue`; add keys through extracted helpers or
+     child modules where needed.
+   - Preserve existing behavior while changing display text.
 
    Done when:
-   - [ ] Every tenant-owned query includes tenant scope at the SQL boundary.
-   - [ ] Missing tenant context fails with a typed auth/authorization error.
-   - [ ] Cross-tenant ID guessing returns not found or forbidden without data.
-   - [ ] Calendar reads/writes honor group grants and grant expiry.
-   - [ ] Existing single-tenant contract tests still pass under the default
-     tenant.
+   - [ ] No hard-coded user-visible English text remains in the targeted Vue
+     surfaces except explicit test fixtures and non-user debug identifiers.
+   - [ ] All strings have stable namespaced keys.
+   - [ ] English fallback covers 100 percent of used keys.
+   - [ ] Non-English seed/import files cover the key set or explicitly mark
+     allowed fallback gaps.
+   - [ ] Contract test fails on missing English keys.
 
-7. [ ] `[tenant-public-link-resolution]` Tenant-bind public booking and access links.
+7. [ ] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
 
    Scope:
-   - Resolve public calendar UUIDs, call access tokens, invite codes, website
-     lead submissions, and confirmation flows to exactly one tenant.
-   - Keep public IDs unguessable and never expose internal tenant IDs.
-   - Ensure booking-generated calls/access links inherit the tenant from the
-     resolved public calendar.
+   - Add direction-aware shell classes and CSS logical-property cleanup.
+   - Flip sidebar/nav placement in RTL.
+   - Swap or mirror directional icons.
+   - Ensure calendar week/day views render correctly under RTL.
+   - Ensure call workspace controls, participant lists, chat, reactions,
+     screen share drag UI, and mini videos do not overlap under RTL.
+   - Ensure video/canvas content is not mirrored unless explicitly desired for
+     self-preview behavior.
 
    Done when:
-   - [ ] Public calendar reads work without authentication but resolve a tenant.
-   - [ ] Booking writes cannot cross from one tenant calendar into another
-     tenant's calls or settings.
-   - [ ] Existing public UUID links remain stable after default-tenant
-     migration.
-   - [ ] Negative tests prove wrong-tenant IDs do not leak owner metadata.
+   - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
+     major screens.
+   - [ ] Left/right physical CSS audit is resolved or documented with a reason.
+   - [ ] Navigation, modal headers, pagination, wizard steps, and form rows are
+     coherent in RTL.
+   - [ ] Canvas/video rendering remains visually correct.
+   - [ ] Playwright screenshots prove desktop, tablet, and mobile RTL layouts.
 
-8. [ ] `[tenant-realtime-and-sfu-isolation]` Tenant-bind websocket, room presence, and SFU routing.
+8. [ ] `[backend-errors-and-email-localization]` Localize server-driven user text and email templates.
 
    Scope:
-   - Include tenant scope in websocket auth context, room joins, presence
-     snapshots, signaling, chat fanout, SFU admission, SFU store keys, recovery
-     messages, and diagnostics.
-   - Treat `(tenant_id, room_id, call_id)` as the routing identity, not just
-     room/call IDs.
-   - Re-evaluate time-limited room/call grants during join, reconnect, and
-     sensitive moderation actions.
-   - Keep reconnection/backfill tenant-safe.
+   - Keep machine contracts as error codes.
+   - Add localized frontend mapping for API errors.
+   - Add locale-aware appointment booking and lead email templates.
+   - Preserve placeholders for booking mails and lead notifications.
+   - Resolve recipient locale for owner and guest independently where possible.
 
    Done when:
-   - [ ] A socket cannot join a room from another tenant.
-   - [ ] Presence, chat, reactions, typing, layout, and moderation events are
-     isolated by tenant.
-   - [ ] `/sfu` admission requires tenant-bound call/room membership.
-   - [ ] Expired group grants stop new websocket/SFU admission.
-   - [ ] SFU recovery logs and counters cannot mix tenants with equal room IDs.
+   - [ ] API error payloads still expose stable codes and do not depend on
+     translated text for logic.
+   - [ ] Public booking confirmation email can be sent in the selected/public
+     locale.
+   - [ ] Owner notification email can use owner locale.
+   - [ ] CSV import rejects translations that remove required placeholders.
+   - [ ] Email contract tests cover placeholder preservation and locale
+     fallback.
 
-9. [ ] `[tenant-workspace-settings]` Convert administration, email, logos, and themes to tenant settings.
+9. [ ] `[public-pages-localization]` Localize public booking and join routes.
 
    Scope:
-   - Replace the singleton workspace settings row with per-tenant settings.
-   - Add platform defaults that tenants can inherit from or override.
-   - Scope SMTP sender, lead recipients, lead templates, appointment mail
-     templates, sidebar logo, modal logo, and theme presets to the active
-     tenant.
-   - Decide which settings are tenant-wide and which can be delegated to
-     organization or group administrators.
-   - Preserve current Admin/Administration UX while showing tenant context.
+   - Public calendar booking route.
+   - Booking confirmation page.
+   - Join/access-link route.
+   - Waiting-room/lobby admission messages.
+   - Public error states for expired or invalid tokens.
+   - Language resolution without requiring authentication.
 
    Done when:
-   - [ ] Tenant admins edit only their tenant settings.
-   - [ ] Platform admin can manage platform defaults without reading tenant
-     private data unnecessarily.
-   - [ ] Theme CRUD is tenant-aware and pagination stays local to the tenant.
-   - [ ] Website leads and booking mails use the tenant's mail settings.
+   - [ ] Public pages choose language from explicit route/query/cookie/browser
+     fallback in a deterministic order.
+   - [ ] Public pages support RTL locales.
+   - [ ] Public booking slots and date/time formatting use the active locale.
+   - [ ] Invalid/expired access paths show localized safe error text.
+   - [ ] Browser smoke covers public booking in `en`, `de`, `ar`, and one
+     additional RTL locale from the website source.
 
-10. [ ] `[tenant-data-export-import]` Add scoped user and organization data export/import.
-
-   Scope:
-   - Let users export their own account data, memberships, calendar data they
-     own, bookings, call metadata, chat/archive records they are allowed to
-     receive, files/attachments they own, and personal settings.
-   - Let authorized organization admins export organization data, including
-     suborganizations, organization users, groups, group memberships,
-     permission grants, calendars, bookings, calls, settings, leads, themes,
-     and permitted attachments.
-   - Add import for previously exported user and organization bundles with
-     schema version checks, tenant validation, ID remapping, conflict handling,
-     and dry-run validation.
-   - Treat import as a privileged operation that can create or update data only
-     inside the active tenant and only inside organizations the importer can
-     administer.
-   - Store export/import audit records with actor, tenant, organization/user
-     scope, timestamps, result, and failure reason.
-
-   Done when:
-   - [ ] A user can export their own data without receiving another user's or
-     organization's private data.
-   - [ ] An organization admin can export only the organization/suborganization
-     tree they administer.
-   - [ ] Import rejects bundles with missing schema version, unknown schema
-     version, wrong tenant, invalid references, expired grants, or forbidden
-     organization scope.
-   - [ ] Import dry-run reports created, updated, skipped, and conflicting
-     records without mutating data.
-   - [ ] Successful import remaps internal IDs and preserves public UUIDs only
-     when they are safe and non-conflicting.
-   - [ ] Export bundles exclude secrets such as SMTP passwords by default.
-
-11. [ ] `[tenant-frontend-context]` Add tenant context to frontend state and navigation.
-
-   Scope:
-   - Store active tenant in session state.
-   - Add a tenant switcher for users with multiple memberships.
-   - Add one clear administration menu area for Organizations, Suborganizations,
-     Groups, Users, Permissions, and Data Export/Import instead of scattering
-     those screens.
-   - Ensure Calls, User Management, Settings, Calendar, Public Booking, and
-     Call Workspace use the active tenant snapshot.
-   - Keep public booking pages free from authenticated tenant switching UI.
-
-   Done when:
-   - [ ] Login/session recovery hydrates tenant context before protected views
-     render.
-   - [ ] Switching tenant reloads tenant-owned stores and clears stale state.
-   - [ ] The administration menu groups organizations, groups, users, and
-     permission grants plus export/import in one discoverable place.
-   - [ ] Admin/user dashboards show the current tenant unambiguously.
-   - [ ] Browser tests prove no stale data remains after switching tenants.
-
-12. [ ] `[tenant-contract-tests]` Add cross-tenant backend contract coverage.
+10. [ ] `[locale-aware-formatting]` Centralize date, time, number, list, and sorting behavior.
 
     Scope:
-    - Add two-tenant fixtures for auth, users, calls, invites, appointment
-      calendars, bookings, workspace settings, themes, leads, chat, diagnostics,
-      organization trees, groups, permission grants, export/import bundles,
-      realtime admission, and SFU admission.
-    - Prove negative access paths, not just happy paths.
+    - Add frontend formatting helpers for date/time/number/list display.
+    - Stop hard-coded English collation for user-facing sorts.
+    - Keep persisted date/time formats compatible with existing user settings.
+    - Ensure calendar slot labels and call times respect locale and time format.
 
     Done when:
-    - [ ] Contract tests fail if any tenant-owned query omits tenant scope.
-    - [ ] Cross-tenant reads, updates, deletes, invite redemption, booking, and
-      websocket joins are denied.
-    - [ ] Group-granted calendar access works while valid and fails after
-      expiry or revocation.
-    - [ ] User and organization export/import tests prove scoped data,
-      rejected foreign references, dry-run behavior, and ID remapping.
-    - [ ] Migration tests prove default-tenant backfill.
-    - [ ] The existing appointment calendar duplicate-booking and recurring-slot
-      contracts still pass.
+    - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
+      locale-aware helpers.
+    - [ ] Date/time formatting uses user locale plus existing time/date
+      preferences.
+    - [ ] Calendar and dashboard sort order remains deterministic.
+    - [ ] Contract tests cover representative LTR and RTL formatting examples,
+      including `en`, `de`, `ar`, `fa`, and `ps`.
 
-13. [ ] `[tenant-browser-smoke]` Add browser coverage for tenant UX.
+11. [ ] `[localization-contract-tests]` Add backend and frontend contracts.
 
     Scope:
-    - Cover tenant switching, organization/suborganization management, group
-      management, time-limited permission grants, scoped user management,
-      scoped export/import, scoped settings/theme editing, public booking, and
-      call entry.
-    - Run desktop and mobile smoke paths.
+    - Backend tests for migrations, user locale settings, CSV validation,
+      translation lookup, superadmin authorization, email placeholders.
+    - Frontend tests for fallback merge, missing keys, interpolation, language
+      switch, RTL state, settings UI, and route-level loading.
+    - Static key coverage test against source usage.
 
     Done when:
-    - [ ] Tenant A and Tenant B data never appear together in the UI.
-    - [ ] A calendar shared to a group is visible only to group members while
-      the grant is valid.
-    - [ ] Switching tenants reloads calls, users, settings, and themes.
-    - [ ] User and organization export/import UI is visible only to authorized
-      users and shows dry-run results before import.
-    - [ ] Public booking selects slots from the correct tenant calendar.
-    - [ ] A tenant-bound call can be joined and remains realtime-isolated.
+    - [ ] Tests fail if a used key is missing from English fallback.
+    - [ ] Tests fail if CSV upload mutates data during preview.
+    - [ ] Tests fail if non-`user_id=1` can import translations.
+    - [ ] Tests fail if a configured RTL locale does not set RTL.
+    - [ ] Tests fail if required email placeholders are missing.
 
-14. [ ] `[tenant-deploy-and-rollout-proof]` Deploy with explicit migration and rollback proof.
+12. [ ] `[localization-browser-smoke]` Add browser proof.
 
     Scope:
-    - Add deploy preflight backup/checks for tenant migration.
-    - Run production health, auth, public booking, and call smoke checks after
-      deploy.
-    - Verify the default tenant contains the existing production data.
+    - Desktop, tablet, mobile.
+    - Representative LTR and RTL locales from the website source, with full
+      matrix metadata coverage for all discovered locales.
+    - Settings language switch.
+    - Admin screens.
+    - Public booking.
+    - Join flow.
+    - Live call workspace at least as a UI shell smoke without requiring real
+      camera permission for every scenario.
 
     Done when:
-    - [ ] Deploy applies tenant migrations once and idempotently.
-    - [ ] Production health and version probes pass.
-    - [ ] A production smoke proves default tenant calls, calendars, settings,
-      and public links.
-    - [ ] Rollback notes identify which migration steps are non-reversible.
+    - [ ] Screenshots show no overlapping text in representative LTR and RTL
+      locales.
+    - [ ] RTL screenshots show sidebar/nav/modal direction flipped correctly.
+    - [ ] Settings switch persists after reload.
+    - [ ] Public booking and join pages render localized text.
+    - [ ] Smoke can run in CI/local without external translation services.
 
-15. [ ] `[appointment-calendar-test-carryover]` Keep appointment calendar verification alive during tenant work.
+13. [ ] `[deploy-and-rollout-proof]` Deploy localization safely.
 
     Scope:
-    - Preserve owner slot creation, recurring weekly public slots, public
-      week-only calendar, booking form validation, privacy consent, booking
-      confirmation, and duplicate-booking prevention.
-    - Add the missing browser smoke that was still open in the previous sprint.
+    - Migration preflight.
+    - Translation bundle seed check.
+    - Production smoke with default `en`.
+    - Production smoke after switching one test user to `de`, `ar`, and one
+      additional RTL locale from the website source.
+    - Rollback notes for schema additions.
 
     Done when:
-    - [ ] Owner drag-select and form-entry slot creation work inside one tenant.
-    - [ ] Public slot selection works for that tenant only.
-    - [ ] Duplicate booking prevention still runs server-side.
-    - [ ] Desktop and mobile public booking smoke tests pass.
-
-## Execution Order
-
-1. [ ] Inventory tables, endpoints, realtime paths, and frontend stores.
-2. [ ] Add tenant schema, default-tenant migration, organization tree, groups,
-   and permission-grant model.
-3. [ ] Implement the grant resolver for user, group, and organization subjects
-   with time-limited validity.
-4. [ ] Carry tenant context through auth/session/RBAC.
-5. [ ] Tenant-bind REST repositories and public link resolvers.
-6. [ ] Tenant-bind websocket, presence, chat, layout, diagnostics, and SFU.
-7. [ ] Convert workspace administration, email, logos, themes, leads, and
-   appointment settings to tenant scope.
-8. [ ] Add scoped user/organization export and import with dry-run validation.
-9. [ ] Add frontend tenant context, switcher, Organizations/Groups/Users menu,
-   permission UI, export/import UI, and stale-state clearing.
-10. [ ] Add backend and browser cross-tenant, group-grant, expiry, and
-   export/import tests.
-11. [ ] Deploy with migration backup, smoke checks, and default-tenant proof.
+    - [ ] Deploy applies localization migrations idempotently.
+    - [ ] Existing users can log in with default English.
+    - [ ] Superadmin can upload a CSV in production-like smoke.
+    - [ ] Production health and deploy smoke pass.
+    - [ ] Rollback notes identify which migration changes are additive.
 
 ## Subagent Execution Plan
 
-The sprint must be executed as staged, disjoint workstreams. Subagents may read
-outside their owned paths, but they must not edit another subagent's owned paths
-unless the coordinator explicitly moves ownership between phases.
-
-### Phase 0: Contract Freeze
-
-1. [ ] `Tenant Contract Coordinator`
-
-   Owns:
-   - `SPRINT.md`
-   - `documentation/dev/video-chat/tenant-architecture.md`
-   - `demo/video-chat/contracts/v1/api-ws-contract.catalog.json`
-   - any new shared tenant contract fixture under `demo/video-chat/contracts/**`
-
-   Delivers:
-   - Table/resource ownership map.
-   - Canonical tenant context shape.
-   - Public link tenant-resolution rules.
-   - Permission grant action names and resource type names.
-   - Export bundle schema version and top-level manifest shape.
-
-   Gate:
-   - No implementation agent starts tenant persistence or API payload changes
-     until this shape is documented.
-
-### Phase 1: Backend Foundations
-
-These agents can run in parallel after Phase 0, because their write sets are
-separate.
-
-1. [ ] `Schema And Migration Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/support/database_migrations.php`
-   - `demo/video-chat/backend-king-php/support/database_demo_seed.php`
-   - new migration helpers under `demo/video-chat/backend-king-php/support/tenant_*.php`
-   - migration/backfill tests only under
-     `demo/video-chat/backend-king-php/tests/tenant-migration-*.php`
-
-   Reads:
-   - all current domain modules for table ownership.
-
-   Delivers:
-   - `tenants`, memberships, organization tree, groups, permission grants, and
-     export/import job metadata.
-   - Default-tenant backfill preserving existing production data.
-   - Idempotent fresh-install and upgrade behavior.
-
-2. [ ] `Auth And Tenant Session Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/support/auth.php`
-   - `demo/video-chat/backend-king-php/support/auth_request.php`
-   - `demo/video-chat/backend-king-php/support/auth_session_cache.php`
-   - `demo/video-chat/backend-king-php/http/module_auth_session.php`
-   - auth/session/RBAC tests under `demo/video-chat/backend-king-php/tests/session-*`,
-     and new `tenant-auth-*.php`
-
-   Reads:
-   - schema contract from the coordinator.
-   - user membership helpers from the Org/Permissions agent once available.
-
-   Delivers:
-   - Active tenant on login/session/refresh.
-   - Tenant switch endpoint.
-   - Tenant membership role and tenant permissions in auth snapshots.
-
-3. [ ] `RBAC Router Boundary Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/support/auth_rbac.php`
-   - `demo/video-chat/backend-king-php/http/router.php`
-   - route-order, protected API, and RBAC tests under
-     `demo/video-chat/backend-king-php/tests/router-*`,
-     `protected-api-*`, `rbac-*`, and new `tenant-router-*.php`
-
-   Reads:
-   - all `demo/video-chat/backend-king-php/http/module_*.php` files.
-
-   Delivers:
-   - Additive tenant-context module contract.
-   - Public route classification: tenant-resolving public route,
-     authenticated tenant route, or platform-global route.
-   - Stable route/module registration points for later backend agents.
-
-   Gate:
-   - No later backend agent edits `router.php`; new routes are queued for this
-     owner or added in a coordinator-controlled merge.
-
-4. [ ] `Organizations Groups Permissions Agent`
-
-   Owns:
-   - new `demo/video-chat/backend-king-php/domain/tenancy/**`
-   - new `demo/video-chat/backend-king-php/http/module_tenancy.php`
-   - tenant organization/group/permission tests under
-     `demo/video-chat/backend-king-php/tests/tenant-organization-*.php`,
-     `tenant-group-*.php`, and `tenant-permission-*.php`
-
-   Reads:
-   - auth context from the Auth agent.
-   - schema from the Schema agent.
-
-   Delivers:
-   - Organization/suborganization CRUD.
-   - Group CRUD and memberships.
-   - Shared grant resolver with `valid_from`, `valid_until`, and revocation.
-   - Calendar grant proof through resolver-level tests, not calendar UI.
-
-### Phase 2: Tenant-Scoped Domain Agents
-
-These agents start only after Phase 1 contracts are stable. They share tenant
-helpers read-only and own separate domain directories.
-
-1. [ ] `Calls Invites Public Links Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/calls/call_*`
-   - `demo/video-chat/backend-king-php/domain/calls/invite_*`
-   - `demo/video-chat/backend-king-php/http/module_calls.php`
-   - `demo/video-chat/backend-king-php/http/module_invites.php`
-   - `demo/video-chat/backend-king-php/http/module_calls_access.php`
-   - calls/invites/access tests under `demo/video-chat/backend-king-php/tests/call-*`,
-     `calls-*`, `invite-*`, and `call-access-*`
-
-   Does not edit:
-   - appointment calendar files.
-   - realtime/SFU files.
-
-   Delivers:
-   - Tenant-bound call, invite, access link, and call-access session behavior.
-   - Public link resolution that inherits tenant safely.
-
-2. [ ] `Users Membership Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/users/**`
-   - `demo/video-chat/backend-king-php/http/module_users.php`
-   - `demo/video-chat/backend-king-php/http/module_users_admin_accounts.php`
-   - user/admin/avatar/email tests under
-     `demo/video-chat/backend-king-php/tests/user-*`,
-     `admin-user-*`, and `avatar-*`
-
-   Reads:
-   - tenant auth context.
-   - organization/group helpers.
-   - workspace theme permission rules.
-
-   Delivers:
-   - Tenant-scoped user directory, account administration, settings, avatar,
-     email identity/change flows, and tenant-local theme editor permission.
-   - Primary-admin behavior replaced by explicit platform-admin or tenant-admin
-     contracts.
-
-3. [ ] `Appointment Calendar Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/calls/appointment_*`
-   - `demo/video-chat/backend-king-php/http/module_appointment_calendar.php`
-   - appointment tests under
-     `demo/video-chat/backend-king-php/tests/appointment-calendar-*`
-
-   Does not edit:
-   - generic call management files except through coordinator-approved helper
-     changes.
-
-   Delivers:
-   - Tenant-bound appointment blocks, settings, bookings, recurring slots, mail
-     templates, and public calendar UUID resolution.
-   - Group-granted calendar access via the shared grant resolver.
-
-4. [ ] `Workspace Settings Themes Leads Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/workspace/**`
-   - `demo/video-chat/backend-king-php/http/module_workspace_administration.php`
-   - workspace/theme/lead tests under
-     `demo/video-chat/backend-king-php/tests/workspace-*.php`,
-     `tenant-workspace-*.php`, and `tenant-theme-*.php`
-
-   Delivers:
-   - Tenant-owned administration settings, mail server settings, logos, themes,
-     leads, and platform defaults.
-
-5. [ ] `Export Import Agent`
-
-   Owns:
-   - new `demo/video-chat/backend-king-php/domain/tenant_export_import/**`
-   - new `demo/video-chat/backend-king-php/http/module_tenant_export_import.php`
-   - export/import tests under
-     `demo/video-chat/backend-king-php/tests/tenant-export-*.php` and
-     `tenant-import-*.php`
-
-   Reads:
-   - all tenant-scoped domain repositories through public helper functions only.
-
-   Delivers:
-   - User data export.
-   - Organization tree export.
-   - Dry-run import, ID remapping, conflict reporting, and audit records.
-   - No raw database dump format.
-
-6. [ ] `Realtime Tenant Context Presence Agent`
-
-   Owns:
-   - new `demo/video-chat/backend-king-php/domain/realtime/realtime_tenant_context.php`
-   - `demo/video-chat/backend-king-php/http/module_realtime_websocket.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_presence.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php`
-   - presence/tenant context tests under
-     `demo/video-chat/backend-king-php/tests/realtime-tenant-*.php`,
-     `realtime-presence-*`, and `realtime-websocket-*`
-
-   Reads:
-   - auth/session tenant context.
-   - calls/access admission helpers.
-
-   Delivers:
-   - Tenant-scoped realtime room/call keys.
-   - Tenant-carrying websocket welcome and connection descriptors.
-   - Tenant-partitioned room presence and snapshots.
-
-7. [ ] `Realtime Commands Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_chat.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_typing.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_reaction.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_reaction_broker.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_signaling.php`
-   - command/broker tests under
-     `demo/video-chat/backend-king-php/tests/realtime-chat-*`,
-     `realtime-typing-*`, `realtime-reaction-*`, and
-     `realtime-signaling-*`
-
-   Does not edit:
-   - `module_realtime_websocket.php`
-   - SFU files.
-
-   Delivers:
-   - Tenant-safe chat, typing, reaction, signaling, activity, layout, and
-     moderation command routing using tenant-scoped room/call keys.
-
-8. [ ] `Realtime Diagnostics Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/realtime/client_diagnostics.php`
-   - diagnostics HTTP/module tests under
-     `demo/video-chat/backend-king-php/tests/client-diagnostics-*` and
-     `tenant-diagnostics-*`
-
-   Reads:
-   - schema migration for diagnostics tenant columns.
-   - auth tenant context.
-
-   Delivers:
-   - Tenant-bound diagnostic writes and tenant-default query filters.
-
-9. [ ] `Realtime SFU Agent`
-
-   Owns:
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_frame_buffer.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_broker_replay.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_recovery_requests.php`
-   - `demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php`
-   - SFU/gateway/media tests under
-     `demo/video-chat/backend-king-php/tests/realtime-sfu-*`,
-     `gateway-*`, and `media-security-*`
-
-   Reads:
-   - realtime tenant context helper.
-   - calls/access admission helper.
-
-   Delivers:
-   - Tenant-bound `/sfu` admission, static room maps, broker rows, frame
-     buffers, recovery routing, publisher/subscriber cursors, and budget
-     tracking.
-
-### Phase 3: Frontend Agents
-
-Frontend agents start after Phase 0 API contracts are frozen. They may mock
-pending backend responses in contract tests, but backend integration is gated on
-Phase 1 and Phase 2.
-
-1. [ ] `Frontend Session Shell Agent`
-
-   Owns:
-   - `demo/video-chat/frontend-vue/src/domain/auth/**`
-   - `demo/video-chat/frontend-vue/src/http/router.js`
-   - `demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue`
-   - tenant context API client under `demo/video-chat/frontend-vue/src/domain/tenant/**`
-   - `demo/video-chat/frontend-vue/src/domain/tenant/TenantSwitcher.vue`
-   - auth/navigation tests under `demo/video-chat/frontend-vue/tests/e2e/auth-*`
-     and new `tenant-session-*`
-
-   Delivers:
-   - Tenant context in session state.
-   - Tenant switcher.
-   - Stale tenant state clearing on switch.
-
-2. [ ] `Frontend Administration Agent`
-
-   Owns:
-   - new organization/group/permission views under
-     `demo/video-chat/frontend-vue/src/domain/identity/**`
-   - tenant administration API client files under
-     `demo/video-chat/frontend-vue/src/domain/identity/**`
-
-   Reads:
-   - `WorkspaceShell.vue` but does not edit it after the Session Shell agent
-     owns the shell integration.
-
-   Delivers:
-   - One administration menu area for orgs, groups, users, permissions, and
-     export/import.
-   - Route/nav requests for the Session Shell owner to wire.
-
-3. [ ] `Frontend Settings Themes Agent`
-
-   Owns:
-   - `demo/video-chat/frontend-vue/src/layouts/settings/**`
-   - `demo/video-chat/frontend-vue/src/domain/workspace/**`
-   - `demo/video-chat/frontend-vue/src/styles/settings.css`
-
-   Delivers:
-   - Tenant-aware administration settings, logos, mail settings, lead settings,
-     and theme CRUD without touching tenancy admin screens.
-
-4. [ ] `Frontend Calls Calendar Agent`
-
-   Owns:
-   - `demo/video-chat/frontend-vue/src/domain/calls/**`
-   - appointment/calendar frontend tests.
-
-   Does not edit:
-   - auth/session files.
-   - tenant admin views.
-   - realtime call workspace internals except API call adapters.
-
-   Delivers:
-   - Tenant-aware call lists, appointment configuration, public booking, and
-     group-granted calendar visibility.
-
-5. [ ] `Frontend Realtime Agent`
-
-   Owns:
-   - `demo/video-chat/frontend-vue/src/domain/realtime/workspace/**`
-   - `demo/video-chat/frontend-vue/src/domain/realtime/sfu/**`
-   - `demo/video-chat/frontend-vue/src/lib/sfu/**`
-   - realtime frontend contract tests.
-
-   Does not edit:
-   - `CallWorkspaceView.vue` except removing lines through extraction if the
-     coordinator explicitly assigns that cleanup.
-
-   Delivers:
-   - Tenant context in websocket/SFU setup and reconnect handling.
-
-6. [ ] `Frontend Data Portability Agent`
-
-   Owns:
-   - new `demo/video-chat/frontend-vue/src/domain/data-portability/**`
-   - export/import contract and e2e tests under
-     `demo/video-chat/frontend-vue/tests/contract/tenant-export-*.mjs`,
-     `tenant-import-*.mjs`, and
-     `demo/video-chat/frontend-vue/tests/e2e/tenant-export-import*.spec.js`
-
-   Reads:
-   - tenant context state.
-   - identity labels and settings shell.
-
-   Delivers:
-   - Export job UI, artifact links, import file selection, dry-run result UI,
-     conflict display, and final import confirmation.
-   - Route/nav requests for the Session Shell owner to wire.
-
-### Phase 4: Verification And Rollout Agents
-
-1. [ ] `Backend Contract Agent`
-
-   Owns:
-   - new cross-tenant backend test fixtures and runners under
-     `demo/video-chat/backend-king-php/tests/tenant-*.php`
-
-   Rule:
-   - Test agents do not edit production code. They report failures to the owner
-     agent for that domain.
-
-2. [ ] `Browser Smoke Agent`
-
-   Owns:
-   - `demo/video-chat/frontend-vue/tests/e2e/tenant-*.spec.js`
-   - `demo/video-chat/frontend-vue/tests/contract/tenant-*.mjs`
-
-   Rule:
-   - Browser smoke agent does not edit Vue production files.
-
-3. [ ] `Deploy Rollout Agent`
-
-   Owns:
-   - `demo/video-chat/scripts/deploy.sh`
-   - `demo/video-chat/scripts/deploy-smoke.sh`
-   - `demo/video-chat/scripts/check-deploy-idempotency.sh`
-   - deploy/rollout docs referenced by the sprint.
-
-   Delivers:
-   - Migration preflight backup checks.
-   - Default-tenant production smoke.
-   - Rollback notes for non-reversible migrations.
-
-### Conflict Rules
-
-- Shared helper files must have one owner per phase. If a second agent needs a
-  helper change, it requests that change from the current owner instead of
-  editing the file.
-- No agent edits `database_migrations.php` except the Schema And Migration
-  Agent.
-- No agent edits auth/session files except the Auth And Tenant Session Agent.
-- No agent edits `router.php` except the RBAC Router Boundary Agent.
-- Realtime backend files are split by presence, commands, diagnostics, and SFU
-  ownership. A realtime agent may read other realtime files, but it does not
-  edit them.
-- No agent edits frontend auth/session files except the Frontend Session Shell
-  Agent.
-- No agent edits `WorkspaceShell.vue` or `router.js` except the Frontend
-  Session Shell Agent.
-- Frontend feature agents request route/nav entries instead of editing the
-  shell directly.
-- No agent edits tests outside its assigned test family unless the coordinator
-  moves ownership.
-- Merge order is schema, auth/session, tenancy permissions, domain agents,
-  frontend agents, tests, deploy. Realtime and export/import can merge after
-  auth/session plus tenancy permissions are stable.
-
-## Guardrails
-
-- Do not remove or weaken current video-call, SFU, appointment, email, theme,
-  or public booking behavior to make tenant isolation easier.
-- Do not introduce a manual refresh workaround for realtime tenant state.
-- Do not grow `CallWorkspaceView.vue`; tenant realtime changes must land in
-  focused helpers under `callWorkspace/**`, SFU modules, or backend modules.
-- Keep source files below 800 lines by extracting helpers while implementing.
-- Treat public UUIDs and tokens as tenant resolvers, never as permission by
-  themselves.
-- Any query without tenant context must be classified as platform-global before
-  it is accepted.
-- Permission checks must use the shared grant resolver for shareable resources;
-  do not add isolated per-screen ACL logic.
-- Time-limited grants must fail closed when clocks, dates, or timezone parsing
-  are invalid.
-- Export/import must never be used to bypass tenant, organization, group, or
-  grant checks. Imported references must be remapped or rejected, not trusted.
-- Export bundles must be schema-versioned and deterministic enough to test; do
-  not serialize raw database dumps as the user-facing export format.
-- Cross-tenant failures must be tested as first-class contract behavior.
-
-## Definition of Done
-
-- [ ] Existing production data is migrated into a default tenant.
-- [ ] Auth/session snapshots include tenant context and tenant role.
-- [ ] Tenant admins can manage only their tenant's users, calls, settings,
-  calendars, leads, themes, and bookings.
-- [ ] Tenant admins can create organizations, suborganizations, groups, and
-  time-limited permission grants.
-- [ ] Calendars can be shared to groups and become unavailable when the grant
-  expires or is revoked.
-- [ ] Users can export their own data, and organization admins can export/import
-  organization data inside the scopes they administer.
-- [ ] Imports support dry-run validation, ID remapping, conflict reporting, and
-  fail-closed tenant/organization reference checks.
-- [ ] Platform admin behavior is explicit and separate from tenant admin
-  behavior.
-- [ ] The frontend has one administration menu area for organizations, groups,
-  users, permissions, and export/import.
-- [ ] Public booking and invite links resolve the correct tenant without
-  exposing internal IDs.
-- [ ] Websocket, room presence, chat, layout, moderation, diagnostics, and SFU
-  routing are tenant-isolated.
-- [ ] Backend contract tests prove denied cross-tenant access.
-- [ ] Browser smoke proves tenant switching and public booking isolation.
-- [ ] KingRT deploy runs tenant migrations, health checks, and production smoke
-  without dropping existing data.
-
-## Worker Handoff Status 2026-05-05
-
-Implemented foundation in this worker pass:
-
-- Tenant contract documentation and JSON fixture:
-  `documentation/dev/video-chat/tenant-architecture.md` and
-  `demo/video-chat/contracts/v1/tenant-context.contract.json`.
-- SQLite migration `0028_tenant_foundation_default_backfill` with default
-  tenant, tenant memberships, organizations, organization memberships, groups,
-  group memberships, permission grants, and export/import job metadata.
-- Default-tenant backfill helpers for fresh demo bootstrap and upgraded
-  databases.
-- Auth/session tenant context, active tenant storage on sessions, tenant switch
-  endpoint, tenant-aware session recovery/refresh payloads, and frontend
-  session hydration.
-- Shared permission grant resolver for user, group, and organization subjects
-  with expiry/revocation fail-closed behavior.
-- Minimal tenant admin context module at `/api/admin/tenancy/context`.
-- Backend contract tests for tenant migration, tenant auth/session switch, and
-  permission grants.
-
-Still open for later workstreams:
-
-- Tenant predicates are not yet applied to every calls, appointment, workspace,
-  user-admin, diagnostics, realtime, and SFU query path.
-- Public booking, invite, call-access, and website-lead resolvers still need
-  explicit tenant-bound write-through beyond default-tenant compatibility.
-- Workspace settings still use the legacy singleton row shape with tenant
-  backfill; full per-tenant settings rewrite remains open.
-- Organization/group CRUD, export/import execution, browser tenant-switch smoke,
-  and deploy rollout proof remain open.
-- PHP SQLite contract tests could not be executed in this local environment
-  because the active PHP has PDO but no `pdo_sqlite` driver.
+Rules for all agents:
+- Work on `feature/videochat-localization-sprint`.
+- Do not push.
+- Keep write ownership disjoint.
+- Do not grow `CallWorkspaceView.vue`; extract into focused modules.
+- Keep source files below 800 lines where possible; if touching an oversized
+  file, move code downward into helpers.
+- Use stable translation keys; do not use raw visible text as identifiers.
+- Preserve existing behavior and tenant isolation.
+
+Agent A: Backend schema, settings, and lookup
+- Owns:
+  - `demo/video-chat/backend-king-php/support/database_migrations.php`
+  - new `support/localization*.php`
+  - new `domain/localization/*.php`
+  - locale seed inventory generated from
+    `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n`
+  - user settings locale validation
+  - session/auth locale payload
+- Must not edit frontend view files.
+- Delivers migrations, locale lookup API, user locale persistence, and backend
+  contracts.
+
+Agent B: CSV admin backend and API
+- Owns:
+  - new CSV parser/import domain files
+  - new or extended HTTP module for localization administration
+  - CSV import tests
+- Depends on Agent A schema names only.
+- Must enforce `user_id = 1` for CSV import.
+
+Agent C: Frontend i18n runtime and settings language UI
+- Owns:
+  - new `demo/video-chat/frontend-vue/src/domain/localization/*`
+  - session/i18n integration in auth state
+  - settings language UI extraction
+  - `WorkspaceShell.vue` only for wiring/removal of the local language stub
+- Must not translate all application surfaces; it only provides runtime and
+  settings plumbing.
+
+Agent D: Frontend string key conversion
+- Owns:
+  - admin/user/calls/calendar/tenant/settings child components and templates
+  - translation fallback seed files
+- Must not edit backend CSV/schema.
+- Must coordinate with Agent C key loader but can add keys.
+
+Agent E: RTL layout and visual proof
+- Owns:
+  - CSS/layout files
+  - direction-aware icon helpers
+  - Playwright screenshots/smoke specs
+- Must not change translation storage.
+- Must prove RTL layout across desktop/tablet/mobile using at least `ar` and
+  one of `fa`, `ps`, or `sgd`.
+
+Agent F: Public pages, emails, and error mapping
+- Owns:
+  - public booking/join localization
+  - localized email template handling
+  - API error-code to UI-message mapping
+  - placeholder validation tests
+- Must coordinate with Agent A for locale lookup and with Agent D for keys.
+
+Recommended order:
+1. Agent A defines schema/contracts and locale/session payload.
+2. Agent C builds frontend runtime against stub/fallback resources.
+3. Agent B adds CSV admin upload/import.
+4. Agent D converts strings by namespace.
+5. Agent F localizes public pages/emails/errors.
+6. Agent E runs RTL sweep and browser proof in parallel after C has direction
+   plumbing.
+7. Integration owner runs full lint/build/contracts/browser smoke, resolves
+   merge conflicts, and deploys only after green checks.
+
+## Acceptance Bar
+
+- A user can choose language under Settings and the choice persists.
+- Superadmin `user_id = 1` can upload translation CSV with preview and atomic
+  import.
+- The first supported locale set matches the Intelligent Intern website source
+  inventory.
+- Configured RTL locales switch the complete application to RTL.
+- Public booking and join flows are localized.
+- Emails and error text use locale-aware templates/messages.
+- Missing English keys fail tests.
+- Non-superadmin CSV upload is impossible.
+- Existing deployed single-language behavior remains usable while localization
+  rolls out.
