@@ -352,8 +352,11 @@ Sprint goal:
    - User Management now exposes Governance groups through the same `+1`
      relation picker and submits selected groups alongside direct Governance
      roles during user create/update.
-   - Remaining work: connect module/permission/grant relation mutations to
-     real tenant-scoped backend APIs.
+   - User Management group selection now opens the real Governance group
+     descriptor target, so selected groups can recurse into permission/module
+     mass selection and return those child relations to the unsaved user draft.
+   - Remaining work: inline-create a missing group from the user relation
+     stack, then return the persisted group to the unsaved user draft.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -458,6 +461,9 @@ Sprint goal:
    - Admin user create/update now also accepts `relationships.groups`,
      persists tenant-scoped user group memberships through `group_memberships`,
      and returns selected group summaries in user relationship payloads.
+   - Nested `relationships.groups[].relationships.permissions/modules` from
+     admin user create/update now sync into group-sourced evaluator grants
+     instead of being dropped at the user membership boundary.
    - Remaining work: broaden direct-role UI affordances only where non-admin
      profile or delegation screens need them.
 
@@ -590,9 +596,12 @@ Sprint goal:
      through `relationships.roles`.
    - Extended admin-user and user-editor contracts for direct Governance group
      assignment through `relationships.groups`.
+   - Extended the same contracts for user -> group -> permission/module nested
+     payloads; frontend build and relation contracts pass, while the PHP
+     contract remains blocked locally by missing `pdo_sqlite`.
    - Remaining work depends on the recursive relation picker and backend
-     governance APIs: nested user -> group -> permission assignment, batch
-      summary loading, and responsive/e2e modal stack proof.
+     governance APIs: inline group creation, batch summary loading, and
+     responsive/e2e modal stack proof.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -633,6 +642,10 @@ Sprint goal:
       relation-stack contract, translation-key coverage, and `npm run build`
       pass. Build still reports the known large `CallWorkspaceView` chunk
       warning.
+    - Admin user group relation PHP syntax checks pass, frontend user-editor
+      relation contract passes, and `npm run build` passes; the admin-user PHP
+      contract still cannot execute locally because this PHP runtime lacks
+      `pdo_sqlite`.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 

@@ -40,6 +40,15 @@ function videochat_tenancy_governance_group_summary(array $row): array
     ];
 }
 
+function videochat_tenancy_governance_user_group_nested_payload(mixed $value): array
+{
+    if (!is_array($value)) {
+        return [];
+    }
+    $relationships = is_array($value['relationships'] ?? null) ? $value['relationships'] : [];
+    return $relationships !== [] ? ['relationships' => $relationships] : [];
+}
+
 function videochat_tenancy_governance_validate_user_groups(PDO $pdo, int $tenantId, array $payload): array
 {
     if (!videochat_tenancy_governance_user_payload_has_groups($payload)) {
@@ -53,6 +62,15 @@ function videochat_tenancy_governance_validate_user_groups(PDO $pdo, int $tenant
         if (!is_array($group)) {
             return ['ok' => false, 'errors' => ['groups' => 'not_found']];
         }
+        $nestedPayload = videochat_tenancy_governance_user_group_nested_payload($value);
+        $permissions = videochat_tenancy_governance_validate_group_permissions($nestedPayload);
+        if (!(bool) ($permissions['ok'] ?? false)) {
+            return ['ok' => false, 'errors' => is_array($permissions['errors'] ?? null) ? $permissions['errors'] : ['permissions' => 'invalid_permission']];
+        }
+        $modules = videochat_tenancy_governance_validate_group_modules($nestedPayload);
+        if (!(bool) ($modules['ok'] ?? false)) {
+            return ['ok' => false, 'errors' => is_array($modules['errors'] ?? null) ? $modules['errors'] : ['modules' => 'invalid_module_reference']];
+        }
         $groupId = (int) ($group['database_id'] ?? ($group['id'] ?? 0));
         if ($groupId > 0) {
             $groupIds[$groupId] = true;
@@ -62,7 +80,7 @@ function videochat_tenancy_governance_validate_user_groups(PDO $pdo, int $tenant
     return ['ok' => true, 'group_ids' => array_keys($groupIds)];
 }
 
-function videochat_tenancy_governance_sync_user_groups(PDO $pdo, int $tenantId, int $userId, array $payload): array
+function videochat_tenancy_governance_sync_user_groups(PDO $pdo, int $tenantId, int $userId, array $payload, int $actorUserId = 0): array
 {
     if (!videochat_tenancy_governance_user_payload_has_groups($payload)) {
         return ['ok' => true];
@@ -123,6 +141,29 @@ SQL
             ':created_at' => $now,
             ':updated_at' => $now,
         ]);
+    }
+
+    foreach (videochat_tenancy_governance_user_group_values($payload) as $value) {
+        $nestedPayload = videochat_tenancy_governance_user_group_nested_payload($value);
+        if ($nestedPayload === []) {
+            continue;
+        }
+        $group = videochat_tenancy_fetch_governance_group($pdo, $tenantId, videochat_tenancy_governance_user_group_identifier($value));
+        if (!is_array($group)) {
+            continue;
+        }
+        $groupId = (int) ($group['database_id'] ?? ($group['id'] ?? 0));
+        if ($groupId <= 0) {
+            continue;
+        }
+        $permissionSync = videochat_tenancy_governance_sync_group_permissions($pdo, $tenantId, $groupId, $actorUserId, $nestedPayload);
+        if (!(bool) ($permissionSync['ok'] ?? false)) {
+            return $permissionSync;
+        }
+        $moduleSync = videochat_tenancy_governance_sync_group_modules($pdo, $tenantId, $groupId, $actorUserId, $nestedPayload);
+        if (!(bool) ($moduleSync['ok'] ?? false)) {
+            return $moduleSync;
+        }
     }
 
     return ['ok' => true];
