@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { nextTick } from 'vue';
 import { useCrudRelationNavigator } from '../../src/modules/governance/useCrudRelationNavigator.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
@@ -35,12 +36,20 @@ assert.equal(navigator.currentFrame.value.key, 'permissions', 'navigator must st
 assert.equal(navigator.currentSelectionIds.value.length, 1, 'navigator must hydrate existing relation selections');
 assert.equal(navigator.pagedRows.value.length, 1, 'navigator must paginate relation rows');
 
-navigator.toggleRow(rowsByEntity.permissions[1]);
+navigator.goToPage(2);
+assert.equal(navigator.page.value, 2, 'relation pagination must move to the requested page');
+navigator.toggleRow(navigator.pagedRows.value[0]);
 assert.deepEqual(
   navigator.currentSelectionIds.value.sort(),
   ['permission:users.read', 'permission:users.update'],
-  'multiple relations must support mass selection',
+  'multiple relations must support mass selection across pages',
 );
+navigator.goToPage(99);
+assert.equal(navigator.page.value, navigator.pageCount.value, 'relation pagination must clamp to the last page');
+navigator.query.value = 'users.update';
+await nextTick();
+assert.equal(navigator.page.value, 1, 'relation search must reset pagination to the first filtered page');
+assert.equal(navigator.pagedRows.value[0].key, 'users.update', 'filtered relation rows must remain visible after search');
 
 navigator.push({ key: 'modules', target_entity: 'modules', selection_mode: 'single' });
 assert.equal(navigator.stack.value.length, 2, 'navigator must support recursive relation stack pushes');

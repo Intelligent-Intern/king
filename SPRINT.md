@@ -319,7 +319,7 @@ Sprint goal:
    - Modules, permissions, and audit log are readonly at CRUD-descriptor level,
      so the generic create path stays unavailable for system catalog rows.
 
-4. [ ] [recursive-relation-picker] Implement the linked `+1` relation workflow
+4. [x] [recursive-relation-picker] Implement the linked `+1` relation workflow
    for entity references and remove entity selects from governance/user CRUD.
 
    Done when:
@@ -367,8 +367,11 @@ Sprint goal:
    - Playwright now also covers Governance group CRUD modal stacks outside User
      Management on desktop and mobile, including nested permission/module
      catalog selection and the persisted nested relationship payload.
-   - Remaining work: broaden recursive proof to deeper back/cancel and paged
-     mass-selection edge cases.
+   - Relation pagination now resets to the first filtered page on search and
+     clamps out-of-range pages when result counts shrink, so filtered matches
+     are not hidden behind stale page state.
+   - Contract and Playwright coverage now prove paged mass selection, nested
+     back/apply, cancel/reopen, and submitted nested relationship payloads.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -629,9 +632,12 @@ Sprint goal:
    - Extended Playwright e2e proof to Governance group CRUD modal stacks on
      desktop/mobile, covering nested permission/module catalog selection,
      visible modal viewport constraints, and submitted relationship payloads.
+   - Extended relation-stack contracts and Playwright e2e for paged permission
+     mass selection, search pagination reset, cancel/reopen behavior, and the
+     resulting two-permission group relationship payload.
    - Remaining work depends on the recursive relation picker and backend
-     governance APIs: batch summary loading and deeper back/cancel/pagination
-     edge-case proof.
+     governance APIs: batch summary loading and readonly catalog e2e proof
+     beyond the existing contract coverage.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -692,6 +698,12 @@ Sprint goal:
       cases across User Management and Governance group CRUD relation stacks;
       user-editor, relation-stack, module-governance catalog contracts, and
       `npm run build` pass with the same known `CallWorkspaceView` chunk warning.
+    - Relation pagination/search/cancel hardening passes
+      `npm run test:contract:governance-relation-stack`,
+      `npm run test:e2e:governance-relations`,
+      `npm run test:contract:user-editor-relations`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 

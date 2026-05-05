@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import { GOVERNANCE_CRUD_DESCRIPTORS } from './crudDescriptors.js';
 
 function normalizeString(value) {
@@ -49,6 +49,16 @@ export function useCrudRelationNavigator(options = {}) {
   });
   const currentSelectionIds = computed(() => selectedByFrame[currentFrame.value?.key || ''] || []);
   const currentSelectedRows = computed(() => selectedRowsForFrame(currentFrame.value));
+
+  watch(query, () => {
+    page.value = 1;
+  });
+
+  watch(pageCount, (nextPageCount) => {
+    if (page.value > nextPageCount) {
+      page.value = nextPageCount;
+    }
+  });
 
   function reset(relation, selectedRows = []) {
     stack.value = [frameFromRelation(relation)].filter((frame) => frame.key !== '' && frame.target_entity !== '');
