@@ -1539,6 +1539,11 @@ Non-goals for this sprint:
     - `demo/video-chat/scripts/check-deploy-idempotency.sh`, `bash -n
       demo/video-chat/scripts/deploy-smoke.sh`, and `bash -n
       demo/video-chat/scripts/deploy.sh` pass.
+    - Public online smoke passes with admin and remote SSH checks explicitly
+      skipped:
+      `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1 VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`.
+      Covered HTTP to HTTPS redirect, frontend, CDN vendor assets, API health,
+      admin auth boundary, API version, and lobby/SFU WebSocket routing.
     - `npm run test:e2e:localization-smoke` passes locally: public booking
       locale/direction, localized public join error, Settings language switch
       persistence with RTL flip, Admin Localization viewport stability across
