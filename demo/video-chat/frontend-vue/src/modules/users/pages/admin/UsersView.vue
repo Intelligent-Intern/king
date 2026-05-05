@@ -1,12 +1,10 @@
 <template>
-  <section class="view-card admin-users-view">
-    <AppPageHeader class="section admin-users-head" :title="t('users.title')">
-      <template #actions>
-        <button class="btn btn-cyan" type="button" @click="openCreateUser">{{ t('users.new_user') }}</button>
-      </template>
-    </AppPageHeader>
+  <AdminPageFrame class="admin-users-view" :title="t('users.title')">
+    <template #actions>
+      <button class="btn btn-cyan" type="button" @click="openCreateUser">{{ t('users.new_user') }}</button>
+    </template>
 
-    <section class="toolbar admin-users-toolbar">
+    <template #toolbar>
       <label class="search-field search-field-main" :aria-label="t('users.search')">
         <input
           v-model.trim="queryDraft"
@@ -23,7 +21,7 @@
         :aria-label="t('users.search')"
         @click="applySearchNow"
       />
-    </section>
+    </template>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
     <section v-if="error" class="section users-banner error">{{ error }}</section>
@@ -40,7 +38,7 @@
       @delete-user="deleteUser"
     />
 
-    <footer class="footer users-footer">
+    <template #footer>
       <AppPagination
         :page="page"
         :page-count="pageCount"
@@ -51,7 +49,7 @@
         :disabled="loading"
         @page-change="goToPage"
       />
-    </footer>
+    </template>
 
     <AdminUserEditorModal
       :open="dialogOpen"
@@ -84,15 +82,15 @@
       @submit-form="submitForm"
       @save-avatar-changes="saveAvatarChanges"
     />
-  </section>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import AppIconButton from '../../../../components/AppIconButton.vue';
-import AppPageHeader from '../../../../components/AppPageHeader.vue';
 import AppPagination from '../../../../components/AppPagination.vue';
+import AdminPageFrame from '../../../../components/admin/AdminPageFrame.vue';
 import AdminUserEditorModal from '../components/UserEditorModal.vue';
 import AdminUsersTable from '../components/UsersTable.vue';
 import { createAdminSyncReloadController } from './syncReload';
