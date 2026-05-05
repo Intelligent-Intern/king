@@ -187,6 +187,9 @@ try {
             'members' => [
                 ['entity_key' => 'users', 'id' => (string) $regularUserId],
             ],
+            'permissions' => [
+                ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.organizations.create', 'key' => 'governance.organizations.create'],
+            ],
         ],
     ]);
     $createGroupPayload = videochat_governance_crud_decode($createGroup);
@@ -202,6 +205,10 @@ try {
     videochat_governance_crud_assert(
         (string) (((($createdGroup['relationships'] ?? [])['organization'] ?? [])[0] ?? [])['id'] ?? '') === $createdOrganizationId,
         'created group response should include selected organization summary'
+    );
+    videochat_governance_crud_assert(
+        (string) (((($createdGroup['relationships'] ?? [])['permissions'] ?? [])[0] ?? [])['key'] ?? '') === 'governance.organizations.create',
+        'created group response should include selected permission summary'
     );
     $createdGroupId = (string) ($createdGroup['id'] ?? '');
     $memberCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships INNER JOIN \"groups\" ON \"groups\".id = group_memberships.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND group_memberships.user_id = {$regularUserId} AND group_memberships.status = 'active'")->fetchColumn();
@@ -221,6 +228,14 @@ try {
         (string) (((((($updateGroupPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['members'] ?? [])[0] ?? [])['id'] ?? '') === (string) $regularUserId,
         'field-only update should preserve group members'
     );
+    videochat_governance_crud_assert(
+        (string) (((((($updateGroupPayload['result'] ?? [])['row'] ?? [])['relationships'] ?? [])['permissions'] ?? [])[0] ?? [])['key'] ?? '') === 'governance.organizations.create',
+        'field-only update should preserve group permission grants'
+    );
+    $groupPermissionCreateOrganization = $dispatch('POST', '/api/governance/organizations', $userAuth, [
+        'name' => 'Group Permission Organization',
+    ]);
+    videochat_governance_crud_assert((int) ($groupPermissionCreateOrganization['status'] ?? 0) === 201, 'group permission relation should allow member organization creation');
 
     $createGrant = $dispatch('POST', '/api/governance/grants', $adminAuth, [
         'name' => 'Contract Group Create Grant',
