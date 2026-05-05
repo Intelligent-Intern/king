@@ -8,6 +8,7 @@
 #include "include/mcp/mcp.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
 #include "include/config/mcp_and_orchestrator/default.h"
+#include "Zend/zend_hrtime.h"
 #include <time.h>
 
 #include "mcp/arginfo_and_runtime_controls.inc"

@@ -34,7 +34,7 @@ static zend_result king_autoscaling_load_symbol(void **target, const char *name)
 
 static zend_result king_autoscaling_ensure_libcurl_ready(void)
 {
-    const char *const candidates[] = {"libcurl.so.4", "libcurl.so", NULL};
+    const char *const candidates[] = {KING_LIBCURL_RUNTIME_CANDIDATES};
     size_t index;
 
     if (king_autoscaling_libcurl.ready) {
@@ -58,7 +58,8 @@ static zend_result king_autoscaling_ensure_libcurl_ready(void)
         snprintf(
             king_autoscaling_libcurl.load_error,
             sizeof(king_autoscaling_libcurl.load_error),
-            "Failed to load libcurl.so.4 or libcurl.so for autoscaling provider calls."
+            "Failed to load %s for autoscaling provider calls.",
+            KING_LIBCURL_RUNTIME_CANDIDATE_NAMES
         );
         return FAILURE;
     }
@@ -124,4 +125,3 @@ static zend_result king_autoscaling_ensure_libcurl_ready(void)
     king_autoscaling_libcurl.ready = 1;
     return SUCCESS;
 }
-

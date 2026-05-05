@@ -47,7 +47,52 @@ SOURCE_DIR="${KING_LSQUIC_SOURCE_DIR:-${CACHE_DIR}/src}"
 BUILD_DIR="${KING_LSQUIC_RUNTIME_BUILD_DIR:-${CACHE_DIR}/runtime/build}"
 PREFIX_DIR="${KING_LSQUIC_RUNTIME_PREFIX:-${CACHE_DIR}/runtime/prefix}"
 METADATA_FILE="${PREFIX_DIR}/king-lsquic-runtime.env"
-JOBS="${JOBS:-$(nproc)}"
+
+default_jobs() {
+    local count=""
+
+    if command -v nproc >/dev/null 2>&1; then
+        nproc
+        return
+    fi
+
+    if command -v sysctl >/dev/null 2>&1; then
+        count="$(sysctl -n hw.ncpu 2>/dev/null || true)"
+        if [[ "${count}" =~ ^[0-9]+$ ]] && [[ "${count}" -gt 0 ]]; then
+            printf '%s\n' "${count}"
+            return
+        fi
+    fi
+
+    getconf _NPROCESSORS_ONLN 2>/dev/null || printf '%s\n' 1
+}
+
+host_os() {
+    case "$(uname -s)" in
+        Darwin)
+            printf '%s\n' "darwin"
+            ;;
+        Linux)
+            printf '%s\n' "linux"
+            ;;
+        *)
+            uname -s | tr '[:upper:]' '[:lower:]'
+            ;;
+    esac
+}
+
+runtime_library_name() {
+    case "$(host_os)" in
+        darwin)
+            printf '%s\n' "liblsquic.dylib"
+            ;;
+        *)
+            printf '%s\n' "liblsquic.so"
+            ;;
+    esac
+}
+
+JOBS="${JOBS:-$(default_jobs)}"
 
 if [[ ! -f "${LOCK_FILE}" ]]; then
     echo "Missing LSQUIC bootstrap lock file: ${LOCK_FILE}" >&2
@@ -70,19 +115,33 @@ require_tool() {
 }
 
 file_sha256() {
-    sha256sum "$1" | awk '{print $1}'
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+        return
+    fi
+
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | awk '{print $1}'
+        return
+    fi
+
+    echo "sha256sum or shasum is required." >&2
+    exit 1
 }
 
 runtime_arch() {
+    local os=""
+
+    os="$(host_os)"
     case "$(uname -m)" in
         x86_64|amd64)
-            printf '%s\n' "linux-amd64"
+            printf '%s\n' "${os}-amd64"
             ;;
         aarch64|arm64)
-            printf '%s\n' "linux-arm64"
+            printf '%s\n' "${os}-arm64"
             ;;
         *)
-            printf 'linux-%s\n' "$(uname -m)"
+            printf '%s-%s\n' "${os}" "$(uname -m)"
             ;;
     esac
 }
@@ -114,7 +173,7 @@ metadata_value() {
 }
 
 verify_runtime() {
-    local library="${PREFIX_DIR}/lib/liblsquic.so"
+    local library="${PREFIX_DIR}/lib/$(runtime_library_name)"
     local header="${PREFIX_DIR}/include/lsquic/lsquic.h"
     local types_header="${PREFIX_DIR}/include/lsquic/lsquic_types.h"
     local xpack_header="${PREFIX_DIR}/include/lsquic/lsxpack_header.h"
@@ -144,15 +203,31 @@ verify_runtime() {
     [[ "${library_sha}" == "$(file_sha256 "${library}")" ]] || return 1
 
     symbols_file="$(mktemp)"
-    nm -D "${library}" > "${symbols_file}"
+    case "$(host_os)" in
+        darwin)
+            nm -gU "${library}" > "${symbols_file}"
+            ;;
+        *)
+            nm -D "${library}" > "${symbols_file}"
+            ;;
+    esac
 
-    if ! grep -q ' T lsquic_global_init' "${symbols_file}"; then
+    if ! grep -Eq ' [Tt] _?lsquic_global_init$' "${symbols_file}"; then
         echo "Built LSQUIC runtime does not export lsquic_global_init: ${library}" >&2
         rm -f "${symbols_file}"
         return 1
     fi
 
-    if grep -Eq ' U (SSL_|CRYPTO_|EVP_|OPENSSL_|HMAC_|HKDF|AES_|RAND_|SHA)' "${symbols_file}"; then
+    case "$(host_os)" in
+        darwin)
+            nm -u "${library}" > "${symbols_file}"
+            ;;
+        *)
+            nm -D "${library}" > "${symbols_file}"
+            ;;
+    esac
+
+    if grep -Eq ' U _?(SSL_|CRYPTO_|EVP_|OPENSSL_|HMAC_|HKDF|AES_|RAND_|SHA)' "${symbols_file}"; then
         echo "Built LSQUIC runtime still has unresolved BoringSSL symbols: ${library}" >&2
         rm -f "${symbols_file}"
         return 1
@@ -166,7 +241,7 @@ print_env() {
 KING_LSQUIC_RUNTIME_PREFIX=${PREFIX_DIR}
 KING_LSQUIC_INCLUDE_DIR=${PREFIX_DIR}/include/lsquic
 KING_LSQUIC_LIBRARY_DIR=${PREFIX_DIR}/lib
-KING_LSQUIC_LIBRARY=${PREFIX_DIR}/lib/liblsquic.so
+KING_LSQUIC_LIBRARY=${PREFIX_DIR}/lib/$(runtime_library_name)
 KING_BORINGSSL_INCLUDE_DIR=${PREFIX_DIR}/include/boringssl
 KING_BORINGSSL_SSL_LIBRARY=${PREFIX_DIR}/boringssl/lib/libssl.a
 KING_BORINGSSL_CRYPTO_LIBRARY=${PREFIX_DIR}/boringssl/lib/libcrypto.a
@@ -181,8 +256,9 @@ build_runtime() {
     local boringssl_build="${BUILD_DIR}/boringssl"
     local boringssl_prefix="${PREFIX_DIR}/boringssl"
     local lsquic_build="${BUILD_DIR}/lsquic"
-    local library="${PREFIX_DIR}/lib/liblsquic.so"
+    local library="${PREFIX_DIR}/lib/$(runtime_library_name)"
     local lsquic_archive=""
+    local shared_link_args=()
 
     require_tool cmake
     require_tool ninja
@@ -232,19 +308,44 @@ build_runtime() {
         exit 1
     fi
 
-    cc \
-        -shared \
-        -Wl,-soname,liblsquic.so \
-        -o "${library}" \
-        -Wl,--whole-archive \
-        "${lsquic_archive}" \
-        "${boringssl_build}/libssl.a" \
-        "${boringssl_build}/libcrypto.a" \
-        -Wl,--no-whole-archive \
-        -lz \
-        -lpthread \
-        -lm \
-        -lstdc++
+    case "$(host_os)" in
+        darwin)
+            shared_link_args=(
+                -dynamiclib
+                -install_name
+                "@rpath/$(runtime_library_name)"
+                -o
+                "${library}"
+                -Wl,-all_load
+                "${lsquic_archive}"
+                "${boringssl_build}/libssl.a"
+                "${boringssl_build}/libcrypto.a"
+                -lz
+                -lpthread
+                -lm
+                -lc++
+            )
+            ;;
+        *)
+            shared_link_args=(
+                -shared
+                -Wl,-soname,liblsquic.so
+                -o
+                "${library}"
+                -Wl,--whole-archive
+                "${lsquic_archive}"
+                "${boringssl_build}/libssl.a"
+                "${boringssl_build}/libcrypto.a"
+                -Wl,--no-whole-archive
+                -lz
+                -lpthread
+                -lm
+                -lstdc++
+            )
+            ;;
+    esac
+
+    cc "${shared_link_args[@]}"
 
     install -m 0644 "${SOURCE_DIR}/lsquic/include/lsquic.h" "${PREFIX_DIR}/include/lsquic/lsquic.h"
     install -m 0644 "${SOURCE_DIR}/lsquic/include/lsquic_types.h" "${PREFIX_DIR}/include/lsquic/lsquic_types.h"

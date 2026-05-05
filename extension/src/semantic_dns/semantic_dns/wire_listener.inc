@@ -484,6 +484,9 @@ static int king_semantic_dns_listener_start(void)
     }
 
     (void) setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(reuse_addr));
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+    (void) setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &reuse_addr, sizeof(reuse_addr));
+#endif
 
     memset(&bind_address, 0, sizeof(bind_address));
     bind_address.sin_family = AF_INET;

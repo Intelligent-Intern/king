@@ -13,6 +13,7 @@ export function createCallWorkspaceSocketHelpers({
 }) {
   const {
     applyCallLayoutPayload,
+    applyGossipTopologyHint = () => false,
     applyLobbySnapshot,
     applyParticipantActivityPayload,
     applyReactionEvent,
@@ -231,11 +232,14 @@ export function createCallWorkspaceSocketHelpers({
 
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
-    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
+    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
 
     const sender = typeof payload.sender === 'object' ? payload.sender : {};
     const senderUserId = Number(sender.user_id || 0);
     const payloadBody = typeof payload.payload === 'object' ? payload.payload : null;
+    if (type === 'call/gossip-topology' || String(payloadBody?.kind || payloadBody?.type || '').trim().toLowerCase() === 'topology_hint') {
+      if (applyGossipTopologyHint(payload)) return;
+    }
     if (mediaSecuritySignalTypes.includes(type)) {
       void handleMediaSecuritySignal(type, senderUserId, payloadBody || {});
       return;
@@ -288,6 +292,11 @@ export function createCallWorkspaceSocketHelpers({
     if (handleAssetVersionSocketPayload(payload)) return;
     const type = String(payload.type || '').trim().toLowerCase();
     if (type === '') return;
+
+    if (type === 'topology_hint') {
+      applyGossipTopologyHint(payload);
+      return;
+    }
 
     if (type === 'system/welcome') {
       refs.hasRealtimeRoomSync.value = true;
@@ -373,6 +382,11 @@ export function createCallWorkspaceSocketHelpers({
       if (!refs.shouldSuppressCallAckNotice(signalType)) {
         setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
       }
+      return;
+    }
+
+    if (type === 'call/gossip-topology') {
+      applyGossipTopologyHint(payload);
       return;
     }
 

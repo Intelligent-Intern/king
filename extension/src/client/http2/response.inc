@@ -154,6 +154,41 @@ static zend_class_entry *king_http2_map_curl_exception(CURLcode code)
     }
 }
 
+static bool king_http2_curl_detail_is_connection_abort(const char *detail)
+{
+    return detail != NULL
+        && detail[0] != '\0'
+        && (strstr(detail, "before end of the underlying stream") != NULL
+            || strstr(detail, "Connection died") != NULL
+            || strstr(detail, "connection died") != NULL
+#if defined(__APPLE__)
+            || strcmp(detail, "Error in the HTTP2 framing layer") == 0
+#endif
+        );
+}
+
+static zend_class_entry *king_http2_map_curl_exception_with_detail(
+    CURLcode code,
+    const char *detail)
+{
+    if (code == CURLE_HTTP2 && king_http2_curl_detail_is_connection_abort(detail)) {
+        return king_ce_network_exception;
+    }
+
+    return king_http2_map_curl_exception(code);
+}
+
+static const char *king_http2_curl_error_detail(
+    CURLcode code,
+    const king_http2_response_buffer_t *response)
+{
+    if (response != NULL && response->error_buffer[0] != '\0') {
+        return response->error_buffer;
+    }
+
+    return king_http2_libcurl.curl_easy_strerror_fn(code);
+}
+
 static const char *king_http2_protocol_label(long curl_http_version)
 {
     switch (curl_http_version) {

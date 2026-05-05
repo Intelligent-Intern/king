@@ -15,6 +15,7 @@ function requireContains(source, needle, label) {
 }
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
+const workspaceClientDiagnostics = read('src/domain/realtime/workspace/callWorkspace/clientDiagnostics.js');
 const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
 const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
 const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
@@ -40,9 +41,10 @@ requireContains(diagnostics, 'diagnosticsSentFingerprints.add(diagnosticsFingerp
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_runtime_error'", 'global runtime error diagnostics hook');
 requireContains(diagnostics, "reportGlobalClientRuntimeError('call_workspace_unhandled_rejection'", 'global promise rejection diagnostics hook');
 requireContains(diagnostics, 'source_file: normalizeString(event?.filename', 'minified bundle source position capture');
-requireContains(workspace, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
-requireContains(workspace, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
-requireContains(workspace, 'last_sfu_transport_sample: callWorkspaceLastSfuTransportSample()', 'last sfu transport sample context');
+requireContains(workspace, 'configureCallWorkspaceClientDiagnosticsContext({', 'workspace delegates diagnostics context');
+requireContains(workspaceClientDiagnostics, 'configureClientDiagnostics(() => ({', 'workspace diagnostics context');
+requireContains(workspaceClientDiagnostics, 'native_bridge_state: callWorkspaceNativeBridgeDiagnosticsSnapshot()', 'native bridge diagnostics context');
+requireContains(workspaceClientDiagnostics, 'last_sfu_transport_sample: callWorkspaceLastSfuTransportSample()', 'last sfu transport sample context');
 requireContains(sfuClient, 'getLastFrameTransportSample()', 'sfu client exposes last transport sample');
 requireContains(runtimeHealth, "eventType: 'sfu_remote_video_stalled'", 'remote stall diagnostics hook');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'", 'signaling diagnostics hook');
