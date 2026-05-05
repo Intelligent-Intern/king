@@ -56,6 +56,7 @@ function accessContext(rawContext = {}) {
     role: normalizeString(value.role),
     permissions: new Set(normalizeStringList(permissionInput)),
     modules: new Set(normalizeStringList(moduleInput)),
+    allPermissions: value.allPermissions === true || value.platformAdmin === true,
     enforcePermissions: Array.isArray(permissionInput),
     enforceModules: Array.isArray(moduleInput),
   };
@@ -67,7 +68,7 @@ function rolesAllow(entry, context) {
 }
 
 function permissionsAllow(requiredPermissions, context) {
-  if (!context.enforcePermissions || requiredPermissions.length === 0) return true;
+  if (context.allPermissions || !context.enforcePermissions || requiredPermissions.length === 0) return true;
   return requiredPermissions.every((permission) => context.permissions.has(permission));
 }
 

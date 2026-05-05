@@ -58,6 +58,8 @@
 <script setup>
 import { computed, reactive, watch } from 'vue';
 import { RouterLink } from 'vue-router';
+import { sessionState } from '../domain/auth/session';
+import { moduleAccessContextFromSession } from '../http/routeAccess.js';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 
 const props = defineProps({
@@ -82,7 +84,7 @@ const callNavigationItems = [
 
 const visibleItems = computed(() => (
   [
-    ...moduleStore.navigationFor({ role: props.role }),
+    ...moduleStore.navigationFor(moduleAccessContextFromSession({ ...sessionState, role: props.role })),
     ...callNavigationItems,
   ]
     .filter((item) => props.role && item.roles.includes(props.role))
