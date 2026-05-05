@@ -249,6 +249,41 @@
   padding: 0 10px;
 }
 
+.users-relation-link {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-0f1d34);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: start;
+}
+
+.users-relation-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.users-relation-link strong {
+  color: var(--accent-cyan);
+}
+
+.users-relation-link span {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
 .users-email-list {
   display: grid;
   gap: 6px;

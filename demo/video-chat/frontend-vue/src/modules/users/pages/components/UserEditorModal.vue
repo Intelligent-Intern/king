@@ -88,13 +88,18 @@
             <input v-model="form.password_repeat" class="input" type="password" autocomplete="new-password" />
           </label>
 
-          <label class="users-field">
+          <section class="users-field">
             <span>{{ t('users.role') }}</span>
-            <AppSelect v-model="form.role" :disabled="!canEditRole">
-              <option value="user">{{ t('users.role_user') }}</option>
-              <option value="admin">{{ t('users.role_admin') }}</option>
-            </AppSelect>
-          </label>
+            <button
+              class="users-relation-link"
+              type="button"
+              :disabled="!canEditRole"
+              @click="openRelation(roleRelation)"
+            >
+              <strong>+1</strong>
+              <span>{{ currentRoleLabel }}</span>
+            </button>
+          </section>
 
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>{{ t('users.status') }}</span>
@@ -112,14 +117,13 @@
             </AppSelect>
           </label>
 
-          <label v-if="form.mode === 'edit'" class="users-field">
+          <section v-if="form.mode === 'edit'" class="users-field">
             <span>{{ t('users.theme') }}</span>
-            <AppSelect v-model="form.theme">
-              <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
-                {{ theme.label }}
-              </option>
-            </AppSelect>
-          </label>
+            <button class="users-relation-link" type="button" @click="openRelation(themeRelation)">
+              <strong>+1</strong>
+              <span>{{ currentThemeLabel }}</span>
+            </button>
+          </section>
 
           <section class="users-field">
             <span>{{ t('users.theme_editor') }}</span>
@@ -185,14 +189,41 @@
       </button>
     </template>
   </AppModalShell>
+
+  <CrudRelationStack
+    :open="relationStackOpen"
+    :relation="activeRelation"
+    :selections="relationSelections"
+    :row-provider="relationRowsForEntity"
+    :maximized="relationStackMaximized"
+    :show-nested-relations="false"
+    @update:maximized="relationStackMaximized = $event"
+    @close="closeRelationStack"
+    @apply="applyRelationSelection"
+  />
 </template>
 
 <script setup>
+import { computed, ref } from 'vue';
 import AppIconButton from '../../../../components/AppIconButton.vue';
 import AppModalShell from '../../../../components/AppModalShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
+import CrudRelationStack from '../../../governance/components/CrudRelationStack.vue';
 import { t } from '../../../localization/i18nRuntime.js';
 import { useUserEditorModal } from './useUserEditorModal.js';
+
+const roleRelation = Object.freeze({
+  key: 'role',
+  target_entity: 'user_roles',
+  label_key: 'users.role',
+  selection_mode: 'single',
+});
+const themeRelation = Object.freeze({
+  key: 'theme',
+  target_entity: 'user_themes',
+  label_key: 'users.theme',
+  selection_mode: 'single',
+});
 
 const props = defineProps({
   open: {
@@ -288,6 +319,30 @@ const emit = defineEmits([
   'save-avatar-changes',
 ]);
 
+const relationStackOpen = ref(false);
+const relationStackMaximized = ref(false);
+const activeRelation = ref(null);
+const roleRows = computed(() => [
+  { id: 'user', key: 'user', name: t('users.role_user'), status: 'active' },
+  { id: 'admin', key: 'admin', name: t('users.role_admin'), status: 'active' },
+]);
+const themeRows = computed(() => props.themeOptions.map((theme) => ({
+  id: String(theme.id || ''),
+  key: String(theme.id || ''),
+  name: String(theme.label || theme.id || ''),
+  status: 'active',
+})).filter((theme) => theme.id !== ''));
+const currentRoleLabel = computed(() => (
+  selectedRow(roleRows.value, props.form.role)?.name || String(props.form.role || '')
+));
+const currentThemeLabel = computed(() => (
+  selectedRow(themeRows.value, props.form.theme)?.name || String(props.form.theme || '')
+));
+const relationSelections = computed(() => ({
+  role: selectedRows(roleRows.value, props.form.role),
+  theme: selectedRows(themeRows.value, props.form.theme),
+}));
+
 const {
   editorMaximized,
   emailDraftModel,
@@ -295,6 +350,45 @@ const {
   themeEditorDisabled,
   themeEditorLabel,
 } = useUserEditorModal({ props, emit, t });
+
+function selectedRow(rows, value) {
+  const normalized = String(value || '').trim();
+  return rows.find((row) => row.id === normalized || row.key === normalized) || null;
+}
+
+function selectedRows(rows, value) {
+  const row = selectedRow(rows, value);
+  return row ? [row] : [];
+}
+
+function relationRowsForEntity(entityKey) {
+  if (entityKey === 'user_roles') return roleRows.value;
+  if (entityKey === 'user_themes') return themeRows.value;
+  return [];
+}
+
+function openRelation(relation) {
+  if (relation?.key === 'role' && !props.canEditRole) return;
+  activeRelation.value = relation;
+  relationStackMaximized.value = false;
+  relationStackOpen.value = true;
+}
+
+function closeRelationStack() {
+  relationStackOpen.value = false;
+  relationStackMaximized.value = false;
+  activeRelation.value = null;
+}
+
+function applyRelationSelection(payload) {
+  const row = Array.isArray(payload?.selectedRows) ? payload.selectedRows[0] : null;
+  const value = String(row?.key || row?.id || '').trim();
+  if (value !== '') {
+    if (payload?.relation?.key === 'role') props.form.role = value;
+    if (payload?.relation?.key === 'theme') props.form.theme = value;
+  }
+  closeRelationStack();
+}
 </script>
 
 <style scoped src="../admin/UsersView.css"></style>
