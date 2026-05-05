@@ -14,6 +14,10 @@ const governance = await source('src/modules/governance/pages/GovernanceCrudView
 const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
 const users = await source('src/modules/users/pages/admin/UsersView.vue');
 const usersTable = await source('src/modules/users/pages/components/UsersTable.vue');
+const appConfiguration = await source('src/modules/administration/pages/AppConfigurationView.vue');
+const marketplace = await source('src/modules/marketplace/pages/AdminMarketplaceView.vue');
+const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
+const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 
 assert.match(pageFrame, /AppPageHeader/, 'shared admin page frame must own the page header');
@@ -24,6 +28,9 @@ for (const [name, file] of [
   ['GovernanceCrudView', governance],
   ['AdministrationLocalizationView', localization],
   ['UsersView', users],
+  ['AppConfigurationView', appConfiguration],
+  ['AdminMarketplaceView', marketplace],
+  ['ThemeEditorView', themeEditor],
 ]) {
   assert.match(file, /AdminPageFrame/, `${name} must use the shared admin page frame`);
   assert.doesNotMatch(file, /import AppPageHeader/, `${name} must not import page header directly`);
@@ -33,6 +40,7 @@ for (const [name, file] of [
   ['GovernanceCrudView', governance],
   ['AdministrationLocalizationView', localization],
   ['UsersTable', usersTable],
+  ['AdminMarketplaceTable', marketplaceTable],
 ]) {
   assert.match(file, /AdminTableFrame/, `${name} must use the shared admin table frame`);
 }

@@ -1,12 +1,10 @@
 <template>
-  <section class="view-card administration-view">
-    <AppPageHeader class="section administration-head" :title="t('administration.app_configuration')">
-      <template #actions>
-        <button class="btn btn-cyan" type="button" :disabled="saving" @click="saveConfiguration">
-          {{ saving ? t('settings.saving') : t('administration.save_configuration') }}
-        </button>
-      </template>
-    </AppPageHeader>
+  <AdminPageFrame class="administration-view" :title="t('administration.app_configuration')">
+    <template #actions>
+      <button class="btn btn-cyan" type="button" :disabled="saving" @click="saveConfiguration">
+        {{ saving ? t('settings.saving') : t('administration.save_configuration') }}
+      </button>
+    </template>
 
     <section class="section administration-panel">
       <WorkspaceAdministrationSettings ref="administrationSettingsRef" title="" />
@@ -15,12 +13,12 @@
     <section v-if="message" class="section administration-status" :class="{ error: !savedOk }">
       {{ message }}
     </section>
-  </section>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import AppPageHeader from '../../../components/AppPageHeader.vue';
+import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import WorkspaceAdministrationSettings from '../../../layouts/settings/WorkspaceAdministrationSettings.vue';
 import { t } from '../../localization/i18nRuntime.js';
 
@@ -53,20 +51,6 @@ async function saveConfiguration() {
   min-height: 0;
 }
 
-.administration-view {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: transparent;
-}
-
-.administration-view > :first-child {
-  border-top-left-radius: 0;
-  border-top-right-radius: 5px;
-}
-
-.administration-head,
 .administration-status {
   background: var(--bg-ui-chrome);
 }
