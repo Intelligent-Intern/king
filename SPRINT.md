@@ -455,6 +455,10 @@ Non-goals for this sprint:
      compose modal labels, and dashboard compose/invite/admission messages now
      use localization keys. The translation-key coverage contract now also
      scans explicitly included `.template.html` files.
+   - [x] Admin overview dashboard, inventory/telemetry tables, scheduling
+     modal labels, and FullCalendar button text now use localization keys. The
+     dashboard metric derivations moved into `useOverviewDashboardMetrics` so
+     `OverviewView.vue` is back below the file-size target.
    - [x] Non-English fallback gaps are now explicit in a machine-readable
      fallback policy. The localization contract verifies every supported
      non-English locale and every English message namespace is either covered
