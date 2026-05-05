@@ -43,7 +43,39 @@
         <span class="crud-relation-count">
           {{ t('governance.relation_picker.selected_count', { count: navigator.currentSelectionIds.value.length }) }}
         </span>
+        <button v-if="canCreateDraft" class="btn" type="button" @click="startCreateDraft">
+          {{ t('governance.relation_picker.create') }}
+        </button>
       </div>
+
+      <form v-if="creatingDraft" class="crud-relation-create" autocomplete="off" @submit.prevent="submitCreateDraft">
+        <label v-for="field in createFields" :key="field.key" :class="fieldClass(field)">
+          <span>{{ fieldLabel(field) }}</span>
+          <textarea
+            v-if="field.type === 'textarea'"
+            v-model.trim="draft[field.key]"
+            class="input crud-relation-textarea"
+            rows="3"
+          ></textarea>
+          <AppSelect v-else-if="field.type === 'enum'" v-model="draft[field.key]">
+            <option v-for="option in field.options || []" :key="option.value" :value="option.value">
+              {{ optionLabel(option) }}
+            </option>
+          </AppSelect>
+          <input
+            v-else
+            v-model.trim="draft[field.key]"
+            class="input"
+            :type="field.input_type || 'text'"
+            autocomplete="off"
+          />
+        </label>
+        <p v-if="draftError" class="crud-relation-error">{{ draftError }}</p>
+        <div class="crud-relation-create-actions">
+          <button class="btn" type="button" @click="creatingDraft = false">{{ t('common.cancel') }}</button>
+          <button class="btn btn-cyan" type="submit">{{ t('governance.relation_picker.save_draft') }}</button>
+        </div>
+      </form>
 
       <section class="crud-relation-content">
         <table class="crud-relation-table">
@@ -67,8 +99,8 @@
                 />
               </td>
               <td :data-label="t('governance.name')">
-                <div class="governance-name">{{ rowLabel(row) }}</div>
-                <div class="governance-subline">{{ targetEntityLabel }}</div>
+                <div class="crud-relation-name">{{ rowLabel(row) }}</div>
+                <div class="crud-relation-subline">{{ targetEntityLabel }}</div>
               </td>
               <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
               <td :data-label="t('governance.status')">{{ row.status || t('common.not_available') }}</td>
@@ -117,10 +149,12 @@
 </template>
 
 <script setup>
-import { computed, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import AppPagination from '../../../components/AppPagination.vue';
+import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
+import { descriptorAllowsAction } from '../crudDescriptors.js';
 import { useCrudRelationNavigator } from '../useCrudRelationNavigator.js';
 
 const props = defineProps({
@@ -140,6 +174,14 @@ const props = defineProps({
     type: Function,
     default: () => [],
   },
+  createDraft: {
+    type: Function,
+    default: null,
+  },
+  canCreateDraftForEntity: {
+    type: Function,
+    default: () => true,
+  },
   maximized: {
     type: Boolean,
     default: false,
@@ -151,10 +193,22 @@ const emit = defineEmits(['close', 'apply', 'update:maximized']);
 const navigator = useCrudRelationNavigator({
   rowProvider: (entityKey) => props.rowProvider(entityKey),
 });
+const creatingDraft = ref(false);
+const draftError = ref('');
+const draft = reactive({});
 
 const title = computed(() => t('governance.relation_picker.title', { relation: relationLabel(props.relation) }));
 const isMultiple = computed(() => navigator.currentFrame.value?.selection_mode === 'multiple');
 const nestedRelations = computed(() => navigator.currentDescriptor.value?.relationships || []);
+const createFields = computed(() => (navigator.currentDescriptor.value?.fields || []).filter((field) => (
+  field && field.readonly !== true && field.type !== 'relation'
+)));
+const canCreateDraft = computed(() => (
+  descriptorAllowsAction(navigator.currentDescriptor.value, 'create')
+  && typeof props.createDraft === 'function'
+  && props.canCreateDraftForEntity(navigator.currentDescriptor.value?.entity_key || '')
+  && createFields.value.length > 0
+));
 const targetEntityLabel = computed(() => {
   const descriptor = navigator.currentDescriptor.value;
   if (!descriptor) return t('common.not_available');
@@ -166,6 +220,8 @@ watch(
   () => {
     if (!props.open || !props.relation) return;
     navigator.reset(props.relation, selectedRowsForRelation(props.relation));
+    creatingDraft.value = false;
+    draftError.value = '';
   },
   { immediate: true },
 );
@@ -186,6 +242,62 @@ function frameLabel(frame) {
 
 function rowLabel(row) {
   return String(row?.name || row?.display_name || row?.email || row?.key || row?.id || '').trim() || t('common.not_available');
+}
+
+function fieldLabel(field) {
+  const key = String(field?.label_key || '').trim();
+  return key !== '' ? t(key) : String(field?.key || '');
+}
+
+function optionLabel(option) {
+  const key = String(option?.label_key || '').trim();
+  return key !== '' ? t(key) : String(option?.label || option?.value || '');
+}
+
+function fieldClass(field) {
+  return {
+    'crud-relation-field': true,
+    'crud-relation-field-wide': field?.wide === true || field?.type === 'textarea',
+  };
+}
+
+function fieldDefaultValue(field) {
+  if (field.default !== undefined) return field.default;
+  if (field.type === 'enum' && Array.isArray(field.options) && field.options.length > 0) {
+    return field.options[0].value;
+  }
+  return '';
+}
+
+function startCreateDraft() {
+  for (const key of Object.keys(draft)) {
+    delete draft[key];
+  }
+  for (const field of createFields.value) {
+    draft[field.key] = fieldDefaultValue(field);
+  }
+  draftError.value = '';
+  creatingDraft.value = true;
+}
+
+function submitCreateDraft() {
+  const missingField = createFields.value.find((field) => (
+    field.required === true && String(draft[field.key] || '').trim() === ''
+  ));
+  if (missingField) {
+    draftError.value = t('governance.field_required', { field: fieldLabel(missingField) });
+    return;
+  }
+
+  const row = props.createDraft?.(
+    navigator.currentDescriptor.value?.entity_key || '',
+    Object.fromEntries(createFields.value.map((field) => [field.key, String(draft[field.key] || '').trim()])),
+  );
+  if (row) {
+    navigator.toggleRow(row);
+  }
+  creatingDraft.value = false;
+  draftError.value = '';
 }
 
 function goBackTo(index) {
@@ -254,6 +366,46 @@ function applySelection() {
   font-weight: 700;
 }
 
+.crud-relation-create {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+
+.crud-relation-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.crud-relation-field-wide,
+.crud-relation-error,
+.crud-relation-create-actions {
+  grid-column: 1 / -1;
+}
+
+.crud-relation-textarea {
+  min-height: 82px;
+  resize: vertical;
+}
+
+.crud-relation-error {
+  margin: 0;
+  color: var(--color-ffb5b5);
+}
+
+.crud-relation-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .crud-relation-content {
   min-height: 0;
   overflow: auto;
@@ -274,9 +426,30 @@ function applySelection() {
   height: 18px;
 }
 
+.crud-relation-name {
+  overflow: hidden;
+  color: var(--text-main);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crud-relation-subline {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .crud-relation-empty {
   padding: 18px 12px;
   color: var(--text-muted);
   text-align: center;
+}
+
+@media (max-width: 760px) {
+  .crud-relation-create {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>
