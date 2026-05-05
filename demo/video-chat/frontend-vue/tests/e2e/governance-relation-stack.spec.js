@@ -85,7 +85,28 @@ async function installQuietWebSocket(page) {
   });
 }
 
-async function seedAuthenticatedAdmin(page, requestLog) {
+function governanceGroupRows(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `group-${index + 1}`,
+    key: `group-${index + 1}`,
+    name: `Governance Group ${index + 1}`,
+    status: 'active',
+    description: `Governance group fixture ${index + 1}`,
+  }));
+}
+
+async function seedAuthenticatedAdmin(page, requestLog, options = {}) {
+  const groupRows = Array.isArray(options.groupRows) && options.groupRows.length > 0
+    ? options.groupRows
+    : [
+      {
+        id: 'existing-group',
+        key: 'existing-group',
+        name: 'Existing Group',
+        status: 'active',
+      },
+    ];
+
   await installQuietWebSocket(page);
   await page.addInitScript((key) => {
     window.localStorage.setItem(key, JSON.stringify({
@@ -145,14 +166,7 @@ async function seedAuthenticatedAdmin(page, requestLog) {
       await route.fulfill(jsonResponse({
         status: 'ok',
         result: {
-          rows: [
-            {
-              id: 'existing-group',
-              key: 'existing-group',
-              name: 'Existing Group',
-              status: 'active',
-            },
-          ],
+          rows: groupRows,
         },
         groups: [],
       }));
@@ -327,8 +341,69 @@ async function expectReadonlyCatalogPage(page, path, title, rowText) {
   await expect(page.getByText('No entries match the current filter.')).toBeVisible();
 }
 
+async function expectAdminScrollOwnership(page) {
+  await page.goto('/admin/governance/groups');
+  await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
+  await expect(page.getByRole('heading', { name: 'Groups' })).toBeVisible();
+  await expect(page.locator('.governance-table tbody tr')).toHaveCount(8);
+  await page.evaluate(() => {
+    const tbody = document.querySelector('.governance-table tbody');
+    const rows = Array.from(tbody?.children || []);
+    for (let index = 0; index < 24; index += 1) {
+      const clone = rows[index % rows.length]?.cloneNode(true);
+      if (clone) tbody.appendChild(clone);
+    }
+  });
+  await expect(page.locator('.governance-table tbody tr')).toHaveCount(32);
+
+  const metrics = await page.evaluate(() => {
+    const sidebar = document.querySelector('.sidebar.sidebar-left');
+    const workspace = document.querySelector('.workspace');
+    const table = document.querySelector('.admin-table-frame');
+    const header = document.querySelector('.admin-page-frame-head');
+    const footer = document.querySelector('.admin-page-frame-footer');
+    const before = {
+      sidebarTop: sidebar?.getBoundingClientRect().top ?? 0,
+      headerTop: header?.getBoundingClientRect().top ?? 0,
+      footerBottom: footer?.getBoundingClientRect().bottom ?? 0,
+    };
+    if (table) {
+      table.scrollTop = table.scrollHeight;
+    }
+    const after = {
+      sidebarTop: sidebar?.getBoundingClientRect().top ?? 0,
+      headerTop: header?.getBoundingClientRect().top ?? 0,
+      footerBottom: footer?.getBoundingClientRect().bottom ?? 0,
+    };
+    const tableStyle = table ? window.getComputedStyle(table) : null;
+    const workspaceStyle = workspace ? window.getComputedStyle(workspace) : null;
+    return {
+      documentScrollable: document.documentElement.scrollHeight > window.innerHeight + 1,
+      hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      workspaceOverflowY: workspaceStyle?.overflowY || '',
+      tableOverflowY: tableStyle?.overflowY || '',
+      tableCanScroll: table ? table.scrollHeight > table.clientHeight + 1 : false,
+      tableScrolled: table ? table.scrollTop > 0 : false,
+      sidebarMoved: Math.abs(after.sidebarTop - before.sidebarTop) > 1,
+      headerMoved: Math.abs(after.headerTop - before.headerTop) > 1,
+      footerMoved: Math.abs(after.footerBottom - before.footerBottom) > 1,
+    };
+  });
+
+  expect(metrics.documentScrollable).toBe(false);
+  expect(metrics.hasHorizontalOverflow).toBe(false);
+  expect(metrics.workspaceOverflowY).toBe('hidden');
+  expect(metrics.tableOverflowY).toBe('auto');
+  expect(metrics.tableCanScroll).toBe(true);
+  expect(metrics.tableScrolled).toBe(true);
+  expect(metrics.sidebarMoved).toBe(false);
+  expect(metrics.headerMoved).toBe(false);
+  expect(metrics.footerMoved).toBe(false);
+}
+
 for (const scenario of [
   { name: 'desktop', viewport: { width: 1366, height: 900 } },
+  { name: 'tablet', viewport: { width: 900, height: 700 } },
   { name: 'mobile', viewport: { width: 390, height: 844 } },
 ]) {
   test(`user management relation stack creates nested group permission on ${scenario.name}`, async ({ page }) => {
@@ -403,5 +478,18 @@ for (const scenario of [
 
     await expectReadonlyCatalogPage(page, '/admin/governance/modules', 'Modules', 'governance');
     await expectReadonlyCatalogPage(page, '/admin/governance/permissions', 'Permissions', 'governance.read');
+  });
+
+  test(`admin Governance frame owns table scroll without moving shell chrome on ${scenario.name}`, async ({ page }) => {
+    const requestLog = [];
+    const viewport = {
+      desktop: { width: 1366, height: 360 },
+      tablet: { width: 900, height: 520 },
+      mobile: { width: 390, height: 520 },
+    }[scenario.name] || scenario.viewport;
+    await page.setViewportSize(viewport);
+    await seedAuthenticatedAdmin(page, requestLog, { groupRows: governanceGroupRows(24) });
+
+    await expectAdminScrollOwnership(page);
   });
 }
