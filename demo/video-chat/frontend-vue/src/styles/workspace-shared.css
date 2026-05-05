@@ -377,6 +377,10 @@ tbody tr:hover {
   filter: brightness(0) invert(1);
 }
 
+html[dir="rtl"] .pager-icon-img {
+  transform: scaleX(-1);
+}
+
 .pager-btn:disabled {
   background: transparent;
   color: var(--color-6f86b0);
