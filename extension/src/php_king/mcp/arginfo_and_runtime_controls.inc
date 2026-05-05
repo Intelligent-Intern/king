@@ -46,7 +46,7 @@ static zend_result king_mcp_set_transfer_error(
 
 static uint64_t king_monotonic_time_ms(void)
 {
-    return (uint64_t) (zend_hrtime() / 1000000ULL);
+    return king_hrtime_ms();
 }
 
 static zend_result king_mcp_validate_runtime_control_option(
@@ -83,6 +83,7 @@ static zend_result king_mcp_validate_runtime_control_option(
     *target = Z_LVAL_P(value);
     return SUCCESS;
 }
+
 
 static zend_result king_mcp_runtime_control_parse(
     zval *options,
@@ -236,4 +237,3 @@ static zend_result king_mcp_runtime_control_check(
 
     return SUCCESS;
 }
-

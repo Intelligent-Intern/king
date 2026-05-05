@@ -5,11 +5,11 @@
  */
 #include "php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "include/king_hrtime.h"
 #include "include/pipeline_orchestrator/orchestrator.h"
 #include "include/telemetry/telemetry.h"
 #include "ext/standard/base64.h"
 #include "ext/standard/php_var.h"
-#include "Zend/zend_hrtime.h"
 #include "zend_smart_str.h"
 #include <time.h>
 #include <unistd.h>

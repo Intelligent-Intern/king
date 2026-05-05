@@ -86,7 +86,7 @@ static size_t king_mcp_remote_line_limit(void)
 
 static uint64_t king_mcp_monotonic_time_ms(void)
 {
-    return (uint64_t) (zend_hrtime() / 1000000ULL);
+    return king_hrtime_ms();
 }
 
 static zend_long king_mcp_control_timeout_budget_ms(const king_mcp_runtime_control_t *control)
