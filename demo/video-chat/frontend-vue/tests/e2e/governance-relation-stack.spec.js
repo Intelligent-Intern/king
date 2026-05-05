@@ -257,9 +257,21 @@ async function createUserThroughNestedGroupRelation(page, label) {
 
 async function selectCatalogRelation(relationDialog, catalogLabel) {
   await relationDialog.getByPlaceholder('Search related records').fill(catalogLabel);
+  await selectVisibleRelationRow(relationDialog, catalogLabel);
+  await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
+}
+
+async function selectVisibleRelationRow(relationDialog, catalogLabel) {
   const catalogRow = relationDialog.locator('tbody tr').filter({ hasText: catalogLabel }).first();
   await expect(catalogRow).toBeVisible();
   await catalogRow.locator('input[type="checkbox"]').check();
+}
+
+async function selectPagedPermissionRelations(relationDialog) {
+  await selectVisibleRelationRow(relationDialog, 'governance.read');
+  await relationDialog.getByRole('button', { name: 'Next' }).click();
+  await expect(relationDialog.getByText(/Page 2 \/ 2/)).toBeVisible();
+  await selectVisibleRelationRow(relationDialog, 'workspace_settings.read');
   await relationDialog.getByRole('button', { name: 'Apply selection' }).click();
 }
 
@@ -278,8 +290,15 @@ async function createGovernanceGroupThroughNestedRelations(page, label) {
   const relationDialog = page.locator('.crud-relation-dialog').filter({ visible: true }).first();
   await expect(relationDialog).toBeVisible();
   await expectModalInsideViewport(page, relationDialog);
-  await selectCatalogRelation(relationDialog, 'governance.read');
-  await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Permissions' }).filter({ hasText: '1 selected' })).toBeVisible();
+  await selectPagedPermissionRelations(relationDialog);
+  await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Permissions' }).filter({ hasText: '2 selected' })).toBeVisible();
+
+  await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).click();
+  await expect(relationDialog).toBeVisible();
+  await expectModalInsideViewport(page, relationDialog);
+  await relationDialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.crud-relation-dialog').filter({ visible: true })).toHaveCount(0);
+  await expect(crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).filter({ hasText: '1 selected' })).toHaveCount(0);
 
   await crudDialog.locator('button.governance-relation-link').filter({ hasText: 'Modules' }).click();
   await expect(relationDialog).toBeVisible();
@@ -338,12 +357,6 @@ for (const scenario of [
       key: `governance-${scenario.name}-group`,
       status: 'active',
       relationships: {
-        permissions: [
-          {
-            entity_key: 'permissions',
-            key: 'governance.read',
-          },
-        ],
         modules: [
           {
             entity_key: 'modules',
@@ -352,5 +365,16 @@ for (const scenario of [
         ],
       },
     });
+    expect(groupCreate?.body?.relationships?.permissions).toHaveLength(2);
+    expect(groupCreate?.body?.relationships?.permissions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        entity_key: 'permissions',
+        key: 'governance.read',
+      }),
+      expect.objectContaining({
+        entity_key: 'permissions',
+        key: 'workspace_settings.read',
+      }),
+    ]));
   });
 }
