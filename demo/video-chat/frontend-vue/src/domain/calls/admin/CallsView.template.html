@@ -5,13 +5,13 @@
           v-if="showInlineSidebarButton"
           class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay calls-show-sidebar-btn"
           type="button"
-          title="Show sidebar"
-          aria-label="Show sidebar"
+          :title="t('common.show_sidebar')"
+          :aria-label="t('common.show_sidebar')"
           @click="showLeftSidebarFromHeader"
         >
           <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
         </button>
-        <h1>Video Call Management</h1>
+        <h1>{{ t('calls.admin.title') }}</h1>
       </div>
       <div class="actions">
         <button
@@ -20,7 +20,7 @@
           :disabled="!canDeleteAllCalls"
           @click="deleteAllCalls"
         >
-          {{ deleteAllCallsBusy ? 'Deleting calls...' : 'Alle Calls löschen' }}
+          {{ deleteAllCallsBusy ? t('calls.admin.deleting_calls') : t('calls.admin.delete_all_calls') }}
         </button>
         <button class="btn btn-cyan" type="button" @click="openPrimaryCompose">{{ primaryActionLabel }}</button>
       </div>
@@ -28,7 +28,7 @@
 
     <section class="toolbar calls-toolbar">
       <div class="calls-toolbar-left">
-        <div class="calls-view-tabs" role="tablist" aria-label="Calls view mode">
+        <div class="calls-view-tabs" role="tablist" :aria-label="t('calls.admin.view_mode_aria')">
           <button
             class="tab"
             :class="{ active: viewMode === 'calls' }"
@@ -37,7 +37,7 @@
             :aria-selected="viewMode === 'calls'"
             @click="setViewMode('calls')"
           >
-            Calls
+            {{ t('calls.admin.tab_calls') }}
           </button>
           <button
             class="tab"
@@ -47,7 +47,7 @@
             :aria-selected="viewMode === 'calendar'"
             @click="setViewMode('calendar')"
           >
-            Calendar
+            {{ t('calls.admin.tab_calendar') }}
           </button>
           <button
             class="tab"
@@ -57,40 +57,40 @@
             :aria-selected="viewMode === 'personalCalendar'"
             @click="setViewMode('personalCalendar')"
           >
-            Personal Calendar
+            {{ t('calls.admin.tab_personal_calendar') }}
           </button>
         </div>
       </div>
 
       <div v-if="viewMode !== 'personalCalendar'" class="calls-toolbar-right">
-        <label class="calls-search calls-search-main" aria-label="Call search">
+        <label class="calls-search calls-search-main" :aria-label="t('calls.admin.search_aria')">
           <input
             v-model="queryDraft"
             class="input"
             type="search"
-            placeholder="Search call title"
+            :placeholder="t('calls.admin.search_placeholder')"
             @keydown.enter.prevent="applyFilters"
           />
         </label>
 
         <AppSelect v-model="statusFilter" @change="applyFilters">
-          <option value="all">All status</option>
-          <option value="scheduled">Scheduled</option>
-          <option value="active">Active</option>
-          <option value="ended">Ended</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="all">{{ t('calls.admin.status_all') }}</option>
+          <option value="scheduled">{{ t('calls.admin.status_scheduled') }}</option>
+          <option value="active">{{ t('calls.admin.status_active') }}</option>
+          <option value="ended">{{ t('calls.admin.status_ended') }}</option>
+          <option value="cancelled">{{ t('calls.admin.status_cancelled') }}</option>
         </AppSelect>
 
         <AppSelect v-model="scopeFilter" @change="applyFilters">
-          <option value="all">All scope</option>
-          <option value="my">My scope</option>
+          <option value="all">{{ t('calls.admin.scope_all') }}</option>
+          <option value="my">{{ t('calls.admin.scope_my') }}</option>
         </AppSelect>
 
         <button
           class="icon-mini-btn calls-toolbar-search-btn"
           type="button"
-          title="Search calls"
-          aria-label="Search calls"
+          :title="t('calls.admin.search_calls')"
+          :aria-label="t('calls.admin.search_calls')"
           @click="applyFilters"
         >
           <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
@@ -120,10 +120,10 @@
       />
 
       <section v-if="!loadingCalls && calls.length === 0" class="section calls-empty">
-        No calls match the active filters.
+        {{ t('calls.admin.empty') }}
       </section>
       <section v-if="loadingCalls" class="section calls-empty">
-        Loading calls…
+        {{ t('calls.admin.loading_calls') }}
       </section>
       <section v-if="callsError" class="section calls-empty calls-error">
         {{ callsError }}
@@ -136,14 +136,14 @@
       </section>
       <section v-else class="calls-calendar-shell">
         <section v-if="loadingCalendar" class="calls-calendar-loading calls-inline-hint">
-          Loading calendar view…
+          {{ t('calls.admin.loading_calendar') }}
         </section>
         <section ref="callsCalendarEl" class="calls-calendar-full"></section>
       </section>
     </section>
 
     <section v-else class="table-wrap calls-personal-calendar-wrap">
-      <AppointmentConfigPanel @saved="setNotice('ok', 'Appointment slots saved.')" />
+      <AppointmentConfigPanel @saved="setNotice('ok', t('calls.admin.appointment_slots_saved'))" />
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
@@ -151,7 +151,7 @@
         :page="pagination.page"
         :page-count="pagination.pageCount"
         :total="pagination.total"
-        total-label="total"
+        :total-label="t('calls.admin.pagination_total')"
         :has-prev="pagination.hasPrev"
         :has-next="pagination.hasNext"
         :disabled="loadingCalls"
@@ -159,15 +159,15 @@
       />
     </section>
 
-    <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" aria-label="Enter video call">
+    <div class="calls-modal" :hidden="!enterCallState.open" role="dialog" aria-modal="true" :aria-label="t('calls.enter.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeEnterCallModal"></div>
       <div class="calls-modal-dialog calls-modal-dialog-enter">
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4 class="calls-enter-title">Enter Video Call</h4>
+            <h4 class="calls-enter-title">{{ t('calls.enter.title') }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeEnterCallModal">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeEnterCallModal">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
@@ -178,22 +178,22 @@
               <div class="calls-enter-preview-frame">
                 <video ref="enterCallPreviewVideoRef" autoplay playsinline muted></video>
                 <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
-                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
+                <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">{{ t('calls.enter.preparing_preview') }}</p>
               </div>
             </section>
 
             <section class="calls-enter-right calls-enter-right-settings">
               <div class="call-left-settings">
-                <section class="call-left-settings-block" aria-label="Camera">
-                  <div class="call-left-settings-title">Camera</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.camera')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.camera') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="admin-enter-call-camera-select"
-                      aria-label="Camera"
+                      :aria-label="t('calls.enter.camera')"
                       :model-value="callMediaPrefs.selectedCameraId"
                       @update:model-value="setCallCameraDevice"
                     >
-                      <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                      <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('calls.enter.no_camera_detected') : t('calls.enter.select_camera') }}</option>
                       <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                         {{ camera.label }}
                       </option>
@@ -201,23 +201,23 @@
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Mic">
-                  <div class="call-left-settings-title">Mic</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.microphone')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.mic') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="admin-enter-call-mic-select"
-                      aria-label="Mic"
+                      :aria-label="t('calls.enter.microphone')"
                       :model-value="callMediaPrefs.selectedMicrophoneId"
                       @update:model-value="setCallMicrophoneDevice"
                     >
-                      <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                      <option value="">{{ callMediaPrefs.microphones.length === 0 ? t('calls.enter.no_microphone_detected') : t('calls.enter.select_microphone') }}</option>
                       <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                         {{ microphone.label }}
                       </option>
                     </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
-                    <label for="admin-enter-call-mic-volume">Volume</label>
+                    <label for="admin-enter-call-mic-volume">{{ t('calls.enter.volume') }}</label>
                     <div class="call-left-volume-row">
                       <input
                         id="admin-enter-call-mic-volume"
@@ -234,23 +234,23 @@
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Speaker">
-                  <div class="call-left-settings-title">Speaker</div>
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.speaker')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.speaker') }}</div>
                   <div class="call-left-settings-field">
                     <AppSelect
                       id="admin-enter-call-speaker-select"
-                      aria-label="Speaker"
+                      :aria-label="t('calls.enter.speaker')"
                       :model-value="callMediaPrefs.selectedSpeakerId"
                       @update:model-value="setCallSpeakerDevice"
                     >
-                      <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                      <option value="">{{ callMediaPrefs.speakers.length === 0 ? t('calls.enter.no_speaker_detected') : t('calls.enter.select_speaker') }}</option>
                       <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                         {{ speaker.label }}
                       </option>
                     </AppSelect>
                   </div>
                   <div class="call-left-settings-field">
-                    <label for="admin-enter-call-speaker-volume">Volume</label>
+                    <label for="admin-enter-call-speaker-volume">{{ t('calls.enter.volume') }}</label>
                     <div class="call-left-volume-row">
                       <input
                         id="admin-enter-call-speaker-volume"
@@ -267,21 +267,21 @@
                   </div>
                   <div class="call-left-settings-field">
                     <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                      Play test sound
+                      {{ t('calls.enter.play_test_sound') }}
                     </button>
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" aria-label="Background blur">
-                  <div class="call-left-settings-title">Background blur</div>
-                  <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
+                <section class="call-left-settings-block" :aria-label="t('calls.enter.background_blur')">
+                  <div class="call-left-settings-title">{{ t('calls.enter.background_blur') }}</div>
+                  <div class="call-left-blur-controls" role="group" :aria-label="t('calls.enter.background_blur_controls')">
                     <button
                       class="call-left-blur-btn"
                       :class="{ active: isBackgroundPresetActive('light') }"
                       type="button"
                       :aria-pressed="isBackgroundPresetActive('light')"
-                      aria-label="Blur"
-                      title="Blur"
+                      :aria-label="t('calls.enter.blur')"
+                      :title="t('calls.enter.blur')"
                       @click="applyBackgroundPreset('light')"
                     >
                       <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
@@ -291,8 +291,8 @@
                       :class="{ active: isBackgroundPresetActive('strong') }"
                       type="button"
                       :aria-pressed="isBackgroundPresetActive('strong')"
-                      aria-label="Strong blur"
-                      title="Strong blur"
+                      :aria-label="t('calls.enter.strong_blur')"
+                      :title="t('calls.enter.strong_blur')"
                       @click="applyBackgroundPreset('strong')"
                     >
                       <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
@@ -313,13 +313,13 @@
             :disabled="enterCallState.loading"
             @click="openCallWorkspace({ callId: enterCallState.callId, roomId: enterCallState.roomId })"
           >
-            Join call
+            {{ t('calls.enter.join_call') }}
           </button>
         </footer>
       </div>
     </div>
 
-    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
+    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" :aria-label="t('calls.compose.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
         <header class="calls-modal-header calls-modal-header-enter">
@@ -327,7 +327,7 @@
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
@@ -335,32 +335,32 @@
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
             <label class="field calls-field-wide">
-              <span>Title</span>
-              <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
+              <span>{{ t('calls.compose.title_label') }}</span>
+              <input v-model="composeState.title" class="input" type="text" :placeholder="t('calls.compose.title_placeholder')" />
             </label>
             <label class="field">
-              <span>Access mode</span>
-              <AppSelect v-model="composeState.accessMode" aria-label="Call access mode">
-                <option value="invite_only">Invite only</option>
-                <option value="free_for_all">Free for all</option>
+              <span>{{ t('calls.compose.access_mode') }}</span>
+              <AppSelect v-model="composeState.accessMode" :aria-label="t('calls.compose.access_mode_aria')">
+                <option value="invite_only">{{ t('calls.compose.invite_only') }}</option>
+                <option value="free_for_all">{{ t('calls.compose.free_for_all') }}</option>
               </AppSelect>
             </label>
             <label class="field">
-              <span>Starts at</span>
+              <span>{{ t('calls.compose.starts_at') }}</span>
               <input
                 v-model="composeState.startsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call starts at"
+                :aria-label="t('calls.compose.starts_at_aria')"
               />
             </label>
             <label class="field">
-              <span>Ends at</span>
+              <span>{{ t('calls.compose.ends_at') }}</span>
               <input
                 v-model="composeState.endsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call ends at"
+                :aria-label="t('calls.compose.ends_at_aria')"
               />
             </label>
           </section>
@@ -372,23 +372,23 @@
                 type="checkbox"
                 @change="handleReplaceParticipantsToggle"
               />
-              <span>Replace participant list during edit</span>
+              <span>{{ t('calls.compose.replace_participants') }}</span>
             </label>
           </section>
 
           <section v-if="shouldSendParticipants" class="calls-participants-grid">
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>Registered users</h5>
-                <label class="calls-search small" aria-label="Participant search">
+                <h5>{{ t('calls.compose.registered_users') }}</h5>
+                <label class="calls-search small" :aria-label="t('calls.compose.participant_search_aria')">
                   <input
                     v-model="composeParticipants.query"
                     class="input"
                     type="search"
-                    placeholder="Search users"
+                    :placeholder="t('calls.compose.search_users_placeholder')"
                     @keydown.enter.prevent="applyParticipantSearch"
                   />
-                  <button class="btn btn-cyan" type="button" @click="applyParticipantSearch">Search</button>
+                  <button class="btn btn-cyan" type="button" @click="applyParticipantSearch">{{ t('common.search') }}</button>
                 </label>
               </header>
 
@@ -411,7 +411,7 @@
                   <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
                 </label>
                 <p v-if="!composeParticipants.loading && composeParticipants.rows.length === 0" class="calls-empty-inline">
-                  No users in this page.
+                  {{ t('calls.compose.no_users') }}
                 </p>
               </section>
 
@@ -422,10 +422,10 @@
                   :disabled="!composeParticipants.hasPrev || composeParticipants.loading"
                   @click="goToParticipantPage(composeParticipants.page - 1)"
                 >
-                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" :alt="t('common.previous')" />
                 </button>
                 <div class="page-info">
-                  Page {{ composeParticipants.page }} / {{ composeParticipants.pageCount }}
+                  {{ t('calls.compose.page_status', { page: composeParticipants.page, pageCount: composeParticipants.pageCount }) }}
                 </div>
                 <button
                   class="pager-btn pager-icon-btn"
@@ -433,15 +433,15 @@
                   :disabled="!composeParticipants.hasNext || composeParticipants.loading"
                   @click="goToParticipantPage(composeParticipants.page + 1)"
                 >
-                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+                  <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" :alt="t('common.next')" />
                 </button>
               </div>
             </article>
 
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>External participants</h5>
-                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
+                <h5>{{ t('calls.compose.external_participants') }}</h5>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">{{ t('calls.compose.add_row') }}</button>
               </header>
 
               <section class="calls-external-list">
@@ -450,33 +450,33 @@
                     v-model="row.display_name"
                     class="input"
                     type="text"
-                    placeholder="Display name"
-                    :aria-label="`External participant ${index + 1} display name`"
+                    :placeholder="t('calls.compose.display_name_placeholder')"
+                    :aria-label="t('calls.compose.external_display_name_aria', { number: index + 1 })"
                   />
                   <input
                     v-model="row.email"
                     class="input"
                     type="email"
-                    placeholder="guest@example.com"
-                    :aria-label="`External participant ${index + 1} email`"
+                    :placeholder="t('calls.compose.email_placeholder')"
+                    :aria-label="t('calls.compose.external_email_aria', { number: index + 1 })"
                   />
                   <button
                     class="icon-mini-btn danger"
                     type="button"
-                    title="Remove external participant"
-                    :aria-label="`Remove external participant row ${index + 1}`"
+                    :title="t('calls.compose.remove_external_participant')"
+                    :aria-label="t('calls.compose.remove_external_participant_row', { number: index + 1 })"
                     @click="removeExternalRow(index)"
                   >
                     <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
                   </button>
                 </div>
-                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">No external participants configured.</p>
+                <p v-if="composeExternalRows.length === 0" class="calls-empty-inline">{{ t('calls.compose.no_external_participants') }}</p>
               </section>
             </article>
           </section>
 
           <section v-else-if="composeState.mode === 'edit'" class="calls-inline-hint">
-            Existing participants remain unchanged for this edit.
+            {{ t('calls.compose.participants_unchanged') }}
           </section>
 
           <section v-if="composeState.error" class="calls-inline-error">
@@ -486,36 +486,36 @@
 
         <footer class="calls-modal-footer">
           <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
-            {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
+            {{ composeState.submitting ? t('common.saving') : composeSubmitLabel }}
           </button>
         </footer>
       </div>
     </div>
 
-    <div class="calls-modal" :hidden="!cancelState.open" role="dialog" aria-modal="true" aria-label="Cancel call modal">
+    <div class="calls-modal" :hidden="!cancelState.open" role="dialog" aria-modal="true" :aria-label="t('calls.cancel_modal.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeCancel"></div>
       <div class="calls-modal-dialog calls-modal-dialog-cancel">
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4 class="calls-enter-title">Cancel call</h4>
+            <h4 class="calls-enter-title">{{ t('calls.cancel_modal.title') }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCancel">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeCancel">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div class="calls-modal-body calls-cancel-body">
           <p class="calls-inline-hint">
-            Cancelling <strong>{{ cancelState.callTitle }}</strong> marks all participants as cancelled.
+            {{ t('calls.cancel_modal.description_prefix') }} <strong>{{ cancelState.callTitle }}</strong> {{ t('calls.cancel_modal.description_suffix') }}
           </p>
 
           <label class="field">
-            <span>Cancel reason</span>
+            <span>{{ t('calls.cancel_modal.reason') }}</span>
             <AppSelect
               v-if="cancelState.overrideTemplate"
               v-model="cancelState.selectedTemplateId"
-              aria-label="Cancel reason template"
+              :aria-label="t('calls.cancel_modal.reason_template_aria')"
               @change="applyCancelTemplate(cancelState.selectedTemplateId)"
             >
               <option v-for="template in cancelTemplates" :key="template.reason" :value="template.reason">
@@ -527,19 +527,19 @@
               v-model.trim="cancelState.customReason"
               class="input"
               type="text"
-              placeholder="Type custom reason"
-              aria-label="Cancel reason"
+              :placeholder="t('calls.cancel_modal.custom_reason_placeholder')"
+              :aria-label="t('calls.cancel_modal.reason')"
             />
           </label>
 
           <label class="field">
-            <span>Cancel message</span>
-            <div class="calls-cancel-template-toolbar" role="toolbar" aria-label="Cancel message formatting">
-              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('bold')">Bold</button>
-              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('italic')">Italic</button>
-              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('underline')">Underline</button>
-              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('insertUnorderedList')">List</button>
-              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('removeFormat')">Clear</button>
+            <span>{{ t('calls.cancel_modal.message') }}</span>
+            <div class="calls-cancel-template-toolbar" role="toolbar" :aria-label="t('calls.cancel_modal.formatting_aria')">
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('bold')">{{ t('calls.cancel_modal.bold') }}</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('italic')">{{ t('calls.cancel_modal.italic') }}</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('underline')">{{ t('calls.cancel_modal.underline') }}</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('insertUnorderedList')">{{ t('calls.cancel_modal.list') }}</button>
+              <button class="btn" type="button" @mousedown.prevent @click="execCancelEditorCommand('removeFormat')">{{ t('calls.cancel_modal.clear') }}</button>
             </div>
             <div
               ref="cancelEditorRef"
@@ -547,7 +547,7 @@
               contenteditable="true"
               role="textbox"
               aria-multiline="true"
-              aria-label="Cancel message editor"
+              :aria-label="t('calls.cancel_modal.editor_aria')"
               @input="handleCancelEditorInput"
             ></div>
           </label>
@@ -564,7 +564,7 @@
               type="checkbox"
               @change="toggleCancelOverride($event.target.checked)"
             />
-            <span>Override</span>
+            <span>{{ t('calls.cancel_modal.override') }}</span>
           </label>
           <button
             v-if="cancelState.overrideTemplate && cancelState.templateDirty"
@@ -573,34 +573,34 @@
             :disabled="cancelState.submitting || cancelState.templateSaving"
             @click="saveCancelTemplate"
           >
-            {{ cancelState.templateSaving ? 'Saving…' : 'Save template' }}
+            {{ cancelState.templateSaving ? t('common.saving') : t('calls.cancel_modal.save_template') }}
           </button>
           <button class="btn btn-danger" type="button" :disabled="cancelState.submitting" @click="submitCancel">
-            {{ cancelState.submitting ? 'Cancelling…' : 'Cancel call' }}
+            {{ cancelState.submitting ? t('calls.cancel_modal.cancelling') : t('calls.cancel_modal.cancel_call') }}
           </button>
         </footer>
       </div>
     </div>
 
-    <div class="calls-modal" :hidden="!deleteState.open" role="dialog" aria-modal="true" aria-label="Delete call modal">
+    <div class="calls-modal" :hidden="!deleteState.open" role="dialog" aria-modal="true" :aria-label="t('calls.delete_modal.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeDelete"></div>
       <div class="calls-modal-dialog calls-modal-dialog-small">
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h4 class="calls-enter-title">Delete call</h4>
+            <h4 class="calls-enter-title">{{ t('calls.delete_modal.title') }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeDelete">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeDelete">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div class="calls-modal-body">
           <p class="calls-delete-warning">
-            Delete <strong>{{ deleteState.callTitle }}</strong> permanently?
+            {{ t('calls.delete_modal.warning_prefix') }} <strong>{{ deleteState.callTitle }}</strong> {{ t('calls.delete_modal.warning_suffix') }}
             <br />
             <br />
-            This removes participants, access links and invite codes for this call.
+            {{ t('calls.delete_modal.warning_detail') }}
           </p>
 
           <section v-if="deleteState.error" class="calls-inline-error">
@@ -610,7 +610,7 @@
 
         <footer class="calls-modal-footer">
           <button class="btn" type="button" :disabled="deleteState.submitting" @click="submitDelete">
-            {{ deleteState.submitting ? 'Deleting…' : 'Delete call' }}
+            {{ deleteState.submitting ? t('calls.delete_modal.deleting') : t('calls.delete_modal.delete_call') }}
           </button>
         </footer>
       </div>
