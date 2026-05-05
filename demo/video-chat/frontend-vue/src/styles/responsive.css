@@ -110,6 +110,15 @@
     gap: 0;
   }
 
+  .shell.tablet-mode:not(.tablet-left-open) .nav-parent-row {
+    grid-template-columns: 40px;
+    justify-items: center;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav-group-toggle {
+    display: none;
+  }
+
   .shell.tablet-mode:not(.tablet-left-open) .nav-link span {
     display: none;
   }
@@ -203,6 +212,14 @@
     padding: 0 12px;
     justify-content: flex-start;
     gap: 9px;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-parent-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-group-toggle {
+    display: grid;
   }
 
   .shell.tablet-mode.tablet-left-open .nav-link span {

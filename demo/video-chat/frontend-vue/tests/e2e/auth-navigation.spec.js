@@ -33,9 +33,18 @@ test('admin can click through all implemented admin routes and logout', async ({
   await expect(page).toHaveURL(/\/admin\/overview$/);
   await expect(page.locator('.view-card h3', { hasText: 'Admin Overview' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'Nutzer' }).click();
+  await page.getByRole('link', { name: 'Governance' }).click();
   await expect(page).toHaveURL(/\/admin\/governance\/users$/);
   await expect(page.getByRole('heading', { name: 'Nutzer' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Gruppen' }).click();
+  await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
+  await expect(page.getByRole('heading', { name: 'Gruppen' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create new' }).click();
+  await expect(page.getByRole('dialog', { name: 'Create Gruppe' })).toBeVisible();
+  await page.getByRole('button', { name: 'Maximize modal' }).click();
+  await expect(page.getByRole('button', { name: 'Restore modal size' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close governance modal' }).click();
 
   await page.getByRole('link', { name: 'Video Calls' }).click();
   await expect(page).toHaveURL(/\/admin\/calls$/);

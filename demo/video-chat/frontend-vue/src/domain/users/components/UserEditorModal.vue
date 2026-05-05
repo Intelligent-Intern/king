@@ -13,6 +13,9 @@
     :body-class="avatarEditorOpen ? 'users-avatar-modal-body' : 'users-modal-body'"
     footer-class="users-modal-footer"
     close-label="Close user modal"
+    maximizable
+    :maximized="editorMaximized"
+    @update:maximized="editorMaximized = $event"
     @close="$emit('close')"
   >
     <template #body>
@@ -185,7 +188,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import AppSelect from '../../../components/AppSelect.vue';
@@ -283,6 +286,14 @@ const emit = defineEmits([
   'submit-form',
   'save-avatar-changes',
 ]);
+
+const editorMaximized = ref(false);
+
+watch(() => props.open, (open) => {
+  if (!open) {
+    editorMaximized.value = false;
+  }
+});
 
 const emailDraftModel = computed({
   get: () => props.userEmailDraft,

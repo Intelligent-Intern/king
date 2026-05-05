@@ -1,17 +1,34 @@
 <template>
   <nav class="nav" aria-label="Main navigation">
     <template v-for="item in visibleItems" :key="item.key || item.to">
-      <section v-if="item.children" class="nav-group" :class="{ active: isActive(item) }">
-        <RouterLink
-          :to="item.to"
-          class="nav-link nav-link-parent"
-          :class="{ active: isActive(item) }"
-          @click="emitNavigate"
-        >
-          <img :src="item.icon" alt="" />
-          <span>{{ item.label }}</span>
-        </RouterLink>
-        <div class="nav-submenu" :aria-label="`${item.label} navigation`">
+      <section v-if="item.children" class="nav-group" :class="{ active: isActive(item), open: isExpanded(item) }">
+        <div class="nav-parent-row">
+          <RouterLink
+            :to="item.to"
+            class="nav-link nav-link-parent"
+            :class="{ active: isActive(item) }"
+            @click="emitNavigate"
+          >
+            <img :src="item.icon" alt="" />
+            <span>{{ item.label }}</span>
+          </RouterLink>
+          <button
+            class="nav-group-toggle"
+            type="button"
+            :aria-expanded="isExpanded(item)"
+            :aria-label="isExpanded(item) ? `Collapse ${item.label}` : `Expand ${item.label}`"
+            :title="isExpanded(item) ? `Collapse ${item.label}` : `Expand ${item.label}`"
+            @click="toggleGroup(item)"
+          >
+            <img
+              class="nav-group-toggle-icon"
+              :class="{ expanded: isExpanded(item) }"
+              src="/assets/orgas/kingrt/icons/forward.png"
+              alt=""
+            />
+          </button>
+        </div>
+        <div v-if="isExpanded(item)" class="nav-submenu" :aria-label="`${item.label} navigation`">
           <RouterLink
             v-for="child in item.children"
             :key="child.to"
@@ -39,7 +56,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 
 const props = defineProps({
@@ -54,6 +71,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['navigate']);
+const expandedGroups = reactive({});
 
 const adminIcon = '/assets/orgas/kingrt/icons/adminon.png';
 const navigationItems = [
@@ -92,6 +110,32 @@ const visibleItems = computed(() => (
         : item
     ))
 ));
+
+watch(
+  [() => props.currentPath, () => props.role],
+  () => {
+    for (const item of visibleItems.value) {
+      if (Array.isArray(item.children) && item.children.length > 0 && isActive(item)) {
+        expandedGroups[groupKey(item)] = true;
+      }
+    }
+  },
+  { immediate: true },
+);
+
+function groupKey(item) {
+  return String(item.key || item.to || '');
+}
+
+function isExpanded(item) {
+  return expandedGroups[groupKey(item)] === true;
+}
+
+function toggleGroup(item) {
+  const key = groupKey(item);
+  if (key === '') return;
+  expandedGroups[key] = !isExpanded(item);
+}
 
 function isActive(item) {
   if (Array.isArray(item.children) && item.children.length > 0) {
