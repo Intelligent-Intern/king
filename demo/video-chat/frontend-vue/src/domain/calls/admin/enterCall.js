@@ -6,6 +6,7 @@ import {
 } from '../../realtime/media/preferences';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { BackgroundFilterController } from '../../realtime/background/controller';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 export function normalizeCallAccessMode(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -255,8 +256,8 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       await previewNode.play().catch(() => {});
       enterCallState.previewReady = true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start camera preview.';
-      enterCallState.previewError = message || 'Could not start camera preview.';
+      const message = error instanceof Error ? error.message : t('calls.enter.preview_failed');
+      enterCallState.previewError = message || t('calls.enter.preview_failed');
     }
   }
 
@@ -385,7 +386,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       const accessId = String(result?.access_link?.id || '').trim();
       const joinPathRaw = String(result?.join_path || '').trim();
       const joinPath = joinPathRaw !== '' ? joinPathRaw : (accessId !== '' ? `/join/${accessId}` : '');
-      if (joinPath === '') throw new Error('Invite link payload is invalid.');
+      if (joinPath === '') throw new Error(t('calls.enter.invalid_invite_payload'));
       const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
       enterCallState.linkUrl = origin !== '' ? `${origin}${joinPath}` : joinPath;
       enterCallState.expiresAt = typeof result?.access_link?.expires_at === 'string' ? result.access_link.expires_at : '';
@@ -397,7 +398,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
         enterCallState.expiresAt = '';
         return;
       }
-      enterCallState.error = error instanceof Error ? error.message : 'Could not create invite link.';
+      enterCallState.error = error instanceof Error ? error.message : t('calls.enter.create_invite_failed');
     } finally {
       enterCallState.loading = false;
     }
