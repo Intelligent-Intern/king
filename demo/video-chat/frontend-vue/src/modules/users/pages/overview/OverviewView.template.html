@@ -1,6 +1,6 @@
   <section class="view-card admin-overview-view">
     <section class="overview-toolbar">
-      <div class="overview-view-tabs" role="tablist" aria-label="Overview views">
+      <div class="overview-view-tabs" role="tablist" :aria-label="t('users.overview.views_aria')">
         <button
           class="tab"
           :class="{ active: activeOverviewView === 'dashboard' }"
@@ -10,7 +10,7 @@
           :aria-selected="activeOverviewView === 'dashboard'"
           @click="setActiveOverviewView('dashboard')"
         >
-          Dashboard
+          {{ t('users.overview.dashboard') }}
         </button>
         <button
           class="tab"
@@ -21,7 +21,7 @@
           :aria-selected="activeOverviewView === 'calendar'"
           @click="setActiveOverviewView('calendar')"
         >
-          Calender
+          {{ t('users.overview.calendar') }}
         </button>
       </div>
     </section>
@@ -29,35 +29,35 @@
     <section class="view-panel dashboard-panel" :class="{ active: activeOverviewView === 'dashboard' }" data-panel="dashboard">
       <section class="metrics">
         <article class="metric">
-          <div class="metric-label">Live Calls</div>
+          <div class="metric-label">{{ t('users.overview.live_calls') }}</div>
           <div class="metric-value">{{ liveCallsMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Concurrent Participants</div>
+          <div class="metric-label">{{ t('users.overview.concurrent_participants') }}</div>
           <div class="metric-value">{{ participantsMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Healthy Cluster Nodes</div>
+          <div class="metric-label">{{ t('users.overview.healthy_cluster_nodes') }}</div>
           <div class="metric-value">{{ healthyNodesMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Nodes Under Load</div>
+          <div class="metric-label">{{ t('users.overview.nodes_under_load') }}</div>
           <div class="metric-value">{{ nodesUnderLoadMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Recent SFU Frames</div>
+          <div class="metric-label">{{ t('users.overview.recent_sfu_frames') }}</div>
           <div class="metric-value">{{ transportRecentFramesMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Matte-guided Frames</div>
+          <div class="metric-label">{{ t('users.overview.matte_guided_frames') }}</div>
           <div class="metric-value">{{ transportMatteGuidedMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Avg Selected Tiles</div>
+          <div class="metric-label">{{ t('users.overview.avg_selected_tiles') }}</div>
           <div class="metric-value">{{ transportAvgSelectionMetric }}</div>
         </article>
         <article class="metric">
-          <div class="metric-label">Avg ROI Area</div>
+          <div class="metric-label">{{ t('users.overview.avg_roi_area') }}</div>
           <div class="metric-value">{{ transportAvgRoiMetric }}</div>
         </article>
       </section>
@@ -65,12 +65,12 @@
       <section class="infra-overview-card">
         <header class="infra-overview-head">
           <div>
-            <h2>Infrastructure Inventory</h2>
+            <h2>{{ t('users.overview.infrastructure_inventory') }}</h2>
             <p>{{ infrastructureSubtitle }}</p>
           </div>
           <span class="tag" :class="infrastructureStatusTagClass">{{ infrastructureStatusLabel }}</span>
         </header>
-        <p v-if="infrastructureState.loading" class="infra-inline-state">Loading infrastructure inventory…</p>
+        <p v-if="infrastructureState.loading" class="infra-inline-state">{{ t('users.overview.loading_infrastructure') }}</p>
         <p v-else-if="infrastructureState.error" class="infra-inline-state error">{{ infrastructureState.error }}</p>
         <section v-else class="infra-provider-grid">
           <article v-for="provider in providerRows" :key="provider.id" class="infra-provider-card">
@@ -83,27 +83,27 @@
 
       <section class="panel-grid grid-2">
         <article class="card">
-          <h2 class="table-title">Running Calls</h2>
+          <h2 class="table-title">{{ t('users.overview.running_calls') }}</h2>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Call</th>
-                  <th>Host</th>
-                  <th>Live Users</th>
-                  <th>Uptime</th>
-                  <th>Status</th>
+                  <th>{{ t('calls.table.call') }}</th>
+                  <th>{{ t('users.overview.host') }}</th>
+                  <th>{{ t('users.overview.live_users') }}</th>
+                  <th>{{ t('users.overview.uptime') }}</th>
+                  <th>{{ t('calls.table.status') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="operationsState.loading">
-                  <td colspan="5">Loading live call metrics…</td>
+                  <td colspan="5">{{ t('users.overview.loading_live_calls') }}</td>
                 </tr>
                 <tr v-else-if="operationsState.error">
                   <td colspan="5">{{ operationsState.error }}</td>
                 </tr>
                 <tr v-else-if="runningCallsRows.length === 0">
-                  <td colspan="5">No live calls right now.</td>
+                  <td colspan="5">{{ t('users.overview.no_live_calls') }}</td>
                 </tr>
                 <template v-else>
                   <tr v-for="row in runningCallsRows" :key="row.id">
@@ -120,17 +120,17 @@
         </article>
 
         <article class="card">
-          <h2 class="table-title">Infrastructure Nodes</h2>
+          <h2 class="table-title">{{ t('users.overview.infrastructure_nodes') }}</h2>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Node</th>
-                  <th>Provider</th>
-                  <th>Region</th>
-                  <th>Roles</th>
-                  <th>Services</th>
-                  <th>Status</th>
+                  <th>{{ t('users.overview.node') }}</th>
+                  <th>{{ t('users.overview.provider') }}</th>
+                  <th>{{ t('users.overview.region') }}</th>
+                  <th>{{ t('users.overview.roles') }}</th>
+                  <th>{{ t('users.overview.services') }}</th>
+                  <th>{{ t('calls.table.status') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,7 +143,7 @@
                   <td><span class="tag" :class="row.statusTagClass">{{ row.status }}</span></td>
                 </tr>
                 <tr v-if="clusterHealthRows.length === 0">
-                  <td colspan="6">No infrastructure nodes reported.</td>
+                  <td colspan="6">{{ t('users.overview.no_infrastructure_nodes') }}</td>
                 </tr>
               </tbody>
             </table>
@@ -151,27 +151,27 @@
         </article>
 
         <article class="card grid-full">
-          <h2 class="table-title">SFU Transport Mix</h2>
+          <h2 class="table-title">{{ t('users.overview.sfu_transport_mix') }}</h2>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Frame Kind</th>
-                  <th>Frames</th>
-                  <th>Matte-guided</th>
-                  <th>Avg Selected Tiles</th>
-                  <th>Avg ROI Area</th>
+                  <th>{{ t('users.overview.frame_kind') }}</th>
+                  <th>{{ t('users.overview.frames') }}</th>
+                  <th>{{ t('users.overview.matte_guided') }}</th>
+                  <th>{{ t('users.overview.avg_selected_tiles') }}</th>
+                  <th>{{ t('users.overview.avg_roi_area') }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-if="operationsState.loading">
-                  <td colspan="5">Loading SFU transport metrics…</td>
+                  <td colspan="5">{{ t('users.overview.loading_sfu_transport') }}</td>
                 </tr>
                 <tr v-else-if="operationsState.error">
                   <td colspan="5">{{ operationsState.error }}</td>
                 </tr>
                 <tr v-else-if="transportFrameKindRows.length === 0">
-                  <td colspan="5">No recent SFU transport samples yet.</td>
+                  <td colspan="5">{{ t('users.overview.no_recent_sfu_samples') }}</td>
                 </tr>
                 <tr v-else v-for="row in transportFrameKindRows" :key="row.id">
                   <td><span class="code">{{ row.kind }}</span></td>
@@ -186,14 +186,14 @@
         </article>
 
         <article class="card grid-full">
-          <h2 class="table-title">Telemetry & Scaling</h2>
+          <h2 class="table-title">{{ t('users.overview.telemetry_scaling') }}</h2>
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Topic</th>
-                  <th>Policy</th>
-                  <th>Current Runtime</th>
+                  <th>{{ t('users.overview.topic') }}</th>
+                  <th>{{ t('users.overview.policy') }}</th>
+                  <th>{{ t('users.overview.current_runtime') }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -214,10 +214,10 @@
 
     <section class="view-panel calendar-panel" :class="{ active: activeOverviewView === 'calendar' }" data-panel="calendar">
       <div id="overviewCalendar" ref="overviewCalendarEl"></div>
-      <p class="calendar-help">Double-click a date/slot to schedule. In day view, drag a time range to prefill the modal.</p>
+      <p class="calendar-help">{{ t('users.overview.calendar_help') }}</p>
     </section>
 
-    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" aria-label="Call compose modal">
+    <div class="calls-modal" :hidden="!composeState.open" role="dialog" aria-modal="true" :aria-label="t('calls.compose.dialog_aria')">
       <div class="calls-modal-backdrop" @click="closeCompose"></div>
       <div class="calls-modal-dialog">
         <header class="calls-modal-header calls-modal-header-enter">
@@ -225,7 +225,7 @@
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <h4 class="calls-enter-title">{{ composeHeadline }}</h4>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeCompose">
+          <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" @click="closeCompose">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
@@ -233,25 +233,25 @@
         <div class="calls-modal-body">
           <section class="calls-modal-grid">
             <label class="field calls-field-wide">
-              <span>Title</span>
-              <input v-model="composeState.title" class="input" type="text" placeholder="Weekly Product Sync" />
+              <span>{{ t('calls.compose.title_label') }}</span>
+              <input v-model="composeState.title" class="input" type="text" :placeholder="t('calls.compose.title_placeholder')" />
             </label>
             <label class="field">
-              <span>Starts at</span>
+              <span>{{ t('calls.compose.starts_at') }}</span>
               <input
                 v-model="composeState.startsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call starts at"
+                :aria-label="t('calls.compose.starts_at_aria')"
               />
             </label>
             <label class="field">
-              <span>Ends at</span>
+              <span>{{ t('calls.compose.ends_at') }}</span>
               <input
                 v-model="composeState.endsLocal"
                 class="input"
                 type="datetime-local"
-                aria-label="Call ends at"
+                :aria-label="t('calls.compose.ends_at_aria')"
               />
             </label>
           </section>
@@ -259,13 +259,13 @@
           <section class="calls-participants-grid">
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>Registered users</h5>
-                <label class="calls-search small" aria-label="Participant search">
+                <h5>{{ t('calls.compose.registered_users') }}</h5>
+                <label class="calls-search small" :aria-label="t('calls.compose.participant_search_aria')">
                   <input
                     v-model="composeParticipants.query"
                     class="input"
                     type="search"
-                    placeholder="Search users"
+                    :placeholder="t('calls.compose.search_users_placeholder')"
                     @keydown.enter.prevent
                   />
                 </label>
@@ -286,15 +286,15 @@
                   <span class="calls-participant-meta">{{ user.email }} · {{ user.role }}</span>
                 </label>
                 <p v-if="filteredRegisteredUsers.length === 0" class="calls-empty-inline">
-                  No users match the current filter.
+                  {{ t('calls.compose.no_users_match') }}
                 </p>
               </section>
             </article>
 
             <article class="calls-participants-panel">
               <header class="calls-participants-head">
-                <h5>External participants</h5>
-                <button class="btn btn-cyan" type="button" @click="addExternalRow">Add row</button>
+                <h5>{{ t('calls.compose.external_participants') }}</h5>
+                <button class="btn btn-cyan" type="button" @click="addExternalRow">{{ t('calls.compose.add_row') }}</button>
               </header>
 
               <section class="calls-external-list">
@@ -303,21 +303,21 @@
                     v-model="row.display_name"
                     class="input"
                     type="text"
-                    placeholder="Display name"
-                    :aria-label="`External participant ${index + 1} display name`"
+                    :placeholder="t('calls.compose.display_name_placeholder')"
+                    :aria-label="t('calls.compose.external_display_name_aria', { number: index + 1 })"
                   />
                   <input
                     v-model="row.email"
                     class="input"
                     type="email"
-                    placeholder="guest@example.com"
-                    :aria-label="`External participant ${index + 1} email`"
+                    :placeholder="t('calls.compose.email_placeholder')"
+                    :aria-label="t('calls.compose.external_email_aria', { number: index + 1 })"
                   />
                   <button
                     class="icon-mini-btn danger"
                     type="button"
-                    title="Remove external participant"
-                    :aria-label="`Remove external participant row ${index + 1}`"
+                    :title="t('calls.compose.remove_external_participant')"
+                    :aria-label="t('calls.compose.remove_external_participant_row', { number: index + 1 })"
                     @click="removeExternalRow(index)"
                   >
                     <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
@@ -340,10 +340,10 @@
             :disabled="composeState.submitting"
             @click="deleteComposeEvent"
           >
-            Delete
+            {{ t('calls.actions.delete') }}
           </button>
           <button class="btn btn-cyan" type="button" :disabled="composeState.submitting" @click="submitCompose">
-            {{ composeState.submitting ? 'Saving…' : composeSubmitLabel }}
+            {{ composeState.submitting ? t('common.saving') : composeSubmitLabel }}
           </button>
         </footer>
       </div>
