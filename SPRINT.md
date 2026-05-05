@@ -412,6 +412,8 @@ Non-goals for this sprint:
      titles and singular/plural entity labels.
    - [x] Administration settings labels, email/server/template controls,
      branding controls, and local status/error text use localization keys.
+   - [x] Translation-key coverage contract now scans all non-call Vue/JS
+     sources and metadata key forms for missing English fallback keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
@@ -420,7 +422,7 @@ Non-goals for this sprint:
    - [ ] English fallback covers 100 percent of used keys.
    - [ ] Non-English seed/import files cover the key set or explicitly mark
      allowed fallback gaps.
-   - [ ] Contract test fails on missing English keys.
+   - [x] Contract test fails on missing English keys.
 
 7. [ ] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
 
