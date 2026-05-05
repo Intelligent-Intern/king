@@ -7,6 +7,7 @@ require_once __DIR__ . '/auth_session_cache.php';
 require_once __DIR__ . '/auth_rbac.php';
 require_once __DIR__ . '/tenant_context.php';
 require_once __DIR__ . '/localization.php';
+require_once __DIR__ . '/../domain/users/onboarding_progress.php';
 
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
@@ -54,6 +55,7 @@ SELECT
     users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url AS user_post_logout_landing_url,
+    users.onboarding_progress_json,
     roles.slug AS role_slug
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
@@ -170,6 +172,8 @@ SQL
                     ? trim((string) $source['user_post_logout_landing_url'])
                     : '';
             })($row),
+            'onboarding_completed_tours' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['completed_tours'],
+            'onboarding_badges' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['badges'],
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
             'tenant' => $tenantPayload,

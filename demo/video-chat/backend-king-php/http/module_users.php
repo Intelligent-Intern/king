@@ -10,6 +10,7 @@ require_once __DIR__ . '/../domain/users/user_emails.php';
 require_once __DIR__ . '/../domain/realtime/client_diagnostics.php';
 require_once __DIR__ . '/../domain/realtime/turn_ice.php';
 require_once __DIR__ . '/module_users_admin_accounts.php';
+require_once __DIR__ . '/module_user_onboarding.php';
 
 /**
  * @param array<string, mixed> $userRow
@@ -114,6 +115,20 @@ function videochat_handle_user_routes(
     callable $decodeJsonBody,
     callable $openDatabase
 ): ?array {
+    $onboardingRouteResponse = videochat_handle_user_onboarding_routes(
+        $path,
+        $method,
+        $request,
+        $apiAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    if ($onboardingRouteResponse !== null) {
+        return $onboardingRouteResponse;
+    }
+
     if ($path === '/api/user/media/ice-servers') {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/user/media/ice-servers.', [
