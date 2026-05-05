@@ -416,6 +416,8 @@ Non-goals for this sprint:
      sources and metadata key forms for missing English fallback keys.
    - [x] `npm run test:contract:localization` runs the localization inventory,
      runtime, settings, import UI, and translation-key coverage contracts.
+   - [x] Shared modal shell default close/maximize/restore labels use
+     localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
