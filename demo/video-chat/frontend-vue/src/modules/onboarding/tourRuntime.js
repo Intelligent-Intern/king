@@ -2,14 +2,44 @@ import { firstRouteActionByKind, routeActionsForContext, routeActionLabel } from
 
 const DEFAULT_TOUR_STEPS = Object.freeze([
   {
-    key: 'overview',
-    title_key: 'onboarding.default.overview_title',
-    body_key: 'onboarding.default.overview_body',
+    key: 'header',
+    selector: '.app-page-header',
+    title_key: 'onboarding.default.header_title',
+    body_key: 'onboarding.default.header_body',
+    side: 'bottom',
+    align: 'start',
   },
   {
     key: 'actions',
+    selector: '.app-page-header-actions',
     title_key: 'onboarding.default.actions_title',
     body_key: 'onboarding.default.actions_body',
+    side: 'bottom',
+    align: 'end',
+  },
+  {
+    key: 'filters',
+    selector: '.admin-page-frame-toolbar, .toolbar',
+    title_key: 'onboarding.default.filters_title',
+    body_key: 'onboarding.default.filters_body',
+    side: 'bottom',
+    align: 'start',
+  },
+  {
+    key: 'content',
+    selector: '.admin-table-frame, .table-wrap, .view-card',
+    title_key: 'onboarding.default.content_title',
+    body_key: 'onboarding.default.content_body',
+    side: 'top',
+    align: 'center',
+  },
+  {
+    key: 'pagination',
+    selector: '.admin-page-frame-footer, .pagination, .footer',
+    title_key: 'onboarding.default.pagination_title',
+    body_key: 'onboarding.default.pagination_body',
+    side: 'top',
+    align: 'center',
   },
 ]);
 
@@ -22,10 +52,14 @@ function normalizeTourStep(step = {}, index = 0) {
   const key = normalizeString(source.key) || `step-${index + 1}`;
   return {
     key,
+    selector: normalizeString(source.selector || source.element),
     title: normalizeString(source.title),
     title_key: normalizeString(source.title_key),
     body: normalizeString(source.body),
     body_key: normalizeString(source.body_key),
+    side: normalizeString(source.side),
+    align: normalizeString(source.align),
+    disable_active_interaction: source.disable_active_interaction !== false,
   };
 }
 
