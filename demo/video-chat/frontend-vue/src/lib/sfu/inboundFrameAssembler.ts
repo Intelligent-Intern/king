@@ -41,6 +41,50 @@ interface SfuInboundFrameAssemblerOptions {
   getRoomId: () => string
 }
 
+export interface SfuInboundFrameMessage {
+  publisherId?: string
+  publisher_id?: string
+  publisherUserId?: string
+  publisher_user_id?: string
+  trackId?: string
+  track_id?: string
+  frameId?: string
+  frame_id?: string
+  frameType?: string
+  frame_type?: string
+  protectedFrame?: string
+  protected_frame?: string
+  dataBase64?: string
+  data_base64?: string
+  protectedFrameChunk?: string
+  protected_frame_chunk?: string
+  dataBase64Chunk?: string
+  data_base64_chunk?: string
+  chunkCount?: number | string
+  chunk_count?: number | string
+  chunkIndex?: number | string
+  chunk_index?: number | string
+  chunkPayloadChars?: number | string
+  chunk_payload_chars?: number | string
+  payloadChars?: number | string
+  payload_chars?: number | string
+  protocolVersion?: number | string
+  protocol_version?: number | string
+  frameSequence?: number | string
+  frame_sequence?: number | string
+  senderSentAtMs?: number | string
+  sender_sent_at_ms?: number | string
+  codecId?: string
+  codec_id?: string
+  runtimeId?: string
+  runtime_id?: string
+  mediaGeneration?: number | string
+  media_generation?: number | string
+  outbound_media_generation?: number | string
+  timestamp?: number | string
+  [key: string]: unknown
+}
+
 export class SfuInboundFrameAssembler {
   private pendingChunks = new Map<string, PendingInboundFrameChunk>()
   private lastDiagnosticAtMs = 0
@@ -53,7 +97,7 @@ export class SfuInboundFrameAssembler {
     this.acceptedGenerations.clear()
   }
 
-  rejectFramePayloadLengthMismatch(msg: any): boolean {
+  rejectFramePayloadLengthMismatch(msg: SfuInboundFrameMessage): boolean {
     const protectedFrame = stringField(msg.protectedFrame, msg.protected_frame)
     const dataBase64 = stringField(msg.dataBase64, msg.data_base64)
     const payloadChars = Math.max(0, integerField(0, msg.payloadChars, msg.payload_chars))
@@ -81,7 +125,7 @@ export class SfuInboundFrameAssembler {
     return true
   }
 
-  acceptChunk(msg: any): Record<string, unknown> | null {
+  acceptChunk(msg: SfuInboundFrameMessage): Record<string, unknown> | null {
     const frameId = stringField(msg.frameId, msg.frame_id)
     const chunkCount = integerField(0, msg.chunkCount, msg.chunk_count)
     const chunkIndex = integerField(-1, msg.chunkIndex, msg.chunk_index)
@@ -595,7 +639,7 @@ function buildReassembledFrame(input: {
   }
 }
 
-export function stringField(...values: any[]): string {
+export function stringField(...values: unknown[]): string {
   for (const value of values) {
     const normalized = String(value ?? '').trim()
     if (normalized !== '') return normalized
@@ -603,7 +647,7 @@ export function stringField(...values: any[]): string {
   return ''
 }
 
-function integerField(fallback: number, ...values: any[]): number {
+function integerField(fallback: number, ...values: unknown[]): number {
   for (const value of values) {
     const normalized = Number(value)
     if (Number.isFinite(normalized)) return Math.floor(normalized)

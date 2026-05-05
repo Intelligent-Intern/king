@@ -34,9 +34,9 @@ function readFrontend(relativePath) {
   return fs.readFileSync(path.resolve(__dirname, '../../', relativePath), 'utf8');
 }
 
-const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.js');
-const signaling = readFrontend('src/domain/realtime/native/signaling.js');
-const mediaOrchestration = readFrontend('src/domain/realtime/local/mediaOrchestration.js');
+const bridgeRuntime = readFrontend('src/domain/realtime/native/bridgeRuntime.ts');
+const signaling = readFrontend('src/domain/realtime/native/signaling.ts');
+const mediaOrchestration = readFrontend('src/domain/realtime/local/mediaOrchestration.ts');
 
 try {
   const ensureLocalMediaBody = functionBody(bridgeRuntime, 'ensureLocalMediaForNativeNegotiation');

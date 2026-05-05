@@ -3,8 +3,8 @@
  * Integrates custom codec into the WebRTC pipeline
  */
 
-import { createEncoder, createDecoder, WaveletVideoEncoder, WaveletVideoDecoder } from '../wavelet/codec.js'
-import { createKalmanFilter, VideoKalmanFilter } from '../kalman/filter.js'
+import { createEncoder, createDecoder, WaveletVideoEncoder, WaveletVideoDecoder } from '../wavelet/codec.ts'
+import { createKalmanFilter, VideoKalmanFilter } from '../kalman/filter.ts'
 
 export interface VideoProcessorConfig {
   enabled: boolean

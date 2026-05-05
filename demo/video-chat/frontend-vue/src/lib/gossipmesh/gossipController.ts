@@ -101,15 +101,43 @@ export interface GossipDelivery {
   receiving_peer_id: string
   from_peer_id: string
   frame_id: string
-  message: any
+  message: GossipFrameMessage
 }
 
 export interface GossipDataTransport {
   readonly kind?: GossipTransportKind
-  sendData(targetPeerId: string, msg: any, fromPeerId: string): void
+  sendData(targetPeerId: string, msg: GossipFrameMessage, fromPeerId: string): void
 }
 
 export type GossipDataListener = (delivery: GossipDelivery) => void
+
+export interface GossipFrameMessage {
+  type?: string
+  frame_id?: string
+  frameId?: string
+  publisher_id?: string
+  publisherId?: string
+  track_id?: string
+  trackId?: string
+  frame_sequence?: number
+  frameSequence?: number
+  media_generation?: number
+  mediaGeneration?: number
+  ttl?: number
+  route_id?: string
+  routeId?: string
+  timestamp?: number
+  sent_at_ms?: number
+  sentAtMs?: number
+  [key: string]: unknown
+}
+
+export interface GossipOpsMessage {
+  type?: string
+  ops_epoch?: number
+  signal_sequence?: number
+  [key: string]: unknown
+}
 
 const SEEN_WINDOW_SIZE = 512
 const HEARTBEAT_INTERVAL_MS = 1000
@@ -201,7 +229,7 @@ export class GossipController {
     this.keyframeCooldowns.clear()
   }
 
-  handleData(receivingPeerId: string, msg: any, fromPeerId = ''): void {
+  handleData(receivingPeerId: string, msg: GossipFrameMessage, fromPeerId = ''): void {
     const peer = this.peers.get(receivingPeerId)
     if (!peer) return
 
@@ -276,7 +304,7 @@ export class GossipController {
     }
   }
 
-  publishFrame(fromPeerId: string, msg: any): void {
+  publishFrame(fromPeerId: string, msg: GossipFrameMessage): void {
     const publisher = this.peers.get(fromPeerId)
     if (!publisher) return
     if (!this.dataLaneConfig.publish) {
@@ -330,7 +358,7 @@ export class GossipController {
     this.forward(fromPeerId, outbound, frameId)
   }
 
-  handleOps(peerId: string, msg: any): void {
+  handleOps(peerId: string, msg: GossipOpsMessage): void {
     const peer = this.peers.get(peerId)
     if (!peer) return
 
@@ -520,8 +548,8 @@ export class GossipController {
     return [...this.events]
   }
 
-  getStats() {
-    const stats: Record<string, any> = {}
+  getStats(): Record<string, Record<string, unknown>> {
+    const stats: Record<string, Record<string, unknown>> = {}
     for (const [peerId, peer] of this.peers.entries()) {
       stats[peerId] = {
         sent: peer.sent,
@@ -571,7 +599,7 @@ export class GossipController {
     }
   }
 
-  private forward(fromPeerId: string, msg: any, frameId: string, previousHopPeerId = ''): void {
+  private forward(fromPeerId: string, msg: GossipFrameMessage, frameId: string, previousHopPeerId = ''): void {
     const peer = this.peers.get(fromPeerId)
     if (!peer) return
     if (!this.dataLaneConfig.publish) return
@@ -654,12 +682,12 @@ export class GossipController {
     this.heartbeatTimers.set(peerId, timer)
   }
 
-  private frameId(msg: any): string {
+  private frameId(msg: GossipFrameMessage): string {
     return `${msg.publisher_id}:${msg.track_id}:${msg.media_generation}:${msg.frame_sequence}`
   }
 
-  private emitDataDelivery(receivingPeerId: string, fromPeerId: string, frameId: string, msg: any): void {
-    const delivery = {
+  private emitDataDelivery(receivingPeerId: string, fromPeerId: string, frameId: string, msg: GossipFrameMessage): void {
+    const delivery: GossipDelivery = {
       receiving_peer_id: receivingPeerId,
       from_peer_id: fromPeerId,
       frame_id: frameId,
@@ -714,7 +742,7 @@ export class GossipController {
     peer.telemetry[counter] += increment
   }
 
-  private hopLatencyMs(msg: any, now: number): number | undefined {
+  private hopLatencyMs(msg: GossipFrameMessage, now: number): number | undefined {
     const sentAt = Number(msg?.last_hop_sent_at_ms || msg?.sender_sent_at_ms || msg?.sent_at_ms || 0)
     if (!Number.isFinite(sentAt) || sentAt <= 0) return undefined
     return Math.max(0, now - sentAt)

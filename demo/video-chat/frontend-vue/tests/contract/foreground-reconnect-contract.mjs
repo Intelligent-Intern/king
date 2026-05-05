@@ -16,7 +16,7 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 
 try {
-  const helper = read(root, 'src/support/foregroundReconnect.js');
+  const helper = read(root, 'src/support/foregroundReconnect.ts');
   assert.match(helper, /window\.addEventListener\('blur', handleBackground\)/, 'foreground helper must track blur');
   assert.match(helper, /window\.addEventListener\('focus', handleForeground\)/, 'foreground helper must track focus');
   assert.match(helper, /window\.addEventListener\('pageshow', handleForeground\)/, 'foreground helper must track pageshow');

@@ -1,4 +1,4 @@
-import { resolveFramedFrameSizeFromDimensions, resolvePublisherFrameSize } from './videoFrameSizing.js';
+import { resolveFramedFrameSizeFromDimensions, resolvePublisherFrameSize } from './videoFrameSizing.ts';
 
 export const DOM_CANVAS_COMPATIBILITY_SOURCE_BACKEND = 'dom_canvas_compatibility_fallback';
 export const DOM_CANVAS_COMPATIBILITY_READBACK_METHOD = 'dom_canvas_compatibility_readback';

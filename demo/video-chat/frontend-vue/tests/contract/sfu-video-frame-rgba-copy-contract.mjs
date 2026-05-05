@@ -20,9 +20,9 @@ function read(relativePath) {
 }
 
 try {
-  const copySource = read('src/domain/realtime/local/publisherVideoFrameCopy.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const copySource = read('src/domain/realtime/local/publisherVideoFrameCopy.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const packageJson = read('package.json');
 
   requireContains(copySource, 'await frame.copyTo(rgba, { format: \'RGBA\' })', 'VideoFrame RGBA copyTo hotpath');
@@ -49,7 +49,7 @@ try {
   requireContains(publisherFrameTrace, 'trace_video_frame_copy_to_rgba_ms', 'publisher trace exposes VideoFrame copyTo timing');
   requireContains(packageJson, 'sfu-video-frame-rgba-copy-contract.mjs', 'SFU contract suite includes VideoFrame RGBA copy proof');
 
-  const copyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.js')).href;
+  const copyUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameCopy.ts')).href;
   const copyModule = await import(copyUrl);
 
   class FakeImageData {

@@ -25,23 +25,23 @@ function readRepo(relativePath) {
 }
 
 try {
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
-  const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.js');
-  const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.ts');
+  const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
-  const security = read('src/domain/realtime/media/security.js');
-  const securityCore = read('src/domain/realtime/media/securityCore.js');
-  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-  const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.js');
+  const security = read('src/domain/realtime/media/security.ts');
+  const securityCore = read('src/domain/realtime/media/securityCore.ts');
+  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const lifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts');
   const packageJson = read('package.json');
   const backendSfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -164,12 +164,12 @@ try {
   requireContains(framePayload, "'webcodecs_vp8'", 'frontend SFU payload normalization preserves webcodecs_vp8');
   requireContains(messageHandler, 'frameWidth: Math.max(0, integerField(0, msg.frameWidth, msg.frame_width))', 'message handler maps browser frame width');
   requireContains(messageHandler, 'frameHeight: Math.max(0, integerField(0, msg.frameHeight, msg.frame_height))', 'message handler maps browser frame height');
-  requireContains(security, "normalized === 'webcodecs_vp8'", 'media security normalizes browser codec id');
+  requireContains(security, "VALID_PROTECTED_CODEC_IDS = new Set(['wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown'])", 'media security normalizes browser codec id');
   requireContains(securityCore, "'webcodecs_vp8'", 'protected header validator allows browser codec id');
   requireContains(backendSfuStore, "'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8'", 'backend SFU store preserves browser codec id');
   requireContains(backendSfuStore, 'publisher_browser_encoder_codec', 'backend SFU store preserves browser encoder telemetry');
   requireContains(
-    read('src/domain/realtime/local/publisherFrameTrace.js'),
+    read('src/domain/realtime/local/publisherFrameTrace.ts'),
     'if (!Array.isArray(trace.stages)) trace.stages = [];',
     'publisher trace stage marker must not crash hand-built browser encoder traces',
   );
