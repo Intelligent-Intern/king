@@ -5,6 +5,7 @@ import {
   compareDateTimeStrings,
   formatDateRangeDisplay,
   formatLocalizedDateTimeDisplay,
+  formatLocalizedTimestampDisplay,
   formatWeekdayShort,
   normalizeDateTimeLocale,
 } from '../../src/support/dateTimeFormat.js';
@@ -47,6 +48,17 @@ function expectedLocalizedDateTime(date, { locale, dateFormat = 'dmy_dot', timeF
   return `${expectedLocalizedDate(date, locale, dateFormat)} ${expectedLocalizedTime(date, locale, timeFormat)}`;
 }
 
+function expectedLocalizedTimestamp(date, locale) {
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(date);
+}
+
 assert.equal(normalizeDateTimeLocale('de'), 'de');
 assert.equal(normalizeDateTimeLocale('definitely-unsupported'), 'en');
 
@@ -67,6 +79,12 @@ assert.equal(
   formatLocalizedDateTimeDisplay(sampleIso, { locale: 'ar', dateFormat: 'ymd_compact', timeFormat: '12h' }),
   expectedLocalizedDateTime(sampleDate, { locale: 'ar', dateFormat: 'ymd_compact', timeFormat: '12h' }),
 );
+assert.equal(
+  formatLocalizedTimestampDisplay(sampleIso, { locale: 'fa', fallback: '--' }),
+  expectedLocalizedTimestamp(sampleDate, 'fa'),
+  'timestamp formatter must keep seconds while using the active locale',
+);
+assert.equal(formatLocalizedTimestampDisplay('', { fallback: '--' }), '--');
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
 assert.equal(
@@ -137,6 +155,15 @@ const navigationBuilderSource = await readFile(path.join(root, 'src/modules/navi
 const routeAccessSource = await readFile(path.join(root, 'src/http/routeAccess.js'), 'utf8');
 const dashboardSource = await readFile(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.vue'), 'utf8');
 const appointmentConfigSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentConfigPanel.vue'), 'utf8');
+const realtimeSources = await Promise.all([
+  'src/domain/realtime/layout/strategies.js',
+  'src/domain/realtime/workspace/callWorkspace/roomState.js',
+  'src/domain/realtime/workspace/callWorkspace/participantUi.js',
+  'src/domain/realtime/workspace/utils.js',
+].map(async (relativePath) => ({
+  relativePath,
+  source: await readFile(path.join(root, relativePath), 'utf8'),
+})));
 assert.match(navigationBuilderSource, /compareLocalizedStrings/, 'navigation builder must use centralized locale-aware collation');
 assert.doesNotMatch(navigationBuilderSource, /\.localeCompare\(/, 'navigation builder must not call localeCompare directly');
 assert.match(routeAccessSource, /locale: normalizeString\(session\.locale\)/, 'module access context must carry the active locale to navigation sorting');
@@ -145,5 +172,14 @@ assert.match(dashboardSource, /compareDateTimeStrings/, 'dashboard calendar buck
 assert.doesNotMatch(dashboardSource, /\.localeCompare\(/, 'dashboard calendar sorting must not use localeCompare for date-time keys');
 assert.match(appointmentConfigSource, /compareDateTimeStrings/, 'appointment form rows must use deterministic date-time sorting');
 assert.doesNotMatch(appointmentConfigSource, /starts_at\)\.localeCompare/, 'appointment form row sorting must not use string localeCompare');
+for (const { relativePath, source } of realtimeSources) {
+  assert.doesNotMatch(source, /localeCompare\([^)]*['"]en['"]/, `${relativePath} must not pin user-facing collation to English`);
+  assert.doesNotMatch(source, /Intl\.DateTimeFormat\(['"]en-GB['"]/, `${relativePath} must not pin timestamps to en-GB`);
+}
+assert.match(
+  realtimeSources.find((entry) => entry.relativePath.endsWith('utils.js')).source,
+  /formatLocalizedTimestampDisplay/,
+  'call workspace timestamp display must use the shared localized timestamp formatter',
+);
 
 console.log('[locale-aware-formatting-contract] PASS');

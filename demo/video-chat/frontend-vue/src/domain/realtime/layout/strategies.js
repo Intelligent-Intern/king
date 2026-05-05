@@ -1,4 +1,5 @@
 import { isScreenShareMediaSource, isScreenShareUserId } from '../screenShareIdentity.js';
+import { compareLocalizedStrings } from '../../../support/localeCollation.js';
 
 export const CALL_LAYOUT_MODES = ['grid', 'main_mini', 'main_only'];
 export const CALL_LAYOUT_STRATEGIES = ['manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active'];
@@ -110,7 +111,7 @@ function compareParticipantFallback(left, right) {
   const roleRank = (role) => (role === 'admin' ? 0 : 1);
   const roleDiff = roleRank(left.role) - roleRank(right.role);
   if (roleDiff !== 0) return roleDiff;
-  const nameDiff = left.displayName.localeCompare(right.displayName, 'en', { sensitivity: 'base' });
+  const nameDiff = compareLocalizedStrings(left.displayName, right.displayName);
   if (nameDiff !== 0) return nameDiff;
   return left.userId - right.userId;
 }

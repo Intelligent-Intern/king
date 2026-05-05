@@ -1,4 +1,5 @@
 import { computed } from 'vue';
+import { compareLocalizedStrings } from '../../../../support/localeCollation.js';
 
 export function createCallWorkspaceRoomStateHelpers(context) {
   const {
@@ -184,7 +185,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     return Array.from(aggregate.values()).sort((left, right) => {
       const roleCmp = roleRank(left.role) - roleRank(right.role);
       if (roleCmp !== 0) return roleCmp;
-      const nameCmp = left.displayName.localeCompare(right.displayName, 'en', { sensitivity: 'base' });
+      const nameCmp = compareLocalizedStrings(left.displayName, right.displayName);
       if (nameCmp !== 0) return nameCmp;
       return left.userId - right.userId;
     });

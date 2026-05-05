@@ -4,8 +4,16 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
+function activeDocumentLocale() {
+  if (typeof document === 'undefined') {
+    return '';
+  }
+  return normalizeString(document.documentElement?.lang);
+}
+
 export function compareLocalizedStrings(left, right, options = {}) {
-  const locale = normalizeLocalizationLanguage(options.locale);
+  const explicitLocale = normalizeString(options.locale);
+  const locale = normalizeLocalizationLanguage(explicitLocale || activeDocumentLocale());
   const collatorOptions = {
     sensitivity: options.sensitivity || 'base',
     numeric: options.numeric !== false,

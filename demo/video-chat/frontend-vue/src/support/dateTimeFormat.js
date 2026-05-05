@@ -192,6 +192,27 @@ export function formatLocalizedDateTimeDisplay(value, options = {}) {
   }
 }
 
+export function formatLocalizedTimestampDisplay(value, options = {}) {
+  const fallback = typeof options.fallback === 'string' && options.fallback !== '' ? options.fallback : 'n/a';
+  const date = toDate(value);
+  if (!date) {
+    return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(resolveDateTimeLocale(options.locale), {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  } catch {
+    return formatDateTimeDisplay(value, options);
+  }
+}
+
 export function formatDateRangeDisplay(startsAt, endsAt, options = {}) {
   const separator = typeof options.separator === 'string' && options.separator !== '' ? options.separator : ' -> ';
   const sharedOptions = {
