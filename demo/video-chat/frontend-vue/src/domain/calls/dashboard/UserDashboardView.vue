@@ -16,6 +16,7 @@ import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
 import {
+  compareDateTimeStrings,
   formatDateDisplay,
   formatDateRangeDisplay,
   formatDateTimeDisplay,
@@ -131,6 +132,7 @@ function formatDateTime(isoValue) {
 
 function formatRange(startsAt, endsAt) {
   return formatDateRangeDisplay(startsAt, endsAt, {
+    locale: sessionState.locale,
     dateFormat: sessionState.dateFormat,
     timeFormat: sessionState.timeFormat,
     separator: ' -> ',
@@ -357,20 +359,18 @@ const calendarBuckets = computed(() => {
     buckets.get(key).push(call);
   }
 
-  const keys = Array.from(buckets.keys()).sort((a, b) => a.localeCompare(b));
+  const keys = Array.from(buckets.keys()).sort(compareDateTimeStrings);
 
   return keys.map((key) => {
     const rows = buckets.get(key).slice().sort((left, right) => {
-      const leftStart = String(left?.starts_at || '');
-      const rightStart = String(right?.starts_at || '');
-      return leftStart.localeCompare(rightStart);
+      return compareDateTimeStrings(left?.starts_at, right?.starts_at);
     });
 
     let label = 'Unscheduled';
     if (key !== 'unscheduled') {
       const keyDate = new Date(`${key}T00:00:00`);
       if (!Number.isNaN(keyDate.getTime())) {
-        const weekday = formatWeekdayShort(keyDate, { fallback: '' });
+        const weekday = formatWeekdayShort(keyDate, { locale: sessionState.locale, fallback: '' });
         const dateLabel = formatDateDisplay(keyDate, {
           dateFormat: sessionState.dateFormat,
           fallback: key,

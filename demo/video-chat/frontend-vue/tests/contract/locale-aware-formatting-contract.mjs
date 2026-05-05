@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  compareDateTimeStrings,
+  formatDateRangeDisplay,
   formatLocalizedDateTimeDisplay,
   formatWeekdayShort,
   normalizeDateTimeLocale,
@@ -68,6 +70,16 @@ assert.equal(
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
 assert.equal(
+  formatDateRangeDisplay(sampleIso, '2026-01-02T15:05:00Z', {
+    locale: 'ar',
+    dateFormat: 'ymd_dash',
+    timeFormat: '24h',
+    separator: ' -> ',
+  }),
+  `${expectedLocalizedDateTime(sampleDate, { locale: 'ar', dateFormat: 'ymd_dash', timeFormat: '24h' })} -> ${expectedLocalizedDateTime(new Date('2026-01-02T15:05:00Z'), { locale: 'ar', dateFormat: 'ymd_dash', timeFormat: '24h' })}`,
+  'date range formatting must use the active locale plus saved date/time preferences',
+);
+assert.equal(
   formatWeekdayShort(sampleIso, { locale: 'de', fallback: '' }),
   new Intl.DateTimeFormat('de', { weekday: 'short' }).format(sampleDate),
 );
@@ -102,6 +114,8 @@ assert.equal(
   compareLocalizedStrings('item 2', 'item 10', { locale: 'en' }),
   'item 2'.localeCompare('item 10', 'en', { sensitivity: 'base', numeric: true }),
 );
+assert.ok(compareDateTimeStrings('2026-01-02T10:00:00Z', '2026-01-02T11:00:00Z') < 0, 'date-time sort helper must order ISO timestamps by time');
+assert.ok(compareDateTimeStrings('', '2026-01-02T11:00:00Z') > 0, 'date-time sort helper must keep unscheduled rows after scheduled rows');
 
 const localizedTableSources = await Promise.all([
   'src/modules/governance/pages/GovernanceCrudView.vue',
@@ -121,8 +135,15 @@ for (const { relativePath, source } of localizedTableSources) {
 
 const navigationBuilderSource = await readFile(path.join(root, 'src/modules/navigationBuilder.js'), 'utf8');
 const routeAccessSource = await readFile(path.join(root, 'src/http/routeAccess.js'), 'utf8');
+const dashboardSource = await readFile(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.vue'), 'utf8');
+const appointmentConfigSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentConfigPanel.vue'), 'utf8');
 assert.match(navigationBuilderSource, /compareLocalizedStrings/, 'navigation builder must use centralized locale-aware collation');
 assert.doesNotMatch(navigationBuilderSource, /\.localeCompare\(/, 'navigation builder must not call localeCompare directly');
 assert.match(routeAccessSource, /locale: normalizeString\(session\.locale\)/, 'module access context must carry the active locale to navigation sorting');
+assert.match(dashboardSource, /formatDateRangeDisplay[\s\S]*locale:\s*sessionState\.locale/, 'dashboard date ranges must pass the active locale');
+assert.match(dashboardSource, /compareDateTimeStrings/, 'dashboard calendar buckets must use deterministic date-time sorting');
+assert.doesNotMatch(dashboardSource, /\.localeCompare\(/, 'dashboard calendar sorting must not use localeCompare for date-time keys');
+assert.match(appointmentConfigSource, /compareDateTimeStrings/, 'appointment form rows must use deterministic date-time sorting');
+assert.doesNotMatch(appointmentConfigSource, /starts_at\)\.localeCompare/, 'appointment form row sorting must not use string localeCompare');
 
 console.log('[locale-aware-formatting-contract] PASS');
