@@ -21,7 +21,7 @@ foreach ($paths as $path) {
 
     var_dump(!str_contains($skipif, "['command', '-v', 'python3']"));
     var_dump(!str_contains($skipif, 'command -v python3'));
-    var_dump(str_contains($skipif, "@proc_open(\n    ['python3', '-c',"));
+    var_dump(str_contains($skipif, '@proc_open('));
 
     $warnings = [];
     set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {

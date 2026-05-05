@@ -9,6 +9,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import BackgroundPipelineDebugPanel from '../../realtime/background/BackgroundPipelineDebugPanel.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
 import {
@@ -38,6 +39,14 @@ const router = useRouter();
 const applyBackgroundPreset = applyCallBackgroundPreset;
 const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const workspaceSidebarState = inject('workspaceSidebarState', null);
+
+function activeBackgroundPreset() {
+  if (isBackgroundPresetActive('image')) return 'image';
+  if (isBackgroundPresetActive('green')) return 'green';
+  if (isBackgroundPresetActive('strong')) return 'strong';
+  if (isBackgroundPresetActive('light')) return 'light';
+  return 'off';
+}
 
 const callsCalendarEl = ref(null);
 let calendarInstance = null;
@@ -624,6 +633,7 @@ async function goToPage(nextPage) {
 
 const {
   enterCallPreviewVideoRef,
+  enterCallPreviewPipelineDebug,
   enterCallState,
   closeEnterCallModal,
   openEnterCallModal,

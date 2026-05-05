@@ -144,9 +144,9 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" aria-label="Background blur">
-                    <div class="call-left-settings-title">Background blur</div>
-                    <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
+                  <section class="call-left-settings-block" aria-label="Background">
+                    <div class="call-left-settings-title">Background</div>
+                    <div class="call-left-blur-controls" role="group" aria-label="Background controls">
                       <button
                         class="call-left-blur-btn"
                         :class="{ active: isBackgroundPresetActive('light') }"
@@ -168,6 +168,17 @@
                         @click="applyBackgroundPreset('strong')"
                       >
                         <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
+                      </button>
+                      <button
+                        class="call-left-blur-btn"
+                        :class="{ active: isBackgroundPresetActive('green') }"
+                        type="button"
+                        :aria-pressed="isBackgroundPresetActive('green')"
+                        aria-label="Green background"
+                        title="Green background"
+                        @click="applyBackgroundPreset('green')"
+                      >
+                        <span class="call-left-blur-label">Green</span>
                       </button>
                     </div>
                   </section>
