@@ -690,7 +690,7 @@ Sprint goal:
       POST, export result download, and the backend dry-run contract for schema,
       tenant, and reference validation.
 
-12. [ ] [rollout-proof] Keep deployment proof and release notes current for
+12. [x] [rollout-proof] Keep deployment proof and release notes current for
     the governance/admin sprint.
 
     Done when:
@@ -765,6 +765,12 @@ Sprint goal:
       download wiring. `npm run build` passes with the known
       `CallWorkspaceView` chunk warning. `governance-crud-api-contract.sh`
       still skips locally because `pdo_sqlite` is not installed for `php`.
+    - Final closeout 2026-05-05: `demo/video-chat/scripts/check-deploy-idempotency.sh`
+      passes, confirming release artifact exclusions such as `dist/`,
+      `frontend-vue/dist/`, `compat-artifacts/`, and cache directories stay out
+      of deploy sync. No deploy was run in this closeout slice. The completion
+      log in `READYNESS_TRACKER.md` records the same proof, skip reason, and
+      release impact.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
