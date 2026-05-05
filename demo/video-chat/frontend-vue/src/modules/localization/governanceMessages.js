@@ -15,6 +15,7 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.create': 'Create',
   'governance.create_new': 'Create new',
   'governance.data_portability.bundle_must_be_object': 'Import bundle must be a JSON object.',
+  'governance.data_portability.download_result': 'Download job result',
   'governance.data_portability.export_ready': 'Export bundle ready with {tables} tables.',
   'governance.data_portability.export_title': 'Export data',
   'governance.data_portability.import_dry_run_failed': 'Import dry-run failed.',

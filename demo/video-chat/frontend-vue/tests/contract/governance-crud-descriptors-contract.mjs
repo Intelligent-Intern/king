@@ -89,6 +89,11 @@ assert.equal(
   'data-portability',
   'route names must resolve to CRUD descriptors',
 );
+assert.deepEqual(
+  GOVERNANCE_CRUD_DESCRIPTORS['data-portability'].row_actions.map((action) => action.kind),
+  ['export'],
+  'data portability rows must expose an explicit result download action',
+);
 assert.equal(
   governanceCrudDescriptorForRoute({ path: '/admin/governance/audit-log' })?.entity_key,
   'audit-log',

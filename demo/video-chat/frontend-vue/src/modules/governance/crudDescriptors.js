@@ -243,6 +243,16 @@ const descriptors = {
       column('updatedAt', 'governance.updated', { cell: 'datetime', width: '18%' }),
     ]),
     allowed_actions: Object.freeze(['export', 'import']),
+    row_actions: Object.freeze([
+      {
+        key: 'governance.data_portability.download_result',
+        kind: 'export',
+        label_key: 'governance.data_portability.download_result',
+        icon: '/assets/orgas/kingrt/icons/forward.png',
+        resource_type: 'tenant_export_import_job',
+        required_permissions: ['governance.data_portability.export'],
+      },
+    ]),
     search_fields: Object.freeze(['job_type', 'description', 'status']),
   }),
   compliance: descriptor('compliance', {
