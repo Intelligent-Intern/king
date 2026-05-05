@@ -70,9 +70,11 @@
       :user-email-submitting="userEmailSubmitting"
       :user-email-mutating-id="userEmailMutatingId"
       :can-edit-role="canEditRole"
+      :can-edit-governance-roles="canEditGovernanceRoles"
       :can-edit-status="canEditStatus"
       :can-edit-theme-editor="canEditThemeEditor"
       :theme-options="workspaceThemeOptions"
+      :governance-role-options="governanceRoleOptions"
       @close="closeDialog"
       @delete-pending-email="deletePendingEmail"
       @create-pending-email="createPendingEmail"
@@ -96,6 +98,11 @@ import AdminUsersTable from '../components/UsersTable.vue';
 import { createAdminSyncReloadController } from './syncReload';
 import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
+import {
+  governanceRoleRelationshipPayload,
+  loadGovernanceRoleOptions,
+  normalizeUserGovernanceRoles,
+} from './governanceRoles';
 import { appearanceState, loadWorkspaceAppearance } from '../../../../domain/workspace/appearance';
 import { t } from '../../../localization/i18nRuntime.js';
 import {
@@ -147,8 +154,10 @@ const form = reactive({
   theme: 'dark',
   theme_editor_enabled: false,
   avatar_path: '',
+  governance_roles: [],
 });
 const userEmailRows = ref([]);
+const governanceRoleOptions = ref([]);
 const userEmailDraft = ref('');
 const userEmailLoading = ref(false);
 const userEmailSubmitting = ref(false);
@@ -233,6 +242,14 @@ async function loadUsers() {
   }
 }
 
+async function loadGovernanceRoles() {
+  try {
+    governanceRoleOptions.value = await loadGovernanceRoleOptions(apiRequest);
+  } catch {
+    governanceRoleOptions.value = [];
+  }
+}
+
 function applySearchNow() {
   queryApplied.value = queryDraft.value.trim();
   page.value = 1;
@@ -267,6 +284,7 @@ function resetForm(mode = 'create') {
   form.theme = 'dark';
   form.theme_editor_enabled = false;
   form.avatar_path = '';
+  form.governance_roles = [];
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
@@ -281,6 +299,7 @@ function resetForm(mode = 'create') {
 
 function openCreateUser() {
   resetForm('create');
+  if (governanceRoleOptions.value.length === 0) void loadGovernanceRoles();
   dialogOpen.value = true;
 }
 
@@ -339,7 +358,9 @@ async function openEditUser(user) {
   form.theme = String(user.theme || 'dark');
   form.theme_editor_enabled = Boolean(user.theme_editor_enabled);
   form.avatar_path = String(user.avatar_path || '');
+  form.governance_roles = normalizeUserGovernanceRoles(user);
   applySelectedUserPermissions(user);
+  if (governanceRoleOptions.value.length === 0) void loadGovernanceRoles();
   dialogOpen.value = true;
   await loadUserEmails(form.id);
 }
@@ -366,6 +387,7 @@ const dialogTitle = computed(() => (form.mode === 'create' ? t('users.create_use
 const dialogSubmitLabel = computed(() => (form.mode === 'create' ? t('users.create_user') : t('common.save_changes')));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
 const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
+const canEditGovernanceRoles = computed(() => (form.mode === 'create' ? true : !selectedUserPermissions.isSelf));
 const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const canEditThemeEditor = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeThemeEditor));
 const workspaceThemeOptions = computed(() => (
@@ -539,6 +561,9 @@ async function submitForm() {
           password_repeat: form.password_repeat,
           role,
           theme_editor_enabled: Boolean(form.theme_editor_enabled),
+          relationships: {
+            roles: governanceRoleRelationshipPayload(form.governance_roles),
+          },
         },
       });
       notice.value = t('users.created_notice', { name: displayName });
@@ -559,6 +584,11 @@ async function submitForm() {
       }
       if (canEditStatus.value) {
         patchBody.status = String(form.status || 'active');
+      }
+      if (canEditGovernanceRoles.value) {
+        patchBody.relationships = {
+          roles: governanceRoleRelationshipPayload(form.governance_roles),
+        };
       }
 
       await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}`, {
@@ -741,7 +771,10 @@ onMounted(() => {
   adminSyncReload.start();
   void (async () => {
     await loadUsers();
-    await loadWorkspaceAppearance({ force: true });
+    await Promise.all([
+      loadWorkspaceAppearance({ force: true }),
+      loadGovernanceRoles(),
+    ]);
     await openEditUserFromRouteQuery();
   })();
 });

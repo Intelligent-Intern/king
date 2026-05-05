@@ -101,6 +101,19 @@
             </button>
           </section>
 
+          <section class="users-field">
+            <span>{{ t('users.governance_roles') }}</span>
+            <button
+              class="users-relation-link"
+              type="button"
+              :disabled="!canEditGovernanceRoles"
+              @click="openRelation(governanceRoleRelation)"
+            >
+              <strong>+1</strong>
+              <span>{{ currentGovernanceRolesLabel }}</span>
+            </button>
+          </section>
+
           <label v-if="form.mode === 'edit'" class="users-field">
             <span>{{ t('users.status') }}</span>
             <AppSelect v-model="form.status" :disabled="!canEditStatus">
@@ -218,6 +231,12 @@ const roleRelation = Object.freeze({
   label_key: 'users.role',
   selection_mode: 'single',
 });
+const governanceRoleRelation = Object.freeze({
+  key: 'governance_roles',
+  target_entity: 'governance_roles',
+  label_key: 'users.governance_roles',
+  selection_mode: 'multiple',
+});
 const themeRelation = Object.freeze({
   key: 'theme',
   target_entity: 'user_themes',
@@ -290,6 +309,10 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  canEditGovernanceRoles: {
+    type: Boolean,
+    default: true,
+  },
   canEditStatus: {
     type: Boolean,
     default: true,
@@ -304,6 +327,10 @@ const props = defineProps({
       { id: 'dark', label: 'dark' },
       { id: 'light', label: 'light' },
     ],
+  },
+  governanceRoleOptions: {
+    type: Array,
+    default: () => [],
   },
 });
 
@@ -332,14 +359,25 @@ const themeRows = computed(() => props.themeOptions.map((theme) => ({
   name: String(theme.label || theme.id || ''),
   status: 'active',
 })).filter((theme) => theme.id !== ''));
+const governanceRoleRows = computed(() => props.governanceRoleOptions.map((role) => ({
+  id: String(role.id || ''),
+  key: String(role.key || role.id || ''),
+  name: String(role.name || role.key || role.id || ''),
+  status: String(role.status || 'active'),
+})).filter((role) => role.id !== ''));
 const currentRoleLabel = computed(() => (
   selectedRow(roleRows.value, props.form.role)?.name || String(props.form.role || '')
 ));
 const currentThemeLabel = computed(() => (
   selectedRow(themeRows.value, props.form.theme)?.name || String(props.form.theme || '')
 ));
+const currentGovernanceRolesLabel = computed(() => {
+  const selected = selectedRowsByValues(governanceRoleRows.value, props.form.governance_roles);
+  return selected.length > 0 ? selected.map((row) => row.name).join(', ') : t('common.not_available');
+});
 const relationSelections = computed(() => ({
   role: selectedRows(roleRows.value, props.form.role),
+  governance_roles: selectedRowsByValues(governanceRoleRows.value, props.form.governance_roles),
   theme: selectedRows(themeRows.value, props.form.theme),
 }));
 
@@ -361,14 +399,23 @@ function selectedRows(rows, value) {
   return row ? [row] : [];
 }
 
+function selectedRowsByValues(rows, values) {
+  const normalizedValues = new Set((Array.isArray(values) ? values : [])
+    .map((value) => String(value?.id || value?.key || value || '').trim())
+    .filter(Boolean));
+  return rows.filter((row) => normalizedValues.has(row.id) || normalizedValues.has(row.key));
+}
+
 function relationRowsForEntity(entityKey) {
   if (entityKey === 'user_roles') return roleRows.value;
+  if (entityKey === 'governance_roles') return governanceRoleRows.value;
   if (entityKey === 'user_themes') return themeRows.value;
   return [];
 }
 
 function openRelation(relation) {
   if (relation?.key === 'role' && !props.canEditRole) return;
+  if (relation?.key === 'governance_roles' && !props.canEditGovernanceRoles) return;
   activeRelation.value = relation;
   relationStackMaximized.value = false;
   relationStackOpen.value = true;
@@ -386,6 +433,16 @@ function applyRelationSelection(payload) {
   if (value !== '') {
     if (payload?.relation?.key === 'role') props.form.role = value;
     if (payload?.relation?.key === 'theme') props.form.theme = value;
+  }
+  if (payload?.relation?.key === 'governance_roles') {
+    props.form.governance_roles = (Array.isArray(payload?.selectedRows) ? payload.selectedRows : [])
+      .map((selectedRow) => ({
+        id: String(selectedRow?.id || '').trim(),
+        key: String(selectedRow?.key || selectedRow?.id || '').trim(),
+        name: String(selectedRow?.name || selectedRow?.key || selectedRow?.id || '').trim(),
+        status: String(selectedRow?.status || 'active'),
+      }))
+      .filter((selectedRow) => selectedRow.id !== '');
   }
   closeRelationStack();
 }

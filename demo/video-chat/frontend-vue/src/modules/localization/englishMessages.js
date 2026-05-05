@@ -655,6 +655,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'users.role': 'Role',
   'users.role_admin': 'admin',
   'users.role_user': 'user',
+  'users.governance_roles': 'Governance roles',
   'users.save_avatar': 'Save avatar',
   'users.save_failed': 'Could not save user.',
   'users.search': 'Search users',
