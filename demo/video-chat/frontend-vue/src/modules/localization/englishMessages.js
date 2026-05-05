@@ -1,8 +1,11 @@
 export const ENGLISH_MESSAGES = Object.freeze({
   'common.cancel': 'Cancel',
   'common.close': 'Close',
+  'common.close_modal': 'Close modal',
   'common.loading': 'Loading...',
+  'common.maximize_modal': 'Maximize modal',
   'common.not_available': 'n/a',
+  'common.restore_modal_size': 'Restore modal size',
   'common.save': 'Save',
   'common.save_changes': 'Save changes',
   'common.saved': 'Saved',

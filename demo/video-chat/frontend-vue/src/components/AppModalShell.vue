@@ -27,13 +27,13 @@
             <AppIconButton
               v-if="maximizable"
               :icon="maximized ? restoreIcon : maximizeIcon"
-              :aria-label="maximized ? restoreLabel : maximizeLabel"
-              :title="maximized ? restoreLabel : maximizeLabel"
+              :aria-label="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
+              :title="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
               @click="toggleMaximized"
             />
             <AppIconButton
               :icon="closeIcon"
-              :aria-label="closeLabel"
+              :aria-label="effectiveCloseLabel"
               @click="$emit('close')"
             />
           </div>
@@ -55,6 +55,7 @@
 import { computed, useAttrs } from 'vue';
 import AppIconButton from './AppIconButton.vue';
 import { appearanceState } from '../domain/workspace/appearance';
+import { t } from '../modules/localization/i18nRuntime.js';
 
 defineOptions({ inheritAttrs: false });
 
@@ -129,7 +130,7 @@ const props = defineProps({
   },
   closeLabel: {
     type: String,
-    default: 'Close modal',
+    default: '',
   },
   showLogo: {
     type: Boolean,
@@ -153,11 +154,11 @@ const props = defineProps({
   },
   maximizeLabel: {
     type: String,
-    default: 'Maximize modal',
+    default: '',
   },
   restoreLabel: {
     type: String,
-    default: 'Restore modal size',
+    default: '',
   },
 });
 
@@ -178,6 +179,9 @@ const modalDialogClass = computed(() => [
   props.dialogClass,
   { 'is-maximized': props.maximized },
 ]);
+const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_modal'));
+const effectiveMaximizeLabel = computed(() => props.maximizeLabel || t('common.maximize_modal'));
+const effectiveRestoreLabel = computed(() => props.restoreLabel || t('common.restore_modal_size'));
 
 function toggleMaximized() {
   emit('update:maximized', !props.maximized);
