@@ -1,0 +1,72 @@
+<template>
+  <section class="view-card admin-page-frame">
+    <AppPageHeader class="section admin-page-frame-head" :title="title">
+      <template v-if="$slots.actions" #actions>
+        <slot name="actions" />
+      </template>
+    </AppPageHeader>
+
+    <section v-if="$slots.toolbar" class="toolbar admin-page-frame-toolbar">
+      <slot name="toolbar" />
+    </section>
+
+    <slot />
+
+    <footer v-if="$slots.footer" class="footer admin-page-frame-footer">
+      <slot name="footer" />
+    </footer>
+  </section>
+</template>
+
+<script setup>
+import AppPageHeader from '../AppPageHeader.vue';
+
+defineProps({
+  title: {
+    type: String,
+    required: true,
+  },
+});
+</script>
+
+<style scoped>
+.admin-page-frame {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: transparent;
+}
+
+.admin-page-frame > :first-child {
+  border-top-left-radius: 0;
+  border-top-right-radius: 5px;
+}
+
+.admin-page-frame-head,
+.admin-page-frame-toolbar,
+.admin-page-frame-footer {
+  background: var(--bg-ui-chrome);
+}
+
+.admin-page-frame-head,
+.admin-page-frame-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.admin-page-frame-toolbar {
+  padding-bottom: 25px;
+}
+
+.admin-page-frame-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: auto;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+</style>

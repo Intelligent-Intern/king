@@ -1,12 +1,10 @@
 <template>
-  <section class="view-card governance-crud-view">
-    <AppPageHeader class="section governance-crud-head" :title="title">
-      <template #actions>
-        <button class="btn btn-cyan" type="button" @click="openCreateModal">Create new</button>
-      </template>
-    </AppPageHeader>
+  <AdminPageFrame class="governance-crud-view" :title="title">
+    <template #actions>
+      <button class="btn btn-cyan" type="button" @click="openCreateModal">Create new</button>
+    </template>
 
-    <section class="toolbar governance-crud-toolbar">
+    <template #toolbar>
       <label class="search-field search-field-main" :aria-label="`Search ${pluralLabel}`">
         <input
           v-model.trim="query"
@@ -15,9 +13,9 @@
           :placeholder="`Search ${pluralLabel}`"
         />
       </label>
-    </section>
+    </template>
 
-    <section class="table-wrap governance-table-wrap">
+    <AdminTableFrame class="governance-table-wrap">
       <table class="governance-table">
         <thead>
           <tr>
@@ -63,9 +61,9 @@
           </tr>
         </tbody>
       </table>
-    </section>
+    </AdminTableFrame>
 
-    <footer class="footer governance-crud-footer">
+    <template #footer>
       <AppPagination
         :page="page"
         :page-count="pageCount"
@@ -75,7 +73,7 @@
         :has-next="page < pageCount"
         @page-change="goToPage"
       />
-    </footer>
+    </template>
 
     <GovernanceCrudModal
       :open="modalOpen"
@@ -88,15 +86,16 @@
       @close="closeModal"
       @submit="submitModal"
     />
-  </section>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import AppIconButton from '../../components/AppIconButton.vue';
-import AppPageHeader from '../../components/AppPageHeader.vue';
 import AppPagination from '../../components/AppPagination.vue';
+import AdminPageFrame from '../../components/admin/AdminPageFrame.vue';
+import AdminTableFrame from '../../components/admin/AdminTableFrame.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../modules/governanceCatalog.js';
 import { workspaceModuleRegistry } from '../../modules/index.js';
@@ -265,41 +264,6 @@ function formatDate(value) {
 </script>
 
 <style scoped>
-.governance-crud-view {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: transparent;
-}
-
-.governance-crud-head,
-.governance-crud-toolbar,
-.governance-crud-footer {
-  background: var(--bg-ui-chrome);
-}
-
-.governance-crud-head,
-.governance-crud-toolbar {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-}
-
-.governance-crud-toolbar {
-  padding-bottom: 25px;
-}
-
-.governance-table-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  margin-top: 0;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-
 .governance-table {
   width: 100%;
   table-layout: fixed;
@@ -361,14 +325,6 @@ function formatDate(value) {
   font-size: 0.76rem;
   font-weight: 700;
   text-transform: uppercase;
-}
-
-.governance-crud-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
 }
 
 @media (max-width: 760px) {
