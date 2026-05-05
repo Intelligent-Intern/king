@@ -1,16 +1,14 @@
 <template>
-  <section class="view-card theme-editor-view">
-    <AppPageHeader class="section theme-editor-head" :title="t('theme_editor.title')" />
-
+  <AdminPageFrame class="theme-editor-view" :title="t('theme_editor.title')">
     <section class="section theme-editor-panel">
       <WorkspaceThemeSettings v-model="selectedTheme" management-only />
     </section>
-  </section>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { ref } from 'vue';
-import AppPageHeader from '../../../components/AppPageHeader.vue';
+import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import { sessionState } from '../../../domain/auth/session';
 import WorkspaceThemeSettings from '../../../layouts/settings/WorkspaceThemeSettings.vue';
 import { t } from '../../localization/i18nRuntime.js';
@@ -22,23 +20,6 @@ const selectedTheme = ref(sessionState.theme || 'dark');
 .theme-editor-view,
 .theme-editor-panel {
   min-height: 0;
-}
-
-.theme-editor-view {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: transparent;
-}
-
-.theme-editor-view > :first-child {
-  border-top-left-radius: 0;
-  border-top-right-radius: 5px;
-}
-
-.theme-editor-head {
-  background: var(--bg-ui-chrome);
 }
 
 .theme-editor-panel {

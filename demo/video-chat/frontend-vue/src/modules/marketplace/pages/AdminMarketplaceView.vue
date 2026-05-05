@@ -1,8 +1,6 @@
 <template>
-  <section class="view-card marketplace-view">
-    <AppPageHeader class="section marketplace-head" :title="t('marketplace.title')" />
-
-    <section class="toolbar marketplace-toolbar">
+  <AdminPageFrame class="marketplace-view" :title="t('marketplace.title')">
+    <template #toolbar>
       <label class="search-field search-field-main" :aria-label="t('marketplace.search')">
         <input
           v-model.trim="queryDraft"
@@ -27,7 +25,7 @@
         :aria-label="t('marketplace.search')"
         @click="applySearchNow"
       />
-    </section>
+    </template>
 
     <section v-if="notice" class="section marketplace-banner ok">{{ notice }}</section>
     <section v-if="error" class="section marketplace-banner error">{{ error }}</section>
@@ -41,7 +39,7 @@
       @delete-app="deleteApp"
     />
 
-    <footer class="footer marketplace-footer">
+    <template #footer>
       <AppPagination
         :page="page"
         :page-count="pageCount"
@@ -52,7 +50,7 @@
         :disabled="loading"
         @page-change="goToPage"
       />
-    </footer>
+    </template>
 
     <div v-if="dialogOpen" class="marketplace-modal" role="dialog" aria-modal="true" :aria-label="dialogTitle">
       <div class="marketplace-modal-backdrop" @click="closeDialog"></div>
@@ -112,16 +110,16 @@
         </footer>
       </div>
     </div>
-  </section>
+  </AdminPageFrame>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import AppIconButton from '../../../components/AppIconButton.vue';
-import AppPageHeader from '../../../components/AppPageHeader.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
 import { t } from '../../localization/i18nRuntime.js';
