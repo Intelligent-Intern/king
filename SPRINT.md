@@ -459,6 +459,11 @@ Non-goals for this sprint:
      modal labels, and FullCalendar button text now use localization keys. The
      dashboard metric derivations moved into `useOverviewDashboardMetrics` so
      `OverviewView.vue` is back below the file-size target.
+   - [x] Call workspace template chrome, controls, roster/lobby pagination,
+     empty states, chat composer labels, and attachment controls now use
+     localization keys. The compact sidebar computed state moved into
+     `compactChrome.js`, so `CallWorkspaceView.vue` keeps shrinking while the
+     template joins translation-key coverage.
    - [x] Non-English fallback gaps are now explicit in a machine-readable
      fallback policy. The localization contract verifies every supported
      non-English locale and every English message namespace is either covered
