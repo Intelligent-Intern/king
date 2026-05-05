@@ -3,32 +3,33 @@
     <table class="users-table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Role</th>
-          <th>Status</th>
-          <th>Updated</th>
-          <th>Actions</th>
+          <th>{{ t('users.name') }}</th>
+          <th>{{ t('users.email') }}</th>
+          <th>{{ t('users.role') }}</th>
+          <th>{{ t('users.status') }}</th>
+          <th>{{ t('users.updated') }}</th>
+          <th>{{ t('users.actions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="user in rows" :key="user.id">
-          <td data-label="Name">
+          <td :data-label="t('users.name')">
             <div class="users-name">{{ user.display_name }}</div>
             <div class="users-subline code">#{{ user.id }}</div>
           </td>
-          <td data-label="Email">
+          <td :data-label="t('users.email')">
             <div>{{ user.email }}</div>
             <div class="users-subline">{{ user.time_format }} · {{ user.theme }}</div>
           </td>
-          <td data-label="Role"><span class="tag" :class="roleTagClass(user.role)">{{ user.role }}</span></td>
-          <td data-label="Status"><span class="tag" :class="statusTagClass(user.status)">{{ user.status }}</span></td>
-          <td data-label="Updated">{{ formatDateTime(user.updated_at) }}</td>
-          <td data-label="Actions">
+          <td :data-label="t('users.role')"><span class="tag" :class="roleTagClass(user.role)">{{ roleLabel(user.role) }}</span></td>
+          <td :data-label="t('users.status')"><span class="tag" :class="statusTagClass(user.status)">{{ statusLabel(user.status) }}</span></td>
+          <td :data-label="t('users.updated')">{{ formatDateTime(user.updated_at) }}</td>
+          <td :data-label="t('users.actions')">
             <div class="actions-inline">
               <AppIconButton
                 icon="/assets/orgas/kingrt/icons/gear.png"
-                title="Edit user"
+                :title="t('users.edit_user')"
+                :aria-label="t('users.edit_user')"
                 @click="$emit('edit-user', user)"
               />
               <AppIconButton
@@ -40,7 +41,8 @@
               <AppIconButton
                 v-if="canDeleteUser(user)"
                 icon="/assets/orgas/kingrt/icons/remove_user.png"
-                title="Delete user"
+                :title="t('users.delete_user')"
+                :aria-label="t('users.delete_user')"
                 :disabled="mutatingUserId === user.id"
                 danger
                 @click="$emit('delete-user', user)"
@@ -49,7 +51,7 @@
           </td>
         </tr>
         <tr v-if="rows.length === 0">
-          <td colspan="6" class="users-empty-cell">No users match the current filter.</td>
+          <td colspan="6" class="users-empty-cell">{{ t('users.empty_filter') }}</td>
         </tr>
       </tbody>
     </table>
@@ -58,6 +60,7 @@
 
 <script setup>
 import AppIconButton from '../../../../components/AppIconButton.vue';
+import { t } from '../../../localization/i18nRuntime.js';
 
 defineProps({
   rows: {
@@ -82,7 +85,7 @@ defineEmits(['edit-user', 'toggle-user-status', 'delete-user']);
 
 function formatDateTime(value) {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (text === '') return 'n/a';
+  if (text === '') return t('common.not_available');
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
   return new Intl.DateTimeFormat('en-GB', {
@@ -94,9 +97,23 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function roleLabel(role) {
+  const normalized = String(role || '').toLowerCase();
+  if (normalized === 'admin') return t('users.role_admin');
+  if (normalized === 'user') return t('users.role_user');
+  return String(role || '');
+}
+
 function roleTagClass(role) {
   const normalized = String(role || '').toLowerCase();
   return normalized === 'admin' ? 'ok' : 'warn';
+}
+
+function statusLabel(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'active') return t('users.status_active');
+  if (normalized === 'disabled') return t('users.status_disabled');
+  return String(status || '');
 }
 
 function statusTagClass(status) {
