@@ -120,6 +120,7 @@ import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { descriptorAllowsAction, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
+import { createEntitySummaryCache, normalizeEntitySummary } from '../entitySummaryCache.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
 import { entryAllowsAccess } from '../../navigationBuilder.js';
@@ -139,6 +140,7 @@ const relationNavigatorMaximized = ref(false);
 const formError = ref('');
 const form = reactive({ id: '' });
 const relationSelections = reactive({});
+const entitySummaryCache = createEntitySummaryCache();
 
 const scopeKey = computed(() => String(route.name || route.path));
 const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
@@ -200,6 +202,13 @@ watch(filteredRows, () => {
     page.value = pageCount.value;
   }
 });
+
+watch(visibleRows, () => {
+  const entityKey = String(crudDescriptor.value.entity_key || '').trim();
+  if (entityKey !== '') {
+    entitySummaryCache.upsertRows(entityKey, visibleRows.value);
+  }
+}, { immediate: true });
 
 function routeLabel(key, keyKey, fallback) {
   const translationKey = typeof route.meta?.[keyKey] === 'string' ? route.meta[keyKey].trim() : '';
@@ -394,18 +403,12 @@ function resetRelationSelections(row = null) {
 function relationSelectionSnapshot() {
   return Object.fromEntries(Object.entries(relationSelections).map(([key, rows]) => [
     key,
-    Array.isArray(rows) ? rows.map(rowSelectionSummary) : [],
+    Array.isArray(rows) ? rows.map((row) => rowSelectionSummary(row, row?.entity_key || '')) : [],
   ]));
 }
 
-function rowSelectionSummary(row) {
-  return {
-    id: row?.id || '',
-    name: row?.name || row?.display_name || row?.email || row?.key || '',
-    key: row?.key || '',
-    status: row?.status || '',
-    description: row?.description || '',
-  };
+function rowSelectionSummary(row, entityKey = '') {
+  return normalizeEntitySummary(entityKey || crudDescriptor.value.entity_key || '', row);
 }
 
 function openRelationNavigator(relationship) {
@@ -422,9 +425,10 @@ function closeRelationNavigator() {
 
 function applyRelationSelection(payload) {
   const key = String(payload?.relation?.key || '').trim();
+  const entityKey = String(payload?.relation?.target_entity || '').trim();
   if (key !== '') {
     relationSelections[key] = Array.isArray(payload.selectedRows)
-      ? payload.selectedRows.map(rowSelectionSummary)
+      ? payload.selectedRows.map((row) => rowSelectionSummary(row, entityKey))
       : [];
   }
   closeRelationNavigator();
@@ -448,10 +452,15 @@ function relationRowsForEntity(entityKey) {
     ];
   }
   if (key === 'modules' || key === 'permissions') {
-    return buildGovernanceCatalogRows(workspaceModuleRegistry, `admin-governance-${key}`);
+    const catalog = buildGovernanceCatalogRows(workspaceModuleRegistry, `admin-governance-${key}`);
+    entitySummaryCache.upsertRows(key, catalog);
+    return entitySummaryCache.rows(key);
   }
   const scopedRows = rowsByScope[`admin-governance-${key}`];
-  return Array.isArray(scopedRows) ? scopedRows : [];
+  if (Array.isArray(scopedRows)) {
+    entitySummaryCache.upsertRows(key, scopedRows);
+  }
+  return entitySummaryCache.rows(key);
 }
 
 function isRowReadonly(row) {

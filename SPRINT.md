@@ -342,6 +342,16 @@ Sprint goal:
    - Frontend code has no per-row relation label request loops.
    - A contract test covers the batch summary requirement.
 
+   Progress 2026-05-05:
+   - Added `entitySummaryCache.js` with normalized `{ entity, id }` summaries,
+     included-summary hydration, missing-id detection, and one-call batch
+     summary loading.
+   - Governance CRUD now hydrates current page/catalog rows into the summary
+     cache and relation providers return cached summaries instead of preparing
+     row-render fetch paths.
+   - Remaining work: backend list endpoints must include relation summaries or
+     expose tenant-scoped batch summary endpoints for real persisted entities.
+
 6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
    onto tenant-scoped resource/action permissions.
 
@@ -436,6 +446,8 @@ Sprint goal:
     - Added `governance-relation-stack-contract.mjs` for relation stack state,
       recursive push/back behavior, mass selection, modal `+1` links, and
       Governance CRUD draft selection wiring.
+    - Added `governance-summary-cache-contract.mjs` for normalized summary
+      hydration, missing-id batch requests, and no row-render fetch loops.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
