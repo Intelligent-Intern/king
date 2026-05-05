@@ -552,11 +552,20 @@ Non-goals for this sprint:
       switch, RTL state, settings UI, and route-level loading.
     - Static key coverage test against source usage.
 
+    Progress:
+    - [x] `npm run test:contract:localization` now runs the backend
+      localization schema, user settings, resource lookup, and CSV import
+      contracts before the frontend localization contracts.
+    - [x] Backend CSV import contract proves preview does not mutate
+      `translation_resources`, failed commits stay atomic, duplicate keys and
+      unsupported locales fail, and only primary superadmin `user_id = 1` can
+      import translations.
+
     Done when:
-    - [ ] Tests fail if a used key is missing from English fallback.
-    - [ ] Tests fail if CSV upload mutates data during preview.
-    - [ ] Tests fail if non-`user_id=1` can import translations.
-    - [ ] Tests fail if a configured RTL locale does not set RTL.
+    - [x] Tests fail if a used key is missing from English fallback.
+    - [x] Tests fail if CSV upload mutates data during preview.
+    - [x] Tests fail if non-`user_id=1` can import translations.
+    - [x] Tests fail if a configured RTL locale does not set RTL.
     - [ ] Tests fail if required email placeholders are missing.
 
 12. [ ] `[localization-browser-smoke]` Add browser proof.
