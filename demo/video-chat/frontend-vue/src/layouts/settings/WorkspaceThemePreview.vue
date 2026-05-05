@@ -1,21 +1,21 @@
 <template>
-  <section class="theme-preview" :style="previewStyle" aria-label="Theme preview">
+  <section class="theme-preview" :style="previewStyle" :aria-label="t('theme_preview.aria')">
     <aside class="theme-preview-sidebar">
       <div class="theme-preview-brand">
         <img :src="sidebarLogoSrc" alt="" />
       </div>
-      <nav class="theme-preview-nav" aria-label="Preview navigation">
+      <nav class="theme-preview-nav" :aria-label="t('theme_preview.navigation_aria')">
         <a class="active" href="#" @click.prevent>
           <img src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
-          <span>Video Calls</span>
+          <span>{{ t('navigation.calls.admin') }}</span>
         </a>
         <a href="#" @click.prevent>
           <img src="/assets/orgas/kingrt/icons/adminon.png" alt="" />
-          <span>Governance</span>
+          <span>{{ t('navigation.governance') }}</span>
         </a>
         <a href="#" @click.prevent>
           <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
-          <span>Nutzer</span>
+          <span>{{ t('navigation.governance.users') }}</span>
         </a>
       </nav>
     </aside>
@@ -23,18 +23,18 @@
     <main class="theme-preview-main">
       <header class="theme-preview-header">
         <div>
-          <h5>Video Call Management</h5>
-          <span>Live preview</span>
+          <h5>{{ t('theme_preview.video_call_management') }}</h5>
+          <span>{{ t('theme_preview.live_preview') }}</span>
         </div>
-        <button class="theme-preview-action" type="button">New video call</button>
+        <button class="theme-preview-action" type="button">{{ t('theme_preview.new_video_call') }}</button>
       </header>
 
       <section class="theme-preview-toolbar">
         <div class="theme-preview-tabs">
-          <button class="active" type="button">Calls</button>
-          <button type="button">Calendar</button>
+          <button class="active" type="button">{{ t('theme_preview.calls') }}</button>
+          <button type="button">{{ t('theme_preview.calendar') }}</button>
         </div>
-        <input type="text" readonly value="Search call title" />
+        <input type="text" readonly :value="t('theme_preview.search_call_title')" />
         <button class="theme-preview-icon" type="button">
           <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
         </button>
@@ -43,10 +43,10 @@
       <section class="theme-preview-table">
         <article v-for="call in calls" :key="call.id" class="theme-preview-row">
           <div>
-            <strong>{{ call.title }}</strong>
+            <strong>{{ t(call.titleKey) }}</strong>
             <span>{{ call.id }}</span>
           </div>
-          <span class="theme-preview-status" :class="call.statusClass">{{ call.status }}</span>
+          <span class="theme-preview-status" :class="call.statusClass">{{ t(call.statusKey) }}</span>
           <span>{{ call.window }}</span>
           <div class="theme-preview-row-actions">
             <button type="button"><img src="/assets/orgas/kingrt/icons/gear.png" alt="" /></button>
@@ -57,7 +57,7 @@
 
       <footer class="theme-preview-footer">
         <button type="button"><img src="/assets/orgas/kingrt/icons/backward.png" alt="" /></button>
-        <span>Page 1 / 2</span>
+        <span>{{ t('pagination.page_short', { page: 1, pageCount: 2 }) }}</span>
         <button type="button"><img src="/assets/orgas/kingrt/icons/forward.png" alt="" /></button>
       </footer>
     </main>
@@ -66,6 +66,7 @@
 
 <script setup>
 import { computed } from 'vue';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
   colors: {
@@ -81,22 +82,22 @@ const props = defineProps({
 const calls = Object.freeze([
   {
     id: '9fbe5c05',
-    title: 'Platform Standup',
-    status: 'active',
+    titleKey: 'theme_preview.call.platform_standup',
+    statusKey: 'users.status_active',
     statusClass: 'ok',
     window: '09:30 - 10:00',
   },
   {
     id: '47632c72',
-    title: 'Quarterly Review',
-    status: 'scheduled',
+    titleKey: 'theme_preview.call.quarterly_review',
+    statusKey: 'theme_preview.status_scheduled',
     statusClass: 'warn',
     window: '14:00 - 14:45',
   },
   {
     id: '8d2c1cd',
-    title: 'Customer Escalation',
-    status: 'ended',
+    titleKey: 'theme_preview.call.customer_escalation',
+    statusKey: 'theme_preview.status_ended',
     statusClass: '',
     window: '17:00 - 17:35',
   },
