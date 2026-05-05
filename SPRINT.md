@@ -435,6 +435,9 @@ Non-goals for this sprint:
    - [x] Appointment slot configuration panel and form rows are now keyed and
      included in the translation-key coverage contract, including FullCalendar
      slot labels, copy/insert actions, save/load notices, and validation text.
+   - [x] Chat archive modal, file filters, file group labels, archive notices,
+     and archive load errors now use localization keys and are covered by the
+     translation-key coverage contract.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
