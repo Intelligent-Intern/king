@@ -1550,6 +1550,10 @@ Non-goals for this sprint:
     - `deploy-smoke.sh` now verifies the authenticated admin session payload,
       default `en` locale, `ltr` direction, and seeded `en`, `de`, `ar`, and
       `sgd` rollout locales before running protected admin checks.
+    - `deploy-smoke.sh` now includes a primary-superadmin localization CSV
+      preview smoke against `/api/admin/localization/imports/preview` and does
+      not call the commit endpoint, so production-like CSV proof can run
+      without importing rows.
     - Full online smoke with remote SSH skipped now cleans up its admin session
       but correctly fails before protected admin checks on the current deployed
       app because `/api/auth/session` does not yet return `user.locale`

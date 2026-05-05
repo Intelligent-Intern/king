@@ -35,6 +35,8 @@ for (const requiredText of [
   'user_id = 1',
   'CSV',
   '/api/auth/logout',
+  '/api/admin/localization/imports/preview',
+  'without committing imported rows',
   'temporary smoke session is revoked',
   'default `en`',
   '`ltr` direction',
@@ -61,6 +63,10 @@ assert.match(deploySmoke, /VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en/, 'depl
 assert.match(deploySmoke, /\/api\/auth\/session/, 'deploy smoke must verify authenticated session payload');
 assert.match(deploySmoke, /supported locale missing/, 'deploy smoke must verify seeded rollout locales');
 assert.match(deploySmoke, /admin session payload localization mismatch/, 'deploy smoke must aggregate authenticated localization payload failures');
+assert.match(deploySmoke, /\/api\/admin\/localization\/imports\/preview/, 'deploy smoke must exercise superadmin localization CSV preview');
+assert.match(deploySmoke, /deploy-smoke-preview\.csv/, 'deploy smoke must use a named preview-only CSV payload');
+assert.match(deploySmoke, /superadmin preview verified without commit/, 'deploy smoke must document that CSV proof is preview-only');
+assert.doesNotMatch(deploySmoke, /\/api\/admin\/localization\/imports\/commit/, 'deploy smoke must not commit localization CSV rows');
 assert.match(deploySmoke, /admin session cleanup failed/, 'deploy smoke must surface admin session cleanup failure');
 
 console.log('[localization-rollout-proof-contract] PASS');
