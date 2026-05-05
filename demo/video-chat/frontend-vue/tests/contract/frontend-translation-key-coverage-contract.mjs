@@ -17,6 +17,8 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/appointment/AppointmentConfigPanel.vue',
   'src/domain/calls/appointment/AppointmentSettingsModal.vue',
   'src/domain/calls/appointment/AppointmentSlotRowsForm.vue',
+  'src/domain/calls/chat/archive.js',
+  'src/domain/calls/components/ChatArchiveModal.vue',
   'src/domain/calls/components/ListTable.vue',
 ]);
 
