@@ -32,11 +32,15 @@ run_with_retry() {
   local status=0
   while (( attempt <= APT_ATTEMPTS )); do
     echo "[ci-deps] ${label} attempt ${attempt}/${APT_ATTEMPTS}"
-    if timeout --kill-after="${APT_KILL_AFTER}" "${APT_TIMEOUT}" "$@"; then
+    set +e
+    timeout --kill-after="${APT_KILL_AFTER}" "${APT_TIMEOUT}" "$@"
+    status=$?
+    set -e
+
+    if [[ "${status}" -eq 0 ]]; then
       return 0
     fi
 
-    status=$?
     echo "[ci-deps] ${label} failed with exit ${status}" >&2
     sudo dpkg --configure -a || true
     sleep $((attempt * 10))
@@ -46,6 +50,32 @@ run_with_retry() {
   return "${status}"
 }
 
+disable_setup_php_apt_sources() {
+  local source_dir="/etc/apt/sources.list.d"
+  local disabled_dir="${source_dir}/king-disabled-setup-php"
+  local found=0
+
+  if [[ ! -d "${source_dir}" ]]; then
+    return 0
+  fi
+
+  while IFS= read -r source_path; do
+    [[ -n "${source_path}" ]] || continue
+    found=1
+    echo "[ci-deps] disabling setup-php apt source: ${source_path}"
+    sudo mkdir -p "${disabled_dir}"
+    sudo mv "${source_path}" "${disabled_dir}/$(basename "${source_path}")"
+  done < <(
+    find "${source_dir}" -maxdepth 1 -type f \
+      \( -name '*ondrej*php*' -o -name '*setup-php*' \) \
+      -print 2>/dev/null
+  )
+
+  if [[ "${found}" -eq 1 ]]; then
+    echo "[ci-deps] setup-php apt sources disabled before dependency refresh"
+  fi
+}
+
 apt_options=(
   -o Acquire::Retries=5
   -o Acquire::http::Timeout=30
@@ -53,5 +83,6 @@ apt_options=(
   -o Dpkg::Use-Pty=0
 )
 
+disable_setup_php_apt_sources
 run_with_retry "apt-get update" sudo apt-get "${apt_options[@]}" update
 run_with_retry "apt-get install" sudo apt-get "${apt_options[@]}" install -y --no-install-recommends "${packages[@]}"
