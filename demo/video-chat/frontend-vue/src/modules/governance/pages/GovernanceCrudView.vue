@@ -70,7 +70,7 @@
               </div>
             </td>
           </tr>
-          <tr v-if="showEmptyState">
+          <tr v-if="showEmptyState" class="table-empty-row">
             <td :colspan="emptyColspan" class="governance-empty-state-cell">
               <GovernanceEmptyState
                 :title="emptyStateTitle"
@@ -81,7 +81,7 @@
               />
             </td>
           </tr>
-          <tr v-else-if="filteredRows.length === 0">
+          <tr v-else-if="filteredRows.length === 0" class="table-empty-row">
             <td :colspan="emptyColspan" class="governance-empty-cell">{{ t('governance.empty_filter') }}</td>
           </tr>
         </tbody>

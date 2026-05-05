@@ -31,6 +31,8 @@ assert.match(pageFrame, /\.admin-page-frame-head,[\s\S]*?\.admin-page-frame-tool
 assert.match(pageFrame, /\.admin-page-frame-footer[\s\S]*?background:\s*transparent;/, 'admin footer must not create a surface band around pagination');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
 assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');
+assert.match(workspaceStyles, /tbody tr:not\(\.table-empty-row\):hover/, 'table hover must not target empty placeholder rows');
+assert.match(workspaceStyles, /tbody tr\.table-empty-row,[\s\S]*?tbody tr\.table-empty-row:hover[\s\S]*?background:\s*transparent;/, 'empty placeholder rows must not paint a hover surface');
 assert.match(responsiveStyles, /\.shell\.tablet-mode:not\(\.call-workspace-mode\)[\s\S]*?overflow:\s*hidden;/, 'non-call tablet shell must keep page scroll out of the document');
 assert.match(responsiveStyles, /\.shell\.mobile-mode:not\(\.call-workspace-mode\)[\s\S]*?overflow:\s*hidden;/, 'non-call mobile shell must keep page scroll out of the document');
 

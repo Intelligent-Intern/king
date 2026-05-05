@@ -59,6 +59,10 @@
   padding: 0;
 }
 
+.governance-table tbody tr.table-empty-row {
+  background: transparent;
+}
+
 .governance-empty-state {
   min-height: 100%;
   display: grid;
@@ -165,6 +169,12 @@
     border-radius: 8px;
     overflow: hidden;
     background: var(--bg-row);
+  }
+
+  .governance-table tbody tr.table-empty-row {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .governance-table td {

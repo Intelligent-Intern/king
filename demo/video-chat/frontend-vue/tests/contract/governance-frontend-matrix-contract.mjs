@@ -79,6 +79,7 @@ assert.match(governanceCrudSource, /rowsByScope/, 'governance CRUD must keep rou
 assert.match(governanceCrudSource, /routeActionsForContext/, 'governance CRUD must use permission-filtered route actions');
 assert.match(governanceCrudSource, /GovernanceCrudToolbar/, 'governance CRUD must use the standard toolbar component');
 assert.match(governanceCrudSource, /GovernanceEmptyState/, 'governance CRUD must render the standard empty state');
+assert.match(governanceCrudSource, /class="table-empty-row"/, 'governance empty placeholders must opt out of table hover styling');
 assert.match(governanceToolbarSource, /icons\/send\.png/, 'governance toolbar submit must use the shared send icon');
 assert.match(governanceToolbarSource, /governance\.filter\.all_status/, 'governance toolbar must expose status filtering');
 assert.match(governanceToolbarSource, /governance\.filter\.all_scope/, 'governance toolbar must expose scope filtering');
