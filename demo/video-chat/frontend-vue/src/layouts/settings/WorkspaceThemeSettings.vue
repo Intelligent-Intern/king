@@ -1,10 +1,10 @@
 <template>
   <section class="settings-theme-settings">
     <section v-if="!props.managementOnly && !editor.open" class="settings-section">
-      <h4>Theme</h4>
-      <p>Choose one of the saved workspace themes.</p>
+      <h4>{{ t('theme_settings.title') }}</h4>
+      <p>{{ t('theme_settings.description') }}</p>
       <label class="settings-field">
-        <span>Workspace theme</span>
+        <span>{{ t('theme_settings.workspace_theme') }}</span>
         <AppSelect v-model="selectedTheme">
           <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
             {{ theme.label }}
@@ -15,9 +15,9 @@
 
     <section v-if="!props.selectionOnly && canEditThemes" class="settings-section settings-theme-crud">
       <header v-if="!editor.open" class="settings-subhead">
-        <h5>Theme Management</h5>
+        <h5>{{ t('theme_settings.management_title') }}</h5>
         <button class="btn" type="button" :disabled="state.saving" @click="startCreateTheme">
-          New theme
+          {{ t('theme_settings.new_theme') }}
         </button>
       </header>
 
@@ -27,7 +27,7 @@
       <template v-if="editor.open">
         <section class="settings-theme-editor">
           <header class="settings-theme-wizard-head">
-            <div class="settings-wizard-steps" aria-label="Theme editor steps">
+            <div class="settings-wizard-steps" :aria-label="t('theme_settings.wizard_steps')">
               <button
                 class="settings-wizard-step"
                 type="button"
@@ -35,7 +35,7 @@
                 @click="editor.step = 'logos'"
               >
                 <span>1</span>
-                <strong>Logos</strong>
+                <strong>{{ t('theme_settings.logos') }}</strong>
               </button>
               <button
                 class="settings-wizard-step"
@@ -44,7 +44,7 @@
                 @click="editor.step = 'colors'"
               >
                 <span>2</span>
-                <strong>Theme</strong>
+                <strong>{{ t('theme_settings.theme') }}</strong>
               </button>
             </div>
           </header>
@@ -53,35 +53,47 @@
             <template v-if="canManageBranding">
               <section class="settings-logo-grid">
                 <article class="settings-logo-card">
-                  <span>Left sidebar logo</span>
+                  <span>{{ t('theme_settings.left_sidebar_logo') }}</span>
                   <img class="settings-logo-preview" :src="sidebarLogoPreview" alt="" />
-                  <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="selectLogo($event, 'sidebar')" />
+                  <input
+                    class="input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    :aria-label="t('theme_settings.left_sidebar_logo')"
+                    @change="selectLogo($event, 'sidebar')"
+                  />
                   <div class="settings-logo-actions">
-                    <button class="btn" type="button" @click="keepLogo('sidebar')">Keep</button>
-                    <button class="btn" type="button" @click="resetLogo('sidebar')">Default</button>
+                    <button class="btn" type="button" @click="keepLogo('sidebar')">{{ t('theme_settings.keep') }}</button>
+                    <button class="btn" type="button" @click="resetLogo('sidebar')">{{ t('theme_settings.default') }}</button>
                   </div>
                 </article>
 
                 <article class="settings-logo-card">
-                  <span>Modal logo</span>
+                  <span>{{ t('theme_settings.modal_logo') }}</span>
                   <img class="settings-logo-preview" :src="modalLogoPreview" alt="" />
-                  <input class="input" type="file" accept="image/png,image/jpeg,image/webp" @change="selectLogo($event, 'modal')" />
+                  <input
+                    class="input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    :aria-label="t('theme_settings.modal_logo')"
+                    @change="selectLogo($event, 'modal')"
+                  />
                   <div class="settings-logo-actions">
-                    <button class="btn" type="button" @click="keepLogo('modal')">Keep</button>
-                    <button class="btn" type="button" @click="resetLogo('modal')">Default</button>
+                    <button class="btn" type="button" @click="keepLogo('modal')">{{ t('theme_settings.keep') }}</button>
+                    <button class="btn" type="button" @click="resetLogo('modal')">{{ t('theme_settings.default') }}</button>
                   </div>
                 </article>
               </section>
             </template>
             <section v-else class="settings-upload-status">
-              Branding logos are managed by the primary admin account.
+              {{ t('theme_settings.branding_superadmin_only') }}
             </section>
             <footer class="settings-theme-editor-actions">
               <button class="btn" type="button" :disabled="state.saving" @click="cancelEditor">
-                Cancel
+                {{ t('common.cancel') }}
               </button>
               <button class="btn" type="button" :disabled="state.saving" @click="editor.step = 'colors'">
-                Next
+                {{ t('theme_settings.next') }}
               </button>
             </footer>
           </section>
@@ -91,11 +103,11 @@
               <section class="settings-theme-palette-panel">
                 <section class="settings-row">
                   <label class="settings-field">
-                    <span>Theme name</span>
+                    <span>{{ t('theme_settings.theme_name') }}</span>
                     <input v-model.trim="editor.label" class="input" type="text" />
                   </label>
                   <label class="settings-field">
-                    <span>Base palette</span>
+                    <span>{{ t('theme_settings.base_palette') }}</span>
                     <AppSelect v-model="editor.baseThemeId" @update:model-value="loadBasePalette">
                       <option v-for="theme in themeOptions" :key="theme.id" :value="theme.id">
                         {{ theme.label }}
@@ -105,8 +117,8 @@
                 </section>
 
                 <section class="settings-theme-admin-actions">
-                  <button class="btn" type="button" @click="loadSystemDefault('dark')">Load dark default</button>
-                  <button class="btn" type="button" @click="loadSystemDefault('light')">Load light default</button>
+                  <button class="btn" type="button" @click="loadSystemDefault('dark')">{{ t('theme_settings.load_dark_default') }}</button>
+                  <button class="btn" type="button" @click="loadSystemDefault('light')">{{ t('theme_settings.load_light_default') }}</button>
                 </section>
 
                 <section class="settings-theme-color-list">
@@ -138,10 +150,10 @@
 
             <footer class="settings-theme-editor-actions">
               <button class="btn" type="button" :disabled="state.saving" @click="editor.step = 'logos'">
-                Back
+                {{ t('theme_settings.back') }}
               </button>
               <button class="btn" type="button" :disabled="state.saving" @click="saveTheme">
-                {{ state.saving ? 'Saving...' : 'Save theme' }}
+                {{ state.saving ? t('settings.saving') : t('theme_settings.save_theme') }}
               </button>
             </footer>
           </section>
@@ -163,18 +175,24 @@
               ></span>
             </div>
             <span class="tag" :class="theme.isSystem ? 'ok' : 'warn'">
-              {{ theme.isSystem ? 'system' : 'custom' }}
+              {{ theme.isSystem ? t('theme_settings.system') : t('theme_settings.custom') }}
             </span>
             <div class="actions-inline">
-              <button class="icon-mini-btn" type="button" title="Edit theme" aria-label="Edit theme" @click="startEditTheme(theme)">
+              <button
+                class="icon-mini-btn"
+                type="button"
+                :title="t('theme_settings.edit_theme')"
+                :aria-label="t('theme_settings.edit_theme')"
+                @click="startEditTheme(theme)"
+              >
                 <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
               </button>
               <button
                 v-if="!theme.isSystem"
                 class="icon-mini-btn danger"
                 type="button"
-                title="Delete theme"
-                aria-label="Delete theme"
+                :title="t('theme_settings.delete_theme')"
+                :aria-label="t('theme_settings.delete_theme')"
                 :disabled="state.deletingId === theme.id"
                 @click="deleteTheme(theme.id)"
               >
@@ -190,18 +208,20 @@
               class="pager-btn pager-icon-btn"
               type="button"
               :disabled="themePage <= 1"
+              :aria-label="t('pagination.previous')"
               @click="themePage -= 1"
             >
-              <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
+              <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" :alt="t('pagination.previous')" />
             </button>
-            <div class="page-info">Page {{ themePage }} / {{ themePageCount }}</div>
+            <div class="page-info">{{ t('pagination.page_short', { page: themePage, pageCount: themePageCount }) }}</div>
             <button
               class="pager-btn pager-icon-btn"
               type="button"
               :disabled="themePage >= themePageCount"
+              :aria-label="t('pagination.next')"
               @click="themePage += 1"
             >
-              <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
+              <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" :alt="t('pagination.next')" />
             </button>
           </div>
         </footer>
@@ -211,51 +231,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
 import AppSelect from '../../components/AppSelect.vue';
-import { sessionState } from '../../domain/auth/session';
-import { deleteWorkspaceTheme, saveWorkspaceAdministration } from '../../domain/workspace/administrationApi';
-import { appearanceState, applyAppearancePayload, loadWorkspaceAppearance } from '../../domain/workspace/appearance';
+import { t } from '../../modules/localization/i18nRuntime.js';
 import WorkspaceThemePreview from './WorkspaceThemePreview.vue';
-
-const DEFAULT_LOGO = '/assets/orgas/kingrt/logo.svg';
-const PAGE_SIZE = 5;
-const themeColorFields = Object.freeze([
-  { key: '--bg-shell', label: 'Shell background', default: '#09111e' },
-  { key: '--bg-pane', label: 'Pane background', default: '#182c4d' },
-  { key: '--brand-bg', label: 'Brand strip', default: '#09111e' },
-  { key: '--bg-surface', label: 'Surface', default: '#003c93' },
-  { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
-  { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
-  { key: '--bg-action', label: 'Action', default: '#0b1324' },
-  { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
-  { key: '--bg-row', label: 'Row', default: '#2a569f' },
-  { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },
-  { key: '--line', label: 'Line', default: '#09111e' },
-  { key: '--text-main', label: 'Text main', default: '#edf3ff' },
-  { key: '--text-muted', label: 'Text muted', default: '#8490a1' },
-  { key: '--ok', label: 'OK', default: '#177f22' },
-  { key: '--wait', label: 'Wait', default: '#8d9500' },
-  { key: '--danger', label: 'Danger', default: '#ff0000' },
-  { key: '--bg-sidebar', label: 'Sidebar', default: '#09111e' },
-  { key: '--bg-main', label: 'Main', default: '#182c4d' },
-  { key: '--bg-tab', label: 'Tab', default: '#003c93' },
-  { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
-  { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
-  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#3d5f98' },
-  { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
-  { key: '--bg-icon', label: 'Icon background', default: '#162e51' },
-  { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
-  { key: '--border-subtle', label: 'Border subtle', default: '#09111e' },
-  { key: '--text-primary', label: 'Text primary', default: '#edf3ff' },
-  { key: '--text-secondary', label: 'Text secondary', default: '#c6d4eb' },
-  { key: '--text-dim', label: 'Text dim', default: '#5e6d86' },
-  { key: '--warn', label: 'Warn', default: '#4d5011' },
-  { key: '--brand-cyan', label: 'Brand cyan', default: '#1482be' },
-  { key: '--brand-cyan-hover', label: 'Brand cyan hover', default: '#1a96d8' },
-  { key: '--brand-cyan-active', label: 'Brand cyan active', default: '#0f6ea8' },
-]);
-const previewColorFields = themeColorFields.slice(0, 6);
+import { useWorkspaceThemeSettings } from './useWorkspaceThemeSettings.js';
 
 const props = defineProps({
   modelValue: {
@@ -277,275 +256,32 @@ const props = defineProps({
 });
 const emit = defineEmits(['update:modelValue']);
 
-const state = reactive({
-  saving: false,
-  deletingId: '',
-  error: '',
-  notice: '',
-});
-const editor = reactive({
-  open: false,
-  step: 'logos',
-  createNew: false,
-  id: '',
-  label: '',
-  baseThemeId: 'dark',
-  colors: {},
-  sidebarLogoDataUrl: '',
-  sidebarLogoReset: false,
-  modalLogoDataUrl: '',
-  modalLogoReset: false,
-});
-const themePage = ref(1);
-
-const selectedTheme = computed({
-  get: () => props.modelValue || themeOptions.value[0]?.id || 'dark',
-  set: (value) => emit('update:modelValue', normalizeThemeId(value)),
-});
-const canEditThemes = computed(() => sessionState.role === 'admin' || sessionState.canEditThemes === true);
-const canManageBranding = computed(() => Number(sessionState.userId || 0) === 1);
-const fallbackThemes = computed(() => ([
-  { id: 'dark', label: 'Dark', colors: defaultColors(), isSystem: true },
-  { id: 'light', label: 'Light', colors: defaultColors('light'), isSystem: true },
-]));
-const themeOptions = computed(() => (
-  appearanceState.themes.length > 0 ? appearanceState.themes : fallbackThemes.value
-));
-const themePageCount = computed(() => Math.max(1, Math.ceil(themeOptions.value.length / PAGE_SIZE)));
-const pagedThemes = computed(() => {
-  const currentPage = Math.max(1, Math.min(themePage.value, themePageCount.value));
-  const start = (currentPage - 1) * PAGE_SIZE;
-  return themeOptions.value.slice(start, start + PAGE_SIZE);
-});
-const sidebarLogoPreview = computed(() => (
-  editor.sidebarLogoReset ? DEFAULT_LOGO : (editor.sidebarLogoDataUrl || appearanceState.sidebarLogoPath || DEFAULT_LOGO)
-));
-const modalLogoPreview = computed(() => (
-  editor.modalLogoReset ? DEFAULT_LOGO : (editor.modalLogoDataUrl || appearanceState.modalLogoPath || DEFAULT_LOGO)
-));
-
-watch(themePageCount, () => {
-  themePage.value = Math.max(1, Math.min(themePage.value, themePageCount.value));
-});
-
-function defaultColors(themeId = 'dark') {
-  const lightOverrides = {
-    '--bg-shell': '#eff4fb',
-    '--bg-pane': '#dce8f6',
-    '--brand-bg': '#e8eff8',
-    '--bg-surface': '#f4f8fd',
-    '--bg-surface-strong': '#ffffff',
-    '--bg-input': '#ffffff',
-    '--text-main': '#122035',
-    '--text-muted': '#5a6780',
-    '--bg-sidebar': '#e8eff8',
-    '--bg-main': '#dce8f6',
-    '--text-primary': '#122035',
-    '--text-secondary': '#33425d',
-    '--text-dim': '#6d7d96',
-  };
-  const colors = {};
-  for (const field of themeColorFields) {
-    colors[field.key] = themeId === 'light' && lightOverrides[field.key] ? lightOverrides[field.key] : field.default;
-  }
-  return colors;
-}
-
-function normalizeThemeId(value) {
-  const candidate = String(value || '').trim();
-  return themeOptions.value.some((theme) => theme.id === candidate) ? candidate : themeOptions.value[0]?.id || 'dark';
-}
-
-function normalizeHex(value, fallback = '#000000') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
-  if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;
-  if (/^#[a-f0-9]{3}$/.test(normalized)) {
-    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
-  }
-  return fallback;
-}
-
-function patchColors(source = {}) {
-  for (const field of themeColorFields) {
-    editor.colors[field.key] = normalizeHex(source[field.key], field.default);
-  }
-}
-
-function startCreateTheme() {
-  state.error = '';
-  state.notice = '';
-  editor.open = true;
-  editor.step = 'logos';
-  editor.createNew = true;
-  editor.id = '';
-  editor.label = 'Custom theme';
-  editor.baseThemeId = selectedTheme.value || 'dark';
-  editor.sidebarLogoDataUrl = '';
-  editor.sidebarLogoReset = false;
-  editor.modalLogoDataUrl = '';
-  editor.modalLogoReset = false;
-  const baseTheme = themeOptions.value.find((theme) => theme.id === editor.baseThemeId) || themeOptions.value[0];
-  patchColors(baseTheme?.colors || defaultColors());
-}
-
-function startEditTheme(theme) {
-  state.error = '';
-  state.notice = '';
-  editor.open = true;
-  editor.step = 'logos';
-  editor.createNew = false;
-  editor.id = String(theme?.id || '');
-  editor.label = String(theme?.label || editor.id || 'Theme');
-  editor.baseThemeId = editor.id || 'dark';
-  editor.sidebarLogoDataUrl = '';
-  editor.sidebarLogoReset = false;
-  editor.modalLogoDataUrl = '';
-  editor.modalLogoReset = false;
-  patchColors(theme?.colors || defaultColors(editor.baseThemeId));
-}
-
-function cancelEditor() {
-  if (state.saving) return;
-  editor.open = false;
-  editor.step = 'logos';
-  state.error = '';
-}
-
-function loadBasePalette(themeId) {
-  const theme = themeOptions.value.find((entry) => entry.id === themeId);
-  patchColors(theme?.colors || defaultColors(themeId));
-}
-
-function loadSystemDefault(themeId) {
-  patchColors(defaultColors(themeId));
-}
-
-function updateThemeColor(key, value) {
-  const field = themeColorFields.find((entry) => entry.key === key);
-  if (!field) return;
-  editor.colors[key] = normalizeHex(value, editor.colors[key] || field.default);
-}
-
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(new Error('Could not read image file.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function selectLogo(event, kind) {
-  const file = event?.target?.files?.[0] || null;
-  if (!file) return;
-  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-    state.error = 'Logo must be PNG, JPEG, or WEBP.';
-    return;
-  }
-  const dataUrl = await readFileAsDataUrl(file);
-  if (kind === 'modal') {
-    editor.modalLogoDataUrl = dataUrl;
-    editor.modalLogoReset = false;
-  } else {
-    editor.sidebarLogoDataUrl = dataUrl;
-    editor.sidebarLogoReset = false;
-  }
-}
-
-function keepLogo(kind) {
-  if (kind === 'modal') {
-    editor.modalLogoDataUrl = '';
-    editor.modalLogoReset = false;
-  } else {
-    editor.sidebarLogoDataUrl = '';
-    editor.sidebarLogoReset = false;
-  }
-}
-
-function resetLogo(kind) {
-  if (kind === 'modal') {
-    editor.modalLogoDataUrl = '';
-    editor.modalLogoReset = true;
-  } else {
-    editor.sidebarLogoDataUrl = '';
-    editor.sidebarLogoReset = true;
-  }
-}
-
-async function saveTheme() {
-  if (state.saving) return;
-  state.error = '';
-  state.notice = '';
-  if (String(editor.label || '').trim() === '') {
-    state.error = 'Theme name is required.';
-    return;
-  }
-  state.saving = true;
-  try {
-    const payload = {
-      theme: {
-        id: editor.id,
-        label: editor.label,
-        colors: editor.colors,
-        create_new: editor.createNew,
-        base_theme: editor.baseThemeId || 'dark',
-      },
-    };
-    if (canManageBranding.value) {
-      if (editor.sidebarLogoDataUrl) payload.sidebar_logo_data_url = editor.sidebarLogoDataUrl;
-      if (editor.modalLogoDataUrl) payload.modal_logo_data_url = editor.modalLogoDataUrl;
-      if (editor.sidebarLogoReset) payload.sidebar_logo_reset = true;
-      if (editor.modalLogoReset) payload.modal_logo_reset = true;
-    }
-
-    const result = await saveWorkspaceAdministration(payload);
-    if (result.appearance) {
-      applyAppearancePayload(result.appearance);
-    } else {
-      await loadWorkspaceAppearance({ force: true });
-    }
-    const savedThemeId = String(result.saved_theme?.id || editor.id || '').trim();
-    if (savedThemeId !== '') {
-      emit('update:modelValue', savedThemeId);
-    }
-    editor.open = false;
-    state.notice = 'Theme saved.';
-  } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not save theme.';
-  } finally {
-    state.saving = false;
-  }
-}
-
-async function deleteTheme(themeId) {
-  if (state.deletingId) return;
-  const id = String(themeId || '').trim();
-  if (id === '') return;
-  state.error = '';
-  state.notice = '';
-  state.deletingId = id;
-  try {
-    const result = await deleteWorkspaceTheme(id);
-    if (result.appearance) {
-      applyAppearancePayload(result.appearance);
-    } else {
-      await loadWorkspaceAppearance({ force: true });
-    }
-    if (selectedTheme.value === id) {
-      emit('update:modelValue', 'dark');
-    }
-    state.notice = 'Theme deleted.';
-  } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not delete theme.';
-  } finally {
-    state.deletingId = '';
-  }
-}
-
-onMounted(() => {
-  void loadWorkspaceAppearance({ force: true });
-});
+const {
+  state,
+  editor,
+  themePage,
+  themeColorFields,
+  previewColorFields,
+  selectedTheme,
+  canEditThemes,
+  canManageBranding,
+  themeOptions,
+  themePageCount,
+  pagedThemes,
+  sidebarLogoPreview,
+  modalLogoPreview,
+  startCreateTheme,
+  startEditTheme,
+  cancelEditor,
+  loadBasePalette,
+  loadSystemDefault,
+  updateThemeColor,
+  selectLogo,
+  keepLogo,
+  resetLogo,
+  saveTheme,
+  deleteTheme,
+} = useWorkspaceThemeSettings({ props, emit, t });
 </script>
 
 <style scoped>
