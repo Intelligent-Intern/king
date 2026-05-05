@@ -127,10 +127,14 @@ function normalizeTourMetadata(route = {}, actions = []) {
           const stepSource = step && typeof step === 'object' ? step : {};
           return {
             key: normalizeString(stepSource.key) || `step-${index + 1}`,
+            selector: normalizeString(stepSource.selector || stepSource.element),
             title: normalizeString(stepSource.title),
             title_key: normalizeString(stepSource.title_key),
             body: normalizeString(stepSource.body),
             body_key: normalizeString(stepSource.body_key),
+            side: normalizeString(stepSource.side),
+            align: normalizeString(stepSource.align),
+            disable_active_interaction: stepSource.disable_active_interaction !== false,
           };
         })
         .filter((step) => step.title !== '' || step.title_key !== '' || step.body !== '' || step.body_key !== '')

@@ -417,6 +417,20 @@ async function expectRolesEmptyState(page) {
   await expect(page.locator('.governance-modal-dialog').filter({ visible: true }).first()).toBeVisible();
 }
 
+async function expectRolesGuidedTour(page) {
+  await page.goto('/admin/governance/roles');
+  await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Take the tour' }).click();
+  const popover = page.locator('.driver-popover.kingrt-tour-popover');
+  await expect(popover).toBeVisible();
+  await expect(popover.locator('.driver-popover-title')).toHaveText('Page header');
+  await expect(page.locator('.driver-active-element')).toHaveCount(1);
+
+  await popover.getByRole('button', { name: 'Next' }).click();
+  await expect(popover.locator('.driver-popover-title')).toHaveText('Actions');
+}
+
 for (const scenario of [
   { name: 'desktop', viewport: { width: 1366, height: 900 } },
   { name: 'tablet', viewport: { width: 900, height: 700 } },
@@ -517,3 +531,11 @@ for (const scenario of [
     await expectRolesEmptyState(page);
   });
 }
+
+test('governance roles take a tour highlights page areas on desktop', async ({ page }) => {
+  const requestLog = [];
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await seedAuthenticatedAdmin(page, requestLog);
+
+  await expectRolesGuidedTour(page);
+});
