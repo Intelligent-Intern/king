@@ -87,6 +87,43 @@ function formatDateParts(date, format) {
   }
 }
 
+function localizedInteger(value, locale, minimumIntegerDigits = 2) {
+  return new Intl.NumberFormat(locale, {
+    minimumIntegerDigits,
+    useGrouping: false,
+  }).format(value);
+}
+
+function formatLocalizedDateParts(date, format, locale) {
+  const year = localizedInteger(date.getFullYear(), locale, 4);
+  const month = localizedInteger(date.getMonth() + 1, locale, 2);
+  const day = localizedInteger(date.getDate(), locale, 2);
+
+  switch (format) {
+    case 'dmy_slash':
+      return `${day}/${month}/${year}`;
+    case 'dmy_dash':
+      return `${day}-${month}-${year}`;
+    case 'ymd_dash':
+      return `${year}-${month}-${day}`;
+    case 'ymd_slash':
+      return `${year}/${month}/${day}`;
+    case 'ymd_dot':
+      return `${year}.${month}.${day}`;
+    case 'ymd_compact':
+      return `${year}${month}${day}`;
+    case 'mdy_slash':
+      return `${month}/${day}/${year}`;
+    case 'mdy_dash':
+      return `${month}-${day}-${year}`;
+    case 'mdy_dot':
+      return `${month}.${day}.${year}`;
+    case 'dmy_dot':
+    default:
+      return `${day}.${month}.${year}`;
+  }
+}
+
 function formatTimeParts(date, format) {
   const minutes = pad2(date.getMinutes());
   const normalizedTimeFormat = normalizeTimeFormat(format);
@@ -129,15 +166,15 @@ export function formatLocalizedDateTimeDisplay(value, options = {}) {
     return typeof value === 'string' && value.trim() !== '' ? value : fallback;
   }
 
+  const locale = normalizeDateTimeLocale(options.locale);
   try {
-    return new Intl.DateTimeFormat(normalizeDateTimeLocale(options.locale), {
-      year: 'numeric',
-      month: 'short',
-      day: '2-digit',
+    const dateDisplay = formatLocalizedDateParts(date, normalizeDateFormat(options.dateFormat), locale);
+    const timeDisplay = new Intl.DateTimeFormat(locale, {
       hour: '2-digit',
       minute: '2-digit',
       hour12: normalizeTimeFormat(options.timeFormat) === '12h',
     }).format(date);
+    return `${dateDisplay} ${timeDisplay}`;
   } catch {
     return formatDateTimeDisplay(value, options);
   }
