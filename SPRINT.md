@@ -288,6 +288,9 @@ Sprint goal:
    - Existing tenant permission aliases now map to granular action keys for
      user CRUD and Governance groups, organizations, grants, audit log,
      compliance, roles, policies, and data portability.
+   - User Management now renders through `AdminPageFrame` and its table through
+     `AdminTableFrame`, removing its local duplicate header/toolbar/footer
+     frame CSS while preserving the shared `?` tour/header behavior.
 
 3. [x] [governance-crud-descriptors] Replace the placeholder governance CRUD
    logic with entity-specific CRUD descriptors for users, groups,

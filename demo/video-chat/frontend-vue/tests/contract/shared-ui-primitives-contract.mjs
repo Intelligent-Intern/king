@@ -41,7 +41,7 @@ try {
 
   assert.match(chatArchive, /<AppModalShell/, 'chat archive modal must stay on the shared modal shell');
   assert.match(adminUserEditor, /<AppModalShell/, 'admin user editor modal must stay on the shared modal shell');
-  assert.match(adminUsers, /<AppPageHeader/, 'admin user management must stay on the shared page header');
+  assert.match(adminUsers, /<AdminPageFrame/, 'admin user management must stay on the shared admin page frame');
 
   process.stdout.write('[shared-ui-primitives-contract] PASS\n');
 } catch (error) {

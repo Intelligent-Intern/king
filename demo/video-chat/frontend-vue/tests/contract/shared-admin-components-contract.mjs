@@ -12,6 +12,8 @@ const pageFrame = await source('src/components/admin/AdminPageFrame.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
 const governance = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
+const users = await source('src/modules/users/pages/admin/UsersView.vue');
+const usersTable = await source('src/modules/users/pages/components/UsersTable.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 
 assert.match(pageFrame, /AppPageHeader/, 'shared admin page frame must own the page header');
@@ -21,10 +23,18 @@ assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own
 for (const [name, file] of [
   ['GovernanceCrudView', governance],
   ['AdministrationLocalizationView', localization],
+  ['UsersView', users],
 ]) {
   assert.match(file, /AdminPageFrame/, `${name} must use the shared admin page frame`);
-  assert.match(file, /AdminTableFrame/, `${name} must use the shared admin table frame`);
   assert.doesNotMatch(file, /import AppPageHeader/, `${name} must not import page header directly`);
+}
+
+for (const [name, file] of [
+  ['GovernanceCrudView', governance],
+  ['AdministrationLocalizationView', localization],
+  ['UsersTable', usersTable],
+]) {
+  assert.match(file, /AdminTableFrame/, `${name} must use the shared admin table frame`);
 }
 
 assert.match(governanceModal, /AppModalShell/, 'governance CRUD modal must use the shared modal shell');

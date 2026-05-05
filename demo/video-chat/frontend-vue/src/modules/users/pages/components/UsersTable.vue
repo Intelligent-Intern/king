@@ -1,5 +1,5 @@
 <template>
-  <section class="table-wrap users-table-wrap">
+  <AdminTableFrame class="users-table-wrap">
     <table class="users-table">
       <thead>
         <tr>
@@ -55,11 +55,12 @@
         </tr>
       </tbody>
     </table>
-  </section>
+  </AdminTableFrame>
 </template>
 
 <script setup>
 import AppIconButton from '../../../../components/AppIconButton.vue';
+import AdminTableFrame from '../../../../components/admin/AdminTableFrame.vue';
 import { sessionState } from '../../../../domain/auth/session';
 import { formatLocalizedDateTimeDisplay } from '../../../../support/dateTimeFormat';
 import { t } from '../../../localization/i18nRuntime.js';
