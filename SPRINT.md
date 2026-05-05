@@ -283,6 +283,11 @@ Sprint goal:
    - Readonly/no-create routes such as modules, permissions, audit log, and
      data portability no longer expose the wrong visible create button through
      `GovernanceCrudView.vue`.
+   - Route actions are filtered through a shared helper and the current session
+     permission context before Governance renders create actions.
+   - Existing tenant permission aliases now map to granular action keys for
+     user CRUD and Governance groups, organizations, grants, audit log,
+     compliance, roles, policies, and data portability.
 
 3. [ ] [governance-crud-descriptors] Replace the placeholder governance CRUD
    logic with entity-specific CRUD descriptors for users, groups,

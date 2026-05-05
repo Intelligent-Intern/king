@@ -3,6 +3,11 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ENGLISH_MESSAGES } from '../../src/modules/localization/englishMessages.js';
 import { workspaceModuleRouteRecords } from '../../src/modules/index.js';
+import {
+  firstRouteActionByKind,
+  routeActionLabel,
+  routeActionsForContext,
+} from '../../src/modules/routeActions.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const ACTION_KINDS = new Set(['create', 'edit', 'delete', 'import', 'export', 'configure', 'inspect', 'tour', 'custom']);
@@ -65,6 +70,27 @@ assert.ok(
   'grants route must describe grant creation explicitly',
 );
 
+const groupsRoute = routeByName('admin-governance-groups');
+assert.equal(
+  firstRouteActionByKind(routeActionsForContext(groupsRoute, { role: 'admin', permissions: ['governance.read'] }), 'create'),
+  null,
+  'governance read permission must not expose group creation',
+);
+const groupCreateAction = firstRouteActionByKind(
+  routeActionsForContext(groupsRoute, { role: 'admin', permissions: ['governance.read', 'governance.groups.create'] }),
+  'create',
+);
+assert.ok(groupCreateAction, 'governance groups create permission must expose group creation');
+assert.equal(
+  routeActionLabel(groupCreateAction, (key) => ENGLISH_MESSAGES[key] || key, ''),
+  'Create group',
+  'route action labels must resolve through i18n keys',
+);
+assert.ok(
+  firstRouteActionByKind(routeActionsForContext(groupsRoute, { role: 'admin', allPermissions: true }), 'create'),
+  'platform admin context must expose group creation',
+);
+
 for (const name of ['admin-governance-modules', 'admin-governance-permissions']) {
   const record = routeByName(name);
   assert.equal(actionKinds(record).has('create'), false, `${name} must not offer create for system catalog rows`);
@@ -108,7 +134,8 @@ assert.match(navigationBuilderSource, /routeActionMetadata/, 'route action metad
 assert.match(navigationBuilderSource, /meta:[\s\S]*actions,/, 'generated route records must expose actions in route meta');
 
 const governanceCrudSource = await readFile(path.join(root, 'src/modules/governance/pages/GovernanceCrudView.vue'), 'utf8');
-assert.match(governanceCrudSource, /route\.meta\?\.actions/, 'governance CRUD must read descriptor route actions');
+assert.match(governanceCrudSource, /routeActionsForContext/, 'governance CRUD must read descriptor route actions through the shared action helper');
+assert.match(governanceCrudSource, /moduleAccessContextFromSession/, 'governance CRUD must filter actions through session permissions');
 assert.match(governanceCrudSource, /createAction/, 'governance CRUD must derive create visibility from route actions');
 assert.doesNotMatch(
   governanceCrudSource,

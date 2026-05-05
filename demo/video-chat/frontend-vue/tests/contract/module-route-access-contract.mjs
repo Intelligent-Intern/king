@@ -42,8 +42,20 @@ assert.equal(
 
 assert.deepEqual(
   sessionPermissionKeys({ manage_users: true, edit_themes: true }),
-  ['edit_themes', 'manage_users', 'theme_editor.admin', 'users.read'],
+  ['edit_themes', 'manage_users', 'theme_editor.admin', 'users.create', 'users.delete', 'users.read', 'users.update'],
   'tenant permission aliases must map to module permission keys',
+);
+assert.deepEqual(
+  sessionPermissionKeys({ manage_groups: true, export_import: true }),
+  [
+    'export_import',
+    'governance.data_portability.export',
+    'governance.data_portability.import',
+    'governance.groups.create',
+    'governance.read',
+    'manage_groups',
+  ],
+  'tenant governance aliases must map to granular governance action keys',
 );
 assert.deepEqual(
   moduleAccessContextFromSession({ role: 'admin', tenantPermissions: {} }),
