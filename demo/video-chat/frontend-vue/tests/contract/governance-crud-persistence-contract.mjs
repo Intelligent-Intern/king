@@ -19,9 +19,11 @@ async function source(relativePath) {
 assert.equal(isPersistedGovernanceEntity('groups'), true, 'groups must be treated as backend-backed');
 assert.equal(isPersistedGovernanceEntity('organizations'), true, 'organizations must be treated as backend-backed');
 assert.equal(isPersistedGovernanceEntity('grants'), true, 'grants must be treated as backend-backed');
+assert.equal(isPersistedGovernanceEntity('data-portability'), true, 'data portability jobs must be treated as backend-backed');
 assert.equal(isPersistedGovernanceEntity('roles'), false, 'roles must remain local until their backend API exists');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.groups.endpoint, '/api/governance/groups', 'groups must target the governance backend endpoint');
 assert.equal(GOVERNANCE_CRUD_DESCRIPTORS.organizations.endpoint, '/api/governance/organizations', 'organizations must target the governance backend endpoint');
+assert.equal(GOVERNANCE_CRUD_DESCRIPTORS['data-portability'].endpoint, '/api/governance/data-portability-jobs', 'data portability must target the governance backend endpoint');
 
 const normalized = normalizeGovernanceCrudRow({
   id: '00000000-0000-4000-8000-000000000301',

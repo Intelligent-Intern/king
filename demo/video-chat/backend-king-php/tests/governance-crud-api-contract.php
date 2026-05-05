@@ -177,6 +177,51 @@ try {
     $clearedOrganizationMemberCount = (int) $pdo->query("SELECT COUNT(*) FROM organization_memberships INNER JOIN organizations ON organizations.id = organization_memberships.organization_id WHERE organizations.public_id = '{$createdOrganizationId}' AND organization_memberships.user_id = {$regularUserId} AND organization_memberships.status = 'active'")->fetchColumn();
     videochat_governance_crud_assert($clearedOrganizationMemberCount === 0, 'cleared organization user should no longer be active');
 
+    $createExportJob = $dispatch('POST', '/api/governance/data-portability-jobs', $adminAuth, [
+        'job_type' => 'export',
+        'relationships' => [
+            'organization' => [
+                ['entity_key' => 'organizations', 'id' => $createdOrganizationId],
+            ],
+        ],
+    ]);
+    $createExportJobPayload = videochat_governance_crud_decode($createExportJob);
+    $createdExportJob = (($createExportJobPayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createExportJob['status'] ?? 0) === 201, 'admin should create data portability export job');
+    videochat_governance_crud_assert(is_array($createdExportJob), 'created export job row missing');
+    videochat_governance_crud_assert((string) ($createdExportJob['job_type'] ?? '') === 'export', 'created export job type mismatch');
+    videochat_governance_crud_assert((string) ($createdExportJob['status'] ?? '') === 'completed', 'created export job should complete synchronously');
+    videochat_governance_crud_assert(
+        (string) (((($createdExportJob['relationships'] ?? [])['organization'] ?? [])[0] ?? [])['id'] ?? '') === $createdOrganizationId,
+        'created export job response should include selected organization summary'
+    );
+    $createdExportJobId = (string) ($createdExportJob['id'] ?? '');
+    videochat_governance_crud_assert($createdExportJobId !== '', 'created export job id missing');
+    $exportJobCount = (int) $pdo->query("SELECT COUNT(*) FROM tenant_export_jobs WHERE tenant_id = {$tenantId} AND id = '{$createdExportJobId}'")->fetchColumn();
+    videochat_governance_crud_assert($exportJobCount === 1, 'created export job should be persisted');
+
+    $exportJobList = $dispatch('GET', '/api/governance/data-portability-jobs', $adminAuth);
+    $exportJobListPayload = videochat_governance_crud_decode($exportJobList);
+    $exportJobRows = (array) (($exportJobListPayload['result'] ?? [])['rows'] ?? []);
+    videochat_governance_crud_assert((int) ($exportJobList['status'] ?? 0) === 200, 'admin should list data portability jobs');
+    videochat_governance_crud_assert(
+        count(array_filter($exportJobRows, static fn ($row): bool => is_array($row) && (string) ($row['id'] ?? '') === $createdExportJobId)) === 1,
+        'data portability job list should include created export job'
+    );
+
+    $importCountBeforeValidation = (int) $pdo->query("SELECT COUNT(*) FROM tenant_import_jobs WHERE tenant_id = {$tenantId}")->fetchColumn();
+    $invalidImportJob = $dispatch('POST', '/api/governance/data-portability-jobs', $adminAuth, [
+        'job_type' => 'import',
+        'relationships' => [
+            'organization' => [
+                ['entity_key' => 'organizations', 'id' => $createdOrganizationId],
+            ],
+        ],
+    ]);
+    videochat_governance_crud_assert((int) ($invalidImportJob['status'] ?? 0) === 422, 'import job without bundle should fail validation');
+    $importCountAfterValidation = (int) $pdo->query("SELECT COUNT(*) FROM tenant_import_jobs WHERE tenant_id = {$tenantId}")->fetchColumn();
+    videochat_governance_crud_assert($importCountAfterValidation === $importCountBeforeValidation, 'invalid import request must not create a failed job row');
+
     $createGroup = $dispatch('POST', '/api/governance/groups', $adminAuth, [
         'name' => 'Contract Group',
         'status' => 'active',

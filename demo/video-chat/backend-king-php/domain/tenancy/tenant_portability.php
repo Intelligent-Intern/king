@@ -18,6 +18,8 @@ function videochat_tenant_export_bundle(PDO $pdo, int $tenantId, int $actorUserI
     $scopeType = in_array((string) ($options['scope_type'] ?? 'organization'), ['user', 'organization'], true)
         ? (string) $options['scope_type']
         : 'organization';
+    $scopeUserId = $scopeType === 'user' ? max(0, (int) ($options['scope_user_id'] ?? 0)) : 0;
+    $scopeOrganizationId = $scopeType === 'organization' ? max(0, (int) ($options['scope_organization_id'] ?? 0)) : 0;
     $jobId = videochat_tenant_portability_create_job_id();
     $now = gmdate('c');
     $tables = videochat_tenant_owned_table_names();
@@ -25,6 +27,8 @@ function videochat_tenant_export_bundle(PDO $pdo, int $tenantId, int $actorUserI
         'schema_version' => 'tenant-export.v1',
         'tenant_id' => $tenantId,
         'scope_type' => $scopeType,
+        'scope_user_id' => $scopeUserId > 0 ? $scopeUserId : null,
+        'scope_organization_id' => $scopeOrganizationId > 0 ? $scopeOrganizationId : null,
         'tables' => [],
         'generated_at' => $now,
     ];
@@ -40,8 +44,13 @@ function videochat_tenant_export_bundle(PDO $pdo, int $tenantId, int $actorUserI
 
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO tenant_export_jobs(id, tenant_id, actor_user_id, scope_type, schema_version, status, result_json, created_at, updated_at, completed_at)
-VALUES(:id, :tenant_id, :actor_user_id, :scope_type, :schema_version, 'completed', :result_json, :created_at, :updated_at, :completed_at)
+INSERT INTO tenant_export_jobs(
+    id, tenant_id, actor_user_id, scope_type, scope_user_id, scope_organization_id,
+    schema_version, status, result_json, created_at, updated_at, completed_at
+) VALUES(
+    :id, :tenant_id, :actor_user_id, :scope_type, :scope_user_id, :scope_organization_id,
+    :schema_version, 'completed', :result_json, :created_at, :updated_at, :completed_at
+)
 SQL
     );
     $insert->execute([
@@ -49,6 +58,8 @@ SQL
         ':tenant_id' => $tenantId,
         ':actor_user_id' => $actorUserId,
         ':scope_type' => $scopeType,
+        ':scope_user_id' => $scopeUserId > 0 ? $scopeUserId : null,
+        ':scope_organization_id' => $scopeOrganizationId > 0 ? $scopeOrganizationId : null,
         ':schema_version' => 'tenant-export.v1',
         ':result_json' => json_encode($manifest, JSON_UNESCAPED_SLASHES),
         ':created_at' => $now,
@@ -59,7 +70,7 @@ SQL
     return ['ok' => true, 'reason' => 'export_ready', 'job_id' => $jobId, 'bundle' => $manifest];
 }
 
-function videochat_tenant_import_dry_run(PDO $pdo, int $tenantId, int $actorUserId, array $bundle): array
+function videochat_tenant_import_dry_run(PDO $pdo, int $tenantId, int $actorUserId, array $bundle, array $options = []): array
 {
     $errors = [];
     if ($tenantId <= 0 || $actorUserId <= 0) {
@@ -74,6 +85,11 @@ function videochat_tenant_import_dry_run(PDO $pdo, int $tenantId, int $actorUser
 
     $jobId = videochat_tenant_portability_create_job_id();
     $now = gmdate('c');
+    $scopeType = in_array((string) ($options['scope_type'] ?? 'organization'), ['user', 'organization'], true)
+        ? (string) $options['scope_type']
+        : 'organization';
+    $scopeUserId = $scopeType === 'user' ? max(0, (int) ($options['scope_user_id'] ?? 0)) : 0;
+    $scopeOrganizationId = $scopeType === 'organization' ? max(0, (int) ($options['scope_organization_id'] ?? 0)) : 0;
     $result = [
         'dry_run' => true,
         'accepted' => $errors === [],
@@ -82,14 +98,22 @@ function videochat_tenant_import_dry_run(PDO $pdo, int $tenantId, int $actorUser
     ];
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO tenant_import_jobs(id, tenant_id, actor_user_id, scope_type, schema_version, dry_run, status, result_json, failure_reason, created_at, updated_at, completed_at)
-VALUES(:id, :tenant_id, :actor_user_id, 'organization', :schema_version, 1, :status, :result_json, :failure_reason, :created_at, :updated_at, :completed_at)
+INSERT INTO tenant_import_jobs(
+    id, tenant_id, actor_user_id, scope_type, scope_user_id, scope_organization_id,
+    schema_version, dry_run, status, result_json, failure_reason, created_at, updated_at, completed_at
+) VALUES(
+    :id, :tenant_id, :actor_user_id, :scope_type, :scope_user_id, :scope_organization_id,
+    :schema_version, 1, :status, :result_json, :failure_reason, :created_at, :updated_at, :completed_at
+)
 SQL
     );
     $insert->execute([
         ':id' => $jobId,
         ':tenant_id' => $tenantId,
         ':actor_user_id' => $actorUserId,
+        ':scope_type' => $scopeType,
+        ':scope_user_id' => $scopeUserId > 0 ? $scopeUserId : null,
+        ':scope_organization_id' => $scopeOrganizationId > 0 ? $scopeOrganizationId : null,
         ':schema_version' => (string) ($bundle['schema_version'] ?? ''),
         ':status' => $errors === [] ? 'completed' : 'failed',
         ':result_json' => json_encode($result, JSON_UNESCAPED_SLASHES),

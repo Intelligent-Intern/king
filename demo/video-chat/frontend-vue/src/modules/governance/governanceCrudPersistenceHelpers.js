@@ -1,4 +1,4 @@
-const PERSISTED_ENTITIES = Object.freeze(['groups', 'organizations', 'grants']);
+const PERSISTED_ENTITIES = Object.freeze(['groups', 'organizations', 'grants', 'data-portability']);
 
 function normalizeString(value) {
   return String(value || '').trim();
