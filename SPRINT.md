@@ -496,15 +496,24 @@ Non-goals for this sprint:
      placeholders from the English canonical value, whether that canonical
      value already exists in `translation_resources` or appears in the same
      CSV file.
+   - [x] Appointment booking and public lead notifications resolve localized
+     templates from `translation_resources` with fallback to English and then
+     to the configured template.
+   - [x] Appointment booking sends guest and owner mails with independently
+     resolved template locales, using the public/guest locale and owner user
+     locale where available.
+   - [x] Email localization contract covers valid localized templates, invalid
+     localized templates falling back to English, outbox rendering, and public
+     lead template locale selection.
 
    Done when:
    - [ ] API error payloads still expose stable codes and do not depend on
      translated text for logic.
-   - [ ] Public booking confirmation email can be sent in the selected/public
+   - [x] Public booking confirmation email can be sent in the selected/public
      locale.
-   - [ ] Owner notification email can use owner locale.
+   - [x] Owner notification email can use owner locale.
    - [x] CSV import rejects translations that remove required placeholders.
-   - [ ] Email contract tests cover placeholder preservation and locale
+   - [x] Email contract tests cover placeholder preservation and locale
      fallback.
 
 9. [ ] `[public-pages-localization]` Localize public booking and join routes.
