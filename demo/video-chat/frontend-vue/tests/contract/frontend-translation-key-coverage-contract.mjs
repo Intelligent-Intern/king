@@ -17,6 +17,8 @@ const sourceFiles = [
   'src/modules/localization/descriptor.js',
   'src/modules/localization/pages/AdministrationLocalizationView.vue',
   'src/modules/marketplace/descriptor.js',
+  'src/modules/marketplace/pages/AdminMarketplaceTable.vue',
+  'src/modules/marketplace/pages/AdminMarketplaceView.vue',
   'src/modules/theme_editor/descriptor.js',
   'src/modules/theme_editor/pages/ThemeEditorView.vue',
   'src/modules/users/descriptor.js',

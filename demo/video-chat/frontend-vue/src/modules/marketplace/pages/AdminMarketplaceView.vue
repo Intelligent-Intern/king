@@ -1,37 +1,37 @@
 <template>
   <section class="view-card marketplace-view">
-    <AppPageHeader class="section marketplace-head" title="Marketplace" />
+    <AppPageHeader class="section marketplace-head" :title="t('marketplace.title')" />
 
     <section class="toolbar marketplace-toolbar">
-      <label class="search-field search-field-main" aria-label="Search marketplace apps">
+      <label class="search-field search-field-main" :aria-label="t('marketplace.search')">
         <input
           v-model.trim="queryDraft"
           class="input"
           type="search"
-          placeholder="Search by name, manufacturer, or website"
+          :placeholder="t('marketplace.search_placeholder')"
           @keydown.enter.prevent="applySearchNow"
         />
       </label>
 
-      <AppSelect v-model="categoryFilter" aria-label="Category filter" @change="applySearchNow">
-        <option value="all">All categories</option>
+      <AppSelect v-model="categoryFilter" :aria-label="t('marketplace.category_filter')" @change="applySearchNow">
+        <option value="all">{{ t('marketplace.all_categories') }}</option>
         <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
-          {{ option.label }}
+          {{ t(option.label_key) }}
         </option>
       </AppSelect>
 
       <AppIconButton
         class="marketplace-toolbar-search-btn"
         icon="/assets/orgas/kingrt/icons/send.png"
-        title="Search marketplace apps"
-        aria-label="Search marketplace apps"
+        :title="t('marketplace.search')"
+        :aria-label="t('marketplace.search')"
         @click="applySearchNow"
       />
     </section>
 
     <section v-if="notice" class="section marketplace-banner ok">{{ notice }}</section>
     <section v-if="error" class="section marketplace-banner error">{{ error }}</section>
-    <section v-if="loading && rows.length === 0" class="section marketplace-empty">Loading marketplace apps...</section>
+    <section v-if="loading && rows.length === 0" class="section marketplace-empty">{{ t('marketplace.loading') }}</section>
 
     <AdminMarketplaceTable
       v-else
@@ -46,7 +46,7 @@
         :page="page"
         :page-count="pageCount"
         :total="pagination.total"
-        total-label="apps"
+        :total-label="t('marketplace.apps_total')"
         :has-prev="pagination.hasPrev"
         :has-next="pagination.hasNext"
         :disabled="loading"
@@ -62,42 +62,42 @@
             <img class="marketplace-modal-head-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
             <div>
               <h4>{{ dialogTitle }}</h4>
-              <p>Manage callable marketplace entries for video calls.</p>
+              <p>{{ t('marketplace.form_subtitle') }}</p>
             </div>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Close" @click="closeDialog">
+          <button class="icon-mini-btn" type="button" :aria-label="t('marketplace.close')" @click="closeDialog">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <section class="marketplace-modal-body">
           <label class="marketplace-field">
-            <span>Name</span>
-            <input v-model.trim="form.name" class="input" type="text" placeholder="Whiteboard" />
+            <span>{{ t('marketplace.name') }}</span>
+            <input v-model.trim="form.name" class="input" type="text" :placeholder="t('marketplace.category.whiteboard')" />
           </label>
           <label class="marketplace-field">
-            <span>Manufacturer</span>
+            <span>{{ t('marketplace.manufacturer') }}</span>
             <input v-model.trim="form.manufacturer" class="input" type="text" placeholder="Intelligent Intern" />
           </label>
           <label class="marketplace-field">
-            <span>Website</span>
+            <span>{{ t('marketplace.website') }}</span>
             <input v-model.trim="form.website" class="input" type="url" placeholder="https://example.com" />
           </label>
           <label class="marketplace-field">
-            <span>Category</span>
+            <span>{{ t('marketplace.category') }}</span>
             <AppSelect v-model="form.category">
               <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
+                {{ t(option.label_key) }}
               </option>
             </AppSelect>
           </label>
           <label class="marketplace-field marketplace-field-wide">
-            <span>Description</span>
+            <span>{{ t('marketplace.description') }}</span>
             <textarea
               v-model.trim="form.description"
               class="input marketplace-textarea"
               rows="5"
-              placeholder="Optional notes about the app, feature scope, or integration path."
+              :placeholder="t('marketplace.description_placeholder')"
             ></textarea>
           </label>
         </section>
@@ -105,7 +105,7 @@
         <section v-if="formError" class="marketplace-banner error">{{ formError }}</section>
 
         <footer class="marketplace-modal-actions">
-          <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">Cancel</button>
+          <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">{{ t('common.cancel') }}</button>
           <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="submitForm">
             {{ dialogSubmitLabel }}
           </button>
@@ -124,14 +124,15 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
+import { t } from '../../localization/i18nRuntime.js';
 
 const CATEGORY_OPTIONS = [
-  { value: 'whiteboard', label: 'Whiteboard' },
-  { value: 'avatar', label: 'Avatar' },
-  { value: 'assistant', label: 'Assistant' },
-  { value: 'collaboration', label: 'Collaboration' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'other', label: 'Other' },
+  { value: 'whiteboard', label_key: 'marketplace.category.whiteboard' },
+  { value: 'avatar', label_key: 'marketplace.category.avatar' },
+  { value: 'assistant', label_key: 'marketplace.category.assistant' },
+  { value: 'collaboration', label_key: 'marketplace.category.collaboration' },
+  { value: 'utility', label_key: 'marketplace.category.utility' },
+  { value: 'other', label_key: 'marketplace.category.other' },
 ];
 
 const router = useRouter();
@@ -169,8 +170,8 @@ let searchTimer = 0;
 
 const categoryOptions = computed(() => CATEGORY_OPTIONS);
 const pageCount = computed(() => pagination.pageCount);
-const dialogTitle = computed(() => (form.mode === 'edit' ? 'Edit marketplace app' : 'Add marketplace app'));
-const dialogSubmitLabel = computed(() => (form.mode === 'edit' ? 'Save changes' : 'Create app'));
+const dialogTitle = computed(() => (form.mode === 'edit' ? t('marketplace.edit_app') : t('marketplace.add_app')));
+const dialogSubmitLabel = computed(() => (form.mode === 'edit' ? t('common.save_changes') : t('marketplace.add_app')));
 
 async function loadApps() {
   const token = ++loadToken;
@@ -210,7 +211,7 @@ async function loadApps() {
     pagination.pageCount = 1;
     pagination.hasPrev = false;
     pagination.hasNext = false;
-    error.value = err instanceof Error ? err.message : 'Could not load marketplace apps.';
+    error.value = err instanceof Error ? err.message : t('marketplace.load_failed');
   } finally {
     if (token === loadToken) loading.value = false;
   }
@@ -282,19 +283,19 @@ async function submitForm() {
         method: 'PATCH',
         body,
       });
-      notice.value = 'Marketplace app updated.';
+      notice.value = t('marketplace.app_updated');
     } else {
       await apiRequest('/api/admin/marketplace/apps', {
         method: 'POST',
         body,
       });
-      notice.value = 'Marketplace app created.';
+      notice.value = t('marketplace.app_created');
     }
 
     dialogOpen.value = false;
     await loadApps();
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not save marketplace app.';
+    formError.value = err instanceof Error ? err.message : t('marketplace.save_failed');
   } finally {
     formSaving.value = false;
   }
@@ -303,8 +304,8 @@ async function submitForm() {
 async function deleteApp(app) {
   const appId = Number(app?.id || 0);
   if (appId <= 0) return;
-  const label = String(app?.name || 'this app').trim() || 'this app';
-  if (!window.confirm(`Delete ${label}?`)) return;
+  const label = String(app?.name || t('marketplace.this_app')).trim() || t('marketplace.this_app');
+  if (!window.confirm(t('marketplace.confirm_delete', { name: label }))) return;
 
   mutatingAppId.value = appId;
   error.value = '';
@@ -312,10 +313,10 @@ async function deleteApp(app) {
     await apiRequest(`/api/admin/marketplace/apps/${encodeURIComponent(String(appId))}`, {
       method: 'DELETE',
     });
-    notice.value = 'Marketplace app deleted.';
+    notice.value = t('marketplace.app_deleted');
     await loadApps();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not delete marketplace app.';
+    error.value = err instanceof Error ? err.message : t('marketplace.delete_failed');
   } finally {
     mutatingAppId.value = 0;
   }

@@ -3,38 +3,38 @@
     <table class="marketplace-table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Manufacturer</th>
-          <th>Website</th>
-          <th>Actions</th>
+          <th>{{ t('marketplace.name') }}</th>
+          <th>{{ t('marketplace.manufacturer') }}</th>
+          <th>{{ t('marketplace.website') }}</th>
+          <th>{{ t('marketplace.actions') }}</th>
         </tr>
       </thead>
       <tbody>
         <tr v-for="app in rows" :key="app.id">
-          <td data-label="Name">
+          <td :data-label="t('marketplace.name')">
             <div class="marketplace-name">{{ app.name }}</div>
             <div class="marketplace-subline">{{ categoryLabel(app.category) }}</div>
           </td>
-          <td data-label="Manufacturer">
-            <div>{{ app.manufacturer || 'n/a' }}</div>
-            <div class="marketplace-subline">Updated {{ formatDateTime(app.updated_at) }}</div>
+          <td :data-label="t('marketplace.manufacturer')">
+            <div>{{ app.manufacturer || t('common.not_available') }}</div>
+            <div class="marketplace-subline">{{ t('marketplace.updated', { date: formatDateTime(app.updated_at) }) }}</div>
           </td>
-          <td data-label="Website">
+          <td :data-label="t('marketplace.website')">
             <a v-if="app.website" class="marketplace-link" :href="app.website" target="_blank" rel="noreferrer noopener">
               {{ app.website }}
             </a>
-            <span v-else class="marketplace-subline">No website</span>
+            <span v-else class="marketplace-subline">{{ t('marketplace.no_website') }}</span>
           </td>
-          <td data-label="Actions">
+          <td :data-label="t('marketplace.actions')">
             <div class="actions-inline">
               <AppIconButton
                 icon="/assets/orgas/kingrt/icons/gear.png"
-                title="Edit app"
+                :title="t('marketplace.edit_app')"
                 @click="$emit('edit-app', app)"
               />
               <AppIconButton
                 icon="/assets/orgas/kingrt/icons/remove_user.png"
-                title="Delete app"
+                :title="t('marketplace.delete_app')"
                 :disabled="mutatingAppId === app.id"
                 danger
                 @click="$emit('delete-app', app)"
@@ -43,7 +43,7 @@
           </td>
         </tr>
         <tr v-if="rows.length === 0">
-          <td colspan="4" class="marketplace-empty-cell">No marketplace apps match the current filter.</td>
+          <td colspan="4" class="marketplace-empty-cell">{{ t('marketplace.empty_filter') }}</td>
         </tr>
       </tbody>
     </table>
@@ -52,14 +52,15 @@
 
 <script setup>
 import AppIconButton from '../../../components/AppIconButton.vue';
+import { t } from '../../localization/i18nRuntime.js';
 
 const CATEGORY_LABELS = {
-  whiteboard: 'Whiteboard',
-  avatar: 'Avatar',
-  assistant: 'Assistant',
-  collaboration: 'Collaboration',
-  utility: 'Utility',
-  other: 'Other',
+  whiteboard: 'marketplace.category.whiteboard',
+  avatar: 'marketplace.category.avatar',
+  assistant: 'marketplace.category.assistant',
+  collaboration: 'marketplace.category.collaboration',
+  utility: 'marketplace.category.utility',
+  other: 'marketplace.category.other',
 };
 
 defineProps({
@@ -77,12 +78,12 @@ defineEmits(['edit-app', 'delete-app']);
 
 function categoryLabel(category) {
   const normalized = String(category || '').toLowerCase();
-  return CATEGORY_LABELS[normalized] || 'Other';
+  return t(CATEGORY_LABELS[normalized] || 'marketplace.category.other');
 }
 
 function formatDateTime(value) {
   const text = typeof value === 'string' ? value.trim() : '';
-  if (text === '') return 'n/a';
+  if (text === '') return t('common.not_available');
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
   return new Intl.DateTimeFormat('en-GB', {
