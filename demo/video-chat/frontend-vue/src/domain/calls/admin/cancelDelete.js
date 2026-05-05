@@ -1,4 +1,5 @@
 import { nextTick, reactive, ref } from 'vue';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 function sanitizeCancelMessageHtml(value) {
   const html = String(value || '');
@@ -40,31 +41,31 @@ function cancelMessageHtmlToPlainText(value) {
 
 function prettifyCancelReason(reason) {
   const normalized = String(reason || '').trim().replace(/[_-]+/g, ' ');
-  if (normalized === '') return 'Custom template';
+  if (normalized === '') return t('calls.cancel_delete.custom_template');
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
 const CANCEL_TEMPLATE_STORAGE_KEY = 'king.video.calls.cancel.templates.v1';
-const DEFAULT_CANCEL_TEMPLATES = Object.freeze([
+const DEFAULT_CANCEL_TEMPLATE_DEFINITIONS = Object.freeze([
   {
     reason: 'scheduler_conflict',
-    label: 'Scheduler conflict',
-    messageHtml: '<p>Call cancelled due to scheduling conflict.</p>',
+    labelKey: 'calls.cancel_delete.templates.scheduler_conflict.label',
+    messageHtmlKey: 'calls.cancel_delete.templates.scheduler_conflict.message_html',
   },
   {
     reason: 'host_unavailable',
-    label: 'Host unavailable',
-    messageHtml: '<p>Call cancelled because the host is currently unavailable.</p>',
+    labelKey: 'calls.cancel_delete.templates.host_unavailable.label',
+    messageHtmlKey: 'calls.cancel_delete.templates.host_unavailable.message_html',
   },
   {
     reason: 'technical_issue',
-    label: 'Technical issue',
-    messageHtml: '<p>Call cancelled due to a technical issue. We will reschedule shortly.</p>',
+    labelKey: 'calls.cancel_delete.templates.technical_issue.label',
+    messageHtmlKey: 'calls.cancel_delete.templates.technical_issue.message_html',
   },
   {
     reason: 'emergency_stop',
-    label: 'Emergency stop',
-    messageHtml: '<p>Call cancelled due to an urgent operational reason.</p>',
+    labelKey: 'calls.cancel_delete.templates.emergency_stop.label',
+    messageHtmlKey: 'calls.cancel_delete.templates.emergency_stop.message_html',
   },
 ]);
 
@@ -78,7 +79,7 @@ function normalizeCancelTemplateItem(rawTemplate, index) {
   const fallbackLabel = prettifyCancelReason(reason);
   const label = String(rawTemplate?.label || '').trim() || fallbackLabel;
   const rawMessage = String(rawTemplate?.messageHtml || rawTemplate?.message || '').trim();
-  const messageHtml = normalizeCancelMessageHtml(rawMessage || `<p>${fallbackLabel}.</p>`);
+  const messageHtml = normalizeCancelMessageHtml(rawMessage || t('calls.cancel_delete.default_message_html', { label: fallbackLabel }));
 
   return {
     id: `${reason}-${index}`,
@@ -94,8 +95,16 @@ function cloneCancelTemplateList(list) {
     .filter((entry) => entry !== null);
 }
 
+function defaultCancelTemplates() {
+  return cloneCancelTemplateList(DEFAULT_CANCEL_TEMPLATE_DEFINITIONS.map((template) => ({
+    reason: template.reason,
+    label: t(template.labelKey),
+    messageHtml: t(template.messageHtmlKey),
+  })));
+}
+
 function loadCancelTemplates() {
-  const fallback = cloneCancelTemplateList(DEFAULT_CANCEL_TEMPLATES);
+  const fallback = defaultCancelTemplates();
   if (typeof window === 'undefined') {
     return fallback;
   }
@@ -284,14 +293,14 @@ export function createCancelDeleteController({
 
     const template = findCancelTemplate(cancelState.selectedTemplateId);
     if (!template) {
-      cancelState.error = 'Select a template first.';
+      cancelState.error = t('calls.cancel_delete.select_template_first');
       return;
     }
 
     const messageHtml = normalizeCancelMessageHtml(cancelState.messageHtml);
     const plainText = cancelMessageHtmlToPlainText(messageHtml);
     if (plainText === '') {
-      cancelState.error = 'Cancel message is required.';
+      cancelState.error = t('calls.cancel_delete.cancel_message_required');
       return;
     }
 
@@ -345,7 +354,7 @@ export function createCancelDeleteController({
       : cancelState.customReason.trim();
     const message = cancelMessageHtmlToPlainText(cancelState.messageHtml).trim();
     if (reason === '' || message === '') {
-      cancelState.error = 'Cancel reason and message are required.';
+      cancelState.error = t('calls.cancel_delete.reason_message_required');
       return;
     }
 
@@ -361,11 +370,11 @@ export function createCancelDeleteController({
       });
 
       closeCancel();
-      setNotice('ok', 'Call cancelled.');
+      setNotice('ok', t('calls.cancel_delete.cancelled_notice'));
       publishAdminSync('calls', 'call_cancelled');
       await Promise.all([loadCalls(), loadCalendar()]);
     } catch (error) {
-      cancelState.error = error instanceof Error ? error.message : 'Could not cancel call.';
+      cancelState.error = error instanceof Error ? error.message : t('calls.cancel_delete.cancel_failed');
     } finally {
       cancelState.submitting = false;
     }
@@ -377,7 +386,7 @@ export function createCancelDeleteController({
 
     const callId = String(deleteState.callId || '').trim();
     if (callId === '') {
-      deleteState.error = 'Missing call id.';
+      deleteState.error = t('calls.cancel_delete.missing_call_id');
       return;
     }
 
@@ -388,11 +397,11 @@ export function createCancelDeleteController({
       });
 
       closeDelete();
-      setNotice('ok', 'Call deleted.');
+      setNotice('ok', t('calls.cancel_delete.deleted_notice'));
       publishAdminSync('calls', 'call_deleted');
       await Promise.all([loadCalls(), loadCalendar()]);
     } catch (error) {
-      deleteState.error = error instanceof Error ? error.message : 'Could not delete call.';
+      deleteState.error = error instanceof Error ? error.message : t('calls.cancel_delete.delete_failed');
     } finally {
       deleteState.submitting = false;
     }
