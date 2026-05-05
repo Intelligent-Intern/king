@@ -1,23 +1,5 @@
 <template>
-  <AppModalShell
-    :open="open"
-    :title="title"
-    :aria-label="title"
-    root-class-name="governance-modal crud-relation-modal"
-    backdrop-class="governance-modal-backdrop"
-    dialog-class="governance-modal-dialog crud-relation-dialog"
-    header-class="governance-modal-head governance-modal-head-brand"
-    header-left-class="governance-modal-head-left"
-    logo-class="governance-modal-head-logo"
-    body-class="governance-modal-body crud-relation-body"
-    footer-class="governance-modal-footer crud-relation-footer"
-    :close-label="t('governance.close_modal')"
-    maximizable
-    :maximized="maximized"
-    @update:maximized="$emit('update:maximized', $event)"
-    @close="$emit('close')"
-  >
-    <template #body>
+  <section v-if="open" class="crud-relation-stack" :aria-label="title">
       <nav v-if="navigator.stack.value.length > 1" class="crud-relation-breadcrumbs" :aria-label="t('governance.relation_picker.stack')">
         <button
           v-for="(frame, index) in navigator.stack.value"
@@ -128,18 +110,17 @@
         </section>
       </section>
 
-      <AppPagination
-        :page="navigator.page.value"
-        :page-count="navigator.pageCount.value"
-        :total="navigator.filteredRows.value.length"
-        :total-label="targetEntityLabel"
-        :has-prev="navigator.page.value > 1"
-        :has-next="navigator.page.value < navigator.pageCount.value"
-        @page-change="navigator.goToPage"
-      />
-    </template>
+    <AppPagination
+      :page="navigator.page.value"
+      :page-count="navigator.pageCount.value"
+      :total="navigator.filteredRows.value.length"
+      :total-label="targetEntityLabel"
+      :has-prev="navigator.page.value > 1"
+      :has-next="navigator.page.value < navigator.pageCount.value"
+      @page-change="navigator.goToPage"
+    />
 
-    <template #footer>
+    <footer class="crud-relation-footer">
       <button v-if="navigator.stack.value.length > 1" class="btn" type="button" @click="returnToParent">
         {{ t('governance.relation_picker.back') }}
       </button>
@@ -147,13 +128,12 @@
       <button class="btn btn-cyan" type="button" @click="applySelection">
         {{ t('governance.relation_picker.apply') }}
       </button>
-    </template>
-  </AppModalShell>
+    </footer>
+  </section>
 </template>
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
-import AppModalShell from '../../../components/AppModalShell.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
@@ -193,13 +173,9 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
-  maximized: {
-    type: Boolean,
-    default: false,
-  },
 });
 
-const emit = defineEmits(['close', 'apply', 'update:maximized']);
+const emit = defineEmits(['close', 'apply']);
 
 const navigator = useCrudRelationNavigator({
   rowProvider: (entityKey) => props.rowProvider(entityKey),
@@ -362,15 +338,16 @@ function applySelection() {
 </script>
 
 <style scoped>
-:deep(.crud-relation-body) {
+.crud-relation-stack {
   display: grid;
   gap: 12px;
+  min-height: 0;
 }
 
 .crud-relation-breadcrumbs,
 .crud-relation-toolbar,
 .crud-relation-nested,
-:deep(.crud-relation-footer) {
+.crud-relation-footer {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

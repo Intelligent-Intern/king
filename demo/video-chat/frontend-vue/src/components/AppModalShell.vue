@@ -173,7 +173,7 @@ const rootAttrs = computed(() => {
   const { class: _class, ...rest } = attrs;
   return rest;
 });
-const rootClass = computed(() => [props.rootClassName, attrs.class]);
+const rootClass = computed(() => [props.rootClassName, attrs.class, { 'is-modal-maximized': props.maximized }]);
 const modalDialogClass = computed(() => [
   'app-modal-dialog',
   props.dialogClass,
@@ -208,6 +208,12 @@ function toggleMaximized() {
   z-index: 30;
 }
 
+.calls-modal.is-modal-maximized,
+.users-modal.is-modal-maximized,
+.governance-modal.is-modal-maximized {
+  padding: 0;
+}
+
 .calls-modal[hidden],
 .users-modal[hidden],
 .governance-modal[hidden] {
@@ -229,9 +235,11 @@ function toggleMaximized() {
 }
 
 .app-modal-dialog.is-maximized {
-  width: min(1280px, calc(100vw - 24px));
-  height: min(94vh, 980px);
-  max-height: calc(100vh - 24px);
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .app-modal-header-actions {
@@ -276,15 +284,17 @@ function toggleMaximized() {
 }
 
 .users-modal-dialog.is-maximized {
-  width: min(1280px, calc(100vw - 24px));
-  height: calc(100vh - 24px);
-  max-height: calc(100vh - 24px);
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
 }
 
 .governance-modal-dialog.is-maximized {
-  width: min(1280px, calc(100vw - 24px));
-  height: calc(100vh - 24px);
-  max-height: calc(100vh - 24px);
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
 }
 
 .calls-modal-header,
@@ -376,6 +386,10 @@ function toggleMaximized() {
 .users-modal-body {
   gap: 12px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.users-modal-body-relation {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .users-avatar-modal-body {

@@ -19,6 +19,7 @@ const marketplace = await source('src/modules/marketplace/pages/AdminMarketplace
 const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
 const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
+const modalShell = await source('src/components/AppModalShell.vue');
 const responsiveStyles = await source('src/styles/responsive.css');
 const workspaceStyles = await source('src/styles/workspace-shared.css');
 
@@ -55,5 +56,7 @@ for (const [name, file] of [
 assert.match(governanceModal, /AppModalShell/, 'governance CRUD modal must use the shared modal shell');
 assert.match(governanceModal, /\bmaximizable\b/, 'governance CRUD modal must use centralized maximizable modal behavior');
 assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature modal must not hardcode maximize controls');
+assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
+assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
 
 console.log('[shared-admin-components-contract] PASS');

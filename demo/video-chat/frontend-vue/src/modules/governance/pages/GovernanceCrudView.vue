@@ -99,24 +99,26 @@
       :error="formError"
       :saving="mutationPending"
       :maximized="modalMaximized"
+      :relation-active="relationNavigatorOpen"
+      :relation-title="relationNavigatorTitle"
       @update:maximized="modalMaximized = $event"
       @close="closeModal"
       @open-relation="openRelationNavigator"
       @submit="submitModal"
-    />
-
-    <CrudRelationStack
-      :open="relationNavigatorOpen"
-      :relation="relationNavigatorRelation"
-      :selections="relationSelections"
-      :row-provider="relationRowsForEntity"
-      :create-draft="createRelationDraft"
-      :can-create-draft-for-entity="canCreateRelationDraft"
-      :maximized="relationNavigatorMaximized"
-      @update:maximized="relationNavigatorMaximized = $event"
-      @close="closeRelationNavigator"
-      @apply="applyRelationSelection"
-    />
+    >
+      <template #relation>
+        <CrudRelationStack
+          :open="relationNavigatorOpen"
+          :relation="relationNavigatorRelation"
+          :selections="relationSelections"
+          :row-provider="relationRowsForEntity"
+          :create-draft="createRelationDraft"
+          :can-create-draft-for-entity="canCreateRelationDraft"
+          @close="closeRelationNavigator"
+          @apply="applyRelationSelection"
+        />
+      </template>
+    </GovernanceCrudModal>
   </AdminPageFrame>
 </template>
 
@@ -166,7 +168,6 @@ const modalMode = ref('create');
 const modalMaximized = ref(false);
 const relationNavigatorOpen = ref(false);
 const relationNavigatorRelation = ref(null);
-const relationNavigatorMaximized = ref(false);
 const formError = ref('');
 const loadError = ref('');
 const loading = ref(false);
@@ -242,6 +243,11 @@ const modalSubmitLabel = computed(() => {
   if (portabilitySubmitKey !== '') return t(portabilitySubmitKey);
   return modalMode.value === 'edit' ? t('common.save_changes') : createButtonLabel.value;
 });
+const relationNavigatorTitle = computed(() => (
+  relationNavigatorRelation.value
+    ? t('governance.relation_picker.title', { relation: relationNavigatorLabel(relationNavigatorRelation.value) })
+    : modalTitle.value
+));
 
 watch(() => route.fullPath, () => {
   query.value = '';
@@ -595,7 +601,6 @@ function openRelationNavigator(relationship) {
   const targetEntity = String(relationship?.target_entity || '').trim();
   loadRowsForRelationTarget(targetEntity);
   relationNavigatorRelation.value = relationship;
-  relationNavigatorMaximized.value = false;
   relationNavigatorOpen.value = true;
 }
 
@@ -617,7 +622,11 @@ function loadRowsForRelationTarget(targetEntity) {
 function closeRelationNavigator() {
   relationNavigatorOpen.value = false;
   relationNavigatorRelation.value = null;
-  relationNavigatorMaximized.value = false;
+}
+
+function relationNavigatorLabel(relation) {
+  const key = String(relation?.label_key || '').trim();
+  return key !== '' ? t(key) : String(relation?.key || '');
 }
 
 function applyRelationSelection(payload) {
