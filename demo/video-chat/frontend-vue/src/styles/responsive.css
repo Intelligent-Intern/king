@@ -114,6 +114,10 @@
     display: none;
   }
 
+  .shell.tablet-mode:not(.tablet-left-open) .nav-submenu {
+    display: none;
+  }
+
   .shell.tablet-mode:not(.tablet-left-open) .logout-wrap,
   .shell.tablet-mode:not(.tablet-left-open) .sidebar-profile,
   .shell.tablet-mode:not(.tablet-left-open) .session-box {
@@ -203,6 +207,10 @@
 
   .shell.tablet-mode.tablet-left-open .nav-link span {
     display: inline;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-submenu {
+    display: grid;
   }
 
   .shell.tablet-mode.tablet-left-open .logout-wrap {

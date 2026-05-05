@@ -265,19 +265,11 @@
             </button>
           </div>
 
-          <nav class="nav" aria-label="Main navigation">
-            <RouterLink
-              v-for="item in navItems"
-              :key="item.to"
-              :to="item.to"
-              class="nav-link"
-              :class="{ active: isNavItemActive(item) }"
-              @click="handleNavItemClick"
-            >
-              <img :src="item.icon" alt="" />
-              <span>{{ item.label }}</span>
-            </RouterLink>
-          </nav>
+          <WorkspaceNavigation
+            :role="sessionState.role || ''"
+            :current-path="route.path"
+            @navigate="handleNavItemClick"
+          />
 
           <section class="sidebar-profile avatar-only">
             <button class="sidebar-avatar-trigger" type="button" aria-label="Open settings" @click="openSettingsModal('about-me')">
@@ -288,8 +280,6 @@
               />
             </button>
           </section>
-
-          <TenantSwitcher />
 
           <div class="logout-wrap">
             <button class="btn full" type="button" @click="handleSignOut">Log out</button>
@@ -712,11 +702,11 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
+import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import WorkspaceAdministrationSettings from './settings/WorkspaceAdministrationSettings.vue';
+import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
-import TenantSwitcher from '../domain/tenant/TenantSwitcher.vue';
 import {
   logoutSession,
   postLogoutRedirectTarget,
@@ -763,27 +753,17 @@ const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
 
-const navItems = computed(() => {
-  const role = sessionState.role;
-  const items = [
-    { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
-    { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/kingrt/icons/user.png', roles: ['admin'] },
-    { to: '/admin/marketplace', label: 'Marketplace', icon: '/assets/orgas/kingrt/icons/add_to_call.png', roles: ['admin'] },
-    { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
-    { to: '/admin/tenancy', label: 'Tenancy', icon: '/assets/orgas/kingrt/icons/adminon.png', roles: ['admin'] },
-    { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
-  ];
-
-  return items.filter((item) => role && item.roles.includes(role));
-});
-
 const pageTitle = computed(() => {
+  const routeTitle = typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '';
+  if (routeTitle !== '') return routeTitle;
+
   const mapping = {
     '/admin/overview': 'Video Operations',
-    '/admin/users': 'User Management',
+    '/admin/users': 'Nutzer',
+    '/admin/governance': 'Governance',
+    '/admin/governance/users': 'Nutzer',
     '/admin/marketplace': 'Marketplace',
     '/admin/calls': 'Video Call Management',
-    '/admin/tenancy': 'Tenant Administration',
     '/user/dashboard': 'My Video Calls',
   };
 
@@ -796,7 +776,8 @@ const pageSubtitle = computed(() => {
   return '';
 });
 const showWorkspaceHeader = computed(() => (
-  !['/admin/users', '/admin/marketplace', '/admin/calls'].includes(route.path)
+  !route.path.startsWith('/admin/governance')
+  && !['/admin/users', '/admin/marketplace', '/admin/calls'].includes(route.path)
   && !isCallWorkspace.value
 ));
 
@@ -1077,14 +1058,6 @@ function applySidebarLayoutMode(mode) {
 function applySidebarLayoutStrategy(strategy) {
   if (typeof callLayoutSidebarState.setStrategy !== 'function') return;
   callLayoutSidebarState.setStrategy(strategy);
-}
-
-function isNavItemActive(item) {
-  if (item.to.startsWith('/workspace/call')) {
-    return route.path.startsWith('/workspace/call');
-  }
-
-  return route.path === item.to;
 }
 
 function syncViewportState() {
