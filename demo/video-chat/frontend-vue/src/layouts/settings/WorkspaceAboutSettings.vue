@@ -103,11 +103,26 @@
         </div>
       </div>
     </section>
+
+    <section class="settings-field settings-field-wide">
+      <div class="settings-messenger-head">
+        <span>{{ t('settings.onboarding_badges') }}</span>
+      </div>
+      <div v-if="onboardingBadges.length > 0" class="settings-onboarding-badges">
+        <span v-for="badge in onboardingBadges" :key="badge.tour_key" class="settings-onboarding-badge">
+          {{ badgeLabel(badge.tour_key) }}
+        </span>
+      </div>
+      <div v-else class="settings-upload-status">
+        {{ t('settings.no_onboarding_badges') }}
+      </div>
+    </section>
   </section>
 </template>
 
 <script setup>
 import { computed } from 'vue';
+import { sessionState } from '../../domain/auth/session';
 import { t } from '../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
@@ -134,6 +149,19 @@ defineEmits(['avatar-select', 'avatar-drop']);
 const messengerContacts = computed(() => (
   Array.isArray(props.draft.messengerContacts) ? props.draft.messengerContacts : []
 ));
+const onboardingBadges = computed(() => (
+  Array.isArray(sessionState.onboardingBadges)
+    ? sessionState.onboardingBadges.filter((badge) => badge && typeof badge === 'object' && String(badge.tour_key || '').trim() !== '')
+    : []
+));
+
+function badgeLabel(tourKey) {
+  const normalizedKey = String(tourKey || '').trim().toLowerCase();
+  const translationKey = `onboarding.badge.${normalizedKey.replace(/[^a-z0-9]+/g, '_')}`;
+  const translated = t(translationKey);
+  if (translated !== translationKey) return translated;
+  return normalizedKey.replace(/[._:-]+/g, ' ');
+}
 
 function addMessengerContact() {
   if (!Array.isArray(props.draft.messengerContacts)) {
@@ -182,6 +210,23 @@ function removeMessengerContact(index) {
   grid-template-columns: minmax(0, 180px) minmax(0, 1fr) 34px;
   gap: 8px;
   align-items: center;
+}
+
+.settings-onboarding-badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-onboarding-badge {
+  max-width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: var(--text);
+  background: var(--bg-ui-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 760px) {

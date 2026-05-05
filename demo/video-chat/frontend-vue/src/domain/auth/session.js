@@ -1,87 +1,27 @@
 import { reactive } from 'vue';
 import { fetchBackend } from '../../support/backendFetch';
-import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
 import {
+  inferAccountType,
   localizationLanguageDirection,
+  normalizeDateFormat,
+  normalizeMessengerContacts,
+  normalizeOnboardingBadges,
+  normalizeOnboardingCompletedTours,
+  normalizePostLogoutLandingUrl,
   normalizeLocalizationLanguage,
+  normalizeRole,
+  normalizeString,
+  normalizeSupportedLocales,
+  normalizeTenantSnapshot,
+  normalizeTheme,
+  normalizeTimeFormat,
   SUPPORTED_LOCALIZATION_LANGUAGES,
-} from '../../support/localizationOptions';
+} from './sessionNormalizers';
 import { extractErrorMessage, normalizeNetworkErrorMessage } from './sessionErrors';
 const STORAGE_KEY = 'ii_videocall_v1_session';
-const AUTH_ROLES = new Set(['admin', 'user']);
-const ACCOUNT_TYPES = new Set(['account', 'guest']);
-function normalizeRole(value) {
-  const role = String(value || '').trim().toLowerCase();
-  return AUTH_ROLES.has(role) ? role : null;
-}
-function normalizeTheme(value) {
-  const theme = String(value || '').trim();
-  return theme !== '' ? theme : 'dark';
-}
-function normalizeString(value) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-function normalizeMessengerContacts(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((contact) => {
-      const source = contact && typeof contact === 'object' ? contact : {};
-      return {
-        channel: normalizeString(source.channel).toLowerCase(),
-        handle: normalizeString(source.handle),
-      };
-    })
-    .filter((contact) => contact.channel !== '' && contact.handle !== '');
-}
 function errorCodeFromPayload(payload) {
   const code = payload && typeof payload === 'object' ? payload?.error?.code : '';
   return typeof code === 'string' ? code.trim() : '';
-}
-function normalizeAccountType(value) {
-  const accountType = normalizeString(value).toLowerCase();
-  return ACCOUNT_TYPES.has(accountType) ? accountType : '';
-}
-function normalizeTenantSnapshot(value) {
-  const source = value && typeof value === 'object' ? value : {};
-  const id = Number.isInteger(source.id) ? source.id : Number(source.tenant_id || 0);
-  return {
-    id: Number.isInteger(id) && id > 0 ? id : 0,
-    uuid: normalizeString(source.uuid || source.public_id),
-    label: normalizeString(source.label),
-    role: normalizeString(source.role).toLowerCase(),
-    permissions: source.permissions && typeof source.permissions === 'object' ? { ...source.permissions } : {},
-  };
-}
-function normalizeSupportedLocales(value) {
-  const source = Array.isArray(value) && value.length > 0 ? value : SUPPORTED_LOCALIZATION_LANGUAGES;
-  return source
-    .map((locale) => {
-      const code = normalizeLocalizationLanguage(locale?.code);
-      return {
-        code,
-        label: normalizeString(locale?.label) || code.toUpperCase(),
-        direction: normalizeString(locale?.direction) === 'rtl' ? 'rtl' : localizationLanguageDirection(code),
-        is_default: locale?.is_default === true,
-      };
-    })
-    .filter((locale, index, locales) => (
-      locale.code !== ''
-      && locales.findIndex((candidate) => candidate.code === locale.code) === index
-    ));
-}
-function inferAccountType(user) {
-  const explicitType = normalizeAccountType(user?.account_type);
-  if (explicitType !== '') {
-    return explicitType;
-  }
-  if (user?.is_guest === true) {
-    return 'guest';
-  }
-  const email = normalizeString(user?.email).toLowerCase();
-  if (email.startsWith('guest+') && email.endsWith('@videochat.local')) {
-    return 'guest';
-  }
-  return 'account';
 }
 function safeParse(raw) {
   if (!raw) return null;
@@ -126,6 +66,8 @@ export const sessionState = reactive({
   xUrl: '',
   youtubeUrl: '',
   messengerContacts: [],
+  onboardingCompletedTours: [],
+  onboardingBadges: [],
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -176,6 +118,8 @@ function resetUserFields() {
   sessionState.xUrl = '';
   sessionState.youtubeUrl = '';
   sessionState.messengerContacts = [];
+  sessionState.onboardingCompletedTours = [];
+  sessionState.onboardingBadges = [];
   sessionState.status = '';
 }
 function setRecoveryState(state, reason = '', message = '') {
@@ -221,14 +165,9 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.xUrl = normalizeString(user.x_url);
   sessionState.youtubeUrl = normalizeString(user.youtube_url);
   sessionState.messengerContacts = normalizeMessengerContacts(user.messenger_contacts);
+  sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(user.onboarding_completed_tours);
+  sessionState.onboardingBadges = normalizeOnboardingBadges(user.onboarding_badges);
   sessionState.status = normalizeString(user.status);
-}
-function normalizePostLogoutLandingUrl(value) {
-  const url = normalizeString(value);
-  if (url === '' || !url.startsWith('/') || url.startsWith('//') || url.includes('\\')) {
-    return '';
-  }
-  return url;
 }
 function applySessionEnvelope(session, user, tenant = null) {
   if (!session || typeof session !== 'object' || !user || typeof user !== 'object') {
@@ -695,6 +634,68 @@ export async function saveSessionSettings(settingsPatch) {
       reason: 'network_error',
       status: 0,
       message: normalizeNetworkErrorMessage(error, 'Could not update user settings.'),
+    };
+  }
+}
+export async function completeOnboardingTour(tourKey) {
+  if (!sessionState.sessionToken) {
+    return {
+      ok: false,
+      reason: 'missing_session',
+      message: 'A valid session token is required.',
+    };
+  }
+
+  const normalizedTourKey = normalizeString(tourKey).toLowerCase();
+  if (normalizedTourKey === '') {
+    return {
+      ok: false,
+      reason: 'invalid_tour_key',
+      message: 'Tour key is required.',
+    };
+  }
+
+  try {
+    const { response } = await fetchBackend('/api/user/onboarding/tours/complete', {
+      method: 'POST',
+      headers: sessionHeaders(),
+      body: JSON.stringify({ tour_key: normalizedTourKey }),
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      const message = extractErrorMessage(payload, 'Could not update onboarding progress.');
+      if ([401, 403].includes(response.status)) {
+        normalizeAuthErrorState('invalid_session', message, true);
+        return {
+          ok: false,
+          reason: 'invalid_session',
+          status: response.status,
+          message,
+        };
+      }
+      return {
+        ok: false,
+        reason: 'request_failed',
+        status: response.status,
+        message,
+        fields: payload?.error?.details?.fields || {},
+      };
+    }
+
+    const onboarding = payload.result?.onboarding || {};
+    sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(onboarding.completed_tours);
+    sessionState.onboardingBadges = normalizeOnboardingBadges(onboarding.badges);
+    return {
+      ok: true,
+      reason: payload.result?.state || 'completed',
+      onboarding,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'network_error',
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Could not update onboarding progress.'),
     };
   }
 }

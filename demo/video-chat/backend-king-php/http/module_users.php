@@ -687,6 +687,7 @@ function videochat_handle_user_routes(
 
     if ($path === '/api/user/settings') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $activeTenantId = (int) (($apiAuthContext['tenant']['id'] ?? ($apiAuthContext['session']['active_tenant_id'] ?? 0)));
         if ($authenticatedUserId <= 0) {
             return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
                 'reason' => 'invalid_user_context',
@@ -696,7 +697,7 @@ function videochat_handle_user_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $userSettings = videochat_fetch_user_settings($pdo, $authenticatedUserId);
+                $userSettings = videochat_fetch_user_settings($pdo, $authenticatedUserId, $activeTenantId);
             } catch (Throwable) {
                 return $errorResponse(500, 'user_settings_fetch_failed', 'Could not load user settings.', [
                     'reason' => 'internal_error',
@@ -737,7 +738,7 @@ function videochat_handle_user_routes(
 
         try {
             $pdo = $openDatabase();
-            $updateResult = videochat_update_user_settings($pdo, $authenticatedUserId, $payload);
+            $updateResult = videochat_update_user_settings($pdo, $authenticatedUserId, $payload, $activeTenantId);
         } catch (Throwable) {
             return $errorResponse(500, 'user_settings_update_failed', 'Could not update user settings.', [
                 'reason' => 'internal_error',

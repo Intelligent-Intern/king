@@ -36,6 +36,8 @@ try {
         "SELECT users.id FROM users INNER JOIN roles ON roles.id = users.role_id WHERE roles.slug = 'user' LIMIT 1"
     )->fetchColumn();
     videochat_onboarding_contract_assert($userId > 0, 'expected seeded standard user');
+    $tenantId = (int) $pdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
+    videochat_onboarding_contract_assert($tenantId > 0, 'expected seeded default tenant');
 
     $sessionId = 'sess_onboarding_progress_contract';
     $pdo->prepare(
@@ -47,12 +49,12 @@ try {
         ':expires_at' => gmdate('c', time() + 3600),
     ]);
 
-    $initialSettings = videochat_fetch_user_settings($pdo, $userId);
+    $initialSettings = videochat_fetch_user_settings($pdo, $userId, $tenantId);
     videochat_onboarding_contract_assert(is_array($initialSettings), 'initial settings lookup should succeed');
     videochat_onboarding_contract_assert(($initialSettings['onboarding_completed_tours'] ?? []) === [], 'initial completed tours should be empty');
     videochat_onboarding_contract_assert(($initialSettings['onboarding_badges'] ?? []) === [], 'initial onboarding badges should be empty');
 
-    $firstCompletion = videochat_complete_onboarding_tour($pdo, $userId, 'governance.users.tour', '2026-05-05T10:00:00+00:00');
+    $firstCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.users.tour', '2026-05-05T10:00:00+00:00');
     videochat_onboarding_contract_assert((bool) ($firstCompletion['ok'] ?? false), 'first completion should succeed');
     videochat_onboarding_contract_assert((string) ($firstCompletion['reason'] ?? '') === 'completed', 'first completion reason mismatch');
     videochat_onboarding_contract_assert(
@@ -60,7 +62,7 @@ try {
         'completed tour key missing from payload'
     );
 
-    $duplicateCompletion = videochat_complete_onboarding_tour($pdo, $userId, 'governance.users.tour', '2026-05-05T11:00:00+00:00');
+    $duplicateCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.users.tour', '2026-05-05T11:00:00+00:00');
     videochat_onboarding_contract_assert((bool) ($duplicateCompletion['ok'] ?? false), 'duplicate completion should be idempotent');
     videochat_onboarding_contract_assert((string) ($duplicateCompletion['reason'] ?? '') === 'already_completed', 'duplicate completion reason mismatch');
     videochat_onboarding_contract_assert(
@@ -68,12 +70,15 @@ try {
         'duplicate completion should preserve original completion time'
     );
 
-    $invalidCompletion = videochat_complete_onboarding_tour($pdo, $userId, '../bad-key');
+    $invalidCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, '../bad-key');
     videochat_onboarding_contract_assert((bool) ($invalidCompletion['ok'] ?? true) === false, 'invalid tour key should fail');
     videochat_onboarding_contract_assert(
         (string) (($invalidCompletion['errors'] ?? [])['tour_key'] ?? '') === 'invalid_tour_key',
         'invalid tour key error mismatch'
     );
+    $wrongTenantCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId + 999, 'governance.groups.tour');
+    videochat_onboarding_contract_assert((bool) ($wrongTenantCompletion['ok'] ?? true) === false, 'wrong tenant should fail closed');
+    videochat_onboarding_contract_assert((string) ($wrongTenantCompletion['reason'] ?? '') === 'not_found', 'wrong tenant reason mismatch');
 
     $authContext = videochat_authenticate_request(
         $pdo,

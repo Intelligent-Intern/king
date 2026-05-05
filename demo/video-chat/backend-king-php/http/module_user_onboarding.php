@@ -30,6 +30,12 @@ function videochat_handle_user_onboarding_routes(
             'reason' => 'invalid_user_context',
         ]);
     }
+    $activeTenantId = (int) (($apiAuthContext['tenant']['id'] ?? ($apiAuthContext['session']['active_tenant_id'] ?? 0)));
+    if ($activeTenantId <= 0) {
+        return $errorResponse(403, 'tenant_required', 'A valid active tenant is required.', [
+            'reason' => 'missing_active_tenant',
+        ]);
+    }
 
     [$payload, $decodeError] = $decodeJsonBody($request);
     if (!is_array($payload)) {
@@ -43,6 +49,7 @@ function videochat_handle_user_onboarding_routes(
         $result = videochat_complete_onboarding_tour(
             $pdo,
             $authenticatedUserId,
+            $activeTenantId,
             $payload['tour_key'] ?? '',
             is_string($payload['completed_at'] ?? null) ? (string) $payload['completed_at'] : null
         );

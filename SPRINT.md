@@ -352,7 +352,7 @@ Sprint goal:
 
    Completed 2026-05-05.
 
-8. [ ] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
+8. [x] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
    persisted completion badges.
 
    Done when:
@@ -360,6 +360,17 @@ Sprint goal:
    - Tour completion persists per user/tenant.
    - Badges are visible in personal settings/profile.
    - Tests cover tour definition loading and badge persistence.
+
+   Completed 2026-05-05:
+   - Route action metadata now feeds normalized tour metadata into page
+     headers, and the shared header renders a `?` tour action when permitted.
+   - Completing a tour posts to `/api/user/onboarding/tours/complete` and
+     stores idempotent user plus active-tenant scoped progress in SQLite.
+   - Personal About settings shows completed onboarding badges from session
+     state without growing `WorkspaceShell.vue`.
+   - Backend `onboarding-progress-contract` covers persistence/endpoint
+     behavior; frontend `onboarding-tour-contract` covers tour loading, header
+     wiring, session state, and badge display.
 
 9. [ ] [admin-i18n-hardening] Close remaining admin/governance i18n escape
    hatches.
