@@ -395,6 +395,10 @@ Non-goals for this sprint:
      child modules where needed.
    - Preserve existing behavior while changing display text.
 
+   Progress:
+   - [x] Theme settings/editor strings are keyed and the editor state/actions
+     moved into an options-based `useWorkspaceThemeSettings` composable.
+
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
      surfaces except explicit test fixtures and non-user debug identifiers.
