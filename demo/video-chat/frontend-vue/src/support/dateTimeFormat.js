@@ -1,3 +1,5 @@
+import { normalizeLocalizationLanguage } from './localizationOptions.js';
+
 export const SUPPORTED_DATE_FORMATS = Object.freeze([
   'dmy_dot',
   'dmy_slash',
@@ -49,6 +51,10 @@ export function normalizeTimeFormat(value) {
 export function normalizeDateFormat(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return SUPPORTED_DATE_FORMATS.includes(normalized) ? normalized : 'dmy_dot';
+}
+
+export function normalizeDateTimeLocale(value) {
+  return normalizeLocalizationLanguage(value);
 }
 
 function formatDateParts(date, format) {
@@ -114,6 +120,27 @@ export function formatDateTimeDisplay(value, options = {}) {
   const dateDisplay = formatDateParts(date, normalizeDateFormat(options.dateFormat));
   const timeDisplay = formatTimeParts(date, options.timeFormat);
   return `${dateDisplay} ${timeDisplay}`;
+}
+
+export function formatLocalizedDateTimeDisplay(value, options = {}) {
+  const fallback = typeof options.fallback === 'string' && options.fallback !== '' ? options.fallback : 'n/a';
+  const date = toDate(value);
+  if (!date) {
+    return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(normalizeDateTimeLocale(options.locale), {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: normalizeTimeFormat(options.timeFormat) === '12h',
+    }).format(date);
+  } catch {
+    return formatDateTimeDisplay(value, options);
+  }
 }
 
 export function formatDateRangeDisplay(startsAt, endsAt, options = {}) {
