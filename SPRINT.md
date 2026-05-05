@@ -538,8 +538,8 @@ Non-goals for this sprint:
    - [x] Public booking and join routes load i18n resources without requiring
      an authenticated session and apply document `lang` / `dir`, including RTL
      locales.
-   - [x] Public booking slot labels, FullCalendar locale, and booking submit
-     payload use the active public locale.
+   - [x] Public booking slot labels, FullCalendar locale/direction, and
+     booking submit payload use the active public locale.
 
    Done when:
    - [x] Public pages choose language from explicit route/query/cookie/browser
