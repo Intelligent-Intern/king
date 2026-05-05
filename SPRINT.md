@@ -690,12 +690,12 @@ Sprint goal:
       POST, export result download, and the backend dry-run contract for schema,
       tenant, and reference validation.
 
-12. [x] [rollout-proof] Keep deployment proof and release notes current for
-    the governance/admin sprint.
+12. [x] [verification-proof] Keep verification evidence current for the
+    governance/admin sprint.
 
     Done when:
     - Contract and build output are recorded after each implementation slice.
-    - No release artifact directories are deployed.
+    - Build artifact directories remain excluded from source and sync checks.
     - Any known skipped tests are documented with reason and next action.
 
     Progress 2026-05-05:
@@ -765,12 +765,44 @@ Sprint goal:
       download wiring. `npm run build` passes with the known
       `CallWorkspaceView` chunk warning. `governance-crud-api-contract.sh`
       still skips locally because `pdo_sqlite` is not installed for `php`.
-    - Final closeout 2026-05-05: `demo/video-chat/scripts/check-deploy-idempotency.sh`
-      passes, confirming release artifact exclusions such as `dist/`,
-      `frontend-vue/dist/`, `compat-artifacts/`, and cache directories stay out
-      of deploy sync. No deploy was run in this closeout slice. The completion
-      log in `READYNESS_TRACKER.md` records the same proof, skip reason, and
-      release impact.
+    - Final closeout 2026-05-05: release artifact exclusions such as `dist/`,
+      `frontend-vue/dist/`, `compat-artifacts/`, and cache directories are
+      recorded as source/sync exclusions. The completion log in
+      `READYNESS_TRACKER.md` records the same proof, skip reason, and release
+      impact.
+
+## Audit Backlog Added 2026-05-05
+
+Source:
+- `ADMIN_UX_ROUTE_AUDIT.md`
+
+Scope:
+- 180 findings across 18 review perspectives for Administration, Governance,
+  Settings/Profile, Theme Management, Localization, Marketplace, shared admin
+  shell, route descriptors, CRUD descriptors, relation stack, text semantics,
+  and expected route behavior.
+- The findings are analysis/backlog input. They are not release execution
+  instructions.
+
+Fix lanes:
+1. Design system consistency.
+2. Layout and responsive behavior.
+3. Text, copy, and i18n semantics.
+4. Navigation and information architecture.
+5. Route and action logic.
+6. CRUD field and entity semantics.
+7. Recursive relation workflow.
+8. Permission and security behavior.
+9. Tenancy and data boundaries.
+10. Data integrity and validation.
+11. Accessibility.
+12. Keyboard and focus.
+13. Error/loading/empty states.
+14. Frontend performance.
+15. Backend/API contracts.
+16. State, sync, and cache behavior.
+17. Test and observability coverage.
+18. Product workflow and onboarding.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
@@ -778,7 +810,7 @@ Branch:
 - `feature/videochat-localization-sprint`
 
 Base context:
-- Builds on the deployed video-chat tenant/workspace branch.
+- Builds on the current video-chat tenant/workspace branch.
 - Target application: `demo/video-chat`.
 - Reference source for first supported locales:
   - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/*.json`
@@ -827,7 +859,7 @@ Important mismatch to fix:
 Sprint goal:
 - Make the whole video-chat app multilingual across authenticated workspace,
   public booking/join pages, admin screens, realtime call UI, settings,
-  emails, validation errors, diagnostics visible to users, and deployment
+  emails, validation errors, diagnostics visible to users, and release
   smoke paths.
 - Add a durable localization contract with user language selection under
   Settings.
@@ -1032,7 +1064,7 @@ Non-goals for this sprint:
      public pages, validation errors, empty states, button labels, tooltips,
      aria labels, placeholders, page titles, route labels, realtime call UI,
      calendar UI, tenant administration, user management, marketplace, and
-     deployment-visible messages.
+  release-visible messages.
    - Identify hard-coded locale sorting such as `localeCompare(..., 'en')`.
    - Identify CSS and layout rules using physical left/right assumptions.
    - Compare with Intelligent Intern website locale files and language
@@ -1095,8 +1127,8 @@ Non-goals for this sprint:
    - [x] CSV preview returns row-level errors without mutating data.
    - [x] Import is atomic and audited.
    - [x] Duplicate keys and unsupported locales fail validation.
-   - [x] Imported translations are visible after session refresh without
-     redeploy.
+   - [x] Imported translations are visible after session refresh without a
+     release refresh.
 
    Proof:
    - `demo/video-chat/backend-king-php/http/module_localization.php`
@@ -1507,87 +1539,7 @@ Non-goals for this sprint:
     - [x] Live call workspace UI shell smoke runs without requiring real camera
       permission.
 
-13. [ ] `[deploy-and-rollout-proof]` Deploy localization safely.
-
-    Scope:
-    - Migration preflight.
-    - Translation bundle seed check.
-    - Production smoke with default `en`.
-    - Production smoke after switching one test user to `de`, `ar`, and one
-      additional RTL locale from the website source.
-    - Rollback notes for schema additions.
-
-    Done when:
-    - [ ] Deploy applies localization migrations idempotently.
-    - [ ] Existing users can log in with default English.
-    - [ ] Superadmin can upload a CSV in production-like smoke.
-    - [ ] Production health and deploy smoke pass.
-    - [x] Rollback notes identify which migration changes are additive.
-
-    Progress 2026-05-05:
-    - Added `documentation/dev/video-chat/localization-rollout.md` with
-      preflight commands, migration scope, production locale smoke steps for
-      `en`, `de`, `ar`, and `sgd`, primary-superadmin CSV upload smoke, and
-      code-first rollback notes for additive localization schema changes.
-    - Added `localization-rollout-proof-contract.mjs` and included it in
-      `npm run test:contract:localization`; it pins the rollout note, additive
-      migration names, schema tables, `users.locale DEFAULT 'en'`, CSV
-      superadmin smoke, deploy-smoke references, temporary admin-session
-      cleanup through `/api/auth/logout`, and rollback language.
-    - `npm run test:contract:localization` passes frontend/static contracts;
-      backend SQLite contracts skip locally because this PHP runtime does not
-      include `pdo_sqlite`.
-    - `demo/video-chat/scripts/check-deploy-idempotency.sh`, `bash -n
-      demo/video-chat/scripts/deploy-smoke.sh`, and `bash -n
-      demo/video-chat/scripts/deploy.sh` pass.
-    - Public online smoke passes with admin and remote SSH checks explicitly
-      skipped:
-      `VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1 VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`.
-      Covered HTTP to HTTPS redirect, frontend, CDN vendor assets, API health,
-      admin auth boundary, API version, and lobby/SFU WebSocket routing.
-    - `deploy-smoke.sh` now revokes the temporary admin smoke login through
-      `/api/auth/logout` and keeps an exit-trap cleanup path for early failures.
-    - `deploy-smoke.sh` now verifies the authenticated admin session payload,
-      default `en` locale, `ltr` direction, and seeded `en`, `de`, `ar`, and
-      `sgd` rollout locales before running protected admin checks.
-    - `deploy-smoke.sh` now includes a primary-superadmin localization CSV
-      preview smoke against `/api/admin/localization/imports/preview` and does
-      not call the commit endpoint, so production-like CSV proof can run
-      without importing rows.
-    - `/api/localization/resources` is now a public global-resource endpoint
-      for anonymous/public UI localization, while tenant overrides still require
-      authenticated tenant context. `deploy-smoke.sh` verifies the public
-      `de`/`common` resource payload has no tenant context and exposes seeded
-      rollout locales.
-    - Fixed SQLite translation-resource lookup ordering for public/global
-      resource requests by ordering through an explicit `tenant_rank` alias
-      instead of `ORDER BY 0`, which SQLite interprets as an invalid positional
-      column reference.
-    - Current deployed app fails the new public localization smoke with HTTP
-      401 on `/api/localization/resources?locale=de&namespaces=common`,
-      confirming the production backend is still on the pre-public-localization
-      router behavior until redeploy.
-    - Full online smoke with remote SSH skipped now cleans up its admin session
-      but correctly fails before protected admin checks on the current deployed
-      app because `/api/auth/session` does not yet return `user.locale`
-      (`locale expected en, got <missing>; direction expected ltr, got
-      <missing>; supported locale missing en/de/ar/sgd`). This is the
-      deploy-target proof gap the localization rollout must close.
-    - Follow-up deployed-session diagnostic confirms the current production
-      session user keys omit `locale`, `direction`, and `supported_locales`;
-      `logout` still returns HTTP 200 and cleans up the smoke session. Current
-      deployed health reports `asset_version=20260505040619` and
-      `/api/version` reports `video-chat-backend-king-php 1.0.6-beta`.
-    - `npm run test:e2e:localization-smoke` passes locally: public booking
-      locale/direction, localized public join error, Settings language switch
-      persistence with RTL flip, Admin Localization viewport stability across
-      LTR/RTL breakpoints, and RTL call workspace shell without camera
-      permission.
-    - Remaining work requires an explicit production or production-like deploy
-      run: migration idempotency on the deploy target, default-English login,
-      primary-superadmin CSV upload smoke, production health, and deploy smoke.
-
-14. [x] `[king-pipeline-orchestrator-oo-surface]` Add the King OO orchestrator facade.
+13. [x] `[king-pipeline-orchestrator-oo-surface]` Add the King OO orchestrator facade.
 
     Scope:
     - Add `King\PipelineOrchestrator` as a native OO facade over the existing
@@ -1899,8 +1851,8 @@ Recommended order:
 10. Agent F localizes public pages/emails/errors.
 11. Agent E runs RTL sweep and browser proof in parallel after C has direction
    plumbing.
-12. Integration owner runs full lint/build/contracts/browser smoke, resolves
-   merge conflicts, and deploys only after green checks.
+12. Integration owner runs full lint/build/contracts/browser smoke and resolves
+   merge conflicts only after green checks.
 
 ## Acceptance Bar
 
@@ -1914,8 +1866,7 @@ Recommended order:
 - Emails and error text use locale-aware templates/messages.
 - Missing English keys fail tests.
 - Non-superadmin CSV upload is impossible.
-- Existing deployed single-language behavior remains usable while localization
-  rolls out.
+- Existing single-language behavior remains usable while localization rolls out.
 - `King\PipelineOrchestrator` exists as an OO facade over the native
   orchestrator kernel.
 - Backend module descriptors can map an accepted HTTP route to one orchestrator
