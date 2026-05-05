@@ -498,6 +498,8 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'settings.messenger_contacts': 'Messenger contacts',
   'settings.messenger_handle': 'Handle',
   'settings.no_messenger_contacts': 'No messenger contacts configured.',
+  'settings.no_onboarding_badges': 'No completed tours yet.',
+  'settings.onboarding_badges': 'Onboarding badges',
   'settings.password': 'Password',
   'settings.primary_email': 'Primary email',
   'settings.regional_time': 'Regional Time',

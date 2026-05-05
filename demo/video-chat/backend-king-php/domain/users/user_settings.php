@@ -226,7 +226,7 @@ function videochat_supported_user_date_formats(): array
  *   onboarding_badges: array<int, array{tour_key: string, completed_at: string}>
  * }|null
  */
-function videochat_fetch_user_settings(PDO $pdo, int $userId): ?array
+function videochat_fetch_user_settings(PDO $pdo, int $userId, int $tenantId = 0): ?array
 {
     if ($userId <= 0) {
         return null;
@@ -250,7 +250,6 @@ SELECT
     users.x_url,
     users.youtube_url,
     users.messenger_contacts_json,
-    users.onboarding_progress_json,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -265,6 +264,7 @@ SQL
     }
 
     $localization = videochat_localization_payload($pdo, $row['locale'] ?? null);
+    $onboarding = videochat_fetch_onboarding_progress($pdo, (int) ($row['id'] ?? 0), $tenantId);
 
     return [
         'id' => (int) ($row['id'] ?? 0),
@@ -287,8 +287,8 @@ SQL
         'x_url' => is_string($row['x_url'] ?? null) ? (string) $row['x_url'] : '',
         'youtube_url' => is_string($row['youtube_url'] ?? null) ? (string) $row['youtube_url'] : '',
         'messenger_contacts' => videochat_decode_messenger_contacts($row['messenger_contacts_json'] ?? '[]'),
-        'onboarding_completed_tours' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['completed_tours'],
-        'onboarding_badges' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['badges'],
+        'onboarding_completed_tours' => $onboarding['completed_tours'],
+        'onboarding_badges' => $onboarding['badges'],
     ];
 }
 
@@ -461,7 +461,7 @@ function videochat_validate_user_settings_patch(array $payload, ?PDO $pdo = null
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_update_user_settings(PDO $pdo, int $userId, array $payload): array
+function videochat_update_user_settings(PDO $pdo, int $userId, array $payload, int $tenantId = 0): array
 {
     if ($userId <= 0) {
         return [
@@ -534,7 +534,7 @@ SQL
         ':id' => $userId,
     ]);
 
-    $updated = videochat_fetch_user_settings($pdo, $userId);
+    $updated = videochat_fetch_user_settings($pdo, $userId, $tenantId);
     if ($updated === null) {
         return [
             'ok' => false,

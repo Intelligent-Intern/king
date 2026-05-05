@@ -115,6 +115,36 @@ export function routeActionMetadata(route = {}, fallbackPermissions = []) {
     .filter(Boolean);
 }
 
+function normalizeTourMetadata(route = {}, actions = []) {
+  const source = route.tour && typeof route.tour === 'object' ? route.tour : {};
+  const tourAction = actions.find((action) => action.kind === 'tour') || null;
+  const key = normalizeString(source.key || tourAction?.key);
+  if (key === '') return null;
+
+  const steps = Array.isArray(source.steps)
+    ? source.steps
+        .map((step, index) => {
+          const stepSource = step && typeof step === 'object' ? step : {};
+          return {
+            key: normalizeString(stepSource.key) || `step-${index + 1}`,
+            title: normalizeString(stepSource.title),
+            title_key: normalizeString(stepSource.title_key),
+            body: normalizeString(stepSource.body),
+            body_key: normalizeString(stepSource.body_key),
+          };
+        })
+        .filter((step) => step.title !== '' || step.title_key !== '' || step.body !== '' || step.body_key !== '')
+    : [];
+
+  return {
+    key,
+    title: normalizeString(source.title),
+    title_key: normalizeString(source.title_key),
+    badge_key: normalizeString(source.badge_key),
+    steps,
+  };
+}
+
 export function entryAllowsAccess(entry, contextInput = {}, modulePermissions = []) {
   const context = accessContext(contextInput);
   const moduleKey = normalizeString(entry.module_key);
@@ -150,6 +180,7 @@ export function buildModuleRouteRecords(registry) {
         required_permissions: requiredPermissions,
         i18nNamespaces: normalizeStringList(route.i18n_namespaces),
         actions,
+        tour: normalizeTourMetadata(route, actions),
         readonly_reason_key: normalizeString(route.readonly_reason_key),
       },
     };

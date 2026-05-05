@@ -55,7 +55,6 @@ SELECT
     users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url AS user_post_logout_landing_url,
-    users.onboarding_progress_json,
     roles.slug AS role_slug
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
@@ -132,6 +131,7 @@ SQL
     }
     $tenantPayload = videochat_tenant_auth_payload($tenant);
     $localization = videochat_localization_payload($pdo, $row['locale'] ?? null);
+    $onboarding = videochat_fetch_onboarding_progress($pdo, (int) $row['user_id'], (int) ($tenantPayload['id'] ?? 0));
 
     return [
         'ok' => true,
@@ -172,8 +172,8 @@ SQL
                     ? trim((string) $source['user_post_logout_landing_url'])
                     : '';
             })($row),
-            'onboarding_completed_tours' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['completed_tours'],
-            'onboarding_badges' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['badges'],
+            'onboarding_completed_tours' => $onboarding['completed_tours'],
+            'onboarding_badges' => $onboarding['badges'],
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
             'tenant' => $tenantPayload,
