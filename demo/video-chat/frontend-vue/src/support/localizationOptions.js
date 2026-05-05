@@ -29,7 +29,7 @@ export const SUPPORTED_LOCALIZATION_LANGUAGES = Object.freeze([
   { code: 'ko', label: 'Korean' },
 ]);
 
-const RTL_LANGUAGE_CODES = new Set(['ar', 'fa', 'ps', 'ur']);
+const RTL_LANGUAGE_CODES = new Set(['ar', 'fa', 'ps', 'sgd']);
 
 export function normalizeLocalizationLanguage(value) {
   const normalized = String(value || '').trim().toLowerCase();

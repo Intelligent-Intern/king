@@ -1,6 +1,11 @@
 import { reactive } from 'vue';
 import { fetchBackend } from '../../support/backendFetch';
 import { normalizeDateFormat, normalizeTimeFormat } from '../../support/dateTimeFormat';
+import {
+  localizationLanguageDirection,
+  normalizeLocalizationLanguage,
+  SUPPORTED_LOCALIZATION_LANGUAGES,
+} from '../../support/localizationOptions';
 import { extractErrorMessage, normalizeNetworkErrorMessage } from './sessionErrors';
 const STORAGE_KEY = 'ii_videocall_v1_session';
 const AUTH_ROLES = new Set(['admin', 'user']);
@@ -30,6 +35,23 @@ function normalizeTenantSnapshot(value) {
     role: normalizeString(source.role).toLowerCase(),
     permissions: source.permissions && typeof source.permissions === 'object' ? { ...source.permissions } : {},
   };
+}
+function normalizeSupportedLocales(value) {
+  const source = Array.isArray(value) && value.length > 0 ? value : SUPPORTED_LOCALIZATION_LANGUAGES;
+  return source
+    .map((locale) => {
+      const code = normalizeLocalizationLanguage(locale?.code);
+      return {
+        code,
+        label: normalizeString(locale?.label) || code.toUpperCase(),
+        direction: normalizeString(locale?.direction) === 'rtl' ? 'rtl' : localizationLanguageDirection(code),
+        is_default: locale?.is_default === true,
+      };
+    })
+    .filter((locale, index, locales) => (
+      locale.code !== ''
+      && locales.findIndex((candidate) => candidate.code === locale.code) === index
+    ));
 }
 function inferAccountType(user) {
   const explicitType = normalizeAccountType(user?.account_type);
@@ -73,6 +95,9 @@ export const sessionState = reactive({
   timeFormat: '24h',
   dateFormat: 'dmy_dot',
   theme: 'dark',
+  locale: 'en',
+  direction: 'ltr',
+  supportedLocales: SUPPORTED_LOCALIZATION_LANGUAGES,
   canEditThemes: false,
   tenantId: 0,
   tenantUuid: '',
@@ -115,6 +140,9 @@ function resetUserFields() {
   sessionState.timeFormat = '24h';
   sessionState.dateFormat = 'dmy_dot';
   sessionState.theme = 'dark';
+  sessionState.locale = 'en';
+  sessionState.direction = 'ltr';
+  sessionState.supportedLocales = SUPPORTED_LOCALIZATION_LANGUAGES;
   sessionState.canEditThemes = false;
   sessionState.tenantId = 0;
   sessionState.tenantUuid = '';
@@ -149,6 +177,11 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.timeFormat = normalizeTimeFormat(user.time_format);
   sessionState.dateFormat = normalizeDateFormat(user.date_format);
   sessionState.theme = normalizeTheme(user.theme);
+  sessionState.locale = normalizeLocalizationLanguage(user.locale);
+  sessionState.direction = normalizeString(user.direction) === 'rtl'
+    ? 'rtl'
+    : localizationLanguageDirection(sessionState.locale);
+  sessionState.supportedLocales = normalizeSupportedLocales(user.supported_locales);
   const tenantSnapshot = normalizeTenantSnapshot(tenant || user.tenant);
   sessionState.tenantId = tenantSnapshot.id;
   sessionState.tenantUuid = tenantSnapshot.uuid;
