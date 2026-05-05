@@ -33,6 +33,17 @@ try {
 
     $adminId = (int) $pdo->query("SELECT users.id FROM users INNER JOIN roles ON roles.id = users.role_id WHERE roles.slug = 'admin' ORDER BY users.id ASC LIMIT 1")->fetchColumn();
     videochat_localization_import_assert($adminId === 1, 'primary superadmin user id must be 1 in seeded test database');
+    $seedCanonical = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source)
+VALUES(NULL, 'en', :namespace, :resource_key, :value, 'contract')
+SQL
+    );
+    $seedCanonical->execute([
+        ':namespace' => 'common',
+        ':resource_key' => 'invite',
+        ':value' => 'Hello {name}, open {link}.',
+    ]);
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [
@@ -64,12 +75,21 @@ try {
     $invalidCsv = "locale,namespace,key,value\n"
         . "xx,common,save,Bad Locale\n"
         . "de,common,save,One\n"
-        . "de,common,save,Two\n";
+        . "de,common,save,Two\n"
+        . "de,common,invite,Hallo ohne Link\n";
+    $sameFilePlaceholderCsv = "locale,namespace,key,value\n"
+        . "en,common,welcome,Welcome {name}\n"
+        . "de,common,welcome,Willkommen\n";
 
     $preview = videochat_preview_translation_csv($pdo, $validCsv);
     videochat_localization_import_assert($preview['ok'] === true, 'valid preview should pass');
     videochat_localization_import_assert((int) $preview['valid_rows'] === 2, 'valid preview row count mismatch');
-    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 0, 'preview must not mutate translation resources');
+    videochat_localization_import_assert((int) $pdo->query("SELECT COUNT(*) FROM translation_resources WHERE source <> 'contract'")->fetchColumn() === 0, 'preview must not mutate translation resources');
+
+    $sameFilePreview = videochat_preview_translation_csv($pdo, $sameFilePlaceholderCsv);
+    videochat_localization_import_assert($sameFilePreview['ok'] === false, 'same-file missing placeholder preview should fail');
+    $sameFileErrorCodes = array_map(static fn (array $error): string => (string) ($error['code'] ?? ''), $sameFilePreview['errors'] ?? []);
+    videochat_localization_import_assert(in_array('missing_required_placeholders', $sameFileErrorCodes, true), 'same-file preview must report missing placeholders');
 
     $forbiddenResponse = videochat_handle_localization_routes(
         '/api/admin/localization/imports/preview',
@@ -101,7 +121,8 @@ try {
     $errorCodes = array_map(static fn (array $error): string => (string) ($error['code'] ?? ''), is_array($previewErrors) ? $previewErrors : []);
     videochat_localization_import_assert(in_array('unsupported_locale', $errorCodes, true), 'invalid commit must report unsupported locale');
     videochat_localization_import_assert(in_array('duplicate_key', $errorCodes, true), 'invalid commit must report duplicate key');
-    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 0, 'failed commit must not mutate translation resources');
+    videochat_localization_import_assert(in_array('missing_required_placeholders', $errorCodes, true), 'invalid commit must report missing placeholders');
+    videochat_localization_import_assert((int) $pdo->query("SELECT COUNT(*) FROM translation_resources WHERE source <> 'contract'")->fetchColumn() === 0, 'failed commit must not mutate translation resources');
 
     $validCommit = videochat_handle_localization_routes(
         '/api/admin/localization/imports/commit',
