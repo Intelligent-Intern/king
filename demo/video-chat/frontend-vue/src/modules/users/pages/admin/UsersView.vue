@@ -1,33 +1,33 @@
 <template>
   <section class="view-card admin-users-view">
-    <AppPageHeader class="section admin-users-head" title="Nutzer">
+    <AppPageHeader class="section admin-users-head" :title="t('users.title')">
       <template #actions>
-        <button class="btn btn-cyan" type="button" @click="openCreateUser">Neuer Nutzer</button>
+        <button class="btn btn-cyan" type="button" @click="openCreateUser">{{ t('users.new_user') }}</button>
       </template>
     </AppPageHeader>
 
     <section class="toolbar admin-users-toolbar">
-      <label class="search-field search-field-main" aria-label="Nutzer suchen">
+      <label class="search-field search-field-main" :aria-label="t('users.search')">
         <input
           v-model.trim="queryDraft"
           class="input"
           type="search"
-          placeholder="Nutzer suchen"
+          :placeholder="t('users.search')"
         />
       </label>
 
       <AppIconButton
         class="users-toolbar-search-btn"
         icon="/assets/orgas/kingrt/icons/send.png"
-        title="Nutzer suchen"
-        aria-label="Nutzer suchen"
+        :title="t('users.search')"
+        :aria-label="t('users.search')"
         @click="applySearchNow"
       />
     </section>
 
     <section v-if="notice" class="section users-banner ok">{{ notice }}</section>
     <section v-if="error" class="section users-banner error">{{ error }}</section>
-    <section v-if="loading && rows.length === 0" class="section users-empty">Loading users...</section>
+    <section v-if="loading && rows.length === 0" class="section users-empty">{{ t('users.loading') }}</section>
 
     <AdminUsersTable
       v-else
@@ -45,7 +45,7 @@
         :page="page"
         :page-count="pageCount"
         :total="pagination.total"
-        total-label="Nutzer"
+        :total-label="t('users.total_label')"
         :has-prev="pagination.hasPrev"
         :has-next="pagination.hasNext"
         :disabled="loading"
@@ -97,6 +97,7 @@ import { createAdminSyncReloadController } from './syncReload';
 import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
 import { appearanceState, loadWorkspaceAppearance } from '../../../../domain/workspace/appearance';
+import { t } from '../../../localization/i18nRuntime.js';
 import {
   applyAdminUserPermissions,
   canDeleteAdminUser,
@@ -109,10 +110,10 @@ const router = useRouter();
 const route = useRoute();
 const apiRequest = createAdminUsersApi({ router });
 const avatarPlaceholder = '/assets/orgas/kingrt/avatar-placeholder.svg';
-const defaultAvatarOptions = [
-  { label: 'KingRT default', path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
-  { label: 'Legacy default', path: '/assets/orgas/intelligent-intern/avatar-placeholder.svg' },
-];
+const defaultAvatarOptions = computed(() => [
+  { label: t('users.avatar_kingrt_default'), path: '/assets/orgas/kingrt/avatar-placeholder.svg' },
+  { label: t('users.avatar_legacy_default'), path: '/assets/orgas/intelligent-intern/avatar-placeholder.svg' },
+]);
 const queryDraft = ref('');
 const queryApplied = ref('');
 const page = ref(1);
@@ -226,7 +227,7 @@ async function loadUsers() {
     pagination.pageCount = 1;
     pagination.hasPrev = false;
     pagination.hasNext = false;
-    error.value = err instanceof Error ? err.message : 'Could not load users.';
+    error.value = err instanceof Error ? err.message : t('users.load_failed');
   } finally {
     if (token === loadToken) loading.value = false;
   }
@@ -321,7 +322,7 @@ async function loadUserEmails(userId) {
     userEmailRows.value = emails;
   } catch (err) {
     userEmailRows.value = [];
-    formError.value = err instanceof Error ? err.message : 'Could not load user emails.';
+    formError.value = err instanceof Error ? err.message : t('users.load_emails_failed');
   } finally {
     userEmailLoading.value = false;
   }
@@ -361,13 +362,20 @@ function closeDialog() {
   formError.value = '';
 }
 
-const dialogTitle = computed(() => (form.mode === 'create' ? 'Create user' : 'Edit user'));
-const dialogSubmitLabel = computed(() => (form.mode === 'create' ? 'Create user' : 'Save changes'));
+const dialogTitle = computed(() => (form.mode === 'create' ? t('users.create_user') : t('users.edit_user')));
+const dialogSubmitLabel = computed(() => (form.mode === 'create' ? t('users.create_user') : t('common.save_changes')));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
 const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
 const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const canEditThemeEditor = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeThemeEditor));
-const workspaceThemeOptions = computed(() => appearanceState.themes.length > 0 ? appearanceState.themes : [{ id: 'dark', label: 'dark' }, { id: 'light', label: 'light' }]);
+const workspaceThemeOptions = computed(() => (
+  appearanceState.themes.length > 0
+    ? appearanceState.themes
+    : [
+      { id: 'dark', label: t('theme_settings.system_dark') },
+      { id: 'light', label: t('theme_settings.system_light') },
+    ]
+));
 const avatarPreviewSrc = computed(() => normalizeAdminAvatarSrc(form.avatar_path, avatarPlaceholder));
 const avatarEditorPreviewSrc = computed(() => {
   if (avatarUploadDataUrl.value !== '') return avatarUploadDataUrl.value;
@@ -397,7 +405,7 @@ async function handleAvatarFileSelect(event) {
   if (!file) return;
 
   if (!isAllowedAvatarMimeType(file.type)) {
-    formError.value = 'Avatar must be PNG, JPEG, or WEBP.';
+    formError.value = t('users.avatar_type_invalid');
     return;
   }
 
@@ -406,7 +414,7 @@ async function handleAvatarFileSelect(event) {
     avatarDefaultSelection.value = '';
     formError.value = '';
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not prepare avatar upload.';
+    formError.value = err instanceof Error ? err.message : t('settings.avatar_prepare_failed');
   }
 }
 
@@ -422,11 +430,11 @@ async function createPendingEmail() {
 
   const nextEmail = String(userEmailDraft.value || '').trim().toLowerCase();
   if (nextEmail === '') {
-    formError.value = 'Email is required.';
+    formError.value = t('users.email_required');
     return;
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(nextEmail)) {
-    formError.value = 'Email is invalid.';
+    formError.value = t('users.email_invalid');
     return;
   }
 
@@ -444,17 +452,17 @@ async function createPendingEmail() {
     const sent = Boolean(delivery.sent);
     const channel = String(delivery.channel || '').trim();
     if (sent) {
-      notice.value = `Confirmation email sent to ${nextEmail}.`;
+      notice.value = t('users.confirmation_email_sent', { email: nextEmail });
     } else if (channel !== '') {
-      notice.value = `Confirmation for ${nextEmail} queued via ${channel}.`;
+      notice.value = t('users.confirmation_queued_channel', { email: nextEmail, channel });
     } else {
-      notice.value = `Confirmation for ${nextEmail} has been queued.`;
+      notice.value = t('users.confirmation_queued', { email: nextEmail });
     }
     adminSyncReload.publish('users', 'user_email_added');
     userEmailDraft.value = '';
     await loadUserEmails(form.id);
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not create email confirmation.';
+    formError.value = err instanceof Error ? err.message : t('users.email_confirmation_create_failed');
   } finally {
     userEmailSubmitting.value = false;
   }
@@ -467,11 +475,11 @@ async function deletePendingEmail(emailRow) {
   const emailValue = String(emailRow?.email || '').trim();
   if (emailId <= 0) return;
   if (Boolean(emailRow?.is_verified)) {
-    formError.value = 'Confirmed emails cannot be deleted.';
+    formError.value = t('users.confirmed_email_delete_blocked');
     return;
   }
 
-  const confirmed = window.confirm(`Delete unconfirmed email ${emailValue || `#${emailId}`}?`);
+  const confirmed = window.confirm(t('users.confirm_delete_unconfirmed_email', { email: emailValue || `#${emailId}` }));
   if (!confirmed) return;
 
   userEmailMutatingId.value = emailId;
@@ -480,11 +488,11 @@ async function deletePendingEmail(emailRow) {
     await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}/emails/${encodeURIComponent(String(emailId))}`, {
       method: 'DELETE',
     });
-    notice.value = `Removed unconfirmed email ${emailValue || `#${emailId}`}.`;
+    notice.value = t('users.removed_unconfirmed_email', { email: emailValue || `#${emailId}` });
     adminSyncReload.publish('users', 'user_email_removed');
     await loadUserEmails(form.id);
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not delete email.';
+    formError.value = err instanceof Error ? err.message : t('users.delete_email_failed');
   } finally {
     userEmailMutatingId.value = 0;
   }
@@ -498,22 +506,22 @@ async function submitForm() {
   const role = String(form.role || 'user').trim();
 
   if (displayName === '') {
-    formError.value = 'Display name is required.';
+    formError.value = t('settings.display_name_required');
     return;
   }
 
   if (form.mode === 'create' && email === '') {
-    formError.value = 'Email is required.';
+    formError.value = t('users.email_required');
     return;
   }
 
   if (form.mode === 'create' && String(form.password || '').trim() === '') {
-    formError.value = 'Password is required for new users.';
+    formError.value = t('users.password_required_new');
     return;
   }
 
   if (form.mode === 'create' && String(form.password_repeat || '') !== String(form.password || '')) {
-    formError.value = 'Passwords do not match.';
+    formError.value = t('users.passwords_mismatch');
     return;
   }
 
@@ -533,7 +541,7 @@ async function submitForm() {
           theme_editor_enabled: Boolean(form.theme_editor_enabled),
         },
       });
-      notice.value = `Created ${displayName}.`;
+      notice.value = t('users.created_notice', { name: displayName });
       adminSyncReload.publish('users', 'user_created');
       page.value = 1;
     } else {
@@ -557,14 +565,14 @@ async function submitForm() {
         method: 'PATCH',
         body: patchBody,
       });
-      notice.value = `Updated ${displayName}.`;
+      notice.value = t('users.updated_notice', { name: displayName });
       adminSyncReload.publish('users', 'user_updated');
     }
 
     dialogOpen.value = false;
     await loadUsers();
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not save user.';
+    formError.value = err instanceof Error ? err.message : t('users.save_failed');
   } finally {
     formSaving.value = false;
   }
@@ -577,7 +585,7 @@ async function saveAvatarChanges() {
   if (userId <= 0) return;
 
   if (avatarUploadDataUrl.value === '' && avatarDefaultSelection.value === '') {
-    formError.value = 'Select an avatar file or pick a default avatar.';
+    formError.value = t('users.avatar_select_required');
     return;
   }
 
@@ -596,7 +604,7 @@ async function saveAvatarChanges() {
       });
       const avatarPath = String(uploadPayload?.result?.avatar_path || '').trim();
       form.avatar_path = avatarPath;
-      notice.value = 'Avatar uploaded.';
+      notice.value = t('users.avatar_uploaded');
     } else {
       const defaultPath = String(avatarDefaultSelection.value || '').trim();
       await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}`, {
@@ -606,14 +614,14 @@ async function saveAvatarChanges() {
         },
       });
       form.avatar_path = defaultPath;
-      notice.value = 'Default avatar applied.';
+      notice.value = t('users.default_avatar_applied');
     }
 
     adminSyncReload.publish('users', 'user_avatar_updated');
     closeAvatarEditor();
     await loadUsers();
   } catch (err) {
-    formError.value = err instanceof Error ? err.message : 'Could not save avatar changes.';
+    formError.value = err instanceof Error ? err.message : t('users.avatar_save_failed');
   } finally {
     formSaving.value = false;
   }
@@ -626,7 +634,7 @@ async function deleteUser(user) {
   if (mutatingUserId.value === userId) return;
 
   const label = String(user?.display_name || user?.email || `#${userId}`);
-  const confirmed = window.confirm(`Delete ${label}? This also deletes all video calls owned by this user.`);
+  const confirmed = window.confirm(t('users.confirm_delete_user', { name: label }));
   if (!confirmed) return;
 
   mutatingUserId.value = userId;
@@ -639,7 +647,7 @@ async function deleteUser(user) {
       method: 'DELETE',
     });
     const deletedCalls = Number(payload?.result?.deleted_calls || 0);
-    notice.value = `Deleted ${label}. Removed ${deletedCalls} owned video calls.`;
+    notice.value = t('users.deleted_notice', { name: label, count: deletedCalls });
     adminSyncReload.publish('users', 'user_deleted');
 
     if (dialogOpen.value && form.mode === 'edit' && Number(form.id || 0) === userId) {
@@ -651,7 +659,7 @@ async function deleteUser(user) {
     }
     await loadUsers();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not delete user.';
+    error.value = err instanceof Error ? err.message : t('users.delete_failed');
   } finally {
     mutatingUserId.value = 0;
   }
@@ -668,17 +676,20 @@ async function toggleUserStatus(user) {
   try {
     const status = String(user.status || '').toLowerCase();
     if (status !== 'disabled' && userId === Number(sessionState.userId || 0)) {
-      error.value = 'You cannot deactivate your own account.';
+      error.value = t('users.cannot_deactivate_self');
       return;
     }
     await apiRequest(`/api/admin/users/${encodeURIComponent(String(userId))}/${status === 'disabled' ? 'reactivate' : 'deactivate'}`, {
       method: 'POST',
     });
-    notice.value = `${status === 'disabled' ? 'Reactivated' : 'Deactivated'} ${String(user.display_name || user.email || userId)}.`;
+    notice.value = t('users.status_changed_notice', {
+      action: status === 'disabled' ? t('users.reactivated') : t('users.deactivated'),
+      name: String(user.display_name || user.email || userId),
+    });
     adminSyncReload.publish('users', 'user_status_updated');
     await loadUsers();
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Could not update user status.';
+    error.value = err instanceof Error ? err.message : t('users.status_update_failed');
   } finally {
     mutatingUserId.value = 0;
   }
@@ -711,11 +722,11 @@ async function openEditUserFromRouteQuery() {
     if (!user) return;
     await openEditUser(user);
     if (String(route.query.email_verified || '').trim() === '1') {
-      notice.value = 'Email change confirmed.';
+      notice.value = t('users.email_change_confirmed');
     }
   } catch (err) {
     if (requestToken !== routeEditRequestToken) return;
-    error.value = err instanceof Error ? err.message : 'Could not open user editor.';
+    error.value = err instanceof Error ? err.message : t('users.open_editor_failed');
   }
 }
 
