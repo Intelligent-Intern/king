@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { createPinia, setActivePinia } from 'pinia';
 import {
   buildModuleRouteRecords,
@@ -8,6 +10,7 @@ import {
 import { workspaceModuleRegistry, workspaceModuleRouteRecords } from '../../src/modules/index.js';
 import { useWorkspaceModuleStore } from '../../src/stores/workspaceModuleStore.js';
 
+const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const routes = buildModuleRouteRecords(workspaceModuleRegistry);
 assert.equal(routes.length, workspaceModuleRegistry.routes().length, 'every descriptor route must become a router record');
 assert.deepEqual(
@@ -72,5 +75,15 @@ assert.equal(
   adminFlat.length,
   'Pinia module store must expose generated navigation',
 );
+
+const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8');
+assert.match(routerSource, /workspaceModuleRouteRecords/, 'router must consume generated module route records');
+assert.doesNotMatch(routerSource, /name:\s*['"]admin-governance-groups['"]/, 'router must not hardcode governance CRUD routes');
+assert.doesNotMatch(routerSource, /name:\s*['"]admin-administration-marketplace['"]/, 'router must not hardcode administration module routes');
+
+const navigationSource = await readFile(path.join(root, 'src/layouts/WorkspaceNavigation.vue'), 'utf8');
+assert.match(navigationSource, /useWorkspaceModuleStore/, 'workspace navigation must consume the Pinia module store');
+assert.doesNotMatch(navigationSource, /label:\s*['"]Marketplace['"]/, 'workspace navigation must not hardcode module nav labels');
+assert.match(navigationSource, /callNavigationItems/, 'workspace navigation may keep call navigation outside module descriptors');
 
 console.log('[module-navigation-builder-contract] PASS');
