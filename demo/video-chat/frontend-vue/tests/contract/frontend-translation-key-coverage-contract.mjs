@@ -16,6 +16,7 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/access/GoodbyeView.vue',
   'src/domain/calls/access/JoinView.vue',
   'src/domain/calls/admin/cancelDelete.js',
+  'src/domain/calls/appointment/AppointmentBookingModal.vue',
   'src/domain/calls/appointment/AppointmentConfigPanel.vue',
   'src/domain/calls/appointment/AppointmentSettingsModal.vue',
   'src/domain/calls/appointment/AppointmentSlotRowsForm.vue',

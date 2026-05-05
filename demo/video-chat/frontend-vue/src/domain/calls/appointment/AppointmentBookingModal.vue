@@ -1,8 +1,8 @@
 <template>
   <AppModalShell
     :open="open"
-    title="Book a Video Call"
-    aria-label="Public appointment booking"
+    :title="t('public.booking.title')"
+    :aria-label="t('public.booking.dialog_aria')"
     dialog-class="calls-modal-dialog appointment-booking-dialog"
     body-class="calls-modal-body appointment-booking-body"
     footer-class="calls-modal-footer appointment-booking-footer"
@@ -12,23 +12,23 @@
       <section v-if="state.error" class="calls-inline-error">{{ state.error }}</section>
 
       <section v-if="state.success" class="appointment-booking-success">
-        <h2>Thank you.</h2>
-        <p>Your video call is scheduled for {{ state.confirmedSlotLabel }}.</p>
+        <h2>{{ t('public.booking.thank_you') }}</h2>
+        <p>{{ t('public.booking.scheduled_for', { slot: state.confirmedSlotLabel }) }}</p>
         <div class="appointment-success-actions">
-          <a v-if="bookingLinks.joinUrl" class="btn btn-cyan" :href="bookingLinks.joinUrl">Open video call</a>
+          <a v-if="bookingLinks.joinUrl" class="btn btn-cyan" :href="bookingLinks.joinUrl">{{ t('public.booking.open_video_call') }}</a>
           <a v-if="bookingLinks.googleUrl" class="btn" :href="bookingLinks.googleUrl" target="_blank" rel="noopener">
-            Add to Google Calendar
+            {{ t('public.booking.add_google_calendar') }}
           </a>
           <button v-if="bookingLinks.canDownloadIcs" class="btn" type="button" @click="downloadIcs">
-            Download iCal
+            {{ t('public.booking.download_ical') }}
           </button>
         </div>
       </section>
 
       <section v-else class="appointment-booking-grid">
-        <section class="appointment-booking-left" :class="{ 'has-invitation': invitationText }" aria-label="Available video call slots">
+        <section class="appointment-booking-left" :class="{ 'has-invitation': invitationText }" :aria-label="t('public.booking.available_slots_aria')">
           <section v-if="invitationText" class="appointment-invitation-text">{{ invitationText }}</section>
-          <section v-if="state.loading" class="calls-inline-hint">Loading slots...</section>
+          <section v-if="state.loading" class="calls-inline-hint">{{ t('public.booking.loading_slots') }}</section>
           <section v-show="!state.loading" ref="calendarEl" class="appointment-booking-calendar"></section>
 
           <div class="appointment-slot-list">
@@ -43,7 +43,7 @@
               {{ slotLabel(slot) }}
             </button>
             <p v-if="!state.loading && state.slots.length === 0" class="calls-inline-hint">
-              No video call slots are currently available.
+              {{ t('public.booking.no_slots') }}
             </p>
           </div>
         </section>
@@ -56,24 +56,24 @@
 
           <div class="appointment-form-row compact">
             <label class="field">
-              <span>Salutation</span>
+              <span>{{ t('public.booking.salutation') }}</span>
               <select v-model="form.salutation" class="input">
-                <option value="">None</option>
-                <option value="Mr.">Mr.</option>
-                <option value="Ms.">Ms.</option>
-                <option value="Mx.">Mx.</option>
-                <option value="Dr.">Dr.</option>
+                <option value="">{{ t('public.booking.salutation_none') }}</option>
+                <option value="Mr.">{{ t('public.booking.salutation_mr') }}</option>
+                <option value="Ms.">{{ t('public.booking.salutation_ms') }}</option>
+                <option value="Mx.">{{ t('public.booking.salutation_mx') }}</option>
+                <option value="Dr.">{{ t('public.booking.salutation_dr') }}</option>
               </select>
             </label>
             <label class="field">
-              <span>Title</span>
+              <span>{{ t('public.booking.honorific_title') }}</span>
               <input v-model.trim="form.title" class="input" type="text" autocomplete="honorific-prefix" />
             </label>
           </div>
 
           <div class="appointment-form-row">
             <label class="field">
-              <span>First name</span>
+              <span>{{ t('public.booking.first_name') }}</span>
               <span v-if="fieldError('first_name')" class="appointment-field-error">{{ fieldError('first_name') }}</span>
               <input
                 v-model.trim="form.first_name"
@@ -84,7 +84,7 @@
               />
             </label>
             <label class="field">
-              <span>Last name</span>
+              <span>{{ t('public.booking.last_name') }}</span>
               <span v-if="fieldError('last_name')" class="appointment-field-error">{{ fieldError('last_name') }}</span>
               <input
                 v-model.trim="form.last_name"
@@ -97,7 +97,7 @@
           </div>
 
           <label class="field">
-            <span>Email</span>
+            <span>{{ t('public.booking.email') }}</span>
             <span v-if="fieldError('email')" class="appointment-field-error">{{ fieldError('email') }}</span>
             <input
               v-model.trim="form.email"
@@ -109,43 +109,30 @@
           </label>
 
           <label class="field">
-            <span>Message</span>
+            <span>{{ t('public.booking.message') }}</span>
             <textarea v-model.trim="form.message" class="calls-textarea appointment-message" rows="5"></textarea>
           </label>
 
           <section v-if="state.privacyOpen" class="appointment-privacy-overlay">
             <header>
-              <h3>Privacy Policy</h3>
-              <button class="icon-mini-btn" type="button" aria-label="Close privacy policy" @click="state.privacyOpen = false">
+              <h3>{{ t('public.booking.privacy_policy') }}</h3>
+              <button class="icon-mini-btn" type="button" :aria-label="t('public.booking.close_privacy_policy')" @click="state.privacyOpen = false">
                 <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
               </button>
             </header>
             <div class="appointment-privacy-copy">
-              <p>
-                We process the details you submit to handle your video call booking, contact you,
-                keep a lead list, and prepare the scheduled video call.
-              </p>
-              <p>
-                The data can include your name, email address, organization context,
-                message, selected call time, consent state, and technical server logs.
-              </p>
-              <p>
-                Legal bases are pre-contractual measures and legitimate interest in
-                handling booking requests. Data is deleted when it is no longer needed
-                unless legal retention duties apply.
-              </p>
-              <p>
-                You can request access, correction, deletion, restriction, portability,
-                objection, or consent withdrawal by contacting kontakt@kingrt.com.
-              </p>
+              <p>{{ t('public.booking.privacy_copy_1') }}</p>
+              <p>{{ t('public.booking.privacy_copy_2') }}</p>
+              <p>{{ t('public.booking.privacy_copy_3') }}</p>
+              <p>{{ t('public.booking.privacy_copy_4') }}</p>
             </div>
           </section>
 
           <label class="appointment-consent-row" :class="{ invalid: Boolean(fieldError('privacy_accepted')) }">
             <input v-model="form.privacy_accepted" type="checkbox" />
             <span>
-              I have read and accept the
-              <button class="appointment-link-button" type="button" @click="state.privacyOpen = true">privacy policy</button>.
+              {{ t('public.booking.privacy_accept_prefix') }}
+              <button class="appointment-link-button" type="button" @click="state.privacyOpen = true">{{ t('public.booking.privacy_policy_link') }}</button>{{ t('public.booking.privacy_accept_suffix') }}
             </span>
           </label>
           <span v-if="fieldError('privacy_accepted')" class="appointment-field-error">
@@ -156,7 +143,7 @@
     </template>
 
     <template #footer>
-      <button class="btn" type="button" :disabled="state.submitting" @click="$emit('close')">Close</button>
+      <button class="btn" type="button" :disabled="state.submitting" @click="$emit('close')">{{ t('common.close') }}</button>
       <button
         v-if="!state.success"
         class="btn btn-cyan"
@@ -164,7 +151,7 @@
         :disabled="state.submitting || state.loading"
         @click="submit"
       >
-        {{ state.submitting ? 'Submitting...' : 'Book video call' }}
+        {{ state.submitting ? t('public.booking.submitting') : t('public.booking.book_video_call') }}
       </button>
     </template>
   </AppModalShell>
@@ -177,7 +164,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import { bookPublicAppointment, loadPublicAppointmentSlots, toLocalSlotLabel } from './appointmentCalendarApi';
-import { i18nState } from '../../../modules/localization/i18nRuntime.js';
+import { i18nState, t } from '../../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
   open: {
@@ -232,7 +219,7 @@ const activeLocale = computed(() => String(i18nState.locale || currentDocumentLo
 const activeDirection = computed(() => (i18nState.direction === 'rtl' ? 'rtl' : 'ltr'));
 const selectedSlot = computed(() => state.slots.find((slot) => String(slot.id) === state.selectedSlotId) || null);
 const selectedSlotLabel = computed(() => (
-  selectedSlot.value ? toLocalSlotLabel(selectedSlot.value, { locale: activeLocale.value }) : 'Select a video call slot'
+  selectedSlot.value ? toLocalSlotLabel(selectedSlot.value, { locale: activeLocale.value }) : t('public.booking.select_slot')
 ));
 const invitationText = computed(() => String(state.settings.invitation_text || '').trim());
 const bookingLinks = computed(() => {
@@ -271,22 +258,22 @@ function slotLabel(slot) {
 function localErrors() {
   const errors = {};
   if (!selectedSlot.value) {
-    errors.slot_id = 'Please select a video call slot.';
+    errors.slot_id = t('public.booking.error_select_slot');
   }
   if (String(form.first_name || '').trim() === '') {
-    errors.first_name = 'First name is required.';
+    errors.first_name = t('public.booking.error_first_name_required');
   }
   if (String(form.last_name || '').trim() === '') {
-    errors.last_name = 'Last name is required.';
+    errors.last_name = t('public.booking.error_last_name_required');
   }
   const email = String(form.email || '').trim();
   if (email === '') {
-    errors.email = 'Email is required.';
+    errors.email = t('public.booking.error_email_required');
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = 'Enter a valid email address.';
+    errors.email = t('public.booking.error_email_invalid');
   }
   if (!form.privacy_accepted) {
-    errors.privacy_accepted = 'Privacy acceptance is required.';
+    errors.privacy_accepted = t('public.booking.error_privacy_required');
   }
   return errors;
 }
@@ -316,7 +303,7 @@ function syncCalendarSlots() {
   for (const slot of state.slots) {
     calendarInstance.addEvent({
       id: String(slot.id || ''),
-      title: 'Video call',
+      title: t('public.booking.default_call_title'),
       start: new Date(String(slot.starts_at || '')),
       end: new Date(String(slot.ends_at || '')),
       backgroundColor: String(slot.id) === state.selectedSlotId ? '#4fd7ff' : '#0e8fb8',
@@ -370,7 +357,7 @@ async function loadSlots() {
     await nextTick();
     calendarInstance?.updateSize();
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not load video call slots.';
+    state.error = error instanceof Error ? error.message : t('public.booking.load_failed');
   } finally {
     state.loading = false;
   }
@@ -407,7 +394,7 @@ async function submit() {
     state.success = true;
   } catch (error) {
     state.serverFields = error?.fields && typeof error.fields === 'object' ? error.fields : {};
-    state.error = error instanceof Error ? error.message : 'Could not book video call.';
+    state.error = error instanceof Error ? error.message : t('public.booking.book_failed');
   } finally {
     state.submitting = false;
   }
@@ -433,9 +420,9 @@ function buildGoogleCalendarUrl(call, joinUrl) {
   if (!startsAt || !endsAt || !joinUrl) return '';
   const params = new URLSearchParams({
     action: 'TEMPLATE',
-    text: String(call?.title || 'Video call'),
+    text: String(call?.title || t('public.booking.default_call_title')),
     dates: `${startsAt}/${endsAt}`,
-    details: `Video call link:\n${joinUrl}`,
+    details: `${t('public.booking.video_call_link_label')}:\n${joinUrl}`,
     location: joinUrl,
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -464,8 +451,8 @@ function buildIcsText() {
     `DTSTAMP:${calendarDateUtc(new Date())}`,
     `DTSTART:${startsAt}`,
     `DTEND:${endsAt}`,
-    `SUMMARY:${escapeIcsText(String(call.title || 'Video call'))}`,
-    `DESCRIPTION:${escapeIcsText(`Video call link:\n${joinUrl}`)}`,
+    `SUMMARY:${escapeIcsText(String(call.title || t('public.booking.default_call_title')))}`,
+    `DESCRIPTION:${escapeIcsText(`${t('public.booking.video_call_link_label')}:\n${joinUrl}`)}`,
     `LOCATION:${escapeIcsText(joinUrl)}`,
     'END:VEVENT',
     'END:VCALENDAR',
