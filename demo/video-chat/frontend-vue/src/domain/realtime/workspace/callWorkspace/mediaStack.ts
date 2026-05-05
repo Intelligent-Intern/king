@@ -12,7 +12,7 @@ import { createCallWorkspaceRuntimeHealthHelpers } from './runtimeHealth';
 import { createCallWorkspaceVideoLayoutHelpers } from './videoLayout';
 import { createSfuTransportController } from './sfuTransport';
 import { createHybridDecoder } from '../../../../lib/wasm/wasm-codec';
-import { createDecoder as createTsDecoder } from '../../../../lib/wavelet/codec.js';
+import { createDecoder as createTsDecoder } from '../../../../lib/wavelet/codec.ts';
 
 export function createCallWorkspaceMediaStack(options) {
   const {

@@ -23,7 +23,7 @@ try {
   assert.ok(!processorPipeline.includes('BackgroundBlurProcessor'), 'wavelet processor-pipeline must not depend on experiment blur processor');
   assert.ok(!processorPipeline.includes('PreEncodeBlurCompositor'), 'wavelet processor-pipeline must not pin obsolete blur compositor wiring');
 
-  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
+  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
   assert.ok(mediaOrchestration.includes('backgroundFilterController'), 'local media orchestration must remain the production background pipeline');
   assert.ok(mediaOrchestration.includes('function defaultApplyControlStateToLocalTracks'), 'local media orchestration must keep a local track control fallback');
   assert.ok(mediaOrchestration.includes("track.enabled = controlState.micEnabled !== false"), 'local media fallback must apply microphone state');

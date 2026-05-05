@@ -4,11 +4,11 @@ import {
   PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES,
   publisherCaptureWorkerTransferListForInit,
   publisherCaptureWorkerTransferListForReadback,
-} from './publisherCaptureWorkerProtocol.js';
+} from './publisherCaptureWorkerProtocol.ts';
 import {
   canUsePublisherCaptureWorker,
   createPublisherCaptureWorker,
-} from './publisherCaptureWorkerClient.js';
+} from './publisherCaptureWorkerClient.ts';
 
 function imageDataFromWorkerPayload(payload = {}, ImageDataCtor = globalThis?.ImageData) {
   if (typeof ImageDataCtor !== 'function') {

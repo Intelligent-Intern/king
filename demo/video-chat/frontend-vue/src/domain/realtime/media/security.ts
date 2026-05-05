@@ -43,7 +43,7 @@ import {
   stableJson,
   subtleCrypto,
   validateProtectedHeader,
-} from './securityCore.js';
+} from './securityCore.ts';
 
 export {
   MEDIA_SECURITY_SIGNAL_TYPES,
@@ -51,7 +51,7 @@ export {
   decodeProtectedFrameEnvelopeBase64Url,
   encodeProtectedFrameEnvelope,
   encodeProtectedFrameEnvelopeBase64Url,
-} from './securityCore.js';
+} from './securityCore.ts';
 
 export function createMediaSecuritySession(options = {}) {
   return new MediaSecuritySession(options);

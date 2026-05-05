@@ -15,18 +15,18 @@ function requireContains(source, needle, label) {
 }
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
-const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const sfuClient = read('src/lib/sfu/sfuClient.ts');
 const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
 const sendFailureDetails = read('src/lib/sfu/sendFailureDetails.ts');
 const outboundFrameQueue = read('src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('src/lib/sfu/inboundFrameAssembler.ts');
-const diagnostics = read('src/support/clientDiagnostics.js');
+const diagnostics = read('src/support/clientDiagnostics.ts');
 
 requireContains(diagnostics, "fetchBackend('/api/user/client-diagnostics'", 'backend diagnostics endpoint');
 requireContains(diagnostics, 'const DIAGNOSTICS_MAX_BATCH = 12;', 'diagnostics batch limit');

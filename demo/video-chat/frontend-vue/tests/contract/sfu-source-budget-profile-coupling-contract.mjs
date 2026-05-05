@@ -21,12 +21,12 @@ function read(relativePath) {
 }
 
 async function main() {
-  const workspaceConfig = read('src/domain/realtime/workspace/config.js');
-  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
-  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const workspaceConfig = read('src/domain/realtime/workspace/config.ts');
+  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
 
   requireContains(workspaceConfig, 'readbackFrameRate', 'profiles define readback FPS');
   requireContains(workspaceConfig, 'readbackIntervalMs', 'profiles define readback interval');
@@ -51,8 +51,8 @@ async function main() {
   });
 
   try {
-    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
-    const { resolveProfileReadbackIntervalMs } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.js');
+    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
+    const { resolveProfileReadbackIntervalMs } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.ts');
     const profiles = config.SFU_VIDEO_QUALITY_PROFILES;
 
     for (const profileId of ['rescue', 'realtime', 'balanced', 'quality']) {

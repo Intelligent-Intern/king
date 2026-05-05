@@ -21,9 +21,9 @@ function read(relativePath) {
 
 try {
   const callWorkspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
-  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
+  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
 
