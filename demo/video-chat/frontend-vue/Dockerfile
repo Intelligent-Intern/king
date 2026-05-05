@@ -44,13 +44,14 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 WORKDIR /app
-
 COPY demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/package-lock.json ./
 RUN npm ci
 
+# Copy the rest of the files
 COPY demo/video-chat/frontend-vue/ ./
-RUN npm run build
 
+# Vite's default dev port
 EXPOSE 5174
-
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "5174"]
+# need to do npm install first outside. TODO: add that as part of the build for production image
+# Default command (can be overridden by compose)
+CMD ["npm", "run", "dev"]

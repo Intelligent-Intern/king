@@ -35,6 +35,7 @@ import {
   reportClientDiagnostic,
 } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
+import BackgroundPipelineDebugPanel from './background/BackgroundPipelineDebugPanel.vue';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
 import { evaluateBackgroundFilterGates } from './background/gates';
 import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
@@ -741,6 +742,13 @@ function applyWorkspaceBackgroundPreset(preset) {
     setCallBackgroundApplyOutgoing(true);
     return;
   }
+  if (preset === 'image') {
+    setCallBackgroundReplacementImageUrl('/assets/images/bookshelf.png');
+    setCallBackgroundBackdropMode('image');
+    setCallBackgroundFilterMode('replace');
+    setCallBackgroundApplyOutgoing(true);
+    return;
+  }
   setCallBackgroundReplacementImageUrl('');
   setCallBackgroundFilterMode('blur');
   setCallBackgroundApplyOutgoing(true);
@@ -757,8 +765,20 @@ function isWorkspaceBackgroundPresetActive(preset) {
   const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
   if (preset === 'off') return mode === 'off' || !applyOutgoing;
   if (preset === 'green') return mode === 'replace' && applyOutgoing && backdrop === 'green';
+  if (preset === 'image') {
+    return mode === 'replace' && applyOutgoing && backdrop === 'image'
+      && String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() !== '';
+  }
   if (preset === 'strong') return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
   return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
+}
+
+function activeWorkspaceBackgroundPreset() {
+  if (isWorkspaceBackgroundPresetActive('image')) return 'image';
+  if (isWorkspaceBackgroundPresetActive('green')) return 'green';
+  if (isWorkspaceBackgroundPresetActive('strong')) return 'strong';
+  if (isWorkspaceBackgroundPresetActive('light')) return 'light';
+  return 'off';
 }
 
 function sendSocketFrame(payload) {

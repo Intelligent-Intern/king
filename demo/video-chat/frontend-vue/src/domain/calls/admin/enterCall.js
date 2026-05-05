@@ -17,9 +17,41 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   const enterCallPreviewRawStreamRef = ref(null);
   const enterCallPreviewStreamRef = ref(null);
   const enterCallPreviewBackgroundController = new BackgroundFilterController();
+  const enterCallPreviewPipelineDebug = reactive({
+    active: false,
+    available: false,
+    backend: 'none',
+    mode: 'off',
+    reactive: false,
+    reason: 'idle',
+    sourceActive: false,
+    sourceState: 'idle',
+    stages: [],
+  });
   const callAccessLinkEndpointAvailable = ref(true);
   let detachCallMediaWatcher = null;
   let enterCallPreviewResizeHandler = null;
+
+  function syncEnterCallPreviewPipelineDebug(snapshot = {}) {
+    enterCallPreviewPipelineDebug.active = Boolean(snapshot?.active);
+    enterCallPreviewPipelineDebug.available = Boolean(snapshot?.available);
+    enterCallPreviewPipelineDebug.backend = String(snapshot?.backend || 'none');
+    enterCallPreviewPipelineDebug.mode = String(snapshot?.mode || 'off');
+    enterCallPreviewPipelineDebug.reactive = Boolean(snapshot?.reactive);
+    enterCallPreviewPipelineDebug.reason = String(snapshot?.reason || 'idle');
+    enterCallPreviewPipelineDebug.sourceActive = snapshot?.sourceActive !== false;
+    enterCallPreviewPipelineDebug.sourceState = String(snapshot?.sourceState || 'idle');
+    enterCallPreviewPipelineDebug.stages = Array.isArray(snapshot?.stages)
+      ? snapshot.stages.map((stage) => ({
+          name: String(stage?.name || ''),
+          state: String(stage?.state || 'idle'),
+        }))
+      : [];
+  }
+
+  const stopEnterCallPreviewPipelineDebugSubscription = enterCallPreviewBackgroundController.subscribe(
+    syncEnterCallPreviewPipelineDebug,
+  );
 
   const enterCallState = reactive({
     open: false,
@@ -59,11 +91,14 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     };
-    const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
-      ? 'blur'
-      : 'off';
+    const requestedMode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+    const mode = requestedMode === 'replace'
+      ? 'replace'
+      : requestedMode === 'blur'
+        ? 'blur'
+        : 'off';
     const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-    if (!applyOutgoing || mode !== 'blur') {
+    if (!applyOutgoing || (mode !== 'blur' && mode !== 'replace')) {
       return { mode: 'off' };
     }
 
@@ -77,11 +112,11 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
     blurPx = Math.max(1, Math.min(12, blurPx));
 
-    let detectIntervalMs = 150;
+    let detectIntervalMs = 1;
     if (qualityProfile === 'quality') {
-      detectIntervalMs = 110;
+      detectIntervalMs = 1;
     } else if (qualityProfile === 'realtime') {
-      detectIntervalMs = 190;
+      detectIntervalMs = 1;
     }
 
     let temporalSmoothingAlpha = 0.28;
@@ -107,6 +142,8 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
     return {
       mode,
+      backgroundColor: mode === 'replace' && backdrop === 'green' ? '#16a34a' : '',
+      backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
       blurPx,
       detectIntervalMs,
       temporalSmoothingAlpha,
@@ -234,7 +271,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
       let previewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
-      if (backgroundOptions.mode === 'blur') {
+      if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
           if (result?.stream instanceof MediaStream) {
@@ -468,6 +505,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       detachCallMediaWatcher();
       detachCallMediaWatcher = null;
     }
+    if (typeof stopEnterCallPreviewPipelineDebugSubscription === 'function') {
+      stopEnterCallPreviewPipelineDebugSubscription();
+    }
     stopEnterCallPreview();
   }
 
@@ -488,6 +528,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       callMediaPrefs.backgroundApplyOutgoing,
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],
@@ -513,6 +554,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
   return {
     enterCallPreviewVideoRef,
+    enterCallPreviewPipelineDebug,
     enterCallState,
     callAccessLinkEndpointAvailable,
     updateEnterCallPreviewAspectRatio,

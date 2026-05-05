@@ -422,9 +422,9 @@ export function createLocalMediaOrchestrationHelpers({
     }
     blurPx = Math.max(1, Math.min(12, blurPx));
 
-    let detectIntervalMs = 150;
-    if (qualityProfile === 'quality') detectIntervalMs = 110;
-    else if (qualityProfile === 'realtime') detectIntervalMs = 190;
+    let detectIntervalMs = 1;
+    if (qualityProfile === 'quality') detectIntervalMs = 1;
+    else if (qualityProfile === 'realtime') detectIntervalMs = 1;
 
     let temporalSmoothingAlpha = 0.28;
     if (qualityProfile === 'quality') temporalSmoothingAlpha = 0.22;

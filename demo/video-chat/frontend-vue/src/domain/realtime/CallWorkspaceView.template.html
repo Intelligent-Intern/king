@@ -85,56 +85,11 @@
             <div id="remote-video-container" class="video-container remote"></div>
             <div id="decoded-video-container" class="video-container decoded"></div>
             <section v-if="showLocalPipelinePanel" class="workspace-local-pipeline-panel" aria-label="Local media pipeline controls">
-              <div class="workspace-local-pipeline-controls" role="group" aria-label="Background controls">
-                <button
-                  class="workspace-local-pipeline-btn"
-                  :class="{ active: isWorkspaceBackgroundPresetActive('off') }"
-                  type="button"
-                  @click="applyWorkspaceBackgroundPreset('off')"
-                >
-                  Off
-                </button>
-                <button
-                  class="workspace-local-pipeline-btn"
-                  :class="{ active: isWorkspaceBackgroundPresetActive('light') }"
-                  type="button"
-                  @click="applyWorkspaceBackgroundPreset('light')"
-                >
-                  Blur
-                </button>
-                <button
-                  class="workspace-local-pipeline-btn"
-                  :class="{ active: isWorkspaceBackgroundPresetActive('strong') }"
-                  type="button"
-                  @click="applyWorkspaceBackgroundPreset('strong')"
-                >
-                  Blur+
-                </button>
-                <button
-                  class="workspace-local-pipeline-btn"
-                  :class="{ active: isWorkspaceBackgroundPresetActive('green') }"
-                  type="button"
-                  @click="applyWorkspaceBackgroundPreset('green')"
-                >
-                  Green
-                </button>
-              </div>
-              <div class="workspace-local-pipeline-diagnostics">
-                <span class="workspace-local-pipeline-title">Local pipeline</span>
-                <span class="workspace-local-pipeline-meta">mode {{ backgroundPipelineDebug.mode }}</span>
-                <span class="workspace-local-pipeline-meta">source {{ backgroundPipelineDebug.sourceState }}</span>
-                <span class="workspace-local-pipeline-meta">backend {{ backgroundPipelineDebug.backend }}</span>
-                <div class="workspace-local-pipeline-stages">
-                  <span
-                    v-for="stage in backgroundPipelineDebug.stages"
-                    :key="stage.name"
-                    class="workspace-local-pipeline-stage"
-                    :class="`state-${stage.state}`"
-                  >
-                    {{ stage.name }}: {{ stage.state }}
-                  </span>
-                </div>
-              </div>
+              <BackgroundPipelineDebugPanel
+                :active-preset="activeWorkspaceBackgroundPreset()"
+                :debug-state="backgroundPipelineDebug"
+                @select-preset="applyWorkspaceBackgroundPreset"
+              />
             </section>
             <div
               v-if="showParticipantMediaOverlay(primaryVideoUserId)"
