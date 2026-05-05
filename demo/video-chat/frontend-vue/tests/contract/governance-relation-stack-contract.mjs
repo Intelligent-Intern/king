@@ -55,6 +55,8 @@ assert.doesNotMatch(modalSource, /<select[\s\S]*relationship/i, 'relation fields
 const stackSource = await source('src/modules/governance/components/CrudRelationStack.vue');
 assert.match(stackSource, /AppModalShell/, 'relation stack must use the shared modal shell');
 assert.match(stackSource, /AppPagination/, 'relation stack must paginate selection rows');
+assert.match(stackSource, /createDraft/, 'relation stack must support create-in-place through a draft creator');
+assert.match(stackSource, /canCreateDraftForEntity/, 'relation stack must let callers restrict local draft creation');
 assert.match(stackSource, /navigator\.push\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
 
@@ -63,5 +65,7 @@ assert.match(viewSource, /CrudRelationStack/, 'governance CRUD view must mount t
 assert.match(viewSource, /relationRowsForEntity/, 'governance CRUD view must provide target rows by entity');
 assert.match(viewSource, /relationSelections/, 'governance CRUD view must keep draft relation selections');
 assert.match(viewSource, /applyRelationSelection/, 'governance CRUD view must return selected rows into the draft');
+assert.match(viewSource, /createRelationDraft/, 'governance CRUD view must create local relation drafts from the stack');
+assert.doesNotMatch(viewSource, /createRelationDraft[\s\S]{0,400}users/, 'backend-backed users must not be locally drafted by the relation stack');
 
 console.log('[governance-relation-stack-contract] PASS');

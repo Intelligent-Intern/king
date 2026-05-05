@@ -330,9 +330,11 @@ Sprint goal:
      descriptor relationships as `+1` controls instead of raw entity selects.
    - Governance draft rows now retain relation selections in draft state and
      can hydrate those selections when reopening a local row.
+   - Relation stack now supports create-in-place for local Governance draft
+     entities while blocking backend-backed users from fake local creation.
    - Remaining work: use the same relation primitive in the backend-backed
-     user editor, add create-in-place inside the stack, and connect relation
-     mutations to real tenant-scoped backend APIs.
+     user editor, attach nested created records to their parent draft, and
+     connect relation mutations to real tenant-scoped backend APIs.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.

@@ -98,6 +98,8 @@
       :relation="relationNavigatorRelation"
       :selections="relationSelections"
       :row-provider="relationRowsForEntity"
+      :create-draft="createRelationDraft"
+      :can-create-draft-for-entity="canCreateRelationDraft"
       :maximized="relationNavigatorMaximized"
       @update:maximized="relationNavigatorMaximized = $event"
       @close="closeRelationNavigator"
@@ -461,6 +463,33 @@ function relationRowsForEntity(entityKey) {
     entitySummaryCache.upsertRows(key, scopedRows);
   }
   return entitySummaryCache.rows(key);
+}
+
+function canCreateRelationDraft(entityKey) {
+  return ['groups', 'organizations', 'roles', 'grants', 'policies', 'compliance'].includes(String(entityKey || '').trim());
+}
+
+function createRelationDraft(entityKey, payload = {}) {
+  const key = String(entityKey || '').trim();
+  if (!canCreateRelationDraft(key)) return null;
+  const routeKey = `admin-governance-${key}`;
+  if (!Array.isArray(rowsByScope[routeKey])) {
+    rowsByScope[routeKey] = [];
+  }
+
+  const now = new Date().toISOString();
+  const row = {
+    id: `${routeKey}-${Date.now()}`,
+    ...payload,
+    name: payload.name || payload.display_name || payload.email || payload.key || key,
+    key: payload.key || '',
+    description: payload.description || '',
+    status: payload.status ? normalizeStatus(payload.status) : 'active',
+    updatedAt: now,
+  };
+  rowsByScope[routeKey].unshift(row);
+  entitySummaryCache.upsertSummary(key, row);
+  return row;
 }
 
 function isRowReadonly(row) {
