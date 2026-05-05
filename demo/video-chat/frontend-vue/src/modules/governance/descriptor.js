@@ -26,6 +26,20 @@ const governanceLabelKeys = {
   compliance: 'navigation.governance.compliance',
 };
 
+const governanceEntityKeys = {
+  users: ['governance.entity.user', 'navigation.governance.users'],
+  groups: ['governance.entity.group', 'navigation.governance.groups'],
+  organizations: ['governance.entity.organization', 'navigation.governance.organizations'],
+  modules: ['governance.entity.module', 'navigation.governance.modules'],
+  permissions: ['governance.entity.permission', 'navigation.governance.permissions'],
+  roles: ['governance.entity.role', 'navigation.governance.roles'],
+  grants: ['governance.entity.grant', 'navigation.governance.grants'],
+  policies: ['governance.entity.policy', 'navigation.governance.policies'],
+  'audit-log': ['governance.entity.audit_entry', 'governance.entity.audit_entries'],
+  'data-portability': ['governance.entity.export_import_job', 'governance.entity.export_import_jobs'],
+  compliance: ['governance.entity.compliance_rule', 'governance.entity.compliance_rules'],
+};
+
 function governanceLoader(sourcePath) {
   if (sourcePath === 'modules/users/pages/admin/UsersView.vue') {
     return () => import('../users/pages/admin/UsersView.vue');
@@ -42,8 +56,11 @@ export default {
     name: `admin-governance-${slug}`,
     roles: ['admin'],
     pageTitle,
+    pageTitle_key: governanceLabelKeys[slug] || '',
     entitySingular,
+    entitySingular_key: governanceEntityKeys[slug]?.[0] || '',
     entityPlural,
+    entityPlural_key: governanceEntityKeys[slug]?.[1] || '',
     source_path: sourcePath,
     loader: governanceLoader(sourcePath),
   })),
