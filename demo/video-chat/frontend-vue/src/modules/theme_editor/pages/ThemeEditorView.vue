@@ -1,6 +1,6 @@
 <template>
   <section class="view-card theme-editor-view">
-    <AppPageHeader class="section theme-editor-head" title="Theme Editor" />
+    <AppPageHeader class="section theme-editor-head" :title="t('theme_editor.title')" />
 
     <section class="section theme-editor-panel">
       <WorkspaceThemeSettings v-model="selectedTheme" management-only />
@@ -13,6 +13,7 @@ import { ref } from 'vue';
 import AppPageHeader from '../../../components/AppPageHeader.vue';
 import { sessionState } from '../../../domain/auth/session';
 import WorkspaceThemeSettings from '../../../layouts/settings/WorkspaceThemeSettings.vue';
+import { t } from '../../localization/i18nRuntime.js';
 
 const selectedTheme = ref(sessionState.theme || 'dark');
 </script>

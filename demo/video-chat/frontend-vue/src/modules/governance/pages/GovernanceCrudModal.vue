@@ -11,7 +11,7 @@
     logo-class="governance-modal-head-logo"
     body-class="governance-modal-body"
     footer-class="governance-modal-footer"
-    close-label="Close governance modal"
+    :close-label="t('governance.close_modal')"
     maximizable
     :maximized="maximized"
     @update:maximized="$emit('update:maximized', $event)"
@@ -20,19 +20,19 @@
     <template #body>
       <form id="governanceCrudForm" class="governance-form" autocomplete="off" @submit.prevent="$emit('submit')">
         <label class="governance-field">
-          <span>Name</span>
+          <span>{{ t('governance.name') }}</span>
           <input v-model.trim="form.name" class="input" type="text" autocomplete="off" />
         </label>
         <label class="governance-field">
-          <span>Key</span>
+          <span>{{ t('governance.key') }}</span>
           <input v-model.trim="form.key" class="input" type="text" autocomplete="off" />
         </label>
         <label class="governance-field governance-field-wide">
-          <span>Beschreibung</span>
+          <span>{{ t('governance.description') }}</span>
           <textarea v-model.trim="form.description" class="input governance-textarea" rows="4"></textarea>
         </label>
         <label class="governance-field">
-          <span>Status</span>
+          <span>{{ t('governance.status') }}</span>
           <AppSelect v-model="form.status">
             <option value="active">active</option>
             <option value="draft">draft</option>
@@ -44,9 +44,9 @@
     </template>
 
     <template #footer>
-      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">Cancel</button>
+      <button class="btn" type="button" :disabled="saving" @click="$emit('close')">{{ t('common.cancel') }}</button>
       <button class="btn btn-cyan" type="submit" form="governanceCrudForm" :disabled="saving">
-        {{ saving ? 'Saving...' : submitLabel }}
+        {{ saving ? t('settings.saving') : submitLabel }}
       </button>
     </template>
   </AppModalShell>
@@ -55,6 +55,7 @@
 <script setup>
 import AppModalShell from '../../../components/AppModalShell.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import { t } from '../../localization/i18nRuntime.js';
 
 defineProps({
   open: {
@@ -67,7 +68,7 @@ defineProps({
   },
   submitLabel: {
     type: String,
-    default: 'Create',
+    default: '',
   },
   form: {
     type: Object,
