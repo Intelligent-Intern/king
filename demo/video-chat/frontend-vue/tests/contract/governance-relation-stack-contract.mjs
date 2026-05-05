@@ -77,7 +77,8 @@ assert.deepEqual(
 const modalSource = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 assert.match(modalSource, /\+1/, 'governance modal must expose relation links as +1 controls');
 assert.match(modalSource, /open-relation/, 'governance modal must emit relation navigation requests');
-assert.match(modalSource, /relationActive/, 'governance modal must switch to relation content in the same modal shell');
+assert.match(modalSource, /AppSidePanelShell/, 'governance CRUD editor must render in the shared side panel shell');
+assert.match(modalSource, /relationActive/, 'governance modal must switch to relation content in the same side panel shell');
 assert.match(modalSource, /name="relation"/, 'governance modal must expose an embedded relation slot');
 assert.doesNotMatch(modalSource, /<select[\s\S]*relationship/i, 'relation fields must not be rendered as raw selects');
 
@@ -96,7 +97,7 @@ assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must 
 
 const viewSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 assert.match(viewSource, /CrudRelationStack/, 'governance CRUD view must mount the relation stack');
-assert.match(viewSource, /:relation-active="relationNavigatorOpen"/, 'governance CRUD view must embed relation navigation in the active CRUD modal');
+assert.match(viewSource, /:relation-active="relationNavigatorOpen"/, 'governance CRUD view must embed relation navigation in the active CRUD side panel');
 assert.match(viewSource, /relationRowsForEntity/, 'governance CRUD view must provide target rows by entity');
 assert.match(viewSource, /relationSelections/, 'governance CRUD view must keep draft relation selections');
 assert.match(viewSource, /applyRelationSelection/, 'governance CRUD view must return selected rows into the draft');

@@ -52,64 +52,65 @@
       />
     </template>
 
-    <div v-if="dialogOpen" class="marketplace-modal" role="dialog" aria-modal="true" :aria-label="dialogTitle">
-      <div class="marketplace-modal-backdrop" @click="closeDialog"></div>
-      <div class="marketplace-modal-dialog">
-        <header class="marketplace-modal-head marketplace-modal-head-brand">
-          <div class="marketplace-modal-head-left">
-            <img class="marketplace-modal-head-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <div>
-              <h4>{{ dialogTitle }}</h4>
-              <p>{{ t('marketplace.form_subtitle') }}</p>
-            </div>
-          </div>
-          <button class="icon-mini-btn" type="button" :aria-label="t('marketplace.close')" @click="closeDialog">
-            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
-          </button>
-        </header>
+    <AppSidePanelShell
+      :open="dialogOpen"
+      :title="dialogTitle"
+      :subtitle="t('marketplace.form_subtitle')"
+      :aria-label="dialogTitle"
+      root-class-name="marketplace-side-panel"
+      backdrop-class="marketplace-side-panel-backdrop"
+      dialog-class="marketplace-side-panel-dialog"
+      body-class="marketplace-side-panel-body"
+      footer-class="marketplace-side-panel-actions"
+      :close-label="t('marketplace.close')"
+      maximizable
+      :maximized="dialogMaximized"
+      @update:maximized="dialogMaximized = $event"
+      @close="closeDialog"
+    >
+      <template #body>
+        <label class="marketplace-field">
+          <span>{{ t('marketplace.name') }}</span>
+          <input v-model.trim="form.name" class="input" type="text" :placeholder="t('marketplace.category.whiteboard')" />
+        </label>
+        <label class="marketplace-field">
+          <span>{{ t('marketplace.manufacturer') }}</span>
+          <input v-model.trim="form.manufacturer" class="input" type="text" :placeholder="t('marketplace.manufacturer_placeholder')" />
+        </label>
+        <label class="marketplace-field">
+          <span>{{ t('marketplace.website') }}</span>
+          <input v-model.trim="form.website" class="input" type="url" :placeholder="t('marketplace.website_placeholder')" />
+        </label>
+        <label class="marketplace-field">
+          <span>{{ t('marketplace.category') }}</span>
+          <AppSelect v-model="form.category">
+            <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
+              {{ t(option.label_key) }}
+            </option>
+          </AppSelect>
+        </label>
+        <label class="marketplace-field marketplace-field-wide">
+          <span>{{ t('marketplace.description') }}</span>
+          <textarea
+            v-model.trim="form.description"
+            class="input marketplace-textarea"
+            rows="5"
+            :placeholder="t('marketplace.description_placeholder')"
+          ></textarea>
+        </label>
+      </template>
 
-        <section class="marketplace-modal-body">
-          <label class="marketplace-field">
-            <span>{{ t('marketplace.name') }}</span>
-            <input v-model.trim="form.name" class="input" type="text" :placeholder="t('marketplace.category.whiteboard')" />
-          </label>
-          <label class="marketplace-field">
-            <span>{{ t('marketplace.manufacturer') }}</span>
-            <input v-model.trim="form.manufacturer" class="input" type="text" :placeholder="t('marketplace.manufacturer_placeholder')" />
-          </label>
-          <label class="marketplace-field">
-            <span>{{ t('marketplace.website') }}</span>
-            <input v-model.trim="form.website" class="input" type="url" :placeholder="t('marketplace.website_placeholder')" />
-          </label>
-          <label class="marketplace-field">
-            <span>{{ t('marketplace.category') }}</span>
-            <AppSelect v-model="form.category">
-              <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
-                {{ t(option.label_key) }}
-              </option>
-            </AppSelect>
-          </label>
-          <label class="marketplace-field marketplace-field-wide">
-            <span>{{ t('marketplace.description') }}</span>
-            <textarea
-              v-model.trim="form.description"
-              class="input marketplace-textarea"
-              rows="5"
-              :placeholder="t('marketplace.description_placeholder')"
-            ></textarea>
-          </label>
-        </section>
-
+      <template #after-body>
         <section v-if="formError" class="marketplace-banner error">{{ formError }}</section>
+      </template>
 
-        <footer class="marketplace-modal-actions">
-          <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">{{ t('common.cancel') }}</button>
-          <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="submitForm">
-            {{ dialogSubmitLabel }}
-          </button>
-        </footer>
-      </div>
-    </div>
+      <template #footer>
+        <button class="btn" type="button" :disabled="formSaving" @click="closeDialog">{{ t('common.cancel') }}</button>
+        <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="submitForm">
+          {{ dialogSubmitLabel }}
+        </button>
+      </template>
+    </AppSidePanelShell>
   </AdminPageFrame>
 </template>
 
@@ -119,6 +120,7 @@ import { useRouter } from 'vue-router';
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import AppSidePanelShell from '../../../components/AppSidePanelShell.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
@@ -145,6 +147,7 @@ const error = ref('');
 const notice = ref('');
 const mutatingAppId = ref(0);
 const dialogOpen = ref(false);
+const dialogMaximized = ref(false);
 const formSaving = ref(false);
 const formError = ref('');
 const form = reactive({
@@ -255,12 +258,14 @@ function openEditApp(app) {
   form.category = String(app?.category || 'whiteboard').trim() || 'whiteboard';
   form.description = String(app?.description || '').trim();
   formError.value = '';
+  dialogMaximized.value = false;
   dialogOpen.value = true;
 }
 
 function closeDialog() {
   if (formSaving.value) return;
   dialogOpen.value = false;
+  dialogMaximized.value = false;
 }
 
 async function submitForm() {
@@ -291,6 +296,7 @@ async function submitForm() {
     }
 
     dialogOpen.value = false;
+    dialogMaximized.value = false;
     await loadApps();
   } catch (err) {
     formError.value = err instanceof Error ? err.message : t('marketplace.save_failed');

@@ -21,6 +21,7 @@ const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarket
 const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 const modalShell = await source('src/components/AppModalShell.vue');
+const sidePanelShell = await source('src/components/AppSidePanelShell.vue');
 const responsiveStyles = await source('src/styles/responsive.css');
 const workspaceStyles = await source('src/styles/workspace-shared.css');
 
@@ -62,10 +63,17 @@ for (const [name, file] of [
   assert.match(file, /AdminTableFrame/, `${name} must use the shared admin table frame`);
 }
 
-assert.match(governanceModal, /AppModalShell/, 'governance CRUD modal must use the shared modal shell');
-assert.match(governanceModal, /\bmaximizable\b/, 'governance CRUD modal must use centralized maximizable modal behavior');
-assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature modal must not hardcode maximize controls');
+assert.match(governanceModal, /AppSidePanelShell/, 'governance CRUD form must use the shared right side panel shell');
+assert.doesNotMatch(governanceModal, /AppModalShell/, 'governance CRUD form must not open as a centered modal');
+assert.match(governanceModal, /\bmaximizable\b/, 'governance CRUD side panel must use centralized maximizable behavior');
+assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature panel must not hardcode maximize controls');
+assert.match(users, /AdminUserEditorModal/, 'user management must keep the extracted user editor component');
+assert.match(marketplace, /AppSidePanelShell/, 'marketplace CRUD form must use the shared right side panel shell');
+assert.doesNotMatch(marketplace, /marketplace-modal/, 'marketplace CRUD form must not keep the old centered modal markup');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
+assert.match(sidePanelShell, /\.app-side-panel[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/, 'CRUD side panels must be anchored to the right edge');
+assert.match(sidePanelShell, /\.app-side-panel-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized CRUD side panels must use fullscreen width');
+assert.match(sidePanelShell, /\.app-side-panel-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized CRUD side panels must use fullscreen height');
 
 console.log('[shared-admin-components-contract] PASS');

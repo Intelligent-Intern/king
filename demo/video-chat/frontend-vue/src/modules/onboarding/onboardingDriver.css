@@ -10,7 +10,7 @@
 .driver-active-element {
   outline: 2px solid var(--brand-cyan-hover);
   outline-offset: 4px;
-  box-shadow: 0 0 0 4px rgba(89, 199, 242, 0.22);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand-cyan-hover) 22%, transparent);
 }
 
 .driver-popover.kingrt-tour-popover .driver-popover-title {

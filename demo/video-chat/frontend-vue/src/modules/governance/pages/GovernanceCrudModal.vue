@@ -1,17 +1,17 @@
 <template>
-  <AppModalShell
+  <AppSidePanelShell
     :open="open"
     :title="activeTitle"
     :aria-label="activeTitle"
-    root-class-name="governance-modal"
-    backdrop-class="governance-modal-backdrop"
-    dialog-class="governance-modal-dialog"
-    header-class="governance-modal-head governance-modal-head-brand"
-    header-left-class="governance-modal-head-left"
-    logo-class="governance-modal-head-logo"
-    :body-class="relationActive ? 'governance-modal-body governance-modal-body-relation' : 'governance-modal-body'"
-    footer-class="governance-modal-footer"
-    :close-label="t('governance.close_modal')"
+    root-class-name="governance-side-panel"
+    backdrop-class="governance-side-panel-backdrop"
+    dialog-class="governance-side-panel-dialog"
+    header-class="governance-side-panel-head"
+    header-left-class="governance-side-panel-head-left"
+    logo-class="governance-side-panel-head-logo"
+    :body-class="relationActive ? 'governance-side-panel-body governance-side-panel-body-relation' : 'governance-side-panel-body'"
+    footer-class="governance-side-panel-footer"
+    :close-label="t('governance.close_panel')"
     maximizable
     :maximized="maximized"
     @update:maximized="$emit('update:maximized', $event)"
@@ -67,12 +67,12 @@
         {{ saving ? t('settings.saving') : submitLabel }}
       </button>
     </template>
-  </AppModalShell>
+  </AppSidePanelShell>
 </template>
 
 <script setup>
 import { computed } from 'vue';
-import AppModalShell from '../../../components/AppModalShell.vue';
+import AppSidePanelShell from '../../../components/AppSidePanelShell.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
 
@@ -170,7 +170,7 @@ function fieldClass(field) {
 <style scoped>
 .governance-form {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 

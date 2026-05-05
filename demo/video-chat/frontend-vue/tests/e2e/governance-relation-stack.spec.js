@@ -238,7 +238,7 @@ async function createUserThroughNestedGroupRelation(page, label) {
   await page.goto('/admin/governance/users');
   await expect(page).toHaveURL(/\/admin\/governance\/users$/);
   await page.getByRole('button', { name: 'New user' }).click();
-  const userDialog = page.locator('.users-modal-dialog').filter({ visible: true }).first();
+  const userDialog = page.locator('.users-side-panel-dialog').filter({ visible: true }).first();
   await expect(userDialog).toBeVisible();
   await fillRequiredUserFields(userDialog, label);
 
@@ -293,7 +293,7 @@ async function createGovernanceGroupThroughNestedRelations(page, label) {
   await page.goto('/admin/governance/groups');
   await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
   await page.getByRole('button', { name: 'Create group' }).click();
-  const crudDialog = page.locator('.governance-modal-dialog').filter({ visible: true }).first();
+  const crudDialog = page.locator('.governance-side-panel-dialog').filter({ visible: true }).first();
   await expect(crudDialog).toBeVisible();
   await expectModalInsideViewport(page, crudDialog);
 
@@ -414,7 +414,7 @@ async function expectRolesEmptyState(page) {
   await expect(emptyState.getByText('No roles found')).toBeVisible();
   await expect(emptyState.getByText('Create your first role to get started.')).toBeVisible();
   await emptyState.getByRole('button', { name: 'Create role' }).click();
-  await expect(page.locator('.governance-modal-dialog').filter({ visible: true }).first()).toBeVisible();
+  await expect(page.locator('.governance-side-panel-dialog').filter({ visible: true }).first()).toBeVisible();
 }
 
 async function expectRolesGuidedTour(page) {

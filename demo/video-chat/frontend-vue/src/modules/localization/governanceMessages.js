@@ -12,6 +12,7 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.action.inspect_catalog': 'Inspect catalog',
   'governance.actions': 'Actions',
   'governance.close_modal': 'Close governance modal',
+  'governance.close_panel': 'Close governance panel',
   'governance.create': 'Create',
   'governance.create_new': 'Create new',
   'governance.data_portability.bundle_must_be_object': 'Import bundle must be a JSON object.',

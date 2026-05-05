@@ -9,8 +9,10 @@ async function source(relativePath) {
 }
 
 const modalSource = await source('src/modules/users/pages/components/UserEditorModal.vue');
+assert.match(modalSource, /AppSidePanelShell/, 'user editor must render in the shared CRUD side panel shell');
+assert.doesNotMatch(modalSource, /AppModalShell/, 'user editor must not open as a centered modal');
 assert.match(modalSource, /CrudRelationStack/, 'user editor must reuse the shared relation stack');
-assert.match(modalSource, /v-if="relationStackOpen"/, 'user editor relation stack must replace content inside the existing modal');
+assert.match(modalSource, /v-if="relationStackOpen"/, 'user editor relation stack must replace content inside the existing side panel');
 assert.doesNotMatch(modalSource, /relationStackMaximized/, 'user editor relation stack must not open a second maximizable modal');
 assert.match(modalSource, /target_entity: 'user_roles'/, 'user role must be exposed as a relation target');
 assert.match(modalSource, /target_entity: 'governance_roles'/, 'governance roles must be exposed as a relation target');
