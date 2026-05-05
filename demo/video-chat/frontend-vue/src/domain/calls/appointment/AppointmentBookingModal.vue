@@ -177,6 +177,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import { bookPublicAppointment, loadPublicAppointmentSlots, toLocalSlotLabel } from './appointmentCalendarApi';
+import { i18nState } from '../../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
   open: {
@@ -222,8 +223,16 @@ const state = reactive({
 
 let calendarInstance = null;
 
+function currentDocumentLocale() {
+  if (typeof document === 'undefined') return '';
+  return String(document.documentElement?.lang || '').trim();
+}
+
+const activeLocale = computed(() => String(i18nState.locale || currentDocumentLocale() || 'en').trim() || 'en');
 const selectedSlot = computed(() => state.slots.find((slot) => String(slot.id) === state.selectedSlotId) || null);
-const selectedSlotLabel = computed(() => (selectedSlot.value ? toLocalSlotLabel(selectedSlot.value) : 'Select a video call slot'));
+const selectedSlotLabel = computed(() => (
+  selectedSlot.value ? toLocalSlotLabel(selectedSlot.value, { locale: activeLocale.value }) : 'Select a video call slot'
+));
 const invitationText = computed(() => String(state.settings.invitation_text || '').trim());
 const bookingLinks = computed(() => {
   const joinUrl = absoluteFrontendUrl(state.joinPath);
@@ -255,7 +264,7 @@ function applySettings(settings) {
 }
 
 function slotLabel(slot) {
-  return toLocalSlotLabel(slot);
+  return toLocalSlotLabel(slot, { locale: activeLocale.value });
 }
 
 function localErrors() {
@@ -320,6 +329,7 @@ async function ensureCalendar() {
   calendarInstance = new Calendar(calendarEl.value, {
     plugins: [timeGridPlugin, interactionPlugin],
     initialView: 'timeGridWeek',
+    locale: activeLocale.value,
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
@@ -383,6 +393,7 @@ async function submit() {
       email: form.email,
       message: form.message,
       privacy_accepted: form.privacy_accepted,
+      locale: activeLocale.value,
     });
     const joinPath = String(result.join_path || result.booking?.join_path || '');
     const call = result.call && typeof result.call === 'object' ? result.call : null;
@@ -482,6 +493,11 @@ watch(
     }
   },
 );
+
+watch(activeLocale, (locale) => {
+  calendarInstance?.setOption('locale', locale);
+  syncCalendarSlots();
+});
 
 onMounted(() => {
   if (props.open) {
