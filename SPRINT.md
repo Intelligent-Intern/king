@@ -444,6 +444,10 @@ Non-goals for this sprint:
    - [x] Admin cancel/delete controller notices, validation errors, and default
      cancel templates now use localization keys and are covered by the
      translation-key coverage contract.
+   - [x] Public booking modal labels, privacy copy, slot status, success
+     actions, validation messages, and calendar export text now use
+     localization keys and are covered by the translation-key coverage
+     contract.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
