@@ -448,6 +448,9 @@ Non-goals for this sprint:
      actions, validation messages, and calendar export text now use
      localization keys and are covered by the translation-key coverage
      contract.
+   - [x] Admin call management template text, filters, enter-call controls,
+     compose modal labels, cancel/delete modal labels, and compose controller
+     validation/notices now use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
