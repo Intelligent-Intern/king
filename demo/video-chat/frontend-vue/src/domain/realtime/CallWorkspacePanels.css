@@ -668,9 +668,9 @@
 
 @media (max-width: 760px) and (orientation: landscape) {
   .workspace-call-view {
-    --mini-strip-height: 121px;
-    --mini-story-width: 101px;
-    --mini-story-height: 101px;
+    --mini-strip-height: 100px;
+    --mini-story-width: 142px;
+    --mini-story-height: 80px;
     --mini-strip-gap: 6px;
   }
 

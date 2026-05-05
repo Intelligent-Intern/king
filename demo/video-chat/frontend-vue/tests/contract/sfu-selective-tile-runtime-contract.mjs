@@ -30,10 +30,10 @@ try {
   requireContains(helper, 'matteMaskImageData?: ImageData | null', 'mask-aware planner options');
 
   const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.ts');
 
   requireContains(runtimeConfig, 'export const SFU_SELECTIVE_TILE_PATCH_ENABLED = true', 'workspace selective tile switch');
   requireContains(runtimeConfig, 'export const SFU_BACKGROUND_SNAPSHOT_ENABLED = true', 'workspace background snapshot switch');

@@ -9,7 +9,7 @@ import {
   wlvcEncodeFrame,
   wlvcFrameToHex,
   wlvcHexToBytes,
-} from '../../src/support/wlvcFrame.js';
+} from '../../src/support/wlvcFrame.ts';
 
 function fail(message) {
   throw new Error(`[wlvc-wire-contract] FAIL: ${message}`);

@@ -34,9 +34,9 @@ class FakeVideoFrame {
 }
 
 try {
-  const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   const packageJson = read('package.json');
 
   requireContains(videoFrameSource, 'new MediaStreamTrackProcessorCtor({ track: videoTrack, maxBufferSize: 1 })', 'VideoFrame source constructs bounded track processor');
@@ -71,7 +71,7 @@ try {
 
   requireContains(packageJson, 'sfu-video-frame-primary-path-contract.mjs', 'SFU contract suite includes VideoFrame primary path proof');
 
-  const sourceUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameSource.js')).href;
+  const sourceUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherVideoFrameSource.ts')).href;
   const sourceModule = await import(sourceUrl);
 
   assert.equal(sourceModule.canUsePublisherVideoFrameSource({

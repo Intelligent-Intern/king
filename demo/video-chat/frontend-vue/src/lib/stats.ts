@@ -3,7 +3,7 @@
  * Tracks bitrate, framerate, latency, packet loss, and quality metrics
  */
 
-import { debugWarn } from '../support/debugLogs.js'
+import { debugWarn } from '../support/debugLogs.ts'
 
 export interface RTCStats {
   timestamp: number

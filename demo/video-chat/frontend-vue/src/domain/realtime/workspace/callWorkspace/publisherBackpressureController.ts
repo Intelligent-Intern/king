@@ -7,8 +7,8 @@ import {
   SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
   SFU_WLVC_MOTION_DELTA_STABLE_SAMPLE_COUNT,
   SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
-} from './runtimeConfig.js';
-import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
+} from './runtimeConfig.ts';
+import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',

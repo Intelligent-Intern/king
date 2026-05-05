@@ -1,4 +1,4 @@
-import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.js';
+import { PUBLISHER_CAPTURE_BACKENDS } from './capturePipelineCapabilities.ts';
 
 export const PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND = 'video_frame_processor_canvas_readback';
 

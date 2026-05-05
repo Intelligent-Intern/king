@@ -7,7 +7,11 @@ $root = dirname(__DIR__, 2);
 function read_source(string $path): string
 {
     global $root;
-    $source = file_get_contents($root . '/' . $path);
+    $absolutePath = $root . '/' . $path;
+    if (!is_file($absolutePath)) {
+        throw new RuntimeException('Could not read ' . $path);
+    }
+    $source = file_get_contents($absolutePath);
     if (!is_string($source)) {
         throw new RuntimeException('Could not read ' . $path);
     }
@@ -34,7 +38,7 @@ function require_order(string $path, string $before, string $after): void
 $sfuClient = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts';
 $sfuMessageHandler = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts';
 $inboundFrameAssembler = 'demo/video-chat/frontend-vue/src/lib/sfu/inboundFrameAssembler.ts';
-$backendOrigin = 'demo/video-chat/frontend-vue/src/support/backendOrigin.js';
+$backendOrigin = 'demo/video-chat/frontend-vue/src/support/backendOrigin.ts';
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
 $store = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php';
 $runtimeContract = 'demo/video-chat/backend-king-php/tests/realtime-sfu-contract.php';

@@ -80,7 +80,6 @@ export function createCallWorkspaceVideoLayoutHelpers({
   }
 
   function targetAspectRatioForSurface(target, role) {
-    if (role === REMOTE_RENDER_SURFACE_ROLES.MINI) return 1;
     if (!(target instanceof HTMLElement)) return 0;
     const rect = typeof target.getBoundingClientRect === 'function' ? target.getBoundingClientRect() : null;
     const width = Number(rect?.width || target.clientWidth || 0);
