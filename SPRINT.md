@@ -662,8 +662,8 @@ Non-goals for this sprint:
     - [x] Build passes with dynamic module imports.
     - [ ] Browser smoke proves non-call navigation and settings pages still
       render.
-    - [ ] Route compatibility smoke covers old and new module-backed paths.
-    - [ ] Diff/path guard reports no edits to call-related excluded paths for
+    - [x] Route compatibility smoke covers old and new module-backed paths.
+    - [x] Diff/path guard reports no edits to call-related excluded paths for
       this module wave.
 
 ## Subagent Execution Plan
