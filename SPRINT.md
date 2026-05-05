@@ -420,6 +420,8 @@ Non-goals for this sprint:
      localization keys.
    - [x] Shared navigation and pagination default labels/aria labels use
      localization keys.
+   - [x] Remaining Login, Administration mail, and Marketplace non-call
+     placeholders/options use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
