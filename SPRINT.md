@@ -410,6 +410,8 @@ Non-goals for this sprint:
      pagination text use localization keys.
    - [x] Governance route metadata now carries translation keys for page
      titles and singular/plural entity labels.
+   - [x] Administration settings labels, email/server/template controls,
+     branding controls, and local status/error text use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
