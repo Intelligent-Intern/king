@@ -60,13 +60,13 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import AppPagination from '../../components/AppPagination.vue';
-import AdminPageFrame from '../../components/admin/AdminPageFrame.vue';
-import AdminTableFrame from '../../components/admin/AdminTableFrame.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
+import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import {
   SUPPORTED_LOCALIZATION_LANGUAGES,
   localizationLanguageDirection,
-} from '../../support/localizationOptions';
+} from '../../../support/localizationOptions';
 
 const pageSize = 10;
 const query = ref('');

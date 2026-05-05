@@ -11,7 +11,7 @@ async function source(relativePath) {
 const pageFrame = await source('src/components/admin/AdminPageFrame.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
 const governance = await source('src/modules/governance/pages/GovernanceCrudView.vue');
-const localization = await source('src/domain/administration/AdministrationLocalizationView.vue');
+const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 
 assert.match(pageFrame, /AppPageHeader/, 'shared admin page frame must own the page header');
