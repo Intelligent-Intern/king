@@ -96,7 +96,7 @@ Impact: medium-high.
 
 Complexity: medium-high.
 
-Status: scaffold complete.
+Status: complete for client request and backend requester-scoped replacement hints.
 
 Why:
 
@@ -106,6 +106,7 @@ Done when:
 
 - RTCDataChannel close/error updates carrier state. Complete for assigned gossip neighbors.
 - Lost neighbor triggers reconnect/topology repair request over ops lane. Complete for `gossip/topology-repair/request`.
+- Backend consumes repair requests, validates context/membership/authenticated peer, and emits bounded replacement topology hints. Complete.
 - Cooldowns prevent reconnect storms. Complete with per-neighbor client cooldown.
 - New executable contract passes. Complete.
 
@@ -115,6 +116,8 @@ Impact: medium.
 
 Complexity: medium.
 
+Status: complete for local controller/workspace/RTC transport telemetry.
+
 Why:
 
 The scaling win needs proof. We need counts for server fanout avoided, peer outbound fanout, duplicates, TTL exhaustion, late drops, and per-hop latency.
@@ -123,11 +126,17 @@ Done when:
 
 - Diagnostics expose gossip send/receive/forward/drop counters.
 - Events distinguish in-memory harness transport vs RTCDataChannel transport.
+- Counters include avoided server fanout, peer outbound fanout, duplicates, TTL exhaustion, stale generation drops, RTC queue late drops, and hop latency when timestamp metadata is available.
 - New executable contract passes.
 
 ## Current Priority
 
-The next step is backend topology repair handling. The server should consume `gossip/topology-repair/request`, validate room/call membership, update topology state, and emit replacement `topology_hint` messages without becoming a media distributor.
+The previous open gossip implementation tasks are complete for the current scaffold:
+
+- Backend topology repair handling now consumes `gossip/topology-repair/request`, validates room/call membership and authenticated peer context, rejects media/signaling/secret fields, and emits bounded replacement topology hints without becoming a media distributor.
+- Gossip telemetry now exposes local controller/workspace/RTC transport counters and transport-kind events through executable frontend contracts.
+
+The next highest-impact step is continued conservative rollout observation. The backend now records repair/link-health observations, reads recent object_store health records back into topology planning, avoids recent failed pairs across reconnects/processes, and exposes diagnostic-only rollout gates from sanitized room telemetry aggregates while preserving SFU-first behavior until active-mode gossip quality is proven.
 
 Prerequisite now complete:
 
@@ -139,6 +148,15 @@ Prerequisite now complete:
 
 Recent completed step:
 
+- Topology repair planning now reads bounded recent King object_store health observations for the room/call, validates schema/version/kind/context/peer fields, rejects unsafe media/signaling/secret-bearing records, ignores malformed/stale records, and feeds recent failed pairs into topology avoidance.
+- Gossip rollout gates now derive duplicate, TTL exhaustion, late-drop, repair-rate, and RTC/topology readiness metrics from sanitized telemetry aggregates or acks; frontend diagnostics remain observational and active mode is only allowed when explicit active mode plus readiness thresholds are met.
+- Persistent topology-health records now write sanitized failed-link observations to King object_store-compatible keys and avoid fresh failed pairs during replacement topology generation.
+- Room-level gossip telemetry aggregation now accepts sanitized `gossip/telemetry/snapshot` ops-lane messages, validates counters/transport labels, aggregates by room in presence state, and returns `gossip/telemetry/ack`.
+- Native linker selector cleanup now lets `make -C extension` link on macOS without passing ELF-only `-soname`; Linux keeps soname behavior.
+- Production gossip fanout now defaults to degree 4 and clamps to degree 3..5 in frontend routing and backend topology/repair/forward planning, preventing eligible rooms from degrading into degree-2 cycle graphs.
+- The standalone four-peer local gossip harness now has adjustable fanout, defaults to degree 4, clamps to degree 3..5 plus available peers, and is covered by `gossip-harness-faults-contract.mjs` inside `npm run test:contract:gossip`.
+- Backend topology repair handling is implemented and covered by `realtime-gossipmesh-runtime-contract.sh`.
+- Gossip telemetry is implemented and covered by `gossip-telemetry-contract.mjs` inside `npm run test:contract:gossip`.
 - Outbound live gossip publication now runs only after successful conservative SFU send and only when the gossip data lane is `active`.
 - Live native gossip data channels are now bound only for server-assigned gossip neighbors.
 - Executable contracts cover outbound live publication and server topology ingestion.
@@ -147,9 +165,102 @@ Recent completed step:
 
 Current failure and warning follow-up:
 
-- Backend topology repair handling still needs implementation and contracts.
+- Backend topology repair handling is no longer open for the current scaffold.
+- Gossip telemetry is no longer open for the current scaffold.
+- Persistent topology-health records, object_store readback, room-level telemetry aggregation, and rollout-gate diagnostics are no longer open for the current scaffold.
 - The previous Vite `CallWorkspaceView` large route chunk warning is resolved through manual route-graph chunks and a new build-size contract.
 - Native MCP remote-control tests `340` and `341` now pass after aligning native runtime-control monotonic milliseconds with PHP `hrtime(true)` via `zend_hrtime() / 1000000`.
+- Native cleanup removed generated/autotools/no-op extension churn from the worktree. The macOS `-soname` linker blocker is fixed for `make -C extension`.
+- Native curl/pkg-config prerequisite cleanup is complete. Top-level `make build` reaches configure/compile with `pkg-config` absent by selecting the documented Homebrew curl include path on this host.
+- Native OpenSSL header/library prerequisite cleanup is complete. Top-level `make build` now selects the documented Homebrew OpenSSL include/library paths on this host and stages release artifacts successfully.
+- Native compiler/linker warning cleanup is complete. `make build` now passes on this macOS host without compiler/linker warnings; Darwin libtool generation avoids deprecated `-undefined suppress`, and native prerequisite selectors now explicitly cover Linux, macOS, and Windows candidate families.
+
+## Next Candidate Tasks
+
+### 1. Windows Native Build CI Runner
+
+Impact: medium.
+
+Complexity: medium-high.
+
+Status: future-blocked.
+
+Why:
+
+The native build scripts now have explicit Windows selector branches for Cygwin/MINGW/MSYS-style environments and vcpkg/MSYS2 curl/OpenSSL candidates, but this repository cannot prove the full Windows native extension build without a real Windows runner.
+
+Blocked on:
+
+- Access to a Windows CI runner or equivalent hosted Windows native build environment.
+- A decided Windows toolchain target, for example MSYS2/MinGW, Cygwin, or a PHP SDK/vcpkg-based flow.
+
+Done when:
+
+- CI has a Windows native build lane that runs the relevant prerequisite selector contracts.
+- The Windows lane exercises `make build` or the Windows-equivalent native extension build path.
+- Any Windows-specific curl/OpenSSL/LSQUIC path differences are contracted.
+- The lane is documented as future validation, not a local developer requirement.
+
+### 2. Native Compiler Warning Cleanup
+
+Impact: low-medium.
+
+Complexity: medium.
+
+Status: complete.
+
+Why:
+
+Top-level `make build` now succeeds, but it still emits existing compiler warnings. Warning cleanup should be separate from prerequisite/build unblocking so it can be reviewed safely.
+
+Done when:
+
+- macOS deprecated `syscall` diagnostics are resolved or intentionally isolated behind platform selectors. Complete with `pthread_threadid_np()` on Darwin and `SYS_gettid` on Linux.
+- `zend_long` format warnings use the correct portable format specifier/cast. Complete across `extension/src`.
+- Focused native PHPTs and `make build` still pass. Complete.
+
+### 3. Native OpenSSL Header/Library Prerequisite Cleanup
+
+Impact: medium.
+
+Complexity: medium.
+
+Status: complete.
+
+Why:
+
+The curl/pkg-config blocker was resolved for this host and `make build` then reached extension compilation. The next native blocker was missing OpenSSL headers at `extension/src/media/rtp.c`.
+
+Done when:
+
+- Build scripts select a documented vendored/system OpenSSL header path on macOS and Linux. Complete.
+- The failure message names the exact install/bootstrap command. Complete.
+- `make build` reaches the next compile/link stage on a clean macOS checkout when system OpenSSL headers are installed. Complete; it now builds and stages release artifacts on this host.
+- Existing focused native PHPTs still pass. Complete.
+
+### 4. Native Curl/pkg-config Build Prerequisite Cleanup
+
+Impact: medium.
+
+Complexity: medium.
+
+Status: complete.
+
+Why:
+
+The macOS `-soname` linker failure is fixed, and `make -C extension` passes. The top-level `make build` path still fails early when curl headers are missing and `pkg-config` is unavailable.
+
+Done when:
+
+- Build scripts select a documented vendored/system curl header path on macOS and Linux. Complete.
+- Build scripts document matching macOS/Linux libcurl library/runtime candidates without adding a hard libcurl link. Complete.
+- The failure message names the exact install/bootstrap command. Complete.
+- `make build` reaches configure/compile on a clean macOS checkout when system curl headers are installed but `pkg-config` is absent. Complete on this host with `-I/opt/homebrew/opt/curl/include`.
+- Existing focused PHPTs still pass. Complete.
+
+Known remaining native follow-up:
+
+- Windows native build validation remains future-blocked because no Windows machine/runner is currently available locally.
 
 ## Step Checklist Template
 

@@ -182,7 +182,7 @@ static zend_result king_server_admin_api_open_listener_stream(
 
     endpoint = strpprintf(
         0,
-        "tls://%.*s:%ld",
+        "tls://%.*s:" ZEND_LONG_FMT,
         (int) config->bind_host_len,
         config->bind_host,
         config->port
@@ -270,4 +270,3 @@ static king_server_admin_api_wait_result_t king_server_admin_api_accept_client_s
 
     return KING_SERVER_ADMIN_API_WAIT_TIMEOUT;
 }
-

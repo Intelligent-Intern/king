@@ -357,12 +357,12 @@ static void king_system_start_recovery_plan(
     snprintf(
         king_system_recovery_plan_id,
         sizeof(king_system_recovery_plan_id),
-        "%s:%s:%ld:%llu:%llu",
+        "%s:%s:" ZEND_LONG_FMT ":%llu:%llu",
         king_system_recovery_mode_to_string(mode),
         king_system_recovery_source_node_id[0] != '\0'
             ? king_system_recovery_source_node_id
             : "local",
-        (long) king_system_recovery_plan_requested_at,
+        (zend_long) king_system_recovery_plan_requested_at,
         (unsigned long long) king_system_coordinator_state_version,
         (unsigned long long) king_system_coordinator_generation
     );
@@ -573,7 +573,7 @@ static int king_system_write_coordinator_state(
         return FAILURE;
     }
 
-    snprintf(temp_path, sizeof(temp_path), "%s.tmp.%ld", state_path, (long) getpid());
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp." ZEND_LONG_FMT, state_path, (zend_long) getpid());
     file = fopen(temp_path, "wb");
     if (file == NULL) {
         return FAILURE;

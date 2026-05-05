@@ -1,5 +1,6 @@
 libcurl
 quiche
+llama-fork/
 node_modules
 .cargo/
 

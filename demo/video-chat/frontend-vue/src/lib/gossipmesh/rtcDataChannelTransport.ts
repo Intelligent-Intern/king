@@ -1,4 +1,4 @@
-import type { GossipDataTransport } from './gossipController'
+import type { GossipDataTransport, GossipTelemetryCounters, GossipTransportKind } from './gossipController'
 import { GOSSIP_IIBIN_CODEC, type GossipDataPlaneCodec } from './iibinCodec'
 
 export interface GossipRtcDataChannelTransportOptions {
@@ -8,6 +8,15 @@ export interface GossipRtcDataChannelTransportOptions {
   codec?: GossipDataPlaneCodec
   onDataMessage: (msg: any, fromPeerId: string) => void
   onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
+  onTelemetry?: (event: GossipTransportTelemetryEvent) => void
+}
+
+export interface GossipTransportTelemetryEvent {
+  peerId: string
+  targetPeerId?: string
+  counter: keyof GossipTelemetryCounters
+  increment: number
+  transport_kind: GossipTransportKind
 }
 
 interface NeighborChannel {
@@ -26,12 +35,14 @@ const DEFAULT_MAX_QUEUED_MESSAGES = 64
  * carries data frames directly over RTCDataChannel.
  */
 export class GossipRtcDataChannelTransport implements GossipDataTransport {
+  readonly kind = 'rtc_datachannel' as const
   private readonly localPeerId: string
   private readonly label: string
   private readonly maxQueuedMessages: number
   private readonly codec: GossipDataPlaneCodec
   private readonly onDataMessage: (msg: any, fromPeerId: string) => void
   private readonly onStateChange?: (peerId: string, state: RTCDataChannelState, eventType: 'open' | 'close' | 'error') => void
+  private readonly onTelemetry?: (event: GossipTransportTelemetryEvent) => void
   private readonly channels: Map<string, NeighborChannel> = new Map()
   private readonly pendingQueues: Map<string, ArrayBuffer[]> = new Map()
 
@@ -42,6 +53,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     this.codec = options.codec || GOSSIP_IIBIN_CODEC
     this.onDataMessage = options.onDataMessage
     this.onStateChange = options.onStateChange
+    this.onTelemetry = options.onTelemetry
   }
 
   bindPeerConnection(peerId: string, pc: RTCPeerConnection, initiator: boolean): RTCDataChannel | null {
@@ -74,6 +86,7 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       return
     }
     entry.channel.send(serialized)
+    this.emitTelemetry('rtc_datachannel_sends', 1, targetPeerId)
   }
 
   close(peerId?: string): void {
@@ -135,6 +148,8 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
     queue.push(serialized)
     while (queue.length > this.maxQueuedMessages) {
       queue.shift()
+      this.emitTelemetry('dropped', 1, peerId)
+      this.emitTelemetry('late_drops', 1, peerId)
     }
     if (entry) {
       entry.queue = queue
@@ -150,6 +165,17 @@ export class GossipRtcDataChannelTransport implements GossipDataTransport {
       const next = entry.queue.shift()
       if (!next) continue
       entry.channel.send(next)
+      this.emitTelemetry('rtc_datachannel_sends', 1, peerId)
     }
+  }
+
+  private emitTelemetry(counter: keyof GossipTelemetryCounters, increment: number, targetPeerId?: string): void {
+    this.onTelemetry?.({
+      peerId: this.localPeerId,
+      targetPeerId,
+      counter,
+      increment,
+      transport_kind: this.kind,
+    })
   }
 }

@@ -7,7 +7,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 cd "${ROOT_DIR}"
 
-mapfile -t tracked_files < <(git ls-files)
+tracked_files="$(git ls-files)"
 
 descriptions=(
   "Vite cache directories must not be versioned (.vite)"
@@ -46,16 +46,17 @@ for i in "${!descriptions[@]}"; do
   desc="${descriptions[i]}"
   regex="${patterns[i]}"
 
-  mapfile -t matches < <(printf '%s\n' "${tracked_files[@]}" | grep -E "${regex}" || true)
+  matches="$(printf '%s\n' "${tracked_files}" | grep -E "${regex}" || true)"
 
-  if [[ "${#matches[@]}" -eq 0 ]]; then
+  if [[ -z "${matches}" ]]; then
     continue
   fi
 
   failed=1
-  total_matches=$((total_matches + ${#matches[@]}))
+  match_count="$(printf '%s\n' "${matches}" | sed '/^$/d' | wc -l | tr -d ' ')"
+  total_matches=$((total_matches + match_count))
   echo "${desc}" >&2
-  printf ' - %s\n' "${matches[@]}" >&2
+  printf '%s\n' "${matches}" | sed 's/^/ - /' >&2
 done
 
 if [[ "${failed}" -ne 0 ]]; then

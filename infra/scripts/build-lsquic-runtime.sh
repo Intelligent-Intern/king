@@ -75,6 +75,9 @@ host_os() {
         Linux)
             printf '%s\n' "linux"
             ;;
+        CYGWIN*|MINGW*|MSYS*)
+            printf '%s\n' "windows"
+            ;;
         *)
             uname -s | tr '[:upper:]' '[:lower:]'
             ;;
@@ -85,6 +88,9 @@ runtime_library_name() {
     case "$(host_os)" in
         darwin)
             printf '%s\n' "liblsquic.dylib"
+            ;;
+        windows)
+            printf '%s\n' "lsquic.dll"
             ;;
         *)
             printf '%s\n' "liblsquic.so"

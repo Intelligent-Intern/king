@@ -244,11 +244,11 @@ static zend_result king_server_http1_open_listener_socket(
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, port);
     gai_status = getaddrinfo(host, port_buffer, &hints, &results);
     if (gai_status != 0) {
         king_server_local_set_errorf(
-            "%s() failed to resolve the HTTP/1 listen target '%s:%ld' (getaddrinfo code %d).",
+            "%s() failed to resolve the HTTP/1 listen target '%s:" ZEND_LONG_FMT "' (getaddrinfo code %d).",
             function_name,
             host,
             port,
@@ -302,7 +302,7 @@ static zend_result king_server_http1_open_listener_socket(
 
     freeaddrinfo(results);
     king_server_local_set_errorf(
-        "%s() failed to bind the on-wire HTTP/1 listener on '%s:%ld' (errno %d).",
+        "%s() failed to bind the on-wire HTTP/1 listener on '%s:" ZEND_LONG_FMT "' (errno %d).",
         function_name,
         host,
         port,

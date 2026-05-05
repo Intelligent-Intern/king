@@ -311,7 +311,7 @@ static zend_result king_http2_build_origin_key(
     spprintf(
         origin_out,
         0,
-        "%s://%s:%ld|verify=%d|ca=%s|cert=%s|key=%s",
+        "%s://%s:" ZEND_LONG_FMT "|verify=%d|ca=%s|cert=%s|key=%s",
         ZSTR_VAL(lower_scheme),
         ZSTR_VAL(lower_host),
         port,

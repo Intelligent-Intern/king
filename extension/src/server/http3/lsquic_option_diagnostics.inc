@@ -14,7 +14,7 @@ static zend_result king_server_http3_lsquic_reject_unsupported_long_if_changed(
     }
 
     king_server_local_set_errorf(
-        "%s() cannot apply quic.%s=%ld with the active LSQUIC HTTP/3 server backend; LSQUIC does not expose this transport setting. Remove the override or use a backend that supports it.",
+        "%s() cannot apply quic.%s=" ZEND_LONG_FMT " with the active LSQUIC HTTP/3 server backend; LSQUIC does not expose this transport setting. Remove the override or use a backend that supports it.",
         function_name,
         option_name,
         value
@@ -49,7 +49,7 @@ static zend_result king_server_http3_lsquic_option_to_unsigned(
 {
     if (value < 0 || value > (zend_long) UINT_MAX) {
         king_server_local_set_errorf(
-            "%s() cannot apply quic.%s=%ld with the active LSQUIC HTTP/3 server backend; LSQUIC expects this setting to fit into an unsigned 32-bit field.",
+            "%s() cannot apply quic.%s=" ZEND_LONG_FMT " with the active LSQUIC HTTP/3 server backend; LSQUIC expects this setting to fit into an unsigned 32-bit field.",
             function_name,
             option_name,
             value
@@ -108,7 +108,7 @@ static zend_result king_server_http3_lsquic_apply_quic_options(
 
     if (options->quic_ping_interval_ms % 1000 != 0) {
         king_server_local_set_errorf(
-            "%s() cannot apply quic.ping_interval_ms=%ld exactly with the active LSQUIC HTTP/3 server backend; LSQUIC exposes ping period in whole seconds.",
+            "%s() cannot apply quic.ping_interval_ms=" ZEND_LONG_FMT " exactly with the active LSQUIC HTTP/3 server backend; LSQUIC exposes ping period in whole seconds.",
             function_name,
             options->quic_ping_interval_ms
         );

@@ -575,14 +575,14 @@ int king_autoscaling_provider_reconcile_inventory(void)
         return SUCCESS;
     }
 
-    if (http_code < 200 || http_code >= 300 || response.s == NULL) {
+    if ((zend_long) http_code < 200 || (zend_long) http_code >= 300 || response.s == NULL) {
         char warning[256];
 
         snprintf(
             warning,
             sizeof(warning),
-            "Hetzner inventory reconcile skipped: list servers returned HTTP %ld.",
-            http_code
+            "Hetzner inventory reconcile skipped: list servers returned HTTP " ZEND_LONG_FMT ".",
+            (zend_long) http_code
         );
         king_autoscaling_set_reconcile_warning(warning);
         smart_str_free(&response);

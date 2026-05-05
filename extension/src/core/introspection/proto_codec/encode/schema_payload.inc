@@ -48,7 +48,7 @@ static bool king_proto_runtime_encode_schema_payload(
                 zend_throw_exception_ex(
                     king_ce_validation_exception,
                     0,
-                    "Encoding failed: Required field '%s' (tag %ld) is missing or null.",
+                    "Encoding failed: Required field '%s' (tag " ZEND_LONG_FMT ") is missing or null.",
                     ZSTR_VAL(field->name),
                     field->tag
                 );

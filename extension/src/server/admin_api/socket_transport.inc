@@ -114,11 +114,11 @@ static zend_result king_server_admin_api_open_listener_socket(
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", config->port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, config->port);
     gai_status = getaddrinfo(config->bind_host, port_buffer, &hints, &results);
     if (gai_status != 0) {
         king_server_control_set_errorf(
-            "%s() failed to resolve the admin listen target '%s:%ld' (getaddrinfo code %d).",
+            "%s() failed to resolve the admin listen target '%s:" ZEND_LONG_FMT "' (getaddrinfo code %d).",
             function_name,
             config->bind_host,
             config->port,
@@ -157,7 +157,7 @@ static zend_result king_server_admin_api_open_listener_socket(
 
     freeaddrinfo(results);
     king_server_control_set_errorf(
-        "%s() failed to bind the admin listener on '%s:%ld' (errno %d).",
+        "%s() failed to bind the admin listener on '%s:" ZEND_LONG_FMT "' (errno %d).",
         function_name,
         config->bind_host,
         config->port,
@@ -210,4 +210,3 @@ static king_server_admin_api_wait_result_t king_server_admin_api_accept_once(
         return KING_SERVER_ADMIN_API_WAIT_ERROR;
     }
 }
-
