@@ -18,6 +18,7 @@
     "test:contract:call-mini-strip-responsive": "node tests/contract/call-mini-strip-responsive-contract.mjs",
     "test:contract:call-layout-sidebar-controls": "node tests/contract/call-layout-sidebar-controls-contract.mjs",
     "test:contract:call-layout-ui-options": "node tests/contract/call-layout-ui-options-contract.mjs",
+    "test:contract:call-layout-active-strategy": "node tests/contract/call-layout-active-strategy-contract.mjs",
     "test:contract:shared-ui-primitives": "node tests/contract/shared-ui-primitives-contract.mjs",
     "test:contract:frontend-state-stores": "node tests/contract/frontend-state-stores-contract.mjs",
     "test:contract:foreground-reconnect": "node tests/contract/foreground-reconnect-contract.mjs",

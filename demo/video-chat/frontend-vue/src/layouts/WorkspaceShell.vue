@@ -4,7 +4,7 @@
       <aside class="sidebar sidebar-left" :class="leftSidebarClasses">
         <div v-if="isCallWorkspace" class="sidebar-content left left-call-content">
           <div class="brand-strip">
-            <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
+            <img data-brand-logo :src="sidebarLogoSrc" alt="KingRT" />
             <button
               class="sidebar-toggle-btn"
               type="button"
@@ -252,7 +252,7 @@
 
         <div v-else class="sidebar-content left">
           <div class="brand-strip">
-            <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
+            <img data-brand-logo :src="sidebarLogoSrc" alt="KingRT" />
             <button
               class="sidebar-toggle-btn"
               type="button"
@@ -288,6 +288,8 @@
               />
             </button>
           </section>
+
+          <TenantSwitcher />
 
           <div class="logout-wrap">
             <button class="btn full" type="button" @click="handleSignOut">Log out</button>
@@ -355,15 +357,27 @@
 
   <div class="settings-modal" :hidden="!settingsState.open" role="dialog" aria-modal="true" aria-label="Workspace settings">
     <div class="settings-backdrop" @click="closeSettingsModal"></div>
-    <div class="settings-dialog">
+    <div class="settings-dialog" :class="{ 'is-maximized': settingsState.maximized }">
       <header class="settings-header">
         <div class="settings-title-wrap">
-          <img src="/assets/orgas/kingrt/logo.svg" alt="" />
+          <img :src="modalLogoSrc" alt="" />
           <h3>Settings</h3>
         </div>
-        <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
-          <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
-        </button>
+        <div class="settings-header-actions">
+          <button
+            v-if="isDesktopLikeViewport"
+            class="icon-mini-btn"
+            type="button"
+            :aria-label="settingsState.maximized ? 'Restore settings size' : 'Maximize settings'"
+            :title="settingsState.maximized ? 'Restore settings size' : 'Maximize settings'"
+            @click="toggleSettingsMaximized"
+          >
+            <img :src="settingsState.maximized ? '/assets/orgas/kingrt/icons/backward.png' : '/assets/orgas/kingrt/icons/forward.png'" alt="" />
+          </button>
+          <button class="icon-mini-btn" type="button" aria-label="Close settings" @click="closeSettingsModal">
+            <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
+          </button>
+        </div>
       </header>
 
       <div class="settings-grid" role="tablist" aria-label="Settings categories">
@@ -423,260 +437,7 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'theme'" class="settings-panel">
-        <div class="settings-theme-layout">
-          <section class="settings-theme-palette">
-            <header class="settings-theme-palette-header">
-              <div class="settings-theme-palette-heading">
-                <img class="settings-theme-palette-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                <h4>Theme Colors</h4>
-              </div>
-              <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="resetThemeColorsToDefault">
-                Reset
-              </button>
-            </header>
-
-            <div class="settings-theme-palette-list">
-              <article v-for="field in themeColorFields" :key="field.key" class="settings-theme-color-row">
-                <div class="settings-theme-color-meta">
-                  <img class="settings-theme-color-meta-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                  <div class="settings-theme-color-copy">
-                    <span class="settings-theme-color-label">{{ field.label }}</span>
-                    <code class="settings-theme-color-key">{{ field.key }}</code>
-                  </div>
-                </div>
-                <div class="settings-theme-color-inputs">
-                  <input
-                    class="settings-theme-swatch"
-                    type="color"
-                    :value="settingsDraft.themeColors[field.key] || field.default"
-                    @input="updateThemeColor(field.key, $event?.target?.value)"
-                  />
-                  <input
-                    class="input settings-theme-hex"
-                    type="text"
-                    maxlength="7"
-                    :value="settingsDraft.themeColors[field.key] || field.default"
-                    @input="updateThemeColor(field.key, $event?.target?.value)"
-                  />
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="settings-theme-preview">
-            <header class="settings-theme-preview-header">
-              <img class="settings-theme-preview-header-icon" src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-              <h4>Video Call Management</h4>
-            </header>
-
-            <div class="settings-theme-preview-viewport">
-              <div class="settings-theme-preview-scale">
-                <div class="settings-theme-preview-shell">
-                  <aside class="settings-theme-preview-left-pane">
-                    <div class="brand-strip settings-theme-preview-brand-strip">
-                      <img data-brand-logo src="/assets/orgas/kingrt/logo.svg" alt="KingRT" />
-                    </div>
-                    <nav class="nav settings-theme-preview-nav" aria-label="Preview workspace navigation">
-                      <a class="nav-link active" href="#" @click.prevent>
-                        <img src="/assets/orgas/kingrt/icons/lobby.png" alt="" />
-                        <span>Video Calls</span>
-                      </a>
-                      <a class="nav-link" href="#" @click.prevent>
-                        <img src="/assets/orgas/kingrt/icons/user.png" alt="" />
-                        <span>User Management</span>
-                      </a>
-                      <a class="nav-link" href="#" @click.prevent>
-                        <img src="/assets/orgas/kingrt/icons/users.png" alt="" />
-                        <span>Overview</span>
-                      </a>
-                    </nav>
-                    <section class="sidebar-profile avatar-only settings-theme-preview-profile">
-                      <button class="sidebar-avatar-trigger" type="button" aria-label="Preview profile avatar">
-                        <img class="sidebar-avatar-image" :src="settingsAvatarPreviewSrc" alt="Preview avatar" />
-                      </button>
-                    </section>
-                  </aside>
-
-                  <section class="settings-theme-preview-main">
-                    <section class="view-card calls-view settings-theme-preview-calls-view">
-                      <section class="section calls-header settings-theme-preview-calls-header">
-                        <div class="calls-header-left">
-                          <h1>Video Call Management</h1>
-                        </div>
-                        <div class="actions">
-                          <button class="btn btn-cyan" type="button">New video call</button>
-                        </div>
-                      </section>
-
-                      <section class="toolbar calls-toolbar settings-theme-preview-calls-toolbar">
-                        <div class="calls-toolbar-left settings-theme-preview-calls-toolbar-left">
-                          <div class="calls-view-tabs" role="tablist" aria-label="Calls view mode preview">
-                            <button
-                              class="tab"
-                              :class="{ active: settingsThemePreview.viewMode === 'calls' }"
-                              type="button"
-                              role="tab"
-                              :aria-selected="settingsThemePreview.viewMode === 'calls'"
-                              @click="setSettingsThemePreviewViewMode('calls')"
-                            >
-                              Calls
-                            </button>
-                            <button
-                              class="tab"
-                              :class="{ active: settingsThemePreview.viewMode === 'calendar' }"
-                              type="button"
-                              role="tab"
-                              :aria-selected="settingsThemePreview.viewMode === 'calendar'"
-                              @click="setSettingsThemePreviewViewMode('calendar')"
-                            >
-                              Calender
-                            </button>
-                          </div>
-
-                          <label
-                            class="calls-search calls-search-main settings-theme-preview-inline-search"
-                            aria-label="Preview call search"
-                          >
-                            <input
-                              v-model="settingsThemePreview.query"
-                              class="input"
-                              type="search"
-                              placeholder="Search call title"
-                              @keydown.enter.prevent="applySettingsThemePreviewFilters"
-                            />
-                          </label>
-                        </div>
-
-                        <div class="calls-toolbar-right">
-                          <AppSelect v-model="settingsThemePreview.status" @change="applySettingsThemePreviewFilters">
-                            <option value="all">All status</option>
-                            <option value="scheduled">Scheduled</option>
-                            <option value="active">Active</option>
-                            <option value="ended">Ended</option>
-                            <option value="cancelled">Cancelled</option>
-                          </AppSelect>
-
-                          <AppSelect v-model="settingsThemePreview.scope" @change="applySettingsThemePreviewFilters">
-                            <option value="all">All scope</option>
-                            <option value="my">My scope</option>
-                          </AppSelect>
-
-                          <button
-                            class="icon-mini-btn calls-toolbar-search-btn"
-                            type="button"
-                            title="Search calls"
-                            aria-label="Search calls"
-                            @click="applySettingsThemePreviewFilters"
-                          >
-                            <img src="/assets/orgas/kingrt/icons/send.png" alt="" />
-                          </button>
-                        </div>
-                      </section>
-
-                      <section v-if="settingsThemePreview.viewMode === 'calls'" class="table-wrap calls-table-wrap">
-                        <table class="calls-list-table">
-                          <thead>
-                            <tr>
-                              <th class="col-title">Call</th>
-                              <th>Status</th>
-                              <th>Window</th>
-                              <th>Participants</th>
-                              <th>Owner</th>
-                              <th class="col-actions">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody v-if="settingsThemePreviewRows.length > 0">
-                            <tr v-for="call in settingsThemePreviewRows" :key="call.id">
-                              <td data-label="Call">
-                                <div class="call-title">{{ call.title }}</div>
-                                <div class="call-subline code">{{ call.id }}</div>
-                              </td>
-                              <td data-label="Status">
-                                <span class="tag" :class="settingsThemePreviewStatusTagClass(call.status)">
-                                  {{ call.status }}
-                                </span>
-                              </td>
-                              <td data-label="Window">{{ call.window }}</td>
-                              <td data-label="Participants">
-                                {{ call.participants.total }}
-                                <span class="call-subline">
-                                  in {{ call.participants.internal }} / ex {{ call.participants.external }}
-                                </span>
-                              </td>
-                              <td data-label="Owner">
-                                {{ call.owner.displayName }}
-                                <span class="call-subline">{{ call.owner.email }}</span>
-                              </td>
-                              <td data-label="Actions">
-                                <div class="actions-inline">
-                                  <button class="icon-mini-btn" type="button" title="Edit call" aria-label="Edit call">
-                                    <img src="/assets/orgas/kingrt/icons/gear.png" alt="" />
-                                  </button>
-                                  <button class="icon-mini-btn" type="button" title="Enter video call" aria-label="Enter video call">
-                                    <img src="/assets/orgas/kingrt/icons/add_to_call.png" alt="" />
-                                  </button>
-                                  <button class="icon-mini-btn danger" type="button" title="Cancel call" aria-label="Cancel call">
-                                    <img src="/assets/orgas/kingrt/icons/end_call.png" alt="" />
-                                  </button>
-                                  <button class="icon-mini-btn danger" type="button" title="Delete call" aria-label="Delete call">
-                                    <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          </tbody>
-                        </table>
-
-                        <section v-if="settingsThemePreviewRows.length === 0" class="section calls-empty">
-                          No calls match the active filters.
-                        </section>
-                      </section>
-
-                      <section v-else class="table-wrap calls-calendar-wrap">
-                        <section class="calls-calendar-full settings-theme-preview-calendar-mock">
-                          <div class="settings-theme-preview-calendar-grid">
-                            <span>Mon</span>
-                            <span>Tue</span>
-                            <span>Wed</span>
-                            <span>Thu</span>
-                            <span>Fri</span>
-                            <span>Sat</span>
-                            <span>Sun</span>
-                          </div>
-                          <div class="settings-theme-preview-calendar-event">Platform Standup · 09:30</div>
-                        </section>
-                      </section>
-
-                      <section v-if="settingsThemePreview.viewMode === 'calls'" class="footer calls-pagination-wrap">
-                        <div class="pagination">
-                          <button
-                            class="pager-btn pager-icon-btn"
-                            type="button"
-                            :disabled="settingsThemePreview.page <= 1"
-                            @click="goToSettingsThemePreviewPage(settingsThemePreview.page - 1)"
-                          >
-                            <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="Previous" />
-                          </button>
-                          <div class="page-info">
-                            Page {{ settingsThemePreview.page }} / {{ settingsThemePreviewPageCount }}
-                          </div>
-                          <button
-                            class="pager-btn pager-icon-btn"
-                            type="button"
-                            :disabled="settingsThemePreview.page >= settingsThemePreviewPageCount"
-                            @click="goToSettingsThemePreviewPage(settingsThemePreview.page + 1)"
-                          >
-                            <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="Next" />
-                          </button>
-                        </div>
-                      </section>
-                    </section>
-                  </section>
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
+        <WorkspaceThemeSettings v-model="settingsDraft.theme" :saving="settingsState.saving || settingsState.loading" />
       </section>
 
       <section v-else-if="activeSettingsTile === 'credentials-email'" class="settings-panel">
@@ -687,7 +448,7 @@
           </label>
           <label class="settings-field">
             <span>Password</span>
-            <input class="input" type="password" value="********" disabled autocomplete="off" />
+            <input class="input" type="text" value="********" disabled autocomplete="off" />
           </label>
         </div>
       </section>
@@ -742,8 +503,8 @@
         </section>
       </section>
 
-      <section v-else-if="activeSettingsTile === 'notifications'" class="settings-panel">
-        <div class="settings-upload-status">Notifications settings coming soon.</div>
+      <section v-else-if="activeSettingsTile === 'administration'" class="settings-panel">
+        <WorkspaceAdministrationSettings ref="administrationSettingsRef" />
       </section>
 
       <section v-else-if="activeSettingsTile === 'apps'" class="settings-panel">
@@ -775,7 +536,7 @@
     <div class="call-owner-edit-dialog">
       <header class="call-owner-edit-header">
         <div class="call-owner-edit-title-wrap">
-          <img class="call-owner-edit-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
+          <img class="call-owner-edit-logo" :src="modalLogoSrc" alt="" />
           <h4>Edit video call</h4>
         </div>
         <button class="icon-mini-btn" type="button" aria-label="Close edit call modal" @click="closeInCallEditModal">
@@ -953,6 +714,9 @@
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
+import WorkspaceAdministrationSettings from './settings/WorkspaceAdministrationSettings.vue';
+import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
+import TenantSwitcher from '../domain/tenant/TenantSwitcher.vue';
 import {
   logoutSession,
   postLogoutRedirectTarget,
@@ -962,6 +726,10 @@ import {
 } from '../domain/auth/session';
 import { DATE_FORMAT_OPTIONS, normalizeDateFormat, normalizeTimeFormat } from '../support/dateTimeFormat';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
+import {
+  appearanceState,
+  loadWorkspaceAppearance,
+} from '../domain/workspace/appearance';
 import {
   applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
@@ -992,107 +760,8 @@ const LAPTOP_BREAKPOINT = 1440;
 const TABLET_BREAKPOINT = 1180;
 const MOBILE_BREAKPOINT = 760;
 const SETTINGS_LANGUAGE_STORAGE_KEY = 'ii_videocall_v1_workspace_language';
-const SETTINGS_THEME_COLORS_STORAGE_KEY = 'ii_videocall_v1_theme_colors';
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const SUPPORTED_SETTINGS_LANGUAGES = ['en', 'de', 'fr', 'es'];
-const themeColorFields = Object.freeze([
-  { key: '--bg-shell', label: 'Shell background', default: '#0b1324' },
-  { key: '--bg-pane', label: 'Pane background', default: '#182c4d' },
-  { key: '--brand-bg', label: 'Brand strip', default: '#0b1324' },
-  { key: '--bg-surface', label: 'Surface', default: '#003c93' },
-  { key: '--bg-surface-strong', label: 'Surface strong', default: '#0c1c33' },
-  { key: '--bg-input', label: 'Input background', default: '#d8dadd' },
-  { key: '--bg-action', label: 'Action', default: '#0b1324' },
-  { key: '--bg-action-hover', label: 'Action hover', default: '#5696ef' },
-  { key: '--bg-row', label: 'Row', default: '#2a569f' },
-  { key: '--bg-row-hover', label: 'Row hover', default: '#163260' },
-  { key: '--line', label: 'Line', default: '#09111e' },
-  { key: '--text-main', label: 'Text main', default: '#edf3ff' },
-  { key: '--text-muted', label: 'Text muted', default: '#8490a1' },
-  { key: '--ok', label: 'OK', default: '#177f22' },
-  { key: '--wait', label: 'Wait', default: '#8d9500' },
-  { key: '--danger', label: 'Danger', default: '#ff0000' },
-  { key: '--bg-sidebar', label: 'Sidebar', default: '#0b1324' },
-  { key: '--bg-main', label: 'Main', default: '#0b1324' },
-  { key: '--bg-tab', label: 'Tab', default: '#003c93' },
-  { key: '--bg-tab-hover', label: 'Tab hover', default: '#5696ef' },
-  { key: '--bg-tab-active', label: 'Tab active', default: '#2a569f' },
-  { key: '--bg-ui-chrome', label: 'UI chrome', default: '#3d5f98' },
-  { key: '--bg-ui-chrome-active', label: 'UI chrome active', default: '#2a569f' },
-  { key: '--bg-icon', label: 'Icon background', default: '#ffffff' },
-  { key: '--bg-icon-active', label: 'Icon active', default: '#5696ef' },
-  { key: '--border-subtle', label: 'Border subtle', default: '#09111e' },
-  { key: '--text-primary', label: 'Text primary', default: '#edf3ff' },
-  { key: '--text-secondary', label: 'Text secondary', default: '#c6d4eb' },
-  { key: '--text-dim', label: 'Text dim', default: '#5e6d86' },
-  { key: '--warn', label: 'Warn', default: '#4d5011' },
-  { key: '--brand-cyan', label: 'Brand cyan', default: '#1482be' },
-  { key: '--brand-cyan-hover', label: 'Brand cyan hover', default: '#1a96d8' },
-  { key: '--brand-cyan-active', label: 'Brand cyan active', default: '#0f6ea8' },
-]);
-const themeColorDefaultMap = Object.freeze(themeColorFields.reduce((accumulator, field) => ({
-  ...accumulator,
-  [field.key]: field.default,
-}), {}));
-
-function normalizeHexColor(value, fallback = '#000000') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
-  if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;
-  if (/^#[a-f0-9]{3}$/.test(normalized)) {
-    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
-  }
-  if (/^[a-f0-9]{3}$/.test(normalized)) {
-    return `#${normalized[0]}${normalized[0]}${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}`;
-  }
-  return normalizeHexColor(fallback, '#000000');
-}
-
-function mergeThemeColorMap(source) {
-  const merged = {};
-  const payload = source && typeof source === 'object' ? source : {};
-  for (const field of themeColorFields) {
-    merged[field.key] = normalizeHexColor(payload[field.key], themeColorDefaultMap[field.key]);
-  }
-  // Keep UI chrome on the approved palette color.
-  merged['--bg-ui-chrome'] = '#3d5f98';
-  return merged;
-}
-
-function applyThemeColorMap(source) {
-  if (typeof document === 'undefined') return;
-  const merged = mergeThemeColorMap(source);
-  for (const field of themeColorFields) {
-    document.documentElement.style.setProperty(field.key, merged[field.key]);
-  }
-}
-
-function readStoredThemeColorMap() {
-  if (typeof localStorage === 'undefined') return mergeThemeColorMap(null);
-  const raw = localStorage.getItem(SETTINGS_THEME_COLORS_STORAGE_KEY);
-  if (!raw) return mergeThemeColorMap(null);
-  try {
-    const parsed = JSON.parse(raw);
-    return mergeThemeColorMap(parsed);
-  } catch {
-    return mergeThemeColorMap(null);
-  }
-}
-
-function storeThemeColorMap(source) {
-  if (typeof localStorage === 'undefined') return;
-  const merged = mergeThemeColorMap(source);
-  localStorage.setItem(SETTINGS_THEME_COLORS_STORAGE_KEY, JSON.stringify(merged));
-}
-
-function patchThemeColorMap(target, source) {
-  const merged = mergeThemeColorMap(source);
-  for (const field of themeColorFields) {
-    target[field.key] = merged[field.key];
-  }
-}
-
-const persistedThemeColors = reactive(readStoredThemeColorMap());
 
 const navItems = computed(() => {
   const role = sessionState.role;
@@ -1101,6 +770,7 @@ const navItems = computed(() => {
     { to: '/admin/users', label: 'User Management', icon: '/assets/orgas/kingrt/icons/user.png', roles: ['admin'] },
     { to: '/admin/marketplace', label: 'Marketplace', icon: '/assets/orgas/kingrt/icons/add_to_call.png', roles: ['admin'] },
     { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
+    { to: '/admin/tenancy', label: 'Tenancy', icon: '/assets/orgas/kingrt/icons/adminon.png', roles: ['admin'] },
     { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
   ];
 
@@ -1113,6 +783,7 @@ const pageTitle = computed(() => {
     '/admin/users': 'User Management',
     '/admin/marketplace': 'Marketplace',
     '/admin/calls': 'Video Call Management',
+    '/admin/tenancy': 'Tenant Administration',
     '/user/dashboard': 'My Video Calls',
   };
 
@@ -1137,6 +808,16 @@ const isDesktopLikeViewport = computed(() => isDesktopViewport.value || isLaptop
 const showMobileShellHeader = computed(() => isMobileViewport.value && !isCallWorkspace.value);
 
 const profileAvatarSrc = computed(() => sessionState.avatarPath || placeholderAvatar);
+const sidebarLogoSrc = computed(() => appearanceState.sidebarLogoPath || '/assets/orgas/kingrt/logo.svg');
+const modalLogoSrc = computed(() => appearanceState.modalLogoPath || '/assets/orgas/kingrt/logo.svg');
+const workspaceThemeOptions = computed(() => (
+  appearanceState.themes.length > 0
+    ? appearanceState.themes
+    : [
+        { id: 'dark', label: 'Dark' },
+        { id: 'light', label: 'Light' },
+      ]
+));
 const sidebarExpanded = computed(() => {
   if (isTabletViewport.value) return isTabletSidebarOpen.value;
   if (isMobileViewport.value) return isMobileSidebarOpen.value;
@@ -1179,7 +860,6 @@ const settingsDraft = reactive({
   language: 'en',
   postLogoutLandingUrl: '',
   avatarDataUrl: '',
-  themeColors: mergeThemeColorMap(persistedThemeColors),
 });
 
 const settingsState = reactive({
@@ -1187,131 +867,22 @@ const settingsState = reactive({
   loading: false,
   saving: false,
   dragging: false,
+  maximized: false,
   message: '',
   avatarStatus: '',
 });
 const activeSettingsTile = ref('about-me');
+const administrationSettingsRef = ref(null);
 const settingsTiles = computed(() => ([
   { id: 'about-me', label: 'About Me' },
   { id: 'credentials-email', label: 'Credentials + Email' },
   { id: 'session', label: 'Session' },
   { id: 'regional', label: 'Regional' },
   { id: 'theme', label: 'Theme' },
-  { id: 'notifications', label: 'Notifications' },
+  { id: 'administration', label: 'Administration' },
   { id: 'apps', label: 'Apps' },
 ]));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
-const SETTINGS_THEME_PREVIEW_PAGE_SIZE = 4;
-const settingsThemePreviewCalls = Object.freeze([
-  {
-    id: '9fbe5c05-8440-4d2e-8a3c-9900ca346c55',
-    title: 'Platform Standup',
-    status: 'active',
-    window: '16 Apr 09:30 - 10:00',
-    scope: 'my',
-    participants: { total: 3, internal: 2, external: 1 },
-    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
-  },
-  {
-    id: '47632c72-ab39-49b6-ba58-05e3e6483fb8',
-    title: 'Quarterly Review',
-    status: 'scheduled',
-    window: '17 Apr 14:00 - 14:45',
-    scope: 'all',
-    participants: { total: 6, internal: 4, external: 2 },
-    owner: { displayName: 'Call Moderator', email: 'moderator@intelligent-intern.com' },
-  },
-  {
-    id: '8d2c1cd4-d5af-45d0-8f8f-7d4ef3044b29',
-    title: 'Customer Escalation',
-    status: 'ended',
-    window: '15 Apr 17:00 - 17:35',
-    scope: 'all',
-    participants: { total: 5, internal: 3, external: 2 },
-    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
-  },
-  {
-    id: '1ca5664f-2e32-4c63-9d85-2f6ca2418c11',
-    title: 'Partner Kickoff',
-    status: 'cancelled',
-    window: '18 Apr 11:00 - 11:30',
-    scope: 'my',
-    participants: { total: 2, internal: 1, external: 1 },
-    owner: { displayName: 'Platform Admin', email: 'admin@intelligent-intern.com' },
-  },
-  {
-    id: '3bd2717f-e8ba-4e76-88ed-bceb5b8f39db',
-    title: 'Hiring Sync',
-    status: 'scheduled',
-    window: '19 Apr 13:00 - 13:30',
-    scope: 'all',
-    participants: { total: 4, internal: 4, external: 0 },
-    owner: { displayName: 'People Ops', email: 'peopleops@intelligent-intern.com' },
-  },
-]);
-const settingsThemePreview = reactive({
-  viewMode: 'calls',
-  query: '',
-  status: 'all',
-  scope: 'all',
-  page: 1,
-});
-
-const settingsThemePreviewFilteredCalls = computed(() => {
-  const query = String(settingsThemePreview.query || '').trim().toLowerCase();
-  return settingsThemePreviewCalls.filter((call) => {
-    if (settingsThemePreview.status !== 'all' && call.status !== settingsThemePreview.status) {
-      return false;
-    }
-    if (settingsThemePreview.scope !== 'all' && call.scope !== settingsThemePreview.scope) {
-      return false;
-    }
-    if (query === '') {
-      return true;
-    }
-    return call.title.toLowerCase().includes(query);
-  });
-});
-
-const settingsThemePreviewPageCount = computed(() => {
-  return Math.max(1, Math.ceil(settingsThemePreviewFilteredCalls.value.length / SETTINGS_THEME_PREVIEW_PAGE_SIZE));
-});
-
-const settingsThemePreviewRows = computed(() => {
-  const currentPage = Math.max(1, Math.min(settingsThemePreview.page, settingsThemePreviewPageCount.value));
-  const start = (currentPage - 1) * SETTINGS_THEME_PREVIEW_PAGE_SIZE;
-  return settingsThemePreviewFilteredCalls.value.slice(start, start + SETTINGS_THEME_PREVIEW_PAGE_SIZE);
-});
-
-watch(
-  () => settingsThemePreviewFilteredCalls.value.length,
-  () => {
-    settingsThemePreview.page = Math.max(1, Math.min(settingsThemePreview.page, settingsThemePreviewPageCount.value));
-  }
-);
-
-function setSettingsThemePreviewViewMode(mode) {
-  const normalized = String(mode || '').trim().toLowerCase();
-  settingsThemePreview.viewMode = normalized === 'calendar' ? 'calendar' : 'calls';
-}
-
-function applySettingsThemePreviewFilters() {
-  settingsThemePreview.page = 1;
-}
-
-function goToSettingsThemePreviewPage(nextPage) {
-  const parsed = Number.parseInt(String(nextPage), 10);
-  if (!Number.isInteger(parsed)) return;
-  settingsThemePreview.page = Math.max(1, Math.min(parsed, settingsThemePreviewPageCount.value));
-}
-
-function settingsThemePreviewStatusTagClass(status) {
-  const normalized = String(status || '').trim().toLowerCase();
-  if (normalized === 'active') return 'ok';
-  if (normalized === 'scheduled') return 'warn';
-  if (normalized === 'cancelled') return 'danger';
-  return 'warn';
-}
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 
@@ -1340,20 +911,6 @@ function normalizePostLogoutLandingUrl(value) {
   if (url === '') return '';
   if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
   return url;
-}
-
-function updateThemeColor(key, value) {
-  const normalizedKey = String(key || '').trim();
-  if (normalizedKey === '' || !(normalizedKey in themeColorDefaultMap)) return;
-  const fallback = settingsDraft.themeColors[normalizedKey] || themeColorDefaultMap[normalizedKey];
-  const next = normalizeHexColor(value, fallback);
-  settingsDraft.themeColors[normalizedKey] = next;
-  applyThemeColorMap(settingsDraft.themeColors);
-}
-
-function resetThemeColorsToDefault() {
-  patchThemeColorMap(settingsDraft.themeColors, themeColorDefaultMap);
-  applyThemeColorMap(settingsDraft.themeColors);
 }
 
 function normalizeRole(value) {
@@ -2371,7 +1928,9 @@ watch(
 
 onMounted(() => {
   applySettingsLanguage(readStoredSettingsLanguage());
-  applyThemeColorMap(persistedThemeColors);
+  void loadWorkspaceAppearance({ force: true }).then(() => {
+    resetSettingsDraft();
+  });
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
   laptopMedia = window.matchMedia(`(max-width: ${LAPTOP_BREAKPOINT}px)`);
   tabletMedia = window.matchMedia(`(max-width: ${TABLET_BREAKPOINT}px)`);
@@ -2423,15 +1982,22 @@ function openUserCreateCall() {
   window.dispatchEvent(new CustomEvent(USER_CALL_CREATE_EVENT));
 }
 
+function normalizeWorkspaceThemeId(value) {
+  const themeId = String(value || '').trim();
+  if (themeId !== '' && workspaceThemeOptions.value.some((theme) => theme.id === themeId)) {
+    return themeId;
+  }
+  return workspaceThemeOptions.value[0]?.id || 'dark';
+}
+
 function resetSettingsDraft() {
   settingsDraft.displayName = sessionState.displayName || '';
-  settingsDraft.theme = sessionState.theme || 'dark';
+  settingsDraft.theme = normalizeWorkspaceThemeId(sessionState.theme || 'dark');
   settingsDraft.timeFormat = sessionState.timeFormat || '24h';
   settingsDraft.dateFormat = sessionState.dateFormat || 'dmy_dot';
   settingsDraft.language = readStoredSettingsLanguage();
   settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
-  patchThemeColorMap(settingsDraft.themeColors, persistedThemeColors);
 }
 
 function resetPostLogoutLandingUrl() {
@@ -2449,11 +2015,16 @@ function normalizeSettingsTile(tileId) {
   return settingsTiles.value.some((tile) => tile.id === normalized) ? normalized : fallback;
 }
 
+function toggleSettingsMaximized() {
+  if (!isDesktopLikeViewport.value) return;
+  settingsState.maximized = !settingsState.maximized;
+}
+
 function closeSettingsModal() {
   if (settingsState.saving) return;
-  applyThemeColorMap(persistedThemeColors);
   settingsState.open = false;
   settingsState.dragging = false;
+  settingsState.maximized = false;
   settingsState.loading = false;
   settingsState.message = '';
   settingsState.avatarStatus = '';
@@ -2469,6 +2040,7 @@ function openSettingsModal(tileId = 'about-me') {
   settingsState.message = '';
   settingsState.avatarStatus = '';
   settingsState.dragging = false;
+  settingsState.maximized = false;
   resetSettingsDraft();
 }
 
@@ -2514,8 +2086,22 @@ async function saveSettings() {
   settingsState.message = '';
   settingsState.avatarStatus = '';
 
+  if (activeSettingsTile.value === 'administration') {
+    settingsState.saving = true;
+    try {
+      const result = await administrationSettingsRef.value?.save?.();
+      settingsState.message = result?.message || (result?.ok ? 'Administration settings saved.' : 'Could not save administration settings.');
+      if (result?.ok) {
+        settingsState.open = false;
+      }
+    } finally {
+      settingsState.saving = false;
+    }
+    return;
+  }
+
   const displayName = settingsDraft.displayName.trim();
-  const theme = settingsDraft.theme.trim();
+  const theme = normalizeWorkspaceThemeId(settingsDraft.theme);
   const rawTimeFormat = settingsDraft.timeFormat.trim();
   const rawDateFormat = settingsDraft.dateFormat.trim();
   const timeFormat = normalizeTimeFormat(rawTimeFormat);
@@ -2591,9 +2177,6 @@ async function saveSettings() {
 
     storeSettingsLanguage(language);
     applySettingsLanguage(language);
-    patchThemeColorMap(persistedThemeColors, settingsDraft.themeColors);
-    storeThemeColorMap(persistedThemeColors);
-    applyThemeColorMap(persistedThemeColors);
     settingsState.message = 'Settings saved.';
     settingsState.open = false;
     resetSettingsDraft();

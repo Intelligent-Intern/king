@@ -49,10 +49,20 @@
           >
             Calendar
           </button>
+          <button
+            class="tab"
+            :class="{ active: viewMode === 'personalCalendar' }"
+            type="button"
+            role="tab"
+            :aria-selected="viewMode === 'personalCalendar'"
+            @click="setViewMode('personalCalendar')"
+          >
+            Personal Calendar
+          </button>
         </div>
       </div>
 
-      <div class="calls-toolbar-right">
+      <div v-if="viewMode !== 'personalCalendar'" class="calls-toolbar-right">
         <label class="calls-search calls-search-main" aria-label="Call search">
           <input
             v-model="queryDraft"
@@ -120,25 +130,20 @@
       </section>
     </section>
 
-    <section v-else class="table-wrap calls-calendar-wrap">
-      <section v-if="loadingCalendar" class="section calls-empty">
-        Loading calendar view…
-      </section>
-      <section v-else-if="calendarError" class="section calls-empty calls-error">
+    <section v-else-if="viewMode === 'calendar'" class="table-wrap calls-calendar-wrap">
+      <section v-if="calendarError" class="section calls-empty calls-error">
         {{ calendarError }}
       </section>
       <section v-else class="calls-calendar-shell">
-        <button
-          class="icon-mini-btn calls-calendar-appointment-btn"
-          type="button"
-          title="Appointment slots"
-          aria-label="Configure appointment slots"
-          @click="openAppointmentConfig"
-        >
-          <img src="/assets/orgas/kingrt/icons/add.png" alt="" />
-        </button>
+        <section v-if="loadingCalendar" class="calls-calendar-loading calls-inline-hint">
+          Loading calendar view…
+        </section>
         <section ref="callsCalendarEl" class="calls-calendar-full"></section>
       </section>
+    </section>
+
+    <section v-else class="table-wrap calls-personal-calendar-wrap">
+      <AppointmentConfigPanel @saved="setNotice('ok', 'Appointment slots saved.')" />
     </section>
 
     <section v-if="viewMode === 'calls'" class="footer calls-pagination-wrap">
@@ -616,11 +621,5 @@
       :call-id="chatArchiveState.callId"
       :call-title="chatArchiveState.callTitle"
       @close="closeChatArchive"
-    />
-
-    <AppointmentConfigModal
-      :open="appointmentConfigOpen"
-      @close="closeAppointmentConfig"
-      @saved="setNotice('ok', 'Appointment slots saved.')"
     />
   </section>

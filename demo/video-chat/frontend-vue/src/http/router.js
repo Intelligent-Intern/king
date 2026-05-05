@@ -16,7 +16,7 @@ const routes = [
     meta: { public: true },
   },
   {
-    path: '/book/:ownerId',
+    path: '/book/:calendarId',
     name: 'appointment-booking',
     component: () => import('../domain/calls/appointment/AppointmentBookingView.vue'),
     meta: { public: true },
@@ -64,6 +64,12 @@ const routes = [
         path: 'admin/calls',
         name: 'admin-calls',
         component: () => import('../domain/calls/admin/CallsView.vue'),
+        meta: { requiresAuth: true, roles: ['admin'] },
+      },
+      {
+        path: 'admin/tenancy',
+        name: 'admin-tenancy',
+        component: () => import('../domain/tenant/TenantAdminView.vue'),
         meta: { requiresAuth: true, roles: ['admin'] },
       },
       {

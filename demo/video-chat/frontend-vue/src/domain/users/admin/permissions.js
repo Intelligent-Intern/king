@@ -10,6 +10,7 @@ export function deriveAdminUserPermissions(user, currentUserId = 0) {
       isPrimaryAdmin: false,
       canChangeRole: true,
       canChangeStatus: true,
+      canChangeThemeEditor: true,
       canToggleStatus: true,
       canDelete: true,
     };
@@ -29,6 +30,7 @@ export function deriveAdminUserPermissions(user, currentUserId = 0) {
     isPrimaryAdmin,
     canChangeRole: normalizeBoolean(userPermissions.can_change_role, fallbackAllowed),
     canChangeStatus: normalizeBoolean(userPermissions.can_change_status, fallbackAllowed),
+    canChangeThemeEditor: normalizeBoolean(userPermissions.can_change_theme_editor, !isSelf),
     canToggleStatus: normalizeBoolean(userPermissions.can_toggle_status, fallbackAllowed),
     canDelete: normalizeBoolean(userPermissions.can_delete, fallbackAllowed),
   };
@@ -40,6 +42,7 @@ export function applyAdminUserPermissions(target, user, currentUserId = 0) {
   target.isPrimaryAdmin = permissions.isPrimaryAdmin;
   target.canChangeRole = permissions.canChangeRole;
   target.canChangeStatus = permissions.canChangeStatus;
+  target.canChangeThemeEditor = permissions.canChangeThemeEditor;
   target.canToggleStatus = permissions.canToggleStatus;
   target.canDelete = permissions.canDelete;
 }
@@ -49,6 +52,7 @@ export function resetAdminUserPermissions(target) {
   target.isPrimaryAdmin = false;
   target.canChangeRole = true;
   target.canChangeStatus = true;
+  target.canChangeThemeEditor = true;
   target.canToggleStatus = true;
   target.canDelete = true;
 }

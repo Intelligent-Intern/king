@@ -71,6 +71,8 @@
       :user-email-mutating-id="userEmailMutatingId"
       :can-edit-role="canEditRole"
       :can-edit-status="canEditStatus"
+      :can-edit-theme-editor="canEditThemeEditor"
+      :theme-options="workspaceThemeOptions"
       @close="closeDialog"
       @delete-pending-email="deletePendingEmail"
       @create-pending-email="createPendingEmail"
@@ -94,6 +96,7 @@ import AdminUsersTable from '../components/UsersTable.vue';
 import { createAdminSyncReloadController } from './syncReload';
 import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
+import { appearanceState, loadWorkspaceAppearance } from '../../workspace/appearance';
 import {
   applyAdminUserPermissions,
   canDeleteAdminUser,
@@ -141,6 +144,7 @@ const form = reactive({
   status: 'active',
   time_format: '24h',
   theme: 'dark',
+  theme_editor_enabled: false,
   avatar_path: '',
 });
 const userEmailRows = ref([]);
@@ -153,6 +157,7 @@ const selectedUserPermissions = reactive({
   isPrimaryAdmin: false,
   canChangeRole: true,
   canChangeStatus: true,
+  canChangeThemeEditor: true,
   canToggleStatus: true,
   canDelete: true,
 });
@@ -259,6 +264,7 @@ function resetForm(mode = 'create') {
   form.status = 'active';
   form.time_format = '24h';
   form.theme = 'dark';
+  form.theme_editor_enabled = false;
   form.avatar_path = '';
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
@@ -330,6 +336,7 @@ async function openEditUser(user) {
   form.status = String(user.status || 'active');
   form.time_format = String(user.time_format || '24h');
   form.theme = String(user.theme || 'dark');
+  form.theme_editor_enabled = Boolean(user.theme_editor_enabled);
   form.avatar_path = String(user.avatar_path || '');
   applySelectedUserPermissions(user);
   dialogOpen.value = true;
@@ -359,6 +366,8 @@ const dialogSubmitLabel = computed(() => (form.mode === 'create' ? 'Create user'
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
 const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
 const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
+const canEditThemeEditor = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeThemeEditor));
+const workspaceThemeOptions = computed(() => appearanceState.themes.length > 0 ? appearanceState.themes : [{ id: 'dark', label: 'dark' }, { id: 'light', label: 'light' }]);
 const avatarPreviewSrc = computed(() => normalizeAdminAvatarSrc(form.avatar_path, avatarPlaceholder));
 const avatarEditorPreviewSrc = computed(() => {
   if (avatarUploadDataUrl.value !== '') return avatarUploadDataUrl.value;
@@ -521,6 +530,7 @@ async function submitForm() {
           password: form.password,
           password_repeat: form.password_repeat,
           role,
+          theme_editor_enabled: Boolean(form.theme_editor_enabled),
         },
       });
       notice.value = `Created ${displayName}.`;
@@ -533,6 +543,9 @@ async function submitForm() {
         theme: String(form.theme || 'dark'),
         avatar_path: String(form.avatar_path || '').trim() === '' ? null : String(form.avatar_path || '').trim(),
       };
+      if (canEditThemeEditor.value) {
+        patchBody.theme_editor_enabled = Boolean(form.theme_editor_enabled);
+      }
       if (canEditRole.value) {
         patchBody.role = role;
       }
@@ -717,6 +730,7 @@ onMounted(() => {
   adminSyncReload.start();
   void (async () => {
     await loadUsers();
+    await loadWorkspaceAppearance({ force: true });
     await openEditUserFromRouteQuery();
   })();
 });

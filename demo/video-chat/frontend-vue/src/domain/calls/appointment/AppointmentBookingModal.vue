@@ -1,7 +1,7 @@
 <template>
   <AppModalShell
     :open="open"
-    title="Request a Demo"
+    title="Book a Video Call"
     aria-label="Public appointment booking"
     dialog-class="calls-modal-dialog appointment-booking-dialog"
     body-class="calls-modal-body appointment-booking-body"
@@ -13,16 +13,21 @@
 
       <section v-if="state.success" class="appointment-booking-success">
         <h2>Thank you.</h2>
-        <p>Your demo request has been received for {{ state.confirmedSlotLabel }}.</p>
-        <p>
-          We are opening demo calls for smaller groups first. Larger calls are welcome,
-          but they will be scheduled later as participant capacity opens.
-        </p>
-        <a v-if="state.joinPath" class="btn btn-cyan" :href="state.joinPath">Open call link</a>
+        <p>Your video call is scheduled for {{ state.confirmedSlotLabel }}.</p>
+        <div class="appointment-success-actions">
+          <a v-if="bookingLinks.joinUrl" class="btn btn-cyan" :href="bookingLinks.joinUrl">Open video call</a>
+          <a v-if="bookingLinks.googleUrl" class="btn" :href="bookingLinks.googleUrl" target="_blank" rel="noopener">
+            Add to Google Calendar
+          </a>
+          <button v-if="bookingLinks.canDownloadIcs" class="btn" type="button" @click="downloadIcs">
+            Download iCal
+          </button>
+        </div>
       </section>
 
       <section v-else class="appointment-booking-grid">
-        <section class="appointment-booking-left" aria-label="Available demo slots">
+        <section class="appointment-booking-left" :class="{ 'has-invitation': invitationText }" aria-label="Available video call slots">
+          <section v-if="invitationText" class="appointment-invitation-text">{{ invitationText }}</section>
           <section v-if="state.loading" class="calls-inline-hint">Loading slots...</section>
           <section v-show="!state.loading" ref="calendarEl" class="appointment-booking-calendar"></section>
 
@@ -38,7 +43,7 @@
               {{ slotLabel(slot) }}
             </button>
             <p v-if="!state.loading && state.slots.length === 0" class="calls-inline-hint">
-              No demo slots are currently available.
+              No video call slots are currently available.
             </p>
           </div>
         </section>
@@ -117,16 +122,16 @@
             </header>
             <div class="appointment-privacy-copy">
               <p>
-                We process the details you submit to handle your demo request, contact you,
-                keep a lead list, and prepare a KingRT open-source video call demo.
+                We process the details you submit to handle your video call booking, contact you,
+                keep a lead list, and prepare the scheduled video call.
               </p>
               <p>
                 The data can include your name, email address, organization context,
-                message, selected demo time, consent state, and technical server logs.
+                message, selected call time, consent state, and technical server logs.
               </p>
               <p>
                 Legal bases are pre-contractual measures and legitimate interest in
-                handling demo requests. Data is deleted when it is no longer needed
+                handling booking requests. Data is deleted when it is no longer needed
                 unless legal retention duties apply.
               </p>
               <p>
@@ -159,14 +164,14 @@
         :disabled="state.submitting || state.loading"
         @click="submit"
       >
-        {{ state.submitting ? 'Submitting...' : 'Request demo' }}
+        {{ state.submitting ? 'Submitting...' : 'Book video call' }}
       </button>
     </template>
   </AppModalShell>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Calendar } from '@fullcalendar/core';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -178,7 +183,7 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  ownerId: {
+  calendarId: {
     type: [Number, String],
     required: true,
   },
@@ -206,14 +211,48 @@ const state = reactive({
   serverFields: {},
   success: false,
   joinPath: '',
+  call: null,
   confirmedSlotLabel: '',
   privacyOpen: false,
+  settings: {
+    slot_minutes: 15,
+    invitation_text: '',
+  },
 });
 
 let calendarInstance = null;
 
 const selectedSlot = computed(() => state.slots.find((slot) => String(slot.id) === state.selectedSlotId) || null);
-const selectedSlotLabel = computed(() => (selectedSlot.value ? toLocalSlotLabel(selectedSlot.value) : 'Select a demo slot'));
+const selectedSlotLabel = computed(() => (selectedSlot.value ? toLocalSlotLabel(selectedSlot.value) : 'Select a video call slot'));
+const invitationText = computed(() => String(state.settings.invitation_text || '').trim());
+const bookingLinks = computed(() => {
+  const joinUrl = absoluteFrontendUrl(state.joinPath);
+  const call = state.call && typeof state.call === 'object' ? state.call : {};
+  const startsAt = new Date(String(call.starts_at || ''));
+  const endsAt = new Date(String(call.ends_at || ''));
+  if (!joinUrl || Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+    return { joinUrl, googleUrl: '', canDownloadIcs: false };
+  }
+
+  return {
+    joinUrl,
+    googleUrl: buildGoogleCalendarUrl(call, joinUrl),
+    canDownloadIcs: true,
+  };
+});
+
+function slotMinutesToDuration(minutes) {
+  const normalized = [5, 10, 15, 20, 30, 45, 60].includes(Number(minutes)) ? Number(minutes) : 15;
+  return `00:${String(normalized).padStart(2, '0')}:00`;
+}
+
+function applySettings(settings) {
+  const minutes = Number.parseInt(String(settings?.slot_minutes || 15), 10);
+  state.settings.slot_minutes = [5, 10, 15, 20, 30, 45, 60].includes(minutes) ? minutes : 15;
+  state.settings.invitation_text = String(settings?.invitation_text || '');
+  calendarInstance?.setOption('slotDuration', slotMinutesToDuration(state.settings.slot_minutes));
+  calendarInstance?.setOption('snapDuration', slotMinutesToDuration(state.settings.slot_minutes));
+}
 
 function slotLabel(slot) {
   return toLocalSlotLabel(slot);
@@ -222,7 +261,7 @@ function slotLabel(slot) {
 function localErrors() {
   const errors = {};
   if (!selectedSlot.value) {
-    errors.slot_id = 'Please select a demo slot.';
+    errors.slot_id = 'Please select a video call slot.';
   }
   if (String(form.first_name || '').trim() === '') {
     errors.first_name = 'First name is required.';
@@ -267,7 +306,7 @@ function syncCalendarSlots() {
   for (const slot of state.slots) {
     calendarInstance.addEvent({
       id: String(slot.id || ''),
-      title: 'Demo slot',
+      title: 'Video call',
       start: new Date(String(slot.starts_at || '')),
       end: new Date(String(slot.ends_at || '')),
       backgroundColor: String(slot.id) === state.selectedSlotId ? '#4fd7ff' : '#0e8fb8',
@@ -284,10 +323,12 @@ async function ensureCalendar() {
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
-      right: 'timeGridWeek,timeGridDay',
+      right: '',
     },
     height: '100%',
     allDaySlot: false,
+    slotDuration: slotMinutesToDuration(state.settings.slot_minutes),
+    snapDuration: slotMinutesToDuration(state.settings.slot_minutes),
     selectable: false,
     editable: false,
     eventClick(info) {
@@ -303,10 +344,12 @@ async function loadSlots() {
   state.error = '';
   state.success = false;
   state.joinPath = '';
+  state.call = null;
   try {
     await nextTick();
     await ensureCalendar();
-    const result = await loadPublicAppointmentSlots(props.ownerId);
+    const result = await loadPublicAppointmentSlots(props.calendarId);
+    applySettings(result.settings || {});
     state.slots = Array.isArray(result.slots) ? result.slots : [];
     if (!selectedSlot.value && state.slots.length > 0) {
       state.selectedSlotId = String(state.slots[0].id || '');
@@ -315,7 +358,7 @@ async function loadSlots() {
     await nextTick();
     calendarInstance?.updateSize();
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not load demo slots.';
+    state.error = error instanceof Error ? error.message : 'Could not load video call slots.';
   } finally {
     state.loading = false;
   }
@@ -331,7 +374,7 @@ async function submit() {
   state.submitting = true;
   state.error = '';
   try {
-    const result = await bookPublicAppointment(props.ownerId, {
+    const result = await bookPublicAppointment(props.calendarId, {
       slot_id: state.selectedSlotId,
       salutation: form.salutation,
       title: form.title,
@@ -342,17 +385,93 @@ async function submit() {
       privacy_accepted: form.privacy_accepted,
     });
     const joinPath = String(result.join_path || result.booking?.join_path || '');
+    const call = result.call && typeof result.call === 'object' ? result.call : null;
     const confirmedSlotLabel = selectedSlotLabel.value;
     await loadSlots();
     state.joinPath = joinPath;
+    state.call = call;
     state.confirmedSlotLabel = confirmedSlotLabel;
     state.success = true;
   } catch (error) {
     state.serverFields = error?.fields && typeof error.fields === 'object' ? error.fields : {};
-    state.error = error instanceof Error ? error.message : 'Could not submit demo request.';
+    state.error = error instanceof Error ? error.message : 'Could not book video call.';
   } finally {
     state.submitting = false;
   }
+}
+
+function absoluteFrontendUrl(path) {
+  const value = String(path || '').trim();
+  if (value === '') return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (typeof window === 'undefined') return value;
+  return `${window.location.origin}/${value.replace(/^\/+/, '')}`;
+}
+
+function calendarDateUtc(value) {
+  const date = value instanceof Date ? value : new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function buildGoogleCalendarUrl(call, joinUrl) {
+  const startsAt = calendarDateUtc(call?.starts_at);
+  const endsAt = calendarDateUtc(call?.ends_at);
+  if (!startsAt || !endsAt || !joinUrl) return '';
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: String(call?.title || 'Video call'),
+    dates: `${startsAt}/${endsAt}`,
+    details: `Video call link:\n${joinUrl}`,
+    location: joinUrl,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function escapeIcsText(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function buildIcsText() {
+  const call = state.call && typeof state.call === 'object' ? state.call : {};
+  const joinUrl = bookingLinks.value.joinUrl;
+  const startsAt = calendarDateUtc(call.starts_at);
+  const endsAt = calendarDateUtc(call.ends_at);
+  if (!startsAt || !endsAt || !joinUrl) return '';
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KingRT//Video Call Booking//EN',
+    'BEGIN:VEVENT',
+    `UID:${escapeIcsText(String(call.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now())))}@kingrt`,
+    `DTSTAMP:${calendarDateUtc(new Date())}`,
+    `DTSTART:${startsAt}`,
+    `DTEND:${endsAt}`,
+    `SUMMARY:${escapeIcsText(String(call.title || 'Video call'))}`,
+    `DESCRIPTION:${escapeIcsText(`Video call link:\n${joinUrl}`)}`,
+    `LOCATION:${escapeIcsText(joinUrl)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+function downloadIcs() {
+  const ics = buildIcsText();
+  if (!ics || typeof document === 'undefined') return;
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'video-call.ics';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 watch(
@@ -363,6 +482,12 @@ watch(
     }
   },
 );
+
+onMounted(() => {
+  if (props.open) {
+    void loadSlots();
+  }
+});
 
 onBeforeUnmount(() => {
   if (calendarInstance) {
@@ -375,6 +500,7 @@ onBeforeUnmount(() => {
 <style scoped>
 :deep(.appointment-booking-dialog) {
   width: min(1180px, calc(100vw - 24px));
+  height: min(960px, calc(100dvh - 24px));
   max-height: calc(100dvh - 24px);
   overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -395,18 +521,46 @@ onBeforeUnmount(() => {
 .appointment-booking-left {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(340px, 1fr) auto;
+  grid-template-rows: minmax(442px, 1fr) auto;
   gap: 10px;
 }
 
+.appointment-booking-left.has-invitation {
+  grid-template-rows: auto minmax(442px, 1fr) auto;
+}
+
+.appointment-invitation-text {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-132745);
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
 .appointment-booking-calendar {
-  min-height: 340px;
+  min-height: 442px;
   height: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-surface-strong);
   padding: 8px;
   overflow: hidden;
+}
+
+.appointment-booking-calendar :deep(.fc-timegrid-slot) {
+  height: 3em;
+}
+
+.appointment-booking-calendar :deep(.fc-timegrid-col:not(:first-child)),
+.appointment-booking-calendar :deep(.fc-col-header-cell:not(:first-child)) {
+  box-shadow: inset 1px 0 0 var(--border-subtle);
+}
+
+.appointment-booking-calendar :deep(.appointment-slot-event-active) {
+  filter: brightness(1.25);
 }
 
 .appointment-slot-list {
@@ -572,6 +726,12 @@ onBeforeUnmount(() => {
 
 .appointment-booking-success p {
   color: var(--text-muted);
+}
+
+.appointment-success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 :deep(.appointment-booking-footer) {
