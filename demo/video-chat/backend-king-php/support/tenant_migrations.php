@@ -398,7 +398,7 @@ WHERE tenants.slug = 'default' AND organizations.parent_organization_id IS NULL"
 function videochat_tenant_column_backfill_statements(): array
 {
     $statements = [];
-    foreach (videochat_tenant_owned_table_names() as $table) {
+    foreach (videochat_tenant_legacy_owned_table_names() as $table) {
         $statements[] = 'ALTER TABLE ' . $table . ' ADD COLUMN tenant_id INTEGER';
         $statements[] = 'UPDATE ' . $table . " SET tenant_id = (SELECT id FROM tenants WHERE slug = 'default' LIMIT 1) WHERE tenant_id IS NULL";
         $statements[] = 'CREATE INDEX IF NOT EXISTS idx_' . $table . '_tenant_id ON ' . $table . '(tenant_id)';
@@ -411,7 +411,7 @@ function videochat_tenant_column_backfill_statements(): array
     return $statements;
 }
 
-function videochat_tenant_owned_table_names(): array
+function videochat_tenant_legacy_owned_table_names(): array
 {
     return [
         'sessions',
@@ -426,16 +426,23 @@ function videochat_tenant_owned_table_names(): array
         'call_layout_state',
         'call_participant_activity',
         'client_diagnostics',
-        'governance_policies',
-        'governance_policy_groups',
-        'governance_policy_organizations',
-        'governance_policy_permissions',
         'appointment_blocks',
         'appointment_bookings',
         'appointment_calendar_settings',
         'workspace_administration_settings',
         'workspace_theme_presets',
         'website_leads',
+    ];
+}
+
+function videochat_tenant_owned_table_names(): array
+{
+    return [
+        ...videochat_tenant_legacy_owned_table_names(),
+        'governance_policies',
+        'governance_policy_groups',
+        'governance_policy_organizations',
+        'governance_policy_permissions',
     ];
 }
 
