@@ -570,7 +570,7 @@ Non-goals for this sprint:
     - [x] Explicit no-touch list for call-related paths is included in the
       execution checklist.
 
-17. [ ] `[frontend-module-runtime]` Add module registry and dynamic loading.
+17. [x] `[frontend-module-runtime]` Add module registry and dynamic loading.
 
     Scope:
     - Add `src/modules` and a small module registry.
@@ -589,7 +589,7 @@ Non-goals for this sprint:
       permissions, settings panels, and i18n namespaces.
     - [x] Router can consume module routes without direct feature imports.
     - [x] Navigation can consume module navigation metadata.
-    - [ ] Settings can consume module settings-panel metadata.
+    - [x] Settings can consume module settings-panel metadata.
     - [x] Build proves module dynamic imports are valid.
 
 18. [ ] `[shared-admin-components]` Extract reusable non-call UI building blocks.
