@@ -400,6 +400,15 @@ Sprint goal:
       readonly catalog behavior.
     - Responsive e2e covers scroll ownership and nested modal usability.
 
+    Progress 2026-05-05:
+    - Added `governance-frontend-matrix-contract.mjs` for descriptor action
+      exposure, tenant permission aliases, readonly module/permission catalogs,
+      keyed CRUD modal labels, and no per-row fetch calls in governance row
+      rendering.
+    - Remaining work depends on the recursive relation picker and backend
+      governance APIs: nested user -> group -> permission assignment, batch
+      summary loading, and responsive/e2e modal stack proof.
+
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
 
