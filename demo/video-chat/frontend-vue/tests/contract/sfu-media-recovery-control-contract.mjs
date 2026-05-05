@@ -20,9 +20,9 @@ function main() {
   const sprint = read('SPRINT.md');
   const sfuClient = read('demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts');
   const messageHandler = read('demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts');
-  const mediaStack = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const runtimeHealth = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-  const lifecycle = read('demo/video-chat/frontend-vue/src/domain/realtime/sfu/lifecycle.js');
+  const mediaStack = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const runtimeHealth = read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const lifecycle = read('demo/video-chat/frontend-vue/src/domain/realtime/sfu/lifecycle.ts');
   const workspace = read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue');
   const sfuStore = read('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   const gateway = read('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php');

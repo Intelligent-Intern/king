@@ -16,9 +16,9 @@ function assert(condition, message) {
 }
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
-const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.js')
+const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
-const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js')
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts')
 const packageJson = read('package.json')
 
 assert(

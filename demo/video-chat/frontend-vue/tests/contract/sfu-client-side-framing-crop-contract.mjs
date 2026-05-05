@@ -23,14 +23,14 @@ async function main() {
   const packageJson = read('package.json');
   const template = read('src/domain/realtime/CallWorkspaceView.template.html');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');
-  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
-  const fullscreenToggle = read('src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.js');
-  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
-  const frameSizing = read('src/domain/realtime/local/videoFrameSizing.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const worker = read('src/domain/realtime/local/publisherCaptureWorker.js');
-  const workerProtocol = read('src/domain/realtime/local/publisherCaptureWorkerProtocol.js');
-  const workerReadback = read('src/domain/realtime/local/publisherCaptureWorkerReadback.js');
+  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
+  const fullscreenToggle = read('src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.ts');
+  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
+  const frameSizing = read('src/domain/realtime/local/videoFrameSizing.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const worker = read('src/domain/realtime/local/publisherCaptureWorker.ts');
+  const workerProtocol = read('src/domain/realtime/local/publisherCaptureWorkerProtocol.ts');
+  const workerReadback = read('src/domain/realtime/local/publisherCaptureWorkerReadback.ts');
 
   requireContains(packageJson, 'sfu-client-side-framing-crop-contract.mjs', 'SFU contract suite includes framing crop proof');
 
@@ -60,7 +60,7 @@ async function main() {
   requireContains(worker, 'context.drawImage(', 'worker draws source into cropped output');
   requireContains(worker, 'crop.x', 'worker uses crop x before readback');
 
-  const sizingUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/videoFrameSizing.js')).href;
+  const sizingUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/videoFrameSizing.ts')).href;
   const sizing = await import(sizingUrl);
   const landscape = sizing.resolveCoverFrameSizeFromDimensions(1920, 1080, 1280, 720, 1);
   assert.equal(landscape.frameWidth, 720, 'landscape-to-square output must use square width within profile height');

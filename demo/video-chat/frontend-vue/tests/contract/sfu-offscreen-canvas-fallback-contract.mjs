@@ -20,11 +20,11 @@ function read(relativePath) {
 }
 
 try {
-  const workerReadbackSource = read('src/domain/realtime/local/publisherCaptureWorkerReadback.js');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.js');
-  const captureWorkerSource = read('src/domain/realtime/local/publisherCaptureWorker.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const workerReadbackSource = read('src/domain/realtime/local/publisherCaptureWorkerReadback.ts');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const videoFrameSource = read('src/domain/realtime/local/publisherVideoFrameSource.ts');
+  const captureWorkerSource = read('src/domain/realtime/local/publisherCaptureWorker.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const packageJson = read('package.json');
 
   requireContains(workerReadbackSource, 'createPublisherCaptureWorkerReadbackController', 'worker readback controller export');
@@ -71,7 +71,7 @@ try {
   requireContains(publisherFrameTrace, 'trace_offscreen_worker_round_trip_ms', 'trace exposes worker round trip timing');
   requireContains(packageJson, 'sfu-offscreen-canvas-fallback-contract.mjs', 'SFU contract suite includes worker fallback proof');
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerReadback.js')).href;
+  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/local/publisherCaptureWorkerReadback.ts')).href;
   const workerModule = await import(moduleUrl);
 
   class FakeImageData {

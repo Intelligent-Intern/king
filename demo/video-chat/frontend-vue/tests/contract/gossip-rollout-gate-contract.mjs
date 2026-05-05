@@ -1,14 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deriveGossipRolloutGateState } from '../../src/lib/gossipmesh/rolloutGate.js'
+import { deriveGossipRolloutGateState } from '../../src/lib/gossipmesh/rolloutGate.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 
-const rolloutGateSource = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/rolloutGate.js'), 'utf8')
-const workspaceGossip = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.js'), 'utf8')
-const socketLifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.js'), 'utf8')
+const rolloutGateSource = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/rolloutGate.ts'), 'utf8')
+const workspaceGossip = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
+const socketLifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts'), 'utf8')
 const packageJson = fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8')
 
 function assert(condition, message) {

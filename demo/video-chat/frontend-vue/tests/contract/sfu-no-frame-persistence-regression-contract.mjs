@@ -84,7 +84,7 @@ try {
   const compose = read('../docker-compose.v1.yml');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const mediaTransport = read('src/lib/sfu/mediaTransport.ts');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
 
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_publishers', 'SFU bootstrap persists publisher metadata');
   requireContains(store, 'CREATE TABLE IF NOT EXISTS sfu_tracks', 'SFU bootstrap persists track metadata');

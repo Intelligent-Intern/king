@@ -1,4 +1,4 @@
-import { wlvcDecodeFrame } from '../../../support/wlvcFrame.js';
+import { wlvcDecodeFrame } from '../../../support/wlvcFrame.ts';
 import {
   SFU_WLVC_FRAME_HEIGHT,
   SFU_WLVC_FRAME_QUALITY,

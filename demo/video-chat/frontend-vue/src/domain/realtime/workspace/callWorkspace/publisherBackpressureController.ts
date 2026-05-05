@@ -7,8 +7,8 @@ import {
   SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD,
   SFU_WLVC_MOTION_DELTA_STABLE_SAMPLE_COUNT,
   SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
-} from './runtimeConfig.js';
-import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.js';
+} from './runtimeConfig.ts';
+import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
@@ -17,18 +17,89 @@ export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CADENCE_THROTTLE: 'cadence_throttle',
   PROFILE_DOWNSHIFT: 'profile_downshift',
   REQUEST_KEYFRAME: 'request_keyframe',
+  SOCKET_RESTART: 'socket_restart',
 });
 
-function normalizedNumber(value, fallback = 0) {
+export type PublisherBackpressureAction =
+  typeof PUBLISHER_BACKPRESSURE_ACTIONS[keyof typeof PUBLISHER_BACKPRESSURE_ACTIONS];
+
+export type PublisherBackpressureKind =
+  | 'pre_encode_buffer'
+  | 'encode_backpressure'
+  | 'send_failure'
+  | 'source_readback_failure'
+  | 'payload_pressure'
+  | 'runtime_encode_error'
+  | 'receiver_feedback'
+  | string;
+
+export interface PublisherBackpressureStageTelemetry {
+  reason?: string;
+  kind?: PublisherBackpressureKind;
+  bufferedAmount?: number | string;
+  queueAgeMs?: number | string;
+  encodeMs?: number | string;
+  payloadBytes?: number | string;
+  receiverRenderLatencyMs?: number | string;
+  subscriberSendLatencyMs?: number | string;
+  skipCount?: number | string;
+  sendFailureCount?: number | string;
+  sourceReadbackFailureCount?: number | string;
+  payloadPressureCount?: number | string;
+  encodeFailureCount?: number | string;
+  sustainedBackpressureMs?: number | string;
+}
+
+export interface PublisherBackpressureConfig {
+  highWaterBytes?: number | string;
+  lowWaterBytes?: number | string;
+  criticalBytes?: number | string;
+  skipThreshold?: number | string;
+  sendFailureThreshold?: number | string;
+  encodeFailureThreshold?: number | string;
+  motionDeltaProfileDownshiftThreshold?: number | string;
+  backpressureWindowMs?: number | string;
+  hardResetAfterMs?: number | string;
+  maxQueueAgeMs?: number | string;
+  maxEncodeMs?: number | string;
+  maxPayloadBytes?: number | string;
+  receiverLagPressureMs?: number | string;
+  subscriberSendPressureMs?: number | string;
+}
+
+export interface PublisherBackpressureDecision {
+  kind: string;
+  reason: string;
+  actions: PublisherBackpressureAction[];
+  stage_telemetry: {
+    buffered_amount: number;
+    queue_age_ms: number;
+    encode_ms: number;
+    payload_bytes: number;
+    receiver_render_latency_ms: number;
+    subscriber_send_latency_ms: number;
+    skip_count: number;
+    send_failure_count: number;
+    source_readback_failure_count: number;
+    payload_pressure_count: number;
+    encode_failure_count: number;
+    sustained_backpressure_ms: number;
+  };
+}
+
+function normalizedNumber(value: unknown, fallback = 0): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.max(0, numeric) : fallback;
 }
 
-function addAction(actions, action) {
+function addAction(actions: PublisherBackpressureAction[], action: PublisherBackpressureAction): void {
   if (!actions.includes(action)) actions.push(action);
 }
 
-export function decidePublisherBackpressureAction(stageTelemetry = {}, config = {}) {
+export function decidePublisherBackpressureAction(
+  stageTelemetry: PublisherBackpressureStageTelemetry = {},
+  config: PublisherBackpressureConfig = {},
+): PublisherBackpressureDecision {
   const reason = String(stageTelemetry.reason || 'publisher_backpressure').trim().toLowerCase();
   const kind = String(stageTelemetry.kind || reason || 'publisher_backpressure').trim().toLowerCase();
   const bufferedAmount = normalizedNumber(stageTelemetry.bufferedAmount);
@@ -60,7 +131,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
   const maxPayloadBytes = Math.max(0, normalizedNumber(config.maxPayloadBytes));
   const receiverLagPressureMs = Math.max(0, normalizedNumber(config.receiverLagPressureMs));
   const subscriberSendPressureMs = Math.max(0, normalizedNumber(config.subscriberSendPressureMs));
-  const actions = [];
+  const actions: PublisherBackpressureAction[] = [];
 
   const socketHigh = bufferedAmount >= highWaterBytes
     || (skipCount > 0 && bufferedAmount >= lowWaterBytes)
@@ -105,7 +176,7 @@ export function decidePublisherBackpressureAction(stageTelemetry = {}, config = 
     if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
-    if (socketCritical || (serverIngressLatencyExceeded && sendFailureCount >= sendFailureThreshold)) {
+    if (socketCritical || serverIngressLatencyExceeded) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART);
     }
   } else if (kind === 'source_readback_failure') {
@@ -709,10 +780,23 @@ export function createPublisherBackpressureController({
     const restartReason = restartServerIngressLag
       ? 'sfu_ingress_latency_budget_exceeded'
       : 'sfu_send_buffer_stuck';
-    if (
-      decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)
-      || restartServerIngressLag
-    ) {
+    const restartPayload = {
+      reason: restartReason,
+      buffered_amount: normalizedBuffered,
+      send_failure_count: state.wlvcFrameSendFailureCount,
+      sustained_backpressure_ms: sustainedBackpressureMs,
+      queue_age_ms: queueAgeMs,
+      budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+      king_receive_latency_ms: kingReceiveLatencyMs,
+      outgoing_video_quality_profile: currentProfile,
+      media_runtime_path: getMediaRuntimePath(),
+    };
+    if (restartServerIngressLag) {
+      if (restartSfuAfterVideoStall(restartReason, restartPayload)) {
+        resetWlvcFrameSendFailureCounters();
+        return;
+      }
+    } else if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.SOCKET_RESTART)) {
       captureClientDiagnostic({
         category: 'media',
         level: 'warning',
@@ -721,15 +805,7 @@ export function createPublisherBackpressureController({
         message: 'Socket restart requested by backpressure controller but blocked; data-lane issues must use keyframe/layer/route recovery.',
         payload: {
           lane: 'data',
-          reason: restartReason,
-          buffered_amount: normalizedBuffered,
-          send_failure_count: state.wlvcFrameSendFailureCount,
-          sustained_backpressure_ms: sustainedBackpressureMs,
-          queue_age_ms: queueAgeMs,
-          budget_max_queue_age_ms: budgetMaxQueueAgeMs,
-          king_receive_latency_ms: kingReceiveLatencyMs,
-          outgoing_video_quality_profile: currentProfile,
-          media_runtime_path: getMediaRuntimePath(),
+          ...restartPayload,
         },
         immediate: true,
       });
@@ -983,7 +1059,7 @@ export function createPublisherBackpressureController({
 
     const carrierState = getCarrierState?.();
     const carrierLost = carrierState?.isLost?.() ?? false;
-    const reconnectAllowed = carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
+    const reconnectAllowed = !carrierState || carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
 
     if (!reconnectAllowed) {
       captureClientDiagnostic({

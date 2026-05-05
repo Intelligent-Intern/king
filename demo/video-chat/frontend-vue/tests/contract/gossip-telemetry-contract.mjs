@@ -7,7 +7,7 @@ const frontendRoot = path.resolve(__dirname, '../..')
 
 const controller = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/gossipController.ts'), 'utf8')
 const rtcTransport = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/rtcDataChannelTransport.ts'), 'utf8')
-const workspaceGossip = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.js'), 'utf8')
+const workspaceGossip = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
 
 function assert(condition, message) {
   if (!condition) {

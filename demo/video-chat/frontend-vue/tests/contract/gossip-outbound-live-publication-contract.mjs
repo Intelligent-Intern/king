@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspacePath = path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue')
-const gossipDataLanePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.js')
-const mediaStackPath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/mediaStack.js')
-const publisherPipelinePath = path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.js')
+const gossipDataLanePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
+const mediaStackPath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/mediaStack.ts')
+const publisherPipelinePath = path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts')
 const packagePath = path.join(frontendRoot, 'package.json')
 
 const callWorkspace = fs.readFileSync(callWorkspacePath, 'utf8')

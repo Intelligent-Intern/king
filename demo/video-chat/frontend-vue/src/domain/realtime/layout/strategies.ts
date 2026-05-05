@@ -1,20 +1,127 @@
-export const CALL_LAYOUT_MODES = ['grid', 'main_mini', 'main_only'];
-export const CALL_LAYOUT_STRATEGIES = ['manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active'];
+export const CALL_LAYOUT_MODES = ['grid', 'main_mini', 'main_only'] as const;
+export const CALL_LAYOUT_STRATEGIES = ['manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active'] as const;
 
-export function normalizeCallLayoutMode(value, fallback = 'main_mini') {
-  const normalized = String(value || '').trim().toLowerCase();
-  return CALL_LAYOUT_MODES.includes(normalized) ? normalized : fallback;
+export type CallLayoutMode = typeof CALL_LAYOUT_MODES[number];
+export type CallLayoutStrategy = typeof CALL_LAYOUT_STRATEGIES[number];
+
+export interface CallLayoutSelectionInput {
+  main_user_id?: number | string;
+  mainUserId?: number | string;
+  visible_user_ids?: unknown[];
+  visibleUserIds?: unknown[];
+  mini_user_ids?: unknown[];
+  miniUserIds?: unknown[];
+  pinned_user_ids?: unknown[];
+  pinnedUserIds?: unknown[];
 }
 
-export function normalizeCallLayoutStrategy(value, fallback = 'manual_pinned') {
-  const normalized = String(value || '').trim().toLowerCase();
-  return CALL_LAYOUT_STRATEGIES.includes(normalized) ? normalized : fallback;
+export interface CallLayoutStateInput {
+  call_id?: string;
+  callId?: string;
+  room_id?: string;
+  roomId?: string;
+  mode?: string;
+  strategy?: string;
+  automation_paused?: boolean;
+  automationPaused?: boolean;
+  pinned_user_ids?: unknown[];
+  pinnedUserIds?: unknown[];
+  selected_user_ids?: unknown[];
+  selectedUserIds?: unknown[];
+  main_user_id?: number | string;
+  mainUserId?: number | string;
+  selection?: CallLayoutSelectionInput;
+  updated_at?: string;
+  updatedAt?: string;
 }
 
-function normalizeIdList(value) {
+export interface NormalizedCallLayoutState {
+  callId: string;
+  roomId: string;
+  mode: CallLayoutMode;
+  strategy: CallLayoutStrategy;
+  automationPaused: boolean;
+  pinnedUserIds: number[];
+  selectedUserIds: number[];
+  mainUserId: number;
+  selection: {
+    mainUserId: number;
+    visibleUserIds: number[];
+    miniUserIds: number[];
+    pinnedUserIds: number[];
+  };
+  updatedAt: string;
+}
+
+export interface CallLayoutParticipantInput {
+  id?: number | string;
+  userId?: number | string;
+  user_id?: number | string;
+  displayName?: string;
+  display_name?: string;
+  role?: string;
+  callRole?: string;
+  call_role?: string;
+  user?: {
+    id?: number | string;
+    display_name?: string;
+    role?: string;
+    call_role?: string;
+  };
+  [key: string]: unknown;
+}
+
+export interface CallLayoutParticipant extends CallLayoutParticipantInput {
+  userId: number;
+  displayName: string;
+  role: string;
+  callRole: string;
+}
+
+export interface CallActivityEntry {
+  score2s?: number | string;
+  score_2s?: number | string;
+  score?: number | string;
+  lastActiveMs?: number | string;
+  updated_at_ms?: number | string;
+  weight?: number | string;
+}
+
+export interface SelectCallLayoutParticipantsOptions {
+  participants?: CallLayoutParticipantInput[];
+  currentUserId?: number | string;
+  pinnedUsers?: Record<string, boolean>;
+  activityByUserId?: Map<number, CallActivityEntry> | Record<string, CallActivityEntry>;
+  layoutState?: CallLayoutStateInput;
+  nowMs?: number;
+}
+
+export interface SelectedCallLayoutParticipants {
+  mode: CallLayoutMode;
+  strategy: CallLayoutStrategy;
+  automationPaused: boolean;
+  mainUserId: number;
+  visibleUserIds: number[];
+  pinnedUserIds: number[];
+  visibleParticipants: CallLayoutParticipant[];
+  miniParticipants: CallLayoutParticipant[];
+  gridParticipants: CallLayoutParticipant[];
+}
+
+export function normalizeCallLayoutMode(value: unknown, fallback: CallLayoutMode = 'main_mini'): CallLayoutMode {
+  const normalized = String(value || '').trim().toLowerCase();
+  return (CALL_LAYOUT_MODES as readonly string[]).includes(normalized) ? normalized as CallLayoutMode : fallback;
+}
+
+export function normalizeCallLayoutStrategy(value: unknown, fallback: CallLayoutStrategy = 'manual_pinned'): CallLayoutStrategy {
+  const normalized = String(value || '').trim().toLowerCase();
+  return (CALL_LAYOUT_STRATEGIES as readonly string[]).includes(normalized) ? normalized as CallLayoutStrategy : fallback;
+}
+
+function normalizeIdList(value: unknown): number[] {
   const ids = Array.isArray(value) ? value : [];
-  const seen = new Set();
-  const normalized = [];
+  const seen = new Set<number>();
+  const normalized: number[] = [];
   for (const rawId of ids) {
     const id = Number(rawId);
     if (!Number.isInteger(id) || id <= 0 || seen.has(id)) continue;
@@ -24,7 +131,7 @@ function normalizeIdList(value) {
   return normalized;
 }
 
-export function normalizeCallLayoutState(value = {}) {
+export function normalizeCallLayoutState(value: CallLayoutStateInput = {}): NormalizedCallLayoutState {
   const raw = value && typeof value === 'object' ? value : {};
   const selection = raw.selection && typeof raw.selection === 'object' ? raw.selection : {};
   return {
@@ -46,7 +153,11 @@ export function normalizeCallLayoutState(value = {}) {
   };
 }
 
-function activityScoreForUser(activityByUserId, userId, nowMs = Date.now()) {
+function activityScoreForUser(
+  activityByUserId: SelectCallLayoutParticipantsOptions['activityByUserId'],
+  userId: number,
+  nowMs = Date.now(),
+): number {
   const entry = activityByUserId instanceof Map
     ? activityByUserId.get(userId)
     : (activityByUserId && typeof activityByUserId === 'object' ? activityByUserId[userId] : null);
@@ -64,7 +175,7 @@ function activityScoreForUser(activityByUserId, userId, nowMs = Date.now()) {
   return (1 - (ageMs / 15000)) * Math.max(0.25, Math.min(1, weight)) * 100;
 }
 
-function normalizeParticipant(row) {
+function normalizeParticipant(row: CallLayoutParticipantInput): CallLayoutParticipant | null {
   const userId = Number(row?.userId || row?.user_id || row?.id || row?.user?.id || 0);
   if (!Number.isInteger(userId) || userId <= 0) return null;
   return {
@@ -76,7 +187,11 @@ function normalizeParticipant(row) {
   };
 }
 
-function sortByActivity(participants, activityByUserId, nowMs) {
+function sortByActivity(
+  participants: CallLayoutParticipant[],
+  activityByUserId: SelectCallLayoutParticipantsOptions['activityByUserId'],
+  nowMs: number,
+): CallLayoutParticipant[] {
   return [...participants].sort((left, right) => {
     const scoreDiff = activityScoreForUser(activityByUserId, right.userId, nowMs) - activityScoreForUser(activityByUserId, left.userId, nowMs);
     if (scoreDiff !== 0) return scoreDiff;
@@ -96,7 +211,7 @@ export function selectCallLayoutParticipants({
   activityByUserId = {},
   layoutState = {},
   nowMs = Date.now(),
-} = {}) {
+}: SelectCallLayoutParticipantsOptions = {}): SelectedCallLayoutParticipants {
   const layout = normalizeCallLayoutState(layoutState);
   const rows = participants.map((row) => normalizeParticipant(row)).filter(Boolean);
   const byUserId = new Map(rows.map((row) => [row.userId, row]));
