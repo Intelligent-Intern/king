@@ -173,8 +173,8 @@
 .show-sidebar-inline {
   position: static;
   top: auto;
-  left: auto;
-  right: auto;
+  inset-inline-start: auto;
+  inset-inline-end: auto;
   z-index: auto;
   transform: none;
   visibility: visible;
@@ -189,12 +189,12 @@
 }
 
 .show-left-sidebar-overlay {
-  left: 14px;
+  inset-inline-start: 14px;
   transform: translateX(-8px);
 }
 
 .show-right-sidebar-overlay {
-  right: 14px;
+  inset-inline-end: 14px;
   transform: translateX(8px);
 }
 
@@ -321,9 +321,9 @@
 .nav-submenu {
   display: grid;
   gap: 4px;
-  margin-left: 20px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border-subtle);
+  margin-inline-start: 20px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--border-subtle);
 }
 
 .nav-sublink {
