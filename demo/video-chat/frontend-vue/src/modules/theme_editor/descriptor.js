@@ -9,6 +9,22 @@ export default {
       roles: ['admin'],
       pageTitle: 'Theme Editor',
       pageTitle_key: 'navigation.administration.theme_editor',
+      actions: [
+        {
+          key: 'theme_editor.themes.create',
+          label_key: 'theme_settings.new_theme',
+          kind: 'create',
+          resource_type: 'workspace_theme',
+          required_permissions: ['theme_editor.admin'],
+        },
+        {
+          key: 'theme_editor.themes.tour',
+          label_key: 'onboarding.take_the_tour',
+          kind: 'tour',
+          resource_type: 'workspace_theme',
+          required_permissions: ['theme_editor.admin'],
+        },
+      ],
       source_path: 'modules/theme_editor/pages/ThemeEditorView.vue',
       loader: () => import('./pages/ThemeEditorView.vue'),
     },

@@ -240,7 +240,7 @@ Sprint goal:
 
 ## Active Issues
 
-1. [ ] [descriptor-action-contract] Add action metadata to module descriptors
+1. [x] [descriptor-action-contract] Add action metadata to module descriptors
    and a passing contract test that every admin/governance route has
    permission-bound action definitions or an explicit readonly/no-action state.
 
@@ -250,6 +250,19 @@ Sprint goal:
      a generic create action.
    - Tests prove action labels use i18n keys and actions carry permissions or
      explicit readonly reasons.
+
+   Completed 2026-05-05:
+   - Route metadata now carries normalized descriptor actions.
+   - Administration and Governance descriptors expose create/import/export/
+     configure/inspect/tour action intent.
+   - Modules, permissions, audit log, and data portability no longer advertise
+     generic create intent at descriptor level.
+   - `module-action-metadata-contract.mjs` covers action keys, i18n labels,
+     permission metadata, readonly catalog reasons, and route-meta exposure.
+
+   Follow-up:
+   - Visible page action bars still need to consume descriptor actions through
+     Issues 2 and 3.
 
 2. [ ] [standard-admin-frame] Create a standard admin/governance page contract
    for h1/title, action bar, search, table, pagination, scroll ownership, and

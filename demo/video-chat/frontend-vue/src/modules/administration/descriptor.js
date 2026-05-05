@@ -9,6 +9,22 @@ export default {
       roles: ['admin'],
       pageTitle: 'App Configuration',
       pageTitle_key: 'navigation.administration.app_configuration',
+      actions: [
+        {
+          key: 'administration.app_configuration.save',
+          label_key: 'administration.save_configuration',
+          kind: 'configure',
+          resource_type: 'app_configuration',
+          required_permissions: ['administration.update'],
+        },
+        {
+          key: 'administration.app_configuration.tour',
+          label_key: 'onboarding.take_the_tour',
+          kind: 'tour',
+          resource_type: 'app_configuration',
+          required_permissions: ['administration.read'],
+        },
+      ],
       source_path: 'modules/administration/pages/AppConfigurationView.vue',
       loader: () => import('./pages/AppConfigurationView.vue'),
     },
