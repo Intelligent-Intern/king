@@ -406,6 +406,8 @@ Non-goals for this sprint:
      text use localization keys.
    - [x] Login form labels, aria labels, submit state, and local validation
      errors use localization keys.
+   - [x] Theme preview labels, sample navigation, sample calls, statuses, and
+     pagination text use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
