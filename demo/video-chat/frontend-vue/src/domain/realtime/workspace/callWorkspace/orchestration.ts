@@ -74,8 +74,8 @@ export function createCallWorkspaceOrchestrationHelpers({
 
   function hangupCall() {
     controlState.handRaised = false;
-    controlState.cameraEnabled = true;
-    controlState.micEnabled = true;
+    controlState.cameraEnabled = false;
+    controlState.micEnabled = false;
     controlState.screenEnabled = false;
     reactionTrayOpen.value = false;
     refreshUsersDirectoryPresentation();
