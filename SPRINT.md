@@ -528,6 +528,8 @@ Non-goals for this sprint:
       through the module access context.
     - [x] Shared localized number and list display helpers cover LTR/RTL
       examples and fallback behavior in the localization contract.
+    - [x] Shared weekday-short formatting uses the requested locale with LTR
+      and RTL contract examples.
 
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
