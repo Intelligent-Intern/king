@@ -15,6 +15,8 @@ assert.match(modalSource, /target_entity: 'governance_roles'/, 'governance roles
 assert.match(modalSource, /target_entity: 'groups'/, 'governance groups must use the shared Governance group descriptor target');
 assert.match(modalSource, /target_entity: 'user_themes'/, 'user theme must be exposed as a relation target');
 assert.match(modalSource, /relationStackShowsNestedRelations/, 'governance group selection must enable nested relation hops without exposing them on legacy user fields');
+assert.match(modalSource, /relationStackRelationFilter/, 'user group relation picker must hide unsupported nested relation hops');
+assert.match(modalSource, /\['modules', 'permissions'\]/, 'user group relation picker must only expose module and permission nested hops');
 assert.match(modalSource, /buildGovernanceCatalogRows/, 'nested group permission/module pickers must use Governance catalog rows');
 assert.match(modalSource, /createGovernanceRelationRow/, 'user group relation picker must persist missing groups from the nested stack');
 assert.match(modalSource, /GOVERNANCE_CRUD_DESCRIPTORS\[key\]/, 'user group inline creation must use the shared Governance descriptor endpoint');

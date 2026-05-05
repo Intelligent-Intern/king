@@ -185,6 +185,10 @@ const props = defineProps({
     type: Function,
     default: () => true,
   },
+  relationFilter: {
+    type: Function,
+    default: null,
+  },
   showNestedRelations: {
     type: Boolean,
     default: true,
@@ -207,7 +211,16 @@ const draft = reactive({});
 
 const title = computed(() => t('governance.relation_picker.title', { relation: relationLabel(props.relation) }));
 const isMultiple = computed(() => navigator.currentFrame.value?.selection_mode === 'multiple');
-const nestedRelations = computed(() => (props.showNestedRelations ? navigator.currentDescriptor.value?.relationships || [] : []));
+const nestedRelations = computed(() => {
+  if (!props.showNestedRelations) return [];
+  const relationships = navigator.currentDescriptor.value?.relationships || [];
+  if (typeof props.relationFilter !== 'function') return relationships;
+  return relationships.filter((relation) => props.relationFilter(
+    relation,
+    navigator.currentFrame.value,
+    navigator.stack.value,
+  ));
+});
 const canOpenNestedRelation = computed(() => navigator.currentSelectionIds.value.length > 0);
 const createFields = computed(() => (navigator.currentDescriptor.value?.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'

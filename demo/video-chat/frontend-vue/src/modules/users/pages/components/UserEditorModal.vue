@@ -223,6 +223,7 @@
     :row-provider="relationRowsForEntity"
     :create-draft="createGovernanceRelationRow"
     :can-create-draft-for-entity="canCreateGovernanceRelationRow"
+    :relation-filter="relationStackRelationFilter"
     :maximized="relationStackMaximized"
     :show-nested-relations="relationStackShowsNestedRelations"
     @update:maximized="relationStackMaximized = $event"
@@ -498,6 +499,11 @@ function mergeRowsById(rows) {
 
 function canCreateGovernanceRelationRow(entityKey) {
   return String(entityKey || '').trim() === 'groups' && props.canEditGovernanceGroups && canCreateGovernanceGroups.value;
+}
+
+function relationStackRelationFilter(relation) {
+  if (activeRelation.value?.key !== 'governance_groups') return true;
+  return ['modules', 'permissions'].includes(String(relation?.target_entity || '').trim());
 }
 
 async function createGovernanceRelationRow(entityKey, payload = {}) {

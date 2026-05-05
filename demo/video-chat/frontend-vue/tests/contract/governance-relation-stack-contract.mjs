@@ -75,6 +75,7 @@ assert.match(stackSource, /AppModalShell/, 'relation stack must use the shared m
 assert.match(stackSource, /AppPagination/, 'relation stack must paginate selection rows');
 assert.match(stackSource, /createDraft/, 'relation stack must support create-in-place through a draft creator');
 assert.match(stackSource, /canCreateDraftForEntity/, 'relation stack must let callers restrict local draft creation');
+assert.match(stackSource, /relationFilter/, 'relation stack must let callers restrict visible nested relation hops');
 assert.match(stackSource, /await props\.createDraft/, 'relation stack create must support persisted async row creation');
 assert.match(stackSource, /draftSaving/, 'relation stack create must expose pending state while persisted rows are created');
 assert.match(stackSource, /pushNestedRelation\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
