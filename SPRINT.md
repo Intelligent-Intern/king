@@ -326,7 +326,7 @@ Sprint goal:
    - Mutations call the backend permission evaluator with resource/action/time.
    - Tests cover allowed, denied, expired, revoked, and wrong-tenant cases.
 
-7. [ ] [profile-social-fields] Extend personal profile/settings with about and
+7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
 
    Done when:
@@ -344,6 +344,13 @@ Sprint goal:
    - User settings payloads expose the new profile fields.
    - Existing user-settings contracts were extended for valid and invalid
      profile payloads.
+   - Frontend session state now carries the profile fields.
+   - `WorkspaceAboutSettings.vue` owns the About Me settings panel so the
+     oversized shell does not grow while the UI gains profile fields.
+   - `settings-profile-contract.mjs` covers the extracted panel, translations,
+     session hydration, and save payload fields.
+
+   Completed 2026-05-05.
 
 8. [ ] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
    persisted completion badges.

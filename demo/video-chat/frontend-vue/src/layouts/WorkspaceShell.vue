@@ -388,47 +388,15 @@
         </button>
       </div>
 
-      <section v-if="activeSettingsTile === 'personal.about'" class="settings-panel">
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>{{ t('settings.display_name') }}</span>
-            <input v-model.trim="settingsDraft.displayName" class="input" type="text" autocomplete="name" />
-          </label>
-          <div class="settings-field">
-            <span>{{ t('settings.email') }}</span>
-            <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
-          </div>
-        </div>
-
-        <div class="settings-row">
-          <div class="settings-field">
-            <span>{{ t('settings.avatar_preview') }}</span>
-            <img class="settings-avatar-preview-lg" :src="settingsAvatarPreviewSrc" :alt="t('settings.avatar_preview')" />
-          </div>
-          <div class="settings-field">
-            <label
-              class="settings-dropzone"
-              :class="{ 'is-over': settingsState.dragging }"
-              for="settings-avatar-input"
-              @dragenter.prevent="settingsState.dragging = true"
-              @dragover.prevent="settingsState.dragging = true"
-              @dragleave.prevent="settingsState.dragging = false"
-              @drop.prevent="handleAvatarDrop"
-            >
-              <input
-                id="settings-avatar-input"
-                class="settings-hidden-input"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                @change="handleAvatarSelect"
-              />
-              <span class="settings-dropzone-title">{{ t('settings.avatar_drop_title') }}</span>
-              <span class="settings-dropzone-subtitle">{{ t('settings.avatar_drop_subtitle') }}</span>
-            </label>
-            <div class="settings-upload-status">{{ settingsState.avatarStatus }}</div>
-          </div>
-        </div>
-      </section>
+      <WorkspaceAboutSettings
+        v-if="activeSettingsTile === 'personal.about'"
+        :draft="settingsDraft"
+        :state="settingsState"
+        :email="sessionState.email || ''"
+        :avatar-preview-src="settingsAvatarPreviewSrc"
+        @avatar-select="handleAvatarSelect"
+        @avatar-drop="handleAvatarDrop"
+      />
 
       <section v-else-if="activeSettingsTile === 'personal.credentials'" class="settings-panel">
         <div class="settings-row">
@@ -698,6 +666,7 @@ import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } f
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
+import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 import {
@@ -852,6 +821,11 @@ const settingsDraft = reactive({
   language: 'en',
   postLogoutLandingUrl: '',
   avatarDataUrl: '',
+  aboutMe: '',
+  linkedinUrl: '',
+  xUrl: '',
+  youtubeUrl: '',
+  messengerContacts: [],
 });
 
 const settingsState = reactive({
@@ -892,6 +866,15 @@ function normalizePostLogoutLandingUrl(value) {
   if (url === '') return '';
   if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
   return url;
+}
+
+function normalizeMessengerContactDrafts(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((contact, index) => ({
+    localId: `messenger-${index}-${String(contact?.channel || '')}-${String(contact?.handle || '')}`,
+    channel: String(contact?.channel || '').trim(),
+    handle: String(contact?.handle || '').trim(),
+  }));
 }
 
 function normalizeRole(value) {
@@ -1975,6 +1958,11 @@ function resetSettingsDraft() {
   settingsDraft.language = normalizeSettingsLanguage(sessionState.locale || 'en');
   settingsDraft.postLogoutLandingUrl = sessionState.postLogoutLandingUrl || '';
   settingsDraft.avatarDataUrl = '';
+  settingsDraft.aboutMe = sessionState.aboutMe || '';
+  settingsDraft.linkedinUrl = sessionState.linkedinUrl || '';
+  settingsDraft.xUrl = sessionState.xUrl || '';
+  settingsDraft.youtubeUrl = sessionState.youtubeUrl || '';
+  settingsDraft.messengerContacts = normalizeMessengerContactDrafts(sessionState.messengerContacts);
 }
 
 function setAvatarStatus(message = '') {
@@ -2069,6 +2057,12 @@ async function saveSettings() {
   const dateFormat = normalizeDateFormat(rawDateFormat);
   const language = normalizeSettingsLanguage(settingsDraft.language);
   const postLogoutLandingUrl = normalizePostLogoutLandingUrl(settingsDraft.postLogoutLandingUrl);
+  const messengerContacts = normalizeMessengerContactDrafts(settingsDraft.messengerContacts)
+    .filter((contact) => contact.channel !== '' || contact.handle !== '')
+    .map((contact) => ({
+      channel: contact.channel,
+      handle: contact.handle,
+    }));
 
   if (displayName === '') {
     settingsState.message = t('settings.display_name_required');
@@ -2126,6 +2120,11 @@ async function saveSettings() {
       locale: language,
       avatar_path: avatarPath,
       post_logout_landing_url: postLogoutLandingUrl,
+      about_me: settingsDraft.aboutMe,
+      linkedin_url: settingsDraft.linkedinUrl,
+      x_url: settingsDraft.xUrl,
+      youtube_url: settingsDraft.youtubeUrl,
+      messenger_contacts: messengerContacts,
     });
 
     if (!saveResult.ok) {
