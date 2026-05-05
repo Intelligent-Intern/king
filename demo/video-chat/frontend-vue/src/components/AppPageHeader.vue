@@ -188,6 +188,7 @@ async function completeTour() {
 
 <style scoped>
 .app-page-header-main {
+  flex: 1 1 auto;
   min-width: 0;
   display: inline-flex;
   align-items: flex-start;
@@ -211,6 +212,19 @@ async function completeTour() {
 .app-page-header p {
   margin: 4px 0 0;
   color: var(--text-muted);
+}
+
+.app-page-header-actions {
+  flex: 0 0 auto;
+  min-height: 40px;
+  margin-inline-start: auto;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.app-page-header-tour-btn {
+  width: 40px;
+  height: 40px;
 }
 
 .app-page-header-tour-btn span {

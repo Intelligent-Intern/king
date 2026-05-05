@@ -9,6 +9,7 @@ async function source(relativePath) {
 }
 
 const pageFrame = await source('src/components/admin/AdminPageFrame.vue');
+const pageHeader = await source('src/components/AppPageHeader.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
 const governance = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
@@ -29,6 +30,8 @@ assert.match(pageFrame, /height:\s*100%;/, 'shared admin page frame must stay he
 assert.match(pageFrame, /overflow:\s*hidden;/, 'shared admin page frame must keep table overflow inside child scrollers');
 assert.match(pageFrame, /\.admin-page-frame-head,[\s\S]*?\.admin-page-frame-toolbar[\s\S]*?background:\s*transparent;/, 'admin header and toolbar must sit on primary navy instead of a surface band');
 assert.match(pageFrame, /\.admin-page-frame-footer[\s\S]*?background:\s*transparent;/, 'admin footer must not create a surface band around pagination');
+assert.match(pageHeader, /\.app-page-header-actions[\s\S]*?margin-inline-start:\s*auto;[\s\S]*?justify-content:\s*flex-end;/, 'page header actions must stay right-aligned');
+assert.match(pageHeader, /\.app-page-header-tour-btn[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/, 'tour button must match CRUD action button height');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
 assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');
 assert.match(workspaceStyles, /tbody tr:not\(\.table-empty-row\):hover/, 'table hover must not target empty placeholder rows');
