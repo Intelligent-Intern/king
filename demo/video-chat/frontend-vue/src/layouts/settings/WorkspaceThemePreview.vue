@@ -328,12 +328,15 @@ const previewStyle = computed(() => {
 }
 
 .theme-preview-toolbar {
+  justify-content: flex-end;
   flex-wrap: wrap;
+  gap: 20px;
 }
 
 .theme-preview-tabs {
   display: inline-flex;
   gap: 4px;
+  margin-inline-end: auto;
 }
 
 .theme-preview-tabs button {
@@ -346,7 +349,8 @@ const previewStyle = computed(() => {
 
 .theme-preview-toolbar input {
   min-width: 160px;
-  flex: 1 1 180px;
+  flex: 0 1 320px;
+  max-width: 320px;
   height: 32px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
@@ -444,6 +448,10 @@ const previewStyle = computed(() => {
   gap: 7px;
 }
 
+.theme-preview.compact .theme-preview-toolbar {
+  gap: 8px;
+}
+
 .theme-preview.compact .theme-preview-header h5 {
   font-size: 13px;
 }
@@ -463,6 +471,7 @@ const previewStyle = computed(() => {
 
 .theme-preview.compact .theme-preview-toolbar input {
   min-width: 0;
+  flex: 0 1 150px;
   height: 28px;
 }
 
