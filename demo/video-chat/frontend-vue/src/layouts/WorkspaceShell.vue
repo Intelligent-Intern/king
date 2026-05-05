@@ -272,17 +272,17 @@
           />
 
           <section class="sidebar-profile avatar-only">
-            <button class="sidebar-avatar-trigger" type="button" aria-label="Open settings" @click="openSettingsModal()">
+            <button class="sidebar-avatar-trigger" type="button" :aria-label="t('common.open_settings')" @click="openSettingsModal()">
               <img
                 class="sidebar-avatar-image"
                 :src="profileAvatarSrc"
-                alt="Profile avatar"
+                :alt="t('common.profile_avatar')"
               />
             </button>
           </section>
 
           <div class="logout-wrap">
-            <button class="btn full" type="button" @click="handleSignOut">Log out</button>
+            <button class="btn full" type="button" @click="handleSignOut">{{ t('common.log_out') }}</button>
           </div>
         </div>
       </aside>
@@ -290,7 +290,7 @@
       <section class="main" @click="handleMainClick">
         <div v-if="showMobileShellHeader" class="mobile-brand-strip">
           <img src="/assets/orgas/kingrt/king_logo-withslogan.svg" alt="KingRT" />
-          <button class="mobile-menu-btn" type="button" aria-label="Toggle menu" @click.stop="handleLeftSidebarToggle">
+          <button class="mobile-menu-btn" type="button" :aria-label="t('common.toggle_menu')" @click.stop="handleLeftSidebarToggle">
             <span class="mobile-menu-btn-bars" aria-hidden="true"></span>
           </button>
         </div>
@@ -308,8 +308,8 @@
                     v-if="!isMobileViewport"
                     class="show-sidebar-overlay show-sidebar-inline show-left-sidebar-overlay"
                     type="button"
-                    title="Show sidebar"
-                    aria-label="Show sidebar"
+                    :title="t('common.show_sidebar')"
+                    :aria-label="t('common.show_sidebar')"
                     @click="showLeftSidebar"
                   >
                     <img class="arrow-icon-image" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
@@ -321,8 +321,8 @@
               </div>
               <div class="actions">
                 <template v-if="route.path === '/admin/overview'">
-                  <button class="btn btn-cyan" type="button" @click="openCallsRegistry">Open Calls</button>
-                  <button class="btn btn-cyan" type="button" @click="openGrafana">Open Grafana</button>
+                  <button class="btn btn-cyan" type="button" @click="openCallsRegistry">{{ t('common.open_calls') }}</button>
+                  <button class="btn btn-cyan" type="button" @click="openGrafana">{{ t('common.open_grafana') }}</button>
                 </template>
                 <button
                   v-else-if="route.name === 'user-dashboard'"
@@ -330,9 +330,9 @@
                   type="button"
                   @click="openUserCreateCall"
                 >
-                  New call
+                  {{ t('common.new_call') }}
                 </button>
-                <button v-else class="btn" type="button" @click="openSettingsModal()">Settings</button>
+                <button v-else class="btn" type="button" @click="openSettingsModal()">{{ t('common.settings') }}</button>
               </div>
             </div>
           </section>
@@ -757,25 +757,28 @@ const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
 const DEFAULT_SETTINGS_TILE = 'personal.about';
 
 const pageTitle = computed(() => {
+  const routeTitleKey = typeof route.meta?.pageTitle_key === 'string' ? route.meta.pageTitle_key.trim() : '';
+  if (routeTitleKey !== '') return t(routeTitleKey);
+
   const routeTitle = typeof route.meta?.pageTitle === 'string' ? route.meta.pageTitle.trim() : '';
   if (routeTitle !== '') return routeTitle;
 
   const mapping = {
-    '/admin/overview': 'Video Operations',
-    '/admin/users': 'Nutzer',
-    '/admin/governance': 'Governance',
-    '/admin/governance/users': 'Nutzer',
-    '/admin/administration': 'Administration',
-    '/admin/administration/marketplace': 'Marketplace',
-    '/admin/administration/localization': 'Localization',
-    '/admin/administration/app-configuration': 'App Configuration',
-    '/admin/administration/theme-editor': 'Theme Editor',
-    '/admin/calls': 'Video Call Management',
-    '/user/dashboard': 'My Video Calls',
+    '/admin/overview': 'page.video_operations',
+    '/admin/users': 'users.title',
+    '/admin/governance': 'navigation.governance',
+    '/admin/governance/users': 'users.title',
+    '/admin/administration': 'navigation.administration',
+    '/admin/administration/marketplace': 'navigation.administration.marketplace',
+    '/admin/administration/localization': 'navigation.administration.localization',
+    '/admin/administration/app-configuration': 'navigation.administration.app_configuration',
+    '/admin/administration/theme-editor': 'navigation.administration.theme_editor',
+    '/admin/calls': 'page.video_call_management',
+    '/user/dashboard': 'page.my_video_calls',
   };
 
-  if (route.path.startsWith('/workspace/call')) return 'Video Call';
-  return mapping[route.path] || 'Workspace';
+  if (route.path.startsWith('/workspace/call')) return t('page.video_call');
+  return t(mapping[route.path] || 'page.workspace');
 });
 const isCallWorkspace = computed(() => route.path.startsWith('/workspace/call'));
 

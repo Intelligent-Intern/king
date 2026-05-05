@@ -8,6 +8,7 @@ export default {
       name: 'admin-administration-theme-editor',
       roles: ['admin'],
       pageTitle: 'Theme Editor',
+      pageTitle_key: 'navigation.administration.theme_editor',
       source_path: 'modules/theme_editor/pages/ThemeEditorView.vue',
       loader: () => import('./pages/ThemeEditorView.vue'),
     },

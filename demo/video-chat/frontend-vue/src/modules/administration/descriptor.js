@@ -8,6 +8,7 @@ export default {
       name: 'admin-administration-app-configuration',
       roles: ['admin'],
       pageTitle: 'App Configuration',
+      pageTitle_key: 'navigation.administration.app_configuration',
       source_path: 'modules/administration/pages/AppConfigurationView.vue',
       loader: () => import('./pages/AppConfigurationView.vue'),
     },
