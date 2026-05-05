@@ -409,7 +409,7 @@ defineExpose({ save, load });
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--color-surface-navy);
   padding: 8px 10px;
   resize: vertical;
 }
@@ -450,14 +450,14 @@ defineExpose({ save, load });
 .settings-placeholder-list span {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 11px;
   padding: 4px 7px;
 }
 
 .settings-upload-status.error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 @media (max-width: 760px) {

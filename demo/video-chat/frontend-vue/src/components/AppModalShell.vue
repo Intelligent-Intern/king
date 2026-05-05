@@ -209,7 +209,7 @@ function toggleMaximized() {
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-rgba-5-12-23-0-72);
+  background: color-mix(in srgb, var(--color-primary-navy) 72%, transparent);
 }
 
 .app-modal-dialog {
@@ -239,7 +239,7 @@ function toggleMaximized() {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 6px 14px var(--color-rgba-0-0-0-0-28);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   padding: var(--calls-enter-dialog-padding);
 }
 

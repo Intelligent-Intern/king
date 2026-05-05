@@ -79,7 +79,7 @@ onMounted(loadTenants);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: #0b1324;
+  color: var(--text-primary);
   font: inherit;
 }
 </style>

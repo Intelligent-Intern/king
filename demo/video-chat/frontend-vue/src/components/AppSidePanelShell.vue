@@ -217,7 +217,7 @@ function toggleMaximized() {
 .app-side-panel-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-rgba-5-12-23-0-72);
+  background: color-mix(in srgb, var(--color-primary-navy) 72%, transparent);
 }
 
 .app-side-panel-dialog {
@@ -235,7 +235,7 @@ function toggleMaximized() {
   border-left: 1px solid var(--border-subtle);
   border-radius: 0;
   background: var(--bg-surface);
-  box-shadow: -18px 0 42px var(--color-rgba-0-0-0-0-42);
+  box-shadow: -18px 0 42px color-mix(in srgb, var(--color-primary-navy) 42%, transparent);
   padding: var(--app-side-panel-padding);
 }
 

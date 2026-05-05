@@ -1,25 +1,25 @@
 .ii-auth {
-  --ii-bg: var(--color-0b1424);
+  --ii-bg: var(--color-surface-navy);
   --ii-bg-rgb: 11, 20, 36;
-  --ii-surface: var(--color-0f1a2c);
+  --ii-surface: var(--color-surface-navy);
   --ii-surface-rgb: 15, 26, 44;
-  --ii-surface-alt-0: var(--color-122033);
-  --ii-accent: var(--color-1482be);
-  --ii-primary: var(--color-rgba-20-130-190-0-75);
+  --ii-surface-alt-0: var(--color-surface-navy);
+  --ii-accent: var(--color-cyan-primary);
+  --ii-primary: color-mix(in srgb, var(--color-cyan-primary) 75%, transparent);
   --ii-primary-tint: color-mix(in srgb, var(--ii-surface) 78%, var(--ii-accent) 22%);
   --ii-primary-tint-2: color-mix(in srgb, var(--ii-surface) 66%, var(--ii-accent) 34%);
-  --ii-primary-strong: var(--color-rgba-20-130-190-0-9);
-  --ii-primary-bg: var(--color-rgba-20-130-190-0-06);
-  --ii-border: var(--color-23354c);
-  --ii-border-input: var(--color-36506e);
-  --ii-border-focus: var(--color-1482be);
-  --ii-text: var(--color-rgba-233-242-255-0-92);
-  --ii-muted: var(--color-rgba-180-180-180-0-95);
-  --ii-danger: var(--color-ff7878);
+  --ii-primary-strong: color-mix(in srgb, var(--color-cyan-primary) 90%, transparent);
+  --ii-primary-bg: color-mix(in srgb, var(--color-cyan-primary) 6%, transparent);
+  --ii-border: var(--color-border);
+  --ii-border-input: var(--color-border);
+  --ii-border-focus: var(--color-cyan-primary);
+  --ii-text: color-mix(in srgb, var(--color-heading) 92%, transparent);
+  --ii-muted: color-mix(in srgb, var(--color-heading) 95%, transparent);
+  --ii-danger: var(--color-warning);
   --ii-radius-md: 8px;
   --ii-input-radius: 0;
   --ii-input-bg: color-mix(in srgb, var(--ii-bg) 80%, var(--ii-surface));
-  --ii-shadow-lg: 0 28px 80px var(--color-rgba-0-0-0-0-42);
+  --ii-shadow-lg: 0 28px 80px color-mix(in srgb, var(--color-primary-navy) 42%, transparent);
   --ii-auth-glow-1: color-mix(in srgb, var(--ii-accent) 22%, transparent);
   --ii-auth-glow-2: color-mix(in srgb, var(--ii-accent) 10%, transparent);
   color-scheme: dark;
@@ -121,7 +121,7 @@
 
 .ii-input--invalid,
 .ii-input[aria-invalid='true'] {
-  outline: 2px solid var(--color-rgba-239-68-68-0-75);
+  outline: 2px solid color-mix(in srgb, var(--color-error) 75%, transparent);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -179,7 +179,7 @@
 
 .ii-error {
   font-size: 12px;
-  color: var(--color-rgba-255-180-180-0-95);
+  color: color-mix(in srgb, var(--color-heading) 95%, transparent);
 }
 
 .ii-fieldError {

@@ -17,7 +17,7 @@
 .call-subline {
   display: block;
   margin-top: 2px;
-  color: var(--color-c7d7f2);
+  color: var(--color-heading);
   font-size: 11px;
 }
 

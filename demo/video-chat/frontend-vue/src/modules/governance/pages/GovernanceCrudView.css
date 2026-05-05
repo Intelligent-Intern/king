@@ -136,7 +136,7 @@
 }
 
 .governance-inline-error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 .governance-readonly-label {

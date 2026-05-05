@@ -306,8 +306,8 @@ function syncCalendarSlots() {
       title: t('public.booking.default_call_title'),
       start: new Date(String(slot.starts_at || '')),
       end: new Date(String(slot.ends_at || '')),
-      backgroundColor: String(slot.id) === state.selectedSlotId ? '#4fd7ff' : '#0e8fb8',
-      borderColor: '#4fd7ff',
+      backgroundColor: String(slot.id) === state.selectedSlotId ? 'var(--color-cyan-hover)' : 'var(--color-cyan-primary)',
+      borderColor: 'var(--color-cyan-hover)',
     });
   }
 }
@@ -538,7 +538,7 @@ onBeforeUnmount(() => {
 .appointment-invitation-text {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-main);
   font-size: 13px;
   line-height: 1.45;
@@ -580,7 +580,7 @@ onBeforeUnmount(() => {
 .appointment-slot-btn {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   color: var(--text-main);
   min-height: 34px;
   padding: 0 10px;
@@ -588,8 +588,8 @@ onBeforeUnmount(() => {
 }
 
 .appointment-slot-btn.active {
-  border-color: var(--color-4fd7ff);
-  background: var(--color-0f3a52);
+  border-color: var(--color-cyan-hover);
+  background: var(--color-border);
 }
 
 .appointment-booking-form {
@@ -614,7 +614,7 @@ onBeforeUnmount(() => {
 .appointment-selected-slot {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-main);
   font-size: 12px;
   padding: 8px 10px;
@@ -623,11 +623,11 @@ onBeforeUnmount(() => {
 .appointment-selected-slot.invalid,
 .input.invalid,
 .appointment-consent-row.invalid {
-  border-color: var(--color-a81a1a);
+  border-color: var(--color-error);
 }
 
 .appointment-field-error {
-  color: var(--color-ff9f9f);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -640,16 +640,16 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--color-surface-navy);
   padding: 8px 10px;
   resize: vertical;
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -658,7 +658,7 @@ onBeforeUnmount(() => {
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -679,7 +679,7 @@ onBeforeUnmount(() => {
 .appointment-link-button {
   border: 0;
   background: transparent;
-  color: var(--color-4fd7ff);
+  color: var(--color-cyan-hover);
   padding: 0;
   text-decoration: underline;
 }
@@ -687,8 +687,8 @@ onBeforeUnmount(() => {
 .appointment-privacy-overlay {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-081326);
-  box-shadow: 0 6px 18px var(--color-rgba-0-0-0-0-28);
+  background: var(--color-surface-navy);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   padding: 10px;
   display: grid;
   gap: 8px;

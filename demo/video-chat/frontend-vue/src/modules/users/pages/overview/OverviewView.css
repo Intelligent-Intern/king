@@ -90,7 +90,7 @@
 }
 
 .infra-inline-state.error {
-  color: var(--color-ffb8c6);
+  color: var(--color-error);
 }
 
 .infra-provider-grid {
@@ -112,7 +112,7 @@
 
 .infra-provider-card strong {
   font-size: 15px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .infra-provider-card span {
@@ -175,7 +175,7 @@
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-09111e);
+  background: var(--color-surface-navy);
 }
 
 .calls-modal-dialog {
@@ -187,7 +187,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
+  box-shadow: 0 16px 32px var(--color-primary-navy);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -255,7 +255,7 @@
 .calls-participants-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   padding: 10px;
   min-height: 0;
   display: grid;
@@ -287,7 +287,7 @@
 .calls-participants-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   display: grid;
@@ -309,7 +309,7 @@
 
 .calls-participant-main {
   font-size: 12px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .calls-participant-meta {
@@ -321,7 +321,7 @@
 .calls-external-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   padding: 8px;
@@ -345,10 +345,10 @@
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -364,7 +364,7 @@
 }
 
 .calls-btn-danger:hover {
-  background: var(--color-cc0000);
+  background: var(--color-error);
 }
 
 :deep(.fc-theme-standard .fc-scrollgrid),
@@ -387,7 +387,7 @@
 
 :deep(.fc .fc-daygrid-day.fc-day-today),
 :deep(.fc .fc-timegrid-col.fc-day-today) {
-  background: var(--color-213a63);
+  background: var(--color-border);
 }
 
 :deep(.fc .fc-button-primary) {
@@ -405,7 +405,7 @@
 :deep(.fc .fc-event) {
   border: 0;
   background: var(--bg-row);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 

@@ -222,13 +222,13 @@
 .input[type='date']::-webkit-datetime-edit,
 .input[type='time']::-webkit-datetime-edit,
 .input[type='datetime-local']::-webkit-datetime-edit {
-  color: var(--color-f7f7f7);
+  color: var(--color-text-primary);
 }
 
 .input[type='date']::-webkit-datetime-edit-fields-wrapper,
 .input[type='time']::-webkit-datetime-edit-fields-wrapper,
 .input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
-  color: var(--color-f7f7f7);
+  color: var(--color-text-primary);
 }
 
 .input[type='date']::-webkit-calendar-picker-indicator,
@@ -292,7 +292,7 @@ tbody tr.table-empty-row:hover {
   padding: 3px 8px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
   border-radius: 6px;
 }
 
@@ -388,14 +388,14 @@ html[dir="rtl"] .pager-icon-img {
 
 .pager-btn:disabled {
   background: transparent;
-  color: var(--color-6f86b0);
+  color: var(--color-cyan-primary);
   opacity: 0.55;
   cursor: not-allowed;
 }
 
 .pager-btn:not(:disabled):hover {
   background: transparent;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .pager-btn.is-hidden {
@@ -489,7 +489,7 @@ html[dir="rtl"] .pager-icon-img {
   border: 0;
   border-radius: 6px;
   background: var(--bg-action);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -505,11 +505,11 @@ html[dir="rtl"] .pager-icon-img {
 }
 
 .icon-mini-btn.danger:hover {
-  background: var(--color-cc0000);
+  background: var(--color-error);
 }
 
 .icon-mini-btn:disabled {
-  background: var(--color-233753);
+  background: var(--color-border);
   cursor: not-allowed;
 }
 
@@ -557,7 +557,7 @@ html[dir="rtl"] .pager-icon-img {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 10px;
-  box-shadow: 0 8px 24px var(--color-000000);
+  box-shadow: 0 8px 24px var(--color-primary-navy);
   z-index: 30;
   display: grid;
   gap: 8px;
@@ -584,8 +584,8 @@ html[dir="rtl"] .pager-icon-img {
   min-height: 34px;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-0d1e36);
-  color: var(--color-f1f5ff);
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
   padding: 7px 10px;
   font-size: 12px;
   overflow: hidden;

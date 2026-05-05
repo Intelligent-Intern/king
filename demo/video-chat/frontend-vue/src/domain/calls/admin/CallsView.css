@@ -101,15 +101,15 @@
 
 .calls-banner {
   font-size: 12px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .calls-banner.ok {
-  background: var(--color-1f4f31);
+  background: var(--color-success);
 }
 
 .calls-banner.error {
-  background: var(--color-4f1f1f);
+  background: var(--color-surface-navy);
 }
 
 .calls-table-wrap {
@@ -139,7 +139,7 @@
 .call-subline {
   display: block;
   margin-top: 2px;
-  color: var(--color-c7d7f2);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -150,7 +150,7 @@
 }
 
 .calls-error {
-  color: var(--color-ff9f9f);
+  color: var(--color-heading);
 }
 
 .calls-calendar-wrap {
@@ -250,7 +250,7 @@
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-rgba-5-12-23-0-72);
+  background: color-mix(in srgb, var(--color-primary-navy) 72%, transparent);
 }
 
 .calls-modal-dialog {
@@ -262,7 +262,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 6px 14px var(--color-rgba-0-0-0-0-28);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -364,7 +364,7 @@
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -440,7 +440,7 @@
 .calls-participants-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   padding: 10px;
   min-height: 0;
   display: grid;
@@ -461,7 +461,7 @@
 .calls-participants-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   display: grid;
@@ -487,7 +487,7 @@
 
 .calls-participant-main {
   font-size: 12px;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .calls-participant-meta {
@@ -499,7 +499,7 @@
 .calls-external-list {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0f1f37);
+  background: var(--color-surface-navy);
   max-height: 280px;
   overflow: auto;
   padding: 8px;
@@ -523,10 +523,10 @@
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -535,8 +535,8 @@
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: var(--color-ff0000);
-  color: var(--color-f7f7f7);
+  background: var(--color-error);
+  color: var(--color-text-primary);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -545,7 +545,7 @@
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -590,27 +590,27 @@
   overflow: auto;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-d8dadd);
-  color: var(--color-0b1323);
+  background: var(--color-heading);
+  color: var(--color-surface-navy);
   padding: 10px;
   line-height: 1.45;
 }
 
 .calls-rich-editor:empty::before {
   content: 'Write cancellation message...';
-  color: var(--color-617082);
+  color: var(--color-cyan-primary);
 }
 
 .btn.btn-danger {
-  background: var(--color-a81a1a);
+  background: var(--color-error);
 }
 
 .btn.btn-danger:hover {
-  background: var(--color-c91f1f);
+  background: var(--color-error);
 }
 
 .btn.btn-danger:active {
-  background: var(--color-7c1010);
+  background: var(--color-primary-navy);
 }
 
 .calls-textarea {
@@ -618,7 +618,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--color-surface-navy);
   padding: 8px 10px;
   resize: vertical;
 }
