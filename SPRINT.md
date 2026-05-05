@@ -307,7 +307,7 @@ Non-goals for this sprint:
    - `demo/video-chat/backend-king-php/tests/user-settings-endpoint-contract.sh`
    - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
 
-3. [ ] `[translation-csv-admin]` Build superadmin CSV upload and import.
+3. [x] `[translation-csv-admin]` Build superadmin CSV upload and import.
 
    Scope:
    - Add backend CSV parser and validator.
@@ -318,13 +318,19 @@ Non-goals for this sprint:
    - Restrict upload/import to primary superadmin only.
 
    Done when:
-   - [ ] Non-admins and admins with IDs other than `1` cannot upload language
+   - [x] Non-admins and admins with IDs other than `1` cannot upload language
      CSV files.
-   - [ ] CSV preview returns row-level errors without mutating data.
-   - [ ] Import is atomic and audited.
-   - [ ] Duplicate keys and unsupported locales fail validation.
-   - [ ] Imported translations are visible after session refresh without
+   - [x] CSV preview returns row-level errors without mutating data.
+   - [x] Import is atomic and audited.
+   - [x] Duplicate keys and unsupported locales fail validation.
+   - [x] Imported translations are visible after session refresh without
      redeploy.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/http/module_localization.php`
+   - `demo/video-chat/backend-king-php/domain/localization/translation_imports.php`
+   - `demo/video-chat/backend-king-php/tests/localization-import-contract.sh`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-import-ui-contract.mjs`
 
 4. [ ] `[frontend-i18n-runtime]` Add frontend translation runtime.
 
