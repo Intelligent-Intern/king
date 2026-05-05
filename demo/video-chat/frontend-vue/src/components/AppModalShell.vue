@@ -9,7 +9,7 @@
     :aria-label="!titleId ? ariaLabel || title : undefined"
   >
     <div :class="backdropClass" @click="$emit('close')"></div>
-    <div :class="['app-modal-dialog', dialogClass]">
+    <div :class="modalDialogClass">
       <header :class="headerClass">
         <div :class="headerLeftClass">
           <slot name="header-prefix">
@@ -23,11 +23,20 @@
           </div>
         </div>
         <slot name="close">
-          <AppIconButton
-            :icon="closeIcon"
-            :aria-label="closeLabel"
-            @click="$emit('close')"
-          />
+          <div class="app-modal-header-actions">
+            <AppIconButton
+              v-if="maximizable"
+              :icon="maximized ? restoreIcon : maximizeIcon"
+              :aria-label="maximized ? restoreLabel : maximizeLabel"
+              :title="maximized ? restoreLabel : maximizeLabel"
+              @click="toggleMaximized"
+            />
+            <AppIconButton
+              :icon="closeIcon"
+              :aria-label="closeLabel"
+              @click="$emit('close')"
+            />
+          </div>
         </slot>
       </header>
 
@@ -126,9 +135,33 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
+  maximizable: {
+    type: Boolean,
+    default: false,
+  },
+  maximized: {
+    type: Boolean,
+    default: false,
+  },
+  maximizeIcon: {
+    type: String,
+    default: '/assets/orgas/kingrt/icons/forward.png',
+  },
+  restoreIcon: {
+    type: String,
+    default: '/assets/orgas/kingrt/icons/backward.png',
+  },
+  maximizeLabel: {
+    type: String,
+    default: 'Maximize modal',
+  },
+  restoreLabel: {
+    type: String,
+    default: 'Restore modal size',
+  },
 });
 
-defineEmits(['close']);
+const emit = defineEmits(['close', 'update:maximized']);
 
 const attrs = useAttrs();
 const effectiveLogoSrc = computed(() => {
@@ -140,18 +173,29 @@ const rootAttrs = computed(() => {
   return rest;
 });
 const rootClass = computed(() => [props.rootClassName, attrs.class]);
+const modalDialogClass = computed(() => [
+  'app-modal-dialog',
+  props.dialogClass,
+  { 'is-maximized': props.maximized },
+]);
+
+function toggleMaximized() {
+  emit('update:maximized', !props.maximized);
+}
 </script>
 
 <style scoped>
 .calls-modal,
-.users-modal {
+.users-modal,
+.governance-modal {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
 }
 
-.calls-modal {
+.calls-modal,
+.governance-modal {
   z-index: 70;
   padding: 12px;
 }
@@ -161,12 +205,14 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
 }
 
 .calls-modal[hidden],
-.users-modal[hidden] {
+.users-modal[hidden],
+.governance-modal[hidden] {
   display: none;
 }
 
 .calls-modal-backdrop,
-.users-modal-backdrop {
+.users-modal-backdrop,
+.governance-modal-backdrop {
   position: absolute;
   inset: 0;
   background: var(--color-rgba-5-12-23-0-72);
@@ -176,6 +222,19 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   position: relative;
   z-index: 1;
   display: grid;
+}
+
+.app-modal-dialog.is-maximized {
+  width: min(1280px, calc(100vw - 24px));
+  height: min(94vh, 980px);
+  max-height: calc(100vh - 24px);
+}
+
+.app-modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .calls-modal-dialog {
@@ -200,8 +259,33 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   padding: var(--users-modal-padding);
 }
 
+.governance-modal-dialog {
+  --governance-modal-padding: 16px;
+  width: min(980px, calc(100vw - 24px));
+  max-height: min(94vh, 980px);
+  overflow: auto;
+  gap: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--color-10203b);
+  padding: var(--governance-modal-padding);
+}
+
+.users-modal-dialog.is-maximized {
+  width: min(1280px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
+}
+
+.governance-modal-dialog.is-maximized {
+  width: min(1280px, calc(100vw - 24px));
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
+}
+
 .calls-modal-header,
-.users-modal-head {
+.users-modal-head,
+.governance-modal-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -212,12 +296,14 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   gap: 10px;
 }
 
-.users-modal-head {
+.users-modal-head,
+.governance-modal-head {
   gap: 12px;
 }
 
 .calls-modal-header h4,
-.users-modal-head h4 {
+.users-modal-head h4,
+.governance-modal-head h4 {
   margin: 5px 0 0;
 }
 
@@ -238,14 +324,20 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   background: var(--brand-bg);
 }
 
-.users-modal-head-brand {
+.users-modal-head-brand,
+.governance-modal-head-brand {
   margin: calc(var(--users-modal-padding) * -1) calc(var(--users-modal-padding) * -1) 0;
   padding: 10px;
   background: var(--brand-bg);
 }
 
+.governance-modal-head-brand {
+  margin: calc(var(--governance-modal-padding) * -1) calc(var(--governance-modal-padding) * -1) 0;
+}
+
 .calls-modal-header-enter-left,
-.users-modal-head-left {
+.users-modal-head-left,
+.governance-modal-head-left {
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -258,7 +350,8 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
 }
 
 .calls-modal-header-enter-logo,
-.users-modal-head-logo {
+.users-modal-head-logo,
+.governance-modal-head-logo {
   width: auto;
   height: 24px;
   display: block;
@@ -267,7 +360,8 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
 
 .calls-modal-body,
 .users-modal-body,
-.users-avatar-modal-body {
+.users-avatar-modal-body,
+.governance-modal-body {
   display: grid;
 }
 
@@ -285,7 +379,8 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
 }
 
 .calls-modal-footer,
-.users-modal-footer {
+.users-modal-footer,
+.governance-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
