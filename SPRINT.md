@@ -459,6 +459,8 @@ Non-goals for this sprint:
      use logical inline borders/padding for RTL-safe separators and lists.
    - [x] Shared workspace table alignment, section spacing, collapsed-sidebar
      spacing, and list indentation use logical inline properties.
+   - [x] Shell sidebar overlay positions and navigation submenu indentation
+     use logical inline properties with RTL contract coverage.
 
    Done when:
    - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
