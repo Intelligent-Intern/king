@@ -438,6 +438,9 @@ Non-goals for this sprint:
    - [x] Chat archive modal, file filters, file group labels, archive notices,
      and archive load errors now use localization keys and are covered by the
      translation-key coverage contract.
+   - [x] Public join flow labels, media controls, admission status messages,
+     and join/access fallback errors now use localization keys and are covered
+     by public-page and translation-key contracts.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
