@@ -5,6 +5,7 @@ import {
   formatLocalizedDateTimeDisplay,
   normalizeDateTimeLocale,
 } from '../../src/support/dateTimeFormat.js';
+import { compareLocalizedStrings } from '../../src/support/localeCollation.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const sampleIso = '2026-01-02T14:05:00Z';
@@ -53,6 +54,14 @@ assert.equal(
 );
 assert.equal(formatLocalizedDateTimeDisplay('', { fallback: 'n/a' }), 'n/a');
 assert.equal(formatLocalizedDateTimeDisplay('not-a-date', { fallback: 'n/a' }), 'not-a-date');
+assert.equal(
+  compareLocalizedStrings('ä', 'z', { locale: 'de' }),
+  'ä'.localeCompare('z', 'de', { sensitivity: 'base', numeric: true }),
+);
+assert.equal(
+  compareLocalizedStrings('item 2', 'item 10', { locale: 'en' }),
+  'item 2'.localeCompare('item 10', 'en', { sensitivity: 'base', numeric: true }),
+);
 
 const localizedTableSources = await Promise.all([
   'src/modules/governance/pages/GovernanceCrudView.vue',
@@ -67,5 +76,11 @@ for (const { relativePath, source } of localizedTableSources) {
   assert.match(source, /formatLocalizedDateTimeDisplay/, `${relativePath} must use centralized localized date-time formatting`);
   assert.doesNotMatch(source, /Intl\.DateTimeFormat\(['"](?:en-GB|de-DE)['"]/, `${relativePath} must not pin date-time formatting to en-GB/de-DE`);
 }
+
+const navigationBuilderSource = await readFile(path.join(root, 'src/modules/navigationBuilder.js'), 'utf8');
+const routeAccessSource = await readFile(path.join(root, 'src/http/routeAccess.js'), 'utf8');
+assert.match(navigationBuilderSource, /compareLocalizedStrings/, 'navigation builder must use centralized locale-aware collation');
+assert.doesNotMatch(navigationBuilderSource, /\.localeCompare\(/, 'navigation builder must not call localeCompare directly');
+assert.match(routeAccessSource, /locale: normalizeString\(session\.locale\)/, 'module access context must carry the active locale to navigation sorting');
 
 console.log('[locale-aware-formatting-contract] PASS');
