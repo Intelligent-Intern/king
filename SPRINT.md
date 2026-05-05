@@ -461,11 +461,14 @@ Non-goals for this sprint:
      spacing, and list indentation use logical inline properties.
    - [x] Shell sidebar overlay positions and navigation submenu indentation
      use logical inline properties with RTL contract coverage.
+   - [x] Physical left/right CSS audit is documented with resolved non-call
+     surfaces, remaining geometric coordinates, and call-specific follow-up
+     scope.
 
    Done when:
    - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
      major screens.
-   - [ ] Left/right physical CSS audit is resolved or documented with a reason.
+   - [x] Left/right physical CSS audit is resolved or documented with a reason.
    - [ ] Navigation, modal headers, pagination, wizard steps, and form rows are
      coherent in RTL.
    - [ ] Canvas/video rendering remains visually correct.
