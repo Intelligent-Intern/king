@@ -12,20 +12,37 @@ const sampleDate = new Date(sampleIso);
 
 assert.equal(normalizeDateTimeLocale('de'), 'de');
 assert.equal(normalizeDateTimeLocale('definitely-unsupported'), 'en');
+
+for (const locale of ['en', 'de', 'ar', 'fa', 'ps']) {
+  assert.equal(normalizeDateTimeLocale(locale), locale);
+  assert.equal(
+    formatLocalizedDateTimeDisplay(sampleIso, { locale, timeFormat: '24h' }),
+    new Intl.DateTimeFormat(locale, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(sampleDate),
+    `${locale} 24h date-time formatting must use the active locale`,
+  );
+}
+
 assert.equal(
-  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'de', timeFormat: '24h' }),
-  new Intl.DateTimeFormat('de', {
+  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'en', timeFormat: '12h' }),
+  new Intl.DateTimeFormat('en', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hour12: true,
   }).format(sampleDate),
 );
 assert.equal(
-  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'en', timeFormat: '12h' }),
-  new Intl.DateTimeFormat('en', {
+  formatLocalizedDateTimeDisplay(sampleIso, { locale: 'ar', timeFormat: '12h' }),
+  new Intl.DateTimeFormat('ar', {
     year: 'numeric',
     month: 'short',
     day: '2-digit',
