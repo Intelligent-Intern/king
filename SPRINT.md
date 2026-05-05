@@ -1156,7 +1156,7 @@ Non-goals for this sprint:
    - `node demo/video-chat/frontend-vue/tests/contract/module-navigation-builder-contract.mjs`
    - `npm run build` in `demo/video-chat/frontend-vue`
 
-6. [ ] `[frontend-string-coverage]` Convert app UI to translation keys.
+6. [x] `[frontend-string-coverage]` Convert app UI to translation keys.
 
    Scope:
    - Convert navigation, page titles, settings, tenant administration, user
@@ -1244,15 +1244,26 @@ Non-goals for this sprint:
      fallback policy. The localization contract verifies every supported
      non-English locale and every English message namespace is either covered
      by CSV import or consciously allowed to use English fallback until import.
+   - [x] Closed 2026-05-05: the fallback policy now includes the onboarding
+     namespace added by the tour/badge work, so the machine-readable
+     non-English fallback contract covers every English message namespace.
 
    Done when:
-   - [ ] No hard-coded user-visible English text remains in the targeted Vue
+   - [x] No hard-coded user-visible English text remains in the targeted Vue
      surfaces except explicit test fixtures and non-user debug identifiers.
-   - [ ] All strings have stable namespaced keys.
+   - [x] All strings have stable namespaced keys.
    - [x] English fallback covers 100 percent of used keys.
    - [x] Non-English seed/import files cover the key set or explicitly mark
      allowed fallback gaps.
    - [x] Contract test fails on missing English keys.
+
+   Proof:
+   - `node tests/contract/frontend-translation-key-coverage-contract.mjs`
+   - `node tests/contract/localization-fallback-gap-contract.mjs`
+   - `node tests/contract/onboarding-tour-contract.mjs`
+   - `npm run test:contract:localization` in `demo/video-chat/frontend-vue`
+     passes frontend/static checks; backend SQLite contracts skip locally
+     because this PHP runtime does not include `pdo_sqlite`.
 
 7. [x] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
 
