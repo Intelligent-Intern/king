@@ -1,0 +1,26 @@
+export default {
+  module_key: 'marketplace',
+  version: '0.1.0',
+  permissions: ['marketplace.admin'],
+  routes: [
+    {
+      path: '/admin/administration/marketplace',
+      name: 'admin-administration-marketplace',
+      roles: ['admin'],
+      pageTitle: 'Marketplace',
+      source_path: 'domain/marketplace/AdminMarketplaceView.vue',
+      loader: () => import('../../domain/marketplace/AdminMarketplaceView.vue'),
+    },
+  ],
+  navigation: [
+    {
+      group: 'administration',
+      to: '/admin/administration/marketplace',
+      label: 'Marketplace',
+      order: 10,
+      roles: ['admin'],
+    },
+  ],
+  settings_panels: [],
+  i18n_namespaces: ['marketplace'],
+};
