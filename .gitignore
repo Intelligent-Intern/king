@@ -32,6 +32,9 @@ extension/tests/*.log
 extension/tests/*.out
 extension/tests/*.php
 extension/tests/*.sh
+extension/tests/*.mem
+extension/tmp-php.ini
+extension/run-test-info.php
 benchmarks/results/
 compat-artifacts/
 dist/
