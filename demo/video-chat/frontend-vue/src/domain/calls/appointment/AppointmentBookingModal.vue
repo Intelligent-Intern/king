@@ -229,6 +229,7 @@ function currentDocumentLocale() {
 }
 
 const activeLocale = computed(() => String(i18nState.locale || currentDocumentLocale() || 'en').trim() || 'en');
+const activeDirection = computed(() => (i18nState.direction === 'rtl' ? 'rtl' : 'ltr'));
 const selectedSlot = computed(() => state.slots.find((slot) => String(slot.id) === state.selectedSlotId) || null);
 const selectedSlotLabel = computed(() => (
   selectedSlot.value ? toLocalSlotLabel(selectedSlot.value, { locale: activeLocale.value }) : 'Select a video call slot'
@@ -330,6 +331,7 @@ async function ensureCalendar() {
     plugins: [timeGridPlugin, interactionPlugin],
     initialView: 'timeGridWeek',
     locale: activeLocale.value,
+    direction: activeDirection.value,
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
@@ -494,8 +496,9 @@ watch(
   },
 );
 
-watch(activeLocale, (locale) => {
+watch([activeLocale, activeDirection], ([locale, direction]) => {
   calendarInstance?.setOption('locale', locale);
+  calendarInstance?.setOption('direction', direction);
   syncCalendarSlots();
 });
 
