@@ -64,5 +64,7 @@ assert.doesNotMatch(appointmentApiSource, /Intl\.DateTimeFormat\(undefined/, 'pu
 assert.match(appointmentBookingModalSource, /toLocalSlotLabel\(selectedSlot\.value,\s*\{\s*locale:\s*activeLocale\.value\s*\}/, 'selected public booking slot label must use active locale');
 assert.match(appointmentBookingModalSource, /locale:\s*activeLocale\.value/, 'public booking submit and calendar options must carry active locale');
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('locale',\s*locale\)/, 'FullCalendar must react to public locale changes');
+assert.match(appointmentBookingModalSource, /direction:\s*activeDirection\.value/, 'FullCalendar must initialize with active public text direction');
+assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('direction',\s*direction\)/, 'FullCalendar must react to public direction changes');
 
 console.log('[public-pages-localization-contract] PASS');
