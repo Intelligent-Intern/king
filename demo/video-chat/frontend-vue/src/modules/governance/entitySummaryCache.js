@@ -69,6 +69,10 @@ export function createEntitySummaryCache() {
     return entityMap(entityKey).get(normalizeString(id)) || null;
   }
 
+  function removeSummary(entityKey, id) {
+    return entityMap(entityKey).delete(normalizeString(id));
+  }
+
   function getSummaries(entityKey, ids = []) {
     return ids.map((id) => getSummary(entityKey, id)).filter(Boolean);
   }
@@ -106,6 +110,7 @@ export function createEntitySummaryCache() {
     upsertRows,
     hydrateIncluded,
     getSummary,
+    removeSummary,
     getSummaries,
     rows,
     missingIds,

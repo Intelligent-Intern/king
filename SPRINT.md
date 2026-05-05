@@ -354,6 +354,9 @@ Sprint goal:
    - Governance CRUD now hydrates current page/catalog rows into the summary
      cache and relation providers return cached summaries instead of preparing
      row-render fetch paths.
+   - Persisted Governance group/organization lists now hydrate the same summary
+     cache from backend list responses, and deleted rows are removed from the
+     cache to avoid stale relation picker entries.
    - Remaining work: backend list endpoints must include relation summaries or
      expose tenant-scoped batch summary endpoints for real persisted entities.
 
@@ -377,8 +380,13 @@ Sprint goal:
      permission aliases.
    - Added route-level RBAC for `/api/governance/` so authenticated users reach
      resource/action permission checks instead of broad admin-only path checks.
+   - Governance CRUD now loads, creates, updates, and deletes groups and
+     organizations through the persisted backend endpoints instead of local
+     draft rows; relation pickers hydrate these backend-backed rows before
+     selection.
    - Remaining work: memberships, grants, policies, export/import job APIs, and
-     frontend wiring from Governance CRUD to these persisted endpoints.
+     recursive relation mutations that persist nested group/user/permission
+     assignments.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -473,6 +481,10 @@ Sprint goal:
     - Added `governance-crud-api-contract.php` for groups/organizations API
       RBAC, tenant isolation, allowed/denied mutation checks, expired grants,
       revoked grants, wrong-tenant identifiers, and UUID row ids.
+    - Added `governance-crud-persistence-contract.mjs` for backend-backed
+      group/organization persistence, UUID row normalization, internal id
+      stripping, descriptor endpoint ownership, and local draft blocking for
+      persisted relation targets.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
@@ -500,6 +512,10 @@ Sprint goal:
     - `governance-crud-api-contract.sh` currently skips in this local PHP
       runtime because `pdo_sqlite` is not installed; the contract is present
       and will execute in a SQLite-enabled backend test runtime.
+    - Governance frontend persistence contracts, summary-cache contract,
+      relation-stack contract, translation-key coverage, and `npm run build`
+      pass. Build still reports the known large `CallWorkspaceView` chunk
+      warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
