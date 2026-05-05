@@ -10,14 +10,14 @@
             @click="emitNavigate"
           >
             <img :src="item.icon" alt="" />
-            <span>{{ item.label }}</span>
+            <span>{{ navigationLabel(item) }}</span>
           </RouterLink>
           <button
             class="nav-group-toggle"
             type="button"
             :aria-expanded="isExpanded(item)"
-            :aria-label="isExpanded(item) ? `Collapse ${item.label}` : `Expand ${item.label}`"
-            :title="isExpanded(item) ? `Collapse ${item.label}` : `Expand ${item.label}`"
+            :aria-label="groupToggleLabel(item)"
+            :title="groupToggleLabel(item)"
             @click="toggleGroup(item)"
           >
             <img
@@ -28,7 +28,7 @@
             />
           </button>
         </div>
-        <div v-if="isExpanded(item)" class="nav-submenu" :aria-label="`${item.label} navigation`">
+        <div v-if="isExpanded(item)" class="nav-submenu" :aria-label="t('navigation.group.navigation', { label: navigationLabel(item) })">
           <RouterLink
             v-for="child in item.children"
             :key="child.to"
@@ -37,7 +37,7 @@
             :class="{ active: isActive(child) }"
             @click="emitNavigate"
           >
-            <span>{{ child.label }}</span>
+            <span>{{ navigationLabel(child) }}</span>
           </RouterLink>
         </div>
       </section>
@@ -49,7 +49,7 @@
         @click="emitNavigate"
       >
         <img :src="item.icon" alt="" />
-        <span>{{ item.label }}</span>
+        <span>{{ navigationLabel(item) }}</span>
       </RouterLink>
     </template>
   </nav>
@@ -60,6 +60,7 @@ import { computed, reactive, watch } from 'vue';
 import { RouterLink } from 'vue-router';
 import { sessionState } from '../domain/auth/session';
 import { moduleAccessContextFromSession } from '../http/routeAccess.js';
+import { t } from '../modules/localization/i18nRuntime.js';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 
 const props = defineProps({
@@ -78,8 +79,8 @@ const expandedGroups = reactive({});
 const moduleStore = useWorkspaceModuleStore();
 
 const callNavigationItems = [
-  { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
-  { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
+  { to: '/admin/calls', label: 'Video Calls', label_key: 'navigation.calls.admin', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
+  { to: '/user/dashboard', label: 'My Calls', label_key: 'navigation.calls.user', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
 ];
 
 const visibleItems = computed(() => (
@@ -119,6 +120,17 @@ function toggleGroup(item) {
   const key = groupKey(item);
   if (key === '') return;
   expandedGroups[key] = !isExpanded(item);
+}
+
+function navigationLabel(item) {
+  const key = String(item?.label_key || '').trim();
+  return key !== '' ? t(key) : String(item?.label || '');
+}
+
+function groupToggleLabel(item) {
+  return isExpanded(item)
+    ? t('navigation.group.collapse', { label: navigationLabel(item) })
+    : t('navigation.group.expand', { label: navigationLabel(item) });
 }
 
 function isActive(item) {

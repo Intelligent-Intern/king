@@ -17,6 +17,7 @@ export default {
       group: 'administration',
       to: '/admin/administration/localization',
       label: 'Localization',
+      label_key: 'navigation.administration.localization',
       order: 20,
       roles: ['admin'],
     },
@@ -25,6 +26,7 @@ export default {
     {
       key: 'personal.localization',
       label: 'Localization',
+      label_key: 'settings.localization',
       roles: ['admin', 'user'],
       order: 40,
     },

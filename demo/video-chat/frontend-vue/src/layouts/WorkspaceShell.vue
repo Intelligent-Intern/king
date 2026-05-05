@@ -716,6 +716,7 @@ import {
 import {
   ensureI18nResources,
   syncI18nDocumentState,
+  t,
 } from '../modules/localization/i18nRuntime.js';
 import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
 import {
@@ -862,7 +863,7 @@ const settingsState = reactive({
 const activeSettingsTile = ref(DEFAULT_SETTINGS_TILE);
 const settingsTiles = computed(() => moduleStore.settingsPanelsFor({ role: sessionState.role }).map((panel) => ({
   id: panel.key,
-  label: panel.label,
+  label: panel.label_key ? t(panel.label_key) : panel.label,
 })));
 const dateFormatOptions = DATE_FORMAT_OPTIONS;
 const settingsLanguageOptions = computed(() => {

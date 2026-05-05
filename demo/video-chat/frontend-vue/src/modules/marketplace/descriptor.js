@@ -17,6 +17,7 @@ export default {
       group: 'administration',
       to: '/admin/administration/marketplace',
       label: 'Marketplace',
+      label_key: 'navigation.administration.marketplace',
       order: 10,
       roles: ['admin'],
     },

@@ -12,6 +12,20 @@ const governanceRoutes = [
   ['compliance', 'Compliance', 'Compliance Rule', 'Compliance Rules', 'modules/governance/pages/GovernanceCrudView.vue'],
 ];
 
+const governanceLabelKeys = {
+  users: 'navigation.governance.users',
+  groups: 'navigation.governance.groups',
+  organizations: 'navigation.governance.organizations',
+  modules: 'navigation.governance.modules',
+  permissions: 'navigation.governance.permissions',
+  roles: 'navigation.governance.roles',
+  grants: 'navigation.governance.grants',
+  policies: 'navigation.governance.policies',
+  'audit-log': 'navigation.governance.audit_log',
+  'data-portability': 'navigation.governance.data_portability',
+  compliance: 'navigation.governance.compliance',
+};
+
 function governanceLoader(sourcePath) {
   if (sourcePath === 'modules/users/pages/admin/UsersView.vue') {
     return () => import('../users/pages/admin/UsersView.vue');
@@ -37,6 +51,7 @@ export default {
     group: 'governance',
     to: `/admin/governance/${slug}`,
     label,
+    label_key: governanceLabelKeys[slug] || '',
     order: (index + 1) * 10,
     roles: ['admin'],
   })),

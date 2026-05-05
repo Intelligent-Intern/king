@@ -8,6 +8,7 @@ export default {
     {
       key: 'personal.theme',
       label: 'Theme',
+      label_key: 'settings.theme',
       roles: ['admin', 'user'],
       order: 30,
       source_path: 'layouts/settings/WorkspaceThemeSettings.vue',
@@ -16,6 +17,7 @@ export default {
     {
       key: 'personal.regional',
       label: 'Regional Time',
+      label_key: 'settings.regional_time',
       roles: ['admin', 'user'],
       order: 50,
     },

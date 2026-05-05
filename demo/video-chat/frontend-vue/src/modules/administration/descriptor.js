@@ -17,6 +17,7 @@ export default {
       group: 'administration',
       to: '/admin/administration/app-configuration',
       label: 'App Configuration',
+      label_key: 'navigation.administration.app_configuration',
       order: 30,
       roles: ['admin'],
     },

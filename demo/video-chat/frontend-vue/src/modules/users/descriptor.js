@@ -17,6 +17,7 @@ export default {
       group: null,
       to: '/admin/overview',
       label: 'Overview',
+      label_key: 'navigation.overview',
       order: 10,
       roles: ['admin'],
     },
@@ -25,12 +26,14 @@ export default {
     {
       key: 'personal.about',
       label: 'About Me',
+      label_key: 'settings.about',
       roles: ['admin', 'user'],
       order: 10,
     },
     {
       key: 'personal.credentials',
       label: 'Credentials + E-Mail',
+      label_key: 'settings.credentials',
       roles: ['admin', 'user'],
       order: 20,
     },
