@@ -15,6 +15,12 @@ paths=(
   "extension/tests/739-websocket-large-binary-short-poll-frame-read.php"
   "extension/tests/739-websocket-large-binary-short-poll-frame-read.sh"
   "extension/tests/739-websocket-large-binary-short-poll-frame-read.log"
+  "extension/tests/739-websocket-large-binary-short-poll-frame-read.diff"
+  "extension/tests/739-websocket-large-binary-short-poll-frame-read.exp"
+  "extension/tests/739-websocket-large-binary-short-poll-frame-read.out"
+  "extension/tests/739-websocket-large-binary-short-poll-frame-read.mem"
+  "extension/tmp-php.ini"
+  "extension/run-test-info.php"
   "llama-fork/common/common.o"
   "node_modules/.package-lock.json"
 )
