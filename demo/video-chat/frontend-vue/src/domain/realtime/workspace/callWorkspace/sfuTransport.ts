@@ -28,6 +28,7 @@ export function createSfuTransportState() {
     wlvcDroppedSourceFrameCount: 0,
     wlvcRemoteKeyframeRequestCount: 0,
     wlvcRemoteKeyframeRequestUntilMs: 0,
+    wlvcRemoteKeyframeRequestLastByKey: new Map(),
     sfuAutomaticQualityTransitionCount: 0,
     sfuAutomaticQualityTransitionLastAtMs: 0,
     sfuAutoQualityDowngradeLastAtMs: 0,

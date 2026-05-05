@@ -4,6 +4,11 @@ import {
 } from '../../sfu/recoveryReasons';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
+const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
+  'call/ice',
+  'call/media-quality-pressure',
+  'call/offer',
+]);
 
 export function createCallWorkspaceSocketHelpers({
   callbacks,
@@ -42,6 +47,7 @@ export function createCallWorkspaceSocketHelpers({
     hideLobbyJoinToast,
     mediaDebugLog,
     normalizeRoomId,
+    pruneGossipNeighborForUserId = () => false,
     redirectInvitedRouteToJoinModal,
     refreshUsersDirectory,
     refreshUsersDirectoryPresentation,
@@ -91,13 +97,14 @@ export function createCallWorkspaceSocketHelpers({
     resetPeerControlState(normalizedUserId);
     closeNativePeerConnection(normalizedUserId);
     removeSfuRemotePeersForUserId(normalizedUserId);
+    const gossipNeighborPruned = pruneGossipNeighborForUserId(normalizedUserId, 'target_not_in_room');
     const participantsChanged = removeParticipantFromSnapshot(normalizedUserId);
     delete refs.participantActivityByUserId[normalizedUserId];
     delete refs.pinnedUsers[normalizedUserId];
     delete refs.mutedUsers[normalizedUserId];
     delete refs.callParticipantRoles[normalizedUserId];
     refreshUsersDirectoryPresentation();
-    return participantsChanged;
+    return participantsChanged || gossipNeighborPruned;
   }
 
   function recoverExpectedSignalingPublishFailure({
@@ -109,8 +116,12 @@ export function createCallWorkspaceSocketHelpers({
     const normalizedError = String(signalingError || '').trim().toLowerCase();
     const targetIsKnown = Number.isInteger(normalizedTargetUserId) && normalizedTargetUserId > 0;
     const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);
+    const failedStaleTargetPruningSignal = failedMediaSecuritySignal
+      || STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
 
-    const shouldPruneTargetNotInRoom = targetIsKnown && normalizedError === 'target_not_in_room';
+    const shouldPruneTargetNotInRoom = targetIsKnown
+      && normalizedError === 'target_not_in_room'
+      && failedStaleTargetPruningSignal;
     const prunedTargetNotInRoom = shouldPruneTargetNotInRoom
       ? removeParticipantLocallyAfterHangup(normalizedTargetUserId)
       : false;
@@ -135,6 +146,15 @@ export function createCallWorkspaceSocketHelpers({
     if (targetIsKnown && normalizedError !== 'target_not_in_room') {
       scheduleNativeOfferRetryForUserId(normalizedTargetUserId, 'signaling_publish_retry');
     }
+  }
+
+  function isExpectedStaleTargetPublishFailure(code, failedCommandType, signalingError, failedTargetUserId) {
+    if (code !== 'signaling_publish_failed') return false;
+    const normalizedTargetUserId = Number(failedTargetUserId || 0);
+    if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return false;
+    if (String(signalingError || '').trim().toLowerCase() !== 'target_not_in_room') return false;
+    return mediaSecuritySignalTypes.includes(failedCommandType)
+      || STALE_TARGET_PRUNING_SIGNAL_TYPES.includes(failedCommandType);
   }
 
   function handleMediaQualityPressure(payloadBody, sender) {
@@ -406,7 +426,14 @@ export function createCallWorkspaceSocketHelpers({
       const closeReason = String(payload?.details?.close?.close_reason || payload?.details?.reason || '').trim().toLowerCase();
       const failedCommandType = String(payload?.details?.type || '').trim().toLowerCase();
       const failedTargetUserId = Number(payload?.details?.target_user_id || 0);
-      if (code === 'signaling_publish_failed') {
+      const signalingError = String(payload?.details?.error || '').trim().toLowerCase();
+      const expectedStaleTargetPublishFailure = isExpectedStaleTargetPublishFailure(
+        code,
+        failedCommandType,
+        signalingError,
+        failedTargetUserId,
+      );
+      if (code === 'signaling_publish_failed' && !expectedStaleTargetPublishFailure) {
         captureClientDiagnostic({
           category: 'realtime',
           level: 'error',
@@ -416,6 +443,21 @@ export function createCallWorkspaceSocketHelpers({
           payload: {
             failed_command_type: failedCommandType,
             failed_target_user_id: failedTargetUserId,
+            details: payload?.details || {},
+          },
+          immediate: true,
+        });
+      } else if (expectedStaleTargetPublishFailure) {
+        captureClientDiagnostic({
+          category: 'realtime',
+          level: 'warning',
+          eventType: 'realtime_signaling_stale_target_pruned',
+          code: 'target_not_in_room',
+          message: 'Realtime signaling pruned an expected stale target that is no longer in the room.',
+          payload: {
+            failed_command_type: failedCommandType,
+            failed_target_user_id: failedTargetUserId,
+            expected_stale_target_prune: true,
             details: payload?.details || {},
           },
           immediate: true,
@@ -467,7 +509,7 @@ export function createCallWorkspaceSocketHelpers({
         recoverExpectedSignalingPublishFailure({
           failedCommandType,
           failedTargetUserId,
-          signalingError: payload?.details?.error,
+          signalingError,
         });
         return;
       }

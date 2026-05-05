@@ -198,8 +198,31 @@ function videochat_gossipmesh_safe_object_key(mixed $value): string
     return $id;
 }
 
+function videochat_gossipmesh_member_has_left(array $member): bool
+{
+    foreach (['left_at', 'removed_at'] as $field) {
+        if (trim((string) ($member[$field] ?? '')) !== '') {
+            return true;
+        }
+    }
+
+    $leftStates = ['left', 'removed', 'kicked', 'banned', 'revoked', 'denied', 'expired', 'cancelled', 'canceled'];
+    foreach (['invite_state', 'state', 'membership_state'] as $field) {
+        $state = strtolower(trim((string) ($member[$field] ?? '')));
+        if (in_array($state, $leftStates, true)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 function videochat_gossipmesh_is_admitted_member(array $member): bool
 {
+    if (videochat_gossipmesh_member_has_left($member)) {
+        return false;
+    }
+
     if (($member['admitted'] ?? false) === true) {
         return true;
     }
@@ -547,6 +570,7 @@ function videochat_gossipmesh_decode_topology_health_observation(
         'peer_id' => $peerId,
         'lost_peer_id' => $lostPeerId,
         'pair_key' => $pairKey,
+        'reason' => substr(trim((string) ($payload['reason'] ?? '')), 0, VIDEOCHAT_GOSSIPMESH_TOPOLOGY_REPAIR_MAX_REASON_BYTES),
         'observed_unix_ms' => $observedMs,
         'failed_until_unix_ms' => $failedUntilMs,
     ];
@@ -647,9 +671,36 @@ function videochat_gossipmesh_recent_failed_pair_map(array $observations, ?int $
         if ($pairKey !== '') {
             $pairs[$pairKey] = true;
         }
+        if (videochat_gossipmesh_topology_repair_reason_excludes_lost_peer((string) ($observation['reason'] ?? ''))) {
+            $lostPeerId = videochat_gossipmesh_safe_id($observation['lost_peer_id'] ?? '');
+            if ($lostPeerId !== '') {
+                $pairs[videochat_gossipmesh_excluded_peer_pair_key($lostPeerId)] = true;
+            }
+        }
     }
 
     return $pairs;
+}
+
+function videochat_gossipmesh_topology_repair_reason_excludes_lost_peer(string $reason): bool
+{
+    $reason = strtolower(trim($reason));
+    return in_array($reason, [
+        'target_not_in_room',
+        'target_left_room',
+        'target_left',
+        'participant_left',
+        'peer_left',
+        'not_in_room',
+        'stale_target',
+        'stale_peer',
+    ], true);
+}
+
+function videochat_gossipmesh_excluded_peer_pair_key(string $peerId): string
+{
+    $peerId = videochat_gossipmesh_safe_id($peerId);
+    return $peerId === '' ? '' : $peerId . '|*';
 }
 
 /**
@@ -658,7 +709,14 @@ function videochat_gossipmesh_recent_failed_pair_map(array $observations, ?int $
 function videochat_gossipmesh_should_avoid_pair(string $leftPeerId, string $rightPeerId, array $avoidPairs): bool
 {
     $pairKey = videochat_gossipmesh_link_pair_key($leftPeerId, $rightPeerId);
-    return $pairKey !== '' && ($avoidPairs[$pairKey] ?? false) === true;
+    if ($pairKey !== '' && ($avoidPairs[$pairKey] ?? false) === true) {
+        return true;
+    }
+
+    $leftExcludeKey = videochat_gossipmesh_excluded_peer_pair_key($leftPeerId);
+    $rightExcludeKey = videochat_gossipmesh_excluded_peer_pair_key($rightPeerId);
+    return ($leftExcludeKey !== '' && ($avoidPairs[$leftExcludeKey] ?? false) === true)
+        || ($rightExcludeKey !== '' && ($avoidPairs[$rightExcludeKey] ?? false) === true);
 }
 
 /**
@@ -934,6 +992,10 @@ function videochat_gossipmesh_member_from_room_participant(array $participant): 
     $user = is_array($participant['user'] ?? null) ? $participant['user'] : [];
     $userId = (int) ($user['id'] ?? ($participant['user_id'] ?? 0));
     $callRole = strtolower(trim((string) ($user['call_role'] ?? ($participant['call_role'] ?? 'participant'))));
+    $inviteState = strtolower(trim((string) ($participant['invite_state'] ?? $user['invite_state'] ?? $participant['state'] ?? $user['state'] ?? 'allowed')));
+    if ($inviteState === '') {
+        $inviteState = 'allowed';
+    }
     $relayScore = match ($callRole) {
         'owner' => 100,
         'moderator' => 85,
@@ -944,7 +1006,9 @@ function videochat_gossipmesh_member_from_room_participant(array $participant): 
         'participant_id' => (string) $userId,
         'user_id' => (string) $userId,
         'display_name' => (string) ($user['display_name'] ?? ($participant['display_name'] ?? ('User ' . $userId))),
-        'invite_state' => 'allowed',
+        'invite_state' => $inviteState,
+        'left_at' => trim((string) ($participant['left_at'] ?? $user['left_at'] ?? '')),
+        'removed_at' => trim((string) ($participant['removed_at'] ?? $user['removed_at'] ?? '')),
         'relay_score' => $relayScore,
         'activity_score' => 0,
     ];
@@ -1012,6 +1076,36 @@ function videochat_gossipmesh_plan_topology(string $callId, string $roomId, arra
         throw new InvalidArgumentException('call_id and room_id are required for GossipMesh topology planning');
     }
 
+    $avoidPairs = [];
+    $excludedPeerIds = [];
+    if (is_array($options['avoid_pairs'] ?? null)) {
+        foreach ($options['avoid_pairs'] as $key => $value) {
+            if (is_string($key) && $value === true) {
+                if (preg_match('/^[A-Za-z0-9._:-]+\|[A-Za-z0-9._:-]+$/', $key) === 1) {
+                    $avoidPairs[$key] = true;
+                    continue;
+                }
+                if (preg_match('/^([A-Za-z0-9._:-]+)\|\*$/', $key, $matches) === 1) {
+                    $peerId = videochat_gossipmesh_safe_id($matches[1] ?? '');
+                    if ($peerId !== '') {
+                        $avoidPairs[videochat_gossipmesh_excluded_peer_pair_key($peerId)] = true;
+                        $excludedPeerIds[$peerId] = true;
+                    }
+                    continue;
+                }
+            }
+            if (is_array($value)) {
+                $pairKey = videochat_gossipmesh_link_pair_key(
+                    (string) ($value['peer_id'] ?? ''),
+                    (string) ($value['lost_peer_id'] ?? ($value['neighbor_id'] ?? ''))
+                );
+                if ($pairKey !== '') {
+                    $avoidPairs[$pairKey] = true;
+                }
+            }
+        }
+    }
+
     $normalizedById = [];
     $rejected = 0;
     foreach ($members as $member) {
@@ -1021,6 +1115,10 @@ function videochat_gossipmesh_plan_topology(string $callId, string $roomId, arra
         }
         $normalized = videochat_gossipmesh_normalize_member($member);
         if ($normalized === null) {
+            $rejected++;
+            continue;
+        }
+        if (($excludedPeerIds[$normalized['id']] ?? false) === true) {
             $rejected++;
             continue;
         }
@@ -1048,25 +1146,6 @@ function videochat_gossipmesh_plan_topology(string $callId, string $roomId, arra
         VIDEOCHAT_GOSSIPMESH_MIN_EXPANDER_FANOUT,
         VIDEOCHAT_GOSSIPMESH_MAX_NEIGHBORS
     );
-    $avoidPairs = [];
-    if (is_array($options['avoid_pairs'] ?? null)) {
-        foreach ($options['avoid_pairs'] as $key => $value) {
-            if (is_string($key) && $value === true && preg_match('/^[A-Za-z0-9._:-]+\|[A-Za-z0-9._:-]+$/', $key) === 1) {
-                $avoidPairs[$key] = true;
-                continue;
-            }
-            if (is_array($value)) {
-                $pairKey = videochat_gossipmesh_link_pair_key(
-                    (string) ($value['peer_id'] ?? ''),
-                    (string) ($value['lost_peer_id'] ?? ($value['neighbor_id'] ?? ''))
-                );
-                if ($pairKey !== '') {
-                    $avoidPairs[$pairKey] = true;
-                }
-            }
-        }
-    }
-
     $topology = [];
     if ($memberCount > 1) {
         $perMemberNeighbors = min($neighborLimit, $memberCount - 1);

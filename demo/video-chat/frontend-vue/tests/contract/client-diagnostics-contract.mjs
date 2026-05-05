@@ -51,10 +51,13 @@ requireContains(socketLifecycle, "eventType: 'realtime_signaling_publish_failed'
 requireContains(socketLifecycle, 'recoverExpectedSignalingPublishFailure({', 'expected signaling failures enter recovery path');
 requireContains(socketLifecycle, 'removeParticipantLocallyAfterHangup(normalizedTargetUserId)', 'target_not_in_room prunes unreachable peer locally');
 requireContains(socketLifecycle, 'const failedMediaSecuritySignal = mediaSecuritySignalTypes.includes(failedCommandType);', 'media-security publish failures enter the same unreachable-peer recovery path');
-requireContains(socketLifecycle, "const shouldPruneTargetNotInRoom = targetIsKnown && normalizedError === 'target_not_in_room';", 'media-security target_not_in_room must evict stale participants before the next key sync');
+requireContains(socketLifecycle, "&& normalizedError === 'target_not_in_room'", 'media-security target_not_in_room must evict stale participants before the next key sync');
+requireContains(socketLifecycle, '&& failedStaleTargetPruningSignal;', 'target_not_in_room pruning is limited to stale-target-safe signaling families');
 requireContains(socketLifecycle, "requestWlvcFullFrameKeyframe('media_security_target_not_in_room_pruned'", 'media-security stale-target pruning forces a fresh video keyframe');
 requireContains(socketLifecycle, "const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;", 'media-security target_not_in_room forces rekey when local pruning changed the participant set');
 requireContains(socketLifecycle, 'void sendMediaSecuritySync(shouldForceMediaSecurityRekey);', 'media-security publish failures retry through the normal sync path');
+requireContains(socketLifecycle, "eventType: 'realtime_signaling_stale_target_pruned'", 'expected stale-target pruning has a dedicated diagnostics hook');
+requireContains(socketLifecycle, "if (code === 'signaling_publish_failed' && !expectedStaleTargetPublishFailure)", 'broker failure diagnostics stay separate from expected stale-target pruning');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');
 requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunk rejection diagnostics hook');

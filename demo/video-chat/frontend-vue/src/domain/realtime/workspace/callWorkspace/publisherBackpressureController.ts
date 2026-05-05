@@ -9,6 +9,7 @@ import {
   SFU_WLVC_MOTION_DELTA_STABLE_WINDOW_MS,
 } from './runtimeConfig.ts';
 import { publisherDroppedSourceFrameDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
+import { resolveSfuReceiverCountAwareSendBudget } from '../../sfu/sendBudget.ts';
 
 export const PUBLISHER_BACKPRESSURE_ACTIONS = Object.freeze({
   CONTINUE: 'continue',
@@ -40,6 +41,8 @@ export interface PublisherBackpressureStageTelemetry {
   queueAgeMs?: number | string;
   encodeMs?: number | string;
   payloadBytes?: number | string;
+  chunkCount?: number | string;
+  receiverCount?: number | string;
   receiverRenderLatencyMs?: number | string;
   subscriberSendLatencyMs?: number | string;
   skipCount?: number | string;
@@ -76,6 +79,8 @@ export interface PublisherBackpressureDecision {
     queue_age_ms: number;
     encode_ms: number;
     payload_bytes: number;
+    chunk_count: number;
+    receiver_count: number;
     receiver_render_latency_ms: number;
     subscriber_send_latency_ms: number;
     skip_count: number;
@@ -106,6 +111,8 @@ export function decidePublisherBackpressureAction(
   const queueAgeMs = normalizedNumber(stageTelemetry.queueAgeMs);
   const encodeMs = normalizedNumber(stageTelemetry.encodeMs);
   const payloadBytes = normalizedNumber(stageTelemetry.payloadBytes);
+  const chunkCount = normalizedNumber(stageTelemetry.chunkCount, 1);
+  const receiverCount = normalizedNumber(stageTelemetry.receiverCount);
   const receiverRenderLatencyMs = normalizedNumber(stageTelemetry.receiverRenderLatencyMs);
   const subscriberSendLatencyMs = normalizedNumber(stageTelemetry.subscriberSendLatencyMs);
   const skipCount = normalizedNumber(stageTelemetry.skipCount);
@@ -131,6 +138,13 @@ export function decidePublisherBackpressureAction(
   const maxPayloadBytes = Math.max(0, normalizedNumber(config.maxPayloadBytes));
   const receiverLagPressureMs = Math.max(0, normalizedNumber(config.receiverLagPressureMs));
   const subscriberSendPressureMs = Math.max(0, normalizedNumber(config.subscriberSendPressureMs));
+  const receiverAwareBudget = resolveSfuReceiverCountAwareSendBudget({
+    baseBufferedBytes: highWaterBytes,
+    baseWireBytesPerSecond: maxPayloadBytes,
+    chunkCount,
+    receiverCount,
+    websocketBufferedAmount: bufferedAmount,
+  });
   const actions: PublisherBackpressureAction[] = [];
 
   const socketHigh = bufferedAmount >= highWaterBytes
@@ -141,6 +155,7 @@ export function decidePublisherBackpressureAction(
   const sustainedPressure = sustainedBackpressureMs >= backpressureWindowMs;
   const encodeTooSlow = maxEncodeMs > 0 && encodeMs >= maxEncodeMs;
   const payloadTooLarge = maxPayloadBytes > 0 && payloadBytes >= maxPayloadBytes;
+  const receiverFanoutTooHigh = receiverAwareBudget.receiver_count_budget_exceeded;
   const receiverLagging = receiverLagPressureMs > 0 && receiverRenderLatencyMs >= receiverLagPressureMs;
   const subscriberLagging = subscriberSendPressureMs > 0 && subscriberSendLatencyMs >= subscriberSendPressureMs;
   const budgetSendFailure = [
@@ -173,7 +188,7 @@ export function decidePublisherBackpressureAction(
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
-    if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh) {
+    if (budgetSendFailure || sendFailureCount >= sendFailureThreshold || socketHigh || receiverFanoutTooHigh) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
     if (socketCritical || serverIngressLatencyExceeded) {
@@ -206,10 +221,13 @@ export function decidePublisherBackpressureAction(
     if (receiverLagging || subscriberLagging) {
       addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
     }
-  } else if (socketHigh || encodeTooSlow || payloadTooLarge || receiverLagging || subscriberLagging) {
+  } else if (socketHigh || encodeTooSlow || payloadTooLarge || receiverFanoutTooHigh || receiverLagging || subscriberLagging) {
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PAUSE_ENCODE);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.DROP_FRAME);
     addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.REQUEST_KEYFRAME);
+    if (receiverFanoutTooHigh) {
+      addAction(actions, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT);
+    }
   }
 
   return {
@@ -221,6 +239,8 @@ export function decidePublisherBackpressureAction(
       queue_age_ms: queueAgeMs,
       encode_ms: encodeMs,
       payload_bytes: payloadBytes,
+      chunk_count: chunkCount,
+      receiver_count: receiverCount,
       receiver_render_latency_ms: receiverRenderLatencyMs,
       subscriber_send_latency_ms: subscriberSendLatencyMs,
       skip_count: skipCount,
@@ -715,6 +735,8 @@ export function createPublisherBackpressureController({
       0,
       Number(details?.bufferedAmount ?? bufferedAmount ?? 0),
     );
+    const receiverCount = Math.max(0, Number(details?.receiverCount ?? details?.receiver_count ?? getRemotePeerCount()));
+    const chunkCount = Math.max(1, Number(details?.chunkCount ?? details?.chunk_count ?? 1));
     const normalizedReason = String(details?.reason || reason || 'sfu_frame_send_failed');
     if (shouldDelayWlvcFrameForBackpressure(normalizedBuffered)) {
       handleWlvcEncodeBackpressure(normalizedBuffered, trackId);
@@ -769,6 +791,8 @@ export function createPublisherBackpressureController({
       sustainedBackpressureMs,
       queueAgeMs,
       payloadBytes: details?.payloadBytes,
+      chunkCount,
+      receiverCount,
     });
     if (decisionHasAction(decision, PUBLISHER_BACKPRESSURE_ACTIONS.PROFILE_DOWNSHIFT)) {
       if (downgradeSfuVideoQualityAfterEncodePressure(normalizedReason)) {
@@ -790,6 +814,15 @@ export function createPublisherBackpressureController({
       king_receive_latency_ms: kingReceiveLatencyMs,
       outgoing_video_quality_profile: currentProfile,
       media_runtime_path: getMediaRuntimePath(),
+      receiver_count: receiverCount,
+      chunk_count: chunkCount,
+      receiver_count_send_budget: resolveSfuReceiverCountAwareSendBudget({
+        baseBufferedBytes: sfuWlvcSendBufferHighWaterBytes,
+        baseWireBytesPerSecond: Number(details?.budgetMaxWireBytesPerSecond || details?.budget_max_wire_bytes_per_second || 0),
+        chunkCount,
+        receiverCount,
+        websocketBufferedAmount: normalizedBuffered,
+      }),
     };
     if (restartServerIngressLag) {
       if (restartSfuAfterVideoStall(restartReason, restartPayload)) {
@@ -861,7 +894,15 @@ export function createPublisherBackpressureController({
         queue_length: Math.max(0, Number(details?.queueLength || 0)),
         queue_payload_chars: Math.max(0, Number(details?.queuePayloadChars || 0)),
         active_payload_chars: Math.max(0, Number(details?.activePayloadChars || 0)),
-        chunk_count: Math.max(0, Number(details?.chunkCount || 0)),
+        chunk_count: chunkCount,
+        receiver_count: receiverCount,
+        receiver_count_send_budget: resolveSfuReceiverCountAwareSendBudget({
+          baseBufferedBytes: sfuWlvcSendBufferHighWaterBytes,
+          baseWireBytesPerSecond: Number(details?.budgetMaxWireBytesPerSecond || details?.budget_max_wire_bytes_per_second || 0),
+          chunkCount,
+          receiverCount,
+          websocketBufferedAmount: normalizedBuffered,
+        }),
         payload_chars: Math.max(0, Number(details?.payloadChars || 0)),
         payload_bytes: Math.max(0, Number(details?.payloadBytes || 0)),
         wire_payload_bytes: Math.max(0, Number(details?.wirePayloadBytes || 0)),
@@ -1025,6 +1066,35 @@ export function createPublisherBackpressureController({
   function requestWlvcFullFrameKeyframe(reason = 'sfu_remote_keyframe_request', details = {}) {
     const nowMs = Date.now();
     const normalizedReason = String(reason || 'sfu_remote_keyframe_request').trim().toLowerCase();
+    const senderUserId = Math.max(0, Number(details?.senderUserId || details?.sender_user_id || 0));
+    const publisherId = String(details?.publisher_id || details?.publisherId || '');
+    const requestKey = `${normalizedReason}:${senderUserId}:${publisherId}`;
+    if (!(state.wlvcRemoteKeyframeRequestLastByKey instanceof Map)) {
+      state.wlvcRemoteKeyframeRequestLastByKey = new Map();
+    }
+    const requestUntilMs = Number(state.wlvcRemoteKeyframeRequestUntilMs || 0);
+    const lastRequestedAtMs = Number(state.wlvcRemoteKeyframeRequestLastByKey.get(requestKey) || 0);
+    const keyframeRequestCoalesceWindowMs = Math.max(750, Math.min(2000, sfuWlvcBackpressureMinPauseMs * 2));
+    if (requestUntilMs > nowMs && lastRequestedAtMs > 0 && (nowMs - lastRequestedAtMs) < keyframeRequestCoalesceWindowMs) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'info',
+        eventType: 'sfu_remote_full_keyframe_request_coalesced',
+        code: 'sfu_remote_full_keyframe_request_coalesced',
+        message: 'Duplicate remote full-frame keyframe request was coalesced while recovery is already active.',
+        payload: {
+          reason: normalizedReason,
+          sender_user_id: senderUserId,
+          publisher_id: publisherId,
+          request_count: Number(state.wlvcRemoteKeyframeRequestCount || 0),
+          request_until_ms: requestUntilMs,
+          keyframe_request_coalesce_window_ms: keyframeRequestCoalesceWindowMs,
+          media_runtime_path: getMediaRuntimePath(),
+        },
+      });
+      return true;
+    }
+    state.wlvcRemoteKeyframeRequestLastByKey.set(requestKey, nowMs);
     state.wlvcRemoteKeyframeRequestCount = Number(state.wlvcRemoteKeyframeRequestCount || 0) + 1;
     state.wlvcRemoteKeyframeRequestUntilMs = Math.max(
       Number(state.wlvcRemoteKeyframeRequestUntilMs || 0),
@@ -1039,10 +1109,11 @@ export function createPublisherBackpressureController({
       message: 'A remote receiver requested a full-frame SFU keyframe; selective patch frames are disabled until it is sent.',
       payload: {
         reason: normalizedReason,
-        sender_user_id: Math.max(0, Number(details?.senderUserId || details?.sender_user_id || 0)),
-        publisher_id: String(details?.publisher_id || details?.publisherId || ''),
+        sender_user_id: senderUserId,
+        publisher_id: publisherId,
         request_count: state.wlvcRemoteKeyframeRequestCount,
         request_until_ms: state.wlvcRemoteKeyframeRequestUntilMs,
+        keyframe_request_coalesce_window_ms: keyframeRequestCoalesceWindowMs,
         outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
         media_runtime_path: getMediaRuntimePath(),
       },
