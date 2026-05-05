@@ -525,7 +525,7 @@ Non-goals for this sprint:
     - [x] OO `getRun` reads the persisted run snapshot.
     - [x] Procedural and OO signatures stay documented in `stubs/king.php`.
 
-15. [ ] `[backend-module-descriptor-runtime]` Add descriptor-based backend module routing to orchestrator.
+15. [x] `[backend-module-descriptor-runtime]` Add descriptor-based backend module routing to orchestrator.
 
     Scope:
     - Add backend module descriptors for non-call modules.
@@ -539,14 +539,14 @@ Non-goals for this sprint:
       backend route boundary.
 
     Done when:
-    - [ ] A descriptor can define one route-to-event-to-pipeline mapping.
-    - [ ] The backend can resolve a route descriptor without direct hard-coded
+    - [x] A descriptor can define one route-to-event-to-pipeline mapping.
+    - [x] The backend can resolve a route descriptor without direct hard-coded
       module handler imports.
-    - [ ] Submitted orchestrator run snapshots include module key, route key,
+    - [x] Submitted orchestrator run snapshots include module key, route key,
       event name, actor/session context, and correlation ID.
-    - [ ] Missing descriptor, unauthorized module, unknown tool, and missing
+    - [x] Missing descriptor, unauthorized module, unknown tool, and missing
       handler readiness fail closed with stable error codes.
-    - [ ] No call-related excluded paths are edited.
+    - [x] No call-related excluded paths are edited.
 
 16. [ ] `[module-inventory-and-boundaries]` Inventory non-call modules and shared component candidates.
 
