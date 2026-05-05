@@ -404,6 +404,8 @@ Non-goals for this sprint:
      confirmations use localization keys.
    - [x] Tenant context/admin labels and Governance CRUD status/not-available
      text use localization keys.
+   - [x] Login form labels, aria labels, submit state, and local validation
+     errors use localization keys.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
