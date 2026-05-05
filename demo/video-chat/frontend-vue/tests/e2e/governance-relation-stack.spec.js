@@ -401,6 +401,22 @@ async function expectAdminScrollOwnership(page) {
   expect(metrics.footerMoved).toBe(false);
 }
 
+async function expectRolesEmptyState(page) {
+  await page.goto('/admin/governance/roles');
+  await expect(page).toHaveURL(/\/admin\/governance\/roles$/);
+  await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder('Search roles...')).toBeVisible();
+  await expect(page.locator('select.governance-filter-select').first()).toHaveValue('all');
+  await expect(page.locator('select.governance-filter-select').nth(1)).toHaveValue('all');
+  await expect(page.getByRole('button', { name: 'Apply filters' })).toBeVisible();
+
+  const emptyState = page.locator('.governance-empty-state').filter({ visible: true }).first();
+  await expect(emptyState.getByText('No roles found')).toBeVisible();
+  await expect(emptyState.getByText('Create your first role to get started.')).toBeVisible();
+  await emptyState.getByRole('button', { name: 'Create role' }).click();
+  await expect(page.locator('.governance-modal-dialog').filter({ visible: true }).first()).toBeVisible();
+}
+
 for (const scenario of [
   { name: 'desktop', viewport: { width: 1366, height: 900 } },
   { name: 'tablet', viewport: { width: 900, height: 700 } },
@@ -491,5 +507,13 @@ for (const scenario of [
     await seedAuthenticatedAdmin(page, requestLog, { groupRows: governanceGroupRows(24) });
 
     await expectAdminScrollOwnership(page);
+  });
+
+  test(`governance roles empty state exposes create action on ${scenario.name}`, async ({ page }) => {
+    const requestLog = [];
+    await page.setViewportSize(scenario.viewport);
+    await seedAuthenticatedAdmin(page, requestLog);
+
+    await expectRolesEmptyState(page);
   });
 }
