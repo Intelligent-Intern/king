@@ -635,9 +635,12 @@ Sprint goal:
    - Extended relation-stack contracts and Playwright e2e for paged permission
      mass selection, search pagination reset, cancel/reopen behavior, and the
      resulting two-permission group relationship payload.
+   - Added desktop/mobile readonly catalog e2e coverage for Governance modules
+     and permissions, proving descriptor catalog rows render through search
+     while create/new/edit/delete controls and the actions column stay absent.
    - Remaining work depends on the recursive relation picker and backend
-     governance APIs: batch summary loading and readonly catalog e2e proof
-     beyond the existing contract coverage.
+     governance APIs: batch summary loading and explicit scroll-ownership e2e
+     proof beyond the current modal viewport checks.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -702,6 +705,11 @@ Sprint goal:
       `npm run test:contract:governance-relation-stack`,
       `npm run test:e2e:governance-relations`,
       `npm run test:contract:user-editor-relations`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
+    - Readonly catalog e2e hardening brings
+      `npm run test:e2e:governance-relations` to six desktop/mobile cases and
+      passes alongside `npm run test:contract:governance-relation-stack`,
       `node tests/contract/module-governance-catalog-contract.mjs`, and
       `npm run build`; build still reports only the known chunk warning.
 

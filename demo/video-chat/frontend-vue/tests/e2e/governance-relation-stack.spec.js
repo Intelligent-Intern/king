@@ -309,6 +309,24 @@ async function createGovernanceGroupThroughNestedRelations(page, label) {
   await crudDialog.getByRole('button', { name: 'Create group' }).click();
 }
 
+async function expectReadonlyCatalogPage(page, path, title, rowText) {
+  await page.goto(path);
+  await expect(page).toHaveURL(new RegExp(`${path.replaceAll('/', '\\/')}$`));
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Create/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^New/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Edit/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Delete/i })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: 'Actions' })).toHaveCount(0);
+
+  const search = page.locator('input[type="search"]').first();
+  await expect(search).toBeVisible();
+  await search.fill(rowText);
+  await expect(page.locator('tbody tr').filter({ hasText: rowText }).first()).toBeVisible();
+  await search.fill('__missing_catalog_row__');
+  await expect(page.getByText('No entries match the current filter.')).toBeVisible();
+}
+
 for (const scenario of [
   { name: 'desktop', viewport: { width: 1366, height: 900 } },
   { name: 'mobile', viewport: { width: 390, height: 844 } },
@@ -376,5 +394,14 @@ for (const scenario of [
         key: 'workspace_settings.read',
       }),
     ]));
+  });
+
+  test(`readonly Governance catalogs expose rows without mutation controls on ${scenario.name}`, async ({ page }) => {
+    const requestLog = [];
+    await page.setViewportSize(scenario.viewport);
+    await seedAuthenticatedAdmin(page, requestLog);
+
+    await expectReadonlyCatalogPage(page, '/admin/governance/modules', 'Modules', 'governance');
+    await expectReadonlyCatalogPage(page, '/admin/governance/permissions', 'Permissions', 'governance.read');
   });
 }
