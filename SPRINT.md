@@ -418,8 +418,11 @@ Sprint goal:
      import jobs, create tenant-scoped export jobs from the existing bundle
      generator, and reject import dry-runs without a submitted bundle before a
      failed job row is persisted.
-   - Remaining work: policies and recursive permission mutations from role
-     editors.
+   - Added tenant-scoped `/api/governance/policies` CRUD with public UUIDs,
+     persisted organization/group/permission relations, and policy-sourced
+     `permission_grants` so policies feed the existing evaluator instead of
+     staying as frontend-only rows.
+   - Remaining work: recursive permission mutations from role editors.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -527,6 +530,9 @@ Sprint goal:
     - Extended Governance CRUD API and persistence contracts for backend-backed
       data portability jobs, export job creation, and import validation without
       fake failed job rows.
+    - Extended Governance CRUD API and persistence contracts for backend-backed
+      policies, relation summaries, policy-sourced evaluator grants, and grant
+      cleanup on policy deletion.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.
