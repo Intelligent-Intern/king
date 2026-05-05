@@ -12,6 +12,7 @@ import {
   DEFAULT_I18N_NAMESPACES,
   ensureI18nResources,
 } from '../modules/localization/i18nRuntime.js';
+import { applyPublicRouteLocale } from '../modules/localization/publicLocale.js';
 import {
   routeAllowsRole,
   routeAllowsSessionAccess,
@@ -22,13 +23,13 @@ const routes = [
     path: '/join/:accessId',
     name: 'call-access-join',
     component: () => import('../domain/calls/access/JoinView.vue'),
-    meta: { public: true },
+    meta: { public: true, i18nNamespaces: ['public'] },
   },
   {
     path: '/book/:calendarId',
     name: 'appointment-booking',
     component: () => import('../domain/calls/appointment/AppointmentBookingView.vue'),
-    meta: { public: true },
+    meta: { public: true, i18nNamespaces: ['public'] },
   },
   {
     path: '/call-goodbye',
@@ -160,6 +161,15 @@ router.beforeEach(async (to) => {
 
   if (loggedIn && !routeAllowsSessionAccess(to, sessionState)) {
     return defaultRouteForRole(sessionState.role);
+  }
+
+  if (!requiresAuth) {
+    const publicLocale = applyPublicRouteLocale(to);
+    await ensureI18nResources({
+      locale: publicLocale.locale,
+      namespaces: routeI18nNamespaces(to),
+      public: true,
+    });
   }
 
   if (requiresAuth && loggedIn) {
