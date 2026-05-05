@@ -8,6 +8,10 @@ import {
   sessionState,
 } from '../domain/auth/session';
 import { workspaceModuleRouteRecords } from '../modules/index.js';
+import {
+  routeAllowsRole,
+  routeAllowsSessionAccess,
+} from './routeAccess.js';
 
 const routes = [
   {
@@ -95,18 +99,7 @@ const router = createRouter({
   routes,
 });
 
-function allowedRolesForRoute(route) {
-  return route.matched.filter((record) => Array.isArray(record.meta?.roles) && record.meta.roles.length > 0);
-}
-
-export function routeAllowsRole(route, role) {
-  if (!role) return false;
-
-  const roleBoundRecords = allowedRolesForRoute(route);
-  if (roleBoundRecords.length === 0) return true;
-
-  return roleBoundRecords.every((record) => record.meta.roles.includes(role));
-}
+export { routeAllowsRole, routeAllowsSessionAccess };
 
 export function resolveAuthorizedRedirect(target, role, routerInstance = router) {
   const fallback = defaultRouteForRole(role);
@@ -124,7 +117,7 @@ export function resolveAuthorizedRedirect(target, role, routerInstance = router)
     return fallback;
   }
 
-  return routeAllowsRole(resolved, role) ? resolved.fullPath : fallback;
+  return routeAllowsSessionAccess(resolved, { ...sessionState, role }) ? resolved.fullPath : fallback;
 }
 
 router.beforeEach(async (to) => {
@@ -152,7 +145,7 @@ router.beforeEach(async (to) => {
     };
   }
 
-  if (loggedIn && !routeAllowsRole(to, sessionState.role)) {
+  if (loggedIn && !routeAllowsSessionAccess(to, sessionState)) {
     return defaultRouteForRole(sessionState.role);
   }
 
