@@ -18,6 +18,32 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0029_tenant_scoped_singletons',
             'statements' => videochat_tenant_scoped_singleton_statements(),
         ],
+        35 => [
+            'name' => '0035_permission_grant_public_metadata',
+            'statements' => videochat_permission_grant_public_metadata_statements(),
+        ],
+    ];
+}
+
+function videochat_permission_grant_public_metadata_statements(): array
+{
+    return [
+        'ALTER TABLE permission_grants ADD COLUMN public_id TEXT',
+        'ALTER TABLE permission_grants ADD COLUMN label TEXT NOT NULL DEFAULT \'\'',
+        'ALTER TABLE permission_grants ADD COLUMN description TEXT NOT NULL DEFAULT \'\'',
+        'ALTER TABLE permission_grants ADD COLUMN permission_key TEXT NOT NULL DEFAULT \'\'',
+        <<<'SQL'
+UPDATE permission_grants
+SET public_id = lower(
+    hex(randomblob(4)) || '-' ||
+    hex(randomblob(2)) || '-' ||
+    '4' || substr(hex(randomblob(2)), 2) || '-' ||
+    substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' ||
+    hex(randomblob(6))
+)
+WHERE public_id IS NULL OR public_id = ''
+SQL,
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_permission_grants_public_id ON permission_grants(public_id)',
     ];
 }
 

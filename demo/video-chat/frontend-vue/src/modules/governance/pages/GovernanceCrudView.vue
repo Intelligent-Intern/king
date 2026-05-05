@@ -534,17 +534,35 @@ function relationSelectionSnapshot() {
 }
 
 function rowSelectionSummary(row, entityKey = '') {
-  return normalizeEntitySummary(entityKey || crudDescriptor.value.entity_key || '', row);
+  const requestedEntity = String(entityKey || '').trim();
+  const sourceEntity = String(row?.entity_key || '').trim();
+  const effectiveEntity = ['subjects', 'resources'].includes(requestedEntity) && sourceEntity !== ''
+    ? sourceEntity
+    : (requestedEntity || crudDescriptor.value.entity_key || '');
+  return normalizeEntitySummary(effectiveEntity, row);
 }
 
 function openRelationNavigator(relationship) {
   const targetEntity = String(relationship?.target_entity || '').trim();
-  if (targetEntity === 'users' || isPersistedGovernanceEntity(targetEntity)) {
-    loadPersistedRowsForEntity(targetEntity);
-  }
+  loadRowsForRelationTarget(targetEntity);
   relationNavigatorRelation.value = relationship;
   relationNavigatorMaximized.value = false;
   relationNavigatorOpen.value = true;
+}
+
+function loadRowsForRelationTarget(targetEntity) {
+  const targetKey = String(targetEntity || '').trim();
+  if (targetKey === 'subjects') {
+    ['users', 'groups', 'organizations'].forEach((key) => loadPersistedRowsForEntity(key));
+    return;
+  }
+  if (targetKey === 'resources') {
+    ['groups', 'organizations'].forEach((key) => loadPersistedRowsForEntity(key));
+    return;
+  }
+  if (targetKey === 'users' || isPersistedGovernanceEntity(targetKey)) {
+    loadPersistedRowsForEntity(targetKey);
+  }
 }
 
 function closeRelationNavigator() {
