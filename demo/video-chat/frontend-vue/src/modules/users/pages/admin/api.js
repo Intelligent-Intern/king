@@ -1,5 +1,6 @@
 import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
+import { buildLocalizedApiError } from '../../../localization/apiErrorMessages.js';
 
 function requestHeaders(includeBody) {
   const token = String(sessionState.sessionToken || '').trim();
@@ -9,12 +10,6 @@ function requestHeaders(includeBody) {
     headers.authorization = `Bearer ${token}`;
   }
   return headers;
-}
-
-function extractErrorMessage(payload, fallback) {
-  const message = payload && typeof payload === 'object' ? payload?.error?.message : '';
-  if (typeof message === 'string' && message.trim() !== '') return message.trim();
-  return fallback;
 }
 
 export function normalizeAdminAvatarSrc(rawPath, avatarPlaceholder) {
@@ -62,7 +57,7 @@ export function createAdminUsersApi({ router }) {
         await router.push('/login');
         throw new Error('Session expired. Please sign in again.');
       }
-      throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
+      throw buildLocalizedApiError(payload, `Request failed (${response.status}).`, response.status);
     }
 
     if (!payload || payload.status !== 'ok') {
