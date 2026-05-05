@@ -2083,6 +2083,46 @@ namespace King {
     }
 
     /* ===========================
+     * Pipeline Orchestrator
+     * =========================== */
+    final class PipelineOrchestrator {
+        /**
+         * Execute one pipeline on the configured orchestrator backend.
+         * @param array<int,array<string,mixed>> $pipeline
+         * @param array<string,mixed>|null $execOptions
+         * @return array<string,mixed>
+         */
+        public static function run(mixed $initialData, array $pipeline, ?array $execOptions = null): array {}
+
+        /**
+         * Queue one pipeline run for the file-worker backend.
+         * @param array<int,array<string,mixed>> $pipeline
+         * @param array<string,mixed>|null $execOptions
+         * @return array<string,mixed>
+         */
+        public static function dispatch(mixed $initialData, array $pipeline, ?array $execOptions = null): array {}
+
+        /** @param array<string,mixed> $config */
+        public static function registerTool(string $toolName, array $config): bool {}
+
+        public static function registerHandler(string $toolName, callable $handler): bool {}
+
+        /** @param array<string,mixed> $config */
+        public static function configureLogging(array $config): bool {}
+
+        /** @return array<string,mixed>|false */
+        public static function workerRunNext(): array|false {}
+
+        /** @return array<string,mixed> */
+        public static function resumeRun(string $runId): array {}
+
+        /** @return array<string,mixed>|false */
+        public static function getRun(string $runId): array|false {}
+
+        public static function cancelRun(string $runId): bool {}
+    }
+
+    /* ===========================
      * IIBIN (binary serialization)
      * =========================== */
     final class IIBIN {
