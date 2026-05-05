@@ -67,6 +67,11 @@ const viewportMatrix = [
   { name: 'mobile', width: 390, height: 844 },
 ];
 
+const callShellViewports = [
+  { name: 'desktop', width: 1280, height: 820 },
+  { name: 'mobile', width: 390, height: 844 },
+];
+
 function localeDirection(locale) {
   return rtlLocales.has(String(locale || '').toLowerCase()) ? 'rtl' : 'ltr';
 }
@@ -219,6 +224,222 @@ async function seedAuthenticatedLocalizationRoutes(page, options = {}) {
   });
 }
 
+async function seedCallWorkspaceLocalizationRoutes(page, options = {}) {
+  const locale = options.locale || 'ar';
+  const callId = 'localization-shell-call';
+  const roomId = 'localization-shell-room';
+  const participantRows = [
+    {
+      user_id: 1,
+      display_name: 'Localization Admin',
+      email: 'admin@example.test',
+      call_role: 'owner',
+      invite_state: 'allowed',
+      joined_at: '2026-05-05T10:00:00.000Z',
+      connected_at: '2026-05-05T10:00:00.000Z',
+    },
+  ];
+  const call = {
+    id: callId,
+    room_id: roomId,
+    title: 'Localization Shell Call',
+    status: 'active',
+    starts_at: '2026-05-05T10:00:00.000Z',
+    ends_at: '2026-05-05T11:00:00.000Z',
+    owner: {
+      user_id: 1,
+      display_name: 'Localization Admin',
+      email: 'admin@example.test',
+    },
+    participants: participantRows,
+  };
+
+  await page.addInitScript((init) => {
+    window.localStorage.setItem('ii_videocall_v1_session', JSON.stringify({
+      sessionId: 'localization-call-shell-session',
+      sessionToken: 'localization-call-shell-session',
+      expiresAt: '2099-01-01T00:00:00Z',
+    }));
+
+    const listenersSymbol = Symbol('listeners');
+    const participants = [
+      {
+        connection_id: 'conn-localization-admin',
+        room_id: init.roomId,
+        user: {
+          id: 1,
+          display_name: 'Localization Admin',
+          role: 'admin',
+          call_role: 'owner',
+        },
+        connected_at: '2026-05-05T10:00:00.000Z',
+      },
+    ];
+
+    function snapshotPayload(reason = 'requested') {
+      return {
+        type: 'room/snapshot',
+        room_id: init.roomId,
+        participant_count: participants.length,
+        participants,
+        viewer: {
+          user_id: 1,
+          role: 'admin',
+          call_id: init.callId,
+          call_role: 'owner',
+          can_moderate: true,
+        },
+        layout: {
+          call_id: init.callId,
+          room_id: init.roomId,
+          mode: 'main_mini',
+          strategy: 'manual_pinned',
+          automation_paused: false,
+          pinned_user_ids: [],
+          selected_user_ids: [1],
+          main_user_id: 1,
+          selection: {
+            main_user_id: 1,
+            visible_user_ids: [1],
+            mini_user_ids: [],
+            pinned_user_ids: [],
+          },
+        },
+        activity: [],
+        reason,
+        time: new Date().toISOString(),
+      };
+    }
+
+    class FakeWebSocket {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSING = 2;
+      static CLOSED = 3;
+
+      constructor(url) {
+        this.url = url;
+        this.readyState = FakeWebSocket.CONNECTING;
+        this[listenersSymbol] = {};
+        setTimeout(() => {
+          this.readyState = FakeWebSocket.OPEN;
+          this.dispatch('open', {});
+          this.emit({
+            type: 'system/welcome',
+            active_room_id: init.roomId,
+            call_context: {
+              user_id: 1,
+              call_id: init.callId,
+              call_role: 'owner',
+              can_moderate: true,
+            },
+          });
+          this.emit(snapshotPayload('connected'));
+        }, 0);
+      }
+
+      addEventListener(type, callback) {
+        if (!this[listenersSymbol][type]) this[listenersSymbol][type] = [];
+        this[listenersSymbol][type].push(callback);
+      }
+
+      removeEventListener(type, callback) {
+        this[listenersSymbol][type] = (this[listenersSymbol][type] || []).filter((row) => row !== callback);
+      }
+
+      dispatch(type, event) {
+        for (const callback of this[listenersSymbol][type] || []) {
+          callback(event);
+        }
+      }
+
+      emit(payload) {
+        this.dispatch('message', { data: JSON.stringify(payload) });
+      }
+
+      send(data) {
+        const payload = JSON.parse(String(data || '{}'));
+        if (payload.type === 'room/snapshot/request') {
+          setTimeout(() => this.emit(snapshotPayload('requested')), 0);
+        }
+      }
+
+      close() {
+        this.readyState = FakeWebSocket.CLOSED;
+        this.dispatch('close', { code: 1000, reason: 'test_close' });
+      }
+    }
+
+    window.WebSocket = FakeWebSocket;
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: async () => [],
+        getUserMedia: async () => new MediaStream(),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    });
+  }, { callId, roomId });
+
+  await page.route('**/api/**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const requestedLocale = String(url.searchParams.get('locale') || locale || 'en').toLowerCase();
+
+    if (url.pathname === '/api/auth/session-state') {
+      await route.fulfill(jsonResponse(sessionEnvelope(locale)));
+      return;
+    }
+
+    if (url.pathname === '/api/localization/resources') {
+      await route.fulfill(jsonResponse({
+        status: 'ok',
+        locale: requestedLocale,
+        direction: localeDirection(requestedLocale),
+        namespaces: String(url.searchParams.get('namespaces') || '').split(',').filter(Boolean),
+        resources: requestedLocale === 'ar' ? arabicResources : {},
+        fallback_resources: {},
+        supported_locales: supportedLocales,
+      }));
+      return;
+    }
+
+    if (url.pathname === `/api/calls/resolve/${roomId}`) {
+      await route.fulfill(jsonResponse({
+        status: 'ok',
+        result: {
+          state: 'resolved',
+          resolved_as: 'call',
+          call,
+        },
+      }));
+      return;
+    }
+
+    if (url.pathname === `/api/calls/${callId}`) {
+      await route.fulfill(jsonResponse({ status: 'ok', call }));
+      return;
+    }
+
+    if (url.pathname === '/api/workspace/appearance') {
+      await route.fulfill(jsonResponse({
+        status: 'ok',
+        result: {
+          sidebar_logo_path: '/assets/orgas/kingrt/logo.svg',
+          modal_logo_path: '/assets/orgas/kingrt/logo.svg',
+          themes: [{ id: 'dark', label: 'Dark', colors: {}, is_system: true }],
+        },
+      }));
+      return;
+    }
+
+    await route.fulfill(jsonResponse({ status: 'ok', result: {} }));
+  });
+
+  return { callId, roomId };
+}
+
 async function expectNoHorizontalOverflow(page, label) {
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(hasHorizontalOverflow, `${label} should not horizontally overflow`).toBe(false);
@@ -269,5 +490,20 @@ test('admin localization shell stays within the viewport across LTR and RTL brea
     await expect(page.getByRole('heading', { name: 'الترجمة' })).toBeVisible();
     await expectNoHorizontalOverflow(page, `admin localization ${viewport.name} rtl`);
     await page.screenshot({ path: testInfo.outputPath(`admin-localization-${viewport.name}-rtl.png`), fullPage: true });
+  }
+});
+
+test('call workspace shell renders in RTL without camera permission', async ({ page }, testInfo) => {
+  const { roomId } = await seedCallWorkspaceLocalizationRoutes(page, { locale: 'ar' });
+
+  for (const viewport of callShellViewports) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto(`/workspace/call/${roomId}`);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('.workspace-stage')).toBeVisible();
+    await expect(page.locator('.user-row.self .user-name')).toHaveText('Admin');
+    await expectNoHorizontalOverflow(page, `call workspace ${viewport.name} rtl`);
+    await page.screenshot({ path: testInfo.outputPath(`call-workspace-${viewport.name}-rtl.png`), fullPage: true });
   }
 });
