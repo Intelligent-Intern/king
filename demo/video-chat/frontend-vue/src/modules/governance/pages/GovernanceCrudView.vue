@@ -127,9 +127,9 @@ const rows = computed(() => {
   return rowsByScope[scopeKey.value];
 });
 const visibleRows = computed(() => [...catalogRows.value, ...rows.value]);
-const title = computed(() => routeLabel('pageTitle', 'Governance'));
-const singularLabel = computed(() => routeLabel('entitySingular', title.value));
-const pluralLabel = computed(() => routeLabel('entityPlural', title.value));
+const title = computed(() => routeLabel('pageTitle', 'pageTitle_key', t('navigation.governance')));
+const singularLabel = computed(() => routeLabel('entitySingular', 'entitySingular_key', title.value));
+const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key', title.value));
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
   if (needle === '') return visibleRows.value;
@@ -164,7 +164,9 @@ watch(filteredRows, () => {
   }
 });
 
-function routeLabel(key, fallback) {
+function routeLabel(key, keyKey, fallback) {
+  const translationKey = typeof route.meta?.[keyKey] === 'string' ? route.meta[keyKey].trim() : '';
+  if (translationKey !== '') return t(translationKey);
   const value = typeof route.meta?.[key] === 'string' ? route.meta[key].trim() : '';
   return value || fallback;
 }
