@@ -347,7 +347,11 @@
 
   <div class="settings-modal" :hidden="!settingsState.open" role="dialog" aria-modal="true" aria-label="Workspace settings">
     <div class="settings-backdrop" @click="closeSettingsModal"></div>
-    <div class="settings-dialog" :class="{ 'is-maximized': settingsState.maximized }">
+    <div
+      class="settings-dialog"
+      :class="{ 'is-maximized': settingsState.maximized, 'rtl-mode': settingsDraftDirection === 'rtl' }"
+      :dir="settingsDraftDirection"
+    >
       <header class="settings-header">
         <div class="settings-title-wrap">
           <img :src="modalLogoSrc" alt="" />
@@ -449,7 +453,7 @@
 
       <section v-else-if="activeSettingsTile === 'personal.localization'" class="settings-panel">
         <section class="settings-section">
-          <h4>Localization</h4>
+          <h4>Language</h4>
           <div class="settings-row">
             <label class="settings-field">
               <span>Application language</span>
@@ -459,6 +463,18 @@
                 </option>
               </AppSelect>
             </label>
+            <div class="settings-field">
+              <span>Text direction</span>
+              <div class="settings-readonly-value">{{ settingsDraftDirection.toUpperCase() }}</div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section v-else-if="activeSettingsTile === 'personal.regional'" class="settings-panel">
+        <section class="settings-section">
+          <h4>Regional Time</h4>
+          <div class="settings-row">
             <label class="settings-field">
               <span>Time format</span>
               <AppSelect v-model="settingsDraft.timeFormat">
@@ -859,6 +875,7 @@ const settingsLanguageOptions = computed(() => {
     direction: language.direction === 'rtl' ? 'rtl' : localizationLanguageDirection(language.code),
   }));
 });
+const settingsDraftDirection = computed(() => localizationLanguageDirection(settingsDraft.language));
 
 const settingsAvatarPreviewSrc = computed(() => settingsDraft.avatarDataUrl || profileAvatarSrc.value);
 

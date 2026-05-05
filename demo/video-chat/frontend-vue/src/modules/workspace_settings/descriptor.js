@@ -13,6 +13,12 @@ export default {
       source_path: 'layouts/settings/WorkspaceThemeSettings.vue',
       loader: () => import('../../layouts/settings/WorkspaceThemeSettings.vue'),
     },
+    {
+      key: 'personal.regional',
+      label: 'Regional Time',
+      roles: ['admin', 'user'],
+      order: 50,
+    },
   ],
   i18n_namespaces: ['workspace_settings'],
 };
