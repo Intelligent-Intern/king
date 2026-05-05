@@ -290,12 +290,66 @@ SQL,
     return $membersByGroup;
 }
 
+function videochat_tenancy_governance_organization_summary_map(PDO $pdo, int $tenantId, array $organizationIds): array
+{
+    $ids = array_values(array_unique(array_filter(array_map('intval', $organizationIds), static fn (int $id): bool => $id > 0)));
+    if ($tenantId <= 0 || $ids === []) {
+        return [];
+    }
+
+    $placeholders = [];
+    $params = [':tenant_id' => $tenantId];
+    foreach ($ids as $index => $id) {
+        $name = ':organization_id_' . $index;
+        $placeholders[] = $name;
+        $params[$name] = $id;
+    }
+    $query = $pdo->prepare(
+        sprintf(
+            <<<'SQL'
+SELECT id, public_id, name, status, updated_at
+FROM organizations
+WHERE tenant_id = :tenant_id
+  AND id IN (%s)
+ORDER BY lower(name) ASC, id ASC
+SQL,
+            implode(', ', $placeholders)
+        )
+    );
+    $query->execute($params);
+
+    $summaries = [];
+    foreach ($query->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $organizationId = (int) ($row['id'] ?? 0);
+        $publicId = trim((string) ($row['public_id'] ?? ''));
+        if ($organizationId <= 0 || $publicId === '') {
+            continue;
+        }
+        $summaries[$organizationId] = [
+            'entity_key' => 'organizations',
+            'id' => $publicId,
+            'key' => $publicId,
+            'name' => (string) ($row['name'] ?? ''),
+            'status' => (string) ($row['status'] ?? 'active'),
+            'updatedAt' => (string) ($row['updated_at'] ?? ''),
+        ];
+    }
+
+    return $summaries;
+}
+
 function videochat_tenancy_governance_enrich_group_relationships(PDO $pdo, int $tenantId, array $row): array
 {
     $groupId = (int) ($row['database_id'] ?? ($row['id'] ?? 0));
     $members = videochat_tenancy_governance_group_member_map($pdo, $tenantId, [$groupId]);
+    $organizationId = (int) ($row['organization_database_id'] ?? 0);
+    $organizations = videochat_tenancy_governance_organization_summary_map($pdo, $tenantId, [$organizationId]);
     $row['relationships'] = [
         ...(is_array($row['relationships'] ?? null) ? $row['relationships'] : []),
+        'organization' => isset($organizations[$organizationId]) ? [$organizations[$organizationId]] : [],
         'members' => $members[$groupId] ?? [],
     ];
 
@@ -305,12 +359,16 @@ function videochat_tenancy_governance_enrich_group_relationships(PDO $pdo, int $
 function videochat_tenancy_governance_enrich_group_rows(PDO $pdo, int $tenantId, array $rows): array
 {
     $groupIds = array_map(static fn (array $row): int => (int) ($row['database_id'] ?? 0), $rows);
+    $organizationIds = array_map(static fn (array $row): int => (int) ($row['organization_database_id'] ?? 0), $rows);
     $members = videochat_tenancy_governance_group_member_map($pdo, $tenantId, $groupIds);
+    $organizations = videochat_tenancy_governance_organization_summary_map($pdo, $tenantId, $organizationIds);
 
-    return array_map(static function (array $row) use ($members): array {
+    return array_map(static function (array $row) use ($members, $organizations): array {
         $groupId = (int) ($row['database_id'] ?? 0);
+        $organizationId = (int) ($row['organization_database_id'] ?? 0);
         $row['relationships'] = [
             ...(is_array($row['relationships'] ?? null) ? $row['relationships'] : []),
+            'organization' => isset($organizations[$organizationId]) ? [$organizations[$organizationId]] : [],
             'members' => $members[$groupId] ?? [],
         ];
         return $row;

@@ -140,10 +140,23 @@ try {
     $invalidMemberGroupCount = (int) $pdo->query("SELECT COUNT(*) FROM \"groups\" WHERE name = 'Invalid Member Group'")->fetchColumn();
     videochat_governance_crud_assert($invalidMemberGroupCount === 0, 'invalid member group must not be created');
 
+    $createOrganization = $dispatch('POST', '/api/governance/organizations', $adminAuth, [
+        'name' => 'Contract Organization',
+        'status' => 'active',
+    ]);
+    $createOrganizationPayload = videochat_governance_crud_decode($createOrganization);
+    $createdOrganization = (($createOrganizationPayload['result'] ?? [])['row'] ?? null);
+    videochat_governance_crud_assert((int) ($createOrganization['status'] ?? 0) === 201, 'admin should create organization for group relation');
+    videochat_governance_crud_assert(is_array($createdOrganization), 'created organization row missing');
+    $createdOrganizationId = (string) ($createdOrganization['id'] ?? '');
+
     $createGroup = $dispatch('POST', '/api/governance/groups', $adminAuth, [
         'name' => 'Contract Group',
         'status' => 'active',
         'relationships' => [
+            'organization' => [
+                ['entity_key' => 'organizations', 'id' => $createdOrganizationId],
+            ],
             'members' => [
                 ['entity_key' => 'users', 'id' => (string) $regularUserId],
             ],
@@ -158,6 +171,10 @@ try {
     videochat_governance_crud_assert(
         (string) (((($createdGroup['relationships'] ?? [])['members'] ?? [])[0] ?? [])['id'] ?? '') === (string) $regularUserId,
         'created group response should include selected member summary'
+    );
+    videochat_governance_crud_assert(
+        (string) (((($createdGroup['relationships'] ?? [])['organization'] ?? [])[0] ?? [])['id'] ?? '') === $createdOrganizationId,
+        'created group response should include selected organization summary'
     );
     $createdGroupId = (string) ($createdGroup['id'] ?? '');
     $memberCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships INNER JOIN \"groups\" ON \"groups\".id = group_memberships.group_id WHERE \"groups\".public_id = '{$createdGroupId}' AND group_memberships.user_id = {$regularUserId} AND group_memberships.status = 'active'")->fetchColumn();
