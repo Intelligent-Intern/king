@@ -16,6 +16,10 @@ assert.match(modalSource, /target_entity: 'groups'/, 'governance groups must use
 assert.match(modalSource, /target_entity: 'user_themes'/, 'user theme must be exposed as a relation target');
 assert.match(modalSource, /relationStackShowsNestedRelations/, 'governance group selection must enable nested relation hops without exposing them on legacy user fields');
 assert.match(modalSource, /buildGovernanceCatalogRows/, 'nested group permission/module pickers must use Governance catalog rows');
+assert.match(modalSource, /createGovernanceRelationRow/, 'user group relation picker must persist missing groups from the nested stack');
+assert.match(modalSource, /GOVERNANCE_CRUD_DESCRIPTORS\[key\]/, 'user group inline creation must use the shared Governance descriptor endpoint');
+assert.match(modalSource, /canCreateGovernanceRelationRow/, 'user group inline creation must be permission-gated by the caller');
+assert.match(modalSource, /governance\.groups\.create/, 'user group inline creation must require group create permission');
 assert.match(modalSource, /props\.form\.role = value/, 'role relation selection must update the existing backend payload field');
 assert.match(modalSource, /props\.form\.governance_roles = /, 'governance role relation selection must update the backend relationship payload field');
 assert.match(modalSource, /props\.form\.governance_groups = /, 'governance group relation selection must update the backend relationship payload field');

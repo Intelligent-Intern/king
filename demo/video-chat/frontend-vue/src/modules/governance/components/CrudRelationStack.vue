@@ -43,7 +43,7 @@
         <span class="crud-relation-count">
           {{ t('governance.relation_picker.selected_count', { count: navigator.currentSelectionIds.value.length }) }}
         </span>
-        <button v-if="canCreateDraft" class="btn" type="button" @click="startCreateDraft">
+        <button v-if="canCreateDraft" class="btn" type="button" :disabled="draftSaving" @click="startCreateDraft">
           {{ t('governance.relation_picker.create') }}
         </button>
       </div>
@@ -73,7 +73,9 @@
         <p v-if="draftError" class="crud-relation-error">{{ draftError }}</p>
         <div class="crud-relation-create-actions">
           <button class="btn" type="button" @click="creatingDraft = false">{{ t('common.cancel') }}</button>
-          <button class="btn btn-cyan" type="submit">{{ t('governance.relation_picker.save_draft') }}</button>
+          <button class="btn btn-cyan" type="submit" :disabled="draftSaving">
+            {{ draftSaving ? t('common.saving') : t('governance.relation_picker.save_draft') }}
+          </button>
         </div>
       </form>
 
@@ -199,6 +201,7 @@ const navigator = useCrudRelationNavigator({
   rowProvider: (entityKey) => props.rowProvider(entityKey),
 });
 const creatingDraft = ref(false);
+const draftSaving = ref(false);
 const draftError = ref('');
 const draft = reactive({});
 
@@ -286,7 +289,8 @@ function startCreateDraft() {
   creatingDraft.value = true;
 }
 
-function submitCreateDraft() {
+async function submitCreateDraft() {
+  if (draftSaving.value) return;
   const missingField = createFields.value.find((field) => (
     field.required === true && String(draft[field.key] || '').trim() === ''
   ));
@@ -295,15 +299,22 @@ function submitCreateDraft() {
     return;
   }
 
-  const row = props.createDraft?.(
-    navigator.currentDescriptor.value?.entity_key || '',
-    Object.fromEntries(createFields.value.map((field) => [field.key, String(draft[field.key] || '').trim()])),
-  );
-  if (row) {
-    navigator.toggleRow(row);
+  draftSaving.value = true;
+  try {
+    const row = await props.createDraft?.(
+      navigator.currentDescriptor.value?.entity_key || '',
+      Object.fromEntries(createFields.value.map((field) => [field.key, String(draft[field.key] || '').trim()])),
+    );
+    if (row) {
+      navigator.toggleRow(row);
+    }
+    creatingDraft.value = false;
+    draftError.value = '';
+  } catch (error) {
+    draftError.value = error instanceof Error ? error.message : t('governance.save_failed');
+  } finally {
+    draftSaving.value = false;
   }
-  creatingDraft.value = false;
-  draftError.value = '';
 }
 
 function goBackTo(index) {

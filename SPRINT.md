@@ -355,8 +355,11 @@ Sprint goal:
    - User Management group selection now opens the real Governance group
      descriptor target, so selected groups can recurse into permission/module
      mass selection and return those child relations to the unsaved user draft.
-   - Remaining work: inline-create a missing group from the user relation
-     stack, then return the persisted group to the unsaved user draft.
+   - User Management can now create a missing Governance group directly from
+     the relation stack through the shared backend descriptor endpoint and
+     select the persisted UUID row in the same unsaved user draft.
+   - Remaining work: responsive/e2e proof for deeper nested create/select/back
+     flows across desktop and mobile modal layouts.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -599,9 +602,11 @@ Sprint goal:
    - Extended the same contracts for user -> group -> permission/module nested
      payloads; frontend build and relation contracts pass, while the PHP
      contract remains blocked locally by missing `pdo_sqlite`.
+   - Extended relation-stack and user-editor contracts for persisted async
+     inline group creation from User Management instead of fake local drafts.
    - Remaining work depends on the recursive relation picker and backend
-     governance APIs: inline group creation, batch summary loading, and
-     responsive/e2e modal stack proof.
+     governance APIs: batch summary loading and responsive/e2e modal stack
+     proof.
 
 11. [ ] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
@@ -646,6 +651,10 @@ Sprint goal:
       relation contract passes, and `npm run build` passes; the admin-user PHP
       contract still cannot execute locally because this PHP runtime lacks
       `pdo_sqlite`.
+    - Persisted inline group creation from User Management passes
+      user-editor, relation-stack, and governance persistence contracts plus
+      `npm run build`. Build still only reports the known large
+      `CallWorkspaceView` chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
