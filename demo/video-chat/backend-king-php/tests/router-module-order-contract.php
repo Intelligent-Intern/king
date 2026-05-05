@@ -31,6 +31,7 @@ try {
         'marketplace',
         'tenancy',
         'backend_modules',
+        'localization',
         'users',
         'workspace_administration',
         'invites',

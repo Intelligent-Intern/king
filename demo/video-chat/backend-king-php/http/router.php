@@ -9,6 +9,7 @@ require_once __DIR__ . '/module_operations.php';
 require_once __DIR__ . '/module_marketplace.php';
 require_once __DIR__ . '/module_tenancy.php';
 require_once __DIR__ . '/module_backend_modules.php';
+require_once __DIR__ . '/module_localization.php';
 require_once __DIR__ . '/module_users.php';
 require_once __DIR__ . '/module_workspace_administration.php';
 require_once __DIR__ . '/module_invites.php';
@@ -29,6 +30,7 @@ function videochat_dispatch_route_module_order(): array
         'marketplace',
         'tenancy',
         'backend_modules',
+        'localization',
         'users',
         'workspace_administration',
         'invites',
@@ -236,6 +238,17 @@ function videochat_dispatch_request(
                 $jsonResponse,
                 $errorResponse,
                 $decodeJsonBody
+            );
+        } elseif ($moduleName === 'localization') {
+            $response = videochat_handle_localization_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
             );
         } elseif ($moduleName === 'users') {
             $response = videochat_handle_user_routes(

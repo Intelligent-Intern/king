@@ -800,5 +800,9 @@ SQL,
             'name' => '0030_localization_foundation',
             'statements' => videochat_localization_migration_statements(),
         ],
+        31 => [
+            'name' => '0031_translation_import_history',
+            'statements' => videochat_translation_import_history_migration_statements(),
+        ],
     ] + videochat_sqlite_tenant_migrations();
 }
