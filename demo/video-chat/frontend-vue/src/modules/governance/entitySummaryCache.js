@@ -53,6 +53,7 @@ export function createEntitySummaryCache() {
     const summary = normalizeEntitySummary(entityKey, row);
     if (summary.entity_key === '' || summary.id === '') return null;
     entityMap(summary.entity_key).set(summary.id, summary);
+    hydrateRelationshipSummaries(row?.relationships);
     return summary;
   }
 
@@ -63,6 +64,18 @@ export function createEntitySummaryCache() {
 
   function hydrateIncluded(included = {}) {
     return includedRows(included).map(([entityKey, row]) => upsertSummary(entityKey, row)).filter(Boolean);
+  }
+
+  function hydrateRelationshipSummaries(relationships = {}) {
+    if (!relationships || typeof relationships !== 'object') return [];
+    return Object.values(relationships).flatMap((rows) => (
+      Array.isArray(rows)
+        ? rows.map((row) => {
+          const entityKey = normalizeString(row?.entity_key);
+          return entityKey !== '' ? upsertSummary(entityKey, row) : null;
+        }).filter(Boolean)
+        : []
+    ));
   }
 
   function getSummary(entityKey, id) {
@@ -94,6 +107,14 @@ export function createEntitySummaryCache() {
     };
   }
 
+  function buildBatchSummaryRequests(requests = []) {
+    if (!Array.isArray(requests)) return [];
+    return requests.map((request) => buildBatchSummaryRequest(
+      request?.entity_key || request?.entity,
+      Array.isArray(request?.ids) ? request.ids : [],
+    )).filter((request) => request.entity_key !== '' && request.ids.length > 0);
+  }
+
   async function loadMissingSummaries(entityKey, ids = [], fetchBatch) {
     const request = buildBatchSummaryRequest(entityKey, ids);
     if (request.ids.length === 0 || typeof fetchBatch !== 'function') {
@@ -105,16 +126,33 @@ export function createEntitySummaryCache() {
     return getSummaries(entityKey, ids);
   }
 
+  async function loadMissingSummaryRequests(requests = [], fetchBatch) {
+    const missingRequests = buildBatchSummaryRequests(requests);
+    if (missingRequests.length > 0 && typeof fetchBatch === 'function') {
+      const payload = await fetchBatch({ requests: missingRequests });
+      hydrateIncluded(payload?.included || payload?.result?.included || payload);
+    }
+
+    return Object.fromEntries((Array.isArray(requests) ? requests : []).map((request) => {
+      const entityKey = normalizeString(request?.entity_key || request?.entity);
+      const ids = Array.isArray(request?.ids) ? request.ids : [];
+      return [entityKey, getSummaries(entityKey, ids)];
+    }).filter(([entityKey]) => entityKey !== ''));
+  }
+
   return {
     upsertSummary,
     upsertRows,
     hydrateIncluded,
+    hydrateRelationshipSummaries,
     getSummary,
     removeSummary,
     getSummaries,
     rows,
     missingIds,
     buildBatchSummaryRequest,
+    buildBatchSummaryRequests,
     loadMissingSummaries,
+    loadMissingSummaryRequests,
   };
 }
