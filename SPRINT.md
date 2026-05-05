@@ -451,6 +451,10 @@ Non-goals for this sprint:
    - [x] Admin call management template text, filters, enter-call controls,
      compose modal labels, cancel/delete modal labels, and compose controller
      validation/notices now use localization keys.
+   - [x] User call dashboard template text, enter-call controls, invite modal,
+     compose modal labels, and dashboard compose/invite/admission messages now
+     use localization keys. The translation-key coverage contract now also
+     scans explicitly included `.template.html` files.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
