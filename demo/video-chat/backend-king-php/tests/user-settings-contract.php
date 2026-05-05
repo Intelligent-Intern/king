@@ -66,6 +66,9 @@ SQL
 
     $initialSettings = videochat_fetch_user_settings($pdo, $userId);
     videochat_user_settings_assert(is_array($initialSettings), 'initial settings lookup should succeed');
+    videochat_user_settings_assert((string) ($initialSettings['locale'] ?? '') === 'en', 'initial locale should default to en');
+    videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
+    videochat_user_settings_assert(count($initialSettings['supported_locales'] ?? []) >= 28, 'supported locale metadata missing');
 
     $invalidEmptyPayload = videochat_update_user_settings($pdo, $userId, []);
     videochat_user_settings_assert($invalidEmptyPayload['ok'] === false, 'empty settings update should fail');
@@ -79,6 +82,7 @@ SQL
         'time_format' => '99h',
         'date_format' => 'unknown',
         'theme' => '',
+        'locale' => 'xx',
     ]);
     videochat_user_settings_assert($invalidValues['ok'] === false, 'invalid settings update should fail');
     videochat_user_settings_assert($invalidValues['reason'] === 'validation_failed', 'invalid settings update reason mismatch');
@@ -93,6 +97,10 @@ SQL
     videochat_user_settings_assert(
         (string) ($invalidValues['errors']['theme'] ?? '') === 'required_theme',
         'invalid theme error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidValues['errors']['locale'] ?? '') === 'must_be_supported_locale',
+        'invalid locale error mismatch'
     );
 
     $unknownFieldPayload = videochat_update_user_settings($pdo, $userId, [
@@ -110,6 +118,7 @@ SQL
         'time_format' => '12h',
         'date_format' => 'ymd_dash',
         'theme' => 'light',
+        'locale' => 'ar',
         'avatar_path' => '/avatars/call-user-updated.png',
     ]);
     videochat_user_settings_assert($validUpdate['ok'] === true, 'valid settings update should succeed');
@@ -129,6 +138,14 @@ SQL
     videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['theme'] ?? '') === 'light',
         'updated theme mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['locale'] ?? '') === 'ar',
+        'updated locale mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['direction'] ?? '') === 'rtl',
+        'updated locale direction mismatch'
     );
     videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',
@@ -160,6 +177,18 @@ SQL
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['theme'] ?? '') === 'light',
         'reauth theme should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['locale'] ?? '') === 'ar',
+        'reauth locale should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['direction'] ?? '') === 'rtl',
+        'reauth direction should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        count((array) (($reauth['user'] ?? [])['supported_locales'] ?? [])) >= 28,
+        'reauth should include supported locale metadata'
     );
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',

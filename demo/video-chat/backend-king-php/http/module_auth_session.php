@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/users/user_emails.php';
 require_once __DIR__ . '/../support/tenant_context.php';
+require_once __DIR__ . '/../support/localization.php';
 
 function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
 {
@@ -85,6 +86,7 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.locale,
     users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url,
@@ -190,6 +192,7 @@ SQL
             $sessionInsert->execute($sessionParams);
 
             $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+            $localization = videochat_localization_payload($pdo, $user['locale'] ?? null);
 
             return $jsonResponse(200, [
                 'status' => 'ok',
@@ -211,6 +214,9 @@ SQL
                     'time_format' => (string) ($user['time_format'] ?? '24h'),
                     'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                     'theme' => (string) ($user['theme'] ?? 'dark'),
+                    'locale' => (string) ($localization['locale'] ?? 'en'),
+                    'direction' => (string) ($localization['direction'] ?? 'ltr'),
+                    'supported_locales' => is_array($localization['supported_locales'] ?? null) ? $localization['supported_locales'] : [],
                     'can_edit_themes' => (string) ($user['role_slug'] ?? 'user') === 'admin'
                         || ((int) ($user['theme_editor_enabled'] ?? 0)) === 1
                         || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),

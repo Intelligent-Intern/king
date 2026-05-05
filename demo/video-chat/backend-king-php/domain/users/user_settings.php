@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/localization.php';
+
 /**
  * @return array<int, string>
  */
 function videochat_allowed_user_settings_patch_fields(): array
 {
-    return ['display_name', 'time_format', 'date_format', 'theme', 'avatar_path', 'post_logout_landing_url'];
+    return ['display_name', 'time_format', 'date_format', 'theme', 'avatar_path', 'post_logout_landing_url', 'locale'];
 }
 
 function videochat_normalize_post_logout_landing_url(mixed $value): string
@@ -82,6 +84,9 @@ function videochat_supported_user_date_formats(): array
  *   time_format: string,
  *   date_format: string,
  *   theme: string,
+ *   locale: string,
+ *   direction: string,
+ *   supported_locales: array<int, array<string, mixed>>,
  *   avatar_path: ?string,
  *   post_logout_landing_url: string
  * }|null
@@ -102,6 +107,7 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.locale,
     users.avatar_path,
     users.post_logout_landing_url,
     roles.slug AS role_slug
@@ -117,6 +123,8 @@ SQL
         return null;
     }
 
+    $localization = videochat_localization_payload($pdo, $row['locale'] ?? null);
+
     return [
         'id' => (int) ($row['id'] ?? 0),
         'email' => (string) ($row['email'] ?? ''),
@@ -126,6 +134,9 @@ SQL
         'time_format' => (string) ($row['time_format'] ?? '24h'),
         'date_format' => (string) ($row['date_format'] ?? 'dmy_dot'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
+        'locale' => (string) ($localization['locale'] ?? 'en'),
+        'direction' => (string) ($localization['direction'] ?? 'ltr'),
+        'supported_locales' => is_array($localization['supported_locales'] ?? null) ? $localization['supported_locales'] : [],
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
         'post_logout_landing_url' => is_string($row['post_logout_landing_url'] ?? null)
             ? videochat_normalize_post_logout_landing_url($row['post_logout_landing_url'])
@@ -140,7 +151,7 @@ SQL
  *   errors: array<string, string>
  * }
  */
-function videochat_validate_user_settings_patch(array $payload): array
+function videochat_validate_user_settings_patch(array $payload, ?PDO $pdo = null): array
 {
     $errors = [];
     $data = [];
@@ -190,6 +201,19 @@ function videochat_validate_user_settings_patch(array $payload): array
             $errors['theme'] = 'theme_too_long';
         } else {
             $data['theme'] = $theme;
+        }
+    }
+
+    if (array_key_exists('locale', $payload)) {
+        $locale = videochat_normalize_locale_code($payload['locale']);
+        $isSupported = $locale !== ''
+            && ($pdo instanceof PDO
+                ? videochat_locale_is_supported($pdo, $locale)
+                : videochat_locale_static_definition($locale) !== null);
+        if (!$isSupported) {
+            $errors['locale'] = 'must_be_supported_locale';
+        } else {
+            $data['locale'] = $locale;
         }
     }
 
@@ -261,7 +285,7 @@ function videochat_update_user_settings(PDO $pdo, int $userId, array $payload): 
         ];
     }
 
-    $validation = videochat_validate_user_settings_patch($payload);
+    $validation = videochat_validate_user_settings_patch($payload, $pdo);
     if (!(bool) $validation['ok']) {
         return [
             'ok' => false,
@@ -279,6 +303,7 @@ SET display_name = :display_name,
     time_format = :time_format,
     date_format = :date_format,
     theme = :theme,
+    locale = :locale,
     avatar_path = :avatar_path,
     post_logout_landing_url = :post_logout_landing_url,
     updated_at = :updated_at
@@ -290,6 +315,7 @@ SQL
         ':time_format' => array_key_exists('time_format', $data) ? (string) $data['time_format'] : (string) $existing['time_format'],
         ':date_format' => array_key_exists('date_format', $data) ? (string) $data['date_format'] : (string) $existing['date_format'],
         ':theme' => array_key_exists('theme', $data) ? (string) $data['theme'] : (string) $existing['theme'],
+        ':locale' => array_key_exists('locale', $data) ? (string) $data['locale'] : (string) ($existing['locale'] ?? 'en'),
         ':avatar_path' => array_key_exists('avatar_path', $data) ? $data['avatar_path'] : $existing['avatar_path'],
         ':post_logout_landing_url' => array_key_exists('post_logout_landing_url', $data)
             ? (string) $data['post_logout_landing_url']
@@ -313,5 +339,23 @@ SQL
         'reason' => 'updated',
         'errors' => [],
         'user' => $updated,
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_user_settings_payload(array $userSettings): array
+{
+    return [
+        'display_name' => (string) ($userSettings['display_name'] ?? ''),
+        'time_format' => (string) ($userSettings['time_format'] ?? '24h'),
+        'date_format' => (string) ($userSettings['date_format'] ?? 'dmy_dot'),
+        'theme' => (string) ($userSettings['theme'] ?? 'dark'),
+        'locale' => (string) ($userSettings['locale'] ?? 'en'),
+        'direction' => (string) ($userSettings['direction'] ?? 'ltr'),
+        'supported_locales' => is_array($userSettings['supported_locales'] ?? null) ? $userSettings['supported_locales'] : [],
+        'avatar_path' => $userSettings['avatar_path'] ?? null,
+        'post_logout_landing_url' => (string) ($userSettings['post_logout_landing_url'] ?? ''),
     ];
 }

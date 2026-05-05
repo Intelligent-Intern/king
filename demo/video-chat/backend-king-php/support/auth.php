@@ -6,6 +6,7 @@ require_once __DIR__ . '/auth_request.php';
 require_once __DIR__ . '/auth_session_cache.php';
 require_once __DIR__ . '/auth_rbac.php';
 require_once __DIR__ . '/tenant_context.php';
+require_once __DIR__ . '/localization.php';
 
 function videochat_validate_session_token(PDO $pdo, string $sessionId, ?int $nowUnix = null): array
 {
@@ -49,6 +50,7 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.locale,
     users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url AS user_post_logout_landing_url,
@@ -127,6 +129,7 @@ SQL
         ];
     }
     $tenantPayload = videochat_tenant_auth_payload($tenant);
+    $localization = videochat_localization_payload($pdo, $row['locale'] ?? null);
 
     return [
         'ok' => true,
@@ -149,6 +152,9 @@ SQL
             'time_format' => is_string($row['time_format'] ?? null) ? (string) $row['time_format'] : '24h',
             'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
             'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
+            'locale' => (string) ($localization['locale'] ?? 'en'),
+            'direction' => (string) ($localization['direction'] ?? 'ltr'),
+            'supported_locales' => is_array($localization['supported_locales'] ?? null) ? $localization['supported_locales'] : [],
             'can_edit_themes' => (string) ($row['role_slug'] ?? 'user') === 'admin'
                 || ((int) ($row['theme_editor_enabled'] ?? 0)) === 1
                 || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),
