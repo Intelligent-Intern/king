@@ -502,13 +502,20 @@ Non-goals for this sprint:
     - Keep persisted date/time formats compatible with existing user settings.
     - Ensure calendar slot labels and call times respect locale and time format.
 
+    Progress:
+    - [x] Governance, Marketplace, and Users table timestamps use the shared
+      locale-aware date-time formatter instead of hard-coded `en-GB`/`de-DE`.
+    - [x] Localization contract now covers date-time formatting examples for
+      `en`, `de`, `ar`, `fa`, and `ps`, and guards those tables against
+      pinned English/German Intl formatters.
+
     Done when:
     - [ ] User-facing `localeCompare(..., 'en')` calls are replaced with active
       locale-aware helpers.
     - [ ] Date/time formatting uses user locale plus existing time/date
       preferences.
     - [ ] Calendar and dashboard sort order remains deterministic.
-    - [ ] Contract tests cover representative LTR and RTL formatting examples,
+    - [x] Contract tests cover representative LTR and RTL formatting examples,
       including `en`, `de`, `ar`, `fa`, and `ps`.
 
 11. [ ] `[localization-contract-tests]` Add backend and frontend contracts.
