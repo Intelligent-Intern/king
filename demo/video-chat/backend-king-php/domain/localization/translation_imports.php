@@ -86,6 +86,105 @@ function videochat_translation_tenant_exists(PDO $pdo, ?int $tenantId): bool
     return (bool) $statement->fetchColumn();
 }
 
+function videochat_translation_value_placeholders(mixed $value): array
+{
+    preg_match_all('/\{([A-Za-z][A-Za-z0-9_]*)\}/', (string) $value, $matches);
+    $placeholders = array_values(array_unique(array_map('strval', $matches[1] ?? [])));
+    sort($placeholders);
+    return $placeholders;
+}
+
+function videochat_translation_scope_key(?int $tenantId, string $namespace, string $resourceKey): string
+{
+    return (string) ($tenantId ?? 0) . '|' . $namespace . '|' . $resourceKey;
+}
+
+function videochat_translation_fetch_canonical_value(PDO $pdo, ?int $tenantId, string $namespace, string $resourceKey): string
+{
+    if (!videochat_locale_table_exists($pdo, 'translation_resources')) {
+        return '';
+    }
+
+    $tenantWhere = 'tenant_id IS NULL';
+    $tenantOrder = 'id';
+    $params = [
+        ':locale' => videochat_default_locale_code(),
+        ':namespace' => $namespace,
+        ':resource_key' => $resourceKey,
+    ];
+    if (is_int($tenantId) && $tenantId > 0) {
+        $tenantWhere = '(tenant_id IS NULL OR tenant_id = :tenant_id)';
+        $tenantOrder = 'CASE WHEN tenant_id = :tenant_id THEN 0 ELSE 1 END';
+        $params[':tenant_id'] = $tenantId;
+    }
+
+    $statement = $pdo->prepare(
+        "SELECT value FROM translation_resources WHERE {$tenantWhere} AND locale = :locale AND namespace = :namespace AND resource_key = :resource_key ORDER BY {$tenantOrder} ASC LIMIT 1"
+    );
+    $statement->execute($params);
+    $value = $statement->fetchColumn();
+    return is_string($value) ? $value : '';
+}
+
+function videochat_translation_validate_placeholder_integrity(PDO $pdo, array $resources): array
+{
+    $defaultLocale = videochat_default_locale_code();
+    $canonicalByScope = [];
+    foreach ($resources as $resource) {
+        if ((string) ($resource['locale'] ?? '') !== $defaultLocale) {
+            continue;
+        }
+        $canonicalByScope[videochat_translation_scope_key(
+            is_int($resource['tenant_id'] ?? null) ? (int) $resource['tenant_id'] : null,
+            (string) ($resource['namespace'] ?? ''),
+            (string) ($resource['resource_key'] ?? '')
+        )] = (string) ($resource['value'] ?? '');
+    }
+
+    $validResources = [];
+    $errors = [];
+    foreach ($resources as $resource) {
+        $locale = (string) ($resource['locale'] ?? '');
+        if ($locale === $defaultLocale) {
+            $validResources[] = $resource;
+            continue;
+        }
+
+        $tenantId = is_int($resource['tenant_id'] ?? null) ? (int) $resource['tenant_id'] : null;
+        $namespace = (string) ($resource['namespace'] ?? '');
+        $resourceKey = (string) ($resource['resource_key'] ?? '');
+        $scopeKey = videochat_translation_scope_key($tenantId, $namespace, $resourceKey);
+        $globalScopeKey = videochat_translation_scope_key(null, $namespace, $resourceKey);
+        $canonicalValue = $canonicalByScope[$scopeKey]
+            ?? $canonicalByScope[$globalScopeKey]
+            ?? videochat_translation_fetch_canonical_value($pdo, $tenantId, $namespace, $resourceKey);
+        $requiredPlaceholders = videochat_translation_value_placeholders($canonicalValue);
+        if ($requiredPlaceholders === []) {
+            $validResources[] = $resource;
+            continue;
+        }
+
+        $present = array_flip(videochat_translation_value_placeholders($resource['value'] ?? ''));
+        $missing = array_values(array_filter(
+            $requiredPlaceholders,
+            static fn (string $placeholder): bool => !isset($present[$placeholder])
+        ));
+        if ($missing === []) {
+            $validResources[] = $resource;
+            continue;
+        }
+
+        $errors[] = videochat_translation_error(
+            (int) ($resource['row'] ?? 0),
+            'value',
+            'missing_required_placeholders',
+            'Translation value must preserve required placeholders: {' . implode('}, {', $missing) . '}.'
+        );
+    }
+
+    return ['resources' => $validResources, 'errors' => $errors];
+}
+
 /**
  * @return array{
  *   ok: bool,
@@ -212,6 +311,15 @@ function videochat_preview_translation_csv(PDO $pdo, string $csv, ?int $defaultT
         ];
     }
     fclose($handle);
+
+    if ($resources !== []) {
+        $placeholderIntegrity = videochat_translation_validate_placeholder_integrity($pdo, $resources);
+        $resources = is_array($placeholderIntegrity['resources'] ?? null) ? (array) $placeholderIntegrity['resources'] : [];
+        $placeholderErrors = is_array($placeholderIntegrity['errors'] ?? null) ? (array) $placeholderIntegrity['errors'] : [];
+        if ($placeholderErrors !== []) {
+            array_push($errors, ...$placeholderErrors);
+        }
+    }
 
     $locales = array_values(array_unique(array_map(static fn (array $row): string => (string) $row['locale'], $resources)));
     sort($locales);
