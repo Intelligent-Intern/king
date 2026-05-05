@@ -412,9 +412,9 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     if (backdrop === 'blur9') blurPx = Math.round(blurPx * 1.35);
     blurPx = Math.max(1, Math.min(12, blurPx));
 
-    let detectIntervalMs = 150;
-    if (qualityProfile === 'quality') detectIntervalMs = 110;
-    else if (qualityProfile === 'realtime') detectIntervalMs = 190;
+    let detectIntervalMs = 66;
+    if (qualityProfile === 'quality') detectIntervalMs = 50;
+    else if (qualityProfile === 'realtime') detectIntervalMs = 80;
 
     let temporalSmoothingAlpha = 0.28;
     if (qualityProfile === 'quality') temporalSmoothingAlpha = 0.22;

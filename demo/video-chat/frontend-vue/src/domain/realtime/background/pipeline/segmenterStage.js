@@ -1,86 +1,56 @@
 export function createBackgroundSegmenterStage({
-  buildInnerFeatherMask,
-  maskLayer,
-  smoothFaceBoxes,
-  getTemporalSmoothingAlpha,
-  video,
-  videoSampleLayer,
   width,
   height,
 }) {
-  let faces = [];
-  let smoothedFaces = [];
   let hasMatteMask = false;
-  let previousMaskAlpha = null;
+  let latestSourceFrame = null;
+  let latestMaskValues = null;
+  let latestMaskWidth = 0;
+  let latestMaskHeight = 0;
 
-  function update(segmentation, { preferFastMatte = false, underLoad = false, vw = width, vh = height } = {}) {
-    const nextFaces = Array.isArray(segmentation?.faces) ? segmentation.faces : faces;
-    faces = nextFaces;
-    smoothedFaces = smoothFaceBoxes(
-      smoothedFaces,
-      faces,
-      Number(getTemporalSmoothingAlpha?.() ?? 0.3),
-    );
-
-    const shouldRefreshMask = Boolean(segmentation?.matteMask)
+  function update(segmentation, { underLoad = false } = {}) {
+    const shouldRefreshMask = segmentation?.matteMaskValues instanceof Float32Array
       && (segmentation?.detectSampleMs !== null || !hasMatteMask)
       && (!underLoad || !hasMatteMask);
+    let maskUpdated = false;
 
-    if (shouldRefreshMask && segmentation?.matteMask) {
-      if (!previousMaskAlpha || previousMaskAlpha.length !== width * height) {
-        previousMaskAlpha = new Uint8ClampedArray(width * height);
-      }
-      const updatedMask = buildInnerFeatherMask(
-        maskLayer,
-        segmentation.matteMask,
-        videoSampleLayer,
-        video,
-        width,
-        height,
-        smoothedFaces.map((face) => ({
-          x: Number(face?.x || 0),
-          y: Number(face?.y || 0),
-          width: Number(face?.width || 0),
-          height: Number(face?.height || 0),
-        })),
-        vw,
-        vh,
-        previousMaskAlpha,
-        preferFastMatte || underLoad,
-      );
-      if (updatedMask) {
-        hasMatteMask = true;
-      }
+    if (shouldRefreshMask) {
+      hasMatteMask = true;
+      maskUpdated = true;
+      latestMaskValues = segmentation.matteMaskValues;
+      latestMaskWidth = Math.max(1, Math.round(Number(segmentation?.matteMaskWidth) || width));
+      latestMaskHeight = Math.max(1, Math.round(Number(segmentation?.matteMaskHeight) || height));
+      latestSourceFrame = segmentation?.sourceFrame || latestSourceFrame;
     }
 
     return {
-      faces,
       hasMatteMask,
-      smoothedFaces,
+      maskHeight: latestMaskHeight,
+      maskUpdated,
+      maskValues: latestMaskValues,
+      maskWidth: latestMaskWidth,
+      sourceFrame: latestSourceFrame,
     };
   }
 
   function reset() {
-    faces = [];
-    smoothedFaces = [];
     hasMatteMask = false;
-    previousMaskAlpha = null;
+    latestSourceFrame = null;
+    latestMaskValues = null;
+    latestMaskWidth = 0;
+    latestMaskHeight = 0;
   }
 
   return {
     getState() {
       return {
-        faces,
         hasMatteMask,
-        smoothedFaces,
+        maskHeight: latestMaskHeight,
+        maskUpdated: false,
+        maskValues: latestMaskValues,
+        maskWidth: latestMaskWidth,
+        sourceFrame: latestSourceFrame,
       };
-    },
-    getMatteMaskSnapshot() {
-      try {
-        return maskLayer.getImageData(0, 0, width, height);
-      } catch {
-        return null;
-      }
     },
     reset,
     update,

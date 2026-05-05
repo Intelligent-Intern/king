@@ -40,6 +40,7 @@ function toBackgroundReplacementImageUrl(value) {
 }
 
 function toBackgroundBackdropMode(value) {
+  if (value === 'image') return 'image';
   if (value === 'green') return 'green';
   if (value === 'blur9') return 'blur9';
   return 'blur7';
@@ -369,6 +370,10 @@ export function isCallBackgroundPresetActive(preset) {
   if (preset === 'green') {
     return mode === 'replace' && applyOutgoing && backdrop === 'green';
   }
+  if (preset === 'image') {
+    return mode === 'replace' && applyOutgoing && backdrop === 'image'
+      && String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() !== '';
+  }
   if (preset === 'light') {
     return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
   }
@@ -379,6 +384,13 @@ export function isCallBackgroundPresetActive(preset) {
 }
 
 export function applyCallBackgroundPreset(preset) {
+  if (preset === 'image') {
+    setCallBackgroundReplacementImageUrl('/assets/images/bookshelf.png');
+    setCallBackgroundBackdropMode('image');
+    setCallBackgroundFilterMode('replace');
+    setCallBackgroundApplyOutgoing(true);
+    return;
+  }
   if (preset === 'green') {
     setCallBackgroundReplacementImageUrl('');
     setCallBackgroundBackdropMode('green');

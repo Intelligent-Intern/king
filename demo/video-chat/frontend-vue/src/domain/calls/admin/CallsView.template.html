@@ -164,8 +164,16 @@
                 <p v-if="enterCallState.previewError" class="calls-inline-error">{{ enterCallState.previewError }}</p>
                 <p v-else-if="!enterCallState.previewReady" class="calls-inline-hint">Preparing preview...</p>
               </div>
+              <div class="calls-enter-pipeline-debug">
+                <BackgroundPipelineDebugPanel
+                  title="Preview pipeline"
+                  :active-preset="activeBackgroundPreset()"
+                  :debug-state="enterCallPreviewPipelineDebug"
+                  @select-preset="applyBackgroundPreset"
+                />
+              </div>
             </section>
-            
+
             <section class="calls-enter-right calls-enter-right-settings">
               <div class="call-left-settings">
                 <section class="call-left-settings-block" aria-label="Camera">
@@ -288,6 +296,7 @@
               </div>
             </section>
           </div>
+
         </div>
 
         <footer class="calls-modal-footer">
