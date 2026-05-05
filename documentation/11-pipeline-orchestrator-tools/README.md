@@ -174,6 +174,47 @@ request. The remote peer must still bind its own executable handlers locally;
 a ready peer executes the marked steps for real, and a peer without those
 handlers now fails closed explicitly instead of borrowing controller memory.
 
+## Step 3b: Use The OO Facade For Application Modules
+
+The same native orchestrator kernel is also exposed through
+`King\PipelineOrchestrator`. The OO facade is intended for descriptor-driven
+application modules and long-lived application composition. It does not change
+the durability boundary: tool definitions remain durable, executable handlers
+remain process-local, and workers or remote peers still have to bind their own
+handlers before executing marked userland steps.
+
+```php
+<?php
+
+use King\PipelineOrchestrator;
+
+PipelineOrchestrator::registerTool('normalize-lead', [
+    'module' => 'administration',
+]);
+PipelineOrchestrator::registerHandler('normalize-lead', 'normalize_lead_handler');
+
+$result = PipelineOrchestrator::run(
+    [
+        'module_key' => 'administration',
+        'event_name' => 'lead.submitted',
+        'payload' => $payload,
+    ],
+    [
+        ['tool' => 'normalize-lead'],
+    ],
+    [
+        'trace_id' => $traceId,
+    ]
+);
+```
+
+For descriptor-based backend modules, keep the HTTP route as the ingress
+contract. The route authenticates, authorizes, validates, and normalizes the
+request, then submits one backend module event to `King\PipelineOrchestrator`
+so the descriptor-selected pipeline can run. This is not a contract to turn
+every frontend click into an event stream; the accepted route command is the
+boundary.
+
 ## Step 4: Inspect The Persisted Run
 
 Finally, the example reads the stored run with
