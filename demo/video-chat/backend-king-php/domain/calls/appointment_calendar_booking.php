@@ -290,7 +290,11 @@ SQL
             'starts_at' => $startsAt,
             'ends_at' => $endsAt,
             'timezone' => (string) ($block['timezone'] ?? 'UTC'),
-        ]
+            'tenant_id' => $tenantId,
+            'guest_locale' => (string) ($data['locale'] ?? ''),
+            'owner_locale' => (string) ($owner['locale'] ?? ''),
+        ],
+        $pdo
     );
 
     return [

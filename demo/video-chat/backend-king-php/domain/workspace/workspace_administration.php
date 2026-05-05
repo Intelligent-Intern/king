@@ -716,6 +716,7 @@ function videochat_workspace_validate_public_lead_payload(array $payload, array 
             'use_case' => videochat_appointment_clean_text($payload['use_case'] ?? '', 80),
             'timing' => videochat_appointment_clean_text($payload['timing'] ?? '', 80),
             'notes' => videochat_appointment_clean_text($payload['notes'] ?? '', 500),
+            'locale' => videochat_normalize_locale_code($payload['locale'] ?? ''),
             'user_agent' => videochat_appointment_clean_text($request['headers']['user-agent'] ?? '', 300),
             'remote_addr' => videochat_appointment_clean_text($request['headers']['x-forwarded-for'] ?? ($request['remote_addr'] ?? ''), 120),
         ],
@@ -759,6 +760,17 @@ function videochat_workspace_send_public_lead_notifications(PDO $pdo, array $lea
     $recipients = videochat_workspace_normalize_email_list($settings['lead_recipients'] ?? []);
     $subjectTemplate = (string) ($settings['lead_subject_template'] ?? videochat_workspace_default_lead_subject_template());
     $bodyTemplate = (string) ($settings['lead_body_template'] ?? videochat_workspace_default_lead_body_template());
+    $templates = videochat_resolve_localized_email_templates(
+        $pdo,
+        $tenantId,
+        (string) ($lead['locale'] ?? ''),
+        'emails.public_lead.subject',
+        'emails.public_lead.body',
+        $subjectTemplate,
+        $bodyTemplate,
+        videochat_workspace_required_lead_subject_placeholders(),
+        videochat_workspace_required_lead_body_placeholders()
+    );
     $variables = [
         'name' => (string) ($lead['name'] ?? ''),
         'email' => (string) ($lead['email'] ?? ''),
@@ -771,11 +783,16 @@ function videochat_workspace_send_public_lead_notifications(PDO $pdo, array $lea
         'user_agent' => (string) ($lead['user_agent'] ?? ''),
         'remote_addr' => (string) ($lead['remote_addr'] ?? ''),
     ];
-    $subject = videochat_appointment_render_mail_template($subjectTemplate, $variables);
-    $body = videochat_appointment_render_mail_template($bodyTemplate, $variables);
+    $subject = videochat_appointment_render_mail_template((string) ($templates['subject_template'] ?? $subjectTemplate), $variables);
+    $body = videochat_appointment_render_mail_template((string) ($templates['body_template'] ?? $bodyTemplate), $variables);
     $results = [];
     foreach ($recipients as $recipient) {
-        $results[$recipient] = videochat_appointment_send_mail($settings, $recipient, $recipient, $subject, $body);
+        $results[$recipient] = [
+            ...videochat_appointment_send_mail($settings, $recipient, $recipient, $subject, $body),
+            'template_locale' => (string) ($templates['locale'] ?? ''),
+            'subject_locale' => (string) ($templates['subject_locale'] ?? ''),
+            'body_locale' => (string) ($templates['body_locale'] ?? ''),
+        ];
     }
     return $results;
 }
