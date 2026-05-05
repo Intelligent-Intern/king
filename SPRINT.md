@@ -343,9 +343,11 @@ Sprint goal:
      persists selected members into tenant-scoped `group_memberships`.
    - Governance organization user assignment now persists the same `+1`
      relation flow into tenant-scoped `organization_memberships`.
-   - Remaining work: attach nested created records to their parent draft and
-     connect module/permission/grant relation mutations to real tenant-scoped
-     backend APIs.
+   - Relation stack now applies nested selections back into the selected parent
+     row draft, so user -> group -> permissions/modules can return with child
+     relations preserved in the unsaved parent payload.
+   - Remaining work: connect module/permission/grant relation mutations to
+     real tenant-scoped backend APIs.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -535,6 +537,9 @@ Sprint goal:
     - Added `governance-relation-stack-contract.mjs` for relation stack state,
       recursive push/back behavior, mass selection, modal `+1` links, and
       Governance CRUD draft selection wiring.
+    - Extended `governance-relation-stack-contract.mjs` for nested selection
+      payloads that attach child permissions/modules to selected parent row
+      drafts.
     - Added `governance-summary-cache-contract.mjs` for normalized summary
       hydration, missing-id batch requests, and no row-render fetch loops.
     - Added `user-editor-relation-controls-contract.mjs` for backend-backed

@@ -10,6 +10,9 @@ async function source(relativePath) {
 }
 
 const rowsByEntity = {
+  groups: [
+    { id: 'group:ops', name: 'Operations', key: 'ops', status: 'active' },
+  ],
   permissions: [
     { id: 'permission:users.read', name: 'users.read', key: 'users.read', status: 'active' },
     { id: 'permission:users.update', name: 'users.update', key: 'users.update', status: 'active' },
@@ -47,6 +50,21 @@ assert.deepEqual(navigator.currentSelectionIds.value, ['module:governance'], 'si
 navigator.back();
 assert.equal(navigator.currentFrame.value.key, 'permissions', 'back must return to the parent relation frame');
 
+const nestedNavigator = useCrudRelationNavigator({
+  rowProvider: (entityKey) => rowsByEntity[entityKey] || [],
+});
+nestedNavigator.reset({ key: 'groups', target_entity: 'groups', selection_mode: 'multiple' });
+nestedNavigator.toggleRow(rowsByEntity.groups[0]);
+nestedNavigator.push({ key: 'permissions', target_entity: 'permissions', selection_mode: 'multiple' });
+nestedNavigator.toggleRow(rowsByEntity.permissions[0]);
+assert.equal(nestedNavigator.applyCurrentSelectionToParent(), true, 'nested selections must return to the selected parent frame');
+assert.equal(nestedNavigator.currentFrame.value.key, 'groups', 'nested apply must navigate back to the parent relation');
+assert.deepEqual(
+  nestedNavigator.currentSelectedRows.value[0].relationships.permissions.map((row) => row.id),
+  ['permission:users.read'],
+  'nested selections must attach to the selected parent row draft',
+);
+
 const modalSource = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 assert.match(modalSource, /\+1/, 'governance modal must expose relation links as +1 controls');
 assert.match(modalSource, /open-relation/, 'governance modal must emit relation navigation requests');
@@ -57,7 +75,8 @@ assert.match(stackSource, /AppModalShell/, 'relation stack must use the shared m
 assert.match(stackSource, /AppPagination/, 'relation stack must paginate selection rows');
 assert.match(stackSource, /createDraft/, 'relation stack must support create-in-place through a draft creator');
 assert.match(stackSource, /canCreateDraftForEntity/, 'relation stack must let callers restrict local draft creation');
-assert.match(stackSource, /navigator\.push\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
+assert.match(stackSource, /pushNestedRelation\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
+assert.match(stackSource, /applyCurrentSelectionToParent/, 'relation stack must apply nested selections back into the selected parent row');
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
 
 const viewSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
@@ -66,6 +85,7 @@ assert.match(viewSource, /relationRowsForEntity/, 'governance CRUD view must pro
 assert.match(viewSource, /relationSelections/, 'governance CRUD view must keep draft relation selections');
 assert.match(viewSource, /applyRelationSelection/, 'governance CRUD view must return selected rows into the draft');
 assert.match(viewSource, /createRelationDraft/, 'governance CRUD view must create local relation drafts from the stack');
+assert.match(viewSource, /relationSelectionSnapshot as buildRelationSelectionSnapshot/, 'governance CRUD view must preserve nested relation payloads');
 assert.doesNotMatch(viewSource, /createRelationDraft[\s\S]{0,400}users/, 'backend-backed users must not be locally drafted by the relation stack');
 
 console.log('[governance-relation-stack-contract] PASS');

@@ -144,8 +144,9 @@ import {
   isDataPortabilityActionKind,
   isDataPortabilityEntity,
 } from '../dataPortabilityUi.js';
-import { createEntitySummaryCache, normalizeEntitySummary } from '../entitySummaryCache.js';
+import { createEntitySummaryCache } from '../entitySummaryCache.js';
 import { isPersistedGovernanceEntity } from '../governanceCrudPersistenceHelpers.js';
+import { relationRowSummary, relationSelectionSnapshot as buildRelationSelectionSnapshot } from '../relationSummaryPayload.js';
 import { createGovernanceCrudPersistence } from '../useGovernanceCrudPersistence.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
@@ -583,19 +584,11 @@ function resetRelationSelections(row = null) {
 }
 
 function relationSelectionSnapshot() {
-  return Object.fromEntries(Object.entries(relationSelections).map(([key, rows]) => [
-    key,
-    Array.isArray(rows) ? rows.map((row) => rowSelectionSummary(row, row?.entity_key || '')) : [],
-  ]));
+  return buildRelationSelectionSnapshot(relationSelections, crudDescriptor.value.entity_key || '');
 }
 
 function rowSelectionSummary(row, entityKey = '') {
-  const requestedEntity = String(entityKey || '').trim();
-  const sourceEntity = String(row?.entity_key || '').trim();
-  const effectiveEntity = ['subjects', 'resources'].includes(requestedEntity) && sourceEntity !== ''
-    ? sourceEntity
-    : (requestedEntity || crudDescriptor.value.entity_key || '');
-  return normalizeEntitySummary(effectiveEntity, row);
+  return relationRowSummary(row, entityKey, crudDescriptor.value.entity_key || '');
 }
 
 function openRelationNavigator(relationship) {

@@ -117,7 +117,8 @@
             :key="nestedRelation.key"
             class="crud-relation-link"
             type="button"
-            @click="navigator.push(nestedRelation)"
+            :disabled="!canOpenNestedRelation"
+            @click="pushNestedRelation(nestedRelation)"
           >
             <strong>+1</strong>
             <span>{{ relationLabel(nestedRelation) }}</span>
@@ -137,7 +138,7 @@
     </template>
 
     <template #footer>
-      <button v-if="navigator.stack.value.length > 1" class="btn" type="button" @click="navigator.back">
+      <button v-if="navigator.stack.value.length > 1" class="btn" type="button" @click="returnToParent">
         {{ t('governance.relation_picker.back') }}
       </button>
       <button class="btn" type="button" @click="$emit('close')">{{ t('common.cancel') }}</button>
@@ -204,6 +205,7 @@ const draft = reactive({});
 const title = computed(() => t('governance.relation_picker.title', { relation: relationLabel(props.relation) }));
 const isMultiple = computed(() => navigator.currentFrame.value?.selection_mode === 'multiple');
 const nestedRelations = computed(() => (props.showNestedRelations ? navigator.currentDescriptor.value?.relationships || [] : []));
+const canOpenNestedRelation = computed(() => navigator.currentSelectionIds.value.length > 0);
 const createFields = computed(() => (navigator.currentDescriptor.value?.fields || []).filter((field) => (
   field && field.readonly !== true && field.type !== 'relation'
 )));
@@ -306,11 +308,26 @@ function submitCreateDraft() {
 
 function goBackTo(index) {
   while (navigator.stack.value.length > index + 1) {
+    returnToParent();
+  }
+}
+
+function pushNestedRelation(relation) {
+  if (!canOpenNestedRelation.value) return;
+  navigator.push(relation);
+}
+
+function returnToParent() {
+  if (!navigator.applyCurrentSelectionToParent()) {
     navigator.back();
   }
 }
 
 function applySelection() {
+  if (navigator.stack.value.length > 1) {
+    returnToParent();
+    return;
+  }
   emit('apply', {
     relation: navigator.currentFrame.value,
     selectedRows: navigator.currentSelectedRows.value,
@@ -358,6 +375,11 @@ function applySelection() {
 
 .crud-relation-link strong {
   color: var(--accent-cyan);
+}
+
+.crud-relation-link:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .crud-relation-toolbar {
