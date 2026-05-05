@@ -358,6 +358,9 @@ Sprint goal:
    - User Management can now create a missing Governance group directly from
      the relation stack through the shared backend descriptor endpoint and
      select the persisted UUID row in the same unsaved user draft.
+   - User Management filters the nested group relation stack to the supported
+     permission/module hops so unsupported organization/member/role links are
+     not shown from the user editor.
    - Remaining work: responsive/e2e proof for deeper nested create/select/back
      flows across desktop and mobile modal layouts.
 
@@ -609,6 +612,8 @@ Sprint goal:
      inline group creation from User Management instead of fake local drafts.
    - Extended summary-cache contracts for nested relationship hydration and
      multi-entity missing summary request collapse.
+   - Extended relation-stack contracts for caller-filtered nested relation
+     hops, including the User Management group -> modules/permissions limit.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: batch summary loading and responsive/e2e modal stack
      proof.
@@ -663,6 +668,8 @@ Sprint goal:
     - Summary-cache contract passes for nested relationship hydration and
       multi-entity batch requests; frontend build remains green with the known
       `CallWorkspaceView` chunk warning.
+    - Relation-stack and user-editor contracts pass for caller-filtered nested
+      relation hops; frontend build remains green with the known chunk warning.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
