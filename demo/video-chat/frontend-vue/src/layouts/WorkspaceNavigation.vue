@@ -58,6 +58,7 @@
 <script setup>
 import { computed, reactive, watch } from 'vue';
 import { RouterLink } from 'vue-router';
+import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 
 const props = defineProps({
   currentPath: {
@@ -72,50 +73,18 @@ const props = defineProps({
 
 const emit = defineEmits(['navigate']);
 const expandedGroups = reactive({});
+const moduleStore = useWorkspaceModuleStore();
 
-const adminIcon = '/assets/orgas/kingrt/icons/adminon.png';
-const gearIcon = '/assets/orgas/kingrt/icons/gear.png';
-const navigationItems = [
-  { to: '/admin/overview', label: 'Overview', icon: '/assets/orgas/kingrt/icons/users.png', roles: ['admin'] },
-  {
-    key: 'administration',
-    to: '/admin/administration',
-    label: 'Administration',
-    icon: gearIcon,
-    roles: ['admin'],
-    children: [
-      { to: '/admin/administration/marketplace', label: 'Marketplace', roles: ['admin'] },
-      { to: '/admin/administration/localization', label: 'Localization', roles: ['admin'] },
-      { to: '/admin/administration/app-configuration', label: 'App Configuration', roles: ['admin'] },
-      { to: '/admin/administration/theme-editor', label: 'Theme Editor', roles: ['admin'] },
-    ],
-  },
-  {
-    key: 'governance',
-    to: '/admin/governance',
-    label: 'Governance',
-    icon: adminIcon,
-    roles: ['admin'],
-    children: [
-      { to: '/admin/governance/users', label: 'Nutzer', roles: ['admin'] },
-      { to: '/admin/governance/groups', label: 'Gruppen', roles: ['admin'] },
-      { to: '/admin/governance/organizations', label: 'Organisationen', roles: ['admin'] },
-      { to: '/admin/governance/modules', label: 'Module', roles: ['admin'] },
-      { to: '/admin/governance/permissions', label: 'Rechte', roles: ['admin'] },
-      { to: '/admin/governance/roles', label: 'Rollen', roles: ['admin'] },
-      { to: '/admin/governance/grants', label: 'Freigaben', roles: ['admin'] },
-      { to: '/admin/governance/policies', label: 'Richtlinien', roles: ['admin'] },
-      { to: '/admin/governance/audit-log', label: 'Audit Log', roles: ['admin'] },
-      { to: '/admin/governance/data-portability', label: 'Export / Import', roles: ['admin'] },
-      { to: '/admin/governance/compliance', label: 'Compliance', roles: ['admin'] },
-    ],
-  },
+const callNavigationItems = [
   { to: '/admin/calls', label: 'Video Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['admin'] },
   { to: '/user/dashboard', label: 'My Calls', icon: '/assets/orgas/kingrt/icons/lobby.png', roles: ['user'] },
 ];
 
 const visibleItems = computed(() => (
-  navigationItems
+  [
+    ...moduleStore.navigationFor({ role: props.role }),
+    ...callNavigationItems,
+  ]
     .filter((item) => props.role && item.roles.includes(props.role))
     .map((item) => (
       item.children
