@@ -51,11 +51,18 @@ assert.deepEqual(
 
 const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8');
 const i18nRuntimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
+const appointmentApiSource = await readFile(path.join(root, 'src/domain/calls/appointment/appointmentCalendarApi.js'), 'utf8');
+const appointmentBookingModalSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentBookingModal.vue'), 'utf8');
 assert.match(routerSource, /applyPublicRouteLocale\(to\)/, 'public routes must resolve locale before rendering');
 assert.match(routerSource, /public:\s*true,\s*i18nNamespaces:\s*\['public'\]/, 'public call routes must declare public i18n namespace');
 assert.match(routerSource, /public:\s*true[\s\S]*ensureI18nResources/, 'public route guard must load translations without requiring auth');
 assert.match(i18nRuntimeSource, /options\.public === true/, 'i18n runtime must support explicit public resource loading');
 assert.match(i18nRuntimeSource, /!sessionState\.sessionToken && !publicLoad/, 'public resource loading must not use local-only fallback');
 assert.match(i18nRuntimeSource, /resourceLoadKey/, 'i18n cache must distinguish public resources from authenticated tenant resources');
+assert.match(appointmentApiSource, /new Intl\.DateTimeFormat\(locale,/, 'public slot labels must use the active locale explicitly');
+assert.doesNotMatch(appointmentApiSource, /Intl\.DateTimeFormat\(undefined/, 'public slot labels must not fall back to browser-default formatting');
+assert.match(appointmentBookingModalSource, /toLocalSlotLabel\(selectedSlot\.value,\s*\{\s*locale:\s*activeLocale\.value\s*\}/, 'selected public booking slot label must use active locale');
+assert.match(appointmentBookingModalSource, /locale:\s*activeLocale\.value/, 'public booking submit and calendar options must carry active locale');
+assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('locale',\s*locale\)/, 'FullCalendar must react to public locale changes');
 
 console.log('[public-pages-localization-contract] PASS');
