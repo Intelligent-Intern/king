@@ -289,7 +289,7 @@ Sprint goal:
      user CRUD and Governance groups, organizations, grants, audit log,
      compliance, roles, policies, and data portability.
 
-3. [ ] [governance-crud-descriptors] Replace the placeholder governance CRUD
+3. [x] [governance-crud-descriptors] Replace the placeholder governance CRUD
    logic with entity-specific CRUD descriptors for users, groups,
    organizations, roles, grants, policies, export/import jobs, compliance,
    modules, permissions, and audit log.
@@ -299,6 +299,19 @@ Sprint goal:
      descriptors.
    - Readonly entities cannot be created through the UI.
    - Row actions are icon-based, permission-gated, and localized.
+
+   Completed 2026-05-05:
+   - Added `governance/crudDescriptors.js` for users, groups, organizations,
+     modules, permissions, roles, grants, policies, audit log, data
+     portability, and compliance.
+   - Each descriptor now carries fields, table columns, allowed actions,
+     recursive relation metadata, endpoints, resource types, selection mode,
+     and row actions where mutation is valid.
+   - `GovernanceCrudView.vue` resolves its entity descriptor from the active
+     route, renders descriptor table columns and modal fields, and gates row
+     edit/delete icons through the current permission context.
+   - Modules, permissions, and audit log are readonly at CRUD-descriptor level,
+     so the generic create path stays unavailable for system catalog rows.
 
 4. [ ] [recursive-relation-picker] Implement the linked `+1` relation workflow
    for entity references and remove entity selects from governance/user CRUD.
@@ -405,6 +418,9 @@ Sprint goal:
       exposure, tenant permission aliases, readonly module/permission catalogs,
       keyed CRUD modal labels, and no per-row fetch calls in governance row
       rendering.
+    - Added `governance-crud-descriptors-contract.mjs` for entity descriptor
+      coverage, localized descriptor keys, readonly semantics, permission-bound
+      row actions, and CRUD view/modal descriptor consumption.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

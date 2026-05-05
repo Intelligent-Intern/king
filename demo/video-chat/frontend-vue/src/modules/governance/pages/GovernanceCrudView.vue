@@ -19,45 +19,47 @@
       <table class="governance-table">
         <thead>
           <tr>
-            <th>{{ t('governance.name') }}</th>
-            <th>{{ t('governance.key') }}</th>
-            <th>{{ t('governance.status') }}</th>
-            <th>{{ t('governance.description') }}</th>
-            <th>{{ t('governance.updated') }}</th>
-            <th class="governance-actions-col">{{ t('governance.actions') }}</th>
+            <th v-for="column in tableColumns" :key="column.key" :style="columnStyle(column)">
+              {{ columnLabel(column) }}
+            </th>
+            <th v-if="showActionsColumn" class="governance-actions-col">{{ t('governance.actions') }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="row in pagedRows" :key="row.id">
-            <td :data-label="t('governance.name')">
-              <div class="governance-name">{{ row.name }}</div>
-              <div class="governance-subline">{{ singularLabel }}</div>
+            <td
+              v-for="column in tableColumns"
+              :key="`${row.id}:${column.key}`"
+              :data-label="columnLabel(column)"
+              :style="columnStyle(column)"
+            >
+              <template v-if="column.cell === 'primary'">
+                <div class="governance-name">{{ rowCellValue(row, column) }}</div>
+                <div class="governance-subline">{{ singularLabel }}</div>
+              </template>
+              <span v-else-if="column.cell === 'status'" class="tag" :class="statusClass(row[column.key])">
+                {{ statusLabel(row[column.key]) }}
+              </span>
+              <template v-else-if="column.cell === 'description'">{{ rowDescription(row) }}</template>
+              <template v-else-if="column.cell === 'datetime'">{{ formatDate(row[column.key]) }}</template>
+              <template v-else>{{ rowCellValue(row, column) }}</template>
             </td>
-            <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
-            <td :data-label="t('governance.status')">
-              <span class="tag" :class="statusClass(row.status)">{{ statusLabel(row.status) }}</span>
-            </td>
-            <td :data-label="t('governance.description')">{{ rowDescription(row) }}</td>
-            <td :data-label="t('governance.updated')">{{ formatDate(row.updatedAt) }}</td>
-            <td :data-label="t('governance.actions')">
-              <span v-if="row.readonly" class="governance-readonly-label">{{ t('governance.system') }}</span>
+            <td v-if="showActionsColumn" :data-label="t('governance.actions')">
+              <span v-if="isRowReadonly(row)" class="governance-readonly-label">{{ t('governance.system') }}</span>
               <div v-else class="actions-inline">
                 <AppIconButton
-                  icon="/assets/orgas/kingrt/icons/gear.png"
-                  :title="t('governance.edit_entity', { entity: singularLabel })"
-                  @click="openEditModal(row)"
-                />
-                <AppIconButton
-                  icon="/assets/orgas/kingrt/icons/remove_user.png"
-                  :title="t('governance.delete_entity', { entity: singularLabel })"
-                  danger
-                  @click="deleteRow(row)"
+                  v-for="action in rowActions"
+                  :key="action.key"
+                  :icon="rowActionIcon(action)"
+                  :title="rowActionTitle(action)"
+                  :danger="action.danger === true"
+                  @click="handleRowAction(action, row)"
                 />
               </div>
             </td>
           </tr>
           <tr v-if="filteredRows.length === 0">
-            <td colspan="6" class="governance-empty-cell">{{ t('governance.empty_filter') }}</td>
+            <td :colspan="emptyColspan" class="governance-empty-cell">{{ t('governance.empty_filter') }}</td>
           </tr>
         </tbody>
       </table>
@@ -80,6 +82,7 @@
       :title="modalTitle"
       :submit-label="modalSubmitLabel"
       :form="form"
+      :fields="modalFields"
       :error="formError"
       :maximized="modalMaximized"
       @update:maximized="modalMaximized = $event"
@@ -101,8 +104,10 @@ import { moduleAccessContextFromSession } from '../../../http/routeAccess.js';
 import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
+import { descriptorAllowsAction, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
 import { workspaceModuleRegistry } from '../../index.js';
 import { t } from '../../localization/i18nRuntime.js';
+import { entryAllowsAccess } from '../../navigationBuilder.js';
 import { firstRouteActionByKind, routeActionLabel, routeActionsForContext } from '../../routeActions.js';
 
 const route = useRoute();
@@ -114,15 +119,10 @@ const modalOpen = ref(false);
 const modalMode = ref('create');
 const modalMaximized = ref(false);
 const formError = ref('');
-const form = reactive({
-  id: '',
-  name: '',
-  key: '',
-  description: '',
-  status: 'active',
-});
+const form = reactive({ id: '' });
 
 const scopeKey = computed(() => String(route.name || route.path));
+const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
 const catalogRows = computed(() => buildGovernanceCatalogRows(workspaceModuleRegistry, scopeKey.value));
 const rows = computed(() => {
   if (!Array.isArray(rowsByScope[scopeKey.value])) {
@@ -136,17 +136,25 @@ const singularLabel = computed(() => routeLabel('entitySingular', 'entitySingula
 const pluralLabel = computed(() => routeLabel('entityPlural', 'entityPlural_key', title.value));
 const routeActionContext = computed(() => moduleAccessContextFromSession(sessionState));
 const availableRouteActions = computed(() => routeActionsForContext(route, routeActionContext.value));
-const createAction = computed(() => firstRouteActionByKind(availableRouteActions.value, 'create'));
+const tableColumns = computed(() => crudDescriptor.value.table_columns || []);
+const modalFields = computed(() => (crudDescriptor.value.fields || []).filter((field) => (
+  field && field.readonly !== true && field.type !== 'relation'
+)));
+const rowActions = computed(() => (crudDescriptor.value.row_actions || []).filter((action) => (
+  entryAllowsAccess(action, routeActionContext.value, action.required_permissions)
+)));
+const showActionsColumn = computed(() => rowActions.value.length > 0);
+const emptyColspan = computed(() => tableColumns.value.length + (showActionsColumn.value ? 1 : 0));
+const createAction = computed(() => (
+  descriptorAllowsAction(crudDescriptor.value, 'create')
+    ? firstRouteActionByKind(availableRouteActions.value, 'create')
+    : null
+));
 const createButtonLabel = computed(() => routeActionLabel(createAction.value, t, t('governance.create')));
 const filteredRows = computed(() => {
   const needle = query.value.trim().toLowerCase();
   if (needle === '') return visibleRows.value;
-  return visibleRows.value.filter((row) => (
-    row.name.toLowerCase().includes(needle)
-    || row.key.toLowerCase().includes(needle)
-    || row.description.toLowerCase().includes(needle)
-    || row.status.toLowerCase().includes(needle)
-  ));
+  return visibleRows.value.filter((row) => rowSearchText(row).includes(needle));
 });
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
 const pagedRows = computed(() => {
@@ -197,6 +205,21 @@ function localizedDescriptionParams(params = {}) {
   return localized;
 }
 
+function columnLabel(column) {
+  const key = String(column?.label_key || '').trim();
+  return key !== '' ? t(key) : String(column?.key || '');
+}
+
+function columnStyle(column) {
+  const width = String(column?.width || '').trim();
+  return width !== '' ? { width } : {};
+}
+
+function fieldLabel(field) {
+  const key = String(field?.label_key || '').trim();
+  return key !== '' ? t(key) : String(field?.key || '');
+}
+
 function rowDescription(row) {
   const descriptionKey = typeof row?.description_key === 'string' ? row.description_key.trim() : '';
   if (descriptionKey !== '') {
@@ -206,12 +229,58 @@ function rowDescription(row) {
   return description || t('common.not_available');
 }
 
+function fieldForKey(key) {
+  return modalFields.value.find((field) => field.key === key) || null;
+}
+
+function optionLabel(field, value) {
+  if (!field || !Array.isArray(field.options)) return '';
+  const option = field.options.find((candidate) => String(candidate.value) === String(value));
+  if (!option) return '';
+  const key = String(option.label_key || '').trim();
+  return key !== '' ? t(key) : String(option.label || option.value || '');
+}
+
+function rawColumnValue(row, column) {
+  if (column?.cell === 'description') return rowDescription(row);
+  return row?.[column?.key] ?? '';
+}
+
+function rowCellValue(row, column) {
+  const value = rawColumnValue(row, column);
+  if (String(value || '').trim() === '') return t('common.not_available');
+  const enumLabel = optionLabel(fieldForKey(column?.key), value);
+  return enumLabel !== '' ? enumLabel : String(value);
+}
+
+function rowSearchText(row) {
+  const keys = crudDescriptor.value.search_fields || tableColumns.value.map((column) => column.key);
+  return keys
+    .map((key) => {
+      if (key === 'description') return rowDescription(row);
+      return row?.[key] ?? '';
+    })
+    .join(' ')
+    .toLowerCase();
+}
+
+function fieldDefaultValue(field, row = null) {
+  if (row && row[field.key] !== undefined && row[field.key] !== null) return row[field.key];
+  if (field.default !== undefined) return field.default;
+  if (field.type === 'enum' && Array.isArray(field.options) && field.options.length > 0) {
+    return field.options[0].value;
+  }
+  return '';
+}
+
 function resetForm(row = null) {
+  for (const key of Object.keys(form)) {
+    delete form[key];
+  }
   form.id = row?.id || '';
-  form.name = row?.name || '';
-  form.key = row?.key || '';
-  form.description = row?.description || '';
-  form.status = row?.status || 'active';
+  for (const field of modalFields.value) {
+    form[field.key] = fieldDefaultValue(field, row);
+  }
   formError.value = '';
 }
 
@@ -237,41 +306,77 @@ function closeModal() {
 }
 
 function submitModal() {
-  const name = form.name.trim();
-  if (name === '') {
-    formError.value = t('governance.name_required');
+  const missingField = modalFields.value.find((field) => (
+    field.required === true && String(form[field.key] || '').trim() === ''
+  ));
+  if (missingField) {
+    formError.value = t('governance.field_required', { field: fieldLabel(missingField) });
     return;
   }
 
   const now = new Date().toISOString();
+  const payload = formPayload();
   if (modalMode.value === 'edit') {
     const existing = rows.value.find((row) => row.id === form.id);
     if (existing) {
-      existing.name = name;
-      existing.key = form.key.trim();
-      existing.description = form.description.trim();
-      existing.status = normalizeStatus(form.status);
-      existing.updatedAt = now;
+      Object.assign(existing, rowFromPayload(payload, existing.id, now));
     }
   } else {
-    rows.value.unshift({
-      id: `${scopeKey.value}-${Date.now()}`,
-      name,
-      key: form.key.trim(),
-      description: form.description.trim(),
-      status: normalizeStatus(form.status),
-      updatedAt: now,
-    });
+    rows.value.unshift(rowFromPayload(payload, `${scopeKey.value}-${Date.now()}`, now));
   }
 
   closeModal();
 }
 
 function deleteRow(row) {
-  if (row.readonly) return;
+  if (isRowReadonly(row)) return;
   const index = rows.value.findIndex((candidate) => candidate.id === row.id);
   if (index >= 0) {
     rows.value.splice(index, 1);
+  }
+}
+
+function formPayload() {
+  return Object.fromEntries(modalFields.value.map((field) => {
+    const value = String(form[field.key] || '').trim();
+    if (field.key === 'status') return [field.key, normalizeStatus(value)];
+    return [field.key, value];
+  }));
+}
+
+function rowFromPayload(payload, id, updatedAt) {
+  const name = payload.name || payload.display_name || payload.email || payload.key || payload.job_type || singularLabel.value;
+  return {
+    id,
+    ...payload,
+    name,
+    key: payload.key || '',
+    description: payload.description || '',
+    status: payload.status ? normalizeStatus(payload.status) : 'active',
+    updatedAt,
+  };
+}
+
+function isRowReadonly(row) {
+  return row?.readonly === true || crudDescriptor.value.readonly === true;
+}
+
+function rowActionIcon(action) {
+  return action.icon || '/assets/orgas/kingrt/icons/gear.png';
+}
+
+function rowActionTitle(action) {
+  const key = String(action?.label_key || '').trim();
+  return key !== '' ? t(key, { entity: singularLabel.value }) : String(action?.key || '');
+}
+
+function handleRowAction(action, row) {
+  if (action.kind === 'edit') {
+    openEditModal(row);
+    return;
+  }
+  if (action.kind === 'delete') {
+    deleteRow(row);
   }
 }
 
@@ -315,31 +420,6 @@ function formatDate(value) {
   width: 100%;
   table-layout: fixed;
   margin-top: 10px;
-}
-
-.governance-table th:nth-child(1),
-.governance-table td:nth-child(1) {
-  width: 21%;
-}
-
-.governance-table th:nth-child(2),
-.governance-table td:nth-child(2) {
-  width: 17%;
-}
-
-.governance-table th:nth-child(3),
-.governance-table td:nth-child(3) {
-  width: 12%;
-}
-
-.governance-table th:nth-child(4),
-.governance-table td:nth-child(4) {
-  width: 25%;
-}
-
-.governance-table th:nth-child(5),
-.governance-table td:nth-child(5) {
-  width: 14%;
 }
 
 .governance-actions-col {
