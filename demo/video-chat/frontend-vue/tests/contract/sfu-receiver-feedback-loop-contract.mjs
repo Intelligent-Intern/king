@@ -21,6 +21,7 @@ function read(relativePath) {
 
 try {
   const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
+  const adaptiveLayers = read('src/domain/realtime/sfu/adaptiveQualityLayers.js');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
@@ -32,6 +33,7 @@ try {
   requireContains(receiverFeedback, 'maybeSendReceiverSequenceGapFeedback', 'receiver sequence gap feedback helper');
   requireContains(receiverFeedback, "'sfu_receiver_sequence_gap'", 'receiver missed sequence pressure reason');
   requireContains(receiverFeedback, 'maybeSendReceiverLayerPreference', 'receiver adaptive layer preference helper');
+  requireContains(adaptiveLayers, 'return false;', 'unchanged adaptive layer preference is not periodically resent');
   requireContains(receiverFeedback, 'receiver_render_latency_ms', 'receiver feedback includes render latency');
   requireContains(receiverFeedback, 'missing_frame_count', 'receiver feedback includes missing sequence count');
   requireContains(receiverFeedback, "requested_action: 'force_full_keyframe'", 'sequence-gap feedback explicitly asks for publisher keyframe');
@@ -46,9 +48,19 @@ try {
   requireContains(mediaStack, "type: 'call/media-quality-pressure'", 'receiver feedback uses existing quality-pressure signaling');
   requireContains(mediaStack, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'receiver feedback preserves explicit requested actions');
   requireContains(mediaStack, 'request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe', 'receiver feedback marks explicit keyframe requests');
+  assert.equal(
+    mediaStack.includes("|| requestedVideoLayer === 'primary'"),
+    false,
+    'primary layer preference must not turn into a full-keyframe recovery request',
+  );
   requireContains(recoveryReasons, "'sfu_receiver_sequence_gap'", 'sequence gaps are full-keyframe recovery reasons');
   requireContains(recoveryReasons, "'sfu_remote_video_never_started'", 'never-started video is a full-keyframe recovery reason');
   requireContains(socketLifecycle, 'shouldRequestSfuFullKeyframeForReason(sourceReason)', 'socket fallback pressure also promotes recovery reasons to full keyframes');
+  assert.equal(
+    socketLifecycle.includes('|| primaryLayerRequested'),
+    false,
+    'publisher must reserve full keyframes for explicit or real recovery reasons',
+  );
   requireContains(socketLifecycle, 'downgradeSfuVideoQualityAfterEncodePressure', 'publisher downshifts after receiver pressure');
   requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'publisher handles explicit full-keyframe receiver pressure');
   requireContains(socketLifecycle, "eventType: 'sfu_remote_quality_pressure_received'", 'publisher records receiver pressure diagnostics');

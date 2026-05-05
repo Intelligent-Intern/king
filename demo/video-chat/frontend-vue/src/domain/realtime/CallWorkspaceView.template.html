@@ -54,13 +54,13 @@
           </button>
         </header>
 
-        <article class="workspace-main-video" @dblclick.stop="toggleVideoFullscreen(primaryVideoUserId)">
+        <article class="workspace-main-video" @dblclick.stop="toggleVideoFullscreenForEvent(primaryVideoUserId, $event)">
           <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
             <article
               v-for="participant in gridVideoParticipants"
               :key="participant.userId"
               class="workspace-grid-tile"
-              @dblclick.stop="toggleVideoFullscreen(participant.userId)"
+              @dblclick.stop="toggleVideoFullscreenForEvent(participant.userId, $event)"
             >
               <div
                 :id="gridVideoSlotId(participant.userId)"
@@ -217,7 +217,7 @@
             v-for="participant in miniVideoParticipants"
             :key="participant.userId"
             class="workspace-mini-tile"
-            @dblclick.stop="toggleVideoFullscreen(participant.userId)"
+            @dblclick.stop="toggleVideoFullscreenForEvent(participant.userId, $event)"
           >
             <div
               :id="miniVideoSlotId(participant.userId)"
@@ -442,8 +442,8 @@
               <button
                 class="icon-mini-btn"
                 type="button"
-                :title="pinnedUsers[row.userId] ? 'Unpin user' : 'Pin user'"
-                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.isRoomMember"
+                :title="pinnedUsers[row.userId] ? 'Unpin locally' : 'Pin locally'"
+                :disabled="!row.isRoomMember"
                 @click="togglePinned(row.userId)"
               >
                   <img

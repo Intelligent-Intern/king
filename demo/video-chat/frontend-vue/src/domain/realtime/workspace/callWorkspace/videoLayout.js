@@ -2,6 +2,8 @@ import {
   REMOTE_RENDER_SURFACE_ROLES,
   applyRemoteVideoSurfaceRole,
 } from '../../sfu/remoteRenderScheduler';
+import { isScreenShareMediaSource, isScreenShareUserId } from '../../screenShareIdentity.js';
+import { applyScreenSharePanSurface, clearScreenSharePanSurface } from './screenSharePan';
 
 export function createCallWorkspaceVideoLayoutHelpers({
   callbacks,
@@ -122,6 +124,10 @@ export function createCallWorkspaceVideoLayoutHelpers({
       userId,
       visibleParticipantCount,
     });
+    applyScreenSharePanSurface(node, target, { userId });
+    if (!isScreenShareUserId(userId) && !isScreenShareMediaSource(node.dataset?.mediaSource)) {
+      clearScreenSharePanSurface(node);
+    }
     assignedNodes.add(node);
     if (node.parentElement !== target || target.children.length !== 1 || target.firstElementChild !== node) {
       target.replaceChildren(node);
@@ -179,6 +185,8 @@ export function createCallWorkspaceVideoLayoutHelpers({
 
     const gridSlot = document.getElementById(gridVideoSlotId(userId));
     if (mountVideoNode(gridSlot, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.GRID, userId })) return;
+
+    if (isScreenShareUserId(userId) || isScreenShareMediaSource(peer?.mediaSource || peer?.media_source)) return;
 
     const decodedFallback = document.getElementById('decoded-video-container');
     mountVideoNode(decodedFallback, node, assignedNodes, { role: REMOTE_RENDER_SURFACE_ROLES.FALLBACK, userId });

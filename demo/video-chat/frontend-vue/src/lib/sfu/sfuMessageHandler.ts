@@ -131,6 +131,7 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
           senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
           codecId: stringField(msg.codecId, msg.codec_id),
           runtimeId: stringField(msg.runtimeId, msg.runtime_id),
+          publisherMediaSource: stringField(msg.publisherMediaSource, msg.publisher_media_source),
           videoLayer: videoLayerField(msg.videoLayer, msg.video_layer),
           outgoingVideoQualityProfile: stringField(
             msg.outgoingVideoQualityProfile,

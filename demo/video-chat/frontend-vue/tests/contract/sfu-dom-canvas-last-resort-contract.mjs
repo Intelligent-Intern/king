@@ -33,7 +33,7 @@ try {
   requireContains(policySource, 'domCanvasCompatibilityReadbackIntervalMs', 'DOM fallback readback interval cap');
 
   requireContains(sourceReadback, 'resolveDomCanvasCompatibilityFrameSize(video, activeProfile, activeTrack)', 'DOM video fallback uses compatibility frame size');
-  requireContains(sourceReadback, 'resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile, resolvePublisherFramingTarget(video))', 'VideoFrame canvas fallback uses compatibility frame size with active framing target');
+  requireContains(sourceReadback, 'resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile, resolvePublisherTransportFramingTarget())', 'VideoFrame canvas fallback uses compatibility frame size with source-stable transport framing');
   requireContains(sourceReadback, 'domCanvasCompatibilityReadbackIntervalMs(activeProfile)', 'DOM canvas fallback throttles readback FPS');
   requireContains(sourceReadback, "'dom_canvas_compatibility_throttle'", 'DOM canvas fallback traces throttled skipped reads');
   requireContains(sourceReadback, 'DOM_CANVAS_COMPATIBILITY_READBACK_METHOD', 'DOM canvas fallback labels readback method');
