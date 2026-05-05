@@ -37,6 +37,28 @@ function videochat_sqlite_tenant_migrations(): array
             'name' => '0038_governance_roles',
             'statements' => videochat_governance_role_statements(),
         ],
+        39 => [
+            'name' => '0039_governance_group_roles',
+            'statements' => videochat_governance_group_role_statements(),
+        ],
+    ];
+}
+
+function videochat_governance_group_role_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS governance_group_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    group_id INTEGER NOT NULL REFERENCES "groups"(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES governance_roles(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE(group_id, role_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_governance_group_roles_tenant_group ON governance_group_roles(tenant_id, group_id)',
+        'CREATE INDEX IF NOT EXISTS idx_governance_group_roles_tenant_role ON governance_group_roles(tenant_id, role_id)',
     ];
 }
 
@@ -492,6 +514,7 @@ function videochat_tenant_owned_table_names(): array
         'governance_roles',
         'governance_role_permissions',
         'governance_role_modules',
+        'governance_group_roles',
         'governance_policies',
         'governance_policy_groups',
         'governance_policy_organizations',
