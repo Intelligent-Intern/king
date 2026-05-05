@@ -665,7 +665,7 @@ Sprint goal:
 
    Completed 2026-05-05.
 
-11. [ ] [data-portability-ui] Implement user and organization export/import
+11. [x] [data-portability-ui] Implement user and organization export/import
     UI on top of tenant export/import jobs.
 
     Done when:
@@ -685,6 +685,10 @@ Sprint goal:
       users can retrieve a completed job payload after leaving the create flow.
     - Frontend contracts and build pass; backend CRUD contract still skips in
       this local runtime because `pdo_sqlite` is not installed.
+    - Completed 2026-05-05: the UI scope is backed by explicit route actions,
+      backend-backed governance job persistence, import JSON validation before
+      POST, export result download, and the backend dry-run contract for schema,
+      tenant, and reference validation.
 
 12. [ ] [rollout-proof] Keep deployment proof and release notes current for
     the governance/admin sprint.
@@ -754,6 +758,13 @@ Sprint goal:
       the CRUD API contract. `node tests/contract/governance-crud-persistence-contract.mjs`
       passes. `governance-crud-api-contract.sh` still skips locally because
       `pdo_sqlite` is not installed for `php`.
+    - Data portability UI closeout: `npm run test:contract:governance-crud-persistence`
+      and `npm run test:contract:module-actions` pass, proving explicit
+      export/import route actions, no generic create affordance, import bundle
+      validation before POST, backend-backed job persistence, and result
+      download wiring. `npm run build` passes with the known
+      `CallWorkspaceView` chunk warning. `governance-crud-api-contract.sh`
+      still skips locally because `pdo_sqlite` is not installed for `php`.
 
 ## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
 
