@@ -433,7 +433,7 @@ onMounted(() => {
 
 .localization-errors {
   margin: 10px 0 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 
 .localization-empty-cell {
