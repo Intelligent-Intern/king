@@ -464,6 +464,10 @@ Non-goals for this sprint:
      localization keys. The compact sidebar computed state moved into
      `compactChrome.js`, so `CallWorkspaceView.vue` keeps shrinking while the
      template joins translation-key coverage.
+   - [x] Call workspace chat runtime upload errors, reconnect/offline notices,
+     paste-to-attachment notices, participant fallbacks, route join-modal
+     errors, room snapshot errors, and screen-share-ended notices now use
+     localization keys and are covered by the translation-key contract.
    - [x] Non-English fallback gaps are now explicit in a machine-readable
      fallback policy. The localization contract verifies every supported
      non-English locale and every English message namespace is either covered
