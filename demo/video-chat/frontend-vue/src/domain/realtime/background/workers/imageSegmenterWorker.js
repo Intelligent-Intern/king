@@ -1,7 +1,7 @@
 /**
  * Web Worker: MediaPipe Tasks-Vision ImageSegmenter
  *
- * Uses selfie_multiclass_256x256.tflite with CATEGORY_MASK output to produce
+ * Uses the vendored selfie segmentation model with CATEGORY_MASK output to produce
  * a foreground alpha mask. All non-background categories become alpha 1.
  *
  * Protocol:
@@ -19,12 +19,13 @@
  *   OUT { type: 'CLEANUP_DONE' }
  */
 
+const TASKS_VISION_MODULE_PATH = '/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs';
 const { ImageSegmenter, FilesetResolver } = await import(
   /* @vite-ignore */
-  '/node_modules/@mediapipe/tasks-vision/vision_bundle.mjs'
+  TASKS_VISION_MODULE_PATH
 );
 const DEFAULT_WASM_PATH = '/wasm';
-const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite';
+const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation.tflite';
 
 let segmenter = null;
 let segmenterLabels = [];
@@ -52,10 +53,15 @@ function buildWasmCandidates(inputPath) {
 function buildModelCandidates(inputPath) {
   const configured = String(inputPath || DEFAULT_MODEL_PATH);
   if (/^https?:\/\//i.test(configured) || configured.startsWith('/')) {
-    return [configured];
+    return Array.from(new Set([
+      configured,
+      DEFAULT_MODEL_PATH,
+      '/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_landscape.tflite',
+    ]));
   }
   return [
     configured,
+    `/cdn/vendor/mediapipe/selfie_segmentation/${configured.replace(/^\/+/, '')}`,
     `/cdn/vendor/mediapipe/models/${configured.replace(/^\/+/, '')}`,
   ];
 }
@@ -181,8 +187,8 @@ function categoryMaskValues(categoryMask) {
 }
 
 // vision_wasm_internal.js is a classic UMD script that sets self.ModuleFactory.
-// In a type:module worker, Vite bundles @mediapipe/tasks-vision as ESM which
-// skips this side effect. We must manually fetch+eval it in global scope before
+// In a type:module worker, the Tasks-Vision browser module skips this side
+// effect. We must manually fetch+eval it in global scope before
 // calling FilesetResolver.forVisionTasks(), otherwise MediaPipe throws
 // "ModuleFactory not set".
 // DO NOT EVER REMOVE THE FOLLOWING FUNCTION OR THE CALL TO IT, or the worker will fail to initialize with a very confusing error.
