@@ -50,5 +50,6 @@ const governanceRolesSource = await source('src/modules/users/pages/admin/govern
 assert.match(governanceRolesSource, /\/api\/governance\/roles/, 'user management must load governance role options from the backend');
 assert.match(governanceRolesSource, /\/api\/governance\/groups/, 'user management must load governance group options from the backend');
 assert.match(governanceRolesSource, /payload\.relationships = relationships/, 'governance group payloads must preserve nested relation selections');
+assert.match(governanceRolesSource, /entity_key: String\(row\?\.entity_key/, 'governance relation payloads must preserve nested entity keys');
 
 console.log('[user-editor-relation-controls-contract] PASS');

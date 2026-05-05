@@ -11,6 +11,7 @@ function titleFromKey(key) {
 
 function moduleRows(registry) {
   return registry.list().map((descriptor) => ({
+    entity_key: 'modules',
     id: `module:${descriptor.module_key}`,
     name: titleFromKey(descriptor.module_key),
     key: descriptor.module_key,
@@ -36,6 +37,7 @@ function moduleRows(registry) {
 function permissionRows(registry) {
   return registry.list().flatMap((descriptor) => (
     descriptor.permissions.map((permission) => ({
+      entity_key: 'permissions',
       id: `permission:${descriptor.module_key}:${permission}`,
       name: permission,
       key: permission,
