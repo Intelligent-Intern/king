@@ -5,10 +5,10 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
 const callWorkspace = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8')
-const gossipDataLane = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.js'), 'utf8')
+const gossipDataLane = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const controller = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossipmesh/gossipController.ts'), 'utf8')
-const lifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/lifecycle.js'), 'utf8')
+const lifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/lifecycle.ts'), 'utf8')
 const packageJson = fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8')
 
 function assert(condition, message) {

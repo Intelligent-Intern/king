@@ -28,8 +28,8 @@ const outboundFrameBudget = read('../../src/lib/sfu/outboundFrameBudget.ts');
 const framePayload = read('../../src/lib/sfu/framePayload.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
-const backendOrigin = read('../../src/support/backendOrigin.js');
-const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
+const backendOrigin = read('../../src/support/backendOrigin.ts');
+const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
 

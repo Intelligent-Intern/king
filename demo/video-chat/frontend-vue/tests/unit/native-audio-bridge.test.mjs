@@ -2,14 +2,14 @@ import assert from 'node:assert/strict';
 
 import {
   createMediaSecuritySession,
-} from '../../src/domain/realtime/media/security.js';
+} from '../../src/domain/realtime/media/security.ts';
 import {
   nativeAudioPlaybackBlocked,
   nativeAudioPlaybackInterrupted,
   nativeSdpAudioSummary,
   nativeSdpAudioSummaries,
   nativeSdpHasSendableAudio,
-} from '../../src/domain/realtime/native/audioBridgeHelpers.js';
+} from '../../src/domain/realtime/native/audioBridgeHelpers.ts';
 
 try {
   const sendrecv = [

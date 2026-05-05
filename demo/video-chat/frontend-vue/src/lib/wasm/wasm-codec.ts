@@ -13,8 +13,8 @@
  * Falls back to the TypeScript codec if WASM fails to load.
  */
 
-import type { FrameData, DecodedFrame, WaveletCodecConfig } from '../wavelet/codec.js'
-import { debugWarn } from '../../support/debugLogs.js'
+import type { FrameData, DecodedFrame, WaveletCodecConfig } from '../wavelet/codec.ts'
+import { debugWarn } from '../../support/debugLogs.ts'
 
 // Dynamic import of the Emscripten-generated module
 type WLVCModule = {
@@ -420,7 +420,7 @@ export async function createWasmDecoder(
 // Hybrid codec factory — tries WASM, falls back to TypeScript
 // ---------------------------------------------------------------------------
 
-import { createEncoder as createTsEncoder, createDecoder as createTsDecoder } from '../wavelet/codec.js'
+import { createEncoder as createTsEncoder, createDecoder as createTsDecoder } from '../wavelet/codec.ts'
 
 export async function createHybridEncoder(config: WasmCodecConfig) {
   const wasm = await createWasmEncoder(config)

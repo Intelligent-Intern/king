@@ -15,9 +15,9 @@ function requireContains(source, needle, label) {
 }
 
 const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
-const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
 const waveletCodec = read('src/lib/wavelet/codec.ts');
 
 requireContains(publisherPipeline, "import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';", 'hybrid encoder import');

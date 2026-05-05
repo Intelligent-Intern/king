@@ -1,8 +1,8 @@
 import {
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
   SFU_AUTO_QUALITY_RECOVERY_NEXT,
-} from './runtimeConfig.js';
-import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.js';
+} from './runtimeConfig.ts';
+import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 
 export function createCallWorkspaceRuntimeSwitchingHelpers({
   callbacks,

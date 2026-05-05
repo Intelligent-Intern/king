@@ -24,9 +24,9 @@ try {
   const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const outboundFrameBudget = read('src/lib/sfu/outboundFrameBudget.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
-  const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.js');
+  const sfuLifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
   const workspaceView = read('src/domain/realtime/CallWorkspaceView.vue');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'client has an explicit low-water send resume target');
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_PROFILE_DRAIN_RATIO = 0.25', 'client drains to a low fraction of the active profile budget');

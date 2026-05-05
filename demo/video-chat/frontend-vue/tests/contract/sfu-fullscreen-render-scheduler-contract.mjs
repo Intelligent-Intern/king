@@ -21,14 +21,14 @@ function read(relativePath) {
 
 async function main() {
   const packageJson = read('package.json');
-  const schedulerSource = read('src/domain/realtime/sfu/remoteRenderScheduler.js');
+  const schedulerSource = read('src/domain/realtime/sfu/remoteRenderScheduler.ts');
   const workspaceTemplate = read('src/domain/realtime/CallWorkspaceView.template.html');
-  const fullscreenToggle = read('src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.js');
-  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
-  const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
+  const fullscreenToggle = read('src/domain/realtime/workspace/callWorkspace/videoFullscreenToggle.ts');
+  const videoLayout = read('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts');
+  const remotePeers = read('src/domain/realtime/sfu/remotePeers.ts');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');
 
   requireContains(packageJson, 'sfu-fullscreen-render-scheduler-contract.mjs', 'SFU contract suite includes fullscreen render scheduler proof');
@@ -79,7 +79,7 @@ async function main() {
   requireContains(stageCss, '[data-call-video-surface-role="fullscreen"]', 'fullscreen surface role has explicit CSS presentation');
   requireContains(stageCss, 'object-position: center center !important;', 'remote surfaces center letterboxed media');
 
-  const schedulerUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteRenderScheduler.js')).href;
+  const schedulerUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/remoteRenderScheduler.ts')).href;
   const scheduler = await import(schedulerUrl);
   const node = { dataset: {} };
   assert.equal(

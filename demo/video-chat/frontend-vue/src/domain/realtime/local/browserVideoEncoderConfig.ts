@@ -1,5 +1,5 @@
-import { resolveFramedFrameSizeFromDimensions } from './videoFrameSizing.js';
-import { videoFrameSourceDimensions } from './browserVideoFrameScaler.js';
+import { resolveFramedFrameSizeFromDimensions } from './videoFrameSizing.ts';
+import { videoFrameSourceDimensions } from './browserVideoFrameScaler.ts';
 
 function positiveInteger(value, fallback = 0) {
   const normalized = Number(value || 0);

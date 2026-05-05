@@ -14,9 +14,9 @@ function corsHeaders() {
 }
 
 async function withChatArchiveHelpers(page, callbackSource) {
-  await page.goto('/src/domain/calls/chat/archive.js', { waitUntil: 'domcontentloaded' });
+  await page.goto('/src/domain/calls/chat/archive.ts', { waitUntil: 'domcontentloaded' });
   return page.evaluate(async (source) => {
-    const helpers = await import('/src/domain/calls/chat/archive.js');
+    const helpers = await import('/src/domain/calls/chat/archive.ts');
     const callback = new Function('helpers', `return (${source})(helpers);`);
     return callback(helpers);
   }, callbackSource.toString());

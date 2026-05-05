@@ -82,7 +82,7 @@ try {
   assert.ok(!workspaceView.includes('moderationSyncQueue'), 'CallWorkspaceView.vue must not own moderation sync queues');
   assert.ok(!workspaceView.includes('let moderationSyncTimer'), 'CallWorkspaceView.vue must not own moderation sync timers');
 
-  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   assert.ok(participantUi.includes("import { createCallWorkspaceModerationSync } from './moderationSync';"), 'participant UI must delegate moderation sync queue handling');
   assert.ok(participantUi.includes('consumeQueuedModerationSyncEntries,'), 'participant UI must expose consumeQueuedModerationSyncEntries for lifecycle cleanup');
 
