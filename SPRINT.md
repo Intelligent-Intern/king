@@ -414,6 +414,8 @@ Non-goals for this sprint:
      branding controls, and local status/error text use localization keys.
    - [x] Translation-key coverage contract now scans all non-call Vue/JS
      sources and metadata key forms for missing English fallback keys.
+   - [x] `npm run test:contract:localization` runs the localization inventory,
+     runtime, settings, import UI, and translation-key coverage contracts.
 
    Done when:
    - [ ] No hard-coded user-visible English text remains in the targeted Vue
