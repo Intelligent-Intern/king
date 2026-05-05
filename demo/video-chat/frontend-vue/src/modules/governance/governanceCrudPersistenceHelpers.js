@@ -20,8 +20,8 @@ export function normalizeGovernanceCrudRow(row = {}) {
   return {
     ...publicSource,
     id,
-    key: normalizeString(source.key || source.public_id || id),
-    name: normalizeString(source.name || source.label || id),
+    key: normalizeString(source.key || source.public_id || source.email || id),
+    name: normalizeString(source.name || source.display_name || source.email || source.label || id),
     description: normalizeString(source.description),
     status: normalizeString(source.status || 'active'),
     updatedAt: normalizeString(source.updatedAt || source.updated_at || source.created_at),

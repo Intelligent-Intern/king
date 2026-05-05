@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/tenancy/tenant_administration.php';
+require_once __DIR__ . '/../domain/tenancy/governance_group_memberships.php';
 require_once __DIR__ . '/../domain/tenancy/tenant_portability.php';
+require_once __DIR__ . '/../support/auth_request.php';
 
 function videochat_handle_tenancy_routes(
     string $path,
@@ -142,6 +144,17 @@ function videochat_handle_governance_crud_routes(
     callable $decodeJsonBody,
     callable $openDatabase
 ): ?array {
+    if ($path === '/api/governance/users') {
+        return videochat_handle_governance_user_summary_route(
+            $method,
+            $request,
+            $apiAuthContext,
+            $jsonResponse,
+            $errorResponse,
+            $openDatabase
+        );
+    }
+
     if (preg_match('#^/api/governance/(groups|organizations)(?:/([^/]+))?$#', $path, $matches) !== 1) {
         return null;
     }
@@ -171,7 +184,11 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($permission['ok'] ?? false)) {
                 return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
             }
-            $rows = videochat_tenancy_governance_public_rows(videochat_tenancy_list_governance_entities($pdo, $entity, $tenantId));
+            $sourceRows = videochat_tenancy_list_governance_entities($pdo, $entity, $tenantId);
+            if ($entity === 'groups') {
+                $sourceRows = videochat_tenancy_governance_enrich_group_rows($pdo, $tenantId, $sourceRows);
+            }
+            $rows = videochat_tenancy_governance_public_rows($sourceRows);
 
             return $jsonResponse(200, [
                 'status' => 'ok',
@@ -201,6 +218,9 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($permission['ok'] ?? false)) {
                 return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
             }
+            if ($entity === 'groups') {
+                $row = videochat_tenancy_governance_enrich_group_relationships($pdo, $tenantId, $row);
+            }
             $publicRow = videochat_tenancy_governance_public_row($row);
 
             return $jsonResponse(200, [
@@ -224,11 +244,30 @@ function videochat_handle_governance_crud_routes(
             if (!(bool) ($permission['ok'] ?? false)) {
                 return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
             }
+            if ($entity === 'groups') {
+                $memberValidation = videochat_tenancy_governance_validate_group_members($pdo, $tenantId, $payload);
+                if (!(bool) ($memberValidation['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $memberValidation);
+                }
+            }
             $result = videochat_tenancy_create_governance_entity($pdo, $entity, $tenantId, $actorUserId, $payload);
             if (!(bool) ($result['ok'] ?? false)) {
                 return videochat_tenancy_governance_validation_response($errorResponse, $result);
             }
-            $row = videochat_tenancy_governance_public_row(is_array($result['row'] ?? null) ? $result['row'] : []);
+            $savedRow = is_array($result['row'] ?? null) ? $result['row'] : [];
+            if ($entity === 'groups') {
+                $syncResult = videochat_tenancy_governance_sync_group_members(
+                    $pdo,
+                    $tenantId,
+                    (int) ($savedRow['database_id'] ?? 0),
+                    $payload
+                );
+                if (!(bool) ($syncResult['ok'] ?? false)) {
+                    return videochat_tenancy_governance_validation_response($errorResponse, $syncResult);
+                }
+                $savedRow = videochat_tenancy_governance_enrich_group_relationships($pdo, $tenantId, $savedRow);
+            }
+            $row = videochat_tenancy_governance_public_row($savedRow);
 
             return $jsonResponse(201, [
                 'status' => 'ok',
@@ -282,11 +321,30 @@ function videochat_handle_governance_crud_routes(
                 'reason' => $decodeError,
             ]);
         }
+        if ($entity === 'groups') {
+            $memberValidation = videochat_tenancy_governance_validate_group_members($pdo, $tenantId, $payload);
+            if (!(bool) ($memberValidation['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $memberValidation);
+            }
+        }
         $result = videochat_tenancy_update_governance_entity($pdo, $entity, $tenantId, $identifier, $payload);
         if (!(bool) ($result['ok'] ?? false)) {
             return videochat_tenancy_governance_validation_response($errorResponse, $result);
         }
-        $updatedRow = videochat_tenancy_governance_public_row(is_array($result['row'] ?? null) ? $result['row'] : []);
+        $savedRow = is_array($result['row'] ?? null) ? $result['row'] : [];
+        if ($entity === 'groups') {
+            $syncResult = videochat_tenancy_governance_sync_group_members(
+                $pdo,
+                $tenantId,
+                (int) ($savedRow['database_id'] ?? 0),
+                $payload
+            );
+            if (!(bool) ($syncResult['ok'] ?? false)) {
+                return videochat_tenancy_governance_validation_response($errorResponse, $syncResult);
+            }
+            $savedRow = videochat_tenancy_governance_enrich_group_relationships($pdo, $tenantId, $savedRow);
+        }
+        $updatedRow = videochat_tenancy_governance_public_row($savedRow);
 
         return $jsonResponse(200, [
             'status' => 'ok',
@@ -302,6 +360,85 @@ function videochat_handle_governance_crud_routes(
             'reason' => 'internal_error',
         ]);
     }
+}
+
+function videochat_handle_governance_user_summary_route(
+    string $method,
+    array $request,
+    array $apiAuthContext,
+    callable $jsonResponse,
+    callable $errorResponse,
+    callable $openDatabase
+): array {
+    if ($method !== 'GET') {
+        return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/governance/users.', [
+            'allowed_methods' => ['GET'],
+        ]);
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $tenantId = videochat_tenant_id_from_auth_context($apiAuthContext);
+        $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($tenantId <= 0 || $actorUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid tenant session is required.', [
+                'reason' => 'invalid_tenant_context',
+            ]);
+        }
+
+        $permission = videochat_tenancy_governance_user_summary_permission_decision($pdo, $apiAuthContext);
+        if (!(bool) ($permission['ok'] ?? false)) {
+            return videochat_tenancy_governance_forbidden_response($errorResponse, $permission);
+        }
+
+        $filters = videochat_admin_user_list_filters(videochat_request_query_params($request));
+        if (!(bool) ($filters['ok'] ?? false)) {
+            return $errorResponse(422, 'governance_user_list_validation_failed', 'Invalid governance user list query parameters.', [
+                'fields' => $filters['errors'] ?? [],
+            ]);
+        }
+        $listing = videochat_admin_list_users(
+            $pdo,
+            (string) ($filters['query'] ?? ''),
+            (int) ($filters['page'] ?? 1),
+            (int) ($filters['page_size'] ?? 100),
+            (string) ($filters['order'] ?? 'role_then_name_asc'),
+            (string) ($filters['status'] ?? 'active'),
+            $tenantId
+        );
+    } catch (Throwable) {
+        return $errorResponse(500, 'governance_user_list_failed', 'Could not load governance users.', [
+            'reason' => 'internal_error',
+        ]);
+    }
+
+    $rows = videochat_tenancy_governance_user_summary_rows(is_array($listing['rows'] ?? null) ? $listing['rows'] : []);
+    $total = (int) ($listing['total'] ?? 0);
+    $pageCount = (int) ($listing['page_count'] ?? 0);
+    $page = (int) ($filters['page'] ?? 1);
+    $pageSize = (int) ($filters['page_size'] ?? 100);
+
+    return $jsonResponse(200, [
+        'status' => 'ok',
+        'result' => [
+            'rows' => $rows,
+            'included' => ['users' => $rows],
+        ],
+        'users' => $rows,
+        'pagination' => [
+            'query' => (string) ($filters['query'] ?? ''),
+            'status' => (string) ($filters['status'] ?? 'active'),
+            'order' => (string) ($filters['order'] ?? 'role_then_name_asc'),
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+            'page_count' => $pageCount,
+            'returned' => count($rows),
+            'has_prev' => $page > 1,
+            'has_next' => $pageCount > 0 && $page < $pageCount,
+        ],
+        'time' => gmdate('c'),
+    ]);
 }
 
 function videochat_tenancy_governance_public_row(array $row): array

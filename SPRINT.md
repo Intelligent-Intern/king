@@ -335,9 +335,12 @@ Sprint goal:
    - Backend-backed user editor now uses the shared relation stack for legacy
      role and theme assignments while still writing the existing `role` and
      `theme` payload fields for current APIs.
-   - Remaining work: use the same relation primitive in the backend-backed
-     group assignment flow, attach nested created records to their parent
-     draft, and connect relation mutations to real tenant-scoped backend APIs.
+   - Governance group member assignment now uses the same linked relation
+     picker, hydrates selectable users from `/api/governance/users`, and
+     persists selected members into tenant-scoped `group_memberships`.
+   - Remaining work: attach nested created records to their parent draft and
+     connect module/permission/grant relation mutations to real tenant-scoped
+     backend APIs.
 
 5. [ ] [n-plus-one-summary-loading] Add normalized entity summary loading for
    CRUD tables and relation pickers.
@@ -357,8 +360,11 @@ Sprint goal:
    - Persisted Governance group/organization lists now hydrate the same summary
      cache from backend list responses, and deleted rows are removed from the
      cache to avoid stale relation picker entries.
-   - Remaining work: backend list endpoints must include relation summaries or
-     expose tenant-scoped batch summary endpoints for real persisted entities.
+   - Governance group list/read/create/update responses now include member
+     summaries in one backend enrichment pass so the group editor can reopen
+     selected users without row-by-row lookups.
+   - Remaining work: add batch summary endpoints and included summaries for
+     organizations, grants, policies, and export/import jobs.
 
 6. [ ] [governance-backend-apis] Wire backend CRUD APIs for governance entities
    onto tenant-scoped resource/action permissions.
@@ -384,9 +390,13 @@ Sprint goal:
      organizations through the persisted backend endpoints instead of local
      draft rows; relation pickers hydrate these backend-backed rows before
      selection.
-   - Remaining work: memberships, grants, policies, export/import job APIs, and
-     recursive relation mutations that persist nested group/user/permission
-     assignments.
+   - Added `/api/governance/users` as a tenant-scoped user summary endpoint for
+     recursive relation pickers without exposing admin account mutation fields.
+   - Added group-member validation and sync so `relationships.members` creates,
+     preserves, and clears active `group_memberships` instead of staying in
+     frontend draft state.
+   - Remaining work: organization memberships, grants, policies, export/import
+     job APIs, and recursive relation mutations for modules/permissions.
 
 7. [x] [profile-social-fields] Extend personal profile/settings with about and
    social/contact fields.
@@ -485,6 +495,9 @@ Sprint goal:
       group/organization persistence, UUID row normalization, internal id
       stripping, descriptor endpoint ownership, and local draft blocking for
       persisted relation targets.
+    - Extended Governance CRUD API and persistence contracts for
+      `/api/governance/users`, user summary normalization, persisted group
+      members, invalid member validation, and clearing member relations.
     - Remaining work depends on the recursive relation picker and backend
       governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

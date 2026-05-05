@@ -358,6 +358,10 @@ function closeModal() {
 
 async function loadPersistedRowsForEntity(targetEntityKey) {
   const targetKey = String(targetEntityKey || '').trim();
+  if (targetKey === 'users') {
+    await loadGovernanceUserRows();
+    return;
+  }
   if (!isPersistedGovernanceEntity(targetKey)) {
     if (targetKey === entityKey.value) {
       loading.value = false;
@@ -389,6 +393,19 @@ async function loadPersistedRowsForEntity(targetEntityKey) {
     if (isCurrentEntity && token === loadRequestToken) {
       loading.value = false;
     }
+  }
+}
+
+async function loadGovernanceUserRows() {
+  const routeKey = 'admin-governance-users';
+  try {
+    loadError.value = '';
+    const persistedRows = await governancePersistence.listUserSummaries();
+    rowsByScope[routeKey] = persistedRows;
+    entitySummaryCache.upsertRows('users', persistedRows);
+  } catch (error) {
+    rowsByScope[routeKey] = [];
+    loadError.value = error instanceof Error ? error.message : t('governance.load_failed');
   }
 }
 
@@ -522,7 +539,7 @@ function rowSelectionSummary(row, entityKey = '') {
 
 function openRelationNavigator(relationship) {
   const targetEntity = String(relationship?.target_entity || '').trim();
-  if (isPersistedGovernanceEntity(targetEntity)) {
+  if (targetEntity === 'users' || isPersistedGovernanceEntity(targetEntity)) {
     loadPersistedRowsForEntity(targetEntity);
   }
   relationNavigatorRelation.value = relationship;
