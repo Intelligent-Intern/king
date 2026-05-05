@@ -2,12 +2,25 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 /**
  * @return array<int, string>
  */
 function videochat_admin_allowed_roles(): array
 {
     return ['admin', 'user'];
+}
+
+function videochat_admin_truthy(mixed $value): bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        return (int) $value === 1;
+    }
+    return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
 }
 
 /**
@@ -22,6 +35,7 @@ function videochat_admin_allowed_update_fields(): array
         'status',
         'time_format',
         'theme',
+        'theme_editor_enabled',
         'avatar_path',
     ];
 }
@@ -57,19 +71,26 @@ function videochat_admin_role_id_map(PDO $pdo): array
  *   status: string,
  *   time_format: string,
  *   theme: string,
+ *   theme_editor_enabled: bool,
  *   avatar_path: ?string,
  *   created_at: string,
  *   updated_at: string
  * }|null
  */
-function videochat_admin_fetch_user_by_id(PDO $pdo, int $userId): ?array
+function videochat_admin_fetch_user_by_id(PDO $pdo, int $userId, ?int $tenantId = null): ?array
 {
     if ($userId <= 0) {
         return null;
     }
 
+    $tenantJoin = '';
+    $tenantWhere = '';
+    if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id')) {
+        $tenantJoin = 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id';
+        $tenantWhere = 'AND tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\'';
+    }
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     users.id,
     users.email,
@@ -77,17 +98,24 @@ SELECT
     users.status,
     users.time_format,
     users.theme,
+    users.theme_editor_enabled,
     users.avatar_path,
     users.created_at,
     users.updated_at,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 WHERE users.id = :id
+  {$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':id' => $userId]);
+    $params = [':id' => $userId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;
@@ -101,6 +129,7 @@ SQL
         'status' => (string) ($row['status'] ?? 'disabled'),
         'time_format' => (string) ($row['time_format'] ?? '24h'),
         'theme' => (string) ($row['theme'] ?? 'dark'),
+        'theme_editor_enabled' => ((int) ($row['theme_editor_enabled'] ?? 0)) === 1,
         'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
         'created_at' => (string) ($row['created_at'] ?? ''),
         'updated_at' => (string) ($row['updated_at'] ?? ''),
@@ -118,6 +147,7 @@ SQL
  *     status: string,
  *     time_format: string,
  *     theme: string,
+ *     theme_editor_enabled: bool,
  *     avatar_path: ?string
  *   },
  *   errors: array<string, string>
@@ -184,6 +214,8 @@ function videochat_admin_validate_create_user_payload(array $payload): array
         $errors['theme'] = 'theme_too_long';
     }
 
+    $themeEditorEnabled = videochat_admin_truthy($payload['theme_editor_enabled'] ?? false);
+
     $avatarPath = null;
     if (array_key_exists('avatar_path', $payload)) {
         $avatarRaw = $payload['avatar_path'];
@@ -209,6 +241,7 @@ function videochat_admin_validate_create_user_payload(array $payload): array
             'status' => $status,
             'time_format' => $timeFormat,
             'theme' => $theme,
+            'theme_editor_enabled' => $themeEditorEnabled,
             'avatar_path' => $avatarPath,
         ],
         'errors' => $errors,
@@ -295,6 +328,10 @@ function videochat_admin_validate_update_user_payload(array $payload): array
         } else {
             $data['theme'] = $theme;
         }
+    }
+
+    if (array_key_exists('theme_editor_enabled', $payload)) {
+        $data['theme_editor_enabled'] = videochat_admin_truthy($payload['theme_editor_enabled']);
     }
 
     if (array_key_exists('avatar_path', $payload)) {

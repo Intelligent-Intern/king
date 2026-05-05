@@ -23,12 +23,14 @@ function videochat_admin_user_permissions_snapshot(array $userRow, int $actorUse
 
     $canChangeRole = !$isSelf && !$isPrimaryAdmin;
     $canChangeStatus = !$isSelf && !$isPrimaryAdmin;
+    $canChangeThemeEditor = !$isSelf;
 
     return [
         'is_self' => $isSelf,
         'is_primary_admin' => $isPrimaryAdmin,
         'can_change_role' => $canChangeRole,
         'can_change_status' => $canChangeStatus,
+        'can_change_theme_editor' => $canChangeThemeEditor,
         'can_toggle_status' => $canChangeStatus,
         'can_delete' => !$isSelf && !$isPrimaryAdmin,
     ];
@@ -150,7 +152,8 @@ function videochat_handle_user_routes(
                 (int) ($filters['page'] ?? 1),
                 (int) ($filters['page_size'] ?? 10),
                 (string) ($filters['order'] ?? 'name_asc'),
-                $authenticatedUserId
+                $authenticatedUserId,
+                videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } catch (Throwable) {
             return $errorResponse(500, 'user_directory_failed', 'Could not load user directory.', [
@@ -465,7 +468,7 @@ function videochat_handle_user_routes(
                     ],
                 ]);
             }
-            $deactivateResult = videochat_admin_deactivate_user($pdo, $userId);
+            $deactivateResult = videochat_admin_deactivate_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_deactivate_failed', 'Could not deactivate user.', [
                 'reason' => 'internal_error',
@@ -506,7 +509,7 @@ function videochat_handle_user_routes(
 
         try {
             $pdo = $openDatabase();
-            $reactivateResult = videochat_admin_reactivate_user($pdo, $userId);
+            $reactivateResult = videochat_admin_reactivate_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_reactivate_failed', 'Could not reactivate user.', [
                 'reason' => 'internal_error',

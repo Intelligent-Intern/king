@@ -43,6 +43,7 @@ SQL
     $secondEnd = gmdate('Y-m-d\TH:i:s\Z', time() + 97200);
 
     $saveResult = videochat_save_appointment_blocks($pdo, $ownerUserId, [
+        'settings' => ['slot_minutes' => 60],
         'blocks' => [
             ['starts_at' => $firstStart, 'ends_at' => $firstEnd, 'timezone' => 'UTC'],
             ['starts_at' => $secondStart, 'ends_at' => $secondEnd, 'timezone' => 'UTC'],
@@ -50,6 +51,11 @@ SQL
     ]);
     videochat_appointment_contract_assert($saveResult['ok'] === true, 'valid block save should succeed');
     videochat_appointment_contract_assert(count($saveResult['blocks'] ?? []) === 2, 'block save should return two blocks');
+    $publicCalendarId = (string) (($saveResult['settings'] ?? [])['public_id'] ?? '');
+    videochat_appointment_contract_assert(
+        preg_match('/^[a-f0-9-]{36}$/', $publicCalendarId) === 1,
+        'appointment calendar should expose a non-sequential public id'
+    );
 
     $overlapResult = videochat_save_appointment_blocks($pdo, $ownerUserId, [
         'blocks' => [
@@ -63,13 +69,17 @@ SQL
         'overlap error should be explicit'
     );
 
-    $publicSlots = videochat_public_appointment_slots($pdo, $ownerUserId);
+    $publicSlots = videochat_public_appointment_slots($pdo, $publicCalendarId);
     videochat_appointment_contract_assert($publicSlots['ok'] === true, 'public slots should load');
     videochat_appointment_contract_assert(count($publicSlots['slots'] ?? []) === 2, 'public slots should expose both open blocks');
+    videochat_appointment_contract_assert(
+        (string) (($publicSlots['owner'] ?? [])['id'] ?? '') === '',
+        'public slots must not expose internal owner user id'
+    );
     $slotId = (string) (($publicSlots['slots'][0] ?? [])['id'] ?? '');
     videochat_appointment_contract_assert($slotId !== '', 'public slot id should be present');
 
-    $invalidBooking = videochat_book_public_appointment($pdo, $ownerUserId, [
+    $invalidBooking = videochat_book_public_appointment($pdo, $publicCalendarId, [
         'slot_id' => $slotId,
         'first_name' => 'Ada',
         'last_name' => 'Lovelace',
@@ -82,7 +92,7 @@ SQL
         'privacy consent error mismatch'
     );
 
-    $booking = videochat_book_public_appointment($pdo, $ownerUserId, [
+    $booking = videochat_book_public_appointment($pdo, $publicCalendarId, [
         'slot_id' => $slotId,
         'salutation' => 'Ms.',
         'title' => '',
@@ -109,10 +119,10 @@ SQL
     $accessCountQuery->execute([':id' => $accessId, ':email' => 'ada@example.com']);
     videochat_appointment_contract_assert((int) $accessCountQuery->fetchColumn() === 1, 'booking access link should persist');
 
-    $slotsAfterBooking = videochat_public_appointment_slots($pdo, $ownerUserId);
+    $slotsAfterBooking = videochat_public_appointment_slots($pdo, $publicCalendarId);
     videochat_appointment_contract_assert(count($slotsAfterBooking['slots'] ?? []) === 1, 'booked slot should disappear');
 
-    $duplicateBooking = videochat_book_public_appointment($pdo, $ownerUserId, [
+    $duplicateBooking = videochat_book_public_appointment($pdo, $publicCalendarId, [
         'slot_id' => $slotId,
         'first_name' => 'Grace',
         'last_name' => 'Hopper',
@@ -121,6 +131,17 @@ SQL
     ]);
     videochat_appointment_contract_assert($duplicateBooking['ok'] === false, 'duplicate booking should fail');
     videochat_appointment_contract_assert((string) ($duplicateBooking['reason'] ?? '') === 'conflict', 'duplicate booking reason mismatch');
+
+    $longBlockStart = gmdate('Y-m-d\T08:00:00\Z', time() + 7 * 86400);
+    $longBlockEnd = gmdate('Y-m-d\T18:00:00\Z', time() + 7 * 86400);
+    $longBlockResult = videochat_save_appointment_blocks($pdo, $ownerUserId, [
+        'blocks' => [
+            ['starts_at' => $longBlockStart, 'ends_at' => $longBlockEnd, 'timezone' => 'UTC'],
+        ],
+    ]);
+    videochat_appointment_contract_assert($longBlockResult['ok'] === true, 'day-length availability block should save');
+    $longBlockSlots = videochat_public_appointment_slots($pdo, $publicCalendarId);
+    videochat_appointment_contract_assert(count($longBlockSlots['slots'] ?? []) === 10, 'public calendar should expose day-length availability as call-length slots');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[appointment-calendar-contract] PASS\n");

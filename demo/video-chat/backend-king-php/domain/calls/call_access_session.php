@@ -40,9 +40,10 @@ function videochat_issue_session_for_call_access(
     }
 
     $linkKind = videochat_call_access_link_kind($accessLink);
+    $tenantId = is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null;
     if ($linkKind === 'open') {
         $guestName = trim((string) ($options['guest_name'] ?? ''));
-        $guestCreate = videochat_create_guest_user_for_call_access($pdo, $guestName);
+        $guestCreate = videochat_create_guest_user_for_call_access($pdo, $guestName, $tenantId);
         if (!(bool) ($guestCreate['ok'] ?? false)) {
             return [
                 'ok' => false,
@@ -87,7 +88,8 @@ function videochat_issue_session_for_call_access(
         $pdo,
         (string) ($call['id'] ?? ''),
         $userId,
-        $userRole
+        $userRole,
+        $tenantId
     );
     if ($linkKind === 'open' && !(bool) ($callPermission['ok'] ?? false)) {
         videochat_ensure_internal_call_participant(
@@ -101,7 +103,8 @@ function videochat_issue_session_for_call_access(
             $pdo,
             (string) ($call['id'] ?? ''),
             $userId,
-            $userRole
+            $userRole,
+            $tenantId
         );
     }
     if (!(bool) ($callPermission['ok'] ?? false)) {
@@ -179,6 +182,9 @@ SQL
             ':client_ip' => $clientIp === '' ? null : $clientIp,
             ':user_agent' => $userAgent === '' ? null : $userAgent,
         ]);
+        if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id')) {
+            videochat_tenant_update_session($pdo, $sessionId, $tenantId);
+        }
 
         $touch = $pdo->prepare(
             <<<'SQL'
@@ -197,13 +203,17 @@ SQL
             ':consumed_at' => gmdate('c'),
         ]);
 
+        $bindTenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'call_access_sessions', 'tenant_id')
+            ? ', tenant_id'
+            : '';
+        $bindTenantValue = $bindTenantColumn !== '' ? ', :tenant_id' : '';
         $bind = $pdo->prepare(
-            <<<'SQL'
-INSERT INTO call_access_sessions(session_id, access_id, call_id, room_id, user_id, link_kind, issued_at, expires_at)
-VALUES(:session_id, :access_id, :call_id, :room_id, :user_id, :link_kind, :issued_at, :expires_at)
+            <<<SQL
+INSERT INTO call_access_sessions(session_id, access_id, call_id, room_id, user_id, link_kind, issued_at, expires_at{$bindTenantColumn})
+VALUES(:session_id, :access_id, :call_id, :room_id, :user_id, :link_kind, :issued_at, :expires_at{$bindTenantValue})
 SQL
         );
-        $bind->execute([
+        $bindParams = [
             ':session_id' => $sessionId,
             ':access_id' => (string) ($accessLink['id'] ?? ''),
             ':call_id' => $callId,
@@ -212,7 +222,11 @@ SQL
             ':link_kind' => $linkKind,
             ':issued_at' => $issuedAt,
             ':expires_at' => $expiresAt,
-        ]);
+        ];
+        if ($bindTenantColumn !== '') {
+            $bindParams[':tenant_id'] = $tenantId;
+        }
+        $bind->execute($bindParams);
 
         $pdo->commit();
     } catch (Throwable) {
@@ -231,12 +245,13 @@ SQL
         ];
     }
 
-    $freshLink = videochat_fetch_call_access_link($pdo, (string) ($accessLink['id'] ?? ''));
+    $freshLink = videochat_fetch_call_access_link($pdo, (string) ($accessLink['id'] ?? ''), $tenantId);
     $freshCall = videochat_get_call_for_user(
         $pdo,
         (string) ($call['id'] ?? ''),
         $userId,
-        $userRole
+        $userRole,
+        $tenantId
     );
 
     return [
