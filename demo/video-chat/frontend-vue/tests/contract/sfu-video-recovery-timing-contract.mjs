@@ -103,7 +103,7 @@ try {
   requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
-  requireContains(sfuClient, 'private markPublisherFrameReceived(msg: any', 'SFU client tracks publisher frame freshness');
+  requireContains(sfuClient, 'private markPublisherFrameReceived(msg: SfuClientMessage', 'SFU client tracks publisher frame freshness');
   requireContains(sfuClient, "if (stringField(msg?.type) !== 'sfu/frame') return", 'publisher frame tracker keys off normalized SFU frame messages');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'binary frame envelopes flow through the same SFU message handler');
   requireContains(sfuClient, 'this.markPublisherFrameReceived(msg)', 'publisher frame tracker runs for binary-decoded and JSON SFU frames');

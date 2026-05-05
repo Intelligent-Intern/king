@@ -7,9 +7,106 @@ export const PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES = Object.freeze({
   CLOSE: 'kingrt/publisher-capture-worker/close',
 });
 
+export type PublisherCaptureWorkerMessageType =
+  typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES[keyof typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES];
+
+export type PublisherCaptureWorkerFrameSource = Transferable & {
+  close?: () => void;
+  displayWidth?: number;
+  displayHeight?: number;
+  codedWidth?: number;
+  codedHeight?: number;
+  videoWidth?: number;
+  videoHeight?: number;
+  width?: number;
+  height?: number;
+};
+
+export interface PublisherCaptureWorkerInitMessage {
+  type: typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.INIT;
+  generation: number;
+  canvas: Transferable | null;
+}
+
+export interface PublisherCaptureWorkerReadbackMessage {
+  type: typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK;
+  requestId: string;
+  generation: number;
+  source: PublisherCaptureWorkerFrameSource | null;
+  sourceWidth: number;
+  sourceHeight: number;
+  sourceCropX: number;
+  sourceCropY: number;
+  sourceCropWidth: number;
+  sourceCropHeight: number;
+  framingMode: string;
+  targetAspectRatio: number;
+  profileFrameWidth: number;
+  profileFrameHeight: number;
+  timestamp: number;
+}
+
+export interface PublisherCaptureWorkerReadbackResultMessage {
+  type: typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK_RESULT;
+  requestId: string;
+  generation?: number;
+  rgba: ArrayBuffer | Uint8ClampedArray;
+  frameWidth: number;
+  frameHeight: number;
+  profileFrameWidth?: number;
+  profileFrameHeight?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sourceCropX?: number;
+  sourceCropY?: number;
+  sourceCropWidth?: number;
+  sourceCropHeight?: number;
+  sourceAspectRatio?: number;
+  targetAspectRatio?: number;
+  framingMode?: string;
+  aspectMode?: string;
+  drawImageMs?: number;
+  readbackMs?: number;
+  workerElapsedMs?: number;
+}
+
+export interface PublisherCaptureWorkerErrorMessage {
+  type: typeof PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.ERROR;
+  requestId?: string;
+  reason?: string;
+  message?: string;
+}
+
+export type PublisherCaptureWorkerInboundMessage =
+  | PublisherCaptureWorkerInitMessage
+  | PublisherCaptureWorkerReadbackMessage;
+
+export type PublisherCaptureWorkerOutboundMessage =
+  | PublisherCaptureWorkerReadbackResultMessage
+  | PublisherCaptureWorkerErrorMessage;
+
+export function isPublisherCaptureWorkerReadbackResultMessage(value: unknown): value is PublisherCaptureWorkerReadbackResultMessage {
+  return Boolean(
+    value
+      && typeof value === 'object'
+      && (value as { type?: unknown }).type === PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK_RESULT
+      && typeof (value as { requestId?: unknown }).requestId === 'string'
+      && Number.isFinite(Number((value as { frameWidth?: unknown }).frameWidth))
+      && Number.isFinite(Number((value as { frameHeight?: unknown }).frameHeight)),
+  );
+}
+
+export function isPublisherCaptureWorkerErrorMessage(value: unknown): value is PublisherCaptureWorkerErrorMessage {
+  return Boolean(
+    value
+      && typeof value === 'object'
+      && (value as { type?: unknown }).type === PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.ERROR,
+  );
+}
+
 let publisherCaptureWorkerRequestSequence = 0;
 
-export function nextPublisherCaptureWorkerRequestId(prefix = 'capture') {
+export function nextPublisherCaptureWorkerRequestId(prefix = 'capture'): string {
   publisherCaptureWorkerRequestSequence = (publisherCaptureWorkerRequestSequence + 1) % 1_000_000;
   return `${String(prefix || 'capture').trim() || 'capture'}_${Date.now().toString(36)}_${publisherCaptureWorkerRequestSequence.toString(36)}`;
 }
@@ -17,7 +114,7 @@ export function nextPublisherCaptureWorkerRequestId(prefix = 'capture') {
 export function buildPublisherCaptureWorkerInitMessage({
   canvas = null,
   generation = 0,
-} = {}) {
+}: Partial<Pick<PublisherCaptureWorkerInitMessage, 'canvas' | 'generation'>> = {}): PublisherCaptureWorkerInitMessage {
   return {
     type: PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.INIT,
     generation: Math.max(0, Number(generation || 0)),
@@ -40,7 +137,7 @@ export function buildPublisherCaptureWorkerReadbackMessage({
   profileFrameWidth = 0,
   profileFrameHeight = 0,
   timestamp = Date.now(),
-} = {}) {
+}: Partial<Omit<PublisherCaptureWorkerReadbackMessage, 'type'>> = {}): PublisherCaptureWorkerReadbackMessage {
   return {
     type: PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK,
     requestId: String(requestId || nextPublisherCaptureWorkerRequestId()),
@@ -60,10 +157,10 @@ export function buildPublisherCaptureWorkerReadbackMessage({
   };
 }
 
-export function publisherCaptureWorkerTransferListForInit(message = {}) {
+export function publisherCaptureWorkerTransferListForInit(message: Partial<PublisherCaptureWorkerInitMessage> = {}): Transferable[] {
   return message?.canvas ? [message.canvas] : [];
 }
 
-export function publisherCaptureWorkerTransferListForReadback(message = {}) {
+export function publisherCaptureWorkerTransferListForReadback(message: Partial<PublisherCaptureWorkerReadbackMessage> = {}): Transferable[] {
   return message?.source ? [message.source] : [];
 }

@@ -2,15 +2,80 @@ import {
   buildPublisherCaptureWorkerInitMessage,
   buildPublisherCaptureWorkerReadbackMessage,
   PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES,
+  isPublisherCaptureWorkerErrorMessage,
+  isPublisherCaptureWorkerReadbackResultMessage,
+  type PublisherCaptureWorkerOutboundMessage,
+  type PublisherCaptureWorkerReadbackResultMessage,
   publisherCaptureWorkerTransferListForInit,
   publisherCaptureWorkerTransferListForReadback,
 } from './publisherCaptureWorkerProtocol.ts';
 import {
   canUsePublisherCaptureWorker,
   createPublisherCaptureWorker,
+  type PublisherCaptureWorkerCapabilities,
+  type PublisherCaptureWorkerCtor,
 } from './publisherCaptureWorkerClient.ts';
 
-function imageDataFromWorkerPayload(payload = {}, ImageDataCtor = globalThis?.ImageData) {
+export interface PublisherCaptureWorkerFrameSize {
+  frameWidth: number;
+  frameHeight: number;
+  profileFrameWidth?: number;
+  profileFrameHeight?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sourceCropX?: number;
+  sourceCropY?: number;
+  sourceCropWidth?: number;
+  sourceCropHeight?: number;
+  sourceAspectRatio?: number;
+  targetAspectRatio?: number;
+  framingMode?: string;
+  aspectMode?: string;
+}
+
+export interface PublisherCaptureWorkerReadbackResult {
+  ok: boolean;
+  fatal?: boolean;
+  reason?: string;
+  error?: unknown;
+  imageData?: ImageData;
+  frameSize?: PublisherCaptureWorkerFrameSize;
+  drawImageMs?: number;
+  readbackMs?: number;
+  workerElapsedMs?: number;
+  readbackBytes?: number;
+}
+
+export interface PublisherCaptureWorkerReadbackController {
+  readFrame(options: {
+    source: Transferable;
+    frameSize: PublisherCaptureWorkerFrameSize;
+    timestamp?: number;
+    timeout?: number;
+  }): Promise<PublisherCaptureWorkerReadbackResult>;
+  reset(): void;
+  close(): void;
+}
+
+interface PendingReadbackRequest {
+  timeoutId: ReturnType<typeof setTimeout> | null;
+  resolve: (result: PublisherCaptureWorkerReadbackResult) => void;
+}
+
+export interface CreatePublisherCaptureWorkerReadbackControllerOptions {
+  capabilities?: PublisherCaptureWorkerCapabilities;
+  WorkerCtor?: PublisherCaptureWorkerCtor | null;
+  workerUrl?: URL | string;
+  ImageDataCtor?: typeof ImageData;
+  timeoutMs?: number;
+  closeGraceMs?: number;
+  mediaDebugLog?: (message: string, payload?: Record<string, unknown>) => void;
+}
+
+function imageDataFromWorkerPayload(
+  payload: Partial<PublisherCaptureWorkerReadbackResultMessage> = {},
+  ImageDataCtor = globalThis?.ImageData,
+): ImageData {
   if (typeof ImageDataCtor !== 'function') {
     throw new Error('publisher_capture_worker_image_data_missing');
   }
@@ -25,7 +90,7 @@ function imageDataFromWorkerPayload(payload = {}, ImageDataCtor = globalThis?.Im
   return new ImageDataCtor(rgba, frameWidth, frameHeight);
 }
 
-function workerFrameSizeFromPayload(payload = {}) {
+function workerFrameSizeFromPayload(payload: Partial<PublisherCaptureWorkerReadbackResultMessage> = {}): PublisherCaptureWorkerFrameSize {
   return {
     frameWidth: Math.max(1, Number(payload.frameWidth || 1)),
     frameHeight: Math.max(1, Number(payload.frameHeight || 1)),
@@ -52,17 +117,17 @@ export function createPublisherCaptureWorkerReadbackController({
   timeoutMs = 1200,
   closeGraceMs = 250,
   mediaDebugLog = () => {},
-} = {}) {
+}: CreatePublisherCaptureWorkerReadbackControllerOptions = {}): PublisherCaptureWorkerReadbackController | null {
   if (!canUsePublisherCaptureWorker(capabilities)) {
     return null;
   }
 
   let generation = 0;
   let closed = false;
-  let worker = null;
-  const pending = new Map();
+  let worker: Worker | null = null;
+  const pending = new Map<string, PendingReadbackRequest>();
 
-  function settlePending(requestId, result) {
+  function settlePending(requestId: string, result: PublisherCaptureWorkerReadbackResult): void {
     const request = pending.get(requestId);
     if (!request) return;
     pending.delete(requestId);
@@ -70,11 +135,11 @@ export function createPublisherCaptureWorkerReadbackController({
     request.resolve(result);
   }
 
-  function handleWorkerMessage(event) {
+  function handleWorkerMessage(event: MessageEvent<PublisherCaptureWorkerOutboundMessage>): void {
     const payload = event?.data && typeof event.data === 'object' ? event.data : {};
     const requestId = String(payload.requestId || '');
     if (!requestId) return;
-    if (payload.type === PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.READBACK_RESULT) {
+    if (isPublisherCaptureWorkerReadbackResultMessage(payload)) {
       try {
         const imageData = imageDataFromWorkerPayload(payload, ImageDataCtor);
         settlePending(requestId, {
@@ -96,7 +161,7 @@ export function createPublisherCaptureWorkerReadbackController({
       }
       return;
     }
-    if (payload.type === PUBLISHER_CAPTURE_WORKER_MESSAGE_TYPES.ERROR) {
+    if (isPublisherCaptureWorkerErrorMessage(payload)) {
       settlePending(requestId, {
         ok: false,
         fatal: true,
@@ -105,7 +170,7 @@ export function createPublisherCaptureWorkerReadbackController({
     }
   }
 
-  function ensureWorker() {
+  function ensureWorker(): Worker | null {
     if (worker || closed) return worker;
     worker = createPublisherCaptureWorker({ WorkerCtor, workerUrl });
     if (typeof worker.addEventListener === 'function') {
@@ -123,7 +188,7 @@ export function createPublisherCaptureWorkerReadbackController({
     frameSize,
     timestamp = Date.now(),
     timeout = timeoutMs,
-  } = {}) {
+  }: Parameters<PublisherCaptureWorkerReadbackController['readFrame']>[0]): Promise<PublisherCaptureWorkerReadbackResult> {
     if (closed) {
       return { ok: false, fatal: true, reason: 'publisher_capture_worker_closed' };
     }

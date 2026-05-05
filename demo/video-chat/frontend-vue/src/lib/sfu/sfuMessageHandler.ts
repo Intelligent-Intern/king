@@ -12,7 +12,90 @@ interface SfuClientMessageHandlerContext {
   subscribe: (publisherId: string) => void
 }
 
-function integerField(fallback: number, ...values: any[]): number {
+export interface SfuClientMessage {
+  type?: string
+  roomId?: string
+  room_id?: string
+  publisherId?: string
+  publisher_id?: string
+  publisherUserId?: string
+  publisher_user_id?: string
+  publisherName?: string
+  publisher_name?: string
+  trackId?: string
+  track_id?: string
+  tracks?: unknown[]
+  publishers?: unknown[]
+  frameId?: string
+  frame_id?: string
+  frameType?: string
+  frame_type?: string
+  frameSequence?: number | string
+  frame_sequence?: number | string
+  mediaGeneration?: number | string
+  media_generation?: number | string
+  outbound_media_generation?: number | string
+  timestamp?: number | string
+  data?: ArrayBuffer | number[]
+  dataBase64?: string
+  data_base64?: string
+  protected?: Record<string, unknown>
+  protectedFrame?: string
+  protected_frame?: string
+  protectionMode?: string
+  protection_mode?: string
+  protocolVersion?: number | string
+  protocol_version?: number | string
+  payloadChars?: number | string
+  payload_chars?: number | string
+  chunkCount?: number | string
+  chunk_count?: number | string
+  senderSentAtMs?: number | string
+  sender_sent_at_ms?: number | string
+  codecId?: string
+  codec_id?: string
+  runtimeId?: string
+  runtime_id?: string
+  videoLayer?: string
+  video_layer?: string
+  outgoingVideoQualityProfile?: string
+  outgoing_video_quality_profile?: string
+  kingReceiveLatencyMs?: number | string
+  king_receive_latency_ms?: number | string
+  kingFanoutLatencyMs?: number | string
+  king_fanout_latency_ms?: number | string
+  subscriberSendLatencyMs?: number | string
+  subscriber_send_latency_ms?: number | string
+  frameWidth?: number | string
+  frame_width?: number | string
+  frameHeight?: number | string
+  frame_height?: number | string
+  reason?: string
+  code?: string
+  retryAfterMs?: number | string
+  retry_after_ms?: number | string
+  queueAgeMs?: number | string
+  queue_age_ms?: number | string
+  budgetMaxQueueAgeMs?: number | string
+  budget_max_queue_age_ms?: number | string
+  payloadBytes?: number | string
+  payload_bytes?: number | string
+  requesterId?: string
+  requester_id?: string
+  requesterUserId?: string
+  requester_user_id?: string
+  requestedAction?: string
+  requested_action?: string
+  requestFullKeyframe?: boolean
+  request_full_keyframe?: boolean
+  requestedVideoLayer?: string
+  requested_video_layer?: string
+  requestedVideoQualityProfile?: string
+  requested_video_quality_profile?: string
+  [key: string]: unknown
+}
+
+function integerField(fallback: number, ...values: unknown[]): number {
   for (const value of values) {
     const normalized = Number(value)
     if (Number.isFinite(normalized)) return Math.floor(normalized)
@@ -20,7 +103,7 @@ function integerField(fallback: number, ...values: any[]): number {
   return fallback
 }
 
-function videoLayerField(...values: any[]): 'primary' | 'thumbnail' | '' {
+function videoLayerField(...values: unknown[]): 'primary' | 'thumbnail' | '' {
   for (const value of values) {
     const normalized = stringField(value).trim().toLowerCase()
     if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail'
@@ -29,7 +112,7 @@ function videoLayerField(...values: any[]): 'primary' | 'thumbnail' | '' {
   return ''
 }
 
-export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg: any): void {
+export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg: SfuClientMessage): void {
   const { callbacks, inboundFrameAssembler, roomId, subscribe } = ctx
 
   switch (msg.type) {

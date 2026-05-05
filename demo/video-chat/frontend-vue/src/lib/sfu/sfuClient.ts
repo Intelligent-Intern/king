@@ -21,7 +21,7 @@ import {
 import { reportClientDiagnostic } from '../../support/clientDiagnostics'
 import { SfuInboundFrameAssembler, stringField } from './inboundFrameAssembler'
 import { normalizeSfuIdentifier } from './identifiers'
-import { handleSfuClientMessage } from './sfuMessageHandler'
+import { handleSfuClientMessage, type SfuClientMessage } from './sfuMessageHandler'
 import {
   SFU_FRAME_CHUNK_BACKPRESSURE_MAX_WAIT_MS,
   SfuOutboundWireBudget,
@@ -316,7 +316,7 @@ export class SFUClient {
         })
         return
       }
-      let msg: any
+      let msg: SfuClientMessage
       try { msg = JSON.parse(ev.data) } catch { return }
       if (handleAssetVersionSocketPayload(msg)) return
       // Track ops heartbeats for carrier state
@@ -613,7 +613,7 @@ export class SFUClient {
     this.publisherFrameHealthById.delete(normalizedPublisherId)
   }
 
-  private markPublisherFrameReceived(msg: any, nowMs = Date.now()): void {
+  private markPublisherFrameReceived(msg: SfuClientMessage, nowMs = Date.now()): void {
     if (stringField(msg?.type) !== 'sfu/frame') return
     const publisherId = stringField(msg?.publisherId, msg?.publisher_id)
     if (publisherId === '') return
@@ -1245,7 +1245,7 @@ export class SFUClient {
     return sample
   }
 
-  private handleMessage(msg: any): void {
+  private handleMessage(msg: SfuClientMessage): void {
     this.markPublisherFrameReceived(msg)
     if (stringField(msg?.type) === 'sfu/publisher_left') {
       this.untrackPublisher(stringField(msg?.publisherId, msg?.publisher_id))
