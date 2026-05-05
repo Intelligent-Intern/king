@@ -30,6 +30,7 @@ try {
         'operations',
         'marketplace',
         'tenancy',
+        'backend_modules',
         'users',
         'workspace_administration',
         'invites',
