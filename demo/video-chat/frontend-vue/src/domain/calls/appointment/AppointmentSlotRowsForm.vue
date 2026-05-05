@@ -1,40 +1,42 @@
 <template>
-  <section class="appointment-config-form-scroll" aria-label="Appointment slot form">
+  <section class="appointment-config-form-scroll" :aria-label="t('appointment_config.slot_form_aria')">
     <div class="appointment-form-head" aria-hidden="true">
-      <span>Date</span>
-      <span>From</span>
-      <span>To</span>
+      <span>{{ t('appointment_config.date') }}</span>
+      <span>{{ t('appointment_config.from') }}</span>
+      <span>{{ t('appointment_config.to') }}</span>
       <span></span>
     </div>
 
     <article v-for="row in rows" :key="row.rowId" class="appointment-form-row" :class="{ booked: row.booked }">
       <label>
-        <span>Date</span>
+        <span>{{ t('appointment_config.date') }}</span>
         <input v-model="row.date" class="input" type="date" :disabled="saving || row.booked" />
       </label>
       <label>
-        <span>From</span>
+        <span>{{ t('appointment_config.from') }}</span>
         <input v-model="row.startTime" class="input" type="time" :disabled="saving || row.booked" />
       </label>
       <label>
-        <span>To</span>
+        <span>{{ t('appointment_config.to') }}</span>
         <input v-model="row.endTime" class="input" type="time" :disabled="saving || row.booked" />
       </label>
       <div class="appointment-form-actions">
-        <span v-if="row.booked" class="appointment-form-state">Booked</span>
+        <span v-if="row.booked" class="appointment-form-state">{{ t('appointment_config.booked') }}</span>
         <button v-else class="btn" type="button" :disabled="saving" @click="$emit('remove-row', row.rowId)">
-          Remove
+          {{ t('common.remove') }}
         </button>
       </div>
     </article>
 
     <button class="btn appointment-form-add" type="button" :disabled="saving" @click="$emit('add-row')">
-      Add entry
+      {{ t('appointment_config.add_entry') }}
     </button>
   </section>
 </template>
 
 <script setup>
+import { t } from '../../../modules/localization/i18nRuntime.js';
+
 defineProps({
   rows: {
     type: Array,
