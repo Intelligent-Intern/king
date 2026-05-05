@@ -24,4 +24,8 @@ assert.match(adminPageFrameSource, /border-start-end-radius/, 'admin page frame 
 const runtimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
 assert.match(runtimeSource, /document\.documentElement\.dir = normalizedDirection/, 'runtime must keep document direction synchronized');
 
+const sharedWorkspaceStyles = await readFile(path.join(root, 'src/styles/workspace-shared.css'), 'utf8');
+assert.match(sharedWorkspaceStyles, /html\[dir="rtl"\]\s+\.pager-icon-img\s*\{[^}]*transform:\s*scaleX\(-1\)/s, 'pagination directional icons must mirror in RTL');
+assert.doesNotMatch(sharedWorkspaceStyles, /html\[dir="rtl"\][^{]*(canvas|video)/, 'RTL rules must not mirror canvas or video content');
+
 console.log('[rtl-layout-foundation-contract] PASS');
