@@ -121,7 +121,7 @@ videochat_gossipmesh_test_assert(
     'protected envelope contract must be advertised'
 );
 videochat_gossipmesh_test_assert(count($plan['members']) === 3, 'only admitted members without forbidden payload fields are eligible');
-videochat_gossipmesh_test_assert($plan['rejected_members'] === 5, 'pending, secret-bearing, and left members must be rejected');
+videochat_gossipmesh_test_assert($plan['rejected_members'] === 5, 'pending and secret-bearing members must be rejected; left members must also be rejected');
 videochat_gossipmesh_test_assert($plan['ttl'] === 3, 'small room TTL estimate mismatch');
 videochat_gossipmesh_test_assert($plan['forward_count'] === VIDEOCHAT_GOSSIPMESH_MIN_EXPANDER_FANOUT, 'requested forward_count below expander minimum must clamp to 3');
 videochat_gossipmesh_test_assert(VIDEOCHAT_GOSSIPMESH_MIN_EXPANDER_FANOUT === 3, 'backend minimum expander fanout must be 3');
