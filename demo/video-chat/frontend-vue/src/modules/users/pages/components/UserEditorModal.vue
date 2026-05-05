@@ -189,9 +189,9 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue';
-import AppIconButton from '../../../components/AppIconButton.vue';
-import AppModalShell from '../../../components/AppModalShell.vue';
-import AppSelect from '../../../components/AppSelect.vue';
+import AppIconButton from '../../../../components/AppIconButton.vue';
+import AppModalShell from '../../../../components/AppModalShell.vue';
+import AppSelect from '../../../../components/AppSelect.vue';
 
 const props = defineProps({
   open: {

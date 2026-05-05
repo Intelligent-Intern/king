@@ -1,4 +1,4 @@
-import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
+import { createAdminSyncSocket } from '../../../../support/adminSyncSocket';
 
 export function createAdminSyncReloadController({ getSessionToken, getOwnSessionId, onReload }) {
   let reloadTimer = 0;

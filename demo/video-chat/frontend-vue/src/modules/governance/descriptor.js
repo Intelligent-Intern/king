@@ -1,5 +1,5 @@
 const governanceRoutes = [
-  ['users', 'Nutzer', 'Nutzer', 'Nutzer', 'domain/users/admin/UsersView.vue'],
+  ['users', 'Nutzer', 'Nutzer', 'Nutzer', 'modules/users/pages/admin/UsersView.vue'],
   ['groups', 'Gruppen', 'Gruppe', 'Gruppen', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['organizations', 'Organisationen', 'Organisation', 'Organisationen', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['modules', 'Module', 'Modul', 'Module', 'modules/governance/pages/GovernanceCrudView.vue'],
@@ -13,8 +13,8 @@ const governanceRoutes = [
 ];
 
 function governanceLoader(sourcePath) {
-  if (sourcePath === 'domain/users/admin/UsersView.vue') {
-    return () => import('../../domain/users/admin/UsersView.vue');
+  if (sourcePath === 'modules/users/pages/admin/UsersView.vue') {
+    return () => import('../users/pages/admin/UsersView.vue');
   }
   return () => import('./pages/GovernanceCrudView.vue');
 }

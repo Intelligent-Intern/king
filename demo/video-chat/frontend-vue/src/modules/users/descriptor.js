@@ -8,8 +8,8 @@ export default {
       name: 'admin-overview',
       roles: ['admin'],
       pageTitle: 'Overview',
-      source_path: 'domain/users/overview/OverviewView.vue',
-      loader: () => import('../../domain/users/overview/OverviewView.vue'),
+      source_path: 'modules/users/pages/overview/OverviewView.vue',
+      loader: () => import('./pages/overview/OverviewView.vue'),
     },
   ],
   navigation: [

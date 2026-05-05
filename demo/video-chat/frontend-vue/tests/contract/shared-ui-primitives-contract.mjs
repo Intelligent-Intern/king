@@ -20,8 +20,8 @@ try {
   const userCalls = readSource('src/domain/calls/dashboard/UserDashboardView.vue');
   const callTable = readSource('src/domain/calls/components/ListTable.vue');
   const chatArchive = readSource('src/domain/calls/components/ChatArchiveModal.vue');
-  const adminUserEditor = readSource('src/domain/users/components/UserEditorModal.vue');
-  const adminUsers = readSource('src/domain/users/admin/UsersView.vue');
+  const adminUserEditor = readSource('src/modules/users/pages/components/UserEditorModal.vue');
+  const adminUsers = readSource('src/modules/users/pages/admin/UsersView.vue');
 
   assert.match(callTable, /import AppIconButton from '..\/..\/..\/components\/AppIconButton\.vue';/, 'call table actions must use the shared icon button');
   assert.match(callTable, /<table class="calls-list-table"/, 'call table markup must live in one shared component');
