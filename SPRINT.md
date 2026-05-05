@@ -447,6 +447,13 @@ Non-goals for this sprint:
    - Ensure video/canvas content is not mirrored unless explicitly desired for
      self-preview behavior.
 
+   Progress:
+   - [x] Shared admin frames, Users/Marketplace table wrappers, and
+     Localization error lists use logical inline padding/radius properties for
+     RTL-safe layout.
+   - [x] Localization contract now includes an RTL layout foundation guard for
+     those non-call admin/module surfaces and document direction sync.
+
    Done when:
    - [ ] RTL locales set app `dir="rtl"` and UI direction changes across all
      major screens.
