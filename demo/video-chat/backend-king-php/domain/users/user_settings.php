@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/localization.php';
+require_once __DIR__ . '/onboarding_progress.php';
 
 /**
  * @return array<int, string>
@@ -220,7 +221,9 @@ function videochat_supported_user_date_formats(): array
  *   linkedin_url: string,
  *   x_url: string,
  *   youtube_url: string,
- *   messenger_contacts: array<int, array{channel: string, handle: string}>
+ *   messenger_contacts: array<int, array{channel: string, handle: string}>,
+ *   onboarding_completed_tours: array<int, string>,
+ *   onboarding_badges: array<int, array{tour_key: string, completed_at: string}>
  * }|null
  */
 function videochat_fetch_user_settings(PDO $pdo, int $userId): ?array
@@ -247,6 +250,7 @@ SELECT
     users.x_url,
     users.youtube_url,
     users.messenger_contacts_json,
+    users.onboarding_progress_json,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -283,6 +287,8 @@ SQL
         'x_url' => is_string($row['x_url'] ?? null) ? (string) $row['x_url'] : '',
         'youtube_url' => is_string($row['youtube_url'] ?? null) ? (string) $row['youtube_url'] : '',
         'messenger_contacts' => videochat_decode_messenger_contacts($row['messenger_contacts_json'] ?? '[]'),
+        'onboarding_completed_tours' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['completed_tours'],
+        'onboarding_badges' => videochat_onboarding_progress_payload($row['onboarding_progress_json'] ?? '{}')['badges'],
     ];
 }
 
@@ -566,5 +572,11 @@ function videochat_user_settings_payload(array $userSettings): array
         'x_url' => (string) ($userSettings['x_url'] ?? ''),
         'youtube_url' => (string) ($userSettings['youtube_url'] ?? ''),
         'messenger_contacts' => is_array($userSettings['messenger_contacts'] ?? null) ? $userSettings['messenger_contacts'] : [],
+        'onboarding_completed_tours' => is_array($userSettings['onboarding_completed_tours'] ?? null)
+            ? $userSettings['onboarding_completed_tours']
+            : [],
+        'onboarding_badges' => is_array($userSettings['onboarding_badges'] ?? null)
+            ? $userSettings['onboarding_badges']
+            : [],
     ];
 }

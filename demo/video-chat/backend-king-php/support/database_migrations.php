@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/tenant_migrations.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/workspace_theme_migrations.php';
+require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
     return [
@@ -782,15 +783,5 @@ SQL,
             'name' => '0031_translation_import_history',
             'statements' => videochat_translation_import_history_migration_statements(),
         ],
-        32 => [
-            'name' => '0032_user_profile_social_fields',
-            'statements' => [
-                "ALTER TABLE users ADD COLUMN about_me TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE users ADD COLUMN linkedin_url TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE users ADD COLUMN x_url TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE users ADD COLUMN youtube_url TEXT NOT NULL DEFAULT ''",
-                "ALTER TABLE users ADD COLUMN messenger_contacts_json TEXT NOT NULL DEFAULT '[]'",
-            ],
-        ],
-    ] + videochat_sqlite_tenant_migrations();
+    ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }
