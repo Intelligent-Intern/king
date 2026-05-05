@@ -14,9 +14,13 @@ function moduleDescription(descriptor) {
     `${descriptor.routes.length} routes`,
     `${descriptor.navigation.length} navigation entries`,
     `${descriptor.settings_panels.length} settings panels`,
+    `grant targets: ${descriptor.access.grant_targets.join(', ')}`,
   ];
   if (descriptor.permissions.length > 0) {
     parts.push(`permissions: ${descriptor.permissions.join(', ')}`);
+  }
+  if (descriptor.access.supports_time_limited_grants) {
+    parts.push('time-limited grants');
   }
   return parts.join('; ');
 }

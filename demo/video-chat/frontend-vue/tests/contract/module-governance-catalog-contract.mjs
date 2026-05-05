@@ -11,6 +11,8 @@ assert.equal(moduleRows.length, workspaceModuleRegistry.list().length, 'governan
 assert.ok(moduleRows.every((row) => row.readonly === true), 'descriptor module rows must be readonly system rows');
 assert.ok(moduleRows.some((row) => row.key === 'governance'), 'governance module row missing');
 assert.ok(moduleRows.some((row) => row.description.includes('permissions: governance.read')), 'module rows must expose permissions');
+assert.ok(moduleRows.every((row) => row.description.includes('grant targets:')), 'module rows must expose grant target metadata');
+assert.ok(moduleRows.every((row) => row.description.includes('time-limited grants')), 'module rows must expose time-limited grant metadata');
 
 const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-permissions');
 const permissionKeys = new Set(permissionRows.map((row) => row.key));
