@@ -47,6 +47,10 @@ try {
     path.join(root, 'src/modules/users/pages/admin/api.js'),
     'utf8',
   );
+  const workspaceAdministrationApiSource = await readFile(
+    path.join(root, 'src/domain/workspace/administrationApi.js'),
+    'utf8',
+  );
 
   const backendCodes = new Set(
     backendSources.flatMap((source) => [...source.matchAll(/\$errorResponse\([^,\n]+,\s*'([^']+)'/g)])
@@ -116,6 +120,7 @@ try {
   for (const [label, source] of [
     ['marketplace admin API', marketplaceApiSource],
     ['users admin API', usersApiSource],
+    ['workspace administration API', workspaceAdministrationApiSource],
   ]) {
     assert.doesNotMatch(source, /payload\?\.error\?\.message/, `${label} must not display backend English error messages directly`);
     assert.match(source, /buildLocalizedApiError\(payload,\s*`Request failed/, `${label} must resolve API errors through stable codes`);

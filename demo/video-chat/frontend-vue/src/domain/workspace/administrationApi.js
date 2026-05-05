@@ -1,5 +1,6 @@
 import { sessionState } from '../auth/session';
 import { fetchBackend } from '../../support/backendFetch';
+import { buildLocalizedApiError } from '../../modules/localization/apiErrorMessages.js';
 
 function headers(withBody = false) {
   const result = { accept: 'application/json' };
@@ -7,11 +8,6 @@ function headers(withBody = false) {
   const token = String(sessionState.sessionToken || '').trim();
   if (token !== '') result.authorization = `Bearer ${token}`;
   return result;
-}
-
-function errorMessage(payload, fallback) {
-  const message = payload?.error?.message;
-  return typeof message === 'string' && message.trim() !== '' ? message.trim() : fallback;
 }
 
 async function request(path, options = {}) {
@@ -22,7 +18,7 @@ async function request(path, options = {}) {
   }).then((result) => result.response);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== 'ok') {
-    const error = new Error(errorMessage(payload, `Request failed (${response.status}).`));
+    const error = buildLocalizedApiError(payload, `Request failed (${response.status}).`, response.status);
     error.fields = payload?.error?.details?.fields || {};
     throw error;
   }
