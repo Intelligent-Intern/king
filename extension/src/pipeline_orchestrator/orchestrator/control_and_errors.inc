@@ -253,7 +253,7 @@ static zend_long king_orchestrator_remote_line_limit(void)
 
 static uint64_t king_orchestrator_monotonic_time_ms(void)
 {
-    return (uint64_t) (zend_hrtime() / 1000000ULL);
+    return king_hrtime_ms();
 }
 
 static zend_long king_orchestrator_control_timeout_budget_ms(
@@ -416,6 +416,7 @@ static zend_result king_orchestrator_validate_positive_long_option(
     *target = Z_LVAL_P(value);
     return SUCCESS;
 }
+
 
 static zend_result king_orchestrator_exec_control_parse(
     zval *options,
@@ -660,4 +661,3 @@ static zend_result king_orchestrator_exec_control_check(
 
     return SUCCESS;
 }
-

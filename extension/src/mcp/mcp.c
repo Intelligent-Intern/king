@@ -7,9 +7,9 @@
 #include "include/mcp/mcp.h"
 #include "include/php_king.h"
 #include "include/config/mcp_and_orchestrator/base_layer.h"
+#include "include/king_hrtime.h"
 
 #include "Zend/zend_smart_str.h"
-#include "Zend/zend_hrtime.h"
 #include "ext/standard/base64.h"
 #include "main/php_network.h"
 
