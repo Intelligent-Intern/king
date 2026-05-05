@@ -1547,6 +1547,14 @@ Non-goals for this sprint:
       admin auth boundary, API version, and lobby/SFU WebSocket routing.
     - `deploy-smoke.sh` now revokes the temporary admin smoke login through
       `/api/auth/logout` and keeps an exit-trap cleanup path for early failures.
+    - `deploy-smoke.sh` now verifies the authenticated admin session payload,
+      default `en` locale, `ltr` direction, and seeded `en`, `de`, `ar`, and
+      `sgd` rollout locales before running protected admin checks.
+    - Full online smoke with remote SSH skipped now cleans up its admin session
+      but correctly fails before protected admin checks on the current deployed
+      app because `/api/auth/session` does not yet return `user.locale`
+      (`expected en, got ""`). This is the deploy-target proof gap the
+      localization rollout must close.
     - `npm run test:e2e:localization-smoke` passes locally: public booking
       locale/direction, localized public join error, Settings language switch
       persistence with RTL flip, Admin Localization viewport stability across
