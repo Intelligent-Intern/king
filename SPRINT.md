@@ -349,6 +349,9 @@ Sprint goal:
    - Relation stack now applies nested selections back into the selected parent
      row draft, so user -> group -> permissions/modules can return with child
      relations preserved in the unsaved parent payload.
+   - User Management now exposes Governance groups through the same `+1`
+     relation picker and submits selected groups alongside direct Governance
+     roles during user create/update.
    - Remaining work: connect module/permission/grant relation mutations to
      real tenant-scoped backend APIs.
 
@@ -452,6 +455,9 @@ Sprint goal:
    - User Management now loads Governance roles and exposes a separate
      multi-select relation control for direct user role assignment, sending
      `relationships.roles` to the admin user API.
+   - Admin user create/update now also accepts `relationships.groups`,
+     persists tenant-scoped user group memberships through `group_memberships`,
+     and returns selected group summaries in user relationship payloads.
    - Remaining work: broaden direct-role UI affordances only where non-admin
      profile or delegation screens need them.
 
@@ -582,6 +588,8 @@ Sprint goal:
    - Extended user editor relation contract so direct Governance role
      assignment is covered by the shared `CrudRelationStack` and persisted
      through `relationships.roles`.
+   - Extended admin-user and user-editor contracts for direct Governance group
+     assignment through `relationships.groups`.
    - Remaining work depends on the recursive relation picker and backend
      governance APIs: nested user -> group -> permission assignment, batch
       summary loading, and responsive/e2e modal stack proof.

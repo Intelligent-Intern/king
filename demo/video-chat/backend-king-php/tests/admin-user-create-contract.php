@@ -241,6 +241,20 @@ VALUES(:tenant_id, :role_id, 'governance.groups.create', 'group', 'create')
 SQL
     );
     $insertRolePermission->execute([':tenant_id' => $tenantId, ':role_id' => $roleId]);
+    $groupPublicId = '00000000-0000-4000-8000-00000000b501';
+    $insertGroup = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO "groups"(tenant_id, public_id, name, key, status, created_by_user_id, created_at, updated_at)
+VALUES(:tenant_id, :public_id, 'Admin User Create Contract Group', 'admin-user-create-contract', 'active', 1, :created_at, :updated_at)
+SQL
+    );
+    $insertGroup->execute([
+        ':tenant_id' => $tenantId,
+        ':public_id' => $groupPublicId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $groupId = (int) $pdo->lastInsertId();
 
     $createdRoleUserResponse = videochat_handle_user_routes(
         '/api/admin/users',
@@ -255,6 +269,9 @@ SQL
                 'relationships' => [
                     'roles' => [
                         ['entity_key' => 'roles', 'id' => $rolePublicId],
+                    ],
+                    'groups' => [
+                        ['entity_key' => 'groups', 'id' => $groupPublicId],
                     ],
                 ],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
@@ -278,8 +295,14 @@ SQL
         (string) (((($createdRoleUser['relationships'] ?? [])['roles'] ?? [])[0] ?? [])['id'] ?? '') === $rolePublicId,
         'created role user should expose selected governance role'
     );
+    videochat_admin_user_create_assert(
+        (string) (((($createdRoleUser['relationships'] ?? [])['groups'] ?? [])[0] ?? [])['id'] ?? '') === $groupPublicId,
+        'created role user should expose selected governance group'
+    );
     $userRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_user_roles WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId} AND role_id = {$roleId}")->fetchColumn();
     videochat_admin_user_create_assert($userRoleAssignmentCount === 1, 'created user governance role should be persisted');
+    $userGroupAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId} AND group_id = {$groupId} AND subject_type = 'user' AND status = 'active'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupAssignmentCount === 1, 'created user governance group should be persisted');
     $userRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'user_roles' AND subject_type = 'user' AND user_id = {$createdRoleUserId} AND permission_key = 'governance.groups.create'")->fetchColumn();
     videochat_admin_user_create_assert($userRoleGrantCount === 1, 'created user governance role should expand into evaluator grant');
     $userRoleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'group', '*', 'create');

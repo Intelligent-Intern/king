@@ -69,10 +69,12 @@
       :user-email-mutating-id="userEmailMutatingId"
       :can-edit-role="canEditRole"
       :can-edit-governance-roles="canEditGovernanceRoles"
+      :can-edit-governance-groups="canEditGovernanceGroups"
       :can-edit-status="canEditStatus"
       :can-edit-theme-editor="canEditThemeEditor"
       :theme-options="workspaceThemeOptions"
       :governance-role-options="governanceRoleOptions"
+      :governance-group-options="governanceGroupOptions"
       @close="closeDialog"
       @delete-pending-email="deletePendingEmail"
       @create-pending-email="createPendingEmail"
@@ -96,11 +98,8 @@ import AdminUsersTable from '../components/UsersTable.vue';
 import { createAdminSyncReloadController } from './syncReload';
 import { createAdminUsersApi, normalizeAdminAvatarSrc } from './api';
 import { isAllowedAvatarMimeType, readAvatarFileAsDataUrl } from './avatarInput';
-import {
-  governanceRoleRelationshipPayload,
-  loadGovernanceRoleOptions,
-  normalizeUserGovernanceRoles,
-} from './governanceRoles';
+import { governanceGroupRelationshipPayload, governanceRoleRelationshipPayload, loadGovernanceGroupOptions, loadGovernanceRoleOptions } from './governanceRoles';
+import { populateUserEditorForm, resetUserEditorForm } from './userEditorFormState';
 import { appearanceState, loadWorkspaceAppearance } from '../../../../domain/workspace/appearance';
 import { t } from '../../../localization/i18nRuntime.js';
 import {
@@ -152,9 +151,11 @@ const form = reactive({
   theme: 'dark',
   theme_editor_enabled: false,
   avatar_path: '',
+  governance_groups: [],
   governance_roles: [],
 });
 const userEmailRows = ref([]);
+const governanceGroupOptions = ref([]);
 const governanceRoleOptions = ref([]);
 const userEmailDraft = ref('');
 const userEmailLoading = ref(false);
@@ -248,6 +249,19 @@ async function loadGovernanceRoles() {
   }
 }
 
+async function loadGovernanceGroups() {
+  try {
+    governanceGroupOptions.value = await loadGovernanceGroupOptions(apiRequest);
+  } catch {
+    governanceGroupOptions.value = [];
+  }
+}
+
+function loadGovernanceRelationOptions() {
+  if (governanceGroupOptions.value.length === 0) void loadGovernanceGroups();
+  if (governanceRoleOptions.value.length === 0) void loadGovernanceRoles();
+}
+
 function applySearchNow() {
   queryApplied.value = queryDraft.value.trim();
   page.value = 1;
@@ -270,19 +284,7 @@ function goToPage(nextPage) {
 }
 
 function resetForm(mode = 'create') {
-  form.mode = mode;
-  form.id = 0;
-  form.email = '';
-  form.display_name = '';
-  form.password = '';
-  form.password_repeat = '';
-  form.role = 'user';
-  form.status = 'active';
-  form.time_format = '24h';
-  form.theme = 'dark';
-  form.theme_editor_enabled = false;
-  form.avatar_path = '';
-  form.governance_roles = [];
+  resetUserEditorForm(form, mode);
   avatarEditorOpen.value = false;
   avatarUploadDataUrl.value = '';
   avatarDefaultSelection.value = '';
@@ -297,7 +299,7 @@ function resetForm(mode = 'create') {
 
 function openCreateUser() {
   resetForm('create');
-  if (governanceRoleOptions.value.length === 0) void loadGovernanceRoles();
+  loadGovernanceRelationOptions();
   dialogOpen.value = true;
 }
 
@@ -347,18 +349,9 @@ async function loadUserEmails(userId) {
 
 async function openEditUser(user) {
   resetForm('edit');
-  form.id = Number(user.id || 0);
-  form.email = String(user.email || '');
-  form.display_name = String(user.display_name || '');
-  form.role = String(user.role || 'user');
-  form.status = String(user.status || 'active');
-  form.time_format = String(user.time_format || '24h');
-  form.theme = String(user.theme || 'dark');
-  form.theme_editor_enabled = Boolean(user.theme_editor_enabled);
-  form.avatar_path = String(user.avatar_path || '');
-  form.governance_roles = normalizeUserGovernanceRoles(user);
+  populateUserEditorForm(form, user);
   applySelectedUserPermissions(user);
-  if (governanceRoleOptions.value.length === 0) void loadGovernanceRoles();
+  loadGovernanceRelationOptions();
   dialogOpen.value = true;
   await loadUserEmails(form.id);
 }
@@ -385,7 +378,8 @@ const dialogTitle = computed(() => (form.mode === 'create' ? t('users.create_use
 const dialogSubmitLabel = computed(() => (form.mode === 'create' ? t('users.create_user') : t('common.save_changes')));
 const pageCount = computed(() => Math.max(1, pagination.pageCount));
 const canEditRole = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeRole));
-const canEditGovernanceRoles = computed(() => (form.mode === 'create' ? true : !selectedUserPermissions.isSelf));
+const canEditGovernanceGroups = computed(() => (form.mode === 'create' ? true : !selectedUserPermissions.isSelf));
+const canEditGovernanceRoles = canEditGovernanceGroups;
 const canEditStatus = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeStatus));
 const canEditThemeEditor = computed(() => (form.mode === 'create' ? true : selectedUserPermissions.canChangeThemeEditor));
 const workspaceThemeOptions = computed(() => (
@@ -560,6 +554,7 @@ async function submitForm() {
           role,
           theme_editor_enabled: Boolean(form.theme_editor_enabled),
           relationships: {
+            groups: governanceGroupRelationshipPayload(form.governance_groups),
             roles: governanceRoleRelationshipPayload(form.governance_roles),
           },
         },
@@ -583,10 +578,14 @@ async function submitForm() {
       if (canEditStatus.value) {
         patchBody.status = String(form.status || 'active');
       }
-      if (canEditGovernanceRoles.value) {
-        patchBody.relationships = {
-          roles: governanceRoleRelationshipPayload(form.governance_roles),
-        };
+      if (canEditGovernanceGroups.value || canEditGovernanceRoles.value) {
+        patchBody.relationships = {};
+        if (canEditGovernanceGroups.value) {
+          patchBody.relationships.groups = governanceGroupRelationshipPayload(form.governance_groups);
+        }
+        if (canEditGovernanceRoles.value) {
+          patchBody.relationships.roles = governanceRoleRelationshipPayload(form.governance_roles);
+        }
       }
 
       await apiRequest(`/api/admin/users/${encodeURIComponent(String(form.id))}`, {

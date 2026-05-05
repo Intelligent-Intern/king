@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
+require_once __DIR__ . '/../domain/tenancy/governance_user_group_assignments.php';
 
 function videochat_handle_admin_user_account_routes(
     string $path,
@@ -63,6 +64,7 @@ function videochat_handle_admin_user_account_routes(
 
             $rows = is_array($listing['rows'] ?? null) ? $listing['rows'] : [];
             $rows = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_role_rows($pdo, $tenantId, $rows) : $rows;
+            $rows = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_group_rows($pdo, $tenantId, $rows) : $rows;
             $rows = array_map(
                 static function ($row) use ($actorUserId, $primaryAdminUserId) {
                     if (!is_array($row)) {
@@ -140,6 +142,12 @@ function videochat_handle_admin_user_account_routes(
                     'fields' => is_array($roleValidation['errors'] ?? null) ? $roleValidation['errors'] : [],
                 ]);
             }
+            $groupValidation = videochat_tenancy_governance_validate_user_groups($pdo, $tenantId, $payload);
+            if (!(bool) ($groupValidation['ok'] ?? false)) {
+                return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
+                    'fields' => is_array($groupValidation['errors'] ?? null) ? $groupValidation['errors'] : [],
+                ]);
+            }
             $createResult = videochat_admin_create_user($pdo, $payload, $tenantId);
             if ((bool) ($createResult['ok'] ?? false) && $tenantId > 0 && is_array($createResult['user'] ?? null)) {
                 $createdUserId = (int) (($createResult['user'] ?? [])['id'] ?? 0);
@@ -149,7 +157,14 @@ function videochat_handle_admin_user_account_routes(
                         'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
                     ]);
                 }
+                $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $createdUserId, $payload);
+                if (!(bool) ($groupSync['ok'] ?? false)) {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User create payload failed validation.', [
+                        'fields' => is_array($groupSync['errors'] ?? null) ? $groupSync['errors'] : [],
+                    ]);
+                }
                 $createResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $createResult['user']);
+                $createResult['user'] = videochat_tenancy_governance_enrich_user_group_relationships($pdo, $tenantId, (array) $createResult['user']);
             }
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_create_failed', 'Could not create user.', [
@@ -199,6 +214,7 @@ function videochat_handle_admin_user_account_routes(
                     ]);
                 }
                 $user = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, $user) : $user;
+                $user = $tenantId > 0 ? videochat_tenancy_governance_enrich_user_group_relationships($pdo, $tenantId, $user) : $user;
 
                 $actorUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
                 $primaryAdminUserId = videochat_primary_admin_user_id($pdo);
@@ -330,10 +346,23 @@ function videochat_handle_admin_user_account_routes(
                         ],
                     ]);
                 }
+                if (videochat_tenancy_governance_user_payload_has_groups($payload) && $actorUserId > 0 && $actorUserId === $userId) {
+                    return $errorResponse(409, 'admin_user_conflict', 'You cannot change your own governance groups.', [
+                        'fields' => [
+                            'groups' => 'cannot_change_own_governance_groups',
+                        ],
+                    ]);
+                }
                 $roleValidation = videochat_tenancy_governance_validate_user_roles($pdo, $tenantId, $payload);
                 if (!(bool) ($roleValidation['ok'] ?? false)) {
                     return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
                         'fields' => is_array($roleValidation['errors'] ?? null) ? $roleValidation['errors'] : [],
+                    ]);
+                }
+                $groupValidation = videochat_tenancy_governance_validate_user_groups($pdo, $tenantId, $payload);
+                if (!(bool) ($groupValidation['ok'] ?? false)) {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                        'fields' => is_array($groupValidation['errors'] ?? null) ? $groupValidation['errors'] : [],
                     ]);
                 }
 
@@ -345,7 +374,14 @@ function videochat_handle_admin_user_account_routes(
                             'fields' => is_array($roleSync['errors'] ?? null) ? $roleSync['errors'] : [],
                         ]);
                     }
+                    $groupSync = videochat_tenancy_governance_sync_user_groups($pdo, $tenantId, $userId, $payload);
+                    if (!(bool) ($groupSync['ok'] ?? false)) {
+                        return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                            'fields' => is_array($groupSync['errors'] ?? null) ? $groupSync['errors'] : [],
+                        ]);
+                    }
                     $updateResult['user'] = videochat_tenancy_governance_enrich_user_role_relationships($pdo, $tenantId, (array) $updateResult['user']);
+                    $updateResult['user'] = videochat_tenancy_governance_enrich_user_group_relationships($pdo, $tenantId, (array) $updateResult['user']);
                 }
             } catch (Throwable) {
                 return $errorResponse(500, 'admin_user_update_failed', 'Could not update user.', [

@@ -12,10 +12,12 @@ const modalSource = await source('src/modules/users/pages/components/UserEditorM
 assert.match(modalSource, /CrudRelationStack/, 'user editor must reuse the shared relation stack');
 assert.match(modalSource, /target_entity: 'user_roles'/, 'user role must be exposed as a relation target');
 assert.match(modalSource, /target_entity: 'governance_roles'/, 'governance roles must be exposed as a relation target');
+assert.match(modalSource, /target_entity: 'governance_groups'/, 'governance groups must be exposed as a relation target');
 assert.match(modalSource, /target_entity: 'user_themes'/, 'user theme must be exposed as a relation target');
 assert.match(modalSource, /show-nested-relations="false"/, 'legacy user fields must not expose unrelated nested relation hops');
 assert.match(modalSource, /props\.form\.role = value/, 'role relation selection must update the existing backend payload field');
 assert.match(modalSource, /props\.form\.governance_roles = /, 'governance role relation selection must update the backend relationship payload field');
+assert.match(modalSource, /props\.form\.governance_groups = /, 'governance group relation selection must update the backend relationship payload field');
 assert.match(modalSource, /props\.form\.theme = value/, 'theme relation selection must update the existing backend payload field');
 assert.doesNotMatch(
   modalSource,
@@ -33,9 +35,12 @@ assert.match(cssSource, /users-relation-link/, 'user relation controls must have
 
 const viewSource = await source('src/modules/users/pages/admin/UsersView.vue');
 assert.match(viewSource, /loadGovernanceRoleOptions/, 'user management must load governance role options through the helper');
+assert.match(viewSource, /loadGovernanceGroupOptions/, 'user management must load governance group options through the helper');
 assert.match(viewSource, /relationships:\s*\{[\s\S]*roles: governanceRoleRelationshipPayload\(form\.governance_roles\)/, 'user save payload must submit governance role relationships');
+assert.match(viewSource, /groups: governanceGroupRelationshipPayload\(form\.governance_groups\)/, 'user save payload must submit governance group relationships');
 
 const governanceRolesSource = await source('src/modules/users/pages/admin/governanceRoles.js');
 assert.match(governanceRolesSource, /\/api\/governance\/roles/, 'user management must load governance role options from the backend');
+assert.match(governanceRolesSource, /\/api\/governance\/groups/, 'user management must load governance group options from the backend');
 
 console.log('[user-editor-relation-controls-contract] PASS');
