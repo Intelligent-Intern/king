@@ -32,6 +32,7 @@ const explicitlyIncludedFiles = new Set([
   'src/domain/calls/dashboard/compose.js',
   'src/domain/calls/dashboard/enterCall.js',
   'src/domain/calls/dashboard/joinInvite.js',
+  'src/modules/users/pages/overview/OverviewView.template.html',
 ]);
 
 function normalizeRelative(filePath) {

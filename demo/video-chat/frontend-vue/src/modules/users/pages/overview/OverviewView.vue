@@ -9,8 +9,10 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { currentBackendOrigin, fetchBackend } from '../../../../support/backendFetch';
 import { logoutSession, refreshSession, sessionState } from '../../../../domain/auth/session';
-import { formatDateRangeDisplay, fullCalendarEventTimeFormat } from '../../../../support/dateTimeFormat';
-import { deriveStatus, formatUptimeSeconds, generateRoomUuid, isoToLocalInput, localInputToIso, normalizeArray, normalizeNonNegativeInteger, normalizeOwnerHost, tagClassForStatus } from './helpers';
+import { fullCalendarEventTimeFormat } from '../../../../support/dateTimeFormat';
+import { t } from '../../../localization/i18nRuntime.js';
+import { deriveStatus, generateRoomUuid, isoToLocalInput, localInputToIso, normalizeArray, normalizeNonNegativeInteger } from './helpers';
+import { useOverviewDashboardMetrics } from './useOverviewDashboardMetrics';
 
 const router = useRouter();
 const activeOverviewView = ref('dashboard');
@@ -55,6 +57,25 @@ const operationsState = reactive({
 
 const myCallsRows = ref([]);
 
+const {
+  clusterHealthRows,
+  healthyNodesMetric,
+  infrastructureStatusLabel,
+  infrastructureStatusTagClass,
+  infrastructureSubtitle,
+  liveCallsMetric,
+  nodesUnderLoadMetric,
+  participantsMetric,
+  providerRows,
+  routingPolicyRows,
+  runningCallsRows,
+  transportAvgRoiMetric,
+  transportAvgSelectionMetric,
+  transportFrameKindRows,
+  transportMatteGuidedMetric,
+  transportRecentFramesMetric,
+} = useOverviewDashboardMetrics({ infrastructureState, operationsState });
+
 const registeredUsers = [
   { id: 1, display_name: 'Jochen', email: 'jochen@kingrt.com', role: 'admin' },
   { id: 2, display_name: 'Anna Meyer', email: 'anna@kingrt.com', role: 'user' },
@@ -85,11 +106,11 @@ const composeExternalRows = ref([]);
 let composeExternalRowId = 0;
 
 const composeHeadline = computed(() => (
-  composeState.mode === 'edit' ? 'Edit video call' : 'Schedule video call'
+  composeState.mode === 'edit' ? t('calls.compose.headline_edit') : t('calls.compose.headline_schedule')
 ));
 
 const composeSubmitLabel = computed(() => (
-  composeState.mode === 'edit' ? 'Save changes' : 'Schedule call'
+  composeState.mode === 'edit' ? t('common.save_changes') : t('calls.compose.submit_schedule')
 ));
 
 const composeCanDelete = computed(() => (
@@ -136,7 +157,7 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : '';
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
+      throw new Error(t('errors.api.backend_unreachable', { origin: currentBackendOrigin() }));
     }
     throw new Error(message);
   }
@@ -156,13 +177,13 @@ async function apiRequest(path, { method = 'GET', query = null, body = null } = 
       }
       await logoutSession();
       await router.push('/login');
-      throw new Error('Session expired. Please sign in again.');
+      throw new Error(t('errors.api.session_expired'));
     }
-    throw new Error(extractErrorMessage(payload, `Request failed (${response.status}).`));
+    throw new Error(extractErrorMessage(payload, t('errors.api.request_failed_status', { status: response.status })));
   }
 
   if (!payload || payload.status !== 'ok') {
-    throw new Error('Backend returned an invalid payload.');
+    throw new Error(t('errors.api.invalid_payload'));
   }
 
   return payload;
@@ -188,7 +209,7 @@ async function loadInfrastructure() {
     applyInfrastructurePayload(payload);
   } catch (error) {
     if (seq !== infrastructureLoadSeq) return;
-    infrastructureState.error = error instanceof Error ? error.message : 'Could not load infrastructure inventory.';
+    infrastructureState.error = error instanceof Error ? error.message : t('users.overview.load_infrastructure_failed');
   } finally {
     if (seq === infrastructureLoadSeq) {
       infrastructureState.loading = false;
@@ -226,7 +247,7 @@ async function loadVideoOperations({ background = false } = {}) {
     applyVideoOperationsPayload(payload);
   } catch (error) {
     if (seq !== operationsLoadSeq) return;
-    operationsState.error = error instanceof Error ? error.message : 'Could not load live video operations.';
+    operationsState.error = error instanceof Error ? error.message : t('users.overview.load_video_operations_failed');
   } finally {
     if (seq === operationsLoadSeq) {
       operationsState.loading = false;
@@ -248,197 +269,10 @@ function stopVideoOperationsRefreshLoop() {
   operationsRefreshTimer = null;
 }
 
-const runningCallsRows = computed(() => (
-  operationsState.runningCalls.map((call, index) => {
-    const id = String(call?.id || call?.room_id || `running-call-${index}`).trim();
-    const liveParticipants = call?.live_participants && typeof call.live_participants === 'object'
-      ? call.live_participants
-      : {};
-    const statusLabel = String(call?.status || 'live').trim() || 'live';
-
-    return {
-      id,
-      call: String(call?.title || 'Untitled call'),
-      host: normalizeOwnerHost(call),
-      users: normalizeNonNegativeInteger(liveParticipants.total),
-      uptime: formatUptimeSeconds(call?.uptime_seconds),
-      statusLabel,
-      statusTagClass: tagClassForStatus(statusLabel),
-    };
-  })
-));
-
-const liveCallsMetric = computed(() => String(normalizeNonNegativeInteger(
-  operationsState.metrics.live_calls,
-)));
-
-const participantsMetric = computed(() => String(normalizeNonNegativeInteger(
-  operationsState.metrics.concurrent_participants,
-)));
-
-const transportRecentFramesMetric = computed(() => String(normalizeNonNegativeInteger(
-  operationsState.transport.recent_frame_count,
-)));
-
-const transportMatteGuidedMetric = computed(() => String(normalizeNonNegativeInteger(
-  operationsState.transport.matte_guided_frame_count,
-)));
-
-const transportAvgSelectionMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_selection_tile_ratio || 0)) * 100)}%`);
-
-const transportAvgRoiMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_roi_area_ratio || 0)) * 100)}%`);
-
-const transportFrameKindRows = computed(() => (
-  normalizeArray(operationsState.transport.frame_kinds).map((row, index) => ({
-    id: `${String(row?.kind || 'kind').trim()}:${index}`,
-    kind: String(row?.kind || 'unknown').trim() || 'unknown',
-    frames: normalizeNonNegativeInteger(row?.frames),
-    matteGuidedFrames: normalizeNonNegativeInteger(row?.matte_guided_frames),
-    avgSelectionTileRatio: `${Math.round(Math.max(0, Number(row?.avg_selection_tile_ratio || 0)) * 100)}%`,
-    avgRoiAreaRatio: `${Math.round(Math.max(0, Number(row?.avg_roi_area_ratio || 0)) * 100)}%`,
-  }))
-));
-
-const healthyNodesMetric = computed(() => {
-  const total = clusterHealthRows.value.length;
-  const healthy = clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() === 'healthy').length;
-  return `${healthy} / ${total}`;
-});
-
-const nodesUnderLoadMetric = computed(() => String(
-  clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() !== 'healthy').length,
-));
-
-const servicesByNodeId = computed(() => {
-  const map = new Map();
-  for (const service of infrastructureState.services) {
-    const nodeId = String(service?.node_id || '').trim();
-    if (nodeId === '') continue;
-    if (!map.has(nodeId)) map.set(nodeId, []);
-    map.get(nodeId).push(service);
-  }
-  return map;
-});
-
-const clusterHealthRows = computed(() => (
-  infrastructureState.nodes.map((node) => {
-    const nodeId = String(node?.id || '').trim();
-    const services = servicesByNodeId.value.get(nodeId) || [];
-    const roles = normalizeArray(node?.roles).map((role) => String(role || '').trim()).filter(Boolean);
-    const health = String(node?.health || node?.status || 'unknown').trim().toLowerCase();
-    return {
-      id: nodeId || String(node?.name || 'unknown-node'),
-      node: String(node?.name || nodeId || 'unknown-node'),
-      provider: String(node?.provider || 'unknown'),
-      region: String(node?.region || 'n/a'),
-      roles: roles.length > 0 ? roles.join(', ') : 'n/a',
-      services: services.length > 0 ? services.map((service) => String(service?.kind || service?.label || 'service')).join(', ') : 'n/a',
-      status: String(node?.status || 'unknown'),
-      health,
-      statusTagClass: tagClassForStatus(health),
-    };
-  })
-));
-
-const providerRows = computed(() => (
-  infrastructureState.providers.map((provider) => {
-    const capabilities = provider?.capabilities && typeof provider.capabilities === 'object' ? provider.capabilities : {};
-    const activeCapabilities = Object.entries(capabilities)
-      .filter(([, value]) => Boolean(value))
-      .map(([key]) => key.replaceAll('_', ' '));
-    return {
-      id: String(provider?.id || provider?.label || 'provider'),
-      label: String(provider?.label || provider?.id || 'Provider'),
-      statusLabel: String(provider?.status || 'unknown'),
-      capabilityLabel: activeCapabilities.length > 0 ? activeCapabilities.join(' / ') : 'inventory only',
-    };
-  })
-));
-
-const infrastructureSubtitle = computed(() => {
-  const deployment = infrastructureState.deployment || {};
-  const name = String(deployment.name || deployment.id || 'deployment');
-  const publicDomain = String(deployment.public_domain || 'local');
-  const mode = String(deployment.inventory_mode || 'auto');
-  return `${name} · ${publicDomain} · inventory ${mode}`;
-});
-
-const infrastructureStatusLabel = computed(() => {
-  if (infrastructureState.loading) return 'loading';
-  if (infrastructureState.error) return 'error';
-  return clusterHealthRows.value.length > 0 ? 'inventory online' : 'no nodes';
-});
-
-const infrastructureStatusTagClass = computed(() => (
-  infrastructureState.error ? 'warn' : 'ok'
-));
-
-const telemetrySummary = computed(() => {
-  const openTelemetry = infrastructureState.telemetry?.open_telemetry || {};
-  if (!openTelemetry.enabled) return 'OpenTelemetry not enabled';
-  const metrics = openTelemetry.metrics_enabled ? 'metrics' : '';
-  const logs = openTelemetry.logs_enabled ? 'logs' : '';
-  const signals = [metrics, logs].filter(Boolean).join(' + ') || 'exporter configured';
-  return `${signals} via ${openTelemetry.protocol || 'grpc'}`;
-});
-
-const scalingModesSummary = computed(() => {
-  const modes = normalizeArray(infrastructureState.scaling?.modes);
-  const available = modes.filter((mode) => Boolean(mode?.available)).map((mode) => String(mode?.label || mode?.id || '').trim()).filter(Boolean);
-  return available.length > 0 ? available.join(' / ') : 'No scaling mode available';
-});
-
-const routingPolicyRows = computed(() => [
-  {
-    topic: 'Deployment routing',
-    policy: 'Domain + API/WS/SFU/CDN subdomains',
-    runtime: [
-      infrastructureState.deployment?.public_domain,
-      infrastructureState.deployment?.api_domain,
-      infrastructureState.deployment?.ws_domain,
-      infrastructureState.deployment?.sfu_domain,
-      infrastructureState.deployment?.cdn_domain,
-    ].filter(Boolean).join(' / ') || 'n/a',
-    code: false,
-  },
-  {
-    topic: 'Telemetry source',
-    policy: 'OpenTelemetry exporter contract',
-    runtime: telemetrySummary.value,
-    code: false,
-  },
-  {
-    topic: 'SFU scaling',
-    policy: String(infrastructureState.scaling?.strategy || 'not reported'),
-    runtime: scalingModesSummary.value,
-    code: false,
-  },
-  {
-    topic: 'Write actions',
-    policy: 'Provisioning is read-only until audited admin actions exist',
-    runtime: infrastructureState.scaling?.write_actions_enabled ? 'Enabled' : 'Disabled',
-    code: false,
-  },
-]);
-
 function setActiveOverviewView(view) {
   if (view === 'dashboard' || view === 'calendar') {
     activeOverviewView.value = view;
   }
-}
-
-function formatScheduleRange(startValue, endValue) {
-  return formatDateRangeDisplay(startValue, endValue, {
-    dateFormat: sessionState.dateFormat,
-    timeFormat: sessionState.timeFormat,
-    separator: ' -> ',
-    fallback: 'n/a',
-  });
-}
-
-function openWorkspace(row) {
-  const routeSegment = String(row?.id || row?.roomId || 'lobby').trim() || 'lobby';
-  void router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
 }
 
 function nextExternalRow(initial = {}) {
@@ -466,7 +300,7 @@ function resetComposeModal() {
 function openComposeFromPreset({
   mode = 'schedule',
   eventId = '',
-  title = 'New Video Call',
+  title = '',
   roomUuid = '',
   startsAt,
   endsAt,
@@ -474,10 +308,11 @@ function openComposeFromPreset({
   externalParticipants = [],
 } = {}) {
   resetComposeModal();
+  const fallbackTitle = t('calls.compose.headline_new');
   composeState.mode = mode === 'edit' ? 'edit' : 'schedule';
   composeState.open = true;
   composeState.calendarEventId = String(eventId || '');
-  composeState.title = String(title || 'New Video Call').trim() || 'New Video Call';
+  composeState.title = String(title || fallbackTitle).trim() || fallbackTitle;
   composeState.roomUuid = String(roomUuid || '').trim() || generateRoomUuid();
   composeState.startsLocal = isoToLocalInput(startsAt instanceof Date ? startsAt.toISOString() : String(startsAt || ''));
   composeState.endsLocal = isoToLocalInput(endsAt instanceof Date ? endsAt.toISOString() : String(endsAt || ''));
@@ -594,10 +429,10 @@ function normalizeExternalRows() {
     const email = String(row?.email || '').trim().toLowerCase();
     if (displayName === '' && email === '') continue;
     if (displayName === '' || email === '') {
-      return { ok: false, error: `External participant row ${index + 1} requires both display name and email.`, rows: [] };
+      return { ok: false, error: t('calls.compose.external_row_required', { number: index + 1 }), rows: [] };
     }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      return { ok: false, error: `External participant row ${index + 1} has an invalid email.`, rows: [] };
+      return { ok: false, error: t('calls.compose.external_row_email_invalid', { number: index + 1 }), rows: [] };
     }
     rows.push({ display_name: displayName, email });
   }
@@ -608,7 +443,7 @@ function upsertMyCallsRow(eventId, title, roomUuid, startsAtIso, endsAtIso, user
   const status = deriveStatus(startsAtIso, endsAtIso);
   const nextRow = {
     id: String(eventId),
-    title: String(title || 'New Video Call'),
+    title: String(title || t('calls.compose.headline_new')),
     scheduleStart: isoToLocalInput(startsAtIso),
     scheduleEnd: isoToLocalInput(endsAtIso),
     statusLabel: status.label,
@@ -667,19 +502,19 @@ function submitCompose() {
   composeState.error = '';
   const title = String(composeState.title || '').trim();
   if (title === '') {
-    composeState.error = 'Title is required.';
+    composeState.error = t('calls.compose.title_required');
     return;
   }
 
   const startsAt = localInputToIso(composeState.startsLocal);
   const endsAt = localInputToIso(composeState.endsLocal);
   if (startsAt === '' || endsAt === '') {
-    composeState.error = 'Start and end timestamps are required.';
+    composeState.error = t('calls.compose.start_end_required');
     return;
   }
 
   if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-    composeState.error = 'End timestamp must be after start timestamp.';
+    composeState.error = t('calls.compose.end_after_start');
     return;
   }
 
@@ -740,12 +575,23 @@ function handleEscape(event) {
   }
 }
 
+function overviewCalendarButtonText() {
+  return {
+    today: t('users.overview.calendar_today'),
+    month: t('users.overview.fullcalendar_month'),
+    week: t('users.overview.fullcalendar_week'),
+    day: t('users.overview.fullcalendar_day'),
+  };
+}
+
 async function initOverviewCalendar() {
   if (!(overviewCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
   try {
     calendarInstance = new Calendar(overviewCalendarEl.value, {
       plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
       initialView: 'dayGridMonth',
+      locale: sessionState.locale || 'en',
+      buttonText: overviewCalendarButtonText(),
       headerToolbar: {
         left: 'prev,next today',
         center: 'title',
@@ -826,9 +672,11 @@ watch(activeOverviewView, (view) => {
 });
 
 watch(
-  () => sessionState.timeFormat,
+  () => [sessionState.timeFormat, sessionState.locale],
   () => {
     if (!calendarInstance) return;
+    calendarInstance.setOption('locale', sessionState.locale || 'en');
+    calendarInstance.setOption('buttonText', overviewCalendarButtonText());
     calendarInstance.setOption('eventTimeFormat', fullCalendarEventTimeFormat(sessionState.timeFormat));
   }
 );

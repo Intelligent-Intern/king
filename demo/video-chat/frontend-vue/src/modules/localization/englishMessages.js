@@ -1,4 +1,7 @@
+import { USERS_OVERVIEW_MESSAGES } from './usersOverviewMessages.js';
+
 export const ENGLISH_MESSAGES = Object.freeze({
+  ...USERS_OVERVIEW_MESSAGES,
   'common.cancel': 'Cancel',
   'common.close': 'Close',
   'common.close_modal': 'Close modal',
