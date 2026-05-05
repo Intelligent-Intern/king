@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/call_access.php';
+require_once __DIR__ . '/../../support/tenant_context.php';
 
 function videochat_appointment_clean_text(mixed $value, int $maxLength): string
 {
@@ -128,6 +129,18 @@ function videochat_appointment_default_settings_row(int $ownerUserId, string $pu
     ];
 }
 
+function videochat_appointment_effective_tenant_id(PDO $pdo, ?int $tenantId = null): ?int
+{
+    if (is_int($tenantId) && $tenantId > 0) {
+        return $tenantId;
+    }
+    if (!videochat_tenant_table_has_column($pdo, 'appointment_calendar_settings', 'tenant_id')) {
+        return null;
+    }
+    $defaultTenantId = videochat_tenant_default_id($pdo);
+    return $defaultTenantId > 0 ? $defaultTenantId : null;
+}
+
 function videochat_appointment_public_settings_payload(array $row): array
 {
     return [
@@ -155,6 +168,7 @@ function videochat_appointment_owner_settings_payload(array $row): array
 
 function videochat_get_appointment_settings_row_by_owner(PDO $pdo, int $ownerUserId, ?int $tenantId = null): ?array
 {
+    $tenantId = videochat_appointment_effective_tenant_id($pdo, $tenantId);
     $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'appointment_calendar_settings', 'tenant_id')
         ? ' AND tenant_id = :tenant_id'
         : '';
@@ -170,6 +184,7 @@ function videochat_get_appointment_settings_row_by_owner(PDO $pdo, int $ownerUse
 
 function videochat_get_or_create_appointment_settings(PDO $pdo, int $ownerUserId, ?int $tenantId = null): array
 {
+    $tenantId = videochat_appointment_effective_tenant_id($pdo, $tenantId);
     $row = videochat_get_appointment_settings_row_by_owner($pdo, $ownerUserId, $tenantId);
     if (is_array($row)) {
         return videochat_appointment_owner_settings_payload($row);
@@ -335,13 +350,14 @@ SQL
     ];
     if ($hasTenantColumn) {
         $tenantId = is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null;
-        $params[':tenant_id'] = $tenantId;
+        $params[':tenant_id'] = videochat_appointment_effective_tenant_id($pdo, $tenantId);
     }
     $query->execute($params);
 }
 
 function videochat_save_appointment_settings(PDO $pdo, int $ownerUserId, string $publicId, array $settings, ?int $tenantId = null): array
 {
+    $tenantId = videochat_appointment_effective_tenant_id($pdo, $tenantId);
     $existingRow = videochat_get_appointment_settings_row_by_owner($pdo, $ownerUserId, $tenantId);
     $effectivePublicId = videochat_appointment_normalize_public_id($publicId);
     if ($effectivePublicId === '' && is_array($existingRow)) {
