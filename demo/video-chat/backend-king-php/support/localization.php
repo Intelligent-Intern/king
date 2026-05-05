@@ -309,12 +309,12 @@ function videochat_fetch_translation_resources(PDO $pdo, string $locale, ?int $t
 
     $statement = $pdo->prepare(
         <<<SQL
-SELECT namespace, resource_key, value
+SELECT namespace, resource_key, value, {$tenantOrder} AS tenant_rank
 FROM translation_resources
 WHERE translation_resources.locale = :locale
   AND {$tenantClause}
   {$namespaceClause}
-ORDER BY {$tenantOrder} ASC, translation_resources.namespace ASC, translation_resources.resource_key ASC
+ORDER BY tenant_rank ASC, translation_resources.namespace ASC, translation_resources.resource_key ASC
 SQL
     );
     $statement->execute($params);

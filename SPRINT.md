@@ -1559,6 +1559,10 @@ Non-goals for this sprint:
       authenticated tenant context. `deploy-smoke.sh` verifies the public
       `de`/`common` resource payload has no tenant context and exposes seeded
       rollout locales.
+    - Fixed SQLite translation-resource lookup ordering for public/global
+      resource requests by ordering through an explicit `tenant_rank` alias
+      instead of `ORDER BY 0`, which SQLite interprets as an invalid positional
+      column reference.
     - Current deployed app fails the new public localization smoke with HTTP
       401 on `/api/localization/resources?locale=de&namespaces=common`,
       confirming the production backend is still on the pre-public-localization
