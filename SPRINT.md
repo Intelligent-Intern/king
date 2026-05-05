@@ -253,7 +253,7 @@ Non-goals for this sprint:
 
 ## Active Issues
 
-1. [ ] `[localization-inventory]` Inventory every user-visible string and locale assumption.
+1. [x] `[localization-inventory]` Inventory every user-visible string and locale assumption.
 
    Scope:
    - Scan Vue templates, JS modules, PHP response messages, email templates,
@@ -267,14 +267,18 @@ Non-goals for this sprint:
      metadata from the correct website source path.
 
    Done when:
-   - [ ] Inventory document lists all frontend, backend, public, and email
+   - [x] Inventory document lists all frontend, backend, public, and email
      translation surfaces.
-   - [ ] Initial namespace plan exists for `common`, `auth`, `settings`,
+   - [x] Initial namespace plan exists for `common`, `auth`, `settings`,
      `calls`, `call_workspace`, `calendar`, `users`, `tenancy`, `marketplace`,
      `public_booking`, `emails`, `errors`, and `diagnostics`.
-   - [ ] All discovered Intelligent Intern website locale files are confirmed
+   - [x] All discovered Intelligent Intern website locale files are confirmed
      as the first supported locale set.
-   - [ ] RTL risk map lists every screen with physical left/right layout.
+   - [x] RTL risk map lists every screen with physical left/right layout.
+
+   Proof:
+   - `documentation/video-chat-localization-inventory.md`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-inventory-contract.mjs`
 
 2. [ ] `[localization-schema-and-settings]` Add backend locale schema and persistent user preference.
 
