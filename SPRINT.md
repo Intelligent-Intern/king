@@ -521,7 +521,7 @@ Non-goals for this sprint:
    - [x] Email contract tests cover placeholder preservation and locale
      fallback.
 
-9. [ ] `[public-pages-localization]` Localize public booking and join routes.
+9. [x] `[public-pages-localization]` Localize public booking and join routes.
 
    Scope:
    - Public calendar booking route.
@@ -543,6 +543,8 @@ Non-goals for this sprint:
    - [x] Public join/access and appointment booking API errors resolve safe
      frontend text from stable backend error codes, including invalid,
      expired, missing, and unavailable public paths.
+   - [x] Playwright public-localization smoke covers public booking in `en`,
+     `de`, `ar`, and `fa`, plus localized invalid join-link text in RTL.
 
    Done when:
    - [x] Public pages choose language from explicit route/query/cookie/browser
@@ -550,7 +552,7 @@ Non-goals for this sprint:
    - [x] Public pages support RTL locales.
    - [x] Public booking slots and date/time formatting use the active locale.
    - [x] Invalid/expired access paths show localized safe error text.
-   - [ ] Browser smoke covers public booking in `en`, `de`, `ar`, and one
+   - [x] Browser smoke covers public booking in `en`, `de`, `ar`, and one
      additional RTL locale from the website source.
 
 10. [ ] `[locale-aware-formatting]` Centralize date, time, number, list, and sorting behavior.
