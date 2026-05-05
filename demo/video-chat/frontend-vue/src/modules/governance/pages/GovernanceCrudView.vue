@@ -92,13 +92,13 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import AppIconButton from '../../components/AppIconButton.vue';
-import AppPagination from '../../components/AppPagination.vue';
-import AdminPageFrame from '../../components/admin/AdminPageFrame.vue';
-import AdminTableFrame from '../../components/admin/AdminTableFrame.vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
+import AppPagination from '../../../components/AppPagination.vue';
+import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
+import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
-import { buildGovernanceCatalogRows } from '../../modules/governanceCatalog.js';
-import { workspaceModuleRegistry } from '../../modules/index.js';
+import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
+import { workspaceModuleRegistry } from '../../index.js';
 
 const route = useRoute();
 const rowsByScope = reactive({});
