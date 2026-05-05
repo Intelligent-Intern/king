@@ -2,8 +2,8 @@
 King HTTP/1 one-shot listener keeps exclusive bind semantics even against same-UID SO_REUSEPORT attempts
 --SKIPIF--
 <?php
-if (!function_exists('proc_open') || !function_exists('stream_socket_client')) {
-    echo "skip proc_open and stream_socket_client are required";
+if (!function_exists('proc_open') || !function_exists('shell_exec') || !function_exists('stream_socket_client')) {
+    echo "skip proc_open, shell_exec, and stream_socket_client are required";
     return;
 }
 if (!is_readable('/proc/net/tcp')) {
@@ -11,46 +11,12 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-$probe = false;
-$checkPython = proc_open(
-    ['command', '-v', 'python3'],
-    [
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ],
-    $pythonPipes
-);
-if (is_resource($checkPython)) {
-    stream_get_contents($pythonPipes[1]);
-    stream_get_contents($pythonPipes[2]);
-    foreach ($pythonPipes as $pipe) {
-        fclose($pipe);
-    }
-    $pythonExit = proc_close($checkPython);
-
-    if ($pythonExit === 0) {
-        $checkReusePort = proc_open(
-            ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
-            [
-                1 => ['pipe', 'w'],
-                2 => ['pipe', 'w'],
-            ],
-            $reusePortPipes
-        );
-        if (is_resource($checkReusePort)) {
-            stream_get_contents($reusePortPipes[1]);
-            stream_get_contents($reusePortPipes[2]);
-            foreach ($reusePortPipes as $pipe) {
-                fclose($pipe);
-            }
-            $reusePortExit = proc_close($checkReusePort);
-            if ($reusePortExit === 0) {
-                $probe = true;
-            }
-        }
-    }
-}
-if (!$probe) {
+$probe = trim((string) shell_exec(
+    'command -v python3 >/dev/null 2>&1'
+    . ' && python3 -c ' . escapeshellarg("import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)")
+    . ' >/dev/null 2>&1 && printf yes'
+));
+if ($probe !== 'yes') {
     echo "skip python3 with socket.SO_REUSEPORT is required";
 }
 ?>

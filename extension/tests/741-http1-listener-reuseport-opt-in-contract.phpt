@@ -2,8 +2,8 @@
 King HTTP/1 one-shot listener enables SO_REUSEPORT only for explicit trusted worker opt-in
 --SKIPIF--
 <?php
-if (!function_exists('proc_open') || !function_exists('stream_socket_client')) {
-    echo "skip proc_open and stream_socket_client are required";
+if (!function_exists('proc_open') || !function_exists('shell_exec') || !function_exists('stream_socket_client')) {
+    echo "skip proc_open, shell_exec, and stream_socket_client are required";
     return;
 }
 if (!is_readable('/proc/net/tcp')) {
