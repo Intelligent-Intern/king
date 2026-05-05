@@ -7,6 +7,12 @@ const localeDirections = {
   fa: 'rtl',
 };
 
+const viewportMatrix = [
+  { name: 'desktop', width: 1280, height: 820 },
+  { name: 'tablet', width: 768, height: 920 },
+  { name: 'mobile', width: 390, height: 844 },
+];
+
 const localizedResources = {
   ar: {
     'errors.api.call_access_validation_failed': 'رابط المكالمة غير صالح.',
@@ -70,11 +76,16 @@ async function installPublicLocalizationRoutes(page) {
 test('public booking resolves locale and direction without an authenticated session', async ({ page }) => {
   await installPublicLocalizationRoutes(page);
 
-  for (const [locale, direction] of Object.entries(localeDirections)) {
-    await page.goto(`/book/public-localization-calendar?locale=${locale}`);
-    await expect(page.locator('html')).toHaveAttribute('lang', locale);
-    await expect(page.locator('html')).toHaveAttribute('dir', direction);
-    await expect(page.locator('.appointment-slot-btn')).toHaveCount(1);
+  for (const viewport of viewportMatrix) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    for (const [locale, direction] of Object.entries(localeDirections)) {
+      await page.goto(`/book/public-localization-calendar?locale=${locale}`);
+      await expect(page.locator('html')).toHaveAttribute('lang', locale);
+      await expect(page.locator('html')).toHaveAttribute('dir', direction);
+      await expect(page.locator('.appointment-slot-btn')).toHaveCount(1);
+      const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+      expect(hasHorizontalOverflow, `${viewport.name} ${locale} should not horizontally overflow`).toBe(false);
+    }
   }
 });
 
