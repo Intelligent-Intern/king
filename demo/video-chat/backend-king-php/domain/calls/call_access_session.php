@@ -97,7 +97,8 @@ function videochat_issue_session_for_call_access(
             (string) ($call['id'] ?? ''),
             $userId,
             (string) ($targetUser['email'] ?? ''),
-            (string) ($targetUser['display_name'] ?? '')
+            (string) ($targetUser['display_name'] ?? ''),
+            'allowed'
         );
         $callPermission = videochat_get_call_for_user(
             $pdo,

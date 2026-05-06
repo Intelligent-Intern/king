@@ -441,8 +441,14 @@ function videochat_ensure_internal_call_participant(
     string $callId,
     int $userId,
     string $email,
-    string $displayName
+    string $displayName,
+    string $inviteState = 'invited'
 ): void {
+    $normalizedInviteState = strtolower(trim($inviteState));
+    if (!in_array($normalizedInviteState, ['invited', 'allowed'], true)) {
+        $normalizedInviteState = 'invited';
+    }
+
     $check = $pdo->prepare(
         <<<'SQL'
 SELECT 1
@@ -465,6 +471,7 @@ UPDATE call_participants
 SET email = :email,
     display_name = :display_name,
     invite_state = CASE
+        WHEN :invite_state = 'allowed' THEN 'allowed'
         WHEN invite_state IN ('declined', 'cancelled') THEN 'invited'
         ELSE invite_state
     END
@@ -478,6 +485,7 @@ SQL
             ':user_id' => $userId,
             ':email' => $email,
             ':display_name' => $displayName,
+            ':invite_state' => $normalizedInviteState,
         ]);
         return;
     }
@@ -485,7 +493,7 @@ SQL
     $insert = $pdo->prepare(
         <<<'SQL'
 INSERT INTO call_participants(call_id, user_id, email, display_name, source, call_role, invite_state, joined_at, left_at)
-VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', 'invited', NULL, NULL)
+VALUES(:call_id, :user_id, :email, :display_name, 'internal', 'participant', :invite_state, NULL, NULL)
 SQL
     );
     $insert->execute([
@@ -493,6 +501,7 @@ SQL
         ':user_id' => $userId,
         ':email' => $email,
         ':display_name' => $displayName,
+        ':invite_state' => $normalizedInviteState,
     ]);
 }
 
