@@ -13,7 +13,7 @@ function videochat_workspace_app_configuration_text_id(): string
 function videochat_workspace_background_filename_from_path(string $path): string
 {
     $decoded = rawurldecode(basename(parse_url($path, PHP_URL_PATH) ?: ''));
-    if (preg_match('/^background-[a-f0-9]{16}\.(png|jpg|webp)$/', $decoded) !== 1) {
+    if (preg_match('/^background(?:-original)?-[a-f0-9]{16}\.(png|jpg|webp)$/', $decoded) !== 1) {
         return '';
     }
     return $decoded;
@@ -25,7 +25,7 @@ function videochat_workspace_background_file_response(
     callable $errorResponse
 ): array {
     $decoded = rawurldecode($filename);
-    if (preg_match('/^background-[a-f0-9]{16}\.(png|jpg|webp)$/', $decoded) !== 1) {
+    if (preg_match('/^background(?:-original)?-[a-f0-9]{16}\.(png|jpg|webp)$/', $decoded) !== 1) {
         return $errorResponse(404, 'background_image_not_found', 'Background image could not be found.', [
             'reason' => 'invalid_filename',
         ]);
@@ -334,6 +334,7 @@ function videochat_workspace_background_image_row(array $row): array
         'id' => (string) ($row['id'] ?? ''),
         'label' => (string) ($row['label'] ?? ''),
         'file_path' => (string) ($row['file_path'] ?? ''),
+        'original_file_path' => (string) ($row['original_file_path'] ?? ''),
         'mime_type' => (string) ($row['mime_type'] ?? ''),
         'file_size' => (int) ($row['file_size'] ?? 0),
         'status' => (string) ($row['status'] ?? 'active'),
@@ -345,7 +346,7 @@ function videochat_workspace_background_image_row(array $row): array
 function videochat_workspace_background_upload_max_body_bytes(int $maxImageBytes): int
 {
     $imageBytes = max(64 * 1024, min($maxImageBytes, 10 * 1024 * 1024));
-    return (int) ceil(($imageBytes * 4) / 3) + 512 * 1024;
+    return (int) ceil(($imageBytes * 8) / 3) + 1024 * 1024;
 }
 
 function videochat_workspace_background_upload_trace_id(array $payload = []): string
@@ -506,7 +507,7 @@ function videochat_workspace_list_background_images(PDO $pdo, int $tenantId, str
     ];
 }
 
-function videochat_workspace_store_background_upload(array $file, string $storageRoot, int $maxBytes, int $tenantId, string $traceId, int $index): array
+function videochat_workspace_store_background_upload(array $file, string $storageRoot, int $maxBytes, int $tenantId, string $traceId, int $index, string $filenamePrefix = 'background'): array
 {
     $diagnostics = [];
     $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'file_received', [
@@ -549,7 +550,8 @@ function videochat_workspace_store_background_upload(array $file, string $storag
     }
     $binary = (string) ($data['binary'] ?? '');
     $extension = (string) ($data['extension'] ?? 'png');
-    $filename = 'background-' . substr(hash('sha256', $binary), 0, 16) . '.' . $extension;
+    $safePrefix = $filenamePrefix === 'background-original' ? 'background-original' : 'background';
+    $filename = $safePrefix . '-' . substr(hash('sha256', $binary), 0, 16) . '.' . $extension;
     $path = $dir . DIRECTORY_SEPARATOR . $filename;
     $objectKey = videochat_workspace_background_object_key($tenantId, $filename);
     $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'object_store_put_started', [
@@ -605,7 +607,7 @@ function videochat_workspace_create_background_images(PDO $pdo, int $tenantId, a
 {
     $traceId = videochat_workspace_background_upload_trace_id($payload);
     $files = is_array($payload['files'] ?? null) ? array_values($payload['files']) : [$payload];
-    $files = array_slice(array_filter($files, 'is_array'), 0, 50);
+    $files = array_slice(array_filter($files, 'is_array'), 0, 12);
     $diagnostics = [];
     $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'create_started', [
         'tenant_id' => $tenantId,
@@ -634,10 +636,11 @@ function videochat_workspace_create_background_images(PDO $pdo, int $tenantId, a
     $now = gmdate('c');
     $query = $pdo->prepare(
         <<<'SQL'
-INSERT INTO workspace_background_images(id, tenant_id, label, file_path, mime_type, file_size, status, created_at, updated_at)
-VALUES(:id, :tenant_id, :label, :file_path, :mime_type, :file_size, 'active', :created_at, :updated_at)
+INSERT INTO workspace_background_images(id, tenant_id, label, file_path, original_file_path, mime_type, file_size, status, created_at, updated_at)
+VALUES(:id, :tenant_id, :label, :file_path, :original_file_path, :mime_type, :file_size, 'active', :created_at, :updated_at)
 ON CONFLICT(tenant_id, file_path) DO UPDATE SET
   label = excluded.label,
+  original_file_path = CASE WHEN excluded.original_file_path <> '' THEN excluded.original_file_path ELSE workspace_background_images.original_file_path END,
   mime_type = excluded.mime_type,
   file_size = excluded.file_size,
   status = 'active',
@@ -653,6 +656,20 @@ SQL
             $errors['files.' . $index] = (string) ($stored['reason'] ?? 'invalid_upload');
             continue;
         }
+        $originalPath = '';
+        if (trim((string) ($file['original_data_url'] ?? '')) !== '') {
+            $original = videochat_workspace_store_background_upload([
+                'file_name' => 'original-' . (string) ($file['file_name'] ?? ''),
+                'label' => (string) ($file['label'] ?? ''),
+                'data_url' => (string) ($file['original_data_url'] ?? ''),
+            ], $storageRoot, $maxBytes, $tenantId, $traceId, $index, 'background-original');
+            if (is_array($original['diagnostics'] ?? null)) {
+                $diagnostics = array_merge($diagnostics, $original['diagnostics']);
+            }
+            if ((bool) ($original['ok'] ?? false)) {
+                $originalPath = (string) ($original['file_path'] ?? '');
+            }
+        }
         $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'db_insert_started', [
             'index' => $index,
             'file_path' => (string) ($stored['file_path'] ?? ''),
@@ -665,6 +682,7 @@ SQL
                 ':tenant_id' => $tenantId,
                 ':label' => (string) ($stored['label'] ?? 'Background image'),
                 ':file_path' => (string) ($stored['file_path'] ?? ''),
+                ':original_file_path' => $originalPath,
                 ':mime_type' => (string) ($stored['mime_type'] ?? ''),
                 ':file_size' => (int) ($stored['file_size'] ?? 0),
                 ':created_at' => $now,
@@ -711,6 +729,58 @@ SQL
     ];
 }
 
+function videochat_workspace_delete_unreferenced_background_file(PDO $pdo, string $storageRoot, string $filePath): void
+{
+    $filename = videochat_workspace_background_filename_from_path($filePath);
+    if ($filename === '') return;
+    $count = $pdo->prepare('SELECT COUNT(*) FROM workspace_background_images WHERE file_path = :path OR original_file_path = :path');
+    $count->execute([':path' => $filePath]);
+    if ((int) $count->fetchColumn() !== 0) return;
+    $path = rtrim($storageRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'backgrounds' . DIRECTORY_SEPARATOR . $filename;
+    if (is_file($path)) @unlink($path);
+}
+
+function videochat_workspace_update_background_image(PDO $pdo, int $tenantId, string $id, array $payload, string $storageRoot, int $maxBytes): array
+{
+    $traceId = videochat_workspace_background_upload_trace_id($payload);
+    $lookup = $pdo->prepare('SELECT * FROM workspace_background_images WHERE tenant_id = :tenant_id AND id = :id LIMIT 1');
+    $lookup->execute([':tenant_id' => $tenantId, ':id' => strtolower(trim($id))]);
+    $row = $lookup->fetch();
+    $files = is_array($payload['files'] ?? null) ? array_values(array_filter($payload['files'], 'is_array')) : [];
+    if (!is_array($row) || !is_array($files[0] ?? null)) {
+        return ['ok' => false, 'reason' => is_array($row) ? 'required_non_empty_files' : 'not_found', 'trace_id' => $traceId, 'row' => null, 'errors' => [], 'diagnostics' => []];
+    }
+    $file = (array) $files[0];
+    $stored = videochat_workspace_store_background_upload($file, $storageRoot, $maxBytes, $tenantId, $traceId, 0);
+    $diagnostics = is_array($stored['diagnostics'] ?? null) ? $stored['diagnostics'] : [];
+    if (!(bool) ($stored['ok'] ?? false)) {
+        return ['ok' => false, 'reason' => (string) ($stored['reason'] ?? 'invalid_upload'), 'trace_id' => $traceId, 'row' => null, 'errors' => $stored['errors'] ?? [], 'diagnostics' => $diagnostics];
+    }
+    $originalPath = (string) ($row['original_file_path'] ?? '');
+    if (trim((string) ($file['original_data_url'] ?? '')) !== '') {
+        $original = videochat_workspace_store_background_upload([
+            'file_name' => 'original-' . (string) ($file['file_name'] ?? ''),
+            'label' => (string) ($file['label'] ?? ''),
+            'data_url' => (string) ($file['original_data_url'] ?? ''),
+        ], $storageRoot, $maxBytes, $tenantId, $traceId, 0, 'background-original');
+        if (is_array($original['diagnostics'] ?? null)) {
+            $diagnostics = array_merge($diagnostics, $original['diagnostics']);
+        }
+        if ((bool) ($original['ok'] ?? false)) {
+            $originalPath = (string) ($original['file_path'] ?? '');
+        }
+    }
+    $now = gmdate('c');
+    $update = $pdo->prepare('UPDATE workspace_background_images SET label = :label, file_path = :file_path, original_file_path = :original_file_path, mime_type = :mime_type, file_size = :file_size, status = \'active\', updated_at = :updated_at WHERE tenant_id = :tenant_id AND id = :id');
+    $update->execute([':label' => (string) ($stored['label'] ?? 'Background image'), ':file_path' => (string) ($stored['file_path'] ?? ''), ':original_file_path' => $originalPath, ':mime_type' => (string) ($stored['mime_type'] ?? ''), ':file_size' => (int) ($stored['file_size'] ?? 0), ':updated_at' => $now, ':tenant_id' => $tenantId, ':id' => (string) $row['id']]);
+    videochat_workspace_delete_unreferenced_background_file($pdo, $storageRoot, (string) ($row['file_path'] ?? ''));
+    videochat_workspace_delete_unreferenced_background_file($pdo, $storageRoot, (string) ($row['original_file_path'] ?? ''));
+    $select = $pdo->prepare('SELECT * FROM workspace_background_images WHERE tenant_id = :tenant_id AND id = :id LIMIT 1');
+    $select->execute([':tenant_id' => $tenantId, ':id' => (string) $row['id']]);
+    $next = $select->fetch();
+    return ['ok' => is_array($next), 'reason' => is_array($next) ? 'updated' : 'not_found', 'trace_id' => $traceId, 'row' => is_array($next) ? videochat_workspace_background_image_row($next) : null, 'errors' => [], 'diagnostics' => $diagnostics];
+}
+
 function videochat_workspace_delete_background_image(PDO $pdo, int $tenantId, string $id, string $storageRoot): array
 {
     $lookup = $pdo->prepare('SELECT * FROM workspace_background_images WHERE tenant_id = :tenant_id AND id = :id LIMIT 1');
@@ -721,16 +791,7 @@ function videochat_workspace_delete_background_image(PDO $pdo, int $tenantId, st
     }
     $delete = $pdo->prepare('DELETE FROM workspace_background_images WHERE tenant_id = :tenant_id AND id = :id');
     $delete->execute([':tenant_id' => $tenantId, ':id' => (string) $row['id']]);
-    $filename = videochat_workspace_background_filename_from_path((string) ($row['file_path'] ?? ''));
-    if ($filename !== '') {
-        $count = $pdo->prepare('SELECT COUNT(*) FROM workspace_background_images WHERE file_path = :file_path');
-        $count->execute([':file_path' => (string) ($row['file_path'] ?? '')]);
-        if ((int) $count->fetchColumn() === 0) {
-            $path = rtrim($storageRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'backgrounds' . DIRECTORY_SEPARATOR . $filename;
-            if (is_file($path)) {
-                @unlink($path);
-            }
-        }
-    }
+    videochat_workspace_delete_unreferenced_background_file($pdo, $storageRoot, (string) ($row['file_path'] ?? ''));
+    videochat_workspace_delete_unreferenced_background_file($pdo, $storageRoot, (string) ($row['original_file_path'] ?? ''));
     return ['ok' => true, 'reason' => 'deleted'];
 }

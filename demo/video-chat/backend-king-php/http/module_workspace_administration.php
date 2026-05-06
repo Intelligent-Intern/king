@@ -427,6 +427,67 @@ function videochat_handle_workspace_administration_routes(
             ]);
         }
 
+        if ($method === 'PATCH' && $backgroundId !== '') {
+            $traceId = videochat_workspace_background_upload_trace_id([
+                'client_trace_id' => videochat_request_header_value($request, 'x-upload-trace-id'),
+            ]);
+            $rawBody = $request['body'] ?? '';
+            $rawBodyBytes = is_string($rawBody) ? strlen($rawBody) : 0;
+            $maxBodyBytes = videochat_workspace_background_upload_max_body_bytes($brandingMaxBytes);
+            videochat_workspace_background_upload_log($traceId, 'route_update_request_received', [
+                'tenant_id' => $tenantId,
+                'background_id' => $backgroundId,
+                'body_bytes' => $rawBodyBytes,
+                'max_body_bytes' => $maxBodyBytes,
+            ]);
+            if (is_string($rawBody) && $rawBodyBytes > $maxBodyBytes) {
+                return $errorResponse(413, 'workspace_background_upload_failed', 'Background image upload request body is too large.', [
+                    'reason' => 'request_body_too_large',
+                    'trace_id' => $traceId,
+                    'body_bytes' => $rawBodyBytes,
+                    'max_body_bytes' => $maxBodyBytes,
+                ]);
+            }
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'workspace_background_invalid_request_body', 'Background image payload must be a JSON object.', [
+                    'reason' => $decodeError,
+                    'trace_id' => $traceId,
+                ]);
+            }
+            $payload['client_trace_id'] = is_string($payload['client_trace_id'] ?? null) ? (string) $payload['client_trace_id'] : $traceId;
+            try {
+                $update = videochat_workspace_update_background_image($pdo, $tenantId, $backgroundId, $payload, $brandingStorageRoot, $brandingMaxBytes);
+            } catch (Throwable $error) {
+                videochat_workspace_background_upload_log($traceId, 'route_update_exception', [
+                    'exception' => get_class($error),
+                    'message' => $error->getMessage(),
+                ]);
+                return $errorResponse(500, 'workspace_background_upload_failed', 'Could not update background image.', [
+                    'reason' => 'internal_error',
+                    'trace_id' => $traceId,
+                ]);
+            }
+            if (!(bool) ($update['ok'] ?? false)) {
+                $reason = (string) ($update['reason'] ?? 'validation_failed');
+                return $errorResponse($reason === 'not_found' ? 404 : 422, 'workspace_background_upload_failed', 'Background image payload failed validation.', [
+                    'reason' => $reason,
+                    'trace_id' => (string) ($update['trace_id'] ?? $traceId),
+                    'diagnostics' => is_array($update['diagnostics'] ?? null) ? $update['diagnostics'] : [],
+                ]);
+            }
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'updated',
+                    'row' => is_array($update['row'] ?? null) ? $update['row'] : null,
+                    'trace_id' => (string) ($update['trace_id'] ?? $traceId),
+                    'diagnostics' => is_array($update['diagnostics'] ?? null) ? $update['diagnostics'] : [],
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
         if ($method === 'DELETE' && $backgroundId !== '') {
             try {
                 $delete = videochat_workspace_delete_background_image($pdo, $tenantId, $backgroundId, $brandingStorageRoot);
@@ -447,8 +508,8 @@ function videochat_handle_workspace_administration_routes(
             ]);
         }
 
-        return $errorResponse(405, 'method_not_allowed', 'Use GET, POST, or DELETE for workspace background images.', [
-            'allowed_methods' => ['GET', 'POST', 'DELETE'],
+        return $errorResponse(405, 'method_not_allowed', 'Use GET, POST, PATCH, or DELETE for workspace background images.', [
+            'allowed_methods' => ['GET', 'POST', 'PATCH', 'DELETE'],
         ]);
     }
 

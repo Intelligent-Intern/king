@@ -27,6 +27,7 @@ CREATE TABLE workspace_background_images (
     tenant_id INTEGER NOT NULL,
     label TEXT NOT NULL,
     file_path TEXT NOT NULL,
+    original_file_path TEXT NOT NULL DEFAULT '',
     mime_type TEXT NOT NULL,
     file_size INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
@@ -63,12 +64,13 @@ $result = videochat_workspace_create_background_images($pdo, 1, [
         'file_name' => 'contract.png',
         'label' => 'Contract',
         'data_url' => 'data:image/png;base64,' . base64_encode($png),
+        'original_data_url' => 'data:image/png;base64,' . base64_encode($png),
     ]],
 ], $storageRoot, 1024 * 1024);
 
 videochat_workspace_background_upload_diagnostics_assert((bool) ($result['ok'] ?? false), 'upload should succeed');
 videochat_workspace_background_upload_diagnostics_assert((string) ($result['trace_id'] ?? '') === 'bgup_contract_trace', 'trace id should round-trip');
-videochat_workspace_background_upload_diagnostics_assert(count($objectStoreCalls) === 1, 'object store put should be attempted');
+videochat_workspace_background_upload_diagnostics_assert(count($objectStoreCalls) === 2, 'object store put should be attempted for cropped and original images');
 
 $diagnostics = is_array($result['diagnostics'] ?? null) ? $result['diagnostics'] : [];
 $stages = array_map(static fn (array $entry): string => (string) ($entry['stage'] ?? ''), $diagnostics);
@@ -89,6 +91,7 @@ foreach ([
 $rows = is_array($result['rows'] ?? null) ? $result['rows'] : [];
 videochat_workspace_background_upload_diagnostics_assert(count($rows) === 1, 'one background row should be returned');
 videochat_workspace_background_upload_diagnostics_assert(is_file($storageRoot . '/backgrounds/' . basename((string) $rows[0]['file_path'])), 'public cache file should be written');
+videochat_workspace_background_upload_diagnostics_assert(is_file($storageRoot . '/backgrounds/' . basename((string) $rows[0]['original_file_path'])), 'original cache file should be written');
 videochat_workspace_background_upload_diagnostics_assert(
     videochat_workspace_background_upload_max_body_bytes(5 * 1024 * 1024) > 7 * 1024 * 1024,
     'request body limit should accept one max-size base64 image'
