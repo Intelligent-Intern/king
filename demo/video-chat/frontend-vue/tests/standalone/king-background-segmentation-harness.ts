@@ -4,7 +4,12 @@ import {
   type KingBackgroundMatteRefiner,
 } from '../../src/lib/wasm/wasm-codec';
 import { shapeForegroundAlpha } from '../../src/domain/realtime/background/maskPostprocess';
-import * as ort from 'onnxruntime-web';
+import * as ort from 'onnxruntime-web/wasm';
+
+if (ort.env?.wasm) {
+  ort.env.wasm.proxy = false;
+  ort.env.wasm.numThreads = 1;
+}
 
 const startButton = document.getElementById('startButton') as HTMLButtonElement;
 const modelSelect = document.getElementById('modelSelect') as HTMLSelectElement;

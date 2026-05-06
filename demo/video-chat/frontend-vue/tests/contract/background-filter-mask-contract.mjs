@@ -35,7 +35,14 @@ try {
   assert.ok(source.includes('const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;'), 'background filter stream must bound blur handoff readiness waits');
   assert.ok(source.includes('const ready = new Promise((resolve) => {'), 'background filter stream must expose a readiness promise');
   assert.ok(source.includes('const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));'), 'background filter stream must time out readiness if segmentation is slow');
-  assert.ok(source.includes('ctx.filter = `blur(${blurPx}px)`;'), 'background filter stream must keep the frame blurred while a fresh matte is still warming up');
+  assert.ok(source.includes('function drawVideoToDownsampleBlurCache('), 'background filter stream must use a filter-independent downsample blur cache');
+  assert.ok(source.includes('function drawVideoWithDownsampleBlur('), 'background filter stream must use downsample blur while a fresh matte is still warming up');
+  assert.ok(source.includes('function createNoMatteSegmentationBackend('), 'background filter stream must keep a local compositor when SINet is unavailable');
+  assert.ok(source.includes('segmentationBackend = createNoMatteSegmentationBackend("sinet_unavailable");'), 'SINet setup failure must not return the raw camera stream');
+  assert.ok(source.includes('drawVideoToDownsampleBlurCache(backgroundLayerCanvas, backgroundLayer, video, canvas.width, canvas.height, blurPx);'), 'background blur must refresh through the downsample cache');
+  assert.ok(source.includes('drawVideoWithDownsampleBlur(ctx, video, backgroundLayerCanvas, backgroundLayer, canvas.width, canvas.height, blurPx);'), 'background filter stream must keep the frame visibly blurred while a fresh matte is still warming up');
+  assert.ok(!source.includes('ctx.filter = `blur(${blurPx}px)`;'), 'background blur must not rely on CanvasRenderingContext2D.filter support');
+  assert.ok(!source.includes('backgroundLayer.filter = `blur('), 'background blur cache must not rely on CanvasRenderingContext2D.filter support');
   assert.ok(source.includes('if (!backgroundImage && !backgroundColor) {'), 'solid/image backgrounds must not draw raw or blurred camera frames while a fresh matte is still warming up');
   assert.ok(source.includes('const canRunSegmentation = !overloadDisabled && now >= overloadCooldownUntil;'), 'background overload may pause SINet detection but must keep the active compositor running');
   assert.ok(!source.includes('if (overloadDisabled) {\n      const vwFast = video.videoWidth || canvas.width;'), 'background overload must not install a raw-camera pass-through branch');
@@ -53,6 +60,11 @@ try {
     assert.ok(file.includes("backgroundColor: isExclusionBackdrop ? '#061a4a' : ''"), `${label} must pass the deep-blue replacement color`);
     assert.ok(file.includes("mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur')"), `${label} must map exclusion to replace matte and keep blur presets`);
   }
+  assert.ok(localOrchestration.includes('refs.localFilteredStreamRef.value = stream;'), 'local media must store the processed background stream');
+  assert.ok(localOrchestration.includes('refs.localStreamRef.value = stream;'), 'local media must publish the processed background stream');
+  assert.ok(localOrchestration.includes('const videoTrack = stream.getVideoTracks()[0];'), 'initial local publisher must encode the processed stream video track');
+  assert.ok(localOrchestration.includes('const videoTrack = nextStream.getVideoTracks()[0] || null;'), 'background reconfigure must encode the replacement processed stream video track');
+  assert.ok(localOrchestration.includes("eventType: 'local_background_sinet_unavailable'"), 'local media must emit a diagnostic if SINet cannot initialize in the call path');
   assert.ok(!source.includes('ctx.filter = "none";\n      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);\n      ctx.restore();'), 'background filter stream must not fall back to raw video while blur presets switch');
   assert.ok(source.includes('ready,'), 'background filter stream handle must return the readiness promise');
   assert.ok(controller.includes('const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);'), 'background filter controller must gate blur-to-blur swaps on ready handoff');
