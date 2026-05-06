@@ -12,6 +12,7 @@ assert.ok(moduleRows.every((row) => row.entity_key === 'modules'), 'descriptor m
 assert.ok(moduleRows.every((row) => row.readonly === true), 'descriptor module rows must be readonly system rows');
 assert.ok(moduleRows.some((row) => row.key === 'governance'), 'governance module row missing');
 assert.ok(moduleRows.some((row) => row.key === 'calls'), 'calls module row missing');
+assert.ok(moduleRows.some((row) => row.key === 'onboarding'), 'onboarding module row missing');
 assert.ok(moduleRows.every((row) => !row.description_key), 'module rows must not render descriptions');
 assert.ok(moduleRows.every((row) => typeof row.preview_kind === 'string' && row.preview_kind !== ''), 'module rows must expose screenshot preview metadata');
 assert.ok(moduleRows.every((row) => Number.isInteger(row.route_count)), 'module rows must expose route counts for diagnostics');

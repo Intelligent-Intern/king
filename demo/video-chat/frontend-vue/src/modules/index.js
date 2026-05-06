@@ -4,6 +4,7 @@ import calls from './calls/descriptor.js';
 import governance from './governance/descriptor.js';
 import localization from './localization/descriptor.js';
 import marketplace from './marketplace/descriptor.js';
+import onboarding from './onboarding/descriptor.js';
 import themeEditor from './theme_editor/descriptor.js';
 import users from './users/descriptor.js';
 import workspaceSettings from './workspace_settings/descriptor.js';
@@ -17,6 +18,7 @@ export const workspaceModuleDescriptors = [
   governance,
   localization,
   marketplace,
+  onboarding,
   themeEditor,
   users,
   workspaceSettings,
