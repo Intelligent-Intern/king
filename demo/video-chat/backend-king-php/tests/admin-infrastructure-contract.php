@@ -94,6 +94,9 @@ putenv('VIDEOCHAT_DEPLOY_CDN_DOMAIN=cdn.video.example.test');
     videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['sfu_domain'] ?? '') === 'sfu.video.example.test', 'SFU domain mismatch');
     videochat_admin_infra_assert((string) (($payload['deployment'] ?? [])['cdn_domain'] ?? '') === 'cdn.video.example.test', 'CDN domain mismatch');
     videochat_admin_infra_assert(count((array) ($payload['nodes'] ?? [])) === 1, 'static inventory should expose one node');
+    $staticResources = (array) (((array) (($payload['nodes'] ?? [])[0] ?? []))['resources'] ?? []);
+    videochat_admin_infra_assert(array_key_exists('cpu_usage_percent', $staticResources), 'static node should expose current CPU usage');
+    videochat_admin_infra_assert(array_key_exists('memory_usage_percent', $staticResources), 'static node should expose current memory usage');
     videochat_admin_infra_assert(count((array) ($payload['services'] ?? [])) >= 4, 'static inventory should expose core services');
     videochat_admin_infra_assert((bool) (($payload['telemetry']['open_telemetry'] ?? [])['enabled'] ?? false), 'OTel should be enabled');
     videochat_admin_infra_assert(

@@ -8,6 +8,28 @@ import {
   tagClassForStatus,
 } from './helpers';
 
+function percentage(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return null;
+  return Math.max(0, Math.min(100, numeric));
+}
+
+function formatPercentage(value) {
+  const normalized = percentage(value);
+  return normalized === null ? t('common.not_available') : `${Math.round(normalized)}%`;
+}
+
+function averagePercent(values) {
+  const normalized = values.map(percentage).filter((value) => value !== null);
+  if (normalized.length === 0) return null;
+  return normalized.reduce((sum, value) => sum + value, 0) / normalized.length;
+}
+
+function providerIsActual(provider) {
+  const status = String(provider?.status || '').trim().toLowerCase();
+  return provider?.configured !== false && !['not_configured', 'not_detected'].includes(status);
+}
+
 export function useOverviewDashboardMetrics({ infrastructureState, operationsState }) {
   const runningCallsRows = computed(() => (
     operationsState.runningCalls.map((call, index) => {
@@ -29,36 +51,8 @@ export function useOverviewDashboardMetrics({ infrastructureState, operationsSta
     })
   ));
 
-  const liveCallsMetric = computed(() => String(normalizeNonNegativeInteger(
-    operationsState.metrics.live_calls,
-  )));
-
-  const participantsMetric = computed(() => String(normalizeNonNegativeInteger(
-    operationsState.metrics.concurrent_participants,
-  )));
-
-  const transportRecentFramesMetric = computed(() => String(normalizeNonNegativeInteger(
-    operationsState.transport.recent_frame_count,
-  )));
-
-  const transportMatteGuidedMetric = computed(() => String(normalizeNonNegativeInteger(
-    operationsState.transport.matte_guided_frame_count,
-  )));
-
-  const transportAvgSelectionMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_selection_tile_ratio || 0)) * 100)}%`);
-
-  const transportAvgRoiMetric = computed(() => `${Math.round(Math.max(0, Number(operationsState.transport.avg_roi_area_ratio || 0)) * 100)}%`);
-
-  const transportFrameKindRows = computed(() => (
-    normalizeArray(operationsState.transport.frame_kinds).map((row, index) => ({
-      id: `${String(row?.kind || 'kind').trim()}:${index}`,
-      kind: String(row?.kind || t('users.overview.status_unknown')).trim() || t('users.overview.status_unknown'),
-      frames: normalizeNonNegativeInteger(row?.frames),
-      matteGuidedFrames: normalizeNonNegativeInteger(row?.matte_guided_frames),
-      avgSelectionTileRatio: `${Math.round(Math.max(0, Number(row?.avg_selection_tile_ratio || 0)) * 100)}%`,
-      avgRoiAreaRatio: `${Math.round(Math.max(0, Number(row?.avg_roi_area_ratio || 0)) * 100)}%`,
-    }))
-  ));
+  const liveCallsMetric = computed(() => String(normalizeNonNegativeInteger(operationsState.metrics.live_calls)));
+  const participantsMetric = computed(() => String(normalizeNonNegativeInteger(operationsState.metrics.concurrent_participants)));
 
   const servicesByNodeId = computed(() => {
     const map = new Map();
@@ -93,6 +87,21 @@ export function useOverviewDashboardMetrics({ infrastructureState, operationsSta
     })
   ));
 
+  const serverResourceRows = computed(() => (
+    infrastructureState.nodes.map((node, index) => {
+      const resources = node?.resources && typeof node.resources === 'object' ? node.resources : {};
+      const health = String(node?.health || node?.status || t('users.overview.status_unknown')).trim().toLowerCase();
+      return {
+        id: String(node?.id || `node-${index}`),
+        node: String(node?.name || node?.id || t('users.overview.unknown_node')),
+        cpuUsage: formatPercentage(resources.cpu_usage_percent),
+        ramUsage: formatPercentage(resources.memory_usage_percent),
+        status: String(node?.status || t('users.overview.status_unknown')),
+        statusTagClass: tagClassForStatus(health),
+      };
+    })
+  ));
+
   const healthyNodesMetric = computed(() => {
     const total = clusterHealthRows.value.length;
     const healthy = clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() === 'healthy').length;
@@ -100,11 +109,22 @@ export function useOverviewDashboardMetrics({ infrastructureState, operationsSta
   });
 
   const nodesUnderLoadMetric = computed(() => String(
-    clusterHealthRows.value.filter((row) => String(row.health).toLowerCase() !== 'healthy').length,
+    serverResourceRows.value.filter((row) => {
+      const cpu = Number.parseInt(row.cpuUsage, 10);
+      const ram = Number.parseInt(row.ramUsage, 10);
+      return (Number.isFinite(cpu) && cpu >= 80) || (Number.isFinite(ram) && ram >= 85);
+    }).length,
   ));
 
+  const cpuUsageMetric = computed(() => formatPercentage(averagePercent(
+    infrastructureState.nodes.map((node) => node?.resources?.cpu_usage_percent),
+  )));
+  const ramUsageMetric = computed(() => formatPercentage(averagePercent(
+    infrastructureState.nodes.map((node) => node?.resources?.memory_usage_percent),
+  )));
+
   const providerRows = computed(() => (
-    infrastructureState.providers.map((provider) => {
+    infrastructureState.providers.filter(providerIsActual).map((provider) => {
       const capabilities = provider?.capabilities && typeof provider.capabilities === 'object' ? provider.capabilities : {};
       const activeCapabilities = Object.entries(capabilities)
         .filter(([, value]) => Boolean(value))
@@ -134,65 +154,11 @@ export function useOverviewDashboardMetrics({ infrastructureState, operationsSta
       : t('users.overview.no_nodes');
   });
 
-  const infrastructureStatusTagClass = computed(() => (
-    infrastructureState.error ? 'warn' : 'ok'
-  ));
-
-  const telemetrySummary = computed(() => {
-    const openTelemetry = infrastructureState.telemetry?.open_telemetry || {};
-    if (!openTelemetry.enabled) return t('users.overview.open_telemetry_disabled');
-    const metrics = openTelemetry.metrics_enabled ? t('users.overview.telemetry_metrics') : '';
-    const logs = openTelemetry.logs_enabled ? t('users.overview.telemetry_logs') : '';
-    const signals = [metrics, logs].filter(Boolean).join(' + ') || t('users.overview.telemetry_exporter_configured');
-    return t('users.overview.telemetry_signal_transport', {
-      signals,
-      protocol: openTelemetry.protocol || 'grpc',
-    });
-  });
-
-  const scalingModesSummary = computed(() => {
-    const modes = normalizeArray(infrastructureState.scaling?.modes);
-    const available = modes.filter((mode) => Boolean(mode?.available)).map((mode) => String(mode?.label || mode?.id || '').trim()).filter(Boolean);
-    return available.length > 0 ? available.join(' / ') : t('users.overview.no_scaling_mode');
-  });
-
-  const routingPolicyRows = computed(() => [
-    {
-      topic: t('users.overview.routing_deployment_topic'),
-      policy: t('users.overview.routing_deployment_policy'),
-      runtime: [
-        infrastructureState.deployment?.public_domain,
-        infrastructureState.deployment?.api_domain,
-        infrastructureState.deployment?.ws_domain,
-        infrastructureState.deployment?.sfu_domain,
-        infrastructureState.deployment?.cdn_domain,
-      ].filter(Boolean).join(' / ') || t('common.not_available'),
-      code: false,
-    },
-    {
-      topic: t('users.overview.routing_telemetry_topic'),
-      policy: t('users.overview.routing_telemetry_policy'),
-      runtime: telemetrySummary.value,
-      code: false,
-    },
-    {
-      topic: t('users.overview.routing_sfu_scaling_topic'),
-      policy: String(infrastructureState.scaling?.strategy || t('users.overview.status_not_reported')),
-      runtime: scalingModesSummary.value,
-      code: false,
-    },
-    {
-      topic: t('users.overview.routing_write_actions_topic'),
-      policy: t('users.overview.routing_write_actions_policy'),
-      runtime: infrastructureState.scaling?.write_actions_enabled
-        ? t('users.overview.status_enabled')
-        : t('users.overview.status_disabled'),
-      code: false,
-    },
-  ]);
+  const infrastructureStatusTagClass = computed(() => (infrastructureState.error ? 'warn' : 'ok'));
 
   return {
     clusterHealthRows,
+    cpuUsageMetric,
     healthyNodesMetric,
     infrastructureStatusLabel,
     infrastructureStatusTagClass,
@@ -201,12 +167,8 @@ export function useOverviewDashboardMetrics({ infrastructureState, operationsSta
     nodesUnderLoadMetric,
     participantsMetric,
     providerRows,
-    routingPolicyRows,
+    ramUsageMetric,
     runningCallsRows,
-    transportAvgRoiMetric,
-    transportAvgSelectionMetric,
-    transportFrameKindRows,
-    transportMatteGuidedMetric,
-    transportRecentFramesMetric,
+    serverResourceRows,
   };
 }
