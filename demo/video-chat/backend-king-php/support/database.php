@@ -7,6 +7,142 @@ require_once __DIR__ . '/database_core.php';
 require_once __DIR__ . '/database_demo_seed.php';
 require_once __DIR__ . '/database_migrations.php';
 
+function videochat_bootstrap_exec_schema_statement(PDO $pdo, string $sql): void
+{
+    try {
+        $pdo->exec($sql);
+    } catch (Throwable $error) {
+        if (str_contains(strtolower($error->getMessage()), 'duplicate column name')) {
+            return;
+        }
+
+        throw $error;
+    }
+}
+
+function videochat_bootstrap_sqlite_table_exists(PDO $pdo, string $tableName): bool
+{
+    $statement = $pdo->prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name LIMIT 1"
+    );
+    $statement->execute([':name' => $tableName]);
+
+    return $statement->fetchColumn() !== false;
+}
+
+function videochat_bootstrap_sqlite_column_exists(PDO $pdo, string $tableName, string $columnName): bool
+{
+    $safeTable = preg_replace('/[^A-Za-z0-9_]/', '', $tableName);
+    if (!is_string($safeTable) || $safeTable === '') {
+        return false;
+    }
+
+    $columns = $pdo->query('PRAGMA table_info(' . $safeTable . ')');
+    foreach ($columns ?: [] as $column) {
+        if (strcasecmp((string) ($column['name'] ?? ''), $columnName) === 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function videochat_bootstrap_add_column_if_missing(
+    PDO $pdo,
+    string $tableName,
+    string $columnName,
+    string $sql
+): void {
+    if (!videochat_bootstrap_sqlite_table_exists($pdo, $tableName)) {
+        return;
+    }
+    if (videochat_bootstrap_sqlite_column_exists($pdo, $tableName, $columnName)) {
+        return;
+    }
+
+    videochat_bootstrap_exec_schema_statement($pdo, $sql);
+}
+
+function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
+{
+    foreach (videochat_localization_migration_statements() as $sql) {
+        videochat_bootstrap_exec_schema_statement($pdo, $sql);
+    }
+    foreach (videochat_translation_import_history_migration_statements() as $sql) {
+        videochat_bootstrap_exec_schema_statement($pdo, $sql);
+    }
+    foreach (videochat_user_profile_migration_entries() as $migration) {
+        foreach ($migration['statements'] as $sql) {
+            videochat_bootstrap_exec_schema_statement($pdo, $sql);
+        }
+    }
+
+    $additiveColumns = [
+        [
+            'users',
+            'date_format',
+            "ALTER TABLE users ADD COLUMN date_format TEXT NOT NULL DEFAULT 'dmy_dot' CHECK (date_format IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot'))",
+        ],
+        [
+            'users',
+            'post_logout_landing_url',
+            "ALTER TABLE users ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
+        ],
+        [
+            'sessions',
+            'post_logout_landing_url',
+            "ALTER TABLE sessions ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
+        ],
+        [
+            'users',
+            'theme_editor_enabled',
+            'ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))',
+        ],
+        [
+            'appointment_calendar_settings',
+            'slot_mode',
+            "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
+        ],
+        [
+            'call_participant_activity',
+            'sample_history_json',
+            "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
+        ],
+    ];
+
+    foreach ($additiveColumns as [$tableName, $columnName, $sql]) {
+        videochat_bootstrap_add_column_if_missing($pdo, $tableName, $columnName, $sql);
+    }
+
+    if (videochat_bootstrap_sqlite_column_exists($pdo, 'users', 'date_format')) {
+        videochat_bootstrap_exec_schema_statement(
+            $pdo,
+            <<<'SQL'
+UPDATE users
+SET date_format = 'dmy_dot'
+WHERE date_format IS NULL
+   OR trim(date_format) = ''
+   OR lower(date_format) NOT IN ('dmy_dot', 'dmy_slash', 'dmy_dash', 'ymd_dash', 'ymd_slash', 'ymd_dot', 'ymd_compact', 'mdy_slash', 'mdy_dash', 'mdy_dot')
+SQL
+        );
+    }
+    if (
+        videochat_bootstrap_sqlite_column_exists($pdo, 'users', 'locale')
+        && videochat_bootstrap_sqlite_table_exists($pdo, 'supported_locales')
+    ) {
+        videochat_bootstrap_exec_schema_statement(
+            $pdo,
+            <<<'SQL'
+UPDATE users
+SET locale = 'en'
+WHERE locale IS NULL
+   OR trim(locale) = ''
+   OR lower(locale) NOT IN (SELECT code FROM supported_locales WHERE is_enabled = 1)
+SQL
+        );
+    }
+}
+
 function videochat_bootstrap_sqlite(string $databasePath): array
 {
     $trimmedPath = trim($databasePath);
@@ -57,14 +193,7 @@ SQL
             $pdo->beginTransaction();
             try {
                 foreach ($migration['statements'] as $sql) {
-                    try {
-                        $pdo->exec($sql);
-                    } catch (Throwable $statementError) {
-                        if (str_contains(strtolower($statementError->getMessage()), 'duplicate column name')) {
-                            continue;
-                        }
-                        throw $statementError;
-                    }
+                    videochat_bootstrap_exec_schema_statement($pdo, $sql);
                 }
 
                 $insert = $pdo->prepare(
@@ -95,6 +224,8 @@ SQL
             sort($appliedVersions);
             $newlyApplied++;
         }
+
+        videochat_bootstrap_repair_additive_schema($pdo);
 
         $seededDemoUsers = [];
         $seededDemoCalls = [];
