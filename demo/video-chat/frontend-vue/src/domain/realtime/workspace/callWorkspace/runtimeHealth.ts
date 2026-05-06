@@ -74,9 +74,14 @@ export function createCallWorkspaceRuntimeHealthHelpers({
 
   function resetWlvcEncoderAfterDroppedEncodedFrame(reason = 'dropped_encoded_frame') {
     const encoder = videoEncoderRef.value;
-    if (!encoder || typeof encoder.reset !== 'function') return;
+    if (!encoder) return;
     try {
-      encoder.reset();
+      if (typeof encoder.destroy === 'function') {
+        encoder.destroy();
+      } else if (typeof encoder.reset === 'function') {
+        encoder.reset();
+      }
+      videoEncoderRef.value = null;
     } catch (error) {
       mediaDebugLog('[SFU] WLVC encoder reset after dropped encoded frame failed', reason, error);
     }
