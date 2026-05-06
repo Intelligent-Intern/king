@@ -655,6 +655,41 @@ CAP-03 Semantic-DNS Registration Layer, 2026-05-07:
     packages, Semantic-DNS payloads, invalid package diagnostics, and optional
     registration results.
 
+CAP-04 MCP Metadata Provider, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_mcp_metadata.php`
+- Provider request shape:
+  - accepts a decoded MCP request array or a JSON MCP payload
+  - requires `method`
+  - requires `params.app_key`
+  - returns a strict response envelope with `ok`, `method`, `response_schema`,
+    `app_key`, `result`, and `metadata_hash`
+- Implemented methods:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Metadata validation before response:
+  - descriptor schema must be `king.call_app.mcp_descriptor.v1`
+  - descriptor protocol must be `king.mcp.v1`
+  - MCP service name must match the Semantic-DNS service name plus `.mcp`
+  - all required MCP methods and response schemas must be present
+  - MCP capabilities must be backed by manifest permissions
+  - launch contract must match the iframe manifest and reject primary session
+    tokens
+  - CRDT schema must match the manifest protocol and include documents
+  - manifest and CRDT export formats must match
+  - health descriptor must expose required checks
+  - marketplace listing must be organization-scoped
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-mcp-metadata-contract.php`
+  - verifies every provider method for `whiteboard`
+  - verifies JSON MCP request handling
+  - mutates a temporary descriptor and proves incomplete metadata is rejected
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -690,7 +725,7 @@ Tickets:
   - Include MCP endpoint, iframe origin, app key/version, health, category,
     supported CRDT protocol, and marketplace metadata hash.
   - Add backend refresh/validation of discovered app services.
-- [ ] CAP-04 MCP metadata provider
+- [x] CAP-04 MCP metadata provider
   - Implement MCP metadata methods for Call Apps:
     describe, capabilities, CRDT schema, launch contract, health, export formats,
     and marketplace listing.
