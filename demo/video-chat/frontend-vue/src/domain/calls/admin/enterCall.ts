@@ -18,41 +18,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   const enterCallPreviewRawStreamRef = ref(null);
   const enterCallPreviewStreamRef = ref(null);
   const enterCallPreviewBackgroundController = new BackgroundFilterController();
-  const enterCallPreviewPipelineDebug = reactive({
-    active: false,
-    available: false,
-    backend: 'none',
-    mode: 'off',
-    reactive: false,
-    reason: 'idle',
-    sourceActive: false,
-    sourceState: 'idle',
-    stages: [],
-  });
   const callAccessLinkEndpointAvailable = ref(true);
   let detachCallMediaWatcher = null;
   let enterCallPreviewResizeHandler = null;
-
-  function syncEnterCallPreviewPipelineDebug(snapshot = {}) {
-    enterCallPreviewPipelineDebug.active = Boolean(snapshot?.active);
-    enterCallPreviewPipelineDebug.available = Boolean(snapshot?.available);
-    enterCallPreviewPipelineDebug.backend = String(snapshot?.backend || 'none');
-    enterCallPreviewPipelineDebug.mode = String(snapshot?.mode || 'off');
-    enterCallPreviewPipelineDebug.reactive = Boolean(snapshot?.reactive);
-    enterCallPreviewPipelineDebug.reason = String(snapshot?.reason || 'idle');
-    enterCallPreviewPipelineDebug.sourceActive = snapshot?.sourceActive !== false;
-    enterCallPreviewPipelineDebug.sourceState = String(snapshot?.sourceState || 'idle');
-    enterCallPreviewPipelineDebug.stages = Array.isArray(snapshot?.stages)
-      ? snapshot.stages.map((stage) => ({
-          name: String(stage?.name || ''),
-          state: String(stage?.state || 'idle'),
-        }))
-      : [];
-  }
-
-  const stopEnterCallPreviewPipelineDebugSubscription = enterCallPreviewBackgroundController.subscribe(
-    syncEnterCallPreviewPipelineDebug,
-  );
 
   const enterCallState = reactive({
     open: false,
@@ -506,9 +474,6 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       detachCallMediaWatcher();
       detachCallMediaWatcher = null;
     }
-    if (typeof stopEnterCallPreviewPipelineDebugSubscription === 'function') {
-      stopEnterCallPreviewPipelineDebugSubscription();
-    }
     stopEnterCallPreview();
   }
 
@@ -555,7 +520,6 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
   return {
     enterCallPreviewVideoRef,
-    enterCallPreviewPipelineDebug,
     enterCallState,
     callAccessLinkEndpointAvailable,
     updateEnterCallPreviewAspectRatio,

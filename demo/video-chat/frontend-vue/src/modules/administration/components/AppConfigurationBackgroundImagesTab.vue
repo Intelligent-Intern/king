@@ -12,7 +12,7 @@
         class="app-config-file-input"
         type="file"
         accept="image/png,image/jpeg,image/webp"
-        @change="handleUpload"
+        @change="handleFileSelection"
       />
       <input
         ref="bulkInput"
@@ -20,7 +20,7 @@
         type="file"
         accept="image/png,image/jpeg,image/webp"
         multiple
-        @change="handleUpload"
+        @change="handleFileSelection"
       />
     </section>
 
@@ -62,6 +62,14 @@
         @page-change="goToPage"
       />
     </footer>
+
+    <BackgroundImageUploadModal
+      :open="cropModal.open"
+      :files="cropModal.files"
+      :uploading="state.uploading"
+      @close="closeCropModal"
+      @upload="uploadCroppedImages"
+    />
   </section>
 </template>
 
@@ -69,6 +77,7 @@
 import { onMounted, reactive, ref } from 'vue';
 import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
+import BackgroundImageUploadModal from './BackgroundImageUploadModal.vue';
 import {
   deleteWorkspaceBackgroundImage,
   listWorkspaceBackgroundImages,
@@ -81,6 +90,7 @@ const bulkInput = ref(null);
 const rows = ref([]);
 const pagination = reactive({ page: 1, page_size: 12, total: 0, page_count: 1 });
 const state = reactive({ loading: false, uploading: false, error: '' });
+const cropModal = reactive({ open: false, files: [] });
 
 function applyListing(result) {
   rows.value = Array.isArray(result?.rows) ? result.rows : [];
@@ -114,44 +124,48 @@ function openBulkUpload() {
   bulkInput.value?.click?.();
 }
 
-function readFileAsDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
-    reader.onerror = () => reject(new Error(t('theme_settings.image_read_failed')));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function filesToPayload(fileList) {
+function selectedImageFiles(fileList) {
   const files = Array.from(fileList || []).filter((file) => (
     ['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
   ));
   if (files.length === 0) {
     throw new Error(t('administration.background_image_type_invalid'));
   }
-  const selected = files.slice(0, 50);
-  return Promise.all(selected.map(async (file) => ({
-    file_name: file.name,
-    label: file.name.replace(/\.[^.]+$/, ''),
-    data_url: await readFileAsDataUrl(file),
-  })));
+  return files.slice(0, 50);
 }
 
-async function handleUpload(event) {
+function handleFileSelection(event) {
   const input = event?.target || null;
+  state.error = '';
+  try {
+    cropModal.files = selectedImageFiles(input?.files || []);
+    cropModal.open = true;
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : t('administration.background_image_upload_failed');
+  } finally {
+    if (input) input.value = '';
+  }
+}
+
+function closeCropModal() {
+  if (state.uploading) return;
+  cropModal.open = false;
+  cropModal.files = [];
+}
+
+async function uploadCroppedImages(files) {
   state.error = '';
   state.uploading = true;
   try {
-    const files = await filesToPayload(input?.files || []);
     await uploadWorkspaceBackgroundImages(files);
+    cropModal.open = false;
+    cropModal.files = [];
     pagination.page = 1;
     await loadRows();
   } catch (error) {
     state.error = error instanceof Error ? error.message : t('administration.background_image_upload_failed');
   } finally {
     state.uploading = false;
-    if (input) input.value = '';
   }
 }
 

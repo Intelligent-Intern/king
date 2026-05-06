@@ -26,6 +26,11 @@ assert.match(
 );
 assert.match(
   administrationApi,
+  /batches\.push\(\[row\]\)/,
+  'bulk background image uploads must use one cropped image per HTTP request',
+);
+assert.match(
+  administrationApi,
   /'x-upload-trace-id': traceId/,
   'background image upload requests must carry a trace id header',
 );

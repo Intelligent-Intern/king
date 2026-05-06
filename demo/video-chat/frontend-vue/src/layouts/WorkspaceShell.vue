@@ -128,33 +128,7 @@
               </div>
             </section>
 
-            <section class="call-left-settings-block" aria-label="Background blur">
-              <div class="call-left-settings-title">Background blur</div>
-              <div class="call-left-blur-controls" role="group" aria-label="Background blur controls">
-                <button
-                  class="call-left-blur-btn"
-                  :class="{ active: isBackgroundPresetActive('light') }"
-                  type="button"
-                  :aria-pressed="isBackgroundPresetActive('light')"
-                  aria-label="Blur"
-                  title="Blur"
-                  @click="applyBackgroundPreset('light')"
-                >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
-                </button>
-                <button
-                  class="call-left-blur-btn"
-                  :class="{ active: isBackgroundPresetActive('strong') }"
-                  type="button"
-                  :aria-pressed="isBackgroundPresetActive('strong')"
-                  aria-label="Strong blur"
-                  title="Strong blur"
-                  @click="applyBackgroundPreset('strong')"
-                >
-                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
-                </button>
-              </div>
-            </section>
+            <CallBackgroundImagePicker />
 
             <section
               v-if="showCallOwnerInviteLink"
@@ -670,6 +644,7 @@ import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
+import CallBackgroundImagePicker from '../domain/realtime/background/CallBackgroundImagePicker.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 import {
   logoutSession,
@@ -695,10 +670,8 @@ import {
   loadWorkspaceAppearance,
 } from '../domain/workspace/appearance';
 import {
-  applyCallBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
-  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
@@ -710,8 +683,6 @@ import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/med
 const router = useRouter();
 const route = useRoute();
 const moduleStore = useWorkspaceModuleStore();
-const applyBackgroundPreset = applyCallBackgroundPreset;
-const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);

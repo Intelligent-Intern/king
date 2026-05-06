@@ -81,6 +81,12 @@ export function listWorkspaceBackgroundImages(query = {}) {
   });
 }
 
+export function listPublicWorkspaceBackgroundImages(query = {}) {
+  return request('/api/workspace/background-images', {
+    query,
+  });
+}
+
 function backgroundImageUploadTimeoutMs(files) {
   const rows = Array.isArray(files) ? files : [];
   const encodedBytes = rows.reduce((total, row) => total + String(row?.data_url || '').length, 0);
@@ -111,20 +117,15 @@ function backgroundUploadPayloadChars(rows) {
 function backgroundUploadBatches(files) {
   const rows = Array.isArray(files) ? files : [];
   const batches = [];
-  let current = [];
-  let currentChars = 128;
   for (const row of rows) {
     const rowChars = backgroundUploadPayloadChars([row]);
-    if (current.length > 0 && currentChars + rowChars > BACKGROUND_IMAGE_UPLOAD_BATCH_MAX_CHARS) {
-      batches.push(current);
-      current = [];
-      currentChars = 128;
+    if (rowChars > BACKGROUND_IMAGE_UPLOAD_BATCH_MAX_CHARS) {
+      console.warn('[BackgroundImages] single cropped upload payload exceeds target batch size', {
+        payloadChars: rowChars,
+        maxChars: BACKGROUND_IMAGE_UPLOAD_BATCH_MAX_CHARS,
+      });
     }
-    current.push(row);
-    currentChars += rowChars;
-  }
-  if (current.length > 0) {
-    batches.push(current);
+    batches.push([row]);
   }
   return batches;
 }

@@ -7,6 +7,7 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
+import CallBackgroundImagePicker from '../../realtime/background/CallBackgroundImagePicker.vue';
 import {
   createCallListStore,
   createChatArchiveStore,
