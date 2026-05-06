@@ -230,6 +230,37 @@ export function createLocalPublisherPipelineHelpers({
     stopLocalEncodingPipeline();
     resetWlvcBackpressureCounters();
 
+    const activeOutputStream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
+    const activeFilteredStream = refs.localFilteredStreamRef.value instanceof MediaStream ? refs.localFilteredStreamRef.value : null;
+    const activeRawStream = refs.localRawStreamRef.value instanceof MediaStream ? refs.localRawStreamRef.value : null;
+    const activeOutputVideoTrack = activeOutputStream?.getVideoTracks?.()[0] || null;
+    const activeFilteredVideoTrack = activeFilteredStream?.getVideoTracks?.()[0] || null;
+    const activeRawVideoTrack = activeRawStream?.getVideoTracks?.()[0] || null;
+    if (
+      activeOutputVideoTrack
+      && activeOutputVideoTrack !== videoTrack
+      && videoTrack === activeRawVideoTrack
+    ) {
+      videoTrack = activeOutputVideoTrack;
+    }
+    if (activeFilteredVideoTrack && videoTrack === activeFilteredVideoTrack && videoTrack !== activeRawVideoTrack) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'local_background_stream_publisher_active',
+        code: 'local_background_stream_publisher_active',
+        message: 'Local preview and SFU publisher are using the processed background compositor video track.',
+        payload: {
+          track_id: videoTrack.id,
+          raw_track_id: activeRawVideoTrack?.id || '',
+          filtered_track_id: activeFilteredVideoTrack.id,
+          local_stream_id: activeOutputStream?.id || '',
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+        },
+        immediate: true,
+      });
+    }
+
     let video = refs.localVideoElement.value;
     if (!(video instanceof HTMLVideoElement)) {
       video = document.createElement('video');
@@ -485,19 +516,18 @@ export function createLocalPublisherPipelineHelpers({
           previousFullFrameImageData = null;
           if ((timestamp - lastSecurityGateDiagnosticAtMs) >= 1000) {
             lastSecurityGateDiagnosticAtMs = timestamp;
-            captureClientDiagnostic('sfu_publish_waiting_for_media_security', {
+            captureClientDiagnostic('sfu_publish_transport_only_until_media_security', {
               track_id: videoTrack.id,
               media_runtime_path: refs.mediaRuntimePathRef.value,
               codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
               profile: pipelineProfileId,
             });
           }
-          hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
+          hintMediaSecuritySync('sfu_publish_security_gate_transport_only', {
             track_id: videoTrack.id,
             media_runtime_path: refs.mediaRuntimePathRef.value,
             codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
           });
-          return;
         }
         if (video.readyState < 2) return;
 
@@ -742,15 +772,18 @@ export function createLocalPublisherPipelineHelpers({
             securityGateWasClosed = true;
             previousFullFrameImageData = null;
             markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
-            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
+            outgoingFrame.transportMetrics = {
+              ...outgoingFrame.transportMetrics,
+              ...publisherFrameTraceMetrics(trace),
+              protected_media_fallback: 'transport_only_until_sender_key_ready',
+            };
             hintMediaSecuritySync('sfu_publish_security_gate_waiting_after_encode', {
               track_id: videoTrack.id,
               media_runtime_path: refs.mediaRuntimePathRef.value,
               codec_id: outgoingFrame.codecId,
             });
-            return;
-          }
-          try {
+          } else {
+            try {
             const mediaSecurity = ensureMediaSecuritySession();
             const protectStartedAtMs = highResolutionNowMs();
             const protectedFrame = await mediaSecurity.protectFrame({
@@ -777,22 +810,26 @@ export function createLocalPublisherPipelineHelpers({
             outgoingFrame.data = new ArrayBuffer(0);
             outgoingFrame.protectedFrame = protectedFrame.protectedFrame;
             outgoingFrame.protectionMode = 'protected';
-          } catch (securityError) {
-            if (!shouldSendTransportOnlySfuFrame(securityError)) {
-              throw securityError;
+            } catch (securityError) {
+              if (!shouldSendTransportOnlySfuFrame(securityError)) {
+                throw securityError;
+              }
+              securityGateWasClosed = true;
+              previousFullFrameImageData = null;
+              markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+              hintMediaSecuritySync('protect_frame_unavailable_waiting_for_security', {
+                track_id: videoTrack.id,
+                media_runtime_path: refs.mediaRuntimePathRef.value,
+                codec_id: outgoingFrame.codecId,
+                error_name: String(securityError?.name || ''),
+                error_message: String(securityError?.message || ''),
+              });
+              outgoingFrame.transportMetrics = {
+                ...outgoingFrame.transportMetrics,
+                ...publisherFrameTraceMetrics(trace),
+                protected_media_fallback: 'transport_only_after_protect_unavailable',
+              };
             }
-            securityGateWasClosed = true;
-            previousFullFrameImageData = null;
-            markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
-            hintMediaSecuritySync('protect_frame_unavailable_waiting_for_security', {
-              track_id: videoTrack.id,
-              media_runtime_path: refs.mediaRuntimePathRef.value,
-              codec_id: outgoingFrame.codecId,
-              error_name: String(securityError?.name || ''),
-              error_message: String(securityError?.message || ''),
-            });
-            outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
-            return;
           }
         } else {
           markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
