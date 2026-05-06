@@ -19,6 +19,45 @@
  *   OUT { type: 'CLEANUP_DONE' }
  */
 
+const MEDIAPIPE_CONSOLE_NOISE_PATTERNS = [
+  'gl_context.cc:',
+  'gl_context_webgl.cc:',
+  'reusable_pool.h:',
+  'segmentation_postprocessor_gl.cc:',
+  'image_segmenter_graph.cc:223',
+  'Graph successfully started running.',
+  'Graph finished closing successfully.',
+]
+
+function isMediaPipeConsoleNoise(args) {
+  const text = args
+    .map((entry) => {
+      if (typeof entry === 'string') return entry
+      try { return String(entry?.message || entry) } catch { return '' }
+    })
+    .join(' ')
+    .trim()
+  if (text === '') return false
+  return MEDIAPIPE_CONSOLE_NOISE_PATTERNS.some((pattern) => text.includes(pattern))
+}
+
+function installMediaPipeConsoleNoiseFilter() {
+  if (self.__kingrtMediaPipeConsoleNoiseFilterInstalled) return
+  self.__kingrtMediaPipeConsoleNoiseFilterInstalled = true
+  for (const method of ['debug', 'log', 'info', 'warn']) {
+    const original = typeof console?.[method] === 'function'
+      ? console[method].bind(console)
+      : null
+    if (!original) continue
+    console[method] = (...args) => {
+      if (isMediaPipeConsoleNoise(args)) return
+      original(...args)
+    }
+  }
+}
+
+installMediaPipeConsoleNoiseFilter()
+
 const tasksVisionModulePath = typeof TASKS_VISION_MODULE_PATH === 'string'
   ? TASKS_VISION_MODULE_PATH
   : '/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs';

@@ -47,6 +47,9 @@ try {
   const imageSegmenterWorker = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/workers/imageSegmenterWorker.js'));
   assertNoJsdelivrAssetSource(imageSegmenterWorker, 'Image segmenter worker');
   assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs'), 'Image segmenter worker must load the vendored Tasks-Vision module');
+  assert.ok(imageSegmenterWorker.includes('installMediaPipeConsoleNoiseFilter()'), 'Image segmenter worker must suppress known MediaPipe/Emscripten console noise');
+  assert.ok(imageSegmenterWorker.includes("'debug', 'log', 'info', 'warn'"), 'MediaPipe console noise filter must cover non-error console channels only');
+  assert.ok(!imageSegmenterWorker.includes("const method of ['debug', 'log', 'info', 'warn', 'error']"), 'MediaPipe console noise filter must not hide initialization errors');
   assert.ok(!imageSegmenterWorker.includes("from '@mediapipe/tasks-vision'"), 'Image segmenter worker must not leave a bare package import for production');
   assert.ok(!imageSegmenterWorker.includes('/node_modules/@mediapipe/tasks-vision'), 'Image segmenter worker must not load node_modules at runtime');
   assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite'), 'Image segmenter worker must use the vendored multiclass model path');
