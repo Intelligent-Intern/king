@@ -4,80 +4,92 @@
 
 function king_server_websocket_wire_start_server(string $mode, int $iterations = 1, ?int $fixedPort = null, array $env = []): array
 {
-    if ($fixedPort !== null) {
-        $port = $fixedPort;
-    } else {
-        $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if ($probe === false) {
-            throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
+    $maxAttempts = $fixedPort !== null ? 1 : 10;
+
+    for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+        if ($fixedPort !== null) {
+            $port = $fixedPort;
+        } else {
+            $probe = stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+            if ($probe === false) {
+                throw new RuntimeException("failed to reserve on-wire HTTP/1 test port: $errstr");
+            }
+
+            $serverName = stream_socket_get_name($probe, false);
+            fclose($probe);
+            [, $port] = explode(':', $serverName, 2);
         }
 
-        $serverName = stream_socket_get_name($probe, false);
-        fclose($probe);
-        [, $port] = explode(':', $serverName, 2);
-    }
+        $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
+        $extensionPath = dirname(__DIR__) . '/modules/king.so';
+        $commandParts = [
+            escapeshellarg(PHP_BINARY),
+            '-n',
+            '-d',
+            escapeshellarg('extension=' . $extensionPath),
+            '-d',
+            escapeshellarg('king.security_allow_config_override=1'),
+        ];
 
-    $capture = tempnam(sys_get_temp_dir(), 'king-server-websocket-wire-');
-    $extensionPath = dirname(__DIR__) . '/modules/king.so';
-    $commandParts = [
-        escapeshellarg(PHP_BINARY),
-        '-n',
-        '-d',
-        escapeshellarg('extension=' . $extensionPath),
-        '-d',
-        escapeshellarg('king.security_allow_config_override=1'),
-    ];
+        if ($mode === 'cors-allowlist') {
+            $commandParts[] = '-d';
+            $commandParts[] = escapeshellarg(
+                'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
+            );
+        }
 
-    if ($mode === 'cors-allowlist') {
-        $commandParts[] = '-d';
-        $commandParts[] = escapeshellarg(
-            'king.security_cors_allowed_origins=https://app.king.test, https://admin.king.test'
-        );
-    }
+        $commandParts = array_merge($commandParts, [
+            escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
+            escapeshellarg($capture),
+            (string) (int) $port,
+            escapeshellarg($mode),
+            (string) max(1, $iterations),
+        ]);
 
-    $commandParts = array_merge($commandParts, [
-        escapeshellarg(__DIR__ . '/server_websocket_wire_server.inc'),
-        escapeshellarg($capture),
-        (string) (int) $port,
-        escapeshellarg($mode),
-        (string) max(1, $iterations),
-    ]);
+        $command = implode(' ', $commandParts);
 
-    $command = implode(' ', $commandParts);
+        $processEnv = null;
+        if ($env !== []) {
+            $baseEnv = getenv();
+            $processEnv = is_array($baseEnv) ? array_merge($baseEnv, $env) : $env;
+        }
 
-    $processEnv = null;
-    if ($env !== []) {
-        $baseEnv = getenv();
-        $processEnv = is_array($baseEnv) ? array_merge($baseEnv, $env) : $env;
-    }
+        $process = proc_open($command, [
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ], $pipes, null, $processEnv);
 
-    $process = proc_open($command, [
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ], $pipes, null, $processEnv);
+        if (!is_resource($process)) {
+            @unlink($capture);
+            if ($fixedPort !== null || $attempt === $maxAttempts) {
+                throw new RuntimeException('failed to launch on-wire HTTP/1 websocket server');
+            }
+            continue;
+        }
 
-    if (!is_resource($process)) {
-        @unlink($capture);
-        throw new RuntimeException('failed to launch on-wire HTTP/1 websocket server');
-    }
+        $ready = fgets($pipes[1]);
+        if ($ready === "READY\n") {
+            return [
+                'process' => $process,
+                'pipes' => $pipes,
+                'capture' => $capture,
+                'port' => (int) $port,
+            ];
+        }
 
-    $ready = fgets($pipes[1]);
-    if ($ready !== "READY\n") {
         $stderr = stream_get_contents($pipes[2]);
         foreach ($pipes as $pipe) {
             fclose($pipe);
         }
         proc_close($process);
         @unlink($capture);
-        throw new RuntimeException('on-wire HTTP/1 websocket server failed: ' . trim($stderr));
+
+        if ($fixedPort !== null || $attempt === $maxAttempts) {
+            throw new RuntimeException('on-wire HTTP/1 websocket server failed: ' . trim($stderr));
+        }
     }
 
-    return [
-        'process' => $process,
-        'pipes' => $pipes,
-        'capture' => $capture,
-        'port' => (int) $port,
-    ];
+    throw new RuntimeException('failed to launch on-wire HTTP/1 websocket server');
 }
 
 function king_server_websocket_wire_stop_server(array $server): array
@@ -92,9 +104,15 @@ function king_server_websocket_wire_stop_server(array $server): array
 
     $capture = [];
     if (is_file($server['capture'])) {
-        $capture = json_decode((string) file_get_contents($server['capture']), true);
-        if (!is_array($capture)) {
+        $captureRaw = (string) file_get_contents($server['capture']);
+        $decodedCapture = json_decode($captureRaw, true);
+        if (is_array($decodedCapture)) {
+            $capture = $decodedCapture;
+        } else {
             $capture = [];
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $capture['__json_error'] = json_last_error_msg();
+            }
         }
         @unlink($server['capture']);
     }
@@ -140,9 +158,10 @@ function king_server_http1_wire_abort_request(int $port, string $request, int $s
 {
     $deadline = microtime(true) + 3.0;
     $socket = false;
+    $message = 'connection timed out';
 
     if (!function_exists('socket_create')) {
-        throw new RuntimeException('socket_create() is required for HTTP/1 abort requests');
+        throw new RuntimeException('The sockets extension is required for HTTP/1 abort requests. Please enable it in php.ini.');
     }
 
     do {
@@ -245,7 +264,7 @@ function king_server_websocket_wire_raw_client_connect(int $port, string $path)
     $message = 'connection failed';
 
     if (!function_exists('socket_create')) {
-        throw new RuntimeException('socket_create() is required for raw websocket client fixtures');
+        throw new RuntimeException('The sockets extension is required for raw websocket client fixtures. Please enable it in php.ini.');
     }
 
     do {
@@ -321,7 +340,9 @@ function king_server_websocket_wire_raw_client_send_text($socket, string $payloa
     } elseif ($payloadLength <= 65535) {
         $frame .= chr(0x80 | 126) . pack('n', $payloadLength);
     } else {
-        $frame .= chr(0x80 | 127) . pack('N2', 0, $payloadLength);
+        $high = intdiv($payloadLength, 4294967296);
+        $low = $payloadLength % 4294967296;
+        $frame .= chr(0x80 | 127) . pack('N2', $high, $low);
     }
 
     $maskedPayload = '';

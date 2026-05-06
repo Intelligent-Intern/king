@@ -50,7 +50,8 @@
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
     "vue": "^3.5.13",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "@mediapipe/tasks-vision": "^0.10.35"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",

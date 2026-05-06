@@ -98,11 +98,69 @@ const assetVersionPlugin = () => ({
   },
 });
 
+const wasmStaticCompatibilityPlugin = () => {
+  const parseRequestUrl = (req) => {
+    const host = String(req?.headers?.host || 'localhost');
+    const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').split(',')[0].trim();
+    const protocol = forwardedProto || 'http';
+    return new URL(req.url, `${protocol}://${host}`);
+  };
+
+  const normalizeWasmImportQuery = (req, next) => {
+    if (!req.url || !req.url.startsWith('/wasm/')) {
+      next();
+      return;
+    }
+    const parsed = parseRequestUrl(req);
+    if (!parsed.searchParams.has('import')) {
+      next();
+      return;
+    }
+    parsed.searchParams.delete('import');
+    const query = parsed.searchParams.toString();
+    req.url = `${parsed.pathname}${query ? `?${query}` : ''}`;
+    next();
+  };
+
+  return {
+    name: 'kingrt-wasm-static-compat',
+    enforce: 'pre',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => normalizeWasmImportQuery(req, next));
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, _res, next) => normalizeWasmImportQuery(req, next));
+    },
+  };
+};
+
 const allowedHosts = parseAllowedHosts(process.env.VIDEOCHAT_VUE_ALLOWED_HOSTS || '');
 const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
 
 export default defineConfig({
-  plugins: [assetVersionPlugin(), vue()],
+  plugins: [assetVersionPlugin(),
+  wasmStaticCompatibilityPlugin(),
+  vue()],
+  optimizeDeps: {
+    exclude: [
+      '@mediapipe/tasks-vision',
+      '@mediapipe/tasks-audio',
+      '@mediapipe/tasks-text'
+    ]
+  },
+  worker: {
+    format: 'es',
+    plugins: () => [
+      assetVersionPlugin(),
+      wasmStaticCompatibilityPlugin()
+    ],
+    rollupOptions: {
+      external: ['@mediapipe/tasks-vision'],
+    }
+  },
+  optimizeDeps: {
+    exclude: ['@mediapipe/tasks-vision'],
+  },
   define: {
     'import.meta.env.VIDEOCHAT_ASSET_VERSION': JSON.stringify(buildAssetVersion),
   },
