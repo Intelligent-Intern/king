@@ -314,7 +314,7 @@ export function createBackgroundCompositorStage({
         if (!hasRenderableMask) {
             ctx.save();
             ctx.globalCompositeOperation = 'copy';
-            ctx.filter = mode === 'replace' ? 'none' : `blur(${blurPx}px)`;
+            ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
             ctx.restore();
             return;
