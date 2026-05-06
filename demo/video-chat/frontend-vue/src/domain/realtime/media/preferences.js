@@ -7,6 +7,7 @@ import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstrai
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
+const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
 export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
 
 function clampVolume(value) {
@@ -226,6 +227,8 @@ export const callMediaPrefs = reactive({
 let refreshPromise = null;
 let watcherRefCount = 0;
 let deviceChangeListenerAttached = false;
+let lastDeviceRefreshAt = 0;
+let lastDeviceRefreshHadPermissions = false;
 
 async function maybeRequestDeviceLabels() {
   if (
@@ -265,13 +268,12 @@ function applyEnumeratedDevices(devices) {
   callMediaPrefs.selectedSpeakerId = resolveSelectedDevice(callMediaPrefs.selectedSpeakerId, nextSpeakers);
   callMediaPrefs.ready = true;
   callMediaPrefs.error = '';
+  lastDeviceRefreshAt = Date.now();
+  lastDeviceRefreshHadPermissions = rows.some((device) => String(device?.label || '').trim() !== '');
   persistCallMediaPrefs();
 }
 
-export async function refreshCallMediaDevices({ requestPermissions = false } = {}) {
-  console.log('Refreshing media devices...', { requestPermissions });
-  console.log('MediaDevices supported:', typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function');
-  console.log(navigator.mediaDevices);
+export async function refreshCallMediaDevices({ force = false, requestPermissions = false } = {}) {
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices
@@ -286,8 +288,19 @@ export async function refreshCallMediaDevices({ requestPermissions = false } = {
     return refreshPromise;
   }
 
+  const now = Date.now();
+  const cacheFresh = callMediaPrefs.ready && now - lastDeviceRefreshAt < CALL_MEDIA_DEVICE_REFRESH_CACHE_MS;
+  const cacheSatisfiesPermission = !requestPermissions || lastDeviceRefreshHadPermissions;
+  if (!force && cacheFresh && cacheSatisfiesPermission) {
+    return true;
+  }
+
+  console.log('Refreshing media devices...', { force, requestPermissions });
+  console.log('MediaDevices supported:', true);
+  console.log(navigator.mediaDevices);
+
   refreshPromise = (async () => {
-    if (requestPermissions) {
+    if (requestPermissions && (!lastDeviceRefreshHadPermissions || force)) {
       try {
         await maybeRequestDeviceLabels();
       } catch {
@@ -472,7 +485,7 @@ export function resetCallBackgroundRuntimeState() {
 }
 
 function handleDeviceChange() {
-  void refreshCallMediaDevices();
+  void refreshCallMediaDevices({ force: true });
 }
 
 export function attachCallMediaDeviceWatcher({ requestPermissions = false } = {}) {
