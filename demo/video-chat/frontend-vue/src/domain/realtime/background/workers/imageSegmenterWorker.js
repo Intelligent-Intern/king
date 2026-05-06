@@ -19,7 +19,7 @@
  *   OUT { type: 'CLEANUP_DONE' }
  */
 
-const {{ DrawingUtils,  ImageSegmenter, FilesetResolver } = await import(
+const { DrawingUtils,  ImageSegmenter, FilesetResolver } = await import(
   /* @vite-ignore */
   TASKS_VISION_MODULE_PATH
 );
