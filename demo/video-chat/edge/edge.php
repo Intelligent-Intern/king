@@ -567,7 +567,15 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             $chunk = @fread($stream, 16384);
             if ($chunk === false) {
                 if ($isWebSocket) {
-                    $closeWebSocketTunnel();
+                    if ($stream === $upstreamStream && $toClient !== '') {
+                        // Preserve buffered websocket upstream response bytes,
+                        // such as a 401/403 handshake rejection, before
+                        // closing the client side.
+                        $upstreamOpen = false;
+                        $toUpstream = '';
+                    } else {
+                        $closeWebSocketTunnel();
+                    }
                     continue;
                 }
                 if ($stream === $client) {
@@ -580,7 +588,14 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($chunk === '') {
                 if (feof($stream)) {
                     if ($isWebSocket) {
-                        $closeWebSocketTunnel();
+                        if ($stream === $upstreamStream && $toClient !== '') {
+                            // Preserve buffered websocket upstream response
+                            // bytes until they have been flushed to the client.
+                            $upstreamOpen = false;
+                            $toUpstream = '';
+                        } else {
+                            $closeWebSocketTunnel();
+                        }
                         $madeProgress = true;
                         continue;
                     }
