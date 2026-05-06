@@ -690,6 +690,36 @@ CAP-04 MCP Metadata Provider, 2026-05-07:
   - verifies JSON MCP request handling
   - mutates a temporary descriptor and proves incomplete metadata is rejected
 
+CAP-05 Marketplace Organization Entitlement Flow, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_marketplace_entitlements.php`
+  - `demo/video-chat/backend-king-php/support/call_app_marketplace_migrations.php`
+- Schema:
+  - `call_app_catalog_entries`
+  - `organization_call_app_entitlements`
+  - `organization_call_app_installations`
+- Catalog discovery:
+  - refreshes local Call App packages through the CAP-03 Semantic-DNS payload
+    builder and CAP-04 MCP metadata provider
+  - persists verified catalog entries with MCP endpoint, service id,
+    iframe entrypoint, CRDT protocol, health, capabilities, export formats, and
+    metadata hash
+- Organization flow:
+  - `POST /api/marketplace/call-apps/{app_key}/orders` creates or reactivates
+    an entitlement for the authenticated active tenant only
+  - `POST /api/marketplace/call-apps/{app_key}/installations` creates or
+    re-enables an installation only when the tenant has an active entitlement
+  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
+    enables or disables the active tenant's installation
+  - client-supplied `tenant_id`, `organization_id`, `user_id`, and
+    `owner_user_id` are rejected so callers cannot order for another
+    organization or only for a personal account
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.php`
+  - verifies catalog discovery, tenant-admin ordering, tenant override
+    rejection, installation create, disable/enable, and duplicate-order
+    idempotency
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -730,7 +760,7 @@ Tickets:
     describe, capabilities, CRDT schema, launch contract, health, export formats,
     and marketplace listing.
   - Reject incomplete or inconsistent metadata.
-- [ ] CAP-05 Marketplace organization entitlement flow
+- [x] CAP-05 Marketplace organization entitlement flow
   - Add catalog discovery from Semantic DNS/MCP.
   - Add organization-scoped order/enable/disable records.
   - Ensure users order apps for their own organization, not globally and not only
