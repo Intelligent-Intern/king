@@ -599,6 +599,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       throw error;
     }
     if (!signal) {
+      const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+      const shouldRefreshHello = helloSentAt <= 0 || (Date.now() - helloSentAt) >= 750;
+      if (shouldRefreshHello) {
+        await sendMediaSecurityHello(normalizedTargetId, true);
+      }
       if (
         Number.isInteger(normalizedTargetId)
         && normalizedTargetId > 0
@@ -615,6 +621,9 @@ export function createCallWorkspaceMediaSecurityRuntime({
         message: 'Media security sender key could not be built for the remote participant.',
         payload: {
           target_user_id: normalizedTargetId,
+          peer_state: String(peer?.state || ''),
+          peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+          refreshed_hello: shouldRefreshHello,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
