@@ -127,6 +127,27 @@ export function createBackgroundCompositorStage({
         maskLayer.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     }
 
+    function drawMaskBitmap(maskBitmap, maskWidth, maskHeight) {
+        if (!(maskBitmap instanceof ImageBitmap) || !maskLayer) {
+            clearMask();
+            return false;
+        }
+
+        const sourceWidth = Math.max(1, Math.round(Number(maskWidth) || maskBitmap.width || 0));
+        const sourceHeight = Math.max(1, Math.round(Number(maskHeight) || maskBitmap.height || 0));
+        if (sourceWidth <= 1 || sourceHeight <= 1) {
+            clearMask();
+            return false;
+        }
+
+        resizeCanvas(maskCanvas, canvas.width, canvas.height);
+        maskLayer.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+        maskLayer.imageSmoothingEnabled = true;
+        maskLayer.imageSmoothingQuality = 'high';
+        maskLayer.drawImage(maskBitmap, 0, 0, maskCanvas.width, maskCanvas.height);
+        return true;
+    }
+
     function drawMaskValues(maskValues, maskWidth, maskHeight) {
         if (!(maskValues instanceof Float32Array) || !maskLayer || !maskSourceLayer) {
             clearMask();
@@ -256,6 +277,7 @@ export function createBackgroundCompositorStage({
 
     function render({
         hasMatteMask,
+        maskBitmap = null,
         maskHeight = 0,
         maskUpdated = false,
         maskValues = null,
@@ -279,16 +301,13 @@ export function createBackgroundCompositorStage({
 
         if (hasMatteMask && !maskUpdated) return;
 
-/*         const hasRenderableMask = maskUpdated
-            ? drawMaskValues(maskValues, maskWidth, maskHeight)
-            : Boolean(hasMatteMask); */
         let hasRenderableMask = false;
         if (maskUpdated) {
-            maskValues = processMaskForAlpha(maskValues, maskWidth, maskHeight);
-            hasRenderableMask = drawMaskValues(maskValues, maskWidth, maskHeight);
+            hasRenderableMask = maskBitmap instanceof ImageBitmap
+                ? drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
+                : drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
         } else {
             hasRenderableMask = Boolean(hasMatteMask);
-
         }
         drawDebugCanvases(foregroundSource);
 

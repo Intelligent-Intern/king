@@ -7,9 +7,9 @@
  *
  * Key differences from the old backends:
  *  - Segmentation runs in a dedicated worker thread (no main-thread blocking)
- *  - Uses selfie_multiclass_256x256 + CONFIDENCE_MASKS → full person silhouette
+ *  - Uses selfie_multiclass_256x256 + CATEGORY_MASK → full person silhouette
  *  - Returns faces=[] (no face detection; compositor uses the mask directly)
- *  - matteMaskValues is a Float32 alpha mask updated on every new inference result
+ *  - matteMaskBitmap is a MediaPipe-drawn alpha mask updated on every new inference result
  *
  * The returned sourceFrame is matched to the mask result so the compositor can
  * compose pixels from the same moment in time.
@@ -95,6 +95,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     let pendingFrame = false;
     let lastDetectAt = -Infinity;
     let pendingSampleMs = null;
+    let pendingMaskBitmap = null;
     let pendingMaskValues = null;
     let pendingMaskWidth = 0;
     let pendingMaskHeight = 0;
@@ -152,14 +153,22 @@ export async function createWorkerSegmenterBackend(opts = {}) {
 
         if (type === 'SEGMENT_RESULT') {
             pendingFrame = false;
-            const { maskValues, width, height, inferenceMs, inferenceTime } = event.data;
+            const { maskBitmap, maskValues, width, height, inferenceMs, inferenceTime } = event.data;
             const sample = typeof inferenceMs === 'number'
                 ? inferenceMs
                 : typeof inferenceTime === 'number'
                     ? inferenceTime
                     : null;
             pendingSampleMs = typeof sample === 'number' ? Math.max(0, sample) : null;
-            if (maskValues instanceof Float32Array && width > 0 && height > 0) {
+            if (maskBitmap instanceof ImageBitmap && width > 0 && height > 0) {
+                pendingMaskBitmap?.close?.();
+                pendingMaskBitmap = maskBitmap;
+                pendingMaskValues = null;
+                pendingMaskWidth = Math.max(1, Math.round(Number(width) || 1));
+                pendingMaskHeight = Math.max(1, Math.round(Number(height) || 1));
+            } else if (maskValues instanceof Float32Array && width > 0 && height > 0) {
+                pendingMaskBitmap?.close?.();
+                pendingMaskBitmap = null;
                 pendingMaskValues = maskValues;
                 pendingMaskWidth = Math.max(1, Math.round(Number(width) || 1));
                 pendingMaskHeight = Math.max(1, Math.round(Number(height) || 1));
@@ -195,7 +204,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
         labels,
 
         nextFaces(video, vw, vh, nowMs) {
-            if (disposed) return { faces: [], detectSampleMs: null, matteMaskValues: null };
+            if (disposed) return { faces: [], detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
 
             const sourceWidth = Math.max(1, Math.round(Number(video?.videoWidth) || Number(vw) || 1));
             const sourceHeight = Math.max(1, Math.round(Number(video?.videoHeight) || Number(vh) || 1));
@@ -209,7 +218,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
                 && sourceHeight > 1;
 
             if (!hasFrame) {
-                return { faces: [], detectSampleMs: null, matteMaskValues: null };
+                return { faces: [], detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
             }
 
             // Dispatch a new frame if the interval has elapsed and the worker is free.
@@ -235,9 +244,11 @@ export async function createWorkerSegmenterBackend(opts = {}) {
 
             const sample = pendingSampleMs;
             pendingSampleMs = null;
+            const maskBitmap = pendingMaskBitmap;
             const maskValues = pendingMaskValues;
             const maskWidth = pendingMaskWidth;
             const maskHeight = pendingMaskHeight;
+            pendingMaskBitmap = null;
             pendingMaskValues = null;
             pendingMaskWidth = 0;
             pendingMaskHeight = 0;
@@ -247,6 +258,7 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             return {
                 faces: [],
                 detectSampleMs: sample,
+                matteMaskBitmap: maskBitmap,
                 matteMaskValues: maskValues,
                 matteMaskWidth: maskWidth,
                 matteMaskHeight: maskHeight,
@@ -270,6 +282,8 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             resultFrameCanvas.height = 1;
             pendingFrame = false;
             pendingSampleMs = null;
+            pendingMaskBitmap?.close?.();
+            pendingMaskBitmap = null;
             pendingMaskValues = null;
             pendingMaskWidth = 0;
             pendingMaskHeight = 0;
