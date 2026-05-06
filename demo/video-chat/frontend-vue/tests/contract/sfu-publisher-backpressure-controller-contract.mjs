@@ -49,7 +49,7 @@ async function main() {
   requireContains(publisherPipeline, 'remoteKeyframeRequestPending', 'publisher pipeline observes receiver-requested full-frame keyframe recovery');
 
   requireContains(sfuTransport, "import { createPublisherBackpressureController } from './publisherBackpressureController';", 'SFU transport delegates publisher pressure decisions');
-  requireContains(sfuTransport, 'createPublisherBackpressureController({', 'SFU transport instantiates publisher controller');
+  requireContains(sfuTransport, 'createPublisherBackpressureController(options)', 'SFU transport instantiates publisher controller with normalized transport options');
   assert.equal(
     sfuTransport.includes('downgradeSfuVideoQualityAfterEncodePressure('),
     false,
@@ -64,6 +64,10 @@ async function main() {
   requireContains(publisherPipeline, 'sendClient.sendEncodedFrame(outgoingFrame)', 'publisher sends through a stable local client reference');
   requireContains(publisherPipeline, "reason: 'sfu_frame_send_pressure'", 'publisher reacts to post-send websocket pressure before the hard high-water gate');
   requireContains(publisherBackpressureController, "'sfu_frame_send_pressure'", 'controller downshifts on soft post-send pressure');
+  requireContains(publisherBackpressureController, 'function isSfuTransportUnavailableSendFailure', 'controller distinguishes lost SFU transport from ordinary data-lane backpressure');
+  requireContains(publisherBackpressureController, "restartSfuAfterVideoStall('sfu_send_transport_unavailable'", 'lost SFU transport after encode triggers a controlled SFU reconnect');
+  requireContains(publisherBackpressureController, 'forceReconnect: true', 'lost SFU transport reconnect is allowed even when carrier diagnostics lag behind the closed socket');
+  requireContains(publisherBackpressureController, "normalizedReason === 'sfu_client_unavailable_after_encode'", 'post-encode SFU client loss is treated as transport loss');
   assert.equal(
     publisherPipeline.includes('refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame)'),
     false,
