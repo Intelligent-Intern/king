@@ -16,6 +16,8 @@ async function request(path, options = {}) {
     headers: headers(options.body !== undefined),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     query: options.query || null,
+    timeoutMs: options.timeoutMs,
+    serialize: options.serialize,
   }).then((result) => result.response);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== 'ok') {
@@ -76,10 +78,20 @@ export function listWorkspaceBackgroundImages(query = {}) {
   });
 }
 
+function backgroundImageUploadTimeoutMs(files) {
+  const rows = Array.isArray(files) ? files : [];
+  const encodedBytes = rows.reduce((total, row) => total + String(row?.data_url || '').length, 0);
+  const encodedMiB = Math.max(1, Math.ceil(encodedBytes / (1024 * 1024)));
+  return Math.max(60_000, Math.min(300_000, 30_000 + encodedMiB * 12_000));
+}
+
 export function uploadWorkspaceBackgroundImages(files) {
+  const rows = Array.isArray(files) ? files : [];
   return request('/api/admin/workspace-administration/background-images', {
     method: 'POST',
-    body: { files: Array.isArray(files) ? files : [] },
+    body: { files: rows },
+    serialize: false,
+    timeoutMs: backgroundImageUploadTimeoutMs(rows),
   });
 }
 

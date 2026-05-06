@@ -231,6 +231,27 @@ SQL
     videochat_chat_attachment_contract_assert((string) ($badZipUpload['code'] ?? '') === 'attachment_type_not_allowed', 'zip error code mismatch');
 
     unset($GLOBALS['videochat_chat_attachment_store_put'], $GLOBALS['videochat_chat_attachment_store_get'], $GLOBALS['videochat_chat_attachment_store_delete']);
+
+    $localStoreRoot = sys_get_temp_dir() . '/videochat-chat-attachment-local-store-' . bin2hex(random_bytes(6));
+    videochat_chat_attachment_contract_assert(
+        videochat_chat_object_store_init($localStoreRoot, 64 * 1024 * 1024),
+        'object store init should keep local fs fallback available'
+    );
+    $localObjectKey = 'vcchat_contract_local_fallback';
+    videochat_chat_attachment_contract_assert(
+        videochat_chat_attachment_local_store_put($localObjectKey, 'local-fallback-payload'),
+        'local object-store fallback put should succeed'
+    );
+    videochat_chat_attachment_contract_assert(
+        videochat_chat_attachment_local_store_get($localObjectKey) === 'local-fallback-payload',
+        'local object-store fallback get should return stored payload'
+    );
+    videochat_chat_attachment_contract_assert(
+        videochat_chat_attachment_local_store_delete($localObjectKey),
+        'local object-store fallback delete should succeed'
+    );
+    @rmdir($localStoreRoot);
+
     @unlink($databasePath);
 
     fwrite(STDOUT, "[chat-attachment-contract] PASS\n");

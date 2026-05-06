@@ -96,12 +96,13 @@ SQL
             implode(', ', $statusPlaceholders)
         )
     );
-    $statement->execute([
-        ':call_id' => $normalizedCallId,
-        ':user_id' => $userId,
-        ':is_admin' => videochat_normalize_role_slug($role) === 'admin' ? 1 : 0,
-        ...$statusParams,
-    ]);
+    $statement->bindValue(':call_id', $normalizedCallId, PDO::PARAM_STR);
+    $statement->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $statement->bindValue(':is_admin', videochat_normalize_role_slug($role) === 'admin' ? 1 : 0, PDO::PARAM_INT);
+    foreach ($statusParams as $placeholder => $status) {
+        $statement->bindValue($placeholder, $status, PDO::PARAM_STR);
+    }
+    $statement->execute();
     $row = $statement->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : null;
 }
@@ -138,23 +139,24 @@ function videochat_chat_attachment_store_put(string $objectKey, string $binary, 
     }
 
     if (!function_exists('king_object_store_put_from_stream')) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $binary);
     }
 
     $stream = fopen('php://temp', 'r+');
     if ($stream === false) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $binary);
     }
     fwrite($stream, $binary);
     rewind($stream);
 
     try {
-        return king_object_store_put_from_stream($objectKey, $stream, [
+        $stored = king_object_store_put_from_stream($objectKey, $stream, [
             'content_type' => $contentType,
             'cache_class' => 'private',
         ]) === true;
+        return $stored || videochat_chat_attachment_local_store_put($objectKey, $binary);
     } catch (Throwable) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $binary);
     } finally {
         fclose($stream);
     }
@@ -168,13 +170,14 @@ function videochat_chat_attachment_store_get(string $objectKey): string|false
     }
 
     if (!function_exists('king_object_store_get')) {
-        return false;
+        return videochat_chat_attachment_local_store_get($objectKey);
     }
 
     try {
-        return king_object_store_get($objectKey);
+        $stored = king_object_store_get($objectKey);
+        return is_string($stored) ? $stored : videochat_chat_attachment_local_store_get($objectKey);
     } catch (Throwable) {
-        return false;
+        return videochat_chat_attachment_local_store_get($objectKey);
     }
 }
 
@@ -186,14 +189,65 @@ function videochat_chat_attachment_store_delete(string $objectKey): bool
     }
 
     if (!function_exists('king_object_store_delete')) {
-        return false;
+        return videochat_chat_attachment_local_store_delete($objectKey);
     }
 
     try {
-        return king_object_store_delete($objectKey) === true;
+        $deleted = king_object_store_delete($objectKey) === true;
+        $localDeleted = videochat_chat_attachment_local_store_delete($objectKey);
+        return $deleted || $localDeleted;
     } catch (Throwable) {
+        return videochat_chat_attachment_local_store_delete($objectKey);
+    }
+}
+
+function videochat_chat_attachment_local_store_path(string $objectKey): ?string
+{
+    $normalizedKey = trim($objectKey);
+    if ($normalizedKey === '' || preg_match('/^[A-Za-z0-9._-]{1,127}$/', $normalizedKey) !== 1) {
+        return null;
+    }
+
+    $root = trim((string) ($GLOBALS['videochat_chat_attachment_object_store_root'] ?? (getenv('VIDEOCHAT_OBJECT_STORE_ROOT') ?: '')));
+    if ($root === '') {
+        return null;
+    }
+    if (!is_dir($root) && !mkdir($root, 0775, true) && !is_dir($root)) {
+        return null;
+    }
+
+    return rtrim($root, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $normalizedKey;
+}
+
+function videochat_chat_attachment_local_store_put(string $objectKey, string $binary): bool
+{
+    $path = videochat_chat_attachment_local_store_path($objectKey);
+    if (!is_string($path)) {
         return false;
     }
+
+    return @file_put_contents($path, $binary, LOCK_EX) !== false;
+}
+
+function videochat_chat_attachment_local_store_get(string $objectKey): string|false
+{
+    $path = videochat_chat_attachment_local_store_path($objectKey);
+    if (!is_string($path) || !is_file($path)) {
+        return false;
+    }
+
+    $payload = @file_get_contents($path);
+    return is_string($payload) ? $payload : false;
+}
+
+function videochat_chat_attachment_local_store_delete(string $objectKey): bool
+{
+    $path = videochat_chat_attachment_local_store_path($objectKey);
+    if (!is_string($path) || !is_file($path)) {
+        return false;
+    }
+
+    return @unlink($path);
 }
 
 function videochat_chat_attachment_current_call_bytes(PDO $pdo, string $callId): int

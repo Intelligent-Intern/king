@@ -645,9 +645,7 @@
                   :key="attachment.id"
                   class="workspace-chat-attachment"
                   :href="attachment.download_url"
-                  target="_blank"
-                  rel="noopener"
-                  download
+                  @click.prevent="downloadChatAttachment(attachment)"
                 >
                   <span class="workspace-chat-attachment-kind">{{ attachment.kind }}</span>
                   <span class="workspace-chat-attachment-name">{{ attachment.name }}</span>
