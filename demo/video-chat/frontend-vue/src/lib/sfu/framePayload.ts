@@ -298,6 +298,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
     ['budget_payload_soft_limit_bytes', source.budget_payload_soft_limit_bytes ?? source.budgetPayloadSoftLimitBytes],
     ['budget_min_keyframe_retry_ms', source.budget_min_keyframe_retry_ms ?? source.budgetMinKeyframeRetryMs],
     ['outbound_media_generation', source.outbound_media_generation ?? source.outboundMediaGeneration],
+    ['publisher_join_started_at_ms', source.publisher_join_started_at_ms ?? source.publisherJoinStartedAtMs],
     ['king_receive_at_ms', source.king_receive_at_ms ?? source.kingReceiveAtMs],
     ['source_video_ready_state', source.source_video_ready_state ?? source.sourceVideoReadyState],
     ['source_track_width', source.source_track_width ?? source.sourceTrackWidth],

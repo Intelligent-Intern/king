@@ -656,6 +656,7 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
         'budget_payload_soft_limit_bytes' => ['budget_payload_soft_limit_bytes', 'budgetPayloadSoftLimitBytes'],
         'budget_min_keyframe_retry_ms' => ['budget_min_keyframe_retry_ms', 'budgetMinKeyframeRetryMs'],
         'outbound_media_generation' => ['outbound_media_generation', 'outboundMediaGeneration'],
+        'publisher_join_started_at_ms' => ['publisher_join_started_at_ms', 'publisherJoinStartedAtMs'],
         'king_receive_at_ms' => ['king_receive_at_ms', 'kingReceiveAtMs'],
         'publisher_browser_encoder_bitrate' => ['publisher_browser_encoder_bitrate', 'publisherBrowserEncoderBitrate'],
     ];
@@ -1172,7 +1173,7 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
-    if (!in_array($type, ['sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/media-recovery-request', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
+    if (!in_array($type, ['sfu/session-hello', 'sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/media-recovery-request', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
         return [
             'ok' => false,
             'type' => $type,

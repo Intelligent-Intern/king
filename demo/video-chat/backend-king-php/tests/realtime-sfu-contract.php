@@ -45,9 +45,18 @@ try {
     $gatewaySource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_gateway.php');
     $moduleRealtimeSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
     $iibinSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_iibin.php');
+    $sessionProtocolSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php');
     videochat_realtime_sfu_assert(is_string($gatewaySource), 'SFU gateway source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($moduleRealtimeSource), 'Realtime module source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($iibinSource), 'SFU IIBIN helper source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($sessionProtocolSource), 'SFU session protocol source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(
+        str_contains($moduleRealtimeSource, 'realtime_sfu_session_protocol.php')
+        && str_contains($sessionProtocolSource, "function videochat_sfu_build_session_acceptance")
+        && str_contains($gatewaySource, "case 'sfu/session-hello':")
+        && str_contains($gatewaySource, "'join_visible_slo_ms' => videochat_sfu_join_visible_slo_ms()"),
+        'SFU fast-join session protocol must be wired into the active King PHP gateway'
+    );
     videochat_realtime_sfu_assert(
         str_contains($moduleRealtimeSource, "realtime_sfu_iibin.php")
         && str_contains($iibinSource, "king_proto_define_schema")
@@ -270,6 +279,29 @@ try {
         'room-alpha'
     );
     videochat_realtime_sfu_assert((bool) ($joinLegacy['ok'] ?? false), 'SFU join with legacy roomId should stay compatible');
+    $sessionHello = videochat_sfu_decode_client_frame(
+        json_encode(['type' => 'sfu/session-hello', 'room_id' => 'room-alpha', 'protocol_versions' => [1]], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($sessionHello['ok'] ?? false), 'SFU session hello with matching room_id should pass');
+    $sessionAccepted = videochat_sfu_build_session_acceptance((array) ($sessionHello['payload'] ?? []), [
+        'room_id' => 'room-alpha',
+        'tenant_id' => 7,
+        'publisher_id' => 'sfu-test-pub',
+        'publisher_user_id' => '42',
+    ]);
+    videochat_realtime_sfu_assert((string) ($sessionAccepted['type'] ?? '') === 'sfu/session-accepted', 'SFU session hello must produce session-accepted');
+    videochat_realtime_sfu_assert((int) ($sessionAccepted['join_visible_slo_ms'] ?? 0) === 1000, 'SFU session protocol must expose the 1s visible-join SLO');
+    videochat_realtime_sfu_assert((bool) ((($sessionAccepted['selected'] ?? [])['fast_first_frame'] ?? false)) === true, 'SFU session protocol must select fast first-frame delivery');
+    $trackAccepted = videochat_sfu_build_track_acceptance([
+        'track_id' => 'camera-1',
+        'kind' => 'video',
+    ], [
+        'room_id' => 'room-alpha',
+        'publisher_id' => 'sfu-test-pub',
+        'publisher_user_id' => '42',
+    ]);
+    videochat_realtime_sfu_assert((string) ($trackAccepted['type'] ?? '') === 'sfu/track-accepted', 'SFU publish must have a fast first-frame track acceptance payload');
     $joinMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/join', 'room_id' => 'room-beta'], JSON_UNESCAPED_SLASHES),
         'room-alpha'

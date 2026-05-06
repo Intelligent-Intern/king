@@ -53,6 +53,13 @@ import {
   highResolutionNowMs,
   roundedTransportStageMs,
 } from './sfuClientTransportSample'
+import {
+  buildSfuJoinLatencySample,
+  buildSfuSessionHelloPayload,
+  buildSfuTrackPublishPayload,
+  handleSfuSessionProtocolMessage,
+  type SfuSessionAcceptedDetails,
+} from './sessionProtocol'
 import type {
   SFUClientCallbacks,
   SFUEncodedFrame,
@@ -136,6 +143,8 @@ export class SFUClient {
   private connectAttemptInFlight = false
   private mediaTransport: SfuWebSocketFallbackMediaTransport
   private autoSubscribe: boolean
+  private joinStartedAtMs = 0
+  private sessionAccepted: SfuSessionAcceptedDetails | null = null
 
   constructor(cb: SFUClientCallbacks, options: SFUClientOptions = {}) {
     this.cb = cb
@@ -304,7 +313,18 @@ export class SFUClient {
       this.disconnectNotified = false
       this.carrierState.reset()
       setBackendSfuOrigin(candidates[index] || '')
+      this.send(buildSfuSessionHelloPayload({
+        roomId,
+        callId: String(query.get('call_id') || ''),
+        userId: String(query.get('userId') || ''),
+        name: String(query.get('name') || ''),
+        startedAtMs: this.joinStartedAtMs,
+      }))
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
+      this.cb.onJoinLatencySample?.(buildSfuJoinLatencySample('sfu_socket_open', this.joinStartedAtMs, {
+        room_id: roomId,
+        candidate_origin: String(candidates[index] || ''),
+      }))
       this.startPublisherFrameStallTimer()
       if (this.cb.onConnected) {
         this.cb.onConnected()
@@ -419,6 +439,8 @@ export class SFUClient {
     this.opsSignalSequence = 0
     this.connectAttemptInFlight = true
     this.disconnectNotified = false
+    this.joinStartedAtMs = Date.now()
+    this.sessionAccepted = null
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
     this.publisherFrameHealthById.clear()
@@ -451,7 +473,7 @@ export class SFUClient {
 
   publishTracks(tracks: SFUTrack[]): void {
     for (const t of tracks) {
-      this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })
+      this.send(buildSfuTrackPublishPayload(t, this.sessionAccepted))
     }
   }
 
@@ -531,6 +553,7 @@ export class SFUClient {
       transportMetrics: {
         ...(frame.transportMetrics || {}),
         outbound_media_generation: this.outboundMediaGeneration,
+        publisher_join_started_at_ms: this.joinStartedAtMs,
       },
       frameSequence,
       senderSentAtMs: Date.now(),
@@ -1258,8 +1281,19 @@ export class SFUClient {
   }
 
   private handleMessage(msg: SfuClientMessage): void {
+    const sessionProtocol = handleSfuSessionProtocolMessage(msg as Record<string, unknown>, {
+      roomId: this.roomId,
+      startedAtMs: this.joinStartedAtMs,
+      callbacks: this.cb,
+    })
+    if (sessionProtocol.accepted) this.sessionAccepted = sessionProtocol.accepted
+    if (sessionProtocol.handled) {
+      return
+    }
+
+    const msgType = stringField(msg?.type)
     this.markPublisherFrameReceived(msg)
-    if (stringField(msg?.type) === 'sfu/publisher_left') {
+    if (msgType === 'sfu/publisher_left') {
       this.untrackPublisher(stringField(msg?.publisherId, msg?.publisher_id))
     }
     handleSfuClientMessage({
