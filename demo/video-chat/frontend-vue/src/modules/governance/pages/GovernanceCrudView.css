@@ -18,7 +18,7 @@
   min-width: 0;
   flex: 0 1 360px;
   max-width: 360px;
-  margin-inline-start: auto;
+  margin-inline-start: 0;
 }
 
 .governance-filter-select {

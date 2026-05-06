@@ -67,7 +67,7 @@ defineProps({
 }
 
 .admin-page-frame-toolbar :deep(.search-field-main) {
-  margin-inline-start: auto;
+  margin-inline-start: 0;
 }
 
 .admin-page-frame-toolbar :deep(.search-field) {
