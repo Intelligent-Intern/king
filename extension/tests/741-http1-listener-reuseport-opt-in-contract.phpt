@@ -11,8 +11,25 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
+$python3 = null;
+foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+    if ($directory === '') {
+        continue;
+    }
+
+    $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+    if (is_file($candidate) && is_executable($candidate)) {
+        $python3 = $candidate;
+        break;
+    }
+}
+if ($python3 === null) {
+    echo "skip python3 is required";
+    return;
+}
+
 $checkReusePort = @proc_open(
-    ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
+    [$python3, '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
     [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],

@@ -21,7 +21,8 @@ foreach ($paths as $path) {
 
     var_dump(!str_contains($skipif, "['command', '-v', 'python3']"));
     var_dump(!str_contains($skipif, 'command -v python3'));
-    var_dump(str_contains($skipif, "@proc_open(\n    ['python3', '-c',"));
+    var_dump(str_contains($skipif, '$python3 = null;'));
+    var_dump(str_contains($skipif, '[$python3, \'-c\','));
 
     $warnings = [];
     set_error_handler(static function (int $severity, string $message) use (&$warnings): bool {
@@ -41,6 +42,8 @@ foreach ($paths as $path) {
 }
 ?>
 --EXPECT--
+bool(true)
+bool(true)
 bool(true)
 bool(true)
 bool(true)
