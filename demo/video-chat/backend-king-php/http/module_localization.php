@@ -201,7 +201,10 @@ function videochat_handle_localization_routes(
         }
     }
 
-    if (preg_match('#^/api/admin/localization/imports/([A-Za-z0-9_:-]+)$#', $path, $matches) === 1) {
+    if (
+        !in_array($path, ['/api/admin/localization/imports/preview', '/api/admin/localization/imports/commit'], true)
+        && preg_match('#^/api/admin/localization/imports/([A-Za-z0-9_:-]+)$#', $path, $matches) === 1
+    ) {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/admin/localization import details.', [
                 'allowed_methods' => ['GET'],

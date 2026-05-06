@@ -222,7 +222,7 @@ function videochat_preview_translation_csv(PDO $pdo, string $csv, ?int $defaultT
     fwrite($handle, $text);
     rewind($handle);
 
-    $header = fgetcsv($handle);
+    $header = fgetcsv($handle, null, ',', '"', '\\');
     if (!is_array($header)) {
         fclose($handle);
         return [
@@ -256,7 +256,7 @@ function videochat_preview_translation_csv(PDO $pdo, string $csv, ?int $defaultT
     }
 
     $rowNumber = 1;
-    while (($row = fgetcsv($handle)) !== false) {
+    while (($row = fgetcsv($handle, null, ',', '"', '\\')) !== false) {
         $rowNumber++;
         if ($row === [null] || trim(implode('', array_map('strval', $row))) === '') {
             continue;
