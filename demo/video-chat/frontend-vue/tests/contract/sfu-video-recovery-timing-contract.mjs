@@ -53,6 +53,8 @@ try {
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
   requireContains(runtimeHealth, 'const socketRecoverySent = typeof sendSocketFrame ===', 'remote freeze recovery sends user-socket fallback alongside SFU publisher-id recovery');
   requireContains(runtimeHealth, 'const sent = Boolean(sfuRecoverySent || socketRecoverySent);', 'remote freeze recovery does not short-circuit stale publisher-id routes');
+  requireContains(runtimeHealth, 'remoteSfuQualityPressureLastByKey', 'remote recovery pressure is throttled outside transient peer objects');
+  requireContains(runtimeHealth, 'remoteSfuQualityPressureThrottleKey(targetUserId, normalizedReason)', 'remote recovery pressure throttle is keyed by stable target user and reason');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
   requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
