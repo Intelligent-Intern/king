@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../domain/workspace/workspace_administration.php';
 require_once __DIR__ . '/../domain/workspace/workspace_app_configuration.php';
+require_once __DIR__ . '/../support/auth_request.php';
 
 function videochat_workspace_branding_file_response(
     string $filename,
@@ -308,23 +309,65 @@ function videochat_handle_workspace_administration_routes(
         }
 
         if ($method === 'POST' && $backgroundId === '') {
-            [$payload, $decodeError] = $decodeJsonBody($request);
-            if (!is_array($payload)) {
-                return $errorResponse(400, 'workspace_background_invalid_request_body', 'Background image payload must be a JSON object.', [
-                    'reason' => $decodeError,
+            $traceId = videochat_workspace_background_upload_trace_id([
+                'client_trace_id' => videochat_request_header_value($request, 'x-upload-trace-id'),
+            ]);
+            $rawBody = $request['body'] ?? '';
+            $rawBodyBytes = is_string($rawBody) ? strlen($rawBody) : 0;
+            $maxBodyBytes = videochat_workspace_background_upload_max_body_bytes($brandingMaxBytes);
+            videochat_workspace_background_upload_log($traceId, 'route_request_received', [
+                'tenant_id' => $tenantId,
+                'body_bytes' => $rawBodyBytes,
+                'max_body_bytes' => $maxBodyBytes,
+                'content_length' => videochat_request_header_value($request, 'content-length'),
+                'client_batch_index' => videochat_request_header_value($request, 'x-upload-batch-index'),
+                'client_batch_count' => videochat_request_header_value($request, 'x-upload-batch-count'),
+            ]);
+            if (is_string($rawBody) && $rawBodyBytes > $maxBodyBytes) {
+                videochat_workspace_background_upload_log($traceId, 'route_request_rejected', [
+                    'reason' => 'request_body_too_large',
+                    'body_bytes' => $rawBodyBytes,
+                    'max_body_bytes' => $maxBodyBytes,
+                ]);
+                return $errorResponse(413, 'workspace_background_upload_failed', 'Background image upload request body is too large.', [
+                    'reason' => 'request_body_too_large',
+                    'trace_id' => $traceId,
+                    'body_bytes' => $rawBodyBytes,
+                    'max_body_bytes' => $maxBodyBytes,
                 ]);
             }
+            [$payload, $decodeError] = $decodeJsonBody($request);
+            if (!is_array($payload)) {
+                videochat_workspace_background_upload_log($traceId, 'route_json_decode_failed', [
+                    'reason' => $decodeError,
+                    'body_bytes' => $rawBodyBytes,
+                ]);
+                return $errorResponse(400, 'workspace_background_invalid_request_body', 'Background image payload must be a JSON object.', [
+                    'reason' => $decodeError,
+                    'trace_id' => $traceId,
+                ]);
+            }
+            $payload['client_trace_id'] = is_string($payload['client_trace_id'] ?? null)
+                ? (string) $payload['client_trace_id']
+                : $traceId;
             try {
                 $create = videochat_workspace_create_background_images($pdo, $tenantId, $payload, $brandingStorageRoot, $brandingMaxBytes);
-            } catch (Throwable) {
+            } catch (Throwable $error) {
+                videochat_workspace_background_upload_log($traceId, 'route_upload_exception', [
+                    'exception' => get_class($error),
+                    'message' => $error->getMessage(),
+                ]);
                 return $errorResponse(500, 'workspace_background_upload_failed', 'Could not upload background images.', [
                     'reason' => 'internal_error',
+                    'trace_id' => $traceId,
                 ]);
             }
             if (!(bool) ($create['ok'] ?? false)) {
                 return $errorResponse(422, 'workspace_background_upload_failed', 'Background image payload failed validation.', [
                     'reason' => (string) ($create['reason'] ?? 'validation_failed'),
                     'fields' => is_array($create['errors'] ?? null) ? $create['errors'] : [],
+                    'trace_id' => (string) ($create['trace_id'] ?? $traceId),
+                    'diagnostics' => is_array($create['diagnostics'] ?? null) ? $create['diagnostics'] : [],
                 ]);
             }
             return $jsonResponse(201, [
@@ -332,6 +375,8 @@ function videochat_handle_workspace_administration_routes(
                 'result' => [
                     'state' => 'stored',
                     'rows' => is_array($create['rows'] ?? null) ? $create['rows'] : [],
+                    'trace_id' => (string) ($create['trace_id'] ?? $traceId),
+                    'diagnostics' => is_array($create['diagnostics'] ?? null) ? $create['diagnostics'] : [],
                 ],
                 'time' => gmdate('c'),
             ]);

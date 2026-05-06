@@ -342,6 +342,135 @@ function videochat_workspace_background_image_row(array $row): array
     ];
 }
 
+function videochat_workspace_background_upload_max_body_bytes(int $maxImageBytes): int
+{
+    $imageBytes = max(64 * 1024, min($maxImageBytes, 10 * 1024 * 1024));
+    return (int) ceil(($imageBytes * 4) / 3) + 512 * 1024;
+}
+
+function videochat_workspace_background_upload_trace_id(array $payload = []): string
+{
+    $candidate = trim((string) ($payload['client_trace_id'] ?? ($payload['trace_id'] ?? '')));
+    if ($candidate !== '' && preg_match('/^[A-Za-z0-9._-]{1,80}$/', $candidate) === 1) {
+        return $candidate;
+    }
+
+    try {
+        return 'bgup_' . bin2hex(random_bytes(10));
+    } catch (Throwable) {
+        return 'bgup_' . substr(hash('sha256', uniqid('background-upload', true) . microtime(true)), 0, 20);
+    }
+}
+
+function videochat_workspace_background_upload_safe_details(array $fields): array
+{
+    $safe = [];
+    foreach ($fields as $key => $value) {
+        $name = is_string($key) ? $key : (string) $key;
+        if ($name === 'data_url' || $name === 'binary' || $name === 'content_base64') {
+            $safe[$name . '_chars'] = is_string($value) ? strlen($value) : 0;
+            continue;
+        }
+        if (is_array($value)) {
+            $safe[$name] = videochat_workspace_background_upload_safe_details($value);
+            continue;
+        }
+        if (is_string($value)) {
+            $safe[$name] = strlen($value) > 240 ? substr($value, 0, 240) . '...' : $value;
+            continue;
+        }
+        if (is_bool($value) || is_int($value) || is_float($value) || $value === null) {
+            $safe[$name] = $value;
+            continue;
+        }
+        if (is_scalar($value)) {
+            $safe[$name] = (string) $value;
+        }
+    }
+
+    return $safe;
+}
+
+function videochat_workspace_background_upload_log(string $traceId, string $stage, array $fields = []): void
+{
+    $payload = [
+        'trace_id' => $traceId,
+        'stage' => $stage,
+        'time' => gmdate('c'),
+        'details' => videochat_workspace_background_upload_safe_details($fields),
+    ];
+    error_log('[video-chat][background-upload] ' . json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+}
+
+function videochat_workspace_background_upload_stage(string $traceId, string $stage, array $fields = []): array
+{
+    videochat_workspace_background_upload_log($traceId, $stage, $fields);
+    return [
+        'stage' => $stage,
+        'time' => gmdate('c'),
+        'details' => videochat_workspace_background_upload_safe_details($fields),
+    ];
+}
+
+function videochat_workspace_background_object_key(int $tenantId, string $filename): string
+{
+    return 'vcbg_' . substr(hash('sha256', (string) $tenantId), 0, 12) . '_' . substr(hash('sha256', $filename), 0, 32);
+}
+
+function videochat_workspace_background_object_store_put(string $objectKey, string $binary, string $contentType): array
+{
+    $override = $GLOBALS['videochat_workspace_background_object_store_put'] ?? null;
+    if (is_callable($override)) {
+        $ok = $override($objectKey, $binary, $contentType) === true;
+        return [
+            'ok' => $ok,
+            'reason' => $ok ? 'stored' : 'override_failed',
+            'backend' => 'override',
+        ];
+    }
+
+    if (!function_exists('king_object_store_put_from_stream')) {
+        return [
+            'ok' => false,
+            'reason' => 'king_object_store_unavailable',
+            'backend' => 'none',
+        ];
+    }
+
+    $stream = fopen('php://temp', 'r+');
+    if ($stream === false) {
+        return [
+            'ok' => false,
+            'reason' => 'temp_stream_unavailable',
+            'backend' => 'king_object_store',
+        ];
+    }
+
+    try {
+        fwrite($stream, $binary);
+        rewind($stream);
+        $stored = king_object_store_put_from_stream($objectKey, $stream, [
+            'content_type' => $contentType,
+            'cache_class' => 'public',
+        ]) === true;
+        return [
+            'ok' => $stored,
+            'reason' => $stored ? 'stored' : 'object_store_rejected',
+            'backend' => 'king_object_store',
+        ];
+    } catch (Throwable $error) {
+        return [
+            'ok' => false,
+            'reason' => 'object_store_exception',
+            'backend' => 'king_object_store',
+            'exception' => get_class($error),
+            'message' => $error->getMessage(),
+        ];
+    } finally {
+        fclose($stream);
+    }
+}
+
 function videochat_workspace_list_background_images(PDO $pdo, int $tenantId, string $query, int $page, int $pageSize): array
 {
     $where = 'tenant_id = :tenant_id';
@@ -377,24 +506,84 @@ function videochat_workspace_list_background_images(PDO $pdo, int $tenantId, str
     ];
 }
 
-function videochat_workspace_store_background_upload(array $file, string $storageRoot, int $maxBytes): array
+function videochat_workspace_store_background_upload(array $file, string $storageRoot, int $maxBytes, int $tenantId, string $traceId, int $index): array
 {
+    $diagnostics = [];
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'file_received', [
+        'index' => $index,
+        'file_name' => (string) ($file['file_name'] ?? ''),
+        'label' => (string) ($file['label'] ?? ''),
+        'data_url_chars' => strlen((string) ($file['data_url'] ?? '')),
+    ]);
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'image_parse_started', [
+        'index' => $index,
+        'max_bytes' => $maxBytes,
+    ]);
     $parsed = videochat_avatar_parse_upload_payload(['data_url' => (string) ($file['data_url'] ?? '')], $maxBytes);
     if (!(bool) ($parsed['ok'] ?? false) || !is_array($parsed['data'] ?? null)) {
-        return ['ok' => false, 'reason' => 'invalid_image_upload', 'errors' => $parsed['errors'] ?? []];
+        $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'image_parse_failed', [
+            'index' => $index,
+            'reason' => (string) ($parsed['reason'] ?? 'validation_failed'),
+            'errors' => is_array($parsed['errors'] ?? null) ? $parsed['errors'] : [],
+        ]);
+        return ['ok' => false, 'reason' => 'invalid_image_upload', 'errors' => $parsed['errors'] ?? [], 'diagnostics' => $diagnostics];
     }
     $data = (array) $parsed['data'];
     $dir = rtrim($storageRoot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'backgrounds';
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'image_parse_ok', [
+        'index' => $index,
+        'bytes' => (int) ($data['bytes'] ?? 0),
+        'mime_type' => (string) ($data['mime'] ?? ''),
+        'extension' => (string) ($data['extension'] ?? ''),
+    ]);
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'local_storage_dir_started', [
+        'index' => $index,
+        'directory' => $dir,
+    ]);
     if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-        return ['ok' => false, 'reason' => 'storage_unavailable', 'errors' => []];
+        $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'local_storage_dir_failed', [
+            'index' => $index,
+            'directory' => $dir,
+        ]);
+        return ['ok' => false, 'reason' => 'storage_unavailable', 'errors' => [], 'diagnostics' => $diagnostics];
     }
     $binary = (string) ($data['binary'] ?? '');
     $extension = (string) ($data['extension'] ?? 'png');
     $filename = 'background-' . substr(hash('sha256', $binary), 0, 16) . '.' . $extension;
     $path = $dir . DIRECTORY_SEPARATOR . $filename;
+    $objectKey = videochat_workspace_background_object_key($tenantId, $filename);
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'object_store_put_started', [
+        'index' => $index,
+        'object_key' => $objectKey,
+        'bytes' => strlen($binary),
+        'content_type' => (string) ($data['mime'] ?? ''),
+    ]);
+    $objectStore = videochat_workspace_background_object_store_put($objectKey, $binary, (string) ($data['mime'] ?? 'application/octet-stream'));
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, (bool) ($objectStore['ok'] ?? false) ? 'object_store_put_ok' : 'object_store_put_failed', [
+        'index' => $index,
+        'object_key' => $objectKey,
+        'reason' => (string) ($objectStore['reason'] ?? 'unknown'),
+        'backend' => (string) ($objectStore['backend'] ?? ''),
+        'exception' => (string) ($objectStore['exception'] ?? ''),
+        'message' => (string) ($objectStore['message'] ?? ''),
+    ]);
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'local_file_write_started', [
+        'index' => $index,
+        'path' => $path,
+        'bytes' => strlen($binary),
+    ]);
     if (@file_put_contents($path, $binary, LOCK_EX) === false) {
-        return ['ok' => false, 'reason' => 'write_failed', 'errors' => []];
+        $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'local_file_write_failed', [
+            'index' => $index,
+            'path' => $path,
+        ]);
+        return ['ok' => false, 'reason' => 'write_failed', 'errors' => [], 'diagnostics' => $diagnostics];
     }
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'local_file_write_ok', [
+        'index' => $index,
+        'path' => $path,
+        'bytes' => strlen($binary),
+    ]);
     $label = videochat_appointment_clean_text($file['label'] ?? '', 120);
     if ($label === '') {
         $label = videochat_appointment_clean_text(pathinfo((string) ($file['file_name'] ?? $filename), PATHINFO_FILENAME), 120);
@@ -406,15 +595,39 @@ function videochat_workspace_store_background_upload(array $file, string $storag
         'file_path' => '/api/workspace/background-images/' . rawurlencode($filename),
         'mime_type' => (string) ($data['mime'] ?? ''),
         'file_size' => (int) ($data['bytes'] ?? 0),
+        'object_key' => $objectKey,
+        'object_store_ok' => (bool) ($objectStore['ok'] ?? false),
+        'diagnostics' => $diagnostics,
     ];
 }
 
 function videochat_workspace_create_background_images(PDO $pdo, int $tenantId, array $payload, string $storageRoot, int $maxBytes): array
 {
+    $traceId = videochat_workspace_background_upload_trace_id($payload);
     $files = is_array($payload['files'] ?? null) ? array_values($payload['files']) : [$payload];
     $files = array_slice(array_filter($files, 'is_array'), 0, 50);
+    $diagnostics = [];
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'create_started', [
+        'tenant_id' => $tenantId,
+        'file_count' => count($files),
+        'max_image_bytes' => $maxBytes,
+        'storage_root' => $storageRoot,
+        'client_batch_index' => (int) ($payload['client_batch_index'] ?? 0),
+        'client_batch_count' => (int) ($payload['client_batch_count'] ?? 0),
+        'client_payload_chars' => (int) ($payload['client_payload_chars'] ?? 0),
+    ]);
     if ($files === []) {
-        return ['ok' => false, 'reason' => 'validation_failed', 'rows' => [], 'errors' => ['files' => 'required_non_empty_files']];
+        $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'create_failed', [
+            'reason' => 'required_non_empty_files',
+        ]);
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'trace_id' => $traceId,
+            'rows' => [],
+            'errors' => ['files' => 'required_non_empty_files'],
+            'diagnostics' => $diagnostics,
+        ];
     }
     $rows = [];
     $errors = [];
@@ -432,33 +645,69 @@ ON CONFLICT(tenant_id, file_path) DO UPDATE SET
 SQL
     );
     foreach ($files as $index => $file) {
-        $stored = videochat_workspace_store_background_upload($file, $storageRoot, $maxBytes);
+        $stored = videochat_workspace_store_background_upload($file, $storageRoot, $maxBytes, $tenantId, $traceId, $index);
+        if (is_array($stored['diagnostics'] ?? null)) {
+            $diagnostics = array_merge($diagnostics, $stored['diagnostics']);
+        }
         if (!(bool) ($stored['ok'] ?? false)) {
             $errors['files.' . $index] = (string) ($stored['reason'] ?? 'invalid_upload');
             continue;
         }
-        $query->execute([
-            ':id' => videochat_workspace_app_configuration_text_id(),
-            ':tenant_id' => $tenantId,
-            ':label' => (string) ($stored['label'] ?? 'Background image'),
-            ':file_path' => (string) ($stored['file_path'] ?? ''),
-            ':mime_type' => (string) ($stored['mime_type'] ?? ''),
-            ':file_size' => (int) ($stored['file_size'] ?? 0),
-            ':created_at' => $now,
-            ':updated_at' => $now,
+        $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'db_insert_started', [
+            'index' => $index,
+            'file_path' => (string) ($stored['file_path'] ?? ''),
+            'object_key' => (string) ($stored['object_key'] ?? ''),
+            'object_store_ok' => (bool) ($stored['object_store_ok'] ?? false),
         ]);
-        $select = $pdo->prepare('SELECT * FROM workspace_background_images WHERE tenant_id = :tenant_id AND file_path = :file_path LIMIT 1');
-        $select->execute([':tenant_id' => $tenantId, ':file_path' => (string) ($stored['file_path'] ?? '')]);
-        $row = $select->fetch();
+        try {
+            $query->execute([
+                ':id' => videochat_workspace_app_configuration_text_id(),
+                ':tenant_id' => $tenantId,
+                ':label' => (string) ($stored['label'] ?? 'Background image'),
+                ':file_path' => (string) ($stored['file_path'] ?? ''),
+                ':mime_type' => (string) ($stored['mime_type'] ?? ''),
+                ':file_size' => (int) ($stored['file_size'] ?? 0),
+                ':created_at' => $now,
+                ':updated_at' => $now,
+            ]);
+            $select = $pdo->prepare('SELECT * FROM workspace_background_images WHERE tenant_id = :tenant_id AND file_path = :file_path LIMIT 1');
+            $select->execute([':tenant_id' => $tenantId, ':file_path' => (string) ($stored['file_path'] ?? '')]);
+            $row = $select->fetch();
+        } catch (Throwable $error) {
+            $errors['files.' . $index] = 'db_insert_failed';
+            $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'db_insert_failed', [
+                'index' => $index,
+                'file_path' => (string) ($stored['file_path'] ?? ''),
+                'exception' => get_class($error),
+                'message' => $error->getMessage(),
+            ]);
+            continue;
+        }
         if (is_array($row)) {
             $rows[] = videochat_workspace_background_image_row($row);
+            $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'db_insert_ok', [
+                'index' => $index,
+                'file_path' => (string) ($stored['file_path'] ?? ''),
+            ]);
+        } else {
+            $diagnostics[] = videochat_workspace_background_upload_stage($traceId, 'db_readback_missing', [
+                'index' => $index,
+                'file_path' => (string) ($stored['file_path'] ?? ''),
+            ]);
         }
     }
+    $diagnostics[] = videochat_workspace_background_upload_stage($traceId, $rows !== [] ? 'create_finished' : 'create_failed', [
+        'stored_count' => count($rows),
+        'error_count' => count($errors),
+        'errors' => $errors,
+    ]);
     return [
         'ok' => $rows !== [],
         'reason' => $rows !== [] ? 'stored' : 'validation_failed',
+        'trace_id' => $traceId,
         'rows' => $rows,
         'errors' => $errors,
+        'diagnostics' => $diagnostics,
     ];
 }
 

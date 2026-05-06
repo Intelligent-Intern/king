@@ -148,7 +148,7 @@ register_shutdown_function(static function () use ($log): void {
 $jsonResponse = static function (int $status, array $payload): array {
     $corsHeaders = [
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
-        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id, X-Upload-Trace-Id, X-Upload-Batch-Index, X-Upload-Batch-Count',
         'access-control-max-age' => '600',
     ];
 
