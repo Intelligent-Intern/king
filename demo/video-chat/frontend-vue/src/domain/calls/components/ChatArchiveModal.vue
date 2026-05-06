@@ -312,7 +312,7 @@ watch(
   display: grid;
   grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) auto;
   align-items: end;
-  gap: 10px;
+  gap: 20px;
 }
 
 .chat-archive-field {
@@ -533,7 +533,7 @@ watch(
 
   .chat-archive-toolbar {
     grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) auto;
-    gap: 8px;
+    gap: 20px;
   }
 }
 
