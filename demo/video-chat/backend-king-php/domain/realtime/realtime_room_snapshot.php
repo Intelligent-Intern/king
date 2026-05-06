@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../call_apps/call_app_sessions.php';
+require_once __DIR__ . '/realtime_activity_layout.php';
+require_once __DIR__ . '/realtime_presence.php';
+
 function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
@@ -198,6 +202,15 @@ function videochat_realtime_room_snapshot_payload(
             ];
         }
     }
+    $callApps = ['active_sessions' => [], 'active_session_count' => 0, 'has_active_session' => false];
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : 0;
+    if ($callId !== '' && $tenantId > 0) {
+        try {
+            $callApps = videochat_call_app_room_snapshot($openDatabase(), $tenantId, $callId);
+        } catch (Throwable) {
+            $callApps = ['active_sessions' => [], 'active_session_count' => 0, 'has_active_session' => false];
+        }
+    }
 
     return [
         'type' => 'room/snapshot',
@@ -217,6 +230,7 @@ function videochat_realtime_room_snapshot_payload(
             'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
             'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
         ],
+        'call_apps' => $callApps,
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
         'time' => gmdate('c'),
     ];
@@ -229,6 +243,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'participants' => $payload['participants'] ?? [],
         'layout' => $payload['layout'] ?? [],
         'activity' => $payload['activity'] ?? [],
+        'call_apps' => $payload['call_apps'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }

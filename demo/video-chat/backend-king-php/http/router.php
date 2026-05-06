@@ -331,7 +331,8 @@ function videochat_dispatch_request(
                 $apiAuthContext,
                 $jsonResponse,
                 $errorResponse,
-                $openDatabase
+                $openDatabase,
+                $decodeJsonBody
             );
         } elseif ($moduleName === 'calls') {
             $response = videochat_handle_call_routes(
