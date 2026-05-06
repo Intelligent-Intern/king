@@ -445,6 +445,7 @@ const sfuConnected = ref(false);
 let sfuConnectRetryCount = 0;
 let detachMediaDeviceWatcher = null;
 let detachForegroundReconnect = null;
+let localMediaCaptureGeneration = 0;
 let localTrackReconfigureInFlight = false;
 let localTrackReconfigureQueuedMode = null;
 let compactMediaQuery = null;
@@ -486,6 +487,8 @@ const localMediaOrchestrationState = {
   set backgroundRuntimeToken(value) { backgroundRuntimeToken = value; },
   get localTrackRecoveryAttempts() { return localTrackRecoveryAttempts; },
   set localTrackRecoveryAttempts(value) { localTrackRecoveryAttempts = value; },
+  get localMediaCaptureGeneration() { return localMediaCaptureGeneration; },
+  set localMediaCaptureGeneration(value) { localMediaCaptureGeneration = value; },
   get localTrackReconfigureInFlight() { return localTrackReconfigureInFlight; },
   set localTrackReconfigureInFlight(value) { localTrackReconfigureInFlight = value; },
   get localTrackReconfigureQueuedMode() { return localTrackReconfigureQueuedMode; },

@@ -11,30 +11,20 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-function king_http1_find_python3_binary(): ?string
-{
-    $path = getenv('PATH');
-    if (!is_string($path) || $path === '') {
-        return null;
+$python3 = null;
+foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+    if ($directory === '') {
+        continue;
     }
 
-    foreach (explode(PATH_SEPARATOR, $path) as $directory) {
-        if ($directory === '') {
-            continue;
-        }
-
-        $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
-        if (is_file($candidate) && is_executable($candidate)) {
-            return $candidate;
-        }
+    $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+    if (is_file($candidate) && is_executable($candidate)) {
+        $python3 = $candidate;
+        break;
     }
-
-    return null;
 }
-
-$python3 = king_http1_find_python3_binary();
 if ($python3 === null) {
-    echo "skip python3 with socket.SO_REUSEPORT is required";
+    echo "skip python3 is required";
     return;
 }
 
