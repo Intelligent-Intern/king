@@ -85,6 +85,21 @@ test('public booking resolves locale and direction without an authenticated sess
       await expect(page.locator('.appointment-slot-btn')).toHaveCount(1);
       const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
       expect(hasHorizontalOverflow, `${viewport.name} ${locale} should not horizontally overflow`).toBe(false);
+
+      if (viewport.name === 'mobile' && locale === 'en') {
+        const calendar = page.locator('.appointment-booking-calendar');
+        const form = page.locator('.appointment-booking-form');
+        await expect(calendar).toBeVisible();
+        await expect(form).toBeVisible();
+        const calendarBox = await calendar.boundingBox();
+        const formBox = await form.boundingBox();
+        expect(calendarBox, 'mobile booking calendar must have a layout box').not.toBeNull();
+        expect(formBox, 'mobile booking form must have a layout box').not.toBeNull();
+        expect(
+          calendarBox.y + calendarBox.height <= formBox.y + 1,
+          'mobile booking calendar must end before the form starts',
+        ).toBe(true);
+      }
     }
   }
 });

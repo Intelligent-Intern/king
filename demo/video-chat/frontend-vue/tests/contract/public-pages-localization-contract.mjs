@@ -69,6 +69,8 @@ assert.match(appointmentBookingModalSource, /locale:\s*activeLocale\.value/, 'pu
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('locale',\s*locale\)/, 'FullCalendar must react to public locale changes');
 assert.match(appointmentBookingModalSource, /direction:\s*activeDirection\.value/, 'FullCalendar must initialize with active public text direction');
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('direction',\s*direction\)/, 'FullCalendar must react to public direction changes');
+assert.match(appointmentBookingModalSource, /@media \(max-width: 900px\)[\s\S]*?\.appointment-booking-grid\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;/, 'mobile public booking must stack calendar and form instead of letting grid children overlap');
+assert.match(appointmentBookingModalSource, /@media \(max-width: 900px\)[\s\S]*?\.appointment-booking-form\s*\{[\s\S]*?overflow:\s*visible;/, 'mobile public booking must let the modal body own scrolling so the calendar cannot overlay the form');
 assert.match(appointmentApiSource, /localizedApiErrorMessage\(payload,\s*fallback\)/, 'public appointment API errors must resolve through stable codes');
 assert.doesNotMatch(appointmentApiSource, /payload\?\.error\?\.message/, 'public appointment API must not display backend English error messages directly');
 assert.match(joinViewSource, /localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must resolve through stable codes');
