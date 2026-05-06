@@ -37,6 +37,7 @@ export const CALL_WORKSPACE_MESSAGES = Object.freeze({
   'calls.workspace.large_paste_attachment': 'Large pasted text was converted to a chat attachment.',
   'calls.workspace.mute_peer': 'Mute peer',
   'calls.workspace.no_chat_messages': 'No chat messages yet.',
+  'calls.workspace.no_call_app_active': 'No Call App active.',
   'calls.workspace.no_users_in_room': 'No users in this room yet.',
   'calls.workspace.no_users_match': 'No users match the current filter.',
   'calls.workspace.open_chat': 'Open chat',

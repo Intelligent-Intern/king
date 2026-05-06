@@ -232,7 +232,7 @@ const primaryVideoUserId = computed(() => {
   return Number.isInteger(selectedId) && selectedId > 0 ? selectedId : currentUserId.value;
 });
 const miniVideoParticipants = computed(() => {
-  if (currentLayoutMode.value !== 'main_mini') return [];
+  if (!['main_mini', 'call_app_workspace'].includes(currentLayoutMode.value)) return [];
   return layoutSelection.value.miniParticipants;
 });
 const gridVideoParticipants = computed(() => (

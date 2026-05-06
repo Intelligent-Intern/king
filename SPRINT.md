@@ -831,11 +831,17 @@ Tickets:
   - Create/list/activate/remove Call App Sessions for a call.
   - Room-state snapshots and websocket events include active app session state.
   - Removing an app retires iframe tokens and stops app synchronization.
-- [ ] CAP-08 Call App workspace view
+- [x] CAP-08 Call App workspace view
   - Add `call_app_workspace` layout mode.
   - Render 5 mini participant videos above the iframe.
   - Keep iframe sizing stable and responsive.
   - Do not add implementation weight to `CallWorkspaceView.vue`.
+  - Proof:
+    - Added dedicated `CallAppWorkspaceHost.vue` and `callAppWorkspaceState.js`
+      instead of embedding iframe logic in `CallWorkspaceView.vue`.
+    - Added frontend/backend `call_app_workspace` layout mode support and SQLite
+      migration `0050_call_app_workspace_layout_mode`.
+    - Added `call-app-workspace-view-contract.mjs`.
 - [ ] CAP-09 Left sidebar Call Apps browser
   - Add `Call Apps` button.
   - Replace sidebar content with searchable, paginated app list.

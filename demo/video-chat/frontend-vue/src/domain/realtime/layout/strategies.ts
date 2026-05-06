@@ -1,7 +1,7 @@
 import { isScreenShareMediaSource, isScreenShareUserId } from '../screenShareIdentity.js';
 import { compareLocalizedStrings } from '../../../support/localeCollation.js';
 
-export const CALL_LAYOUT_MODES = ['grid', 'main_mini', 'main_only'];
+export const CALL_LAYOUT_MODES = ['grid', 'main_mini', 'main_only', 'call_app_workspace'];
 export const CALL_LAYOUT_STRATEGIES = ['manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active'];
 export const ACTIVE_SPEAKER_MIN_SPEAKING_MS = 2000;
 export const ACTIVE_SPEAKER_RELEASE_PAUSE_MS = 2000;
@@ -443,9 +443,11 @@ export function selectCallLayoutParticipants({
         ? (explicitMiniVisibleIds.length > 0 ? explicitMiniVisibleIds : fallbackMiniUserIds)
         : fallbackMiniUserIds;
     }
+  } else if (mode === 'call_app_workspace') {
+    miniUserIds = clippedVisibleIds;
   }
   const finalVisibleParticipants = clippedVisibleIds.map((id) => byUserId.get(id)).filter(Boolean);
-  const miniParticipants = mode === 'main_mini'
+  const miniParticipants = ['main_mini', 'call_app_workspace'].includes(mode)
     ? miniUserIds.map((id) => byUserId.get(id)).filter(Boolean)
     : [];
   const gridParticipants = mode === 'grid' ? finalVisibleParticipants : [];
