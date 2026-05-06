@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,6 +24,10 @@ try {
   ];
 
   assert.ok(fs.existsSync(iconPath), 'blue background selector icon must exist');
+  execFileSync('git', ['ls-files', '--error-unmatch', 'public/assets/orgas/kingrt/icons/background-blue.svg'], {
+    cwd: frontendRoot,
+    stdio: 'ignore',
+  });
   assert.ok(readUtf8('public/assets/orgas/kingrt/icons/background-blue.svg').includes('#061a4a'), 'blue background icon must show the contracted deep-blue color');
   assert.ok(callSettingsCss.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'background selector controls must reserve stable space for three buttons');
 
