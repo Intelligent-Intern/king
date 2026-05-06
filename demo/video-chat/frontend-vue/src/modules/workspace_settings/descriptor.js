@@ -7,19 +7,12 @@ export default {
   settings_panels: [
     {
       key: 'personal.theme',
-      label: 'Theme',
-      label_key: 'settings.theme',
+      label: 'Options',
+      label_key: 'settings.options',
       roles: ['admin', 'user'],
-      order: 30,
+      order: 90,
       source_path: 'layouts/settings/WorkspaceThemeSettings.vue',
       loader: () => import('../../layouts/settings/WorkspaceThemeSettings.vue'),
-    },
-    {
-      key: 'personal.regional',
-      label: 'Regional Time',
-      label_key: 'settings.regional_time',
-      roles: ['admin', 'user'],
-      order: 50,
     },
   ],
   i18n_namespaces: ['workspace_settings'],

@@ -368,24 +368,12 @@
         v-if="activeSettingsTile === 'personal.about'"
         :draft="settingsDraft"
         :state="settingsState"
-        :email="sessionState.email || ''"
         :avatar-preview-src="settingsAvatarPreviewSrc"
         @avatar-select="handleAvatarSelect"
         @avatar-drop="handleAvatarDrop"
       />
 
-      <section v-else-if="activeSettingsTile === 'personal.credentials'" class="settings-panel">
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>{{ t('settings.primary_email') }}</span>
-            <div class="settings-readonly-value">{{ sessionState.email || '—' }}</div>
-          </label>
-          <label class="settings-field">
-            <span>{{ t('settings.password') }}</span>
-            <input class="input" type="text" value="********" disabled autocomplete="off" />
-          </label>
-        </div>
-      </section>
+      <WorkspaceCredentialsSettings v-else-if="activeSettingsTile === 'personal.credentials'" />
 
       <section v-else-if="activeSettingsTile === 'personal.theme'" class="settings-panel">
         <WorkspaceThemeSettings
@@ -396,59 +384,46 @@
       </section>
 
       <section v-else-if="activeSettingsTile === 'personal.localization'" class="settings-panel">
-        <section class="settings-section">
-          <h4>{{ t('settings.language') }}</h4>
-          <div class="settings-row">
-            <label class="settings-field">
-              <span>{{ t('settings.application_language') }}</span>
-              <AppSelect v-model="settingsDraft.language">
-                <option v-for="language in settingsLanguageOptions" :key="language.code" :value="language.code">
-                  {{ language.label }}
-                </option>
-              </AppSelect>
-            </label>
-            <div class="settings-field">
-              <span>{{ t('settings.text_direction') }}</span>
-              <div class="settings-readonly-value">{{ settingsDraftDirection.toUpperCase() }}</div>
-            </div>
-          </div>
-        </section>
-      </section>
-
-      <section v-else-if="activeSettingsTile === 'personal.regional'" class="settings-panel">
-        <section class="settings-section">
-          <h4>{{ t('settings.regional_time') }}</h4>
-          <div class="settings-row">
-            <label class="settings-field">
-              <span>{{ t('settings.time_format') }}</span>
-              <AppSelect v-model="settingsDraft.timeFormat">
-                <option value="24h">24h</option>
-                <option value="12h">12h</option>
-              </AppSelect>
-            </label>
-            <label class="settings-field">
-              <span>{{ t('settings.date_display') }}</span>
-              <AppSelect v-model="settingsDraft.dateFormat">
-                <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </AppSelect>
-            </label>
-          </div>
-        </section>
+        <div class="settings-row">
+          <label class="settings-field">
+            <span>{{ t('settings.language') }}</span>
+            <AppSelect v-model="settingsDraft.language">
+              <option v-for="language in settingsLanguageOptions" :key="language.code" :value="language.code">
+                {{ language.label }}
+              </option>
+            </AppSelect>
+          </label>
+          <label class="settings-field">
+            <span>{{ t('settings.date_format') }}</span>
+            <AppSelect v-model="settingsDraft.dateFormat">
+              <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </AppSelect>
+          </label>
+        </div>
+        <div class="settings-row">
+          <label class="settings-field">
+            <span>{{ t('settings.time_format') }}</span>
+            <AppSelect v-model="settingsDraft.timeFormat">
+              <option value="24h">24h</option>
+              <option value="12h">12h</option>
+            </AppSelect>
+          </label>
+        </div>
       </section>
 
       <section v-else class="settings-panel">
         <div class="settings-upload-status">{{ t('settings.select_tab') }}</div>
       </section>
 
-      <div class="settings-actions">
+      <div v-if="activeSettingsTile !== 'personal.credentials'" class="settings-actions">
         <button class="btn" type="button" :disabled="settingsState.saving || settingsState.loading" @click="saveSettings">
           {{ settingsState.saving ? t('settings.saving') : t('settings.save_settings') }}
         </button>
       </div>
 
-      <div class="settings-upload-status">{{ settingsState.message }}</div>
+      <div v-if="activeSettingsTile !== 'personal.credentials'" class="settings-upload-status">{{ settingsState.message }}</div>
     </div>
   </div>
 
@@ -643,6 +618,7 @@ import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
+import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import CallBackgroundImagePicker from '../domain/realtime/background/CallBackgroundImagePicker.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
@@ -798,7 +774,6 @@ const settingsDraft = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
-  messengerContacts: [],
 });
 
 const settingsState = reactive({
@@ -839,15 +814,6 @@ function normalizePostLogoutLandingUrl(value) {
   if (url === '') return '';
   if (!url.startsWith('/') || url.startsWith('//') || url.includes('\\')) return null;
   return url;
-}
-
-function normalizeMessengerContactDrafts(value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((contact, index) => ({
-    localId: `messenger-${index}-${String(contact?.channel || '')}-${String(contact?.handle || '')}`,
-    channel: String(contact?.channel || '').trim(),
-    handle: String(contact?.handle || '').trim(),
-  }));
 }
 
 function normalizeRole(value) {
@@ -1935,7 +1901,6 @@ function resetSettingsDraft() {
   settingsDraft.linkedinUrl = sessionState.linkedinUrl || '';
   settingsDraft.xUrl = sessionState.xUrl || '';
   settingsDraft.youtubeUrl = sessionState.youtubeUrl || '';
-  settingsDraft.messengerContacts = normalizeMessengerContactDrafts(sessionState.messengerContacts);
 }
 
 function setAvatarStatus(message = '') {
@@ -2030,12 +1995,6 @@ async function saveSettings() {
   const dateFormat = normalizeDateFormat(rawDateFormat);
   const language = normalizeSettingsLanguage(settingsDraft.language);
   const postLogoutLandingUrl = normalizePostLogoutLandingUrl(settingsDraft.postLogoutLandingUrl);
-  const messengerContacts = normalizeMessengerContactDrafts(settingsDraft.messengerContacts)
-    .filter((contact) => contact.channel !== '' || contact.handle !== '')
-    .map((contact) => ({
-      channel: contact.channel,
-      handle: contact.handle,
-    }));
 
   if (displayName === '') {
     settingsState.message = t('settings.display_name_required');
@@ -2097,7 +2056,6 @@ async function saveSettings() {
       linkedin_url: settingsDraft.linkedinUrl,
       x_url: settingsDraft.xUrl,
       youtube_url: settingsDraft.youtubeUrl,
-      messenger_contacts: messengerContacts,
     });
 
     if (!saveResult.ok) {

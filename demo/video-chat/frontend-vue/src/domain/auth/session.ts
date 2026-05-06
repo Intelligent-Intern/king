@@ -4,8 +4,6 @@ import {
   inferAccountType,
   localizationLanguageDirection,
   normalizeDateFormat,
-  normalizeMessengerContacts,
-  normalizeOnboardingBadges,
   normalizeOnboardingCompletedTours,
   normalizePostLogoutLandingUrl,
   normalizeLocalizationLanguage,
@@ -65,9 +63,7 @@ export const sessionState = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
-  messengerContacts: [],
   onboardingCompletedTours: [],
-  onboardingBadges: [],
   status: '',
   sessionId: loaded?.sessionId || '',
   sessionToken: loaded?.sessionToken || '',
@@ -117,9 +113,7 @@ function resetUserFields() {
   sessionState.linkedinUrl = '';
   sessionState.xUrl = '';
   sessionState.youtubeUrl = '';
-  sessionState.messengerContacts = [];
   sessionState.onboardingCompletedTours = [];
-  sessionState.onboardingBadges = [];
   sessionState.status = '';
 }
 function setRecoveryState(state, reason = '', message = '') {
@@ -164,9 +158,9 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.linkedinUrl = normalizeString(user.linkedin_url);
   sessionState.xUrl = normalizeString(user.x_url);
   sessionState.youtubeUrl = normalizeString(user.youtube_url);
-  sessionState.messengerContacts = normalizeMessengerContacts(user.messenger_contacts);
-  sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(user.onboarding_completed_tours);
-  sessionState.onboardingBadges = normalizeOnboardingBadges(user.onboarding_badges);
+  if (Object.prototype.hasOwnProperty.call(user, 'onboarding_completed_tours')) {
+    sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(user.onboarding_completed_tours);
+  }
   sessionState.status = normalizeString(user.status);
 }
 function applySessionEnvelope(session, user, tenant = null) {
@@ -637,6 +631,220 @@ export async function saveSessionSettings(settingsPatch) {
     };
   }
 }
+
+export async function fetchSessionEmailAddresses() {
+  if (!sessionState.sessionToken) {
+    return {
+      ok: false,
+      reason: 'missing_session',
+      message: 'A valid session token is required.',
+      emails: [],
+    };
+  }
+  try {
+    const { response } = await fetchBackend('/api/user/emails', {
+      method: 'GET',
+      headers: sessionHeaders(),
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      const message = extractErrorMessage(payload, 'Could not load email addresses.');
+      if ([401, 403].includes(response.status)) {
+        normalizeAuthErrorState('invalid_session', message, true);
+        return {
+          ok: false,
+          reason: 'invalid_session',
+          status: response.status,
+          message,
+          emails: [],
+        };
+      }
+      return {
+        ok: false,
+        reason: 'request_failed',
+        status: response.status,
+        message,
+        emails: [],
+      };
+    }
+    const emails = Array.isArray(payload.result?.emails) ? payload.result.emails : [];
+    return {
+      ok: true,
+      reason: 'ready',
+      emails,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'network_error',
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Could not load email addresses.'),
+      emails: [],
+    };
+  }
+}
+
+export async function addSessionEmailAddress(email) {
+  if (!sessionState.sessionToken) {
+    return {
+      ok: false,
+      reason: 'missing_session',
+      message: 'A valid session token is required.',
+    };
+  }
+  try {
+    const { response } = await fetchBackend('/api/user/emails', {
+      method: 'POST',
+      headers: sessionHeaders(),
+      body: JSON.stringify({ email: String(email || '') }),
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      const message = extractErrorMessage(payload, 'Could not add email address.');
+      if ([401, 403].includes(response.status)) {
+        normalizeAuthErrorState('invalid_session', message, true);
+        return {
+          ok: false,
+          reason: 'invalid_session',
+          status: response.status,
+          message,
+          fields: payload?.error?.details?.fields || {},
+        };
+      }
+      return {
+        ok: false,
+        reason: 'request_failed',
+        status: response.status,
+        message,
+        fields: payload?.error?.details?.fields || {},
+      };
+    }
+    return {
+      ok: true,
+      reason: payload.result?.state || 'pending_confirmation',
+      email: payload.result?.email || null,
+      delivery: payload.result?.delivery || null,
+      debugConfirmationUrl: normalizeString(payload.result?.debug_confirmation_url),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'network_error',
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Could not add email address.'),
+    };
+  }
+}
+
+export async function deleteSessionEmailAddress(emailId) {
+  const normalizedEmailId = Number.parseInt(String(emailId || 0), 10);
+  if (!sessionState.sessionToken) {
+    return {
+      ok: false,
+      reason: 'missing_session',
+      message: 'A valid session token is required.',
+    };
+  }
+  if (!Number.isInteger(normalizedEmailId) || normalizedEmailId <= 0) {
+    return {
+      ok: false,
+      reason: 'invalid_email_id',
+      message: 'Email address selection is invalid.',
+    };
+  }
+  try {
+    const { response } = await fetchBackend(`/api/user/emails/${encodeURIComponent(String(normalizedEmailId))}`, {
+      method: 'DELETE',
+      headers: sessionHeaders(),
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      const message = extractErrorMessage(payload, 'Could not delete email address.');
+      if ([401, 403].includes(response.status)) {
+        normalizeAuthErrorState('invalid_session', message, true);
+        return {
+          ok: false,
+          reason: 'invalid_session',
+          status: response.status,
+          message,
+        };
+      }
+      return {
+        ok: false,
+        reason: 'request_failed',
+        status: response.status,
+        message,
+      };
+    }
+    return {
+      ok: true,
+      reason: payload.result?.state || 'deleted',
+      email: payload.result?.email || null,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'network_error',
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Could not delete email address.'),
+    };
+  }
+}
+
+export async function changeSessionPassword({ currentPassword, newPassword, repeatPassword }) {
+  if (!sessionState.sessionToken) {
+    return {
+      ok: false,
+      reason: 'missing_session',
+      message: 'A valid session token is required.',
+    };
+  }
+  try {
+    const { response } = await fetchBackend('/api/user/password', {
+      method: 'POST',
+      headers: sessionHeaders(),
+      body: JSON.stringify({
+        current_password: String(currentPassword || ''),
+        new_password: String(newPassword || ''),
+        repeat_password: String(repeatPassword || ''),
+      }),
+    });
+    const payload = await readJsonResponse(response);
+    if (!response.ok || !payload || payload.status !== 'ok') {
+      const message = extractErrorMessage(payload, 'Could not change password.');
+      if ([401, 403].includes(response.status) && errorCodeFromPayload(payload) !== 'user_password_validation_failed') {
+        normalizeAuthErrorState('invalid_session', message, true);
+        return {
+          ok: false,
+          reason: 'invalid_session',
+          status: response.status,
+          message,
+          fields: payload?.error?.details?.fields || {},
+        };
+      }
+      return {
+        ok: false,
+        reason: 'request_failed',
+        status: response.status,
+        message,
+        fields: payload?.error?.details?.fields || {},
+      };
+    }
+    return {
+      ok: true,
+      reason: payload.result?.state || 'changed',
+      revokedSessions: Number.isInteger(payload.result?.revoked_sessions) ? payload.result.revoked_sessions : 0,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: 'network_error',
+      status: 0,
+      message: normalizeNetworkErrorMessage(error, 'Could not change password.'),
+    };
+  }
+}
+
 export async function completeOnboardingTour(tourKey) {
   if (!sessionState.sessionToken) {
     return {
@@ -684,7 +892,6 @@ export async function completeOnboardingTour(tourKey) {
 
     const onboarding = payload.result?.onboarding || {};
     sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(onboarding.completed_tours);
-    sessionState.onboardingBadges = normalizeOnboardingBadges(onboarding.badges);
     return {
       ok: true,
       reason: payload.result?.state || 'completed',

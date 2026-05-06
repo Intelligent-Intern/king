@@ -55,7 +55,7 @@ assert.ok(settingsKeys.has('personal.about'), 'about settings panel missing');
 assert.ok(settingsKeys.has('personal.credentials'), 'credentials settings panel missing');
 assert.ok(settingsKeys.has('personal.theme'), 'theme settings panel missing');
 assert.ok(settingsKeys.has('personal.localization'), 'localization settings panel missing');
-assert.ok(settingsKeys.has('personal.regional'), 'regional time settings panel missing');
+assert.ok(!settingsKeys.has('personal.regional'), 'regional time settings panel must be merged into localization');
 
 const namespaces = workspaceModuleRegistry.i18nNamespaces();
 for (const moduleKey of expectedModules) {

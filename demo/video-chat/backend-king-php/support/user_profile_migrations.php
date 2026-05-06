@@ -41,5 +41,12 @@ SQL,
                 "CREATE INDEX IF NOT EXISTS idx_user_onboarding_progress_tenant ON user_onboarding_progress(tenant_id, tour_key)",
             ],
         ],
+        46 => [
+            'name' => '0046_remove_legacy_profile_settings_columns',
+            'statements' => [
+                'ALTER TABLE users DROP COLUMN messenger_contacts_json',
+                'ALTER TABLE users DROP COLUMN onboarding_progress_json',
+            ],
+        ],
     ];
 }

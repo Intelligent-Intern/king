@@ -70,7 +70,8 @@ SQL
     videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
     videochat_user_settings_assert(count($initialSettings['supported_locales'] ?? []) >= 28, 'supported locale metadata missing');
     videochat_user_settings_assert((string) ($initialSettings['about_me'] ?? 'missing') === '', 'initial about_me should be empty');
-    videochat_user_settings_assert(is_array($initialSettings['messenger_contacts'] ?? null), 'initial messenger_contacts should be an array');
+    videochat_user_settings_assert(!array_key_exists('messenger_contacts', $initialSettings), 'settings must not expose removed messenger contacts');
+    videochat_user_settings_assert(!array_key_exists('onboarding_badges', $initialSettings), 'settings must not expose onboarding badges');
 
     $invalidEmptyPayload = videochat_update_user_settings($pdo, $userId, []);
     videochat_user_settings_assert($invalidEmptyPayload['ok'] === false, 'empty settings update should fail');
@@ -110,9 +111,6 @@ SQL
         'linkedin_url' => 'https://example.com/in/user',
         'x_url' => 'http://x.com/calluser',
         'youtube_url' => 'not-a-url',
-        'messenger_contacts' => [
-            ['channel' => 'Signal', 'handle' => ''],
-        ],
     ]);
     videochat_user_settings_assert($invalidProfileValues['ok'] === false, 'invalid profile settings should fail');
     videochat_user_settings_assert(
@@ -131,18 +129,15 @@ SQL
         (string) ($invalidProfileValues['errors']['youtube_url'] ?? '') === 'must_be_https_url',
         'invalid youtube_url error mismatch'
     );
-    videochat_user_settings_assert(
-        str_starts_with((string) ($invalidProfileValues['errors']['messenger_contacts'] ?? ''), 'channel_and_handle_required'),
-        'invalid messenger_contacts error mismatch'
-    );
-
     $unknownFieldPayload = videochat_update_user_settings($pdo, $userId, [
         'role' => 'admin',
+        'messenger_contacts' => [],
     ]);
     videochat_user_settings_assert($unknownFieldPayload['ok'] === false, 'unknown-field settings update should fail');
     videochat_user_settings_assert($unknownFieldPayload['reason'] === 'validation_failed', 'unknown-field settings reason mismatch');
     videochat_user_settings_assert(
-        (string) ($unknownFieldPayload['errors']['role'] ?? '') === 'field_not_updatable',
+        (string) ($unknownFieldPayload['errors']['role'] ?? '') === 'field_not_updatable'
+            && (string) ($unknownFieldPayload['errors']['messenger_contacts'] ?? '') === 'field_not_updatable',
         'unknown-field settings error mismatch'
     );
 
@@ -157,10 +152,6 @@ SQL
         'linkedin_url' => ' https://www.linkedin.com/in/call-user ',
         'x_url' => 'https://x.com/calluser',
         'youtube_url' => 'https://www.youtube.com/@calluser',
-        'messenger_contacts' => [
-            ['channel' => 'Signal', 'handle' => 'call-user.01'],
-            ['channel' => 'telegram', 'handle' => '@calluser'],
-        ],
     ]);
     videochat_user_settings_assert($validUpdate['ok'] === true, 'valid settings update should succeed');
     videochat_user_settings_assert($validUpdate['reason'] === 'updated', 'valid settings update reason mismatch');
@@ -208,11 +199,34 @@ SQL
         (string) (($validUpdate['user'] ?? [])['youtube_url'] ?? '') === 'https://www.youtube.com/@calluser',
         'updated youtube_url mismatch'
     );
-    $messengerContacts = is_array(($validUpdate['user'] ?? [])['messenger_contacts'] ?? null)
-        ? ($validUpdate['user'] ?? [])['messenger_contacts']
-        : [];
-    videochat_user_settings_assert(count($messengerContacts) === 2, 'updated messenger_contacts count mismatch');
-    videochat_user_settings_assert((string) ($messengerContacts[0]['channel'] ?? '') === 'signal', 'messenger channel should normalize');
+    videochat_user_settings_assert(!array_key_exists('messenger_contacts', (array) ($validUpdate['user'] ?? [])), 'updated settings must not expose messenger contacts');
+
+    $otherSessionId = 'sess_user_settings_contract_other';
+    $pdo->prepare(
+        'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, NULL, NULL)'
+    )->execute([
+        ':id' => $otherSessionId,
+        ':user_id' => $userId,
+        ':issued_at' => gmdate('c', time() - 30),
+        ':expires_at' => gmdate('c', time() + 3600),
+    ]);
+    $passwordChangeInvalid = videochat_change_user_password($pdo, $userId, [
+        'current_password' => 'wrong-password',
+        'new_password' => 'new-user-password',
+        'repeat_password' => 'new-user-password',
+    ], $sessionId);
+    videochat_user_settings_assert($passwordChangeInvalid['ok'] === false, 'invalid current password should fail');
+    videochat_user_settings_assert(
+        (string) (($passwordChangeInvalid['errors'] ?? [])['current_password'] ?? '') === 'current_password_invalid',
+        'invalid current password error mismatch'
+    );
+    $passwordChange = videochat_change_user_password($pdo, $userId, [
+        'current_password' => 'user123',
+        'new_password' => 'new-user-password',
+        'repeat_password' => 'new-user-password',
+    ], $sessionId);
+    videochat_user_settings_assert($passwordChange['ok'] === true, 'valid password change should succeed');
+    videochat_user_settings_assert((int) ($passwordChange['revoked_sessions'] ?? 0) === 1, 'password change should revoke other sessions');
 
     $reauth = videochat_authenticate_request(
         $pdo,

@@ -52,7 +52,7 @@ try {
     $initialSettings = videochat_fetch_user_settings($pdo, $userId, $tenantId);
     videochat_onboarding_contract_assert(is_array($initialSettings), 'initial settings lookup should succeed');
     videochat_onboarding_contract_assert(($initialSettings['onboarding_completed_tours'] ?? []) === [], 'initial completed tours should be empty');
-    videochat_onboarding_contract_assert(($initialSettings['onboarding_badges'] ?? []) === [], 'initial onboarding badges should be empty');
+    videochat_onboarding_contract_assert(!array_key_exists('onboarding_badges', $initialSettings), 'settings must not expose onboarding badges');
 
     $firstCompletion = videochat_complete_onboarding_tour($pdo, $userId, $tenantId, 'governance.users.tour', '2026-05-05T10:00:00+00:00');
     videochat_onboarding_contract_assert((bool) ($firstCompletion['ok'] ?? false), 'first completion should succeed');

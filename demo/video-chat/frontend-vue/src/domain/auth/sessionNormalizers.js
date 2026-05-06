@@ -69,19 +69,6 @@ export function inferAccountType(user) {
   return 'account';
 }
 
-export function normalizeMessengerContacts(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((contact) => {
-      const source = contact && typeof contact === 'object' ? contact : {};
-      return {
-        channel: normalizeString(source.channel).toLowerCase(),
-        handle: normalizeString(source.handle),
-      };
-    })
-    .filter((contact) => contact.channel !== '' && contact.handle !== '');
-}
-
 export function normalizePostLogoutLandingUrl(value) {
   const url = normalizeString(value);
   if (url === '' || !url.startsWith('/') || url.startsWith('//') || url.includes('\\')) {
@@ -93,20 +80,6 @@ export function normalizePostLogoutLandingUrl(value) {
 export function normalizeOnboardingCompletedTours(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((tourKey) => normalizeString(tourKey).toLowerCase()).filter(Boolean))].sort();
-}
-
-export function normalizeOnboardingBadges(value) {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((badge) => {
-      const source = badge && typeof badge === 'object' ? badge : {};
-      return {
-        tour_key: normalizeString(source.tour_key).toLowerCase(),
-        completed_at: normalizeString(source.completed_at),
-      };
-    })
-    .filter((badge) => badge.tour_key !== '')
-    .sort((a, b) => a.tour_key.localeCompare(b.tour_key));
 }
 
 export {

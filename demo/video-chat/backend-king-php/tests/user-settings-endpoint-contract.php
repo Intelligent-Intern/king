@@ -146,7 +146,8 @@ SQL
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['locale'] ?? '') === 'en', 'GET settings locale default mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['direction'] ?? '') === 'ltr', 'GET settings direction mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['about_me'] ?? 'missing') === '', 'GET settings about_me default mismatch');
-    videochat_user_settings_endpoint_assert(is_array(($getPayload['settings'] ?? [])['messenger_contacts'] ?? null), 'GET settings messenger contacts missing');
+    videochat_user_settings_endpoint_assert(!array_key_exists('messenger_contacts', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose removed messenger contacts');
+    videochat_user_settings_endpoint_assert(!array_key_exists('onboarding_badges', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose onboarding badges');
     videochat_user_settings_endpoint_assert(
         count((array) ((($getPayload['localization'] ?? [])['supported_locales'] ?? []))) >= 28,
         'GET settings supported locale metadata missing'
@@ -185,7 +186,6 @@ SQL
                 'locale' => 'unknown',
                 'post_logout_landing_url' => 'https://evil.example/logout',
                 'linkedin_url' => 'https://example.com/in/user',
-                'messenger_contacts' => [['channel' => '', 'handle' => 'user']],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -224,11 +224,6 @@ SQL
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['linkedin_url'] ?? '') === 'host_not_allowed',
         'PATCH invalid-value linkedin_url field mismatch'
     );
-    videochat_user_settings_endpoint_assert(
-        str_starts_with((string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['messenger_contacts'] ?? ''), 'channel_and_handle_required'),
-        'PATCH invalid-value messenger_contacts field mismatch'
-    );
-
     $patchUnknownField = videochat_handle_user_routes(
         '/api/user/settings',
         'PATCH',
@@ -274,9 +269,6 @@ SQL
                 'linkedin_url' => ' https://linkedin.com/in/endpoint-user ',
                 'x_url' => 'https://x.com/endpointuser',
                 'youtube_url' => 'https://youtu.be/abcdefghijk',
-                'messenger_contacts' => [
-                    ['channel' => 'Matrix', 'handle' => '@endpoint:example.com'],
-                ],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -340,11 +332,10 @@ SQL
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['youtube_url'] ?? '')) === 'https://youtu.be/abcdefghijk',
         'PATCH valid youtube_url should be normalized'
     );
-    $endpointMessengerContacts = is_array(((($patchValidPayload['result'] ?? [])['settings'] ?? [])['messenger_contacts'] ?? null))
-        ? (($patchValidPayload['result'] ?? [])['settings'] ?? [])['messenger_contacts']
-        : [];
-    videochat_user_settings_endpoint_assert(count($endpointMessengerContacts) === 1, 'PATCH valid messenger_contacts count mismatch');
-    videochat_user_settings_endpoint_assert((string) ($endpointMessengerContacts[0]['channel'] ?? '') === 'matrix', 'PATCH valid messenger channel should normalize');
+    videochat_user_settings_endpoint_assert(
+        !array_key_exists('messenger_contacts', (array) ((($patchValidPayload['result'] ?? [])['settings'] ?? []))),
+        'PATCH settings must not expose removed messenger contacts'
+    );
 
     $reauth = videochat_authenticate_request(
         $pdo,
@@ -411,6 +402,104 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?from=settings',
         'session-check should reflect updated post_logout_landing_url'
+    );
+
+    $emailsResponse = videochat_handle_user_routes(
+        '/api/user/emails',
+        'GET',
+        [...$requestTemplate, 'method' => 'GET', 'body' => ''],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_user_settings_endpoint_assert(is_array($emailsResponse), 'GET emails response must be an array');
+    videochat_user_settings_endpoint_assert((int) ($emailsResponse['status'] ?? 0) === 200, 'GET emails status should be 200');
+    $emailsPayload = videochat_user_settings_endpoint_decode($emailsResponse);
+    videochat_user_settings_endpoint_assert(
+        count((array) (($emailsPayload['result'] ?? [])['emails'] ?? [])) >= 1,
+        'GET emails should include primary email'
+    );
+
+    $addEmailResponse = videochat_handle_user_routes(
+        '/api/user/emails',
+        'POST',
+        [
+            ...$requestTemplate,
+            'method' => 'POST',
+            'body' => json_encode(['email' => 'endpoint-alt@example.test'], JSON_UNESCAPED_SLASHES),
+        ],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_user_settings_endpoint_assert(is_array($addEmailResponse), 'POST emails response must be an array');
+    videochat_user_settings_endpoint_assert((int) ($addEmailResponse['status'] ?? 0) === 201, 'POST emails status should be 201');
+    $addEmailPayload = videochat_user_settings_endpoint_decode($addEmailResponse);
+    $pendingEmailId = (int) (((($addEmailPayload['result'] ?? [])['email'] ?? [])['id'] ?? 0));
+    videochat_user_settings_endpoint_assert($pendingEmailId > 0, 'POST emails should return pending email id');
+
+    $deleteEmailResponse = videochat_handle_user_routes(
+        '/api/user/emails/' . $pendingEmailId,
+        'DELETE',
+        [...$requestTemplate, 'method' => 'DELETE', 'body' => ''],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_user_settings_endpoint_assert(is_array($deleteEmailResponse), 'DELETE email response must be an array');
+    videochat_user_settings_endpoint_assert((int) ($deleteEmailResponse['status'] ?? 0) === 200, 'DELETE email status should be 200');
+
+    $otherSessionId = 'sess_user_settings_endpoint_other';
+    $pdo->prepare(
+        'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, NULL, NULL)'
+    )->execute([
+        ':id' => $otherSessionId,
+        ':user_id' => $userId,
+        ':issued_at' => gmdate('c', time() - 30),
+        ':expires_at' => gmdate('c', time() + 3600),
+    ]);
+    $passwordResponse = videochat_handle_user_routes(
+        '/api/user/password',
+        'POST',
+        [
+            ...$requestTemplate,
+            'method' => 'POST',
+            'body' => json_encode([
+                'current_password' => 'user123',
+                'new_password' => 'endpoint-new-password',
+                'repeat_password' => 'endpoint-new-password',
+            ], JSON_UNESCAPED_SLASHES),
+        ],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_user_settings_endpoint_assert(is_array($passwordResponse), 'POST password response must be an array');
+    videochat_user_settings_endpoint_assert((int) ($passwordResponse['status'] ?? 0) === 200, 'POST password status should be 200');
+    $passwordPayload = videochat_user_settings_endpoint_decode($passwordResponse);
+    videochat_user_settings_endpoint_assert(
+        (int) (($passwordPayload['result'] ?? [])['revoked_sessions'] ?? 0) === 1,
+        'POST password should revoke other sessions'
     );
 
     $invalidUserContextResponse = videochat_handle_user_routes(
