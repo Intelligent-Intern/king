@@ -469,7 +469,7 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     return $requestLine . "\r\n" . implode("\r\n", $filtered) . "\r\n\r\n" . $body;
 };
 
-$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders): void {
+$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeChunk, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders): void {
     [$upstreamHost, $upstreamPort] = $parseUpstream($upstream);
     $upstreamStream = @stream_socket_client(
         "tcp://{$upstreamHost}:{$upstreamPort}",
