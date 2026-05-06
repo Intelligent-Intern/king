@@ -57,7 +57,14 @@ SQL
             $pdo->beginTransaction();
             try {
                 foreach ($migration['statements'] as $sql) {
-                    $pdo->exec($sql);
+                    try {
+                        $pdo->exec($sql);
+                    } catch (Throwable $statementError) {
+                        if (str_contains(strtolower($statementError->getMessage()), 'duplicate column name')) {
+                            continue;
+                        }
+                        throw $statementError;
+                    }
                 }
 
                 $insert = $pdo->prepare(
