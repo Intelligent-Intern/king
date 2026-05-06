@@ -12,6 +12,8 @@ function read(relativePath) {
 }
 
 const picker = read('demo/video-chat/frontend-vue/src/domain/realtime/background/CallBackgroundImagePicker.vue');
+const controls = read('demo/video-chat/frontend-vue/src/domain/realtime/background/CallBackgroundControls.vue');
+const blurControls = read('demo/video-chat/frontend-vue/src/domain/realtime/background/CallBackgroundBlurControls.vue');
 const uploadModal = read('demo/video-chat/frontend-vue/src/modules/administration/components/BackgroundImageUploadModal.vue');
 const appConfigBackgrounds = read('demo/video-chat/frontend-vue/src/modules/administration/components/AppConfigurationBackgroundImagesTab.vue');
 const shell = read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue');
@@ -44,8 +46,28 @@ assert.match(
 );
 assert.match(
   picker,
-  /hideWhenEmpty/,
-  'call background picker must be able to disappear when no workspace background images exist',
+  /default:\s*true/,
+  'call background picker must hide by default when no workspace background images exist',
+);
+assert.match(
+  picker,
+  /!props\.hideWhenEmpty \|\| rows\.value\.length > 0/,
+  'call background picker must not render an empty Background images block while it has no rows',
+);
+assert.match(
+  blurControls,
+  /call-left-blur-controls/,
+  'shared call background blur controls must keep the Blur and Blur+ button group',
+);
+assert.match(
+  blurControls,
+  /applyCallBackgroundPreset\('light'\)[\s\S]*applyCallBackgroundPreset\('strong'\)/,
+  'shared call background blur controls must wire both blur presets',
+);
+assert.match(
+  controls,
+  /<CallBackgroundBlurControls[\s\S]*<CallBackgroundImagePicker[^>]*hide-when-empty/,
+  'shared call background controls must always render blur presets and hide images when empty',
 );
 assert.match(
   uploadModal,
@@ -78,19 +100,11 @@ for (const [label, source] of [
   ['user enter lobby', userCalls],
   ['public join lobby', joinView],
 ]) {
-  assert.match(source, /<CallBackgroundImagePicker/, `${label} must expose the background image picker`);
+  assert.match(source, /<CallBackgroundControls/, `${label} must expose shared background controls`);
 }
 assert.doesNotMatch(adminCalls, /BackgroundPipelineDebugPanel|Preview pipeline/, 'admin lobby must not render the preview pipeline mask');
 assert.doesNotMatch(adminCallsScript, /BackgroundPipelineDebugPanel|activeBackgroundPreset/, 'admin lobby script must not wire the preview pipeline mask');
-for (const [label, source] of [
-  ['admin enter lobby', adminCalls],
-  ['user enter lobby', userCalls],
-  ['public join lobby', joinView],
-]) {
-  assert.match(source, /call-left-blur-controls/, `${label} must keep the existing blur controls next to background images`);
-}
 assert.match(joinView, /call-access-join-guest-name[\s\S]*calls-enter-preview-frame/, 'public guest join name entry must sit above the camera preview');
-assert.match(joinView, /hide-when-empty/, 'public join must hide background image picker when no images are configured');
 assert.match(joinView, /role="meter"[\s\S]*state\.micLevelPercent/, 'public join must expose a live microphone level meter');
 assert.match(joinViewCss, /@media \(max-width: 900px\)[\s\S]*\.calls-enter-layout\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/, 'mobile public join must stack name, half-screen preview, effects, audio controls, and footer');
 assert.match(joinViewCss, /\.calls-enter-preview-frame\s*\{[\s\S]*height:\s*min\(50dvh,\s*420px\);/, 'mobile public join preview must take roughly half the viewport');

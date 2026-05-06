@@ -7,7 +7,7 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
-import CallBackgroundImagePicker from '../../realtime/background/CallBackgroundImagePicker.vue';
+import CallBackgroundControls from '../../realtime/background/CallBackgroundControls.vue';
 import {
   createCallListStore,
   createChatArchiveStore,
@@ -25,9 +25,7 @@ import {
   formatWeekdayShort,
 } from '../../../support/dateTimeFormat';
 import {
-  applyCallBackgroundPreset,
   callMediaPrefs,
-  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
@@ -40,8 +38,6 @@ import { createJoinInviteController } from './joinInvite';
 
 const router = useRouter();
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
-const applyBackgroundPreset = applyCallBackgroundPreset;
-const isBackgroundPresetActive = isCallBackgroundPresetActive;
 
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };

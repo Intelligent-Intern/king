@@ -128,7 +128,7 @@
               </div>
             </section>
 
-            <CallBackgroundImagePicker />
+            <CallBackgroundControls />
 
             <section
               v-if="showCallOwnerInviteLink"
@@ -620,7 +620,7 @@ import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
-import CallBackgroundImagePicker from '../domain/realtime/background/CallBackgroundImagePicker.vue';
+import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 import {
   logoutSession,

@@ -9,7 +9,7 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
-import CallBackgroundImagePicker from '../../realtime/background/CallBackgroundImagePicker.vue';
+import CallBackgroundControls from '../../realtime/background/CallBackgroundControls.vue';
 import AppointmentConfigPanel from '../appointment/AppointmentConfigPanel.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
@@ -24,9 +24,7 @@ import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFor
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
-  applyCallBackgroundPreset,
   callMediaPrefs,
-  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
@@ -38,8 +36,6 @@ import { createComposeController } from './compose';
 import { createEnterCallController, normalizeCallAccessMode } from './enterCall';
 
 const router = useRouter();
-const applyBackgroundPreset = applyCallBackgroundPreset;
-const isBackgroundPresetActive = isCallBackgroundPresetActive;
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const callsCalendarEl = ref(null);
