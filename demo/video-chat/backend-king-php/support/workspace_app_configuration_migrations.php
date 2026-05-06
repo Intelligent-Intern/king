@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS workspace_background_images (
     tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
     label TEXT NOT NULL,
     file_path TEXT NOT NULL,
+    original_file_path TEXT NOT NULL DEFAULT '',
     mime_type TEXT NOT NULL,
     file_size INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
@@ -39,6 +40,7 @@ CREATE TABLE IF NOT EXISTS workspace_background_images (
     UNIQUE(tenant_id, file_path)
 )
 SQL,
+        "ALTER TABLE workspace_background_images ADD COLUMN original_file_path TEXT NOT NULL DEFAULT ''",
         'CREATE INDEX IF NOT EXISTS idx_workspace_background_images_tenant_updated ON workspace_background_images(tenant_id, updated_at DESC)',
         'CREATE INDEX IF NOT EXISTS idx_workspace_background_images_tenant_label ON workspace_background_images(tenant_id, label COLLATE NOCASE)',
     ];
