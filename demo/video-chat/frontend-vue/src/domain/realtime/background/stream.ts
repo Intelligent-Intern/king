@@ -56,6 +56,17 @@ async function waitForVideoReady(video) {
     setTimeout(onReady, 500);
   });
 }
+function resolveVideoSourceDimensions(video, settings = {}) {
+  const videoWidth = Math.max(0, Math.round(toNumber(video?.videoWidth, 0)));
+  const videoHeight = Math.max(0, Math.round(toNumber(video?.videoHeight, 0)));
+  if (videoWidth > 1 && videoHeight > 1) {
+    return { width: videoWidth, height: videoHeight };
+  }
+  return {
+    width: Math.max(1, Math.round(toNumber(settings.width, 1280))),
+    height: Math.max(1, Math.round(toNumber(settings.height, 720))),
+  };
+}
 async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const videoTrack = sourceStream.getVideoTracks()[0] ?? null;
   if (!videoTrack) {
@@ -73,19 +84,9 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const pipelineController = options.pipelineController || null;
   const runtimeConfig = normalizeBackgroundFilterRuntimeConfig(options);
   const settings = videoTrack.getSettings?.() ?? {};
-  const sourceWidth = Math.max(1, Math.round(toNumber(settings.width, 1280)));
-  const sourceHeight = Math.max(1, Math.round(toNumber(settings.height, 720)));
   const sourceFps = Math.max(8, Math.min(30, Math.round(toNumber(settings.frameRate, 24))));
-  const processing = resolveProcessingSpec(
-    sourceWidth,
-    sourceHeight,
-    sourceFps,
-    toNumber(options.maxProcessWidth, 960),
-    toNumber(options.maxProcessFps, 24)
-  );
-  const width = processing.width;
-  const height = processing.height;
-  const fps = processing.fps;
+  const maxProcessWidth = toNumber(options.maxProcessWidth, 960);
+  const maxProcessFps = toNumber(options.maxProcessFps, 24);
   const onStats = typeof options.onStats === "function" ? options.onStats : null;
   const onOverload = typeof options.onOverload === "function" ? options.onOverload : null;
   let disposed = false;
@@ -103,6 +104,19 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       }
     };
   }
+  let sourceDimensions = resolveVideoSourceDimensions(video, settings);
+  let sourceWidth = sourceDimensions.width;
+  let sourceHeight = sourceDimensions.height;
+  let processing = resolveProcessingSpec(
+    sourceWidth,
+    sourceHeight,
+    sourceFps,
+    maxProcessWidth,
+    maxProcessFps
+  );
+  let width = processing.width;
+  let height = processing.height;
+  const fps = processing.fps;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, width);
   canvas.height = Math.max(1, height);
@@ -167,6 +181,28 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     getBlurPx: () => runtimeConfig.blurPx,
     video,
   });
+
+  function syncCanvasToSourceFrame(nextSourceWidth, nextSourceHeight) {
+    const nextWidth = Math.max(1, Math.round(toNumber(nextSourceWidth, sourceWidth)));
+    const nextHeight = Math.max(1, Math.round(toNumber(nextSourceHeight, sourceHeight)));
+    if (nextWidth <= 1 || nextHeight <= 1) return;
+    sourceWidth = nextWidth;
+    sourceHeight = nextHeight;
+    processing = resolveProcessingSpec(
+      sourceWidth,
+      sourceHeight,
+      sourceFps,
+      maxProcessWidth,
+      maxProcessFps,
+    );
+    width = processing.width;
+    height = processing.height;
+    if (canvas.width === width && canvas.height === height) return;
+    canvas.width = Math.max(1, width);
+    canvas.height = Math.max(1, height);
+    segmenterStage.reset();
+    compositorStage.reset();
+  }
 
   function releaseSegmentationBackend({ keepWarm = true } = {}) {
     segmentationBackendLease?.release?.({ keepWarm });
@@ -286,17 +322,19 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const draw = (frameStartedAt = performance.now()) => {
     if (disposed) return;
     if (!runtimeConfig.sourceActive) return;
-    const vw = video.videoWidth || canvas.width;
-    const vh = video.videoHeight || canvas.height;
+    sourceDimensions = resolveVideoSourceDimensions(video, settings);
+    const vw = sourceDimensions.width;
+    const vh = sourceDimensions.height;
     if (vw <= 1 || vh <= 1) {
       return;
     }
+    syncCanvasToSourceFrame(vw, vh);
     const now = performance.now();
     const effectEnabled = runtimeConfig.mode !== 'off';
     //const canRunSegmentation = effectEnabled && now >= overloadCooldownUntil && Boolean(segmentationBackend);
     const canRunSegmentation = effectEnabled && Boolean(segmentationBackend);
-    const segmentationWidth = Math.max(1, Math.round(Math.min(vw, canvas.width)));
-    const segmentationHeight = Math.max(1, Math.round(Math.min(vh, canvas.height)));
+    const segmentationWidth = Math.max(1, Math.round(canvas.width));
+    const segmentationHeight = Math.max(1, Math.round(canvas.height));
 
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
