@@ -770,7 +770,7 @@ VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret
 VIDEOCHAT_V1_TURN_EXTERNAL_IP=\${TURN_EXTERNAL_IP}
 VIDEOCHAT_V1_TURN_RELAY_MIN_PORT=49160
 VIDEOCHAT_V1_TURN_RELAY_MAX_PORT=49660
-VIDEOCHAT_V1_BACKEND_ORIGIN=https://\${API_DOMAIN}
+VIDEOCHAT_V1_BACKEND_ORIGIN=https://\${DOMAIN}
 VIDEOCHAT_V1_BACKEND_WS_ORIGIN=https://\${WS_DOMAIN}
 VIDEOCHAT_V1_BACKEND_SFU_ORIGIN=https://\${SFU_DOMAIN}
 VITE_VIDEOCHAT_ENABLE_SFU=true
@@ -1033,7 +1033,7 @@ set_env_value VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/t
 set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
 set_env_value VIDEOCHAT_V1_TURN_RELAY_MIN_PORT 49160
 set_env_value VIDEOCHAT_V1_TURN_RELAY_MAX_PORT 49660
-set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\${API_DOMAIN}"
+set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "https://\${DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "https://\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "https://\${SFU_DOMAIN}"
 set_env_value VITE_VIDEOCHAT_ENABLE_SFU true
@@ -1133,25 +1133,25 @@ wait_for_code http-redirect 301 \\
 wait_for_code https-frontend 200 \\
   --resolve "\${DOMAIN}:443:127.0.0.1" \\
   "https://\${DOMAIN}/"
-wait_for_code https-api-health 200 \\
-  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
-  "https://\${API_DOMAIN}/health"
+wait_for_code https-app-api-health 200 \\
+  --resolve "\${DOMAIN}:443:127.0.0.1" \\
+  "https://\${DOMAIN}/health"
 
 wait_for_allowed_code wss-route /tmp/king-videochat-ws-probe.out \\
   --resolve "\${WS_DOMAIN}:443:127.0.0.1" \\
   "https://\${WS_DOMAIN}/ws"
 
-wait_for_allowed_code api-wss-route /tmp/king-videochat-api-ws-probe.out \\
-  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
-  "https://\${API_DOMAIN}/ws"
+wait_for_allowed_code app-wss-route /tmp/king-videochat-app-ws-probe.out \\
+  --resolve "\${DOMAIN}:443:127.0.0.1" \\
+  "https://\${DOMAIN}/ws"
 
 wait_for_allowed_code sfu-route /tmp/king-videochat-sfu-probe.out \\
   --resolve "\${SFU_DOMAIN}:443:127.0.0.1" \\
   "https://\${SFU_DOMAIN}/sfu"
 
-wait_for_allowed_code api-sfu-route /tmp/king-videochat-api-sfu-probe.out \\
-  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
-  "https://\${API_DOMAIN}/sfu"
+wait_for_allowed_code app-sfu-route /tmp/king-videochat-app-sfu-probe.out \\
+  --resolve "\${DOMAIN}:443:127.0.0.1" \\
+  "https://\${DOMAIN}/sfu"
 
 wait_for_tcp() {
   local label="\$1"
@@ -1183,11 +1183,11 @@ print(json.dumps({
 PY
 )"
   wait_for_code admin-login 200 \\
-    --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+    --resolve "\${DOMAIN}:443:127.0.0.1" \\
     -H 'content-type: application/json' \\
     -H "origin: https://\${DOMAIN}" \\
     --data "\${login_payload}" \\
-    "https://\${API_DOMAIN}/api/auth/login"
+    "https://\${DOMAIN}/api/auth/login"
 
   session_token="\$(python3 - /tmp/king-videochat-probe.out <<'PY'
 import json
@@ -1218,10 +1218,10 @@ PY
 )"
   if [ -n "\${session_token}" ]; then
     wait_for_code ice-servers 200 \\
-      --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
+      --resolve "\${DOMAIN}:443:127.0.0.1" \\
       -H "Authorization: Bearer \${session_token}" \\
       -H "origin: https://\${DOMAIN}" \\
-      "https://\${API_DOMAIN}/api/user/media/ice-servers"
+      "https://\${DOMAIN}/api/user/media/ice-servers"
     python3 - /tmp/king-videochat-probe.out <<'PY'
 import json
 import sys
@@ -1243,7 +1243,7 @@ PY
 fi
 
 printf 'Production frontend: https://%s/\\n' "\${DOMAIN}"
-printf 'Production API: https://%s/health\\n' "\${API_DOMAIN}"
+printf 'Production API: https://%s/health\\n' "\${DOMAIN}"
 printf 'Production lobby websocket: wss://%s/ws\\n' "\${WS_DOMAIN}"
 printf 'Production SFU websocket: wss://%s/sfu\\n' "\${SFU_DOMAIN}"
 printf 'Production TURN relay: turn:%s:3478\\n' "\${TURN_DOMAIN}"
@@ -1322,7 +1322,7 @@ set_env_value VIDEOCHAT_V1_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/t
 set_env_value VIDEOCHAT_V1_TURN_EXTERNAL_IP "\${TURN_EXTERNAL_IP}"
 set_env_value VIDEOCHAT_V1_TURN_RELAY_MIN_PORT 49160
 set_env_value VIDEOCHAT_V1_TURN_RELAY_MAX_PORT 49660
-set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "http://\${API_DOMAIN}:18080"
+set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "http://\${DOMAIN}:80"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "http://\${WS_DOMAIN}:18081"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "http://\${SFU_DOMAIN}:18082"
 set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "http://\${CDN_DOMAIN}:80"
