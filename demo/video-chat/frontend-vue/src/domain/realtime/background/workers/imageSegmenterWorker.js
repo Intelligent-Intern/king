@@ -21,12 +21,17 @@
 
 const tasksVisionModulePath = typeof TASKS_VISION_MODULE_PATH === 'string'
   ? TASKS_VISION_MODULE_PATH
-  : '/node_modules/@mediapipe/tasks-vision/vision_bundle.mjs';
+  : '/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs';
 
-const { DrawingUtils, ImageSegmenter, FilesetResolver } = await import(
-  /* @vite-ignore */
-  tasksVisionModulePath
-);
+async function importStaticModule(modulePath) {
+  const moduleUrl = new URL(modulePath, self.location.origin).href;
+  return import(
+    /* @vite-ignore */
+    moduleUrl
+  );
+}
+
+const { DrawingUtils, ImageSegmenter, FilesetResolver } = await importStaticModule(tasksVisionModulePath);
 const DEFAULT_WASM_PATH = '/wasm';
 const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite';
 
