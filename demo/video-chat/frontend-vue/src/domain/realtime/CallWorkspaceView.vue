@@ -25,9 +25,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
-import {
-  reportClientDiagnostic,
-} from '../../support/clientDiagnostics';
+import { reportClientDiagnostic } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
 import { evaluateBackgroundFilterGates } from './background/gates';
@@ -55,6 +53,8 @@ import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
+import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
+import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
 import {
   createNativePeerAudioElement,
   createNativePeerVideoElement,
@@ -231,8 +231,7 @@ import {
 import { createSfuTransportState } from './workspace/callWorkspace/sfuTransport';
 import { t } from '../../modules/localization/i18nRuntime.js';
 
-const route = useRoute();
-const router = useRouter();
+const route = useRoute(); const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const activeTab = ref('users');
@@ -627,8 +626,7 @@ let stopSfuTrackAnnounceTimer = () => {};
 let switchMediaRuntimePath = async () => false;
 let teardownRemotePeer = () => {};
 let currentLayoutMode = computed(() => 'main_mini');
-let gridVideoParticipants = computed(() => []);
-let miniVideoParticipants = computed(() => []);
+let gridVideoParticipants = computed(() => []); let miniVideoParticipants = computed(() => []);
 let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 let primaryVideoUserId = computed(() => currentUserId.value);
 const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);
@@ -787,6 +785,7 @@ const {
   callbacks: {
     apiRequest,
     applyActivitySnapshot: (...args) => applyActivitySnapshot(...args),
+    applyCallAppsRoomState: (...args) => applyCallAppsRoomState(...args),
     applyCallLayoutPayload: (...args) => applyCallLayoutPayload(...args),
     clearAdmissionGate: (...args) => clearAdmissionGate(...args),
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),
@@ -841,6 +840,7 @@ const {
     setParticipantsRawSignature: (value) => { participantsRawSignature = value; },
   },
 });
+const { activeCallAppSession, callAppWorkspaceMiniParticipants, applyCallAppsRoomState } = createCallAppWorkspaceState({ connectedParticipantUsers, miniVideoParticipants: liveMiniVideoParticipants, nextTick, renderCallVideoLayout: () => renderCallVideoLayout() });
 
 const mediaSecurityRuntimeState = {
   mediaSecuritySyncInFlight,

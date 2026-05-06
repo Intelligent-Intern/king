@@ -26,6 +26,7 @@
           'layout-grid': currentLayoutMode === 'grid',
           'layout-main-mini': currentLayoutMode === 'main_mini',
           'layout-main-only': currentLayoutMode === 'main_only',
+          'layout-call-app-workspace': currentLayoutMode === 'call_app_workspace',
         }"
       >
         <header v-if="isCompactHeaderVisible" class="workspace-compact-header">
@@ -55,7 +56,18 @@
         </header>
 
         <article class="workspace-main-video" @dblclick.stop="toggleVideoFullscreenForEvent(primaryVideoUserId, $event)">
-          <section v-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
+          <CallAppWorkspaceHost
+            v-if="currentLayoutMode === 'call_app_workspace'"
+            :active-session="activeCallAppSession"
+            :mini-participants="callAppWorkspaceMiniParticipants"
+            :mini-video-slot-id="miniVideoSlotId"
+            :participant-initials="participantInitials"
+            :participant-media-status-label="participantMediaStatusLabel"
+            :participant-media-status-state="participantMediaStatusState"
+            :show-participant-media-overlay="showParticipantMediaOverlay"
+            :toggle-video-fullscreen-for-event="toggleVideoFullscreenForEvent"
+          />
+          <section v-else-if="currentLayoutMode === 'grid'" class="workspace-grid-video">
             <article
               v-for="participant in gridVideoParticipants"
               :key="participant.userId"

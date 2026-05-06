@@ -7,6 +7,7 @@ require_once __DIR__ . '/workspace_app_configuration_migrations.php';
 require_once __DIR__ . '/workspace_calendar_migrations.php';
 require_once __DIR__ . '/call_app_marketplace_migrations.php';
 require_once __DIR__ . '/call_app_session_migrations.php';
+require_once __DIR__ . '/call_layout_migrations.php';
 require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
@@ -455,7 +456,7 @@ SQL,
 CREATE TABLE IF NOT EXISTS call_layout_state (
     call_id TEXT PRIMARY KEY REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
     room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only')),
+    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only', 'call_app_workspace')),
     strategy TEXT NOT NULL DEFAULT 'manual_pinned' CHECK (strategy IN ('manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active')),
     automation_paused INTEGER NOT NULL DEFAULT 0 CHECK (automation_paused IN (0, 1)),
     pinned_user_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -787,5 +788,6 @@ SQL,
         47 => ['name' => '0047_translation_resources_drop_source', 'statements' => videochat_translation_resource_drop_source_migration_statements()],
         48 => ['name' => '0048_call_app_marketplace_entitlements', 'statements' => videochat_call_app_marketplace_entitlement_migration_statements()],
         49 => ['name' => '0049_call_app_sessions', 'statements' => videochat_call_app_session_migration_statements()],
+        50 => ['name' => '0050_call_app_workspace_layout_mode', 'statements' => videochat_call_layout_call_app_workspace_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

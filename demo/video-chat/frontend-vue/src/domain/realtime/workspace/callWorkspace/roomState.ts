@@ -11,6 +11,7 @@ export function createCallWorkspaceRoomStateHelpers(context) {
   const {
     apiRequest,
     applyActivitySnapshot,
+    applyCallAppsRoomState,
     applyCallLayoutPayload,
     clearAdmissionGate,
     hideLobbyJoinToast,
@@ -375,6 +376,9 @@ export function createCallWorkspaceRoomStateHelpers(context) {
     const participantsChanged = applyParticipantsSnapshot(payload?.participants);
     if (payload?.layout && typeof payload.layout === 'object') {
       applyCallLayoutPayload(payload.layout);
+    }
+    if (typeof applyCallAppsRoomState === 'function') {
+      applyCallAppsRoomState(payload?.call_apps || null);
     }
     if (Array.isArray(payload?.activity)) {
       applyActivitySnapshot(payload.activity);

@@ -203,6 +203,10 @@
   cursor: zoom-out;
 }
 
+.workspace-stage.layout-call-app-workspace .workspace-main-video {
+  cursor: default;
+}
+
 .workspace-local-pipeline-panel {
   position: absolute;
   left: 14px;
