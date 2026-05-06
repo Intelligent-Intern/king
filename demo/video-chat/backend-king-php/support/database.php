@@ -71,6 +71,9 @@ function videochat_bootstrap_repair_additive_schema(PDO $pdo): void
     foreach (videochat_translation_import_history_migration_statements() as $sql) {
         videochat_bootstrap_exec_schema_statement($pdo, $sql);
     }
+    foreach (videochat_workspace_app_configuration_migration_statements() as $sql) {
+        videochat_bootstrap_exec_schema_statement($pdo, $sql);
+    }
     foreach (videochat_user_profile_migration_entries() as $migration) {
         foreach ($migration['statements'] as $sql) {
             videochat_bootstrap_exec_schema_statement($pdo, $sql);

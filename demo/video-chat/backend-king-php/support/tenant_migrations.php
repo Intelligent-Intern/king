@@ -558,6 +558,8 @@ function videochat_tenant_legacy_owned_table_names(): array
         'workspace_administration_settings',
         'workspace_theme_presets',
         'website_leads',
+        'workspace_email_texts',
+        'workspace_background_images',
     ];
 }
 

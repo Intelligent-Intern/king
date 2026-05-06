@@ -106,6 +106,10 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if (preg_match('#^/api/workspace/background-images/[^/]+$#', $requestPath) === 1) {
+            return true;
+        }
+
         if (preg_match('#^/api/call-access/[A-Fa-f0-9-]{36}/(join|session)$#', $requestPath) === 1) {
             return true;
         }

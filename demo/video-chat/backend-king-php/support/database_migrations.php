@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/tenant_migrations.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/workspace_theme_migrations.php';
+require_once __DIR__ . '/workspace_app_configuration_migrations.php';
 require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
@@ -788,6 +789,10 @@ SQL,
             'statements' => [
                 "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
             ],
+        ],
+        45 => [
+            'name' => '0045_workspace_app_configuration_assets',
+            'statements' => videochat_workspace_app_configuration_migration_statements(),
         ],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }
