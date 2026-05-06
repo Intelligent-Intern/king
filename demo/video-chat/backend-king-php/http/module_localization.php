@@ -6,21 +6,10 @@ require_once __DIR__ . '/../domain/localization/translation_imports.php';
 require_once __DIR__ . '/../support/auth_request.php';
 require_once __DIR__ . '/../support/tenant_context.php';
 
-function videochat_localization_actor_is_superadmin(array $apiAuthContext): bool
-{
-    $user = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
-    return (string) ($user['role'] ?? '') === 'admin' && (int) ($user['id'] ?? 0) === 1;
-}
-
 function videochat_localization_actor_is_admin(array $apiAuthContext): bool
 {
     $user = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
     return (string) ($user['role'] ?? '') === 'admin';
-}
-
-function videochat_localization_csv_from_payload(array $payload): string
-{
-    return (string) ($payload['csv'] ?? ($payload['content'] ?? ''));
 }
 
 /**
@@ -345,73 +334,8 @@ function videochat_handle_localization_routes(
     }
 
     if (in_array($path, ['/api/admin/localization/imports/preview', '/api/admin/localization/imports/commit'], true)) {
-        if ($method !== 'POST') {
-            return $errorResponse(405, 'method_not_allowed', 'Use POST for localization CSV import operations.', [
-                'allowed_methods' => ['POST'],
-            ]);
-        }
-        if (!videochat_localization_actor_is_superadmin($apiAuthContext)) {
-            return $errorResponse(403, 'localization_superadmin_required', 'Only the primary superadmin can import language CSV files.', [
-                'required_user_id' => 1,
-            ]);
-        }
-
-        [$payload, $decodeError] = $decodeJsonBody($request);
-        if (!is_array($payload)) {
-            return $errorResponse(400, 'localization_import_invalid_request_body', 'Localization CSV import payload must be a JSON object.', [
-                'reason' => $decodeError,
-            ]);
-        }
-
-        $csv = videochat_localization_csv_from_payload($payload);
-        $fileName = videochat_translation_clean_text($payload['file_name'] ?? '', 255);
-        $tenantId = isset($payload['tenant_id']) && is_scalar($payload['tenant_id']) && trim((string) $payload['tenant_id']) !== ''
-            ? (int) $payload['tenant_id']
-            : null;
-
-        try {
-            $pdo = $openDatabase();
-            if ($path === '/api/admin/localization/imports/preview') {
-                $preview = videochat_preview_translation_csv($pdo, $csv, $tenantId);
-                return $jsonResponse(200, [
-                    'status' => 'ok',
-                    'result' => [
-                        'state' => 'previewed',
-                        'preview' => $preview,
-                    ],
-                    'time' => gmdate('c'),
-                ]);
-            }
-
-            $actorUserId = (int) (($apiAuthContext['user'] ?? [])['id'] ?? 0);
-            $commit = videochat_commit_translation_csv($pdo, $actorUserId, $csv, $fileName, $tenantId);
-        } catch (Throwable) {
-            return $errorResponse(500, 'localization_import_failed', 'Localization CSV import failed due to a backend error.', [
-                'reason' => 'internal_error',
-            ]);
-        }
-
-        if (!(bool) ($commit['ok'] ?? false)) {
-            $reason = (string) ($commit['reason'] ?? 'import_failed');
-            if ($reason === 'validation_failed') {
-                return $errorResponse(422, 'localization_import_validation_failed', 'Localization CSV import failed validation.', [
-                    'preview' => is_array($commit['preview'] ?? null) ? $commit['preview'] : null,
-                ]);
-            }
-
-            return $errorResponse(500, 'localization_import_failed', 'Localization CSV import failed due to a backend error.', [
-                'reason' => $reason,
-            ]);
-        }
-
-        return $jsonResponse(200, [
-            'status' => 'ok',
-            'result' => [
-                'state' => 'committed',
-                'preview' => $commit['preview'] ?? null,
-                'import' => $commit['import'] ?? null,
-            ],
-            'time' => gmdate('c'),
+        return $errorResponse(410, 'localization_csv_import_disabled', 'Localization CSV imports are disabled.', [
+            'replacement' => '/api/admin/localization/resources',
         ]);
     }
 

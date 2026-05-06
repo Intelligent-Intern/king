@@ -91,7 +91,14 @@ SQL
     $sameFileErrorCodes = array_map(static fn (array $error): string => (string) ($error['code'] ?? ''), $sameFilePreview['errors'] ?? []);
     videochat_localization_import_assert(in_array('missing_required_placeholders', $sameFileErrorCodes, true), 'same-file preview must report missing placeholders');
 
-    $forbiddenResponse = videochat_handle_localization_routes(
+    $invalidPreview = videochat_preview_translation_csv($pdo, $invalidCsv);
+    videochat_localization_import_assert($invalidPreview['ok'] === false, 'invalid preview should fail');
+    $errorCodes = array_map(static fn (array $error): string => (string) ($error['code'] ?? ''), $invalidPreview['errors'] ?? []);
+    videochat_localization_import_assert(in_array('unsupported_locale', $errorCodes, true), 'invalid preview must report unsupported locale');
+    videochat_localization_import_assert(in_array('duplicate_key', $errorCodes, true), 'invalid preview must report duplicate key');
+    videochat_localization_import_assert(in_array('missing_required_placeholders', $errorCodes, true), 'invalid preview must report missing placeholders');
+
+    $disabledPreview = videochat_handle_localization_routes(
         '/api/admin/localization/imports/preview',
         'POST',
         ['method' => 'POST', 'uri' => '/api/admin/localization/imports/preview', 'body' => json_encode(['csv' => $validCsv])],
@@ -101,30 +108,15 @@ SQL
         $decodeJsonBody,
         $openDatabase
     );
-    videochat_localization_import_assert(is_array($forbiddenResponse), 'forbidden response should be returned');
-    videochat_localization_import_assert((int) ($forbiddenResponse['status'] ?? 0) === 403, 'non-primary admin import should be forbidden');
-
-    $invalidCommit = videochat_handle_localization_routes(
-        '/api/admin/localization/imports/commit',
-        'POST',
-        ['method' => 'POST', 'uri' => '/api/admin/localization/imports/commit', 'body' => json_encode(['csv' => $invalidCsv, 'file_name' => 'bad.csv'])],
-        ['user' => ['id' => 1, 'role' => 'admin']],
-        $jsonResponse,
-        $errorResponse,
-        $decodeJsonBody,
-        $openDatabase
+    videochat_localization_import_assert(is_array($disabledPreview), 'disabled preview response should be returned');
+    videochat_localization_import_assert((int) ($disabledPreview['status'] ?? 0) === 410, 'CSV preview route must be disabled');
+    $disabledPreviewPayload = videochat_localization_import_decode($disabledPreview);
+    videochat_localization_import_assert(
+        (string) (($disabledPreviewPayload['error'] ?? [])['code'] ?? '') === 'localization_csv_import_disabled',
+        'CSV preview route must report disabled import code'
     );
-    videochat_localization_import_assert(is_array($invalidCommit), 'invalid commit response should be returned');
-    videochat_localization_import_assert((int) ($invalidCommit['status'] ?? 0) === 422, 'invalid commit should fail validation');
-    $invalidPayload = videochat_localization_import_decode($invalidCommit);
-    $previewErrors = (((($invalidPayload['error'] ?? [])['details'] ?? [])['preview'] ?? [])['errors'] ?? []);
-    $errorCodes = array_map(static fn (array $error): string => (string) ($error['code'] ?? ''), is_array($previewErrors) ? $previewErrors : []);
-    videochat_localization_import_assert(in_array('unsupported_locale', $errorCodes, true), 'invalid commit must report unsupported locale');
-    videochat_localization_import_assert(in_array('duplicate_key', $errorCodes, true), 'invalid commit must report duplicate key');
-    videochat_localization_import_assert(in_array('missing_required_placeholders', $errorCodes, true), 'invalid commit must report missing placeholders');
-    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 1, 'failed commit must not mutate translation resources');
 
-    $validCommit = videochat_handle_localization_routes(
+    $disabledCommit = videochat_handle_localization_routes(
         '/api/admin/localization/imports/commit',
         'POST',
         ['method' => 'POST', 'uri' => '/api/admin/localization/imports/commit', 'body' => json_encode(['csv' => $validCsv, 'file_name' => 'good.csv'])],
@@ -134,26 +126,10 @@ SQL
         $decodeJsonBody,
         $openDatabase
     );
-    videochat_localization_import_assert(is_array($validCommit), 'valid commit response should be returned');
-    videochat_localization_import_assert((int) ($validCommit['status'] ?? 0) === 200, 'valid commit status mismatch');
-    $validPayload = videochat_localization_import_decode($validCommit);
-    $importId = (string) (((($validPayload['result'] ?? [])['import'] ?? [])['id'] ?? ''));
-    videochat_localization_import_assert($importId !== '', 'valid commit should return import id');
-
-    $resources = videochat_fetch_translation_resources($pdo, 'de', null, ['common']);
-    videochat_localization_import_assert(($resources['common.save'] ?? '') === 'Speichern', 'committed translation should be visible in resource lookup');
-
-    $imports = videochat_list_translation_imports($pdo);
-    videochat_localization_import_assert((int) ($imports['total'] ?? 0) === 1, 'import history total mismatch');
-    $import = videochat_fetch_translation_import($pdo, $importId);
-    videochat_localization_import_assert(is_array($import), 'import detail should be fetchable');
-    videochat_localization_import_assert((int) ($import['row_count'] ?? 0) === 2, 'import detail row count mismatch');
-
-    $bundles = videochat_list_translation_bundles($pdo);
-    videochat_localization_import_assert(count($bundles) >= 2, 'translation bundle list should include committed locale namespaces');
-    $bundle = videochat_fetch_translation_bundle($pdo, 'de', 'common');
-    videochat_localization_import_assert(is_array($bundle), 'translation bundle detail should be fetchable');
-    videochat_localization_import_assert(count($bundle['resources'] ?? []) === 1, 'translation bundle resource count mismatch');
+    videochat_localization_import_assert(is_array($disabledCommit), 'disabled commit response should be returned');
+    videochat_localization_import_assert((int) ($disabledCommit['status'] ?? 0) === 410, 'CSV commit route must be disabled');
+    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 1, 'disabled CSV routes must not mutate translation resources');
+    videochat_localization_import_assert((int) (videochat_list_translation_imports($pdo)['total'] ?? 0) === 0, 'disabled CSV routes must not create import history');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[localization-import-contract] PASS\n");
