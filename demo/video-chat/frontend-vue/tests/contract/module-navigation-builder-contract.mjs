@@ -32,6 +32,7 @@ for (const route of routes) {
 const adminNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, { role: 'admin' });
 const adminFlat = adminNavigation.flatMap((item) => item.children || [item]);
 assert.ok(adminFlat.some((item) => item.to === '/admin/overview'), 'admin overview must be visible');
+assert.ok(adminFlat.some((item) => item.to === '/admin/infrastructure'), 'admin infrastructure docs must be visible');
 assert.ok(adminNavigation.some((item) => item.key === 'administration'), 'administration group must be built');
 assert.ok(adminNavigation.some((item) => item.key === 'governance'), 'governance group must be built');
 assert.ok(adminFlat.every((item) => typeof item.label_key === 'string'), 'navigation entries must carry translation label keys');

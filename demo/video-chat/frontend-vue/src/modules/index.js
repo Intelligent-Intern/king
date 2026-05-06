@@ -2,6 +2,7 @@ import administration from './administration/descriptor.js';
 import calendar from './calendar/descriptor.js';
 import calls from './calls/descriptor.js';
 import governance from './governance/descriptor.js';
+import infrastructure from './infrastructure/descriptor.js';
 import localization from './localization/descriptor.js';
 import marketplace from './marketplace/descriptor.js';
 import onboarding from './onboarding/descriptor.js';
@@ -16,6 +17,7 @@ export const workspaceModuleDescriptors = [
   calendar,
   calls,
   governance,
+  infrastructure,
   localization,
   marketplace,
   onboarding,
