@@ -233,6 +233,6 @@ SQL
     fwrite(STDOUT, "[session-refresh-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {
-    fwrite(STDERR, "[session-refresh-contract] ERROR: " . $error->getMessage() . "\n");
+    fwrite(STDERR, "[session-refresh-contract] ERROR: " . $error->getMessage() . ' at ' . $error->getFile() . ':' . $error->getLine() . "\n");
     exit(1);
 }

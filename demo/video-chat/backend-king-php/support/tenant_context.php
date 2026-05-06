@@ -63,7 +63,6 @@ function videochat_tenant_context_for_user(PDO $pdo, int $userId, ?int $preferre
         return null;
     }
 
-    videochat_tenant_backfill_default_memberships($pdo);
     $tenantPredicate = '';
     $params = [':user_id' => $userId];
     if (is_int($preferredTenantId) && $preferredTenantId > 0) {
@@ -99,7 +98,19 @@ SQL
     $query->execute($params);
     $row = $query->fetch();
     if (!is_array($row)) {
-        return null;
+        try {
+            videochat_tenant_backfill_default_memberships($pdo);
+            $query->execute($params);
+            $row = $query->fetch();
+        } catch (Throwable $error) {
+            if (function_exists('videochat_sqlite_is_transient_lock') && videochat_sqlite_is_transient_lock($error)) {
+                return null;
+            }
+            throw $error;
+        }
+        if (!is_array($row)) {
+            return null;
+        }
     }
 
     return videochat_tenant_context_from_membership_row($row);

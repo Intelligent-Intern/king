@@ -123,8 +123,14 @@ function videochat_dispatch_request(
 
     $authenticateRequest = static function (array $authRequest, string $transport) use ($openDatabase): array {
         try {
-            $pdo = $openDatabase();
-            return videochat_authenticate_request($pdo, $authRequest, $transport);
+            $authResult = videochat_authenticate_request_with_retry($openDatabase, $authRequest, $transport);
+            if ((string) ($authResult['backend_reason'] ?? '') === 'sqlite_busy') {
+                error_log(sprintf(
+                    '[video-chat][auth] authentication backend busy transport=%s reason=sqlite_busy retryable=1',
+                    $transport
+                ));
+            }
+            return $authResult;
         } catch (Throwable $exception) {
             error_log(sprintf(
                 '[video-chat][auth] authentication backend error transport=%s exception=%s message=%s',
