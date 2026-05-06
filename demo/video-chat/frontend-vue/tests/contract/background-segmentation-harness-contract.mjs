@@ -26,7 +26,9 @@ try {
   assert.ok(html.includes('king-background-segmentation-harness.ts'), 'standalone harness must load the TypeScript module');
   assert.ok(source.includes("from '../../src/lib/wasm/wasm-codec'"), 'harness must keep King WASM infra available');
   assert.ok(source.includes("from '../../src/domain/realtime/background/maskPostprocess'"), 'harness must use the same matte postprocess as production');
-  assert.ok(source.includes("from 'onnxruntime-web'"), 'harness must load ONNX Runtime for fast segmentation candidates');
+  assert.ok(source.includes("from 'onnxruntime-web/wasm'"), 'harness must load ONNX Runtime WASM for fast segmentation candidates');
+  assert.ok(source.includes('ort.env.wasm.proxy = false;'), 'harness must not depend on ORT proxy workers');
+  assert.ok(source.includes('ort.env.wasm.numThreads = 1;'), 'harness must not depend on SharedArrayBuffer threading');
   assert.ok(source.includes('createKingBackgroundMatteRefiner'), 'harness must instantiate the King background segmenter');
   assert.ok(html.includes('value="sinet"'), 'harness must expose SINet as the fast segmentation candidate');
   assert.ok(source.includes("fetchBinaryAsset('/cdn/vendor/sinet/sinet-float.onnx')"), 'harness must load the vendored SINet ONNX graph');

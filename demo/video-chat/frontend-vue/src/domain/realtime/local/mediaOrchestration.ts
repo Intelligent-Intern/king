@@ -519,6 +519,22 @@ export function createLocalMediaOrchestrationHelpers({
       callMediaPrefs.backgroundFilterActive = true;
       callMediaPrefs.backgroundFilterReason = result.reason === 'ok_fallback' ? 'ok_fallback' : 'ok';
       callMediaPrefs.backgroundFilterBackend = String(result.backend || 'none');
+      if (callMediaPrefs.backgroundFilterBackend === 'sinet_unavailable') {
+        captureDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'local_background_sinet_unavailable',
+          code: 'sinet_unavailable',
+          message: 'Local background compositor is active, but SINet segmentation did not initialize.',
+          payload: {
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            background_filter_mode: callMediaPrefs.backgroundFilterMode,
+            background_backdrop_mode: callMediaPrefs.backgroundBackdropMode,
+            background_quality_profile: callMediaPrefs.backgroundQualityProfile,
+          },
+          immediate: true,
+        });
+      }
     } else {
       callMediaPrefs.backgroundFilterActive = false;
       callMediaPrefs.backgroundFilterReason = String(result?.reason || 'setup_failed');

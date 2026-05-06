@@ -82,8 +82,21 @@ async function fetchBinaryAsset(path) {
 let sinetModelFiles = null;
 let ortModule = null;
 
+function configureOrtWasmRuntime(ort) {
+  const wasm = ort?.env?.wasm;
+  if (!wasm || wasm.__kingSinetConfigured === true) return;
+  wasm.proxy = false;
+  wasm.numThreads = 1;
+  wasm.__kingSinetConfigured = true;
+}
+
 function getOrtModule() {
-  if (!ortModule) ortModule = import('onnxruntime-web');
+  if (!ortModule) {
+    ortModule = import('onnxruntime-web/wasm').then((ort) => {
+      configureOrtWasmRuntime(ort);
+      return ort;
+    });
+  }
   return ortModule;
 }
 

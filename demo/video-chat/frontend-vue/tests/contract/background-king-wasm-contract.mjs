@@ -30,7 +30,10 @@ try {
   requireMissing(stream, 'createMediaPipeSegmentationBackend', 'production background stream');
   requireMissing(stream, 'createTfjsSegmentationBackend', 'production background stream');
 
-  requireContains(backend, "import('onnxruntime-web')", 'SINet WASM backend runtime');
+  requireContains(backend, "import('onnxruntime-web/wasm')", 'SINet WASM backend runtime');
+  requireContains(backend, 'function configureOrtWasmRuntime', 'SINet WASM runtime guard');
+  requireContains(backend, 'wasm.proxy = false;', 'SINet WASM runtime must not depend on ORT proxy workers');
+  requireContains(backend, 'wasm.numThreads = 1;', 'SINet WASM runtime must not depend on SharedArrayBuffer threading');
   requireContains(backend, 'const SINET_MODEL_WIDTH = 256;', 'SINet model width');
   requireContains(backend, 'const SINET_MODEL_HEIGHT = 256;', 'SINet model height');
   requireContains(backend, "const SINET_GRAPH_URL = '/cdn/vendor/sinet/sinet-float.onnx';", 'vendored SINet graph');

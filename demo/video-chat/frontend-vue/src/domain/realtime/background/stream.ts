@@ -68,6 +68,47 @@ function drawCoverImage(ctx, image, width, height) {
   const dy = (height - dh) * 0.5;
   ctx.drawImage(image, dx, dy, dw, dh);
 }
+function resolveDownsampleBlurSize(width, height, blurPx) {
+  const strength = Math.max(1, Math.min(64, Math.round(toNumber(blurPx, 18))));
+  const scale = Math.max(0.035, Math.min(0.28, 1 / (strength * 0.32 + 2.4)));
+  return {
+    width: Math.max(8, Math.round(width * scale)),
+    height: Math.max(8, Math.round(height * scale)),
+  };
+}
+function drawVideoToDownsampleBlurCache(scratchCanvas, scratchCtx, video, width, height, blurPx) {
+  const blurSize = resolveDownsampleBlurSize(width, height, blurPx);
+  if (scratchCanvas.width !== blurSize.width) scratchCanvas.width = blurSize.width;
+  if (scratchCanvas.height !== blurSize.height) scratchCanvas.height = blurSize.height;
+
+  scratchCtx.save();
+  scratchCtx.globalCompositeOperation = "copy";
+  scratchCtx.filter = "none";
+  scratchCtx.imageSmoothingEnabled = true;
+  scratchCtx.imageSmoothingQuality = "low";
+  scratchCtx.drawImage(video, 0, 0, blurSize.width, blurSize.height);
+  scratchCtx.restore();
+}
+function drawVideoWithDownsampleBlur(ctx, video, scratchCanvas, scratchCtx, width, height, blurPx) {
+  drawVideoToDownsampleBlurCache(scratchCanvas, scratchCtx, video, width, height, blurPx);
+
+  ctx.save();
+  ctx.filter = "none";
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(scratchCanvas, 0, 0, width, height);
+  ctx.restore();
+}
+function createNoMatteSegmentationBackend(kind = "sinet_unavailable") {
+  return {
+    kind,
+    nextFaces() {
+      return { faces: [], detectSampleMs: null, matteMask: null };
+    },
+    dispose() {
+    },
+  };
+}
 function rgbToYCbCr(r, g, b) {
   const y = BT601_Y_R * r + BT601_Y_G * g + BT601_Y_B * b;
   const cb = BT601_CHROMA_OFFSET + BT601_CB_R * r + BT601_CB_G * g + BT601_CB_B * b;
@@ -429,8 +470,9 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   videoSampleCanvas.height = canvas.height;
   const videoSampleLayer = videoSampleCanvas.getContext("2d", { alpha: true, desynchronized: true, willReadFrequently: true });
   const backgroundLayerCanvas = document.createElement("canvas");
-  backgroundLayerCanvas.width = Math.max(1, Math.round(canvas.width * 0.5));
-  backgroundLayerCanvas.height = Math.max(1, Math.round(canvas.height * 0.5));
+  const initialBlurSize = resolveDownsampleBlurSize(canvas.width, canvas.height, blurPx);
+  backgroundLayerCanvas.width = initialBlurSize.width;
+  backgroundLayerCanvas.height = initialBlurSize.height;
   const backgroundLayer = backgroundLayerCanvas.getContext("2d", { alpha: false, desynchronized: true });
   if (!personLayer || !maskLayer || !videoSampleLayer) {
     video.pause();
@@ -451,16 +493,10 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       mattePreset: options.mattePreset,
     });
   } catch {
-    video.pause();
-    video.srcObject = null;
-    return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-    } };
+    segmentationBackend = null;
   }
   if (!segmentationBackend) {
-    video.pause();
-    video.srcObject = null;
-    return { stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-    } };
+    segmentationBackend = createNoMatteSegmentationBackend("sinet_unavailable");
   }
   const captureStream = canvas.captureStream;
   if (typeof captureStream !== "function") {
@@ -587,13 +623,15 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       ctx.restore();
     } else {
       if (now - lastBackgroundRefreshAt >= backgroundRefreshIntervalMs || lastBackgroundRefreshAt === 0) {
-        backgroundLayer.save();
-        backgroundLayer.filter = `blur(${Math.max(1, Math.round(blurPx * 0.9))}px)`;
-        backgroundLayer.drawImage(video, 0, 0, backgroundLayerCanvas.width, backgroundLayerCanvas.height);
-        backgroundLayer.restore();
+        drawVideoToDownsampleBlurCache(backgroundLayerCanvas, backgroundLayer, video, canvas.width, canvas.height, blurPx);
         lastBackgroundRefreshAt = now;
       }
+      ctx.save();
+      ctx.filter = "none";
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(backgroundLayerCanvas, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
     }
     if (hasMatteMask) {
       personLayer.save();
@@ -610,10 +648,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       // Keep the whole frame blurred until the fresh matte is ready instead of
       // briefly exposing the raw camera frame during a blur-strength handoff.
       if (!backgroundImage && !backgroundColor) {
-        ctx.save();
-        ctx.filter = `blur(${blurPx}px)`;
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
+        drawVideoWithDownsampleBlur(ctx, video, backgroundLayerCanvas, backgroundLayer, canvas.width, canvas.height, blurPx);
       }
     }
     markReady();
