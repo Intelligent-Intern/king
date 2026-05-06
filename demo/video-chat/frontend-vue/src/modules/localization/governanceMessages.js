@@ -79,6 +79,8 @@ export const GOVERNANCE_MESSAGES = Object.freeze({
   'governance.option.medium': 'Medium',
   'governance.option.organization': 'Organization',
   'governance.option.user': 'User',
+  'governance.organization.inline_form_hint': 'Edit organization details without leaving the overview.',
+  'governance.organization.user_count': '{count} users',
   'governance.readonly.system_catalog': 'System catalog entries are managed by module descriptors.',
   'governance.relationships': 'Relationships',
   'governance.relation_picker.apply': 'Select',

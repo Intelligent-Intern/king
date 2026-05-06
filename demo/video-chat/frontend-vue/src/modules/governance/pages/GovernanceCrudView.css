@@ -147,6 +147,162 @@
   text-transform: uppercase;
 }
 
+.governance-organizations-view {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.governance-organization-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 20px;
+}
+
+.governance-organization-card {
+  position: relative;
+  min-height: 210px;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-surface-navy);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: start;
+}
+
+.governance-organization-card:hover,
+.governance-organization-card:focus-visible {
+  outline: 2px solid var(--color-cyan-primary);
+  outline-offset: 2px;
+}
+
+.governance-organization-logo {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-primary-navy);
+  color: var(--color-cyan-hover);
+  font-weight: 900;
+}
+
+.governance-organization-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.governance-organization-card-body {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.governance-organization-card-body strong {
+  color: var(--text-main);
+  font-size: 18px;
+}
+
+.governance-organization-card-body span,
+.governance-organization-editor-head span {
+  color: var(--text-muted);
+}
+
+.governance-organization-delete {
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline-end: 14px;
+}
+
+.governance-organizations-empty {
+  min-height: min(48vh, 420px);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-navy);
+}
+
+.governance-organization-editor {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-navy);
+}
+
+.governance-organization-editor-head,
+.governance-organization-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.governance-organization-editor-head h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.governance-organization-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.governance-organization-field {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.governance-organization-field-wide {
+  grid-column: 1 / -1;
+}
+
+.governance-organization-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.governance-organization-relations {
+  display: grid;
+  gap: 10px;
+}
+
+.governance-organization-relation-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  background: var(--color-primary-navy);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: start;
+}
+
+.governance-organization-relation-link strong {
+  color: var(--color-cyan-primary);
+}
+
+.governance-organization-relation-link em {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
 @media (max-width: 760px) {
   .governance-crud-view .admin-page-frame-toolbar {
     align-items: stretch;
@@ -226,5 +382,15 @@
 
   .governance-empty-state-cell {
     height: auto;
+  }
+
+  .governance-organization-grid,
+  .governance-organization-form {
+    grid-template-columns: 1fr;
+  }
+
+  .governance-organization-editor-head,
+  .governance-organization-editor-actions {
+    align-items: stretch;
   }
 }
