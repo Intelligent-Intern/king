@@ -617,6 +617,44 @@ CAP-02 Package Layout, 2026-05-07:
   - `selection.update`
   - `cursor.move`
 
+CAP-03 Semantic-DNS Registration Layer, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_semantic_dns.php`
+- Local package discovery:
+  - scans `demo/call-app`
+  - reads `call-app.manifest.json`, `mcp.descriptor.json`,
+    `crdt.schema.json`, and `health.descriptor.json`
+  - validates whiteboard metadata consistency before exposing it
+- Semantic-DNS service payload:
+  - `service_type`: `call_app`
+  - `service_name`: `call_app.whiteboard`
+  - `status`: derived from descriptor validation health
+  - `attributes.app_key`
+  - `attributes.app_version`
+  - `attributes.category`
+  - `attributes.mcp_endpoint`
+  - `attributes.mcp_service_name`
+  - `attributes.iframe_entrypoint`
+  - `attributes.crdt_protocol`
+  - `attributes.marketplace_order_scope`
+  - `attributes.marketplace_metadata_hash`
+  - `attributes.mother_node_registration_required`
+  - `attributes.capabilities_csv`
+  - `attributes.mcp_methods_csv`
+  - `attributes.export_formats_csv`
+- Registration behavior:
+  - validates payloads against the native `king_semantic_dns_register_service`
+    shape: `service_id`, `service_name`, `service_type`, `hostname`, `port`,
+    `status`, and scalar `attributes`.
+  - calls a provided registration callable in tests and calls
+    `king_semantic_dns_register_service` when the King extension is loaded.
+  - reports `registration_available` honestly instead of pretending native
+    registration ran when the extension function is unavailable.
+- Discovery/refresh behavior:
+  - `videochat_call_app_refresh_semantic_dns_catalog(...)` returns validated
+    packages, Semantic-DNS payloads, invalid package diagnostics, and optional
+    registration results.
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -647,7 +685,7 @@ Tickets:
   - Define package manifest, MCP descriptor, CRDT schema descriptor, health
     descriptor, and iframe entrypoint conventions.
   - Add whiteboard as the first package stub with real metadata.
-- [ ] CAP-03 Semantic-DNS and Mother Node registration
+- [x] CAP-03 Semantic-DNS and Mother Node registration
   - Register Call Apps as `call_app` services.
   - Include MCP endpoint, iframe origin, app key/version, health, category,
     supported CRDT protocol, and marketplace metadata hash.
