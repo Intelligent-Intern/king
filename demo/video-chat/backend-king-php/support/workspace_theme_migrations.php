@@ -5,79 +5,29 @@ declare(strict_types=1);
 function videochat_workspace_theme_dark_colors(): array
 {
     return [
-        '--bg-shell' => '#000010',
-        '--bg-pane' => '#000010',
-        '--brand-bg' => '#000010',
-        '--bg-surface' => '#00052d',
-        '--bg-surface-strong' => '#00052d',
-        '--bg-input' => '#00052d',
-        '--bg-action' => '#1582bf',
-        '--bg-action-hover' => '#59c7f2',
-        '--bg-row' => '#00052d',
-        '--bg-row-hover' => '#03275a',
-        '--line' => '#03275a',
-        '--text-main' => '#ffffff',
-        '--text-muted' => '#efefe7',
-        '--ok' => '#00652f',
-        '--wait' => '#f47221',
-        '--danger' => '#ef4423',
-        '--bg-sidebar' => '#000010',
-        '--bg-main' => '#000010',
-        '--bg-tab' => '#00052d',
-        '--bg-tab-hover' => '#03275a',
-        '--bg-tab-active' => '#1582bf',
-        '--bg-ui-chrome' => '#00052d',
-        '--bg-ui-chrome-active' => '#03275a',
-        '--bg-icon' => '#00052d',
-        '--bg-icon-active' => '#1582bf',
-        '--border-subtle' => '#03275a',
-        '--text-primary' => '#ffffff',
-        '--text-secondary' => '#efefe7',
-        '--text-dim' => '#efefe7',
-        '--warn' => '#f47221',
-        '--brand-cyan' => '#1582bf',
-        '--brand-cyan-hover' => '#59c7f2',
-        '--brand-cyan-active' => '#1582bf',
+        '--color-primary-navy' => '#000010',
+        '--color-surface-navy' => '#00052d',
+        '--color-cyan-primary' => '#1582bf',
+        '--color-cyan-hover' => '#59c7f2',
+        '--color-heading' => '#efefe7',
+        '--color-text-primary' => '#ffffff',
+        '--color-text-link' => '#1582bf',
+        '--color-text-link-hover' => '#59c7f2',
+        '--color-border' => '#03275a',
+        '--color-success' => '#00652f',
+        '--color-warning' => '#f47221',
+        '--color-error' => '#ef4423',
     ];
 }
 
 function videochat_workspace_theme_light_colors(): array
 {
-    return [
-        '--bg-shell' => '#eff4fb',
-        '--bg-pane' => '#dce8f6',
-        '--brand-bg' => '#e8eff8',
-        '--bg-surface' => '#f4f8fd',
-        '--bg-surface-strong' => '#ffffff',
-        '--bg-input' => '#ffffff',
-        '--bg-action' => '#1582bf',
-        '--bg-action-hover' => '#59c7f2',
-        '--bg-row' => '#b7cdf5',
-        '--bg-row-hover' => '#8cabdf',
-        '--line' => '#c4d1e3',
-        '--text-main' => '#122035',
-        '--text-muted' => '#5a6780',
-        '--ok' => '#2e8b57',
-        '--wait' => '#9a7b00',
-        '--danger' => '#c62828',
-        '--bg-sidebar' => '#e8eff8',
-        '--bg-main' => '#dce8f6',
-        '--bg-tab' => '#00052d',
-        '--bg-tab-hover' => '#9cbcf3',
-        '--bg-tab-active' => '#b7cdf5',
-        '--bg-ui-chrome' => '#3d5f98',
-        '--bg-ui-chrome-active' => '#2a569f',
-        '--bg-icon' => '#dae7f7',
-        '--bg-icon-active' => '#9cbcf3',
-        '--border-subtle' => '#c4d1e3',
-        '--text-primary' => '#122035',
-        '--text-secondary' => '#33425d',
-        '--text-dim' => '#6d7d96',
-        '--warn' => '#4d5011',
-        '--brand-cyan' => '#1582bf',
-        '--brand-cyan-hover' => '#59c7f2',
-        '--brand-cyan-active' => '#1582bf',
-    ];
+    $colors = videochat_workspace_theme_dark_colors();
+    $colors['--color-primary-navy'] = '#efefe7';
+    $colors['--color-surface-navy'] = '#ffffff';
+    $colors['--color-heading'] = '#000010';
+    $colors['--color-text-primary'] = '#000010';
+    return $colors;
 }
 
 function videochat_workspace_theme_colors_json(string $themeId): string
@@ -122,14 +72,21 @@ function videochat_workspace_theme_seed_statements(): array
 
 function videochat_workspace_theme_refresh_statements(): array
 {
-    $colorsSql = videochat_workspace_theme_sql_string(videochat_workspace_theme_colors_json('dark'));
+    $darkColorsSql = videochat_workspace_theme_sql_string(videochat_workspace_theme_colors_json('dark'));
+    $lightColorsSql = videochat_workspace_theme_sql_string(videochat_workspace_theme_colors_json('light'));
 
     return [
         <<<SQL
 UPDATE workspace_theme_presets
-SET colors_json = {$colorsSql},
+SET colors_json = {$darkColorsSql},
     updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE id = 'dark' AND is_system = 1
+SQL,
+        <<<SQL
+UPDATE workspace_theme_presets
+SET colors_json = {$lightColorsSql},
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+WHERE id = 'light' AND is_system = 1
 SQL,
     ];
 }

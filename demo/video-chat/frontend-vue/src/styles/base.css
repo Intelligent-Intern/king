@@ -81,6 +81,11 @@ select {
   font: inherit;
 }
 
+input[type='text'],
+input[type='search'] {
+  background-color: var(--bg-input);
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-subtle) var(--bg-shell);

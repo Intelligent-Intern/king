@@ -45,6 +45,7 @@ const modalRootAllowList = new Set([
   'call-owner-edit-modal',
   'calls-modal',
   'chat-archive-modal',
+  'background-upload-modal',
   'marketplace-modal',
   'settings-modal',
   'users-modal',
@@ -58,7 +59,7 @@ function listSourceFiles(dir) {
       files.push(...listSourceFiles(fullPath));
       continue;
     }
-    if (/\.(css|vue)$/.test(entry.name)) {
+    if (/\.(css|vue|js|ts)$/.test(entry.name)) {
       files.push(fullPath);
     }
   }

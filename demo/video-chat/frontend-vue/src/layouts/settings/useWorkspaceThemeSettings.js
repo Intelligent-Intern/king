@@ -9,45 +9,16 @@ import {
   applyAppearancePayload,
   loadWorkspaceAppearance,
 } from '../../domain/workspace/appearance';
+import {
+  STYLEGUIDE_COLOR_FIELDS as THEME_COLOR_FIELDS,
+  STYLEGUIDE_PALETTE,
+  defaultWorkspaceThemeColors,
+  normalizeStyleguideHex as normalizeHex,
+  normalizeStyleguideThemeColors,
+} from '../../domain/workspace/styleguidePalette.js';
 
 const DEFAULT_LOGO = '/assets/orgas/kingrt/logo.svg';
 const DEFAULT_PAGE_SIZE = 5;
-
-const THEME_COLOR_FIELDS = Object.freeze([
-  { key: '--bg-shell', labelKey: 'theme_settings.color.shell_background', default: '#000010' },
-  { key: '--bg-pane', labelKey: 'theme_settings.color.pane_background', default: '#000010' },
-  { key: '--brand-bg', labelKey: 'theme_settings.color.brand_strip', default: '#000010' },
-  { key: '--bg-surface', labelKey: 'theme_settings.color.surface', default: '#00052d' },
-  { key: '--bg-surface-strong', labelKey: 'theme_settings.color.surface_strong', default: '#00052d' },
-  { key: '--bg-input', labelKey: 'theme_settings.color.input_background', default: '#00052d' },
-  { key: '--bg-action', labelKey: 'theme_settings.color.action', default: '#1582bf' },
-  { key: '--bg-action-hover', labelKey: 'theme_settings.color.action_hover', default: '#59c7f2' },
-  { key: '--bg-row', labelKey: 'theme_settings.color.row', default: '#00052d' },
-  { key: '--bg-row-hover', labelKey: 'theme_settings.color.row_hover', default: '#03275a' },
-  { key: '--line', labelKey: 'theme_settings.color.line', default: '#03275a' },
-  { key: '--text-main', labelKey: 'theme_settings.color.text_main', default: '#ffffff' },
-  { key: '--text-muted', labelKey: 'theme_settings.color.text_muted', default: '#efefe7' },
-  { key: '--ok', labelKey: 'theme_settings.color.ok', default: '#00652f' },
-  { key: '--wait', labelKey: 'theme_settings.color.wait', default: '#f47221' },
-  { key: '--danger', labelKey: 'theme_settings.color.danger', default: '#ef4423' },
-  { key: '--bg-sidebar', labelKey: 'theme_settings.color.sidebar', default: '#000010' },
-  { key: '--bg-main', labelKey: 'theme_settings.color.main', default: '#000010' },
-  { key: '--bg-tab', labelKey: 'theme_settings.color.tab', default: '#00052d' },
-  { key: '--bg-tab-hover', labelKey: 'theme_settings.color.tab_hover', default: '#03275a' },
-  { key: '--bg-tab-active', labelKey: 'theme_settings.color.tab_active', default: '#1582bf' },
-  { key: '--bg-ui-chrome', labelKey: 'theme_settings.color.ui_chrome', default: '#00052d' },
-  { key: '--bg-ui-chrome-active', labelKey: 'theme_settings.color.ui_chrome_active', default: '#03275a' },
-  { key: '--bg-icon', labelKey: 'theme_settings.color.icon_background', default: '#00052d' },
-  { key: '--bg-icon-active', labelKey: 'theme_settings.color.icon_active', default: '#1582bf' },
-  { key: '--border-subtle', labelKey: 'theme_settings.color.border_subtle', default: '#03275a' },
-  { key: '--text-primary', labelKey: 'theme_settings.color.text_primary', default: '#ffffff' },
-  { key: '--text-secondary', labelKey: 'theme_settings.color.text_secondary', default: '#efefe7' },
-  { key: '--text-dim', labelKey: 'theme_settings.color.text_dim', default: '#efefe7' },
-  { key: '--warn', labelKey: 'theme_settings.color.warn', default: '#f47221' },
-  { key: '--brand-cyan', labelKey: 'theme_settings.color.brand_cyan', default: '#1582bf' },
-  { key: '--brand-cyan-hover', labelKey: 'theme_settings.color.brand_cyan_hover', default: '#59c7f2' },
-  { key: '--brand-cyan-active', labelKey: 'theme_settings.color.brand_cyan_active', default: '#1582bf' },
-]);
 
 function fallbackTranslate(key, params = {}) {
   return String(key || '').replace(/\{([A-Za-z0-9_.-]+)\}/g, (_match, name) => String(params?.[name] ?? ''));
@@ -55,41 +26,6 @@ function fallbackTranslate(key, params = {}) {
 
 function createTranslator(t) {
   return typeof t === 'function' ? t : fallbackTranslate;
-}
-
-export function defaultWorkspaceThemeColors(themeId = 'dark') {
-  const lightOverrides = {
-    '--bg-shell': '#efefe7',
-    '--bg-pane': '#efefe7',
-    '--brand-bg': '#000010',
-    '--bg-surface': '#ffffff',
-    '--bg-surface-strong': '#ffffff',
-    '--bg-input': '#ffffff',
-    '--bg-row': '#ffffff',
-    '--bg-row-hover': '#efefe7',
-    '--text-main': '#000010',
-    '--text-muted': '#03275a',
-    '--bg-sidebar': '#000010',
-    '--bg-main': '#efefe7',
-    '--text-primary': '#000010',
-    '--text-secondary': '#03275a',
-    '--text-dim': '#03275a',
-  };
-  const colors = {};
-  for (const field of THEME_COLOR_FIELDS) {
-    colors[field.key] = themeId === 'light' && lightOverrides[field.key] ? lightOverrides[field.key] : field.default;
-  }
-  return colors;
-}
-
-function normalizeHex(value, fallback = '#000010') {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (/^#[a-f0-9]{6}$/.test(normalized)) return normalized;
-  if (/^[a-f0-9]{6}$/.test(normalized)) return `#${normalized}`;
-  if (/^#[a-f0-9]{3}$/.test(normalized)) {
-    return `#${normalized[1]}${normalized[1]}${normalized[2]}${normalized[2]}${normalized[3]}${normalized[3]}`;
-  }
-  return fallback;
 }
 
 function readFileAsDataUrl(file, errorMessage) {
@@ -175,8 +111,9 @@ export function useWorkspaceThemeSettings(options = {}) {
   }
 
   function patchColors(source = {}) {
+    const normalizedColors = normalizeStyleguideThemeColors(source, defaultWorkspaceThemeColors(editor.baseThemeId));
     for (const field of THEME_COLOR_FIELDS) {
-      editor.colors[field.key] = normalizeHex(source[field.key], field.default);
+      editor.colors[field.key] = normalizedColors[field.key];
     }
   }
 
@@ -259,30 +196,25 @@ export function useWorkspaceThemeSettings(options = {}) {
     }
 
     if (/(cyan|blau|blue|king)/.test(prompt)) {
-      updateThemeColor('--bg-action', '#1582bf');
-      updateThemeColor('--bg-action-hover', '#59c7f2');
-      updateThemeColor('--brand-cyan', '#1582bf');
-      updateThemeColor('--brand-cyan-hover', '#59c7f2');
-      updateThemeColor('--bg-tab-active', '#1582bf');
+      updateThemeColor('--color-cyan-primary', STYLEGUIDE_PALETTE['--color-cyan-primary']);
+      updateThemeColor('--color-cyan-hover', STYLEGUIDE_PALETTE['--color-cyan-hover']);
+      updateThemeColor('--color-text-link', STYLEGUIDE_PALETTE['--color-text-link']);
+      updateThemeColor('--color-text-link-hover', STYLEGUIDE_PALETTE['--color-text-link-hover']);
       changed = true;
     }
 
     if (/(kontrast|contrast|klar|lesbar)/.test(prompt)) {
-      updateThemeColor('--text-main', '#ffffff');
-      updateThemeColor('--text-primary', '#ffffff');
-      updateThemeColor('--text-muted', '#efefe7');
-      updateThemeColor('--text-secondary', '#efefe7');
-      updateThemeColor('--line', '#03275a');
-      updateThemeColor('--border-subtle', '#03275a');
+      updateThemeColor('--color-heading', STYLEGUIDE_PALETTE['--color-heading']);
+      updateThemeColor('--color-text-primary', STYLEGUIDE_PALETTE['--color-text-primary']);
+      updateThemeColor('--color-border', STYLEGUIDE_PALETTE['--color-border']);
       changed = true;
     }
 
     if (!changed) {
-      updateThemeColor('--bg-shell', '#000010');
-      updateThemeColor('--bg-main', '#000010');
-      updateThemeColor('--bg-surface', '#00052d');
-      updateThemeColor('--bg-action', '#1582bf');
-      updateThemeColor('--bg-action-hover', '#59c7f2');
+      updateThemeColor('--color-primary-navy', STYLEGUIDE_PALETTE['--color-primary-navy']);
+      updateThemeColor('--color-surface-navy', STYLEGUIDE_PALETTE['--color-surface-navy']);
+      updateThemeColor('--color-cyan-primary', STYLEGUIDE_PALETTE['--color-cyan-primary']);
+      updateThemeColor('--color-cyan-hover', STYLEGUIDE_PALETTE['--color-cyan-hover']);
     }
 
     state.notice = t('theme_settings.chat_prompt_applied');
@@ -343,7 +275,7 @@ export function useWorkspaceThemeSettings(options = {}) {
         theme: {
           id: editor.id,
           label: editor.label,
-          colors: editor.colors,
+          colors: normalizeStyleguideThemeColors(editor.colors, defaultWorkspaceThemeColors(editor.baseThemeId)),
           create_new: editor.createNew,
           base_theme: editor.baseThemeId || 'dark',
         },

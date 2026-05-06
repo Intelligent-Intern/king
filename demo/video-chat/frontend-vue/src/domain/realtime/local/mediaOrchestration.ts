@@ -758,7 +758,7 @@ export function createLocalMediaOrchestrationHelpers({
 
     return {
       mode,
-      backgroundColor: mode === 'replace' && backdrop === 'green' ? '#16a34a' : '',
+      backgroundColor: mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '',
       blurPx,
       backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
       detectIntervalMs,

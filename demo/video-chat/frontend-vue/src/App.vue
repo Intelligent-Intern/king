@@ -12,76 +12,12 @@ import {
   loadWorkspaceAppearance,
   themeColorsForId,
 } from './domain/workspace/appearance';
+import {
+  STYLEGUIDE_DERIVED_COLOR_KEYS,
+  defaultWorkspaceThemeColors,
+  normalizeStyleguideThemeColors,
+} from './domain/workspace/styleguidePalette';
 import { syncI18nDocumentState } from './modules/localization/i18nRuntime.js';
-
-const THEME_PRESETS = {
-  dark: {
-    '--bg-shell': '#000010',
-    '--bg-pane': '#000010',
-    '--brand-bg': '#000010',
-    '--bg-surface': '#00052d',
-    '--bg-surface-strong': '#00052d',
-    '--bg-input': '#00052d',
-    '--bg-action': '#1582bf',
-    '--bg-action-hover': '#59c7f2',
-    '--bg-row': '#00052d',
-    '--bg-row-hover': '#03275a',
-    '--line': '#03275a',
-    '--text-main': '#ffffff',
-    '--text-muted': '#efefe7',
-    '--ok': '#00652f',
-    '--wait': '#f47221',
-    '--danger': '#ef4423',
-    '--bg-sidebar': '#000010',
-    '--bg-main': '#000010',
-    '--bg-tab': '#00052d',
-    '--bg-tab-hover': '#03275a',
-    '--bg-tab-active': '#1582bf',
-    '--bg-icon': '#00052d',
-    '--bg-icon-active': '#1582bf',
-    '--border-subtle': '#03275a',
-    '--text-primary': '#ffffff',
-    '--text-secondary': '#efefe7',
-    '--text-dim': '#efefe7',
-    '--warn': '#f47221',
-    '--brand-cyan': '#1582bf',
-    '--brand-cyan-hover': '#59c7f2',
-    '--brand-cyan-active': '#1582bf',
-  },
-  light: {
-    '--bg-shell': '#efefe7',
-    '--bg-pane': '#efefe7',
-    '--brand-bg': '#000010',
-    '--bg-surface': '#ffffff',
-    '--bg-surface-strong': '#ffffff',
-    '--bg-input': '#ffffff',
-    '--bg-action': '#1582bf',
-    '--bg-action-hover': '#59c7f2',
-    '--bg-row': '#ffffff',
-    '--bg-row-hover': '#efefe7',
-    '--line': '#03275a',
-    '--text-main': '#000010',
-    '--text-muted': '#03275a',
-    '--ok': '#00652f',
-    '--wait': '#f47221',
-    '--danger': '#ef4423',
-    '--bg-sidebar': '#000010',
-    '--bg-main': '#efefe7',
-    '--bg-tab': '#00052d',
-    '--bg-tab-hover': '#03275a',
-    '--bg-tab-active': '#1582bf',
-    '--bg-icon': '#00052d',
-    '--bg-icon-active': '#1582bf',
-    '--border-subtle': '#03275a',
-    '--text-primary': '#000010',
-    '--text-secondary': '#03275a',
-    '--text-dim': '#03275a',
-    '--warn': '#f47221',
-    '--brand-cyan': '#1582bf',
-    '--brand-cyan-hover': '#59c7f2',
-    '--brand-cyan-active': '#1582bf',
-  },
-};
 
 const BUILD_VERSION = String(import.meta.env.VIDEOCHAT_ASSET_VERSION || '').trim();
 const BUILD_VERSION_HEADER = 'x-kingrt-asset-version';
@@ -96,7 +32,12 @@ function applyTheme(themeValue) {
   if (typeof document === 'undefined') return;
 
   const theme = String(themeValue || '').trim().toLowerCase();
-  const palette = themeColorsForId(theme) || (theme === 'light' ? THEME_PRESETS.light : THEME_PRESETS.dark);
+  const fallbackPalette = defaultWorkspaceThemeColors(theme === 'light' ? 'light' : 'dark');
+  const palette = normalizeStyleguideThemeColors(themeColorsForId(theme) || fallbackPalette, fallbackPalette);
+
+  for (const key of STYLEGUIDE_DERIVED_COLOR_KEYS) {
+    document.documentElement.style.removeProperty(key);
+  }
 
   for (const [key, value] of Object.entries(palette)) {
     document.documentElement.style.setProperty(key, value);

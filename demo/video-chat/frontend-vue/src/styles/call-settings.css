@@ -195,22 +195,15 @@
   border-radius: 6px;
   background-color: var(--border-subtle);
   color: var(--text-primary);
-  padding: 0 32px 0 12px;
+  padding: 0 12px;
   color-scheme: dark;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5L6 8.5L10 4.5' fill='none' stroke='%23ffffff' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 12px 12px;
 }
 
 .call-left-settings .ii-select,
 .calls-enter-right-settings .ii-select {
   width: 100%;
   height: 34px;
-  padding: 0 32px 0 10px;
+  padding: 0 10px;
 }
 
 .ii-select:focus {

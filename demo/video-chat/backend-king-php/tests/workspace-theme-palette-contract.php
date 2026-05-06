@@ -15,27 +15,29 @@ function assert_palette(bool $condition, string $message): void
 
 $dark = videochat_workspace_default_theme_colors('dark');
 foreach ([
-    '--bg-shell' => '#000010',
-    '--bg-main' => '#000010',
-    '--brand-bg' => '#000010',
-    '--bg-sidebar' => '#000010',
-    '--bg-surface' => '#00052d',
-    '--bg-action' => '#1582bf',
-    '--bg-action-hover' => '#59c7f2',
-    '--border-subtle' => '#03275a',
-    '--text-main' => '#ffffff',
-    '--ok' => '#00652f',
-    '--wait' => '#f47221',
-    '--danger' => '#ef4423',
+    '--color-primary-navy' => '#000010',
+    '--color-surface-navy' => '#00052d',
+    '--color-cyan-primary' => '#1582bf',
+    '--color-cyan-hover' => '#59c7f2',
+    '--color-heading' => '#efefe7',
+    '--color-text-primary' => '#ffffff',
+    '--color-text-link' => '#1582bf',
+    '--color-text-link-hover' => '#59c7f2',
+    '--color-border' => '#03275a',
+    '--color-success' => '#00652f',
+    '--color-warning' => '#f47221',
+    '--color-error' => '#ef4423',
 ] as $key => $expected) {
     assert_palette(($dark[$key] ?? '') === $expected, "{$key} should default to {$expected}");
 }
+assert_palette(count($dark) === 12, 'backend theme defaults should expose exactly 12 root styleguide slots');
 
 $refreshSql = implode("\n", videochat_workspace_theme_refresh_statements());
-assert_palette(str_contains($refreshSql, '"--bg-shell":"#000010"'), 'migration should refresh primary navy shell color');
-assert_palette(str_contains($refreshSql, '"--bg-surface":"#00052d"'), 'migration should refresh surface navy color');
-assert_palette(str_contains($refreshSql, '"--bg-action":"#1582bf"'), 'migration should refresh cyan button color');
-assert_palette(str_contains($refreshSql, '"--border-subtle":"#03275a"'), 'migration should refresh border color');
+assert_palette(str_contains($refreshSql, '"--color-primary-navy":"#000010"'), 'migration should refresh primary navy color');
+assert_palette(str_contains($refreshSql, '"--color-surface-navy":"#00052d"'), 'migration should refresh surface navy color');
+assert_palette(str_contains($refreshSql, '"--color-cyan-primary":"#1582bf"'), 'migration should refresh cyan primary color');
+assert_palette(str_contains($refreshSql, '"--color-border":"#03275a"'), 'migration should refresh border color');
+assert_palette(str_contains($refreshSql, "WHERE id = 'light' AND is_system = 1"), 'migration should refresh light system theme too');
 
 $tenantMigrations = videochat_sqlite_tenant_migrations();
 assert_palette(isset($tenantMigrations[43]), 'tenant migrations should include a corrective styleguide palette refresh');

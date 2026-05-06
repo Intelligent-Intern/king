@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import { fetchBackend } from '../../support/backendFetch';
+import { normalizeStyleguideThemeColors } from './styleguidePalette.js';
 
 const DEFAULT_LOGO = '/assets/orgas/kingrt/logo.svg';
 const THEME_STORAGE_KEY = 'ii_videocall_v1_workspace_appearance';
@@ -26,7 +27,7 @@ function normalizeTheme(theme) {
   const payload = theme && typeof theme === 'object' ? theme : {};
   const id = String(payload.id || '').trim();
   if (id === '') return null;
-  const colors = payload.colors && typeof payload.colors === 'object' ? payload.colors : {};
+  const colors = normalizeStyleguideThemeColors(payload.colors, {});
   return {
     id,
     label: String(payload.label || id).trim() || id,
