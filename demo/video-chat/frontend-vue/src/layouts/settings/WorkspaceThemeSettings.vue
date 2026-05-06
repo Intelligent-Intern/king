@@ -162,6 +162,7 @@
               class="settings-theme-live-preview"
               :colors="editor.colors"
               :sidebar-logo-src="sidebarLogoPreview"
+              interactive
             />
           </section>
         </section>

@@ -44,6 +44,12 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/theme-preview-sandbox',
+    name: 'theme-preview-sandbox',
+    component: () => import('../layouts/settings/WorkspaceThemePreviewRoute.vue'),
+    meta: { public: true },
+  },
+  {
     path: '/',
     component: () => import('../layouts/WorkspaceShell.vue'),
     meta: { requiresAuth: true },
