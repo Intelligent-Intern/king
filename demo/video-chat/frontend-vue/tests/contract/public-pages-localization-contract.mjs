@@ -53,9 +53,12 @@ const routerSource = await readFile(path.join(root, 'src/http/router.ts'), 'utf8
 const i18nRuntimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
 const appointmentApiSource = await readFile(path.join(root, 'src/domain/calls/appointment/appointmentCalendarApi.js'), 'utf8');
 const appointmentBookingModalSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentBookingModal.vue'), 'utf8');
+const appointmentBookingModalCssSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentBookingModal.css'), 'utf8');
 const joinViewSource = await readFile(path.join(root, 'src/domain/calls/access/JoinView.vue'), 'utf8');
 const sessionSource = await readFile(path.join(root, 'src/domain/auth/session.ts'), 'utf8');
 const englishMessagesSource = await readFile(path.join(root, 'src/modules/localization/englishMessages.js'), 'utf8');
+const publicMessagesSource = await readFile(path.join(root, 'src/modules/localization/publicMessages.js'), 'utf8');
+const fallbackMessagesSource = `${englishMessagesSource}\n${publicMessagesSource}`;
 assert.match(routerSource, /applyPublicRouteLocale\(to\)/, 'public routes must resolve locale before rendering');
 assert.match(routerSource, /public:\s*true,\s*i18nNamespaces:\s*\['public'\]/, 'public call routes must declare public i18n namespace');
 assert.match(routerSource, /public:\s*true[\s\S]*ensureI18nResources/, 'public route guard must load translations without requiring auth');
@@ -69,8 +72,14 @@ assert.match(appointmentBookingModalSource, /locale:\s*activeLocale\.value/, 'pu
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('locale',\s*locale\)/, 'FullCalendar must react to public locale changes');
 assert.match(appointmentBookingModalSource, /direction:\s*activeDirection\.value/, 'FullCalendar must initialize with active public text direction');
 assert.match(appointmentBookingModalSource, /calendarInstance\?\.setOption\('direction',\s*direction\)/, 'FullCalendar must react to public direction changes');
-assert.match(appointmentBookingModalSource, /@media \(max-width: 900px\)[\s\S]*?\.appointment-booking-grid\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;/, 'mobile public booking must stack calendar and form instead of letting grid children overlap');
-assert.match(appointmentBookingModalSource, /@media \(max-width: 900px\)[\s\S]*?\.appointment-booking-form\s*\{[\s\S]*?overflow:\s*visible;/, 'mobile public booking must let the modal body own scrolling so the calendar cannot overlay the form');
+assert.match(appointmentBookingModalSource, /v-else-if="state\.isMobileBooking" class="appointment-mobile-flow"/, 'mobile public booking must use a dedicated mobile flow instead of the dense calendar grid');
+assert.match(appointmentBookingModalSource, /appointment-mobile-day-rail/, 'mobile public booking must expose a horizontally scrollable day picker');
+assert.match(appointmentBookingModalSource, /state\.mobileStep === 'slot'/, 'mobile public booking must start with slot selection');
+assert.match(appointmentBookingModalSource, /class="appointment-booking-form appointment-mobile-details-step"/, 'mobile public booking must move the guest form to a second step');
+assert.match(appointmentBookingModalSource, /\/assets\/orgas\/kingrt\/logo\.svg/, 'public booking mobile flow must use the KingRT logo asset');
+assert.match(appointmentBookingModalSource, /if \(state\.isMobileBooking\) return;/, 'FullCalendar must not initialize for the mobile slot picker');
+assert.match(appointmentBookingModalCssSource, /@media \(max-width: 900px\)[\s\S]*?\.is-mobile-booking-flow :deep\(\.calls-modal-header\)\s*\{[\s\S]*?display:\s*none;/, 'mobile public booking must hide the modal chrome header and use the branded mobile header');
+assert.match(appointmentBookingModalCssSource, /\.appointment-mobile-day-rail\s*\{[\s\S]*?overflow-x:\s*auto;/, 'mobile public booking day picker must scroll horizontally');
 assert.match(appointmentApiSource, /localizedApiErrorMessage\(payload,\s*fallback\)/, 'public appointment API errors must resolve through stable codes');
 assert.doesNotMatch(appointmentApiSource, /payload\?\.error\?\.message/, 'public appointment API must not display backend English error messages directly');
 assert.match(joinViewSource, /localizedApiErrorMessage\(payload,\s*t\('public\.join\.resolve_failed'\)\)/, 'public join access errors must resolve through stable codes');
@@ -87,7 +96,7 @@ for (const key of [
   'public.join.access_invalid',
   'public.join.resolve_failed',
 ]) {
-  assert.match(englishMessagesSource, new RegExp(`'${key}'`), `${key} must have an English fallback`);
+  assert.match(fallbackMessagesSource, new RegExp(`'${key}'`), `${key} must have an English fallback`);
 }
 
 console.log('[public-pages-localization-contract] PASS');
