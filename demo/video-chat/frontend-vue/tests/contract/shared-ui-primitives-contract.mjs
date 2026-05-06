@@ -28,6 +28,7 @@ try {
   const chatArchive = readSource('src/domain/calls/components/ChatArchiveModal.vue');
   const adminUserEditor = readSource('src/modules/users/pages/components/UserEditorModal.vue');
   const adminUsers = readSource('src/modules/users/pages/admin/UsersView.vue');
+  const shellStyles = readSource('src/styles/shell.css');
 
   assert.match(callTable, /import AppIconButton from '..\/..\/..\/components\/AppIconButton\.vue';/, 'call table actions must use the shared icon button');
   assert.match(callTable, /<table class="calls-list-table"/, 'call table markup must live in one shared component');
@@ -49,6 +50,9 @@ try {
   assert.match(adminUserEditor, /<AppSidePanelShell/, 'admin user editor must use the shared CRUD side panel shell');
   assert.doesNotMatch(adminUserEditor, /<AppModalShell/, 'admin user editor must not open as a centered modal');
   assert.match(adminUsers, /<AdminPageFrame/, 'admin user management must stay on the shared admin page frame');
+  assert.match(shellStyles, /\.nav-link\s*\{[\s\S]*?transition:\s*background-color 70ms linear,\s*color 70ms linear;/, 'primary navigation hover must stay responsive');
+  assert.match(shellStyles, /\.nav-sublink\s*\{[\s\S]*?transition:\s*background-color 70ms linear,\s*color 70ms linear;/, 'submenu navigation hover must stay responsive');
+  assert.doesNotMatch(shellStyles, /\.nav-(?:sub)?link\s*\{[\s\S]*?transition:\s*background 1[2-9]0ms/, 'navigation links must not use sluggish background shorthand transitions');
 
   process.stdout.write('[shared-ui-primitives-contract] PASS\n');
 } catch (error) {

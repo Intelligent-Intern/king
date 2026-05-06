@@ -274,7 +274,7 @@
   font-size: 13px;
   font-weight: 600;
   border-radius: 6px;
-  transition: background 160ms ease, color 160ms ease;
+  transition: background-color 70ms linear, color 70ms linear;
 }
 
 .nav-link img {
@@ -357,7 +357,7 @@
   text-decoration: none;
   display: flex;
   align-items: center;
-  transition: background 160ms ease, color 160ms ease;
+  transition: background-color 70ms linear, color 70ms linear;
 }
 
 .nav-sublink:hover {
