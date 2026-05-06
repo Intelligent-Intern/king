@@ -153,13 +153,15 @@ export class SFUClient {
     this.autoSubscribe = options.autoSubscribe !== false
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
-      this.reportClientDiagnostic({
+      reportClientDiagnostic({
         category: 'media',
         level: change.current === 'lost' ? 'error' : (change.current === 'degraded' ? 'warning' : 'info'),
         eventType: 'sfu_carrier_state_changed',
         code: 'sfu_carrier_state_changed',
         message: `SFU carrier state changed from ${change.previous} to ${change.current}.`,
+        roomId: this.roomId,
         payload: {
+          room_id: this.roomId,
           lane: 'ops',
           carrier_state: change.current,
           previous_carrier_state: change.previous,
@@ -444,13 +446,15 @@ export class SFUClient {
     this.lastInvalidBinaryEnvelopeDiagnosticAtMs = nowMs
     const bytes = new Uint8Array(data || new ArrayBuffer(0))
     const prefix = Array.from(bytes.subarray(0, 8)).map((value) => value.toString(16).padStart(2, '0')).join('')
-    this.reportClientDiagnostic({
+    reportClientDiagnostic({
       category: 'media',
       level: 'warning',
       eventType: 'sfu_binary_frame_rejected',
       code: 'sfu_binary_frame_rejected',
       message: 'SFU binary media frame could not be decoded and was dropped.',
+      roomId: this.roomId,
       payload: {
+        room_id: this.roomId,
         lane: 'data',
         byte_length: bytes.byteLength,
         prefix_hex: prefix,

@@ -118,6 +118,7 @@ try {
   requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunks are diagnostically rejected');
   requireContains(sfuClient, "ws.binaryType = 'arraybuffer'", 'SFU websocket receives binary media envelopes');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'inbound media uses binary envelope decode');
+  assert.ok(!sfuClient.includes('this.reportClientDiagnostic('), 'SFU client diagnostics must call the imported reporter, not a missing instance method');
   requireContains(framePayload, "export const SFU_BINARY_FRAME_MAGIC = 'KSFB'", 'binary frame magic');
   requireContains(framePayload, 'export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2', 'binary frame layout envelope version');
   requireContains(framePayload, 'encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFramePayload)', 'binary frame envelope encoder');
