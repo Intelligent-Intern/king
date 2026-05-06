@@ -456,6 +456,124 @@ Observability and operations:
 - App health by organization/app version.
 - Export job latency/failure.
 
+CAP-01 Architecture Inventory, 2026-05-07:
+- Existing Extension anchors:
+  - `extension/include/semantic_dns/semantic_dns.h`
+    - current service types include `KING_SERVICE_TYPE_MCP_AGENT` and
+      `KING_SERVICE_TYPE_MOTHER_NODE`.
+    - current public functions include `king_semantic_dns_register_service`,
+      `king_semantic_dns_discover_service`, and
+      `king_semantic_dns_register_mother_node`.
+  - `extension/src/core/introspection/semantic_dns/service_registry/register.inc`
+    owns Semantic-DNS service registration behavior.
+  - `extension/src/core/introspection/semantic_dns/discovery.inc` owns
+    Semantic-DNS service discovery behavior.
+  - `extension/src/core/introspection/semantic_dns/mother_nodes.inc` owns
+    mother-node registration behavior.
+  - `extension/include/mcp/mcp.h` and `extension/src/php_king/mcp.inc` own the
+    native MCP request/upload/download surface used by Call Apps metadata
+    discovery.
+- Existing backend anchors:
+  - `demo/video-chat/backend-king-php/domain/marketplace/call_app_marketplace.php`
+    owns the current legacy admin Call App catalog CRUD.
+  - `demo/video-chat/backend-king-php/http/module_marketplace.php` exposes the
+    current `/api/admin/marketplace/apps` route boundary.
+  - `demo/video-chat/backend-king-php/support/database_migrations.php` migration
+    `0019_call_app_marketplace` owns the current legacy `call_apps` table.
+  - `demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php`
+    owns room snapshots that must later include active Call App session state.
+  - `demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php`
+    owns websocket command routing that must later include Call App session,
+    grant, presence, and CRDT events.
+  - `demo/video-chat/backend-king-php/domain/tenancy/permission_grants.php` owns
+    resource grant evaluation for organization/app/call-session permissions.
+- Existing frontend anchors:
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/descriptor.js` owns
+    the Administration Marketplace navigation and action metadata.
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceView.vue`
+    owns the current admin marketplace catalog surface.
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/pages/adminMarketplaceApi.ts`
+    owns current marketplace API calls.
+  - `demo/video-chat/frontend-vue/src/modules/calls/descriptor.js` owns
+    video-call module permissions.
+  - `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/**`
+    must receive new focused Call App helpers. `CallWorkspaceView.vue` must not
+    grow with Call App logic.
+- New source ownership to create in later tickets:
+  - `demo/call-app/<app-key>/` owns installable demo Call App packages.
+  - `demo/call-app/whiteboard/` owns the first iframe app, its manifest, MCP
+    descriptor, CRDT schema, health descriptor, and launch entrypoint.
+  - `demo/video-chat/backend-king-php/domain/call_apps/**` owns catalog
+    discovery, organization entitlements/installations, call app sessions,
+    participant grants, iframe launch tokens, CRDT persistence/replay, and
+    export jobs.
+  - `demo/video-chat/backend-king-php/http/module_call_apps.php` owns new
+    user/organization/call-scoped Call App APIs.
+  - `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/callApps/**`
+    owns the video-call Call App host, sidebar browser, permission panel, iframe
+    bridge, and CRDT bridge.
+
+CAP-01 Capability Contract:
+- Marketplace and discovery:
+  - `call_apps.discover`
+  - `call_apps.marketplace.order`
+  - `call_apps.marketplace.install`
+  - `call_apps.marketplace.disable`
+- Call session lifecycle:
+  - `call_apps.call.attach`
+  - `call_apps.call.remove`
+  - `call_apps.call.view`
+- Participant permissions:
+  - `call_apps.permissions.manage`
+  - `call_apps.permissions.use`
+  - `call_apps.permissions.revoke`
+- Iframe launch:
+  - `call_apps.launch`
+  - `call_apps.launch.validate`
+- CRDT and presence:
+  - `call_apps.crdt.read`
+  - `call_apps.crdt.append`
+  - `call_apps.crdt.replay`
+  - `call_apps.presence.publish`
+- Export:
+  - `call_apps.export.request`
+  - `call_apps.export.download`
+
+CAP-01 Route Boundary Contract:
+- Existing legacy admin catalog:
+  - `GET /api/admin/marketplace/apps`
+  - `POST /api/admin/marketplace/apps`
+  - `GET /api/admin/marketplace/apps/{app_id}`
+  - `PATCH /api/admin/marketplace/apps/{app_id}`
+  - `DELETE /api/admin/marketplace/apps/{app_id}`
+- New organization-facing marketplace/discovery APIs:
+  - `GET /api/marketplace/call-apps`
+  - `GET /api/marketplace/call-apps/{app_key}`
+  - `POST /api/marketplace/call-apps/{app_key}/orders`
+  - `POST /api/marketplace/call-apps/{app_key}/installations`
+  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
+- New call-scoped app APIs:
+  - `GET /api/calls/{call_id}/call-apps/available`
+  - `GET /api/calls/{call_id}/call-app-sessions`
+  - `POST /api/calls/{call_id}/call-app-sessions`
+  - `PATCH /api/call-app-sessions/{session_id}`
+  - `DELETE /api/call-app-sessions/{session_id}`
+- New app participant permission APIs:
+  - `GET /api/call-app-sessions/{session_id}/participant-grants`
+  - `PATCH /api/call-app-sessions/{session_id}/participant-grants`
+- New iframe launch APIs:
+  - `POST /api/call-app-sessions/{session_id}/launch-token`
+  - `POST /api/call-app-sessions/{session_id}/launch-token/validate`
+- New CRDT APIs:
+  - `GET /api/call-app-sessions/{session_id}/crdt/bootstrap`
+  - `GET /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/snapshots`
+- New export APIs:
+  - `POST /api/call-app-sessions/{session_id}/exports`
+  - `GET /api/call-app-exports/{job_id}`
+  - `GET /api/call-app-exports/{job_id}/download`
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -474,7 +592,7 @@ Acceptance criteria:
 - CRDT document ops are persisted/replayed through a King envelope.
 
 Tickets:
-- [ ] CAP-01 Architecture inventory and contracts
+- [x] CAP-01 Architecture inventory and contracts
   - Audit existing Semantic DNS, MCP, Marketplace, module descriptors, video-call
     room-state, and permission-grant surfaces.
   - Produce exact source ownership for backend, frontend, extension, and
