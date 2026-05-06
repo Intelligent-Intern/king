@@ -68,14 +68,15 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
 
     const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
+    const isExclusionBackdrop = backdrop === 'exclusion';
     const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
     const baseBlurLevel = Math.max(0, Math.min(4, Math.round(toFiniteNumber(callMediaPrefs.backgroundBlurStrength, 2))));
-    const blurStepPx = [1, 2, 3, 4, 5];
+    const blurStepPx = [8, 12, 18, 26, 34];
     let blurPx = blurStepPx[baseBlurLevel] ?? 3;
     if (backdrop === 'blur9') {
-      blurPx = Math.round(blurPx * 1.35);
+      blurPx = Math.round(blurPx * 1.55);
     }
-    blurPx = Math.max(1, Math.min(12, blurPx));
+    blurPx = Math.max(1, Math.min(64, blurPx));
 
     let detectIntervalMs = 150;
     if (qualityProfile === 'quality') {
@@ -108,7 +109,8 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     return {
       mode,
       blurPx,
-      mattePreset: backdrop === 'blur9' ? 'hard_blur' : 'weak_blur',
+      backgroundColor: isExclusionBackdrop ? '#061a4a' : '',
+      mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),
       detectIntervalMs,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',

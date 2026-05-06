@@ -12,7 +12,7 @@
     "test:contract:native-webrtc": "node tests/contract/native-webrtc-negotiation-contract.mjs",
     "test:contract:participant-roster": "node tests/contract/participant-roster-stability-contract.mjs",
     "test:contract:chat-attachments": "node tests/contract/chat-attachment-upload-timeout-contract.mjs",
-    "test:contract:background-filter": "node tests/contract/background-filter-mask-contract.mjs && node tests/contract/background-king-wasm-contract.mjs",
+    "test:contract:background-filter": "node tests/contract/background-filter-mask-contract.mjs && node tests/contract/background-king-wasm-contract.mjs && node tests/contract/background-segmentation-harness-contract.mjs && node tests/contract/background-sinet-defaults-contract.mjs && node tests/contract/background-blue-selector-contract.mjs",
     "test:contract:admin-owner-rights": "node tests/contract/admin-owner-rights-contract.mjs",
     "test:contract:user-dashboard-participants": "node tests/contract/user-dashboard-participants-contract.mjs",
     "test:contract:call-compose-room-field": "node tests/contract/call-compose-room-field-contract.mjs",
@@ -52,6 +52,7 @@
     "@fullcalendar/daygrid": "^6.1.20",
     "@fullcalendar/interaction": "^6.1.20",
     "@fullcalendar/timegrid": "^6.1.20",
+    "onnxruntime-web": "^1.26.0-dev.20260416-b7804b056c",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },

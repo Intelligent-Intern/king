@@ -14,6 +14,11 @@ function readUtf8(file) {
 try {
   const source = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.ts'));
   const controller = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/controller.ts'));
+  const localOrchestration = readUtf8(path.join(frontendRoot, 'src/domain/realtime/local/mediaOrchestration.ts'));
+  const joinPreview = readUtf8(path.join(frontendRoot, 'src/domain/calls/access/joinPreview.ts'));
+  const dashboardEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/dashboard/enterCall.ts'));
+  const adminEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/admin/enterCall.ts'));
+  const harness = readUtf8(path.join(frontendRoot, 'tests/standalone/king-background-segmentation-harness.ts'));
   assert.ok(source.includes('const DEFAULT_INNER_CONTRACT_PX = 16;'), 'background filter must contract the matte around 16px inward from the detected contour');
   assert.ok(source.includes('const DEFAULT_INNER_FEATHER_PX = 24;'), 'background filter must keep the feathered edge half as wide for a faster blur falloff');
   assert.ok(source.includes("{ progress: 0.0, alpha: 0.05 }"), 'background filter must start the inner feather ramp near 5 percent alpha');
@@ -31,6 +36,21 @@ try {
   assert.ok(source.includes('const ready = new Promise((resolve) => {'), 'background filter stream must expose a readiness promise');
   assert.ok(source.includes('const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));'), 'background filter stream must time out readiness if segmentation is slow');
   assert.ok(source.includes('ctx.filter = `blur(${blurPx}px)`;'), 'background filter stream must keep the frame blurred while a fresh matte is still warming up');
+  assert.ok(source.includes('if (!backgroundImage && !backgroundColor) {'), 'solid/image backgrounds must not draw raw or blurred camera frames while a fresh matte is still warming up');
+  assert.ok(harness.includes("preset === 'weak_blur' ? 'blur(14px)' : 'blur(32px)'"), 'standalone harness must use stronger thin/thick blur previews');
+  for (const [label, file] of [
+    ['local orchestration', localOrchestration],
+    ['join preview', joinPreview],
+    ['dashboard enter preview', dashboardEnter],
+    ['admin enter preview', adminEnter],
+  ]) {
+    assert.ok(file.includes('const blurStepPx = [8, 12, 18, 26, 34];'), `${label} must use stronger blur steps`);
+    assert.ok(file.includes('Math.round(blurPx * 1.55)'), `${label} must ramp thick blur above the thin blur levels`);
+    assert.ok(file.includes('Math.min(64, blurPx)'), `${label} must allow stronger blur cap`);
+    assert.ok(file.includes("const isExclusionBackdrop = backdrop === 'exclusion';"), `${label} must detect the solid blue exclusion backdrop`);
+    assert.ok(file.includes("backgroundColor: isExclusionBackdrop ? '#061a4a' : ''"), `${label} must pass the deep-blue replacement color`);
+    assert.ok(file.includes("mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur')"), `${label} must map exclusion to replace matte and keep blur presets`);
+  }
   assert.ok(!source.includes('ctx.filter = "none";\n      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);\n      ctx.restore();'), 'background filter stream must not fall back to raw video while blur presets switch');
   assert.ok(source.includes('ready,'), 'background filter stream handle must return the readiness promise');
   assert.ok(controller.includes('const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);'), 'background filter controller must gate blur-to-blur swaps on ready handoff');

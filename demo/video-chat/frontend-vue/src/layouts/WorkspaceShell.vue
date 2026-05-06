@@ -153,6 +153,17 @@
                 >
                   <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
                 </button>
+                <button
+                  class="call-left-blur-btn"
+                  :class="{ active: isBackgroundPresetActive('exclusion') }"
+                  type="button"
+                  :aria-pressed="isBackgroundPresetActive('exclusion')"
+                  aria-label="Blue background"
+                  title="Blue background"
+                  @click="applyBackgroundPreset('exclusion')"
+                >
+                  <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/background-blue.svg" alt="" />
+                </button>
               </div>
             </section>
 

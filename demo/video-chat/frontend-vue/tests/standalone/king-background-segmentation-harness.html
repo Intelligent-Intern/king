@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>King Background Segmentation Harness</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0b1018;
+        color: #e7edf7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #0b1018;
+      }
+
+      main {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-height: 100vh;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        border-bottom: 1px solid #263241;
+        background: #101722;
+      }
+
+      .toolbar strong {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .toolbar button,
+      .toolbar select,
+      .toolbar input {
+        height: 34px;
+        border: 1px solid #3a4b61;
+        border-radius: 6px;
+        background: #172130;
+        color: #e7edf7;
+        font: inherit;
+      }
+
+      .toolbar button {
+        padding: 0 12px;
+        cursor: pointer;
+      }
+
+      .toolbar select {
+        padding: 0 10px;
+      }
+
+      .toolbar input {
+        width: 92px;
+        padding: 0 8px;
+      }
+
+      .status {
+        margin-left: auto;
+        color: #aebdd0;
+        font-size: 13px;
+      }
+
+      .stage {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1px;
+        min-height: 0;
+        background: #263241;
+      }
+
+      .pane {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        min-width: 0;
+        min-height: 0;
+        background: #0d131d;
+      }
+
+      .pane h2 {
+        margin: 0;
+        padding: 10px 12px;
+        border-bottom: 1px solid #263241;
+        color: #cbd7e6;
+        font-size: 13px;
+        letter-spacing: 0;
+      }
+
+      .surface {
+        display: grid;
+        place-items: center;
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      video,
+      canvas {
+        width: min(100%, calc((100vh - 80px) * 16 / 9));
+        max-height: calc(100vh - 96px);
+        aspect-ratio: 16 / 9;
+        background: #05070a;
+        object-fit: contain;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="toolbar" aria-label="Segmentation controls">
+        <strong>King WASM segmentation</strong>
+        <button id="startButton" type="button">Start camera</button>
+        <label>
+          Model
+          <select id="modelSelect">
+            <option value="sinet">SINet fast</option>
+            <option value="king_wasm">King WASM bootstrap</option>
+          </select>
+        </label>
+        <label>
+          Device
+          <select id="deviceSelect">
+            <option value="wasm">WASM</option>
+            <option value="webgpu">WebGPU</option>
+          </select>
+        </label>
+        <label>
+          Dtype
+          <select id="dtypeSelect">
+            <option value="float">SINet float</option>
+          </select>
+        </label>
+        <label>
+          Preset
+          <select id="presetSelect">
+            <option value="weak_blur">Thin blur</option>
+            <option value="hard_blur">Thick blur</option>
+            <option value="exclusion">Exclusion</option>
+          </select>
+        </label>
+        <label>
+          Width
+          <input id="modelWidthInput" type="number" min="96" max="960" step="16" value="256" />
+        </label>
+        <label>
+          Height
+          <input id="modelHeightInput" type="number" min="96" max="540" step="8" value="256" />
+        </label>
+        <label>
+          Gamma
+          <input id="alphaGammaInput" type="number" min="0.4" max="2.5" step="0.05" value="0.8" />
+        </label>
+        <label>
+          Contrast
+          <input id="maskContrastInput" type="number" min="0.25" max="4" step="0.05" value="0.75" />
+        </label>
+        <label>
+          Gaussian
+          <input id="averageRadiusInput" type="number" min="0" max="12" step="1" value="6" />
+        </label>
+        <label>
+          Rise
+          <input id="temporalRiseInput" type="number" min="0" max="1" step="0.05" value="0.7" />
+        </label>
+        <label>
+          Fall
+          <input id="temporalFallInput" type="number" min="0" max="1" step="0.05" value="0.6" />
+        </label>
+        <label>
+          Interval
+          <input id="intervalInput" type="number" min="0" max="1000" step="25" value="125" />
+        </label>
+        <span id="status" class="status">Idle</span>
+      </section>
+
+      <section class="stage">
+        <article class="pane">
+          <h2>Source</h2>
+          <div class="surface">
+            <video id="sourceVideo" muted playsinline></video>
+          </div>
+        </article>
+        <article class="pane">
+          <h2>Foreground Mask</h2>
+          <div class="surface">
+            <canvas id="maskCanvas" width="1280" height="720"></canvas>
+          </div>
+        </article>
+        <article class="pane">
+          <h2>Composited Blur</h2>
+          <div class="surface">
+            <canvas id="compositeCanvas" width="1280" height="720"></canvas>
+          </div>
+        </article>
+      </section>
+      <canvas id="sampleCanvas" class="hidden" width="256" height="144"></canvas>
+    </main>
+    <script type="module" src="./king-background-segmentation-harness.ts"></script>
+  </body>
+</html>

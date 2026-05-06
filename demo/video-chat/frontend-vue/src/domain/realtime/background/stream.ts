@@ -1,4 +1,4 @@
-import { createKingWasmSegmentationBackend } from './backendKingWasm';
+import { createSinetWasmSegmentationBackend } from './backendSinetWasm';
 import { clamp01, lerp, smoothstep, toNumber } from './math';
 
 // Default matte shaping values for inner mask refinement.
@@ -376,7 +376,7 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const fps = processing.fps;
   const statsIntervalMs = Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3))));
   const onStats = typeof options.onStats === "function" ? options.onStats : null;
-  const blurPx = Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3))));
+  const blurPx = Math.max(1, Math.min(64, Math.round(toNumber(options.blurPx, 3))));
   const backgroundColor = String(options.backgroundColor ?? "").trim();
   const backgroundImageUrl = String(options.backgroundImageUrl ?? "").trim();
   const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3)));
@@ -446,10 +446,8 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   }
   let segmentationBackend = null;
   try {
-    segmentationBackend = await createKingWasmSegmentationBackend({
+    segmentationBackend = await createSinetWasmSegmentationBackend({
       detectIntervalMs,
-      width: canvas.width,
-      height: canvas.height,
       mattePreset: options.mattePreset,
     });
   } catch {
@@ -622,10 +620,12 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
     } else {
       // Keep the whole frame blurred until the fresh matte is ready instead of
       // briefly exposing the raw camera frame during a blur-strength handoff.
-      ctx.save();
-      ctx.filter = `blur(${blurPx}px)`;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+      if (!backgroundImage && !backgroundColor) {
+        ctx.save();
+        ctx.filter = `blur(${blurPx}px)`;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
     }
     markReady();
     frameCount += 1;

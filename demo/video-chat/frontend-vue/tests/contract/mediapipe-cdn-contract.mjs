@@ -23,8 +23,8 @@ try {
   const selector = readUtf8('src/domain/realtime/background/backendSelector.ts');
   const packageJson = readUtf8('package.json');
 
-  assert.ok(stream.includes("createKingWasmSegmentationBackend"), 'background stream must use King WASM');
-  assert.ok(selector.includes("backend: 'king_wasm'"), 'backend selector must report King WASM');
+  assert.ok(stream.includes("createSinetWasmSegmentationBackend"), 'background stream must use SINet WASM');
+  assert.ok(selector.includes("backend: 'sinet_wasm'"), 'backend selector must report SINet WASM');
   assert.ok(!stream.includes('MediaPipe'), 'production background stream must not reference MediaPipe');
   assert.ok(!stream.includes('TensorFlow'), 'production background stream must not reference TensorFlow');
   assert.ok(!stream.includes('tfjs'), 'production background stream must not reference TFJS');
