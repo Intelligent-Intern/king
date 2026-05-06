@@ -46,6 +46,8 @@ $zeroWriteSleepMicros = max(1000, (int) (getenv('VIDEOCHAT_EDGE_ZERO_WRITE_SLEEP
 $readStallTimeout = max(1.0, (float) (getenv('VIDEOCHAT_EDGE_READ_STALL_TIMEOUT_SECONDS') ?: (string) $writeStallTimeout));
 $maxChildren = (int) (getenv('VIDEOCHAT_EDGE_MAX_CHILDREN') ?: '512');
 $assetVersion = trim((string) (getenv('VIDEOCHAT_ASSET_VERSION') ?: ''));
+$backgroundUploadMaxBodyBytes = max(1024 * 1024, (int) (getenv('VIDEOCHAT_EDGE_BACKGROUND_UPLOAD_MAX_BODY_BYTES') ?: '16777216'));
+$backgroundUploadBodyTimeout = max(10, (int) (getenv('VIDEOCHAT_EDGE_BACKGROUND_UPLOAD_BODY_TIMEOUT_SECONDS') ?: '300'));
 
 if ($httpPort < 1 || $httpPort > 65535 || $httpsPort < 1 || $httpsPort > 65535) {
     fwrite(STDERR, "[videochat-edge] invalid listener port configuration\n");
@@ -519,7 +521,7 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     return $requestLine . "\r\n" . implode("\r\n", $filtered) . "\r\n\r\n" . $body;
 };
 
-$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeChunk, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
+$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeChunk, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog, $backgroundUploadMaxBodyBytes, $backgroundUploadBodyTimeout): void {
     $isBackgroundUpload = $isBackgroundUploadRequest($request);
     $uploadTraceId = $isBackgroundUpload ? $uploadTraceIdFromRequest($request) : '';
     $headParts = explode("\r\n\r\n", $head, 2);
@@ -531,12 +533,111 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     $proxyStartedAt = microtime(true);
     [$upstreamHost, $upstreamPort] = $parseUpstream($upstream);
     if ($isBackgroundUpload) {
+        $contentLength = (int) trim((string) ($request['headers']['content-length'] ?? '0'));
         $edgeUploadLog($uploadTraceId, 'proxy_connect_started', [
             'upstream' => $upstream,
             'content_length' => (string) (($request['headers']['content-length'] ?? '')),
             'transfer_encoding' => (string) (($request['headers']['transfer-encoding'] ?? '')),
             'head_bytes' => strlen($head),
             'initial_body_bytes' => $initialBodyBytes,
+        ]);
+        if ($contentLength <= 0 || $contentLength > $backgroundUploadMaxBodyBytes) {
+            $edgeUploadLog($uploadTraceId, 'proxy_rejected_upload_body_size', [
+                'content_length' => $contentLength,
+                'max_body_bytes' => $backgroundUploadMaxBodyBytes,
+            ]);
+            $payload = json_encode([
+                'status' => 'error',
+                'error' => [
+                    'code' => 'workspace_background_upload_failed',
+                    'message' => 'Background image upload request body is too large.',
+                    'details' => [
+                        'reason' => $contentLength <= 0 ? 'invalid_content_length' : 'request_body_too_large',
+                        'trace_id' => $uploadTraceId,
+                        'body_bytes' => $contentLength,
+                        'max_body_bytes' => $backgroundUploadMaxBodyBytes,
+                    ],
+                ],
+                'time' => gmdate('c'),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $headers = $proxyCorsHeaders();
+            $headers['Content-Type'] = 'application/json; charset=utf-8';
+            $headers['X-Upload-Trace-Id'] = $uploadTraceId;
+            $writeResponse($client, $contentLength <= 0 ? 411 : 413, $contentLength <= 0 ? 'Length Required' : 'Payload Too Large', $headers, is_string($payload) ? $payload : '{}');
+            return;
+        }
+
+        $body = (string) ($headParts[1] ?? '');
+        if (strlen($body) > $contentLength) {
+            $body = substr($body, 0, $contentLength);
+        }
+        $remainingBodyBytes = max(0, $contentLength - strlen($body));
+        $edgeUploadLog($uploadTraceId, 'proxy_body_read_started', [
+            'content_length' => $contentLength,
+            'initial_body_bytes' => strlen($body),
+            'remaining_body_bytes' => $remainingBodyBytes,
+            'max_body_bytes' => $backgroundUploadMaxBodyBytes,
+        ]);
+        $bodyReadDeadline = microtime(true) + $backgroundUploadBodyTimeout;
+        $lastBodyReadProgress = microtime(true);
+        while ($remainingBodyBytes > 0 && microtime(true) < $bodyReadDeadline) {
+            $read = [$client];
+            $write = null;
+            $except = null;
+            $ready = @stream_select($read, $write, $except, 1, 0);
+            if ($ready === false) {
+                break;
+            }
+            if ($ready === 0) {
+                if ((microtime(true) - $lastBodyReadProgress) >= $readStallTimeout) {
+                    break;
+                }
+                continue;
+            }
+            $chunk = @fread($client, min(65536, $remainingBodyBytes));
+            if ($chunk === false || $chunk === '') {
+                if (feof($client) || (microtime(true) - $lastBodyReadProgress) >= $readStallTimeout) {
+                    break;
+                }
+                usleep($zeroWriteSleepMicros);
+                continue;
+            }
+            $body .= $chunk;
+            $clientBodyBytesSeen = strlen($body);
+            $remainingBodyBytes = max(0, $contentLength - strlen($body));
+            $lastBodyReadProgress = microtime(true);
+        }
+        if (strlen($body) !== $contentLength) {
+            $edgeUploadLog($uploadTraceId, 'proxy_body_read_failed', [
+                'content_length' => $contentLength,
+                'client_body_bytes_seen' => strlen($body),
+                'remaining_body_bytes' => max(0, $contentLength - strlen($body)),
+                'duration_ms' => (int) round((microtime(true) - $proxyStartedAt) * 1000),
+            ]);
+            $payload = json_encode([
+                'status' => 'error',
+                'error' => [
+                    'code' => 'workspace_background_upload_failed',
+                    'message' => 'Background image upload body could not be read completely.',
+                    'details' => [
+                        'reason' => 'request_body_incomplete',
+                        'trace_id' => $uploadTraceId,
+                        'body_bytes' => strlen($body),
+                        'content_length' => $contentLength,
+                    ],
+                ],
+                'time' => gmdate('c'),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $headers = $proxyCorsHeaders();
+            $headers['Content-Type'] = 'application/json; charset=utf-8';
+            $headers['X-Upload-Trace-Id'] = $uploadTraceId;
+            $writeResponse($client, 408, 'Request Timeout', $headers, is_string($payload) ? $payload : '{}');
+            return;
+        }
+        $edgeUploadLog($uploadTraceId, 'proxy_body_read_complete', [
+            'content_length' => $contentLength,
+            'client_body_bytes_seen' => strlen($body),
+            'duration_ms' => (int) round((microtime(true) - $proxyStartedAt) * 1000),
         ]);
     }
     $upstreamStream = @stream_socket_client(
@@ -562,17 +663,20 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     stream_set_blocking($client, false);
     stream_set_blocking($upstreamStream, false);
 
-    $toUpstream = $injectForwardHeaders($head, $request);
+    $toUpstream = $isBackgroundUpload
+        ? $injectForwardHeaders((string) ($headParts[0] ?? '') . "\r\n\r\n", $request) . $body
+        : $injectForwardHeaders($head, $request);
     $toClient = '';
     $clientOpen = true;
     $upstreamOpen = true;
     $isWebSocket = $request['upgrade'] === 'websocket';
-    $idleTimeout = $isWebSocket ? $wsIdleTimeout : $httpIdleTimeout;
+    $idleTimeout = $isWebSocket ? $wsIdleTimeout : ($isBackgroundUpload ? $backgroundUploadBodyTimeout : $httpIdleTimeout);
     $lastActivity = microtime(true);
     $lastClientReadProgress = $lastActivity;
     $lastUpstreamReadProgress = $lastActivity;
     $lastClientWriteProgress = $lastActivity;
     $lastUpstreamWriteProgress = $lastActivity;
+    $backgroundUploadRequestWrittenLogged = false;
     $closeWebSocketTunnel = static function () use (&$clientOpen, &$upstreamOpen, &$toClient, &$toUpstream): void {
         // WebSocket tunnels cannot stay half-open: otherwise browser requests
         // remain pending while the closed upstream socket sits in CLOSE_WAIT.
@@ -593,6 +697,9 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         }
         if ($isWebSocket && !$clientOpen && $toUpstream === '') {
             $upstreamOpen = false;
+        }
+        if (!$isWebSocket && !$upstreamOpen && $toClient === '' && $toUpstream === '') {
+            break;
         }
         if (!$clientOpen) {
             $toClient = '';
@@ -746,7 +853,8 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
 
         foreach ($write as $stream) {
             if ($stream === $upstreamStream && $toUpstream !== '') {
-                $result = $writeChunk($upstreamStream, $toUpstream);
+                $writeBuffer = $isBackgroundUpload ? substr($toUpstream, 0, 65536) : $toUpstream;
+                $result = $writeChunk($upstreamStream, $writeBuffer);
                 if (!$result['ok']) {
                     if ($isBackgroundUpload) {
                         $edgeUploadLog($uploadTraceId, 'proxy_upstream_write_failed', [
@@ -780,6 +888,13 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                 $toUpstream = substr($toUpstream, $written);
                 if ($isBackgroundUpload) {
                     $upstreamBytesWritten += $written;
+                    if (!$backgroundUploadRequestWrittenLogged && $toUpstream === '') {
+                        $backgroundUploadRequestWrittenLogged = true;
+                        $edgeUploadLog($uploadTraceId, 'proxy_upstream_request_written', [
+                            'client_body_bytes_seen' => $clientBodyBytesSeen,
+                            'upstream_bytes_written' => $upstreamBytesWritten,
+                        ]);
+                    }
                 }
                 $lastActivity = microtime(true);
                 $lastUpstreamWriteProgress = $lastActivity;
