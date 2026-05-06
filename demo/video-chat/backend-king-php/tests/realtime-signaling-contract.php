@@ -157,6 +157,83 @@ try {
         'signal id must stay stable across target connections'
     );
 
+    $tenantPresenceState = videochat_presence_state_init();
+    $tenantFrames = [];
+    $tenantSender = static function (mixed $socket, array $payload) use (&$tenantFrames): bool {
+        $key = is_scalar($socket) ? (string) $socket : 'unknown';
+        if (!isset($tenantFrames[$key]) || !is_array($tenantFrames[$key])) {
+            $tenantFrames[$key] = [];
+        }
+        $tenantFrames[$key][] = $payload;
+        return true;
+    };
+    $tenantSenderConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 501,
+            'display_name' => 'Tenant Caller',
+            'role' => 'admin',
+            'tenant' => ['id' => 42],
+        ],
+        'sess-tenant-sender',
+        'conn-tenant-sender',
+        'socket-tenant-sender',
+        'tenant-lobby'
+    );
+    $tenantSenderJoin = videochat_presence_join_room($tenantPresenceState, $tenantSenderConnection, 'tenant-lobby', $tenantSender);
+    $tenantSenderConnection = (array) ($tenantSenderJoin['connection'] ?? $tenantSenderConnection);
+    videochat_realtime_signaling_assert(
+        videochat_signaling_room_key_for_connection($tenantSenderConnection) === 'tenant:42:room:tenant-lobby',
+        'signaling room key helper should preserve tenant-scoped room keys'
+    );
+    $tenantTargetConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 502,
+            'display_name' => 'Tenant Target',
+            'role' => 'user',
+            'tenant' => ['id' => 42],
+        ],
+        'sess-tenant-target',
+        'conn-tenant-target',
+        'socket-tenant-target',
+        'tenant-lobby'
+    );
+    $tenantTargetJoin = videochat_presence_join_room($tenantPresenceState, $tenantTargetConnection, 'tenant-lobby', $tenantSender);
+    $tenantTargetConnection = (array) ($tenantTargetJoin['connection'] ?? $tenantTargetConnection);
+    $otherTenantTargetConnection = videochat_presence_connection_descriptor(
+        [
+            'id' => 502,
+            'display_name' => 'Other Tenant Target',
+            'role' => 'user',
+            'tenant' => ['id' => 43],
+        ],
+        'sess-other-tenant-target',
+        'conn-other-tenant-target',
+        'socket-other-tenant-target',
+        'tenant-lobby'
+    );
+    videochat_presence_join_room($tenantPresenceState, $otherTenantTargetConnection, 'tenant-lobby', $tenantSender);
+    $tenantFrames = [];
+    $decodedTenantOffer = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/offer',
+        'target_user_id' => 502,
+        'payload' => ['sdp' => 'tenant-offer-sdp'],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedTenantOffer['ok'] ?? false), 'tenant call/offer should decode');
+    $tenantOfferPublish = videochat_signaling_publish(
+        $tenantPresenceState,
+        $tenantSenderConnection,
+        $decodedTenantOffer,
+        $tenantSender,
+        1_780_300_123_500
+    );
+    videochat_realtime_signaling_assert((bool) ($tenantOfferPublish['ok'] ?? false), 'tenant-scoped offer publish should succeed');
+    videochat_realtime_signaling_assert((int) ($tenantOfferPublish['sent_count'] ?? 0) === 1, 'tenant-scoped offer should fanout only inside the sender tenant');
+    $tenantTargetFrame = videochat_realtime_signaling_last_frame($tenantFrames, 'socket-tenant-target');
+    $otherTenantTargetFrame = videochat_realtime_signaling_last_frame($tenantFrames, 'socket-other-tenant-target');
+    videochat_realtime_signaling_assert((string) ($tenantTargetFrame['type'] ?? '') === 'call/offer', 'tenant target should receive call/offer');
+    videochat_realtime_signaling_assert((string) ($tenantTargetFrame['room_id'] ?? '') === 'tenant-lobby', 'tenant signaling payload should keep public room id');
+    videochat_realtime_signaling_assert($otherTenantTargetFrame === [], 'tenant signaling must not leak to same public room in another tenant');
+
     $decodedAnswerAlias = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/answer',
         'targetUserId' => '100',
@@ -374,6 +451,42 @@ try {
         videochat_realtime_signaling_assert((int) ($brokerTargetFrame['target_user_id'] ?? 0) === 400, 'broker target_user_id mismatch');
         videochat_realtime_signaling_assert((string) (($brokerTargetFrame['payload'] ?? [])['kind'] ?? '') === 'webrtc_offer', 'broker payload kind mismatch');
         videochat_realtime_signaling_assert($lastBrokerEventId > 0, 'broker poll should advance last event id');
+        $tenantBrokerEvent = [
+            'type' => 'media-security/hello',
+            'room_id' => 'tenant-lobby',
+            'target_user_id' => 410,
+            'sender' => ['user_id' => 501],
+            'payload' => ['kind' => 'media_security_hello'],
+            'signal' => ['id' => 'signal-tenant-broker'],
+        ];
+        $tenantBrokerRoomKey = videochat_presence_room_key('tenant-lobby', 42);
+        videochat_realtime_signaling_assert(
+            videochat_signaling_broker_insert_event($brokerPdo, $tenantBrokerRoomKey, 410, $tenantBrokerEvent),
+            'signaling broker should accept tenant-scoped room keys'
+        );
+        $tenantBrokerFrames = [];
+        $tenantBrokerSender = static function (mixed $socket, array $payload) use (&$tenantBrokerFrames): bool {
+            $key = is_scalar($socket) ? (string) $socket : 'unknown';
+            if (!isset($tenantBrokerFrames[$key]) || !is_array($tenantBrokerFrames[$key])) {
+                $tenantBrokerFrames[$key] = [];
+            }
+            $tenantBrokerFrames[$key][] = $payload;
+            return true;
+        };
+        $lastTenantBrokerEventId = 0;
+        videochat_signaling_broker_poll($brokerPdo, 'socket-tenant-broker', $tenantBrokerRoomKey, 410, $lastTenantBrokerEventId, $tenantBrokerSender);
+        $tenantBrokerFrame = videochat_realtime_signaling_last_frame($tenantBrokerFrames, 'socket-tenant-broker');
+        videochat_realtime_signaling_assert((string) ($tenantBrokerFrame['type'] ?? '') === 'media-security/hello', 'tenant broker target should receive media-security signaling');
+        videochat_realtime_signaling_assert($lastTenantBrokerEventId > 0, 'tenant broker poll should advance last event id');
+        $plainTenantBrokerEventId = 0;
+        $plainTenantBrokerFrames = [];
+        $plainTenantBrokerSender = static function (mixed $socket, array $payload) use (&$plainTenantBrokerFrames): bool {
+            $key = is_scalar($socket) ? (string) $socket : 'unknown';
+            $plainTenantBrokerFrames[$key][] = $payload;
+            return true;
+        };
+        videochat_signaling_broker_poll($brokerPdo, 'socket-plain-tenant-broker', 'tenant-lobby', 410, $plainTenantBrokerEventId, $plainTenantBrokerSender);
+        videochat_realtime_signaling_assert($plainTenantBrokerFrames === [], 'signaling broker must not leak tenant-scoped events through the plain room id');
 
         $databasePath = sys_get_temp_dir() . '/videochat-signaling-db-target-' . bin2hex(random_bytes(6)) . '.sqlite';
         if (is_file($databasePath)) {
@@ -452,6 +565,10 @@ SQL
             }
         );
         videochat_realtime_signaling_assert((bool) ($dbBrokerPublish['ok'] ?? false), 'DB-admitted target should allow brokered media-security signaling before local presence is visible');
+        videochat_realtime_signaling_assert(
+            videochat_realtime_db_room_has_joined_user($openCallDatabase, $dbSenderConnection, videochat_presence_room_key('broker-call-room', 42), $standardUserId),
+            'DB-admitted target check should accept tenant-scoped room keys by resolving the public room id'
+        );
         $callPdo->prepare("UPDATE call_participants SET invite_state = 'pending', joined_at = NULL WHERE call_id = :call_id AND user_id = :user_id")
             ->execute([':call_id' => 'broker-call', ':user_id' => $standardUserId]);
         videochat_realtime_signaling_assert(

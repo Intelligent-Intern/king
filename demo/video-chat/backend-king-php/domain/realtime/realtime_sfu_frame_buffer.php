@@ -69,7 +69,7 @@ function videochat_sfu_frame_buffer_should_cleanup(string $roomId, int $nowMs): 
  */
 function videochat_sfu_frame_buffer_room_pressure(PDO $pdo, string $roomId, ?int $nowMs = null): array
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '') {
         return ['row_count' => 0, 'total_bytes' => 0, 'oldest_age_ms' => 0, 'newest_age_ms' => 0];
     }
@@ -104,7 +104,7 @@ SQL
 function videochat_sfu_cleanup_stale_frames(PDO $pdo, ?string $roomId = null): void
 {
     $cutoffMs = videochat_sfu_frame_buffer_cutoff_ms();
-    $normalizedRoomId = $roomId !== null ? videochat_presence_normalize_room_id($roomId, '') : '';
+    $normalizedRoomId = $roomId !== null ? videochat_presence_normalize_room_storage_key($roomId, '') : '';
     if ($normalizedRoomId !== '') {
         $statement = $pdo->prepare('DELETE FROM sfu_frames WHERE room_id = :room_id AND created_at_ms < :cutoff_ms');
         $statement->execute([
@@ -183,7 +183,7 @@ function videochat_sfu_frame_buffer_select_age_biased_eviction_rows(
  */
 function videochat_sfu_trim_frame_buffer_room(PDO $pdo, string $roomId): array
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '') {
         return [
             'evicted_rows' => 0,
@@ -289,7 +289,7 @@ SQL
 function videochat_sfu_insert_frame(PDO $pdo, string $roomId, string $publisherId, array $frame, ?string &$error = null): bool
 {
     $error = '';
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     $normalizedPublisherId = trim($publisherId);
     if ($normalizedRoomId === '' || $normalizedPublisherId === '') {
         $error = 'invalid_room_or_publisher';
@@ -298,7 +298,7 @@ function videochat_sfu_insert_frame(PDO $pdo, string $roomId, string $publisherI
 
     $storedFrame = videochat_sfu_frame_json_safe_for_live_relay($frame);
     $storedFrame['type'] = 'sfu/frame';
-    $storedFrame['room_id'] = $normalizedRoomId;
+    $storedFrame['room_id'] = videochat_presence_external_room_id_from_key($roomId, $normalizedRoomId);
     $storedFrame['publisher_id'] = (string) ($storedFrame['publisher_id'] ?? $normalizedPublisherId);
     $encoded = json_encode($storedFrame, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if (!is_string($encoded) || $encoded === '' || strlen($encoded) > videochat_sfu_frame_buffer_max_record_bytes($storedFrame)) {
@@ -348,7 +348,7 @@ function videochat_sfu_fetch_buffered_frames(
     int &$cursor,
     int $limit = 80
 ): array {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '') {
         return [];
     }

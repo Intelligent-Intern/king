@@ -96,7 +96,7 @@ function videochat_realtime_db_room_has_joined_user(
     string $roomId,
     int $targetUserId
 ): bool {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_external_room_id_from_key($roomId, '');
     $callId = videochat_realtime_normalize_call_id(
         (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
         ''

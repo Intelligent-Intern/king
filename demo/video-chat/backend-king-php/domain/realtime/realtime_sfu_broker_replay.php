@@ -90,7 +90,7 @@ function videochat_sfu_live_frame_relay_root(): string
 
 function videochat_sfu_live_frame_relay_room_dir(string $roomId): string
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '') {
         return '';
     }
@@ -174,7 +174,7 @@ function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs
 
 function videochat_sfu_live_frame_relay_publish(string $roomId, string $publisherId, array $frame): bool
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     $normalizedPublisherId = trim($publisherId);
     if ($normalizedRoomId === '' || $normalizedPublisherId === '') {
         return false;
