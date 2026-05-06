@@ -443,6 +443,7 @@ export function createLocalMediaOrchestrationHelpers({
     return {
       mode,
       blurPx,
+      mattePreset: backdrop === 'blur9' ? 'hard_blur' : 'weak_blur',
       detectIntervalMs,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
