@@ -13,8 +13,14 @@
         </button>
       </nav>
 
-      <div class="crud-relation-toolbar">
-        <label class="search-field search-field-main" :aria-label="t('governance.relation_picker.search')">
+      <form class="crud-relation-toolbar" @submit.prevent="submitRelationSearch">
+        <span class="crud-relation-count">
+          {{ t('governance.relation_picker.selected_count', { count: navigator.currentSelectionIds.value.length }) }}
+        </span>
+        <button v-if="canCreateDraft" class="btn" type="button" :disabled="draftSaving" @click="startCreateDraft">
+          {{ t('governance.relation_picker.create') }}
+        </button>
+        <label class="search-field search-field-main crud-relation-search-field" :aria-label="t('governance.relation_picker.search')">
           <input
             v-model.trim="navigator.query.value"
             class="input"
@@ -22,13 +28,14 @@
             :placeholder="t('governance.relation_picker.search')"
           />
         </label>
-        <span class="crud-relation-count">
-          {{ t('governance.relation_picker.selected_count', { count: navigator.currentSelectionIds.value.length }) }}
-        </span>
-        <button v-if="canCreateDraft" class="btn" type="button" :disabled="draftSaving" @click="startCreateDraft">
-          {{ t('governance.relation_picker.create') }}
-        </button>
-      </div>
+        <AppIconButton
+          class="crud-relation-submit-btn"
+          type="submit"
+          icon="/assets/orgas/kingrt/icons/send.png"
+          :title="t('governance.apply_filters')"
+          :aria-label="t('governance.apply_filters')"
+        />
+      </form>
 
       <form v-if="creatingDraft" class="crud-relation-create" autocomplete="off" @submit.prevent="submitCreateDraft">
         <label v-for="field in createFields" :key="field.key" :class="fieldClass(field)">
@@ -133,6 +140,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
+import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
@@ -305,6 +313,10 @@ async function submitCreateDraft() {
   }
 }
 
+function submitRelationSearch() {
+  navigator.goToPage(1);
+}
+
 function goBackTo(index) {
   while (navigator.stack.value.length > index + 1) {
     returnToParent();
@@ -394,13 +406,39 @@ function applySelection() {
 }
 
 .crud-relation-toolbar {
-  justify-content: space-between;
+  justify-content: flex-end;
+  gap: 20px;
+  padding-inline-end: 4px;
 }
 
 .crud-relation-count {
+  margin-inline-end: auto;
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
+}
+
+.crud-relation-search-field {
+  flex: 0 1 320px;
+  width: min(320px, 100%);
+  min-width: min(220px, 100%);
+  margin-inline-start: 0;
+}
+
+.crud-relation-search-field .input {
+  border-color: var(--border-subtle);
+  background-color: var(--bg-input);
+}
+
+.crud-relation-submit-btn {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+}
+
+.crud-relation-submit-btn img {
+  width: 18px;
+  height: 18px;
 }
 
 .crud-relation-create {
@@ -485,6 +523,14 @@ function applySelection() {
 }
 
 @media (max-width: 760px) {
+  .crud-relation-count {
+    flex-basis: 100%;
+  }
+
+  .crud-relation-search-field {
+    flex: 1 1 min(220px, calc(100% - 60px));
+  }
+
   .crud-relation-create {
     grid-template-columns: minmax(0, 1fr);
   }

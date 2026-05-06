@@ -90,6 +90,9 @@ for (const [name, file] of [
 }
 assert.doesNotMatch(relationStack, /@click="\$emit\('close'\)"/, 'relation picker must not render a redundant footer close button');
 assert.doesNotMatch(relationStack, /governance\.relation_picker\.close['"`)]/, 'relation picker must not render a redundant footer close label');
+assert.match(relationStack, /AppIconButton[\s\S]*icons\/send\.png/, 'relation picker sidebar search must always expose the shared submit icon');
+assert.match(relationStack, /\.crud-relation-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?gap:\s*20px;/, 'relation picker sidebar search must stay right-aligned with 20px spacing');
+assert.match(relationStack, /\.crud-relation-search-field \.input\s*\{[\s\S]*?background-color:\s*var\(--bg-input\);/, 'relation picker sidebar search input must use the standard input background');
 assert.match(relationStack, /\.crud-relation-footer\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 4px 4px 0;/, 'relation picker footer must pin the select action to the bottom right with 20px panel spacing');
 assert.match(relationStack, /\.crud-relation-footer \.btn-cyan\s*\{[\s\S]*?margin-inline-start:\s*auto;/, 'relation picker select action must stay rightmost when back is visible');
 assert.match(themeSettings, /theme_settings\.close_editor/, 'theme editor must use a neutral close editor label instead of generic cancel');
