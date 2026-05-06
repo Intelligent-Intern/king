@@ -1,5 +1,16 @@
 export type GossipDataLaneMode = 'off' | 'shadow' | 'active'
 
+export {
+  VIDEOCHAT_MEDIA_CARRIER_CONFIG,
+  VIDEOCHAT_MEDIA_CARRIER_ENV_KEY,
+  normalizeVideochatMediaCarrierMode,
+  resolveVideochatMediaCarrierConfig,
+} from './mediaCarrierMode'
+export type {
+  VideochatMediaCarrierConfig,
+  VideochatMediaCarrierMode,
+} from './mediaCarrierMode'
+
 export interface GossipDataLaneConfig {
   mode: GossipDataLaneMode
   enabled: boolean

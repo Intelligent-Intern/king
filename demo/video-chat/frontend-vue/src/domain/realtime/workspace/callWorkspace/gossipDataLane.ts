@@ -1,5 +1,5 @@
 import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
-import { GOSSIP_DATA_LANE_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
@@ -33,6 +33,15 @@ export function createCallWorkspaceGossipDataLane({
 
   function localPeerId() {
     return String(currentUserId() || '').trim();
+  }
+
+  function mediaCarrierDiagnosticPayload() {
+    return {
+      media_carrier_mode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
+      media_carrier_diagnostics_label: VIDEOCHAT_MEDIA_CARRIER_CONFIG.diagnosticsLabel,
+      gossip_may_publish_without_sfu: VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipMayPublishWithoutSfu,
+      sfu_send_optional: VIDEOCHAT_MEDIA_CARRIER_CONFIG.sfuSendIsOptional,
+    };
   }
 
   function roomId() {
@@ -450,6 +459,7 @@ export function createCallWorkspaceGossipDataLane({
       code: 'gossip_data_lane_shadow_would_publish',
       message: 'Gossip data lane recorded a frame that would have been published after SFU baseline send; media was not published.',
       payload: {
+        ...mediaCarrierDiagnosticPayload(),
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
         reason: String(reason || 'shadow_observe'),
