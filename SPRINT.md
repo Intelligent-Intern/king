@@ -202,7 +202,7 @@ Target call workspace layout:
   - Non-owners can only see their access state and app status.
 
 Discovery and Marketplace architecture:
-- Call Apps live under `demo/call-apps/<app-key>/`.
+- Call Apps live under `demo/call-app/<app-key>/`.
 - Every app package exposes:
   - static package metadata for local/dev builds,
   - an MCP metadata endpoint for runtime discovery,
@@ -379,7 +379,7 @@ Permissions and owner controls:
   - launch token rejected.
 
 Whiteboard first-slice scope:
-- Create `demo/call-apps/whiteboard`.
+- Create `demo/call-app/whiteboard`.
 - Package metadata and MCP descriptor.
 - Semantic-DNS local registration entry.
 - Iframe app shell.
@@ -478,10 +478,10 @@ Tickets:
   - Audit existing Semantic DNS, MCP, Marketplace, module descriptors, video-call
     room-state, and permission-grant surfaces.
   - Produce exact source ownership for backend, frontend, extension, and
-    `demo/call-apps`.
+    `demo/call-app`.
   - Add contract tests that pin the planned Call App capability names and route
     boundaries before implementation starts.
-- [ ] CAP-02 `demo/call-apps` package layout
+- [ ] CAP-02 `demo/call-app` package layout
   - Create the directory structure for installable Call Apps.
   - Define package manifest, MCP descriptor, CRDT schema descriptor, health
     descriptor, and iframe entrypoint conventions.
