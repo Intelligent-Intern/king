@@ -95,6 +95,10 @@ assert.match(stackSource, /pushNestedRelation\(nestedRelation\)/, 'relation stac
 assert.match(stackSource, /applyCurrentSelectionToParent/, 'relation stack must apply nested selections back into the selected parent row');
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
 assert.doesNotMatch(stackSource, /@click="\$emit\('close'\)"/, 'relation stack must not render a redundant footer close action');
+assert.match(stackSource, /AppIconButton[\s\S]*icons\/send\.png/, 'relation stack search must use the shared send submit icon');
+assert.match(stackSource, /<form class="crud-relation-toolbar" @submit\.prevent="submitRelationSearch">/, 'relation stack search must submit through a toolbar form');
+assert.match(stackSource, /\.crud-relation-toolbar\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?gap:\s*20px;/, 'relation stack search toolbar must be right-aligned with 20px spacing');
+assert.match(stackSource, /\.crud-relation-search-field \.input\s*\{[\s\S]*?background-color:\s*var\(--bg-input\);/, 'relation stack search input must use the standard border-colored input background');
 assert.match(stackSource, /\.crud-relation-footer\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 4px 4px 0;/, 'relation stack must keep the select button pinned to the bottom right');
 
 const viewSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');

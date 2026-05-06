@@ -82,7 +82,7 @@ assert.match(governanceCrudSource, /GovernanceCrudToolbar/, 'governance CRUD mus
 assert.match(governanceCrudSource, /GovernanceEmptyState/, 'governance CRUD must render the standard empty state');
 assert.match(governanceCrudSource, /class="table-empty-row"/, 'governance empty placeholders must opt out of table hover styling');
 assert.match(governanceCrudStyles, /\.governance-crud-view \.admin-page-frame-toolbar[\s\S]*?gap:\s*20px;[\s\S]*?justify-content:\s*flex-end;/, 'governance toolbar must use the shared right-aligned 20px spacing');
-assert.match(governanceCrudStyles, /\.governance-search-field[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*auto;/, 'governance search field must push filters and submit to the right edge');
+assert.match(governanceCrudStyles, /\.governance-search-field[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'governance search field must rely on the shared right-aligned 20px toolbar gap');
 assert.match(governanceCrudStyles, /\.governance-toolbar-submit-btn[\s\S]*flex:\s*0 0 48px;/, 'governance toolbar send button must keep a fixed right-edge footprint');
 assert.match(governanceToolbarSource, /icons\/send\.png/, 'governance toolbar submit must use the shared send icon');
 assert.match(governanceToolbarSource, /governance\.filter\.all_status/, 'governance toolbar must expose status filtering');
