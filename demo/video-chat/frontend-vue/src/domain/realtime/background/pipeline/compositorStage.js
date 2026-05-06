@@ -1,9 +1,25 @@
 const backgroundCanvasCache = new Map();
 
+function sourceNaturalSize(source, fallbackWidth, fallbackHeight) {
+    return {
+        width: Math.max(1, source?.videoWidth || source?.naturalWidth || source?.width || fallbackWidth),
+        height: Math.max(1, source?.videoHeight || source?.naturalHeight || source?.height || fallbackHeight),
+    };
+}
+
 function drawCoverImage(ctx, image, width, height) {
-    const iw = Math.max(1, image.width || width);
-    const ih = Math.max(1, image.height || height);
+    const { width: iw, height: ih } = sourceNaturalSize(image, width, height);
     const scale = Math.max(width / iw, height / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    const dx = (width - dw) * 0.5;
+    const dy = (height - dh) * 0.5;
+    ctx.drawImage(image, dx, dy, dw, dh);
+}
+
+function drawContainImage(ctx, image, width, height) {
+    const { width: iw, height: ih } = sourceNaturalSize(image, width, height);
+    const scale = Math.min(width / iw, height / ih);
     const dw = iw * scale;
     const dh = ih * scale;
     const dx = (width - dw) * 0.5;
@@ -219,10 +235,10 @@ export function createBackgroundCompositorStage({
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (mode === 'blur') {
             ctx.filter = `blur(${blurPx}px)`;
-            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+            drawCoverImage(ctx, source, canvas.width, canvas.height);
         } else {
             ctx.filter = 'none';
-            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+            drawContainImage(ctx, source, canvas.width, canvas.height);
         }
         ctx.restore();
     }
@@ -269,7 +285,7 @@ export function createBackgroundCompositorStage({
         personOnlyCanvas.width = width;
         personOnlyCanvas.height = height;
         personOnlyCtx.clearRect(0, 0, width, height);
-        personOnlyCtx.drawImage(source, 0, 0, width, height);
+        drawContainImage(personOnlyCtx, source, width, height);
         personOnlyCtx.globalCompositeOperation = 'destination-in';
         personOnlyCtx.drawImage(maskCanvas, 0, 0, width, height);
         personOnlyCtx.globalCompositeOperation = 'source-over';
@@ -292,9 +308,10 @@ export function createBackgroundCompositorStage({
 
         if (mode === 'off') {
             ctx.save();
-            ctx.globalCompositeOperation = 'copy';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'source-over';
             ctx.filter = 'none';
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            drawContainImage(ctx, video, canvas.width, canvas.height);
             ctx.restore();
             return;
         }
@@ -313,17 +330,19 @@ export function createBackgroundCompositorStage({
 
         if (!hasRenderableMask) {
             ctx.save();
-            ctx.globalCompositeOperation = 'copy';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.globalCompositeOperation = 'source-over';
             ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            drawCoverImage(ctx, video, canvas.width, canvas.height);
             ctx.restore();
             return;
         }
 
         ctx.save();
-        ctx.globalCompositeOperation = 'copy';
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
         ctx.filter = 'none';
-        ctx.drawImage(foregroundSource, 0, 0, canvas.width, canvas.height);
+        drawContainImage(ctx, foregroundSource, canvas.width, canvas.height);
         ctx.restore();
 
         ctx.save();
