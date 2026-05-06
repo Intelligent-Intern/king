@@ -1,5 +1,105 @@
 # King Active Issues
 
+## Sprint: Gossip-Primary Video Media Carrier Control Plane
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Active sprint as of 2026-05-06.
+- Execute one checkbox at a time. A checkbox is only closed after
+  implementation and proof.
+- The final checkbox is the test protocol. After each closed checkbox, wait for
+  the next `w` before continuing.
+
+Sprint goal:
+- Move the video-call media architecture so the Head Server is the authoritative
+  Control Plane while bounded Gossip peer links can become the primary media
+  carrier.
+- Keep the server responsible for join/admission, identity, topology hints,
+  neighbor assignment, repair, telemetry, and SFU fallback.
+- Keep SFU available for fallback, relay, and recording, but never let SFU
+  failure block Gossip media publication in `gossip_primary`.
+- Prevent normal server media fanout so the scale advantage of peer fanout is
+  preserved.
+
+Execution boundary:
+- Preserve backend-authoritative admission, identity, topology, repair, and
+  revocation. Do not let browsers invent unbounded random media topology.
+- Do not replace protected media/SFU fallback with weaker plaintext or local-only
+  shortcuts.
+- Do not grow `CallWorkspaceView.vue`; add focused helpers, contracts, and
+  backend modules.
+- The server may coordinate topology, repair, telemetry, fallback, relay, and
+  recording. It must not become the normal frame fanout path.
+- Treat `8865edfa`, `23e4fc80`, `8802b610`, and current `origin/main` Gossip
+  foundations as the compatibility baseline.
+
+Acceptance criteria:
+- In `gossip_primary`, a call can transport media over Gossip even when SFU send
+  is not successful or not ready.
+- SFU remains an optional fallback, relay, and recording path.
+- Join and room-state snapshots provide usable topology information: admitted
+  peers, capabilities, room identity, call identity, transport candidates, and
+  assigned Gossip neighbors.
+- Clients create dedicated bounded Gossip neighbor DataChannels from server
+  assignment rather than binding media Gossip only to random existing native
+  peer connections.
+- Neighbor failures are reported by clients, reassigned by the server, and
+  repaired through clean edge retirement and new edge setup.
+- Rollout and gating for `gossip_primary` are based on Gossip topology health,
+  not SFU baseline health.
+- Gossip-native recovery exists for publisher keyframe requests, recent
+  keyframe cache, missing frame retransmit, duplicate suppression, TTL/fanout
+  limits, and server ops-lane recovery messages.
+- The server does not perform normal media fanout.
+
+Tickets:
+- [ ] GSP-01 Runtime media carrier mode
+  - Add `VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary|sfu_first|sfu_mirror`.
+  - Expose a typed runtime config that states whether Gossip may publish without
+    SFU readiness and whether SFU send is optional.
+  - Add contract coverage for defaults and mode semantics.
+- [ ] GSP-02 Publisher pipeline decoupling
+  - In `gossip_primary`, change encode flow to publish Gossip before optional
+    SFU send.
+  - SFU unavailable, send pressure, or send failure must not prevent Gossip
+    publish in this mode.
+  - Keep conservative `sfu_first` behavior intact.
+- [ ] GSP-03 Join/snapshot/churn topology hints
+  - Promote topology hints to normal join and room-state payloads.
+  - Include admitted peers, capabilities, room/call identity, transport
+    candidates, and assigned bounded neighbors.
+  - Add frontend/backend contracts that topology is not diagnostic-only.
+- [ ] GSP-04 Dedicated bounded neighbor lifecycle
+  - Add client lifecycle for assigned neighbor links:
+    `assigned -> create/renegotiate DataChannel -> media gossip -> retired`.
+  - Do not attach Gossip media to arbitrary existing peer connections.
+  - Enforce bounded active links from server assignment.
+- [ ] GSP-05 Authoritative topology repair
+  - Make `gossip/topology-repair/request` operational: client failure report,
+    server replacement assignment, client edge setup, old edge retirement.
+  - Add contracts for reassignment and cleanup.
+- [ ] GSP-06 Gossip health rollout gates
+  - In `gossip_primary`, gate media Gossip on Gossip topology health.
+  - SFU health may influence fallback/relay usage, not whether Gossip is active.
+- [ ] GSP-07 Gossip-native recovery
+  - Add per-publisher keyframe requests, recent keyframe cache, missing-frame
+    retransmit, duplicate suppression, TTL/fanout limits, and recovery messages
+    over the server ops lane.
+  - Recovery must not assume SFU is source of truth.
+- [ ] GSP-08 Server no-normal-media-fanout guard
+  - Audit backend realtime Gossip/SFU paths and add tests ensuring the server
+    does not distribute every normal media frame to all peers.
+  - Keep fallback/relay/recording explicitly separate.
+- [ ] GSP-09 Integration contracts and smoke checks
+  - Cover `gossip_primary`, `sfu_first`, and `sfu_mirror` behavior at contract
+    level.
+  - Exercise join, churn, neighbor repair, and SFU failure tolerance.
+- [ ] GSP-10 Test protocol and readiness record
+  - Produce the final test protocol with commands, observed results, residual
+    risks, and remaining rollout gates.
+
 ## Sprint: Governance UX, Recursive CRUD, Permissions, And Onboarding
 
 Branch:
