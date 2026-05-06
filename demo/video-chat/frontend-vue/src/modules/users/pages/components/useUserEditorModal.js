@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 
 function fallbackTranslate(key, params = {}) {
   return String(key || '').replace(/\{([A-Za-z0-9_.-]+)\}/g, (_match, name) => String(params?.[name] ?? ''));
@@ -12,13 +12,6 @@ export function useUserEditorModal(options = {}) {
   const props = options.props || {};
   const emit = typeof options.emit === 'function' ? options.emit : () => {};
   const t = createTranslator(options.t);
-  const editorMaximized = ref(false);
-
-  watch(() => props.open, (open) => {
-    if (!open) {
-      editorMaximized.value = false;
-    }
-  });
 
   const emailDraftModel = computed({
     get: () => props.userEmailDraft,
@@ -41,7 +34,6 @@ export function useUserEditorModal(options = {}) {
   ));
 
   return {
-    editorMaximized,
     emailDraftModel,
     themeEditorChecked,
     themeEditorDisabled,

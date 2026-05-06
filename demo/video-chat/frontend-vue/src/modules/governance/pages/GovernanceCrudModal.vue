@@ -12,9 +12,6 @@
     :body-class="relationActive ? 'governance-side-panel-body governance-side-panel-body-relation' : 'governance-side-panel-body'"
     footer-class="governance-side-panel-footer"
     :close-label="t('governance.close_panel')"
-    maximizable
-    :maximized="maximized"
-    @update:maximized="$emit('update:maximized', $event)"
     @close="$emit('close')"
   >
     <template #body>
@@ -112,10 +109,6 @@ const props = defineProps({
     type: String,
     default: '',
   },
-  maximized: {
-    type: Boolean,
-    default: false,
-  },
   relationActive: {
     type: Boolean,
     default: false,
@@ -126,7 +119,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(['close', 'submit', 'update:maximized', 'open-relation']);
+defineEmits(['close', 'submit', 'open-relation']);
 
 const activeTitle = computed(() => (
   props.relationActive && props.relationTitle ? props.relationTitle : props.title

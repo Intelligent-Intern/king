@@ -13,9 +13,6 @@
     :body-class="relationStackOpen ? 'users-side-panel-body users-side-panel-body-relation' : (avatarEditorOpen ? 'users-avatar-side-panel-body' : 'users-side-panel-body')"
     footer-class="users-side-panel-footer"
     :close-label="t('users.close_user_panel')"
-    maximizable
-    :maximized="editorMaximized"
-    @update:maximized="editorMaximized = $event"
     @close="$emit('close')"
   >
     <template #body>
@@ -440,7 +437,6 @@ const activeDialogTitle = computed(() => (
 ));
 
 const {
-  editorMaximized,
   emailDraftModel,
   themeEditorChecked,
   themeEditorDisabled,
