@@ -48,6 +48,11 @@
   --brand-cyan-hover: var(--color-cyan-hover);
   --brand-cyan-active: var(--color-cyan-primary);
   --action-icon-filter: brightness(0) saturate(100%) invert(88%) sepia(8%) saturate(176%) hue-rotate(180deg) brightness(94%) contrast(89%);
+  --app-content-direction: ltr;
+}
+
+html[dir="rtl"] {
+  --app-content-direction: rtl;
 }
 
 * {

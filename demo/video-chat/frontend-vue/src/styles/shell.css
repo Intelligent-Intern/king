@@ -250,6 +250,11 @@
   display: flex;
   flex-direction: column;
   background: var(--brand-bg);
+  direction: rtl;
+}
+
+.sidebar-scroll-body > * {
+  direction: var(--app-content-direction);
 }
 
 .sidebar-scroll-body .nav {

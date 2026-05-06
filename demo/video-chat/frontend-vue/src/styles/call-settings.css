@@ -136,6 +136,11 @@
   display: grid;
   gap: 10px;
   align-content: start;
+  direction: rtl;
+}
+
+.call-left-settings > * {
+  direction: var(--app-content-direction);
 }
 
 .call-left-settings-block {
