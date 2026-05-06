@@ -34,8 +34,8 @@ try {
 
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source)
-VALUES(:tenant_id, :locale, :namespace, :resource_key, :value, 'contract')
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value)
+VALUES(:tenant_id, :locale, :namespace, :resource_key, :value)
 SQL
     );
     $insert->execute([':tenant_id' => null, ':locale' => 'en', ':namespace' => 'common', ':resource_key' => 'save', ':value' => 'Save']);
@@ -60,7 +60,10 @@ SQL
             'time' => gmdate('c'),
         ]);
     };
-    $decodeJsonBody = static fn (array $request): array => [null, 'unused'];
+    $decodeJsonBody = static function (array $request): array {
+        $decoded = json_decode((string) ($request['body'] ?? ''), true);
+        return is_array($decoded) ? [$decoded, null] : [null, 'invalid_json'];
+    };
     $openDatabase = static fn (): PDO => videochat_open_sqlite_pdo($databasePath);
     $authContext = [
         'user' => ['id' => 2, 'role' => 'user', 'locale' => 'de'],
@@ -125,6 +128,35 @@ SQL
     );
     $unsupportedPayload = videochat_localization_resources_decode($unsupportedResponse ?? []);
     videochat_localization_resources_assert((string) ($unsupportedPayload['locale'] ?? '') === 'en', 'unsupported locale should resolve to default locale');
+
+    $saveResponse = videochat_handle_localization_routes(
+        '/api/admin/localization/resources',
+        'PUT',
+        [
+            'method' => 'PUT',
+            'uri' => '/api/admin/localization/resources',
+            'body' => json_encode([
+                'resources' => [
+                    ['locale' => 'de', 'namespace' => 'common', 'resource_key' => 'search', 'value' => 'Suchen'],
+                    ['locale' => 'en', 'namespace' => 'common', 'resource_key' => 'search', 'value' => 'Search'],
+                ],
+            ]),
+        ],
+        ['user' => ['id' => 1, 'role' => 'admin']],
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_localization_resources_assert(is_array($saveResponse), 'admin resource save should return a response');
+    videochat_localization_resources_assert((int) ($saveResponse['status'] ?? 0) === 200, 'admin resource save status mismatch');
+    $savePayload = videochat_localization_resources_decode($saveResponse);
+    videochat_localization_resources_assert((int) ($savePayload['saved_count'] ?? 0) === 2, 'admin resource save count mismatch');
+    $savedResources = videochat_fetch_translation_resources($pdo, 'de', null, ['common']);
+    videochat_localization_resources_assert(
+        (string) ($savedResources['common.search'] ?? '') === 'Suchen',
+        'admin resource save should upsert translations'
+    );
 
     @unlink($databasePath);
     fwrite(STDOUT, "[localization-resources-contract] PASS\n");

@@ -357,7 +357,7 @@ function videochat_issue_translation_import_id(PDO $pdo): string
     throw new RuntimeException('translation_import_id_issue_failed');
 }
 
-function videochat_upsert_translation_resource(PDO $pdo, array $resource, int $actorUserId, string $source): void
+function videochat_upsert_translation_resource(PDO $pdo, array $resource, int $actorUserId): void
 {
     $tenantId = is_int($resource['tenant_id'] ?? null) && (int) $resource['tenant_id'] > 0 ? (int) $resource['tenant_id'] : null;
     $tenantWhere = $tenantId === null ? 'tenant_id IS NULL' : 'tenant_id = :tenant_id';
@@ -380,7 +380,6 @@ function videochat_upsert_translation_resource(PDO $pdo, array $resource, int $a
             <<<'SQL'
 UPDATE translation_resources
 SET value = :value,
-    source = :source,
     created_by_user_id = :actor_user_id,
     updated_at = :updated_at
 WHERE id = :id
@@ -388,7 +387,6 @@ SQL
         );
         $update->execute([
             ':value' => (string) $resource['value'],
-            ':source' => $source,
             ':actor_user_id' => $actorUserId,
             ':updated_at' => gmdate('c'),
             ':id' => $existingId,
@@ -398,8 +396,8 @@ SQL
 
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source, created_by_user_id, created_at, updated_at)
-VALUES(:tenant_id, :locale, :namespace, :resource_key, :value, :source, :actor_user_id, :created_at, :updated_at)
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, created_by_user_id, created_at, updated_at)
+VALUES(:tenant_id, :locale, :namespace, :resource_key, :value, :actor_user_id, :created_at, :updated_at)
 SQL
     );
     $now = gmdate('c');
@@ -409,7 +407,6 @@ SQL
         ':namespace' => (string) $resource['namespace'],
         ':resource_key' => (string) $resource['resource_key'],
         ':value' => (string) $resource['value'],
-        ':source' => $source,
         ':actor_user_id' => $actorUserId,
         ':created_at' => $now,
         ':updated_at' => $now,
@@ -436,9 +433,8 @@ function videochat_commit_translation_csv(PDO $pdo, int $actorUserId, string $cs
 
     try {
         $importId = videochat_issue_translation_import_id($pdo);
-        $source = 'csv:' . $importId;
         foreach ($preview['resources'] as $resource) {
-            videochat_upsert_translation_resource($pdo, $resource, $actorUserId, $source);
+            videochat_upsert_translation_resource($pdo, $resource, $actorUserId);
         }
 
         $tenantIds = is_array($preview['summary']['tenant_ids'] ?? null) ? (array) $preview['summary']['tenant_ids'] : [];
@@ -582,7 +578,7 @@ function videochat_fetch_translation_bundle(PDO $pdo, string $locale, string $na
 
     $tenantWhere = $tenantId !== null && $tenantId > 0 ? 'tenant_id = :tenant_id' : 'tenant_id IS NULL';
     $statement = $pdo->prepare(
-        "SELECT id, resource_key, value, source, updated_at FROM translation_resources WHERE {$tenantWhere} AND locale = :locale AND namespace = :namespace ORDER BY resource_key ASC"
+        "SELECT id, resource_key, value, updated_at FROM translation_resources WHERE {$tenantWhere} AND locale = :locale AND namespace = :namespace ORDER BY resource_key ASC"
     );
     $params = [
         ':locale' => $resolvedLocale,
@@ -599,7 +595,6 @@ function videochat_fetch_translation_bundle(PDO $pdo, string $locale, string $na
             'id' => (int) ($row['id'] ?? 0),
             'resource_key' => (string) ($row['resource_key'] ?? ''),
             'value' => (string) ($row['value'] ?? ''),
-            'source' => (string) ($row['source'] ?? ''),
             'updated_at' => (string) ($row['updated_at'] ?? ''),
         ];
     }

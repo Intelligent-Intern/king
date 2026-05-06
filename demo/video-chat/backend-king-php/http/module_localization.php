@@ -12,6 +12,12 @@ function videochat_localization_actor_is_superadmin(array $apiAuthContext): bool
     return (string) ($user['role'] ?? '') === 'admin' && (int) ($user['id'] ?? 0) === 1;
 }
 
+function videochat_localization_actor_is_admin(array $apiAuthContext): bool
+{
+    $user = is_array($apiAuthContext['user'] ?? null) ? (array) $apiAuthContext['user'] : [];
+    return (string) ($user['role'] ?? '') === 'admin';
+}
+
 function videochat_localization_csv_from_payload(array $payload): string
 {
     return (string) ($payload['csv'] ?? ($payload['content'] ?? ''));
@@ -33,6 +39,43 @@ function videochat_localization_namespaces_from_query(array $queryParams): array
     }
 
     return array_values(array_unique($namespaces));
+}
+
+function videochat_localization_normalized_resource_from_payload(PDO $pdo, mixed $entry, int $index): array
+{
+    if (!is_array($entry)) {
+        return ['error' => ['index' => $index, 'field' => 'resource', 'code' => 'invalid_resource']];
+    }
+
+    $locale = videochat_normalize_locale_code($entry['locale'] ?? '');
+    $namespace = videochat_translation_clean_text($entry['namespace'] ?? '', 120);
+    $resourceKey = videochat_translation_clean_text($entry['resource_key'] ?? '', 240);
+    $tenantId = isset($entry['tenant_id']) && is_scalar($entry['tenant_id']) && trim((string) $entry['tenant_id']) !== ''
+        ? (int) $entry['tenant_id']
+        : null;
+
+    if ($locale === '' || !videochat_locale_is_supported($pdo, $locale)) {
+        return ['error' => ['index' => $index, 'field' => 'locale', 'code' => 'unsupported_locale']];
+    }
+    if ($namespace === '' || preg_match('/^[A-Za-z][A-Za-z0-9_.-]{0,119}$/', $namespace) !== 1) {
+        return ['error' => ['index' => $index, 'field' => 'namespace', 'code' => 'invalid_namespace']];
+    }
+    if ($resourceKey === '' || preg_match('/^[A-Za-z0-9_.:-]{1,240}$/', $resourceKey) !== 1) {
+        return ['error' => ['index' => $index, 'field' => 'resource_key', 'code' => 'invalid_resource_key']];
+    }
+    if (!videochat_translation_tenant_exists($pdo, $tenantId)) {
+        return ['error' => ['index' => $index, 'field' => 'tenant_id', 'code' => 'unknown_tenant']];
+    }
+
+    return [
+        'resource' => [
+            'tenant_id' => $tenantId,
+            'locale' => $locale,
+            'namespace' => $namespace,
+            'resource_key' => $resourceKey,
+            'value' => (string) ($entry['value'] ?? ''),
+        ],
+    ];
 }
 
 function videochat_handle_localization_routes(
@@ -160,6 +203,75 @@ function videochat_handle_localization_routes(
             ]);
         } catch (Throwable) {
             return $errorResponse(500, 'localization_bundle_fetch_failed', 'Could not load translation bundle.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
+    if ($path === '/api/admin/localization/resources') {
+        if ($method !== 'PUT') {
+            return $errorResponse(405, 'method_not_allowed', 'Use PUT for /api/admin/localization/resources.', [
+                'allowed_methods' => ['PUT'],
+            ]);
+        }
+        if (!videochat_localization_actor_is_admin($apiAuthContext)) {
+            return $errorResponse(403, 'localization_admin_required', 'Only admins can edit localization resources.', [
+                'required_role' => 'admin',
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload) || !is_array($payload['resources'] ?? null)) {
+            return $errorResponse(400, 'localization_resources_invalid_request_body', 'Localization resources payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $resources = [];
+            $errors = [];
+            foreach ((array) $payload['resources'] as $index => $entry) {
+                $normalized = videochat_localization_normalized_resource_from_payload($pdo, $entry, (int) $index);
+                if (isset($normalized['error'])) {
+                    $errors[] = $normalized['error'];
+                    continue;
+                }
+                $resources[] = $normalized['resource'];
+            }
+            if ($errors !== []) {
+                return $errorResponse(422, 'localization_resources_validation_failed', 'Localization resources failed validation.', [
+                    'errors' => $errors,
+                ]);
+            }
+
+            $actorUserId = (int) (($apiAuthContext['user'] ?? [])['id'] ?? 0);
+            $startedTransaction = false;
+            if (!$pdo->inTransaction()) {
+                $pdo->beginTransaction();
+                $startedTransaction = true;
+            }
+            try {
+                foreach ($resources as $resource) {
+                    videochat_upsert_translation_resource($pdo, $resource, $actorUserId);
+                }
+                if ($startedTransaction) {
+                    $pdo->commit();
+                }
+            } catch (Throwable $error) {
+                if ($startedTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $error;
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'saved_count' => count($resources),
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'localization_resources_save_failed', 'Could not save localization resources.', [
                 'reason' => 'internal_error',
             ]);
         }

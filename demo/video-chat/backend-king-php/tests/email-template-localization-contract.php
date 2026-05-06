@@ -21,8 +21,8 @@ function videochat_email_template_localization_insert(PDO $pdo, ?int $tenantId, 
     $parts = explode('.', $key, 2);
     $insert = $pdo->prepare(
         <<<'SQL'
-INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source)
-VALUES(:tenant_id, :locale, :namespace, :resource_key, :value, 'email-template-contract')
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value)
+VALUES(:tenant_id, :locale, :namespace, :resource_key, :value)
 SQL
     );
     $insert->execute([

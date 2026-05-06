@@ -777,27 +777,11 @@ SQL,
                 "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
             ],
         ],
-        30 => [
-            'name' => '0030_localization_foundation',
-            'statements' => videochat_localization_migration_statements(),
-        ],
-        31 => [
-            'name' => '0031_translation_import_history',
-            'statements' => videochat_translation_import_history_migration_statements(),
-        ],
-        44 => [
-            'name' => '0044_call_activity_sample_history',
-            'statements' => [
-                "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
-            ],
-        ],
-        45 => [
-            'name' => '0045_workspace_app_configuration_assets',
-            'statements' => videochat_workspace_app_configuration_migration_statements(),
-        ],
-        46 => [
-            'name' => '0046_workspace_calendars',
-            'statements' => videochat_workspace_calendar_migration_statements(),
-        ],
+        30 => ['name' => '0030_localization_foundation', 'statements' => videochat_localization_migration_statements()],
+        31 => ['name' => '0031_translation_import_history', 'statements' => videochat_translation_import_history_migration_statements()],
+        44 => ['name' => '0044_call_activity_sample_history', 'statements' => ["ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'"]],
+        45 => ['name' => '0045_workspace_app_configuration_assets', 'statements' => videochat_workspace_app_configuration_migration_statements()],
+        46 => ['name' => '0046_workspace_calendars', 'statements' => videochat_workspace_calendar_migration_statements()],
+        47 => ['name' => '0047_translation_resources_drop_source', 'statements' => videochat_translation_resource_drop_source_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

@@ -35,8 +35,8 @@ try {
     videochat_localization_import_assert($adminId === 1, 'primary superadmin user id must be 1 in seeded test database');
     $seedCanonical = $pdo->prepare(
         <<<'SQL'
-INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source)
-VALUES(NULL, 'en', :namespace, :resource_key, :value, 'contract')
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value)
+VALUES(NULL, 'en', :namespace, :resource_key, :value)
 SQL
     );
     $seedCanonical->execute([
@@ -84,7 +84,7 @@ SQL
     $preview = videochat_preview_translation_csv($pdo, $validCsv);
     videochat_localization_import_assert($preview['ok'] === true, 'valid preview should pass');
     videochat_localization_import_assert((int) $preview['valid_rows'] === 2, 'valid preview row count mismatch');
-    videochat_localization_import_assert((int) $pdo->query("SELECT COUNT(*) FROM translation_resources WHERE source <> 'contract'")->fetchColumn() === 0, 'preview must not mutate translation resources');
+    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 1, 'preview must not mutate translation resources');
 
     $sameFilePreview = videochat_preview_translation_csv($pdo, $sameFilePlaceholderCsv);
     videochat_localization_import_assert($sameFilePreview['ok'] === false, 'same-file missing placeholder preview should fail');
@@ -122,7 +122,7 @@ SQL
     videochat_localization_import_assert(in_array('unsupported_locale', $errorCodes, true), 'invalid commit must report unsupported locale');
     videochat_localization_import_assert(in_array('duplicate_key', $errorCodes, true), 'invalid commit must report duplicate key');
     videochat_localization_import_assert(in_array('missing_required_placeholders', $errorCodes, true), 'invalid commit must report missing placeholders');
-    videochat_localization_import_assert((int) $pdo->query("SELECT COUNT(*) FROM translation_resources WHERE source <> 'contract'")->fetchColumn() === 0, 'failed commit must not mutate translation resources');
+    videochat_localization_import_assert((int) $pdo->query('SELECT COUNT(*) FROM translation_resources')->fetchColumn() === 1, 'failed commit must not mutate translation resources');
 
     $validCommit = videochat_handle_localization_routes(
         '/api/admin/localization/imports/commit',

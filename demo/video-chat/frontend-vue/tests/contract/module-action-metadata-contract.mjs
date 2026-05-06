@@ -121,8 +121,12 @@ assert.ok(
   'marketplace route must expose app creation metadata',
 );
 assert.ok(
-  actionKeys(routeByName('admin-administration-localization')).has('localization.resources.upload_csv'),
-  'localization route must expose CSV upload metadata',
+  !actionKeys(routeByName('admin-administration-localization')).has('localization.resources.upload_csv'),
+  'localization route must not expose CSV upload metadata',
+);
+assert.ok(
+  actionKeys(routeByName('admin-administration-localization')).has('localization.resources.tour'),
+  'localization route must keep tour metadata',
 );
 assert.ok(
   actionKeys(routeByName('admin-administration-theme-editor')).has('theme_editor.themes.create'),
