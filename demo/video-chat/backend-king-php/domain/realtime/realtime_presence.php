@@ -57,6 +57,53 @@ function videochat_presence_room_key(string $roomId, ?int $tenantId = null): str
 }
 
 /**
+ * @return array{tenant_id: int, room_id: string, room_key: string}|null
+ */
+function videochat_presence_parse_room_key(string $roomKey): ?array
+{
+    $candidate = strtolower(trim($roomKey));
+    if ($candidate === '') {
+        return null;
+    }
+
+    if (preg_match('/^tenant:([1-9][0-9]*):room:(.+)$/', $candidate, $matches) !== 1) {
+        return null;
+    }
+
+    $tenantId = (int) $matches[1];
+    $roomId = videochat_presence_normalize_room_id((string) $matches[2], '');
+    if ($tenantId <= 0 || $roomId === '') {
+        return null;
+    }
+
+    return [
+        'tenant_id' => $tenantId,
+        'room_id' => $roomId,
+        'room_key' => 'tenant:' . $tenantId . ':room:' . $roomId,
+    ];
+}
+
+function videochat_presence_normalize_room_storage_key(?string $roomIdOrKey, string $fallback = ''): string
+{
+    $parsedRoomKey = videochat_presence_parse_room_key((string) $roomIdOrKey);
+    if (is_array($parsedRoomKey)) {
+        return (string) $parsedRoomKey['room_key'];
+    }
+
+    return videochat_presence_normalize_room_id($roomIdOrKey, $fallback);
+}
+
+function videochat_presence_external_room_id_from_key(string $roomIdOrKey, string $fallback = ''): string
+{
+    $parsedRoomKey = videochat_presence_parse_room_key($roomIdOrKey);
+    if (is_array($parsedRoomKey)) {
+        return (string) $parsedRoomKey['room_id'];
+    }
+
+    return videochat_presence_normalize_room_id($roomIdOrKey, $fallback);
+}
+
+/**
  * @return array{
  *   connection_id: string,
  *   session_id: string,

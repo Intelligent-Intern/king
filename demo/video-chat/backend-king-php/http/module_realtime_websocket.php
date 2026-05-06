@@ -345,7 +345,7 @@ function videochat_handle_realtime_websocket_route(
         $nextChatBrokerPollMs = videochat_chat_broker_now_ms() + 100;
         $nextChatBrokerCleanupMs = videochat_chat_broker_now_ms() + 5000;
         $signalingBrokerDatabase = null;
-        $lastSignalingBrokerRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+        $lastSignalingBrokerRoomId = videochat_signaling_room_key_for_connection($presenceConnection);
         $lastSignalingBrokerUserId = (int) ($presenceConnection['user_id'] ?? 0);
         $lastSignalingBrokerEventId = 0;
         $nextSignalingBrokerPollMs = videochat_signaling_broker_now_ms() + 100;

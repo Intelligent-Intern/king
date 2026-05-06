@@ -432,6 +432,30 @@ try {
         videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-b', [], $relayCursor, $relaySeen, 10) === [],
         'SFU live frame relay cursor should suppress duplicate frame delivery'
     );
+    $tenantRelayRoomKey = videochat_presence_room_key('room-tenant-alpha', 42);
+    $tenantRelayPayload = array_merge($relayPayload, [
+        'publisher_id' => 'publisher-tenant',
+        'publisher_user_id' => '420',
+        'frame_sequence' => 45,
+        'track_id' => 'camera-tenant',
+    ]);
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_publish($tenantRelayRoomKey, 'publisher-tenant', $tenantRelayPayload),
+        'SFU live frame relay should publish frames for tenant-scoped room keys'
+    );
+    $tenantRelayCursor = '';
+    $tenantRelaySeen = [];
+    $tenantRelayedFrames = videochat_sfu_live_frame_relay_read($tenantRelayRoomKey, 'subscriber-tenant', [], $tenantRelayCursor, $tenantRelaySeen, 10);
+    videochat_realtime_sfu_assert(
+        count($tenantRelayedFrames) === 1
+        && (string) ($tenantRelayedFrames[0]['publisher_id'] ?? '') === 'publisher-tenant'
+        && (int) ($tenantRelayedFrames[0]['frame_sequence'] ?? 0) === 45,
+        'SFU live frame relay should replay tenant-scoped room key frames'
+    );
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_read('room-tenant-alpha', 'subscriber-tenant', [], $tenantRelayCursor, $tenantRelaySeen, 10) === [],
+        'SFU live frame relay must not leak tenant-scoped frames through the plain room id'
+    );
     $localRelayCursor = '';
     $localRelaySeen = [];
     videochat_realtime_sfu_assert(
@@ -883,6 +907,33 @@ try {
     videochat_realtime_sfu_assert(
         videochat_sfu_fetch_buffered_frames($pdo, 'room-alpha', 'subscriber-x', [], $bufferCursor, 10) === [],
         'SFU bounded SQLite frame buffer cursor should suppress duplicate delivery'
+    );
+    $tenantBufferRoomKey = videochat_presence_room_key('room-tenant-buffer', 42);
+    $tenantBufferPayload = array_merge($bufferFramePayload, [
+        'publisher_id' => 'publisher-tenant-buffer',
+        'track_id' => 'camera-tenant-buffer',
+        'frame_sequence' => 46,
+    ]);
+    $tenantBufferInsertError = '';
+    videochat_realtime_sfu_assert(
+        videochat_sfu_insert_frame($pdo, $tenantBufferRoomKey, 'publisher-tenant-buffer', $tenantBufferPayload, $tenantBufferInsertError),
+        'SFU bounded SQLite frame buffer should accept tenant-scoped room keys'
+    );
+    $tenantBufferCursor = 0;
+    $tenantBufferedFrames = videochat_sfu_fetch_buffered_frames($pdo, $tenantBufferRoomKey, 'subscriber-tenant-buffer', [], $tenantBufferCursor, 10);
+    videochat_realtime_sfu_assert(
+        count($tenantBufferedFrames) === 1
+        && (string) ($tenantBufferedFrames[0]['publisher_id'] ?? '') === 'publisher-tenant-buffer'
+        && (string) ($tenantBufferedFrames[0]['room_id'] ?? '') === 'room-tenant-buffer'
+        && (int) ($tenantBufferedFrames[0]['frame_sequence'] ?? 0) === 46,
+        'SFU bounded SQLite frame buffer should replay tenant-scoped frames with public room ids in payloads'
+    );
+    $tenantBufferedRows = (int) $pdo->query("SELECT COUNT(*) FROM sfu_frames WHERE room_id = 'tenant:42:room:room-tenant-buffer'")->fetchColumn();
+    videochat_realtime_sfu_assert($tenantBufferedRows === 1, 'SFU bounded SQLite frame buffer should store tenant-scoped rows under tenant room key');
+    $plainTenantBufferedCursor = 0;
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_buffered_frames($pdo, 'room-tenant-buffer', 'subscriber-tenant-buffer', [], $plainTenantBufferedCursor, 10) === [],
+        'SFU bounded SQLite frame buffer must not leak tenant-scoped rows through the plain room id'
     );
     $localBufferCursor = 0;
     videochat_realtime_sfu_assert(
