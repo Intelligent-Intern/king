@@ -1,5 +1,5 @@
 <template>
-  <section class="call-left-settings-block call-background-picker" :aria-label="effectiveTitle">
+  <section v-if="shouldRenderPicker" class="call-left-settings-block call-background-picker" :aria-label="effectiveTitle">
     <div class="call-left-settings-title">{{ effectiveTitle }}</div>
 
     <section v-if="state.loading" class="call-background-picker-status">
@@ -33,7 +33,7 @@
       >
         <img :src="image.file_path" :alt="image.label" loading="lazy" />
       </button>
-      <section v-if="rows.length === 0" class="call-background-picker-empty">
+      <section v-if="rows.length === 0 && !props.hideWhenEmpty" class="call-background-picker-empty">
         {{ t('calls.enter.background_images_empty') }}
       </section>
     </section>
@@ -61,11 +61,16 @@ const props = defineProps({
     type: Number,
     default: 100,
   },
+  hideWhenEmpty: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const rows = ref([]);
 const state = reactive({ loading: false, error: '' });
 const effectiveTitle = computed(() => props.title || t('calls.enter.background_images'));
+const shouldRenderPicker = computed(() => !props.hideWhenEmpty || state.loading || state.error || rows.value.length > 0);
 const isNoBackgroundActive = computed(() => (
   String(callMediaPrefs.backgroundFilterMode || 'off') === 'off'
     || !callMediaPrefs.backgroundApplyOutgoing
@@ -89,6 +94,13 @@ function clearBackground() {
   setCallBackgroundApplyOutgoing(false);
 }
 
+function clearUnavailableImageBackground() {
+  const mode = String(callMediaPrefs.backgroundFilterMode || '').trim();
+  const backdrop = String(callMediaPrefs.backgroundBackdropMode || '').trim();
+  if (mode !== 'replace' || backdrop !== 'image') return;
+  clearBackground();
+}
+
 function selectImage(image) {
   const path = normalizePath(image?.file_path);
   if (path === '') return;
@@ -107,6 +119,9 @@ async function loadRows() {
       page_size: Math.max(1, Math.min(100, Number(props.pageSize) || 100)),
     });
     rows.value = Array.isArray(result?.rows) ? result.rows : [];
+    if (props.hideWhenEmpty && rows.value.length === 0) {
+      clearUnavailableImageBackground();
+    }
   } catch (error) {
     state.error = error instanceof Error ? error.message : t('calls.enter.background_images_load_failed');
   } finally {

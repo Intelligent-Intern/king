@@ -452,6 +452,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'public.join.lobby_connect_failed': 'Could not connect to call lobby.',
   'public.join.mic': 'Mic',
   'public.join.microphone': 'Microphone',
+  'public.join.microphone_level': 'Microphone level',
   'public.join.missing_call_reference': 'Could not open the call because the call reference is missing.',
   'public.join.name_required': 'Name is required for this link.',
   'public.join.no_camera_detected': 'No camera detected',

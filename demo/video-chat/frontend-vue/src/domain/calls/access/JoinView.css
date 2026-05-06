@@ -102,7 +102,18 @@
 .calls-enter-preview {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  align-content: start;
+}
+
+.call-access-join-guest-name {
+  width: min(100%, 560px);
+  margin: 0;
+}
+
+.call-access-join-guest-name .input {
+  width: 100%;
 }
 
 .calls-enter-preview-frame {
@@ -235,19 +246,39 @@
     width: calc(100vw - 14px);
     height: calc(100dvh - 14px);
     max-height: calc(100dvh - 14px);
+    grid-template-rows: auto auto auto;
+    overflow-y: auto;
     padding: var(--calls-enter-dialog-padding);
     gap: 8px;
   }
 
+  .calls-enter-body {
+    min-height: auto;
+    overflow: visible;
+  }
+
   .calls-enter-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    grid-template-columns: none;
+    grid-template-rows: none;
     gap: 8px;
+  }
+
+  .calls-enter-preview {
+    min-height: auto;
+    grid-template-rows: auto auto;
+  }
+
+  .call-access-join-guest-name {
+    width: 100%;
   }
 
   .calls-enter-preview-frame {
     width: 100%;
-    height: 100%;
+    height: min(50dvh, 420px);
+    min-height: 280px;
     aspect-ratio: auto;
     max-height: none;
   }
@@ -259,12 +290,14 @@
     box-shadow: none;
     background: transparent;
     padding: 0;
+    overflow: visible;
   }
 
   .calls-enter-right-settings .call-left-settings {
     padding: 8px;
     gap: 6px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
@@ -303,6 +336,14 @@
     height: 34px;
     padding: 0 14px;
   }
+
+  .calls-modal-footer-enter {
+    flex-wrap: wrap;
+  }
+
+  .calls-modal-footer-enter .btn-cyan {
+    flex: 1 1 180px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -327,8 +368,9 @@
     height: 20px;
   }
 
-  .calls-enter-layout {
-    grid-template-rows: minmax(112px, 34%) minmax(0, 1fr);
+  .calls-enter-preview-frame {
+    height: 50dvh;
+    min-height: 240px;
   }
 
   .calls-enter-right-settings .call-left-settings {
