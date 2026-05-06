@@ -129,8 +129,8 @@ try {
   requireContains(frameHotPath, 'videochat_sfu_upsert_publisher(', 'frame hotpath only refreshes publisher presence');
   requireContains(frameHotPath, 'videochat_sfu_touch_track(', 'frame hotpath only refreshes track presence');
   requireContains(frameHotPath, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'frame hotpath uses JSON-safe relay copy');
-  requireContains(frameHotPath, 'videochat_sfu_insert_frame($activeSfuDatabase, $roomId, (string) $clientId, $relayFrame, $frameBufferInsertError)', 'frame hotpath writes JSON-safe frame copy to bounded SQLite buffer with diagnostics');
-  requireContains(frameHotPath, 'videochat_sfu_live_frame_relay_publish($roomId, (string) $clientId, $relayFrame)', 'frame hotpath publishes to live relay');
+  requireContains(frameHotPath, 'videochat_sfu_insert_frame($activeSfuDatabase, $roomStateKey, (string) $clientId, $relayFrame, $frameBufferInsertError)', 'frame hotpath writes JSON-safe frame copy to bounded SQLite buffer with diagnostics');
+  requireContains(frameHotPath, 'videochat_sfu_live_frame_relay_publish($roomStateKey, (string) $clientId, $relayFrame)', 'frame hotpath publishes to live relay');
   requireContains(frameHotPath, 'videochat_sfu_direct_fanout_frame(', 'frame hotpath keeps direct live fanout');
   assert.equal(/\$activeSfuDatabase->(?:prepare|exec|query)\s*\(/.test(frameHotPath), false, 'frame hotpath must not write frame payload SQL directly');
 
@@ -138,8 +138,12 @@ try {
   requireContains(relay, 'return 2500;', 'live relay keeps frame records short-lived');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_room_bytes(): int', 'live relay bounds room bytes');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs = null): void', 'live relay cleanup exists');
-  requireContains(relay, "@unlink($file);", 'live relay deletes expired transient files');
-  requireContains(relay, "return '/dev/shm/king-videochat-sfu-live-relay';", 'live relay prefers memory-backed transient storage');
+  requireContains(relay, "return 'ram://king-videochat-sfu-live-relay';", 'live relay uses process RAM instead of tmpfs files');
+  requireContains(relay, "function &videochat_sfu_live_frame_relay_state(): array", 'live relay owns a process-local RAM state');
+  requireContains(relay, "unset($records[$relayId]);", 'live relay deletes expired transient RAM records');
+  requireNotContains(relay, "return '/dev/shm/king-videochat-sfu-live-relay';", 'live relay must not depend on tmpfs files');
+  requireNotContains(relay, 'file_put_contents(', 'live relay must not synchronously write frame files');
+  requireNotContains(relay, 'sys_get_temp_dir()', 'live relay must not fall back to temp filesystem storage');
   requireContains(relay, 'function videochat_sfu_sqlite_frame_buffer_poll(', 'broker replay polls the bounded SQLite frame buffer');
   requireContains(relay, "videochat_sfu_send_replay_frames_to_subscriber(", 'broker replay uses bounded subscriber pacing');
   requireContains(relay, "'sqlite_frame_buffer_poll'", 'SQLite frame-buffer replay labels its send path');
