@@ -398,11 +398,14 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     };
-    const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
-      ? 'blur'
-      : 'off';
+    const requestedMode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+    const mode = requestedMode === 'replace'
+      ? 'replace'
+      : requestedMode === 'blur'
+        ? 'blur'
+        : 'off';
     const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-    if (!applyOutgoing || mode !== 'blur') return { mode: 'off' };
+    if (!applyOutgoing || (mode !== 'blur' && mode !== 'replace')) return { mode: 'off' };
 
     const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
     const qualityProfile = String(callMediaPrefs.backgroundQualityProfile || 'balanced').trim().toLowerCase();
@@ -436,6 +439,8 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
 
     return {
       mode,
+      backgroundColor: mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '',
+      backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
       blurPx,
       detectIntervalMs,
       temporalSmoothingAlpha,
@@ -500,7 +505,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
 
       let previewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
-      if (backgroundOptions.mode === 'blur') {
+      if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
           if (result?.stream instanceof MediaStream) previewStream = result.stream;

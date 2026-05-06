@@ -28,6 +28,18 @@
           <div class="calls-modal-body calls-enter-body">
             <div class="calls-enter-layout">
               <section class="calls-enter-preview">
+                <section v-if="state.linkKind === 'open'" class="call-access-join-guest-name call-left-settings-block" :aria-label="t('public.join.guest_name')">
+                  <div class="call-left-settings-title">{{ t('public.join.guest_name') }}</div>
+                  <input
+                    v-model.trim="state.guestName"
+                    class="input"
+                    type="text"
+                    maxlength="96"
+                    :placeholder="t('public.join.guest_name_placeholder')"
+                    :disabled="state.joining || state.waitingForAdmission"
+                    @keydown.enter.prevent="startSessionAndJoin"
+                  />
+                </section>
                 <div class="calls-enter-preview-frame">
                   <video ref="previewVideoRef" autoplay playsinline muted></video>
                   <p v-if="state.previewError" class="calls-inline-error">{{ state.previewError }}</p>
@@ -41,39 +53,37 @@
 
               <section class="calls-enter-right calls-enter-right-settings">
                 <div class="call-left-settings">
-                  <section v-if="state.linkKind === 'open'" class="call-left-settings-block" :aria-label="t('public.join.guest_name')">
-                    <div class="call-left-settings-title">{{ t('public.join.guest_name') }}</div>
-                    <div class="call-left-settings-field">
-                      <input
-                        v-model.trim="state.guestName"
-                        class="input"
-                        type="text"
-                        maxlength="96"
-                        :placeholder="t('public.join.guest_name_placeholder')"
-                        :disabled="state.joining || state.waitingForAdmission"
-                        @keydown.enter.prevent="startSessionAndJoin"
-                      />
-                    </div>
-                  </section>
-
-                  <section class="call-left-settings-block" :aria-label="t('public.join.camera')">
-                    <div class="call-left-settings-title">{{ t('public.join.camera') }}</div>
-                    <div class="call-left-settings-field">
-                      <AppSelect
-                        id="guest-enter-call-camera-select"
-                        :aria-label="t('public.join.camera')"
-                        :model-value="callMediaPrefs.selectedCameraId"
-                        @update:model-value="setCallCameraDevice"
+                  <section class="call-left-settings-block join-settings-blur" :aria-label="t('public.join.background_blur')">
+                    <div class="call-left-settings-title">{{ t('public.join.background_blur') }}</div>
+                    <div class="call-left-blur-controls" role="group" :aria-label="t('public.join.background_blur_controls')">
+                      <button
+                        class="call-left-blur-btn"
+                        :class="{ active: isBackgroundPresetActive('light') }"
+                        type="button"
+                        :aria-pressed="isBackgroundPresetActive('light')"
+                        :aria-label="t('public.join.blur')"
+                        :title="t('public.join.blur')"
+                        @click="applyBackgroundPreset('light')"
                       >
-                        <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('public.join.no_camera_detected') : t('public.join.select_camera') }}</option>
-                        <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
-                          {{ camera.label }}
-                        </option>
-                      </AppSelect>
+                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
+                      </button>
+                      <button
+                        class="call-left-blur-btn"
+                        :class="{ active: isBackgroundPresetActive('strong') }"
+                        type="button"
+                        :aria-pressed="isBackgroundPresetActive('strong')"
+                        :aria-label="t('public.join.strong_blur')"
+                        :title="t('public.join.strong_blur')"
+                        @click="applyBackgroundPreset('strong')"
+                      >
+                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
+                      </button>
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" :aria-label="t('public.join.microphone')">
+                  <CallBackgroundImagePicker :title="t('public.join.background_images')" hide-when-empty />
+
+                  <section class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
                     <div class="call-left-settings-title">{{ t('public.join.mic') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
@@ -103,11 +113,26 @@
                         />
                         <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
                       </div>
+                      <div
+                        class="call-left-meter"
+                        role="meter"
+                        :aria-label="t('public.join.microphone_level')"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        :aria-valuenow="state.micLevelPercent"
+                      >
+                        <span class="call-left-meter-bar" :style="{ width: `${state.micLevelPercent}%` }"></span>
+                      </div>
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" :aria-label="t('public.join.speaker')">
+                  <section class="call-left-settings-block join-settings-speaker" :aria-label="t('public.join.speaker')">
                     <div class="call-left-settings-title">{{ t('public.join.speaker') }}</div>
+                    <div class="call-left-settings-field">
+                      <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
+                        {{ t('public.join.play_test_sound') }}
+                      </button>
+                    </div>
                     <div class="call-left-settings-field">
                       <AppSelect
                         id="guest-enter-call-speaker-select"
@@ -137,53 +162,24 @@
                         <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
                       </div>
                     </div>
+                  </section>
+
+                  <section class="call-left-settings-block join-settings-camera" :aria-label="t('public.join.camera')">
+                    <div class="call-left-settings-title">{{ t('public.join.camera') }}</div>
                     <div class="call-left-settings-field">
-                      <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                        {{ t('public.join.play_test_sound') }}
-                      </button>
+                      <AppSelect
+                        id="guest-enter-call-camera-select"
+                        :aria-label="t('public.join.camera')"
+                        :model-value="callMediaPrefs.selectedCameraId"
+                        @update:model-value="setCallCameraDevice"
+                      >
+                        <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('public.join.no_camera_detected') : t('public.join.select_camera') }}</option>
+                        <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
+                          {{ camera.label }}
+                        </option>
+                      </AppSelect>
                     </div>
                   </section>
-
-                  <section class="call-left-settings-block" :aria-label="t('public.join.background_blur')">
-                    <div class="call-left-settings-title">{{ t('public.join.background_blur') }}</div>
-                    <div class="call-left-blur-controls" role="group" :aria-label="t('public.join.background_blur_controls')">
-                      <button
-                        class="call-left-blur-btn"
-                        :class="{ active: isBackgroundPresetActive('light') }"
-                        type="button"
-                        :aria-pressed="isBackgroundPresetActive('light')"
-                        :aria-label="t('public.join.blur')"
-                        :title="t('public.join.blur')"
-                        @click="applyBackgroundPreset('light')"
-                      >
-                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
-                      </button>
-                      <button
-                        class="call-left-blur-btn"
-                        :class="{ active: isBackgroundPresetActive('strong') }"
-                        type="button"
-                        :aria-pressed="isBackgroundPresetActive('strong')"
-                        :aria-label="t('public.join.strong_blur')"
-                        :title="t('public.join.strong_blur')"
-                        @click="applyBackgroundPreset('strong')"
-                      >
-                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
-                      </button>
-                      <button
-                        class="call-left-blur-btn"
-                        :class="{ active: isBackgroundPresetActive('green') }"
-                        type="button"
-                        :aria-pressed="isBackgroundPresetActive('green')"
-                        aria-label="Green background"
-                        title="Green background"
-                        @click="applyBackgroundPreset('green')"
-                      >
-                        <span class="call-left-blur-label">Green</span>
-                      </button>
-                    </div>
-                  </section>
-
-                  <CallBackgroundImagePicker :title="t('public.join.background_images')" />
 
                   <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
                 </div>
@@ -281,6 +277,7 @@ const state = reactive({
   joinError: '',
   previewReady: false,
   previewError: '',
+  micLevelPercent: 0,
 });
 
 const {
