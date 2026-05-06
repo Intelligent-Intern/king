@@ -304,6 +304,7 @@ export function createLocalPublisherPipelineHelpers({
     let keyframeRetryBlockedUntilMs = 0;
     let securityGateWasClosed = false;
     let lastSecurityGateDiagnosticAtMs = 0;
+    let lastRemoteRecoveryEncoderResetAtMs = 0;
     let fullFrameEncoderWidth = 0;
     let fullFrameEncoderHeight = 0;
     let fullFrameEncoderQuality = 0;
@@ -317,6 +318,7 @@ export function createLocalPublisherPipelineHelpers({
       forcedKeyframeRecoveryPending = false;
       keyframeRetryBlockedUntilMs = 0;
       securityGateWasClosed = false;
+      lastRemoteRecoveryEncoderResetAtMs = 0;
       if (refs.videoPatchEncoderRef.value) {
         try {
           refs.videoPatchEncoderRef.value.destroy?.();
@@ -556,6 +558,22 @@ export function createLocalPublisherPipelineHelpers({
         if (!fullFrameEncoder) {
           mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
           return;
+        }
+        if (!remoteKeyframeRequestPending) {
+          lastRemoteRecoveryEncoderResetAtMs = 0;
+        } else {
+          const recoveryKeyframeResetCadenceMs = Math.max(500, Math.min(1200, keyframeRetryDelayMs));
+          if (
+            lastRemoteRecoveryEncoderResetAtMs <= 0
+            || (timestamp - lastRemoteRecoveryEncoderResetAtMs) >= recoveryKeyframeResetCadenceMs
+          ) {
+            try {
+              fullFrameEncoder.reset?.();
+              lastRemoteRecoveryEncoderResetAtMs = timestamp;
+            } catch {
+              // The next normal full-frame encode still runs; recovery feedback can request another burst.
+            }
+          }
         }
         let tilePatchMetadata = null;
         let tilePatchTransportMetrics = null;
@@ -900,7 +918,6 @@ export function createLocalPublisherPipelineHelpers({
             forcedKeyframeRecoveryPending = false;
             keyframeRetryBlockedUntilMs = 0;
             securityGateWasClosed = false;
-            refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
           }
           lastFullFrameSentAtMs = timestamp;
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {

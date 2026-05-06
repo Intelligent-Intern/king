@@ -156,6 +156,7 @@ function createLegacyDecoder(moduleRef: WLVCModule, config: Required<WasmCodecCo
 }
 
 export class WasmWaveletVideoEncoder {
+  public readonly sfuCodecId = 'wlvc_wasm'
   private encoder: WasmEncoder | null = null
   private moduleRef: WLVCModule | null = null
   private config: Required<WasmCodecConfig>
@@ -283,6 +284,7 @@ export class WasmWaveletVideoEncoder {
 // ---------------------------------------------------------------------------
 
 export class WasmWaveletVideoDecoder {
+  public readonly sfuCodecId = 'wlvc_wasm'
   private decoder: WasmDecoder | null = null
   private moduleRef: WLVCModule | null = null
   private config: Required<WasmCodecConfig>

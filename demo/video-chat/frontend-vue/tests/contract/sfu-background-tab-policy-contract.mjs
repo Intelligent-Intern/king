@@ -49,6 +49,7 @@ async function main() {
   requireContains(policy, 'preserve_remote_publisher_with_keyframe_marker', 'background policy documents remote publisher obligation preservation');
   requireContains(policy, 'pause_local_preview_video_keep_audio_status', 'background policy distinguishes local preview throttling');
   requireContains(policy, 'getRemotePeerCount = () => 0', 'background policy accepts remote peer count from production runtime');
+  requireContains(policy, 'getConnectedParticipantCount = () => 0', 'background policy can preserve publishing during remote-peer reconnect gaps');
   requireContains(policy, 'requestWlvcFullFrameKeyframe = () => false', 'background policy can request a deliberate background keyframe marker');
   requireContains(policy, "eventType: 'sfu_background_tab_publisher_obligation_preserved'", 'background policy emits remote publisher preservation diagnostic');
   requireContains(policy, 'background_pause_intentional', 'background diagnostics identify whether pause was intentional');
@@ -89,6 +90,7 @@ async function main() {
     const policyInstance = module.createSfuBackgroundTabPolicy({
       callbacks: {
         captureClientDiagnostic: (entry) => diagnostics.push(entry),
+        getConnectedParticipantCount: () => 2,
         getRemotePeerCount: () => 2,
         publishLocalTracks: async () => { calls.publish += 1; return true; },
         requestWlvcFullFrameKeyframe: (reason, details = {}) => {
@@ -122,6 +124,32 @@ async function main() {
     assert.equal(diagnostics[0]?.payload?.background_video_policy, 'preserve_remote_publisher_with_keyframe_marker', 'diagnostic records remote publisher preservation policy');
     assert.equal(diagnostics[0]?.payload?.background_pause_intentional, false, 'diagnostic records that remote-publisher pause was not intentional');
     assert.equal(diagnostics[0]?.payload?.active_publisher_layer, 'primary_keyframe_marker', 'diagnostic records active publisher layer');
+
+    const reconnectGapDiagnostics = [];
+    const reconnectGapCalls = { keyframes: [], stop: 0, unpublished: [] };
+    const reconnectGap = module.createSfuBackgroundTabPolicy({
+      callbacks: {
+        captureClientDiagnostic: (entry) => reconnectGapDiagnostics.push(entry),
+        getConnectedParticipantCount: () => 2,
+        getRemotePeerCount: () => 0,
+        requestWlvcFullFrameKeyframe: (reason, details = {}) => {
+          reconnectGapCalls.keyframes.push({ reason, details });
+          return true;
+        },
+        stopLocalEncodingPipeline: () => { reconnectGapCalls.stop += 1; },
+      },
+      refs: {
+        callMediaPrefs: { outgoingVideoQualityProfile: 'balanced' },
+        localStreamRef: { value: new FakeMediaStream() },
+        mediaRuntimePath: { value: 'wlvc_wasm' },
+        sfuClientRef: { value: { unpublishTrack: (trackId) => reconnectGapCalls.unpublished.push(trackId) } },
+      },
+      documentRef: { visibilityState: 'hidden' },
+    });
+    assert.equal(reconnectGap.pauseVideoForBackground({ reason: 'document_hidden', hidden: true }), true, 'hidden tab preserves publisher during transient remote-peer reconnect gap');
+    assert.equal(reconnectGapCalls.stop, 0, 'reconnect-gap preservation must not stop publishing');
+    assert.deepEqual(reconnectGapCalls.unpublished, [], 'reconnect-gap preservation must not unpublish video');
+    assert.equal(reconnectGapDiagnostics[0]?.payload?.connected_participant_count, 2, 'reconnect-gap diagnostic records participant count fallback');
 
     const previewOnlyDiagnostics = [];
     const previewOnlyCalls = { publish: 0, stop: 0, unpublished: [], publishedFlag: null };

@@ -113,6 +113,7 @@ export function registerCallWorkspaceLifecycleHelpers({
   const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
     callbacks: {
       captureClientDiagnostic,
+      getConnectedParticipantCount: () => connectedParticipantUsers?.value?.length || 0,
       getRemotePeerCount: () => remotePeersRef?.value?.size || 0,
       publishLocalTracks,
       requestWlvcFullFrameKeyframe,
