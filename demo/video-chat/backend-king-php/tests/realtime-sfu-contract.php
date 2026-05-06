@@ -396,7 +396,7 @@ try {
         && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_publish')
         && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_poll')
         && str_contains($sfuGatewaySource, 'videochat_sfu_sqlite_frame_buffer_poll'),
-        'SFU cross-worker media fanout must keep bounded live relay and SQLite frame-buffer replay'
+        'SFU media fanout must keep bounded RAM live relay and SQLite cross-worker frame-buffer replay'
     );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),
@@ -423,9 +423,10 @@ try {
         'tag_length' => 16,
     ];
     $protectedFrame = videochat_realtime_sfu_protected_frame($protectedHeader, "\x0b\x0c\x0d");
-    $previousRelayPath = getenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH');
-    $relayRoot = sys_get_temp_dir() . '/videochat-sfu-live-relay-contract-' . bin2hex(random_bytes(6));
-    putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH=' . $relayRoot);
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_root() === 'ram://king-videochat-sfu-live-relay',
+        'SFU live frame relay should use the process RAM ring buffer, not tmpfs files'
+    );
     $relayPayload = [
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -451,7 +452,7 @@ try {
     $relayCursor = '';
     $relaySeen = [];
     $relayedFrames = videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-b', [], $relayCursor, $relaySeen, 10);
-    videochat_realtime_sfu_assert(count($relayedFrames) === 1, 'SFU live frame relay should expose one cross-worker frame');
+    videochat_realtime_sfu_assert(count($relayedFrames) === 1, 'SFU live frame relay should expose one same-worker RAM frame');
     videochat_realtime_sfu_assert(
         (string) ($relayedFrames[0]['publisher_id'] ?? '') === 'publisher-a'
         && (string) ($relayedFrames[0]['protected_frame'] ?? '') === $protectedFrame
@@ -494,25 +495,15 @@ try {
         videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-c', ['publisher-a'], $localRelayCursor, $localRelaySeen, 10) === [],
         'SFU live frame relay should skip publishers that are local to the subscriber worker'
     );
-    $relayRoomDir = videochat_sfu_live_frame_relay_room_dir('room-alpha');
-    $relayFilesAfterLocalSkip = glob($relayRoomDir . '/*.json') ?: [];
-    sort($relayFilesAfterLocalSkip, SORT_STRING);
-    $localRelayWatermark = basename((string) end($relayFilesAfterLocalSkip));
-    $lateRemoteCreatedAtMs = max(1, (int) substr($localRelayWatermark, 0, 13) - 1);
     $lateRemotePayload = array_merge($relayPayload, [
         'publisher_id' => 'publisher-b',
         'publisher_user_id' => '200',
         'track_id' => 'camera-b',
         'frame_sequence' => 43,
     ]);
-    file_put_contents(
-        $relayRoomDir . '/' . sprintf('%013d_99999_999999.json', $lateRemoteCreatedAtMs),
-        json_encode([
-            'created_at_ms' => videochat_sfu_now_ms(),
-            'room_id' => 'room-alpha',
-            'publisher_id' => 'publisher-b',
-            'frame' => $lateRemotePayload,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_publish('room-alpha', 'publisher-b', $lateRemotePayload),
+        'SFU live frame relay should accept remote RAM records after a local skip'
     );
     $lateRemoteFrames = videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-c', ['publisher-a'], $localRelayCursor, $localRelaySeen, 10);
     videochat_realtime_sfu_assert(
@@ -522,22 +513,7 @@ try {
         'SFU live frame relay must not let skipped local frames hide late-arriving remote frames'
     );
     videochat_sfu_live_frame_relay_cleanup_room('room-alpha', videochat_sfu_now_ms() + videochat_sfu_live_frame_relay_ttl_ms() + 1);
-    if (is_dir($relayRoot)) {
-        foreach ((glob($relayRoot . '/*') ?: []) as $relayRoomDir) {
-            if (is_dir($relayRoomDir)) {
-                foreach ((glob($relayRoomDir . '/*') ?: []) as $relayFile) {
-                    @unlink((string) $relayFile);
-                }
-                @rmdir((string) $relayRoomDir);
-            }
-        }
-        @rmdir($relayRoot);
-    }
-    if ($previousRelayPath === false) {
-        putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH');
-    } else {
-        putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH=' . $previousRelayPath);
-    }
+    videochat_sfu_live_frame_relay_cleanup_room($tenantRelayRoomKey, videochat_sfu_now_ms() + videochat_sfu_live_frame_relay_ttl_ms() + 1);
     $jsonMediaCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame',

@@ -382,7 +382,7 @@ function videochat_handle_sfu_routes(
     $knownBrokerPublishers = [];
     $brokerTrackSignatures = [];
     $liveFrameRelayCursor = '';
-    $liveFrameRelaySeenFiles = [];
+    $liveFrameRelaySeenIds = [];
     $sqliteFrameBufferCursor = 0;
     $recoveryRequestCursor = 0;
     $slowSubscriberVideoBlockedUntilMsByClient = [];
@@ -605,7 +605,7 @@ function videochat_handle_sfu_routes(
                     (string) $clientId,
                     array_keys($sfuRooms[$roomStateKey]['publishers'] ?? []),
                     $liveFrameRelayCursor,
-                    $liveFrameRelaySeenFiles,
+                    $liveFrameRelaySeenIds,
                     $slowSubscriberVideoBlockedUntilMsByClient,
                     $sfuClients[$clientId] ?? []
                 );
