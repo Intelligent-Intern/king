@@ -277,7 +277,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
 
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
-      : { detectSampleMs: null, matteMaskValues: null };
+      : { detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);
@@ -290,6 +290,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       : (segmenterStage.reset(), segmenterStage.getState());
     compositorStage.render({
       hasMatteMask: segmenterState.hasMatteMask,
+      maskBitmap: segmenterState.maskBitmap,
       maskHeight: segmenterState.maskHeight,
       maskUpdated: segmenterState.maskUpdated,
       maskValues: segmenterState.maskValues,

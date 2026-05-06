@@ -18,7 +18,7 @@ export function shouldUseReactiveBackgroundPipeline() {
 }
 
 // When enabled, uses the worker-based MediaPipe Tasks-Vision segmenter
-// (selfie_multiclass_256x256 + CONFIDENCE_MASKS) instead of the legacy
+// (selfie_multiclass_256x256 + CATEGORY_MASK) instead of the legacy
 // SelfieSegmentation backend. Falls back to legacy backends on init failure.
 export const WORKER_SEGMENTER_ENABLED = parseEnvFlag(
   import.meta.env.VITE_VIDEOCHAT_WORKER_SEGMENTER,

@@ -2,7 +2,7 @@
  * Web Worker: MediaPipe Tasks-Vision ImageSegmenter
  *
  * Uses selfie_multiclass_256x256.tflite with CATEGORY_MASK output to produce
- * a foreground alpha mask. All non-background categories become alpha 1.
+ * a MediaPipe-drawn foreground alpha mask.
  *
  * Protocol:
  *   IN  { type: 'INIT', modelAssetPath?, delegate?, wasmPath? }
@@ -11,15 +11,15 @@
  *
  *   IN  { type: 'SEGMENT_VIDEO', bitmap: ImageBitmap, timestampMs: number }
  *       (bitmap is transferred - caller must not reuse it)
- *   OUT { type: 'SEGMENT_RESULT', maskValues: Float32Array|null, width, height, inferenceMs }
- *       (maskValues.buffer is transferred)
+ *   OUT { type: 'SEGMENT_RESULT', maskBitmap: ImageBitmap|null, maskValues: Float32Array|null, width, height, inferenceMs }
+ *       (maskBitmap or maskValues.buffer is transferred)
  *   OUT { type: 'SEGMENT_ERROR', error: string }
  *
  *   IN  { type: 'CLEANUP' }
  *   OUT { type: 'CLEANUP_DONE' }
  */
 
-const { ImageSegmenter, FilesetResolver } = await import(
+const { DrawingUtils, ImageSegmenter, FilesetResolver } = await import(
   /* @vite-ignore */
   '/node_modules/@mediapipe/tasks-vision/vision_bundle.mjs'
 );
@@ -31,6 +31,17 @@ let segmenterLabels = [];
 let lastTimestampMs = -1;
 let isInitializing = false;
 let renderCanvas = null;
+
+function buildCategoryAlphaColors() {
+  const colors = [];
+  colors.push([0, 0, 0, 0]);
+  for (let index = 1; index < 256; index += 1) {
+    colors.push([255, 255, 255, 255]);
+  }
+  return colors;
+}
+
+const CATEGORY_ALPHA_COLORS = buildCategoryAlphaColors();
 
 function trimTrailingSlash(value) {
   return String(value || '').replace(/\/+$/, '');
@@ -155,29 +166,32 @@ function confidenceMaskValues(confidenceMasks) {
   };
 }
 
-function categoryMaskValues(categoryMask) {
+function categoryMaskBitmap(categoryMask) {
   const width = Math.max(1, Math.round(Number(categoryMask?.width) || 0));
   const height = Math.max(1, Math.round(Number(categoryMask?.height) || 0));
   if (!categoryMask || width <= 1 || height <= 1) return null;
 
-  let categoryValues = null;
   try {
-    categoryValues = categoryMask.getAsUint8Array();
+    if (!renderCanvas || renderCanvas.width !== width || renderCanvas.height !== height) {
+      renderCanvas = new OffscreenCanvas(width, height);
+    }
+    renderCanvas.width = width;
+    renderCanvas.height = height;
+
+    const glCtx = renderCanvas.getContext('webgl2');
+    if (!glCtx) return null;
+
+    const drawingUtils = new DrawingUtils(glCtx);
+    drawingUtils.drawCategoryMask(categoryMask, CATEGORY_ALPHA_COLORS, [0, 0, 0, 0]);
+    const bitmap = renderCanvas.transferToImageBitmap();
+    return {
+      bitmap,
+      width,
+      height,
+    };
   } catch {
     return null;
   }
-  if (!categoryValues || categoryValues.length < width * height) return null;
-
-  const values = new Float32Array(width * height);
-  for (let pixel = 0; pixel < width * height; pixel += 1) {
-    values[pixel] = categoryValues[pixel] > 0 ? 1 : 0;
-  }
-
-  return {
-    values,
-    width,
-    height,
-  };
 }
 
 // vision_wasm_internal.js is a classic UMD script that sets self.ModuleFactory.
@@ -269,23 +283,35 @@ self.onmessage = async (event) => {
         bitmap.close();
         const inferenceTime = performance.now() - startMs;
 
+        let maskBitmap = null;
         let maskValues = null;
         let width = 0;
         let height = 0;
 
-        const categoryResult = categoryMaskValues(result.categoryMask);
-        const fallbackResult = categoryResult || confidenceMaskValues(result.confidenceMasks);
-        if (fallbackResult) {
-          maskValues = fallbackResult.values;
-          width = fallbackResult.width;
-          height = fallbackResult.height;
+        const categoryResult = categoryMaskBitmap(result.categoryMask);
+        if (categoryResult) {
+          maskBitmap = categoryResult.bitmap;
+          width = categoryResult.width;
+          height = categoryResult.height;
+        } else {
+          const fallbackResult = confidenceMaskValues(result.confidenceMasks);
+          if (fallbackResult) {
+            maskValues = fallbackResult.values;
+            width = fallbackResult.width;
+            height = fallbackResult.height;
+          }
         }
 
         result.close?.();
 
+        const transfer = maskBitmap
+          ? [maskBitmap]
+          : maskValues
+            ? [maskValues.buffer]
+            : [];
         self.postMessage(
-          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskValues, width, height, inferenceTime },
-          maskValues ? [maskValues.buffer] : [],
+          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, maskValues, width, height, inferenceTime },
+          transfer,
         );
       });
     } catch (e) {
