@@ -222,7 +222,6 @@ CREATE TABLE IF NOT EXISTS translation_resources (
     namespace TEXT NOT NULL,
     resource_key TEXT NOT NULL,
     value TEXT NOT NULL,
-    source TEXT NOT NULL DEFAULT 'seed',
     created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -243,6 +242,44 @@ WHERE locale IS NULL
    OR lower(locale) NOT IN (SELECT code FROM supported_locales WHERE is_enabled = 1)
 SQL,
         'CREATE INDEX IF NOT EXISTS idx_users_locale ON users(locale)',
+    ];
+}
+
+/**
+ * @return array<int, string>
+ */
+function videochat_translation_resource_drop_source_migration_statements(): array
+{
+    return [
+        'DROP INDEX IF EXISTS idx_translation_resources_lookup',
+        'DROP INDEX IF EXISTS idx_translation_resources_tenant_locale',
+        'DROP INDEX IF EXISTS idx_translation_resources_scope_key',
+        'DROP TABLE IF EXISTS translation_resources_0047',
+        <<<'SQL'
+CREATE TABLE translation_resources_0047 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tenant_id INTEGER REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    locale TEXT NOT NULL REFERENCES supported_locales(code) ON UPDATE CASCADE ON DELETE CASCADE,
+    namespace TEXT NOT NULL,
+    resource_key TEXT NOT NULL,
+    value TEXT NOT NULL,
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK (trim(namespace) <> ''),
+    CHECK (trim(resource_key) <> '')
+)
+SQL,
+        <<<'SQL'
+INSERT INTO translation_resources_0047(id, tenant_id, locale, namespace, resource_key, value, created_by_user_id, created_at, updated_at)
+SELECT id, tenant_id, locale, namespace, resource_key, value, created_by_user_id, created_at, updated_at
+FROM translation_resources
+SQL,
+        'DROP TABLE translation_resources',
+        'ALTER TABLE translation_resources_0047 RENAME TO translation_resources',
+        'CREATE INDEX IF NOT EXISTS idx_translation_resources_lookup ON translation_resources(locale, namespace, resource_key)',
+        'CREATE INDEX IF NOT EXISTS idx_translation_resources_tenant_locale ON translation_resources(tenant_id, locale, namespace)',
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_translation_resources_scope_key ON translation_resources(COALESCE(tenant_id, 0), locale, namespace, resource_key)',
     ];
 }
 

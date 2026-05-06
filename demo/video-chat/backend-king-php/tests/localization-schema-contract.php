@@ -32,6 +32,12 @@ try {
         in_array('translation_resources', $runtime['table_names'] ?? [], true),
         'translation_resources table missing'
     );
+    $translationColumns = $pdo->query('PRAGMA table_info(translation_resources)')->fetchAll(PDO::FETCH_ASSOC);
+    $translationColumnNames = array_map(static fn (array $row): string => (string) ($row['name'] ?? ''), $translationColumns);
+    videochat_localization_schema_assert(
+        !in_array('source', $translationColumnNames, true),
+        'translation_resources.source must not exist'
+    );
 
     $expectedLocales = array_keys(videochat_supported_locale_definitions());
     sort($expectedLocales);
@@ -62,8 +68,8 @@ try {
 
     $insertResource = $pdo->prepare(
         <<<'SQL'
-INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value, source)
-VALUES(:tenant_id, :locale, :namespace, :resource_key, :value, :source)
+INSERT INTO translation_resources(tenant_id, locale, namespace, resource_key, value)
+VALUES(:tenant_id, :locale, :namespace, :resource_key, :value)
 SQL
     );
     $insertResource->execute([
@@ -72,7 +78,6 @@ SQL
         ':namespace' => 'common',
         ':resource_key' => 'save',
         ':value' => 'Global Speichern',
-        ':source' => 'contract',
     ]);
     $insertResource->execute([
         ':tenant_id' => $tenantId,
@@ -80,7 +85,6 @@ SQL
         ':namespace' => 'common',
         ':resource_key' => 'save',
         ':value' => 'Tenant Speichern',
-        ':source' => 'contract',
     ]);
     $insertResource->execute([
         ':tenant_id' => null,
@@ -88,7 +92,6 @@ SQL
         ':namespace' => 'auth',
         ':resource_key' => 'login',
         ':value' => 'Anmelden',
-        ':source' => 'contract',
     ]);
 
     $tenantResources = videochat_fetch_translation_resources($pdo, 'de', $tenantId, ['common']);

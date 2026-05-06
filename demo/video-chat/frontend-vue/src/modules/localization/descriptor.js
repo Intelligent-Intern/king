@@ -11,20 +11,6 @@ export default {
       pageTitle_key: 'navigation.administration.localization',
       actions: [
         {
-          key: 'localization.resources.refresh',
-          label_key: 'localization.admin.refresh',
-          kind: 'inspect',
-          resource_type: 'translation_resource',
-          required_permissions: ['localization.admin'],
-        },
-        {
-          key: 'localization.resources.upload_csv',
-          label_key: 'localization.admin.upload_csv',
-          kind: 'import',
-          resource_type: 'translation_resource',
-          required_permissions: ['localization.admin'],
-        },
-        {
           key: 'localization.resources.tour',
           label_key: 'onboarding.take_the_tour',
           kind: 'tour',

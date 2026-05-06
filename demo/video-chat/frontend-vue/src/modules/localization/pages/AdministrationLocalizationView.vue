@@ -1,31 +1,11 @@
 <template>
   <AdminPageFrame class="administration-localization-view" :title="t('localization.admin.title')">
-    <template #actions>
-      <button class="btn" type="button" :disabled="loading" @click="loadLocalizationAdminData">
-        {{ t('localization.admin.refresh') }}
-      </button>
-      <label v-if="isSuperAdmin" class="btn btn-cyan localization-file-button">
-        <span>{{ t('localization.admin.upload_csv') }}</span>
-        <input class="localization-file-input" type="file" accept=".csv,text/csv" @change="selectCsv" />
-      </label>
-      <button v-if="isSuperAdmin" class="btn" type="button" :disabled="!csvContent || previewing" @click="previewCsv">
-        {{ t('localization.admin.preview') }}
-      </button>
-      <button v-if="isSuperAdmin" class="btn btn-cyan" type="button" :disabled="!canCommitCsv" @click="commitCsv">
-        {{ t('localization.admin.commit') }}
-      </button>
-    </template>
-
     <template #toolbar>
       <label class="search-field search-field-main" :aria-label="t('localization.admin.search_languages')">
         <input v-model.trim="query" class="input" type="search" :placeholder="t('localization.admin.search_languages')" />
       </label>
-      <span class="settings-upload-status">{{ csvStatus }}</span>
     </template>
 
-    <p v-if="!isSuperAdmin" class="localization-notice">
-      {{ t('localization.admin.imports_restricted') }}
-    </p>
     <p v-if="message" class="localization-notice" :class="{ error: messageKind === 'error' }">
       {{ message }}
     </p>
@@ -37,7 +17,7 @@
             <th>{{ t('localization.admin.language') }}</th>
             <th>{{ t('localization.admin.code') }}</th>
             <th>{{ t('localization.admin.direction') }}</th>
-            <th>{{ t('localization.admin.source') }}</th>
+            <th>{{ t('localization.admin.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -51,7 +31,11 @@
                 {{ language.direction.toUpperCase() }}
               </span>
             </td>
-            <td :data-label="t('localization.admin.source')">intelligent-intern.com</td>
+            <td :data-label="t('localization.admin.actions')">
+              <button class="btn btn-cyan localization-edit-button" type="button" @click="openEditor(language.code)">
+                {{ t('localization.admin.edit') }}
+              </button>
+            </td>
           </tr>
           <tr v-if="filteredLanguages.length === 0">
             <td colspan="4" class="localization-empty-cell">{{ t('localization.admin.no_languages') }}</td>
@@ -60,99 +44,67 @@
       </table>
     </AdminTableFrame>
 
-    <section v-if="preview" class="localization-section">
-      <h2>{{ t('localization.admin.csv_preview') }}</h2>
-      <div class="localization-summary-row">
-        <span>{{ t('localization.admin.rows') }}: {{ preview.total_rows }}</span>
-        <span>{{ t('localization.admin.valid') }}: {{ preview.valid_rows }}</span>
-        <span>{{ t('localization.admin.errors') }}: {{ preview.error_count }}</span>
+    <section v-if="editorOpen" class="localization-editor">
+      <header class="localization-editor-header">
+        <div>
+          <h2>{{ t('localization.admin.editor_title') }}</h2>
+          <p>{{ t('localization.admin.editor_count', { count: translationRows.length }) }}</p>
+        </div>
+      </header>
+
+      <div class="localization-editor-grid">
+        <section class="localization-editor-column">
+          <label class="field">
+            <span>{{ t('localization.admin.left_language') }}</span>
+            <select v-model="editorLeftLocale" class="ii-select">
+              <option v-for="language in languages" :key="`left-${language.code}`" :value="language.code">
+                {{ language.label }} ({{ language.code }})
+              </option>
+            </select>
+          </label>
+          <div class="localization-editor-fields" :aria-busy="editorLoading">
+            <label v-for="row in translationRows" :key="`left-${row.fullKey}`" class="localization-resource-field">
+              <span>{{ row.fullKey }}</span>
+              <textarea
+                class="input localization-resource-input"
+                :dir="localeDirection(editorLeftLocale)"
+                :disabled="editorLoading || saving"
+                :value="editorValue(editorLeftLocale, row.fullKey)"
+                @input="updateEditorValue(editorLeftLocale, row.fullKey, $event.target.value)"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section class="localization-editor-column">
+          <label class="field">
+            <span>{{ t('localization.admin.right_language') }}</span>
+            <select v-model="editorRightLocale" class="ii-select">
+              <option v-for="language in languages" :key="`right-${language.code}`" :value="language.code">
+                {{ language.label }} ({{ language.code }})
+              </option>
+            </select>
+          </label>
+          <div class="localization-editor-fields" :aria-busy="editorLoading">
+            <label v-for="row in translationRows" :key="`right-${row.fullKey}`" class="localization-resource-field">
+              <span>{{ row.fullKey }}</span>
+              <textarea
+                class="input localization-resource-input"
+                :dir="localeDirection(editorRightLocale)"
+                :disabled="editorLoading || saving"
+                :value="editorValue(editorRightLocale, row.fullKey)"
+                @input="updateEditorValue(editorRightLocale, row.fullKey, $event.target.value)"
+              />
+            </label>
+          </div>
+        </section>
       </div>
-      <AdminTableFrame class="localization-table-wrap">
-        <table class="governance-table localization-table compact">
-          <thead>
-            <tr>
-              <th>{{ t('localization.admin.row') }}</th>
-              <th>{{ t('localization.admin.locale') }}</th>
-              <th>{{ t('localization.admin.namespace') }}</th>
-              <th>{{ t('localization.admin.key') }}</th>
-              <th>{{ t('localization.admin.value') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="resource in preview.resources.slice(0, 8)" :key="`${resource.row}-${resource.locale}-${resource.namespace}-${resource.resource_key}`">
-              <td :data-label="t('localization.admin.row')">{{ resource.row }}</td>
-              <td :data-label="t('localization.admin.locale')">{{ resource.locale }}</td>
-              <td :data-label="t('localization.admin.namespace')">{{ resource.namespace }}</td>
-              <td :data-label="t('localization.admin.key')">{{ resource.resource_key }}</td>
-              <td :data-label="t('localization.admin.value')">{{ resource.value }}</td>
-            </tr>
-            <tr v-if="preview.resources.length === 0">
-              <td colspan="5" class="localization-empty-cell">{{ t('localization.admin.no_valid_rows') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </AdminTableFrame>
-      <ul v-if="preview.errors.length" class="localization-errors">
-        <li v-for="error in preview.errors.slice(0, 10)" :key="`${error.row}-${error.field}-${error.code}`">
-          {{ t('localization.admin.row_error', { row: error.row, field: error.field, code: error.code }) }}
-        </li>
-      </ul>
-    </section>
 
-    <section class="localization-section">
-      <h2>{{ t('localization.admin.bundles') }}</h2>
-      <AdminTableFrame class="localization-table-wrap">
-        <table class="governance-table localization-table compact">
-          <thead>
-            <tr>
-              <th>{{ t('localization.admin.locale') }}</th>
-              <th>{{ t('localization.admin.namespace') }}</th>
-              <th>{{ t('localization.admin.tenant') }}</th>
-              <th>{{ t('localization.admin.keys') }}</th>
-              <th>{{ t('localization.admin.updated') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="bundle in bundles" :key="`${bundle.tenant_id || 'global'}-${bundle.locale}-${bundle.namespace}`">
-              <td :data-label="t('localization.admin.locale')">{{ bundle.locale }}</td>
-              <td :data-label="t('localization.admin.namespace')">{{ bundle.namespace }}</td>
-              <td :data-label="t('localization.admin.tenant')">{{ bundle.tenant_id || 'global' }}</td>
-              <td :data-label="t('localization.admin.keys')">{{ bundle.resource_count }}</td>
-              <td :data-label="t('localization.admin.updated')">{{ bundle.updated_at || 'n/a' }}</td>
-            </tr>
-            <tr v-if="bundles.length === 0">
-              <td colspan="5" class="localization-empty-cell">{{ t('localization.admin.no_bundles') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </AdminTableFrame>
-    </section>
-
-    <section class="localization-section">
-      <h2>{{ t('localization.admin.import_history') }}</h2>
-      <AdminTableFrame class="localization-table-wrap">
-        <table class="governance-table localization-table compact">
-          <thead>
-            <tr>
-              <th>{{ t('localization.admin.file') }}</th>
-              <th>{{ t('localization.admin.status') }}</th>
-              <th>{{ t('localization.admin.rows') }}</th>
-              <th>{{ t('localization.admin.imported') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in imports" :key="entry.id">
-              <td :data-label="t('localization.admin.file')">{{ entry.file_name || entry.id }}</td>
-              <td :data-label="t('localization.admin.status')">{{ entry.status }}</td>
-              <td :data-label="t('localization.admin.rows')">{{ entry.row_count }}</td>
-              <td :data-label="t('localization.admin.imported')">{{ entry.committed_at || entry.created_at }}</td>
-            </tr>
-            <tr v-if="imports.length === 0">
-              <td colspan="4" class="localization-empty-cell">{{ t('localization.admin.no_imports') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </AdminTableFrame>
+      <footer class="localization-editor-footer">
+        <button class="btn btn-cyan" type="button" :disabled="editorLoading || saving" @click="saveEditor">
+          {{ saving ? t('localization.admin.saving_translations') : t('localization.admin.save_translations') }}
+        </button>
+      </footer>
     </section>
 
     <template #footer>
@@ -181,24 +133,34 @@ import {
   localizationLanguageDirection,
 } from '../../../support/localizationOptions';
 import { buildLocalizedApiError } from '../apiErrorMessages.js';
+import { ENGLISH_MESSAGES } from '../englishMessages.js';
 import { t } from '../i18nRuntime.js';
 
 const pageSize = 10;
 const query = ref('');
 const page = ref(1);
-const csvFileName = ref('');
-const csvContent = ref('');
 const message = ref('');
 const messageKind = ref('info');
-const loading = ref(false);
-const previewing = ref(false);
-const committing = ref(false);
+const saving = ref(false);
+const editorLoading = ref(false);
 const locales = ref([]);
-const bundles = ref([]);
-const imports = ref([]);
-const preview = ref(null);
+const editorOpen = ref(false);
+const editorLeftLocale = ref('en');
+const editorRightLocale = ref('de');
+const editorValues = ref({});
+const editorOriginalValues = ref({});
 
-const isSuperAdmin = computed(() => Number(sessionState.userId || 0) === 1 && String(sessionState.role || '') === 'admin');
+const translationRows = Object.keys(ENGLISH_MESSAGES)
+  .sort((left, right) => left.localeCompare(right))
+  .map((fullKey) => {
+    const separatorIndex = fullKey.indexOf('.');
+    return {
+      fullKey,
+      namespace: separatorIndex > 0 ? fullKey.slice(0, separatorIndex) : 'common',
+      resourceKey: separatorIndex > 0 ? fullKey.slice(separatorIndex + 1) : fullKey,
+      englishValue: String(ENGLISH_MESSAGES[fullKey] ?? ''),
+    };
+  });
 
 const languages = computed(() => {
   const source = locales.value.length > 0 ? locales.value : SUPPORTED_LOCALIZATION_LANGUAGES;
@@ -221,25 +183,16 @@ const pagedLanguages = computed(() => {
   const offset = (page.value - 1) * pageSize;
   return filteredLanguages.value.slice(offset, offset + pageSize);
 });
-const csvStatus = computed(() => {
-  if (committing.value) return t('localization.admin.committing');
-  if (previewing.value) return t('localization.admin.previewing');
-  if (csvFileName.value) return t('localization.admin.csv_selected', { file: csvFileName.value });
-  return t('localization.admin.no_csv_selected');
-});
-const canCommitCsv = computed(() => (
-  isSuperAdmin.value
-  && !!csvContent.value
-  && !previewing.value
-  && !committing.value
-  && preview.value
-  && Number(preview.value.error_count || 0) === 0
-  && Number(preview.value.valid_rows || 0) > 0
-));
 
 watch(filteredLanguages, () => {
   if (page.value > pageCount.value) {
     page.value = pageCount.value;
+  }
+});
+
+watch([editorLeftLocale, editorRightLocale], () => {
+  if (editorOpen.value) {
+    void loadEditorResources();
   }
 });
 
@@ -284,96 +237,121 @@ async function apiJson(path, options = {}) {
   return payload;
 }
 
+function fieldKey(locale, fullKey) {
+  return `${locale}:${fullKey}`;
+}
+
+function localeDirection(locale) {
+  return localizationLanguageDirection(locale);
+}
+
+function editorValue(locale, fullKey) {
+  return String(editorValues.value[fieldKey(locale, fullKey)] ?? '');
+}
+
+function updateEditorValue(locale, fullKey, value) {
+  editorValues.value = {
+    ...editorValues.value,
+    [fieldKey(locale, fullKey)]: String(value ?? ''),
+  };
+}
+
 async function loadLocalizationAdminData() {
-  loading.value = true;
   try {
-    const [localePayload, bundlePayload, importPayload] = await Promise.all([
-      apiJson('/api/admin/localization/locales', { fallback: t('localization.admin.load_locales_failed') }),
-      apiJson('/api/admin/localization/bundles', { fallback: t('localization.admin.load_bundles_failed') }),
-      apiJson('/api/admin/localization/imports', { fallback: t('localization.admin.load_imports_failed') }),
-    ]);
+    const localePayload = await apiJson('/api/admin/localization/locales', {
+      fallback: t('localization.admin.load_locales_failed'),
+    });
     locales.value = Array.isArray(localePayload.locales) ? localePayload.locales : [];
-    bundles.value = Array.isArray(bundlePayload.bundles) ? bundlePayload.bundles : [];
-    imports.value = Array.isArray(importPayload.imports) ? importPayload.imports : [];
   } catch (error) {
     setMessage(error instanceof Error ? error.message : t('localization.admin.load_data_failed'), 'error');
-  } finally {
-    loading.value = false;
   }
 }
 
-async function readFileText(file) {
-  if (!file) return '';
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error(t('localization.admin.csv_read_failed')));
-    reader.readAsText(file);
+async function loadLocaleResources(locale) {
+  const payload = await apiJson(`/api/localization/resources?locale=${encodeURIComponent(locale)}`, {
+    fallback: t('localization.admin.load_translations_failed'),
   });
+  const resources = payload && typeof payload.resources === 'object' && payload.resources !== null ? payload.resources : {};
+  const values = {};
+  for (const row of translationRows) {
+    values[row.fullKey] = locale === 'en'
+      ? String(resources[row.fullKey] ?? row.englishValue)
+      : String(resources[row.fullKey] ?? '');
+  }
+  return values;
 }
 
-async function selectCsv(event) {
-  const file = event?.target?.files?.[0] || null;
-  csvFileName.value = file?.name || '';
-  csvContent.value = '';
-  preview.value = null;
-  if (!file) return;
+async function loadEditorResources() {
+  editorLoading.value = true;
   try {
-    csvContent.value = await readFileText(file);
-    setMessage(t('localization.admin.csv_loaded'));
+    const selectedLocales = Array.from(new Set([editorLeftLocale.value, editorRightLocale.value]));
+    const resourcePairs = await Promise.all(selectedLocales.map(async (locale) => [locale, await loadLocaleResources(locale)]));
+    const nextValues = {};
+    const nextOriginalValues = {};
+    for (const [locale, resources] of resourcePairs) {
+      for (const row of translationRows) {
+        const key = fieldKey(locale, row.fullKey);
+        nextValues[key] = String(resources[row.fullKey] ?? '');
+        nextOriginalValues[key] = nextValues[key];
+      }
+    }
+    editorValues.value = nextValues;
+    editorOriginalValues.value = nextOriginalValues;
   } catch (error) {
-    setMessage(error instanceof Error ? error.message : t('localization.admin.csv_read_failed'), 'error');
+    setMessage(error instanceof Error ? error.message : t('localization.admin.load_translations_failed'), 'error');
+  } finally {
+    editorLoading.value = false;
   }
 }
 
-async function previewCsv() {
-  if (!csvContent.value || previewing.value) return;
-  previewing.value = true;
-  try {
-    const payload = await apiJson('/api/admin/localization/imports/preview', {
-      method: 'POST',
-      body: {
-        csv: csvContent.value,
-        file_name: csvFileName.value,
-      },
-      fallback: t('localization.admin.csv_preview_failed'),
-    });
-    preview.value = payload.result?.preview || null;
-    const errors = Number(preview.value?.error_count || 0);
-    setMessage(
-      errors > 0 ? t('localization.admin.preview_errors', { count: errors }) : t('localization.admin.preview_passed'),
-      errors > 0 ? 'error' : 'info'
-    );
-  } catch (error) {
-    setMessage(error instanceof Error ? error.message : t('localization.admin.csv_preview_failed'), 'error');
-  } finally {
-    previewing.value = false;
-  }
+function openEditor(locale) {
+  editorLeftLocale.value = 'en';
+  editorRightLocale.value = locale === 'en' ? 'de' : locale;
+  editorOpen.value = true;
+  void loadEditorResources();
 }
 
-async function commitCsv() {
-  if (!canCommitCsv.value) return;
-  committing.value = true;
+async function saveEditor() {
+  if (editorLoading.value || saving.value) return;
+  saving.value = true;
   try {
-    const payload = await apiJson('/api/admin/localization/imports/commit', {
-      method: 'POST',
-      body: {
-        csv: csvContent.value,
-        file_name: csvFileName.value,
-      },
-      fallback: t('localization.admin.csv_import_failed'),
+    const resources = [];
+    const selectedLocales = Array.from(new Set([editorLeftLocale.value, editorRightLocale.value]));
+    for (const locale of selectedLocales) {
+      for (const row of translationRows) {
+        const key = fieldKey(locale, row.fullKey);
+        const value = editorValues.value[key] ?? '';
+        if (String(value) === String(editorOriginalValues.value[key] ?? '')) {
+          continue;
+        }
+        resources.push({
+          locale,
+          namespace: row.namespace,
+          resource_key: row.resourceKey,
+          value: String(value),
+        });
+      }
+    }
+
+    if (resources.length === 0) {
+      setMessage(t('localization.admin.no_translation_changes'));
+      return;
+    }
+
+    const payload = await apiJson('/api/admin/localization/resources', {
+      method: 'PUT',
+      body: { resources },
+      fallback: t('localization.admin.save_translations_failed'),
     });
-    preview.value = payload.result?.preview || preview.value;
-    csvContent.value = '';
-    csvFileName.value = '';
-    setMessage(t('localization.admin.csv_import_committed'));
-    await loadLocalizationAdminData();
+    for (const resource of resources) {
+      const key = fieldKey(resource.locale, `${resource.namespace}.${resource.resource_key}`);
+      editorOriginalValues.value[key] = resource.value;
+    }
+    setMessage(t('localization.admin.translations_saved', { count: payload.saved_count || resources.length }));
   } catch (error) {
-    const payload = error?.payload || null;
-    preview.value = payload?.error?.details?.preview || preview.value;
-    setMessage(error instanceof Error ? error.message : t('localization.admin.csv_import_failed'), 'error');
+    setMessage(error instanceof Error ? error.message : t('localization.admin.save_translations_failed'), 'error');
   } finally {
-    committing.value = false;
+    saving.value = false;
   }
 }
 
@@ -383,61 +361,114 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.localization-file-button {
-  position: relative;
-  overflow: hidden;
-}
-
-.localization-file-input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
 .localization-table {
   margin-top: 10px;
 }
 
-.localization-table.compact {
-  font-size: 0.9rem;
-}
-
-.localization-section {
-  margin-top: 22px;
-}
-
-.localization-section h2 {
-  margin: 0 0 8px;
-  font-size: 1rem;
-}
-
-.localization-summary-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
+.localization-edit-button {
+  min-width: 82px;
 }
 
 .localization-notice {
-  margin: 10px 0 0;
+  margin: 10px 20px 0;
   color: var(--text-muted);
 }
 
-.localization-notice.error,
-.localization-errors {
+.localization-notice.error {
   color: var(--danger);
-}
-
-.localization-errors {
-  margin: 10px 0 0;
-  padding-inline-start: 18px;
 }
 
 .localization-empty-cell {
   padding: 18px 12px;
   text-align: center;
   color: var(--text-muted);
+}
+
+.localization-editor {
+  min-height: 0;
+  margin: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface-navy);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.localization-editor-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.localization-editor-header h2,
+.localization-editor-header p {
+  margin: 0;
+}
+
+.localization-editor-header h2 {
+  font-size: 1rem;
+}
+
+.localization-editor-header p {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.localization-editor-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 20px;
+  overflow: hidden;
+}
+
+.localization-editor-column {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.localization-editor-fields {
+  min-height: 420px;
+  max-height: 58vh;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding-inline-end: 6px;
+}
+
+.localization-resource-field {
+  display: grid;
+  gap: 6px;
+}
+
+.localization-resource-field > span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.localization-resource-input {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.localization-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px 20px;
+}
+
+@media (max-width: 860px) {
+  .localization-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .localization-editor-fields {
+    max-height: none;
+  }
 }
 </style>
