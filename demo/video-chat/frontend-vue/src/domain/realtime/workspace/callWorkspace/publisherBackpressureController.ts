@@ -310,6 +310,21 @@ export function createPublisherBackpressureController({
     state.wlvcPayloadPressureFirstAtMs = 0;
   }
 
+  function isSfuTransportUnavailableSendFailure(reason, details = {}) {
+    const normalizedReason = String(reason || details?.reason || '').trim().toLowerCase();
+    const stage = String(details?.stage || '').trim().toLowerCase();
+    const source = String(details?.source || '').trim().toLowerCase();
+    return normalizedReason === 'socket_not_open'
+      || normalizedReason === 'sfu_client_unavailable_after_encode'
+      || normalizedReason === 'websocket_send_throw'
+      || normalizedReason === 'media_transport_send_failed'
+      || (
+        stage === 'send_binary_envelope'
+        && source === 'media_transport'
+        && normalizedReason.includes('socket')
+      );
+  }
+
   function resetWlvcMotionDeltaStableWindow() {
     state.wlvcMotionDeltaStableStartedAtMs = 0;
     state.wlvcMotionDeltaStableSampleCount = 0;
@@ -781,8 +796,38 @@ export function createPublisherBackpressureController({
     const queueAgeMs = Math.max(0, Number(details?.queueAgeMs ?? details?.queue_age_ms ?? 0));
     const budgetMaxQueueAgeMs = Math.max(0, Number(details?.budgetMaxQueueAgeMs ?? details?.budget_max_queue_age_ms ?? 0));
     const kingReceiveLatencyMs = Math.max(0, Number(details?.kingReceiveLatencyMs ?? details?.king_receive_latency_ms ?? 0));
+    const failureStage = String(details?.stage || 'unknown_stage');
+    const failureSource = String(details?.source || 'unknown_source');
+    const failureTransportPath = String(details?.transportPath || 'unknown_transport');
+    const failureMessage = String(details?.message || 'Outgoing SFU video frame send failed.');
     const serverIngressLatencyExceeded = normalizedReason.trim().toLowerCase() === 'sfu_ingress_latency_budget_exceeded'
       || String(details?.stage || '').trim().toLowerCase() === 'sfu_ingress_latency_guard';
+    if (isSfuTransportUnavailableSendFailure(normalizedReason, details || {})) {
+      const restarted = restartSfuAfterVideoStall('sfu_send_transport_unavailable', {
+        reason: normalizedReason,
+        stage: failureStage,
+        source: failureSource,
+        transport_path: failureTransportPath,
+        message: failureMessage,
+        buffered_amount: normalizedBuffered,
+        send_failure_count: state.wlvcFrameSendFailureCount,
+        queue_age_ms: queueAgeMs,
+        budget_max_queue_age_ms: budgetMaxQueueAgeMs,
+        king_receive_latency_ms: kingReceiveLatencyMs,
+        outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
+        media_runtime_path: getMediaRuntimePath(),
+        receiver_count: receiverCount,
+        chunk_count: chunkCount,
+        sfu_connected: Boolean(sfuConnected?.value),
+        force_reconnect: true,
+      }, {
+        forceReconnect: true,
+      });
+      if (restarted) {
+        resetWlvcFrameSendFailureCounters();
+        return;
+      }
+    }
     const decision = decide({
       kind: 'send_failure',
       reason: normalizedReason,
@@ -848,10 +893,6 @@ export function createPublisherBackpressureController({
       return;
     }
     state.wlvcFrameSendFailureLastLogAtMs = nowMs;
-    const failureStage = String(details?.stage || 'unknown_stage');
-    const failureSource = String(details?.source || 'unknown_source');
-    const failureTransportPath = String(details?.transportPath || 'unknown_transport');
-    const failureMessage = String(details?.message || 'Outgoing SFU video frame send failed.');
     const publisherFrameTraceId = String(details?.publisherFrameTraceId || details?.publisher_frame_trace_id || '');
     const publisherPathTraceStages = String(details?.publisherPathTraceStages || details?.publisher_path_trace_stages || '');
     const sourceDeliveryMs = Math.max(
@@ -1122,7 +1163,7 @@ export function createPublisherBackpressureController({
     return true;
   }
 
-  function restartSfuAfterVideoStall(reason, payload = {}) {
+  function restartSfuAfterVideoStall(reason, payload = {}, options = {}) {
     const nowMs = Date.now();
     if ((nowMs - state.sfuVideoRecoveryLastAtMs) < sfuVideoRecoveryReconnectCooldownMs) {
       return false;
@@ -1130,7 +1171,8 @@ export function createPublisherBackpressureController({
 
     const carrierState = getCarrierState?.();
     const carrierLost = carrierState?.isLost?.() ?? false;
-    const reconnectAllowed = !carrierState || carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
+    const forceReconnect = Boolean(options?.forceReconnect || payload?.force_reconnect);
+    const reconnectAllowed = forceReconnect || !carrierState || carrierLost || (carrierState?.canRequestReconnect?.() ?? false);
 
     if (!reconnectAllowed) {
       captureClientDiagnostic({
@@ -1144,6 +1186,7 @@ export function createPublisherBackpressureController({
           ...payload,
           reason: String(reason || 'video_stall'),
           reconnect_allowed: false,
+          force_reconnect: forceReconnect,
           carrier_state: carrierState?.getState?.() ?? 'unknown',
           media_runtime_path: getMediaRuntimePath(),
           remote_peer_count: getRemotePeerCount(),
@@ -1166,6 +1209,7 @@ export function createPublisherBackpressureController({
         ...payload,
         reason: String(reason || 'video_stall'),
         reconnect_allowed: true,
+        force_reconnect: forceReconnect,
         carrier_state: carrierState?.getState?.() ?? 'unknown',
         media_runtime_path: getMediaRuntimePath(),
         remote_peer_count: getRemotePeerCount(),
