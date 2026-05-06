@@ -42,7 +42,6 @@ export async function createWorkerSegmenterBackend(opts = {}) {
         const timeout = setTimeout(() => fail(new Error('Worker READY timeout')), 5000);
         worker.onmessage = (e) => {
             if (e.data?.type === 'READY') {
-                console.log('Worker is ready');
                 clearTimeout(timeout);
                 resolve();
             }
@@ -52,13 +51,6 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             fail(new Error(`Worker error: ${e.message || 'init_failed'}`));
         };
     });
-    console.log('Created worker segmenter backend with config', {
-        modelAssetPath,
-        delegate,
-        //detectIntervalMs,
-        wasmPath,
-    });
-
     // Wait for INIT_DONE (or INIT_ERROR / timeout).
     const ready = await new Promise((resolve, reject) => {
         const fail = (error) => {
@@ -75,7 +67,6 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             if (type === 'INIT_DONE') {
                 clearTimeout(timer);
                 resolve(event.data.labels || []);
-                console.log('WorkerSegmenter initialized with labels:', event.data.labels);
             } else if (type === 'INIT_ERROR') {
                 fail(new Error(`WorkerSegmenter: ${event.data.error}`));
             }
@@ -120,10 +111,6 @@ export async function createWorkerSegmenterBackend(opts = {}) {
         const { video, sourceWidth, sourceHeight, targetWidth, targetHeight, timestampMs, nowMs } = params;
         pendingFrame = true;
         lastDetectAt = nowMs;
-/*         console.log('[dispatchFrame] Dispatching frame to worker with timestampMs', timestampMs, 'and source/target sizes', sourceWidth, sourceHeight, targetWidth, targetHeight);
-        console.log('[dispatchFrame] params', params); */
-
-//[dispatchFrame] params {video: video, sourceWidth: 640, sourceHeight: 480, targetWidth: 640, targetHeight: 480, …}
         if (!pendingFrameCtx) {
             pendingFrame = false;
             return;

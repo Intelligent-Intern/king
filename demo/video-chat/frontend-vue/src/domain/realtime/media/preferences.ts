@@ -269,9 +269,6 @@ function applyEnumeratedDevices(devices) {
 }
 
 export async function refreshCallMediaDevices({ requestPermissions = false } = {}) {
-  console.log('Refreshing media devices...', { requestPermissions });
-  console.log('MediaDevices supported:', typeof navigator !== 'undefined' && navigator.mediaDevices && typeof navigator.mediaDevices.enumerateDevices === 'function');
-  console.log(navigator.mediaDevices);
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices

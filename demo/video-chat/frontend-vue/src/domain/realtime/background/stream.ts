@@ -137,7 +137,9 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   let statsWindowStartAt = performance.now();
   const targetFps = Math.max(8, Math.min(30, Math.round(fps)));
   let segmentationBackend = null;
+  let segmentationBackendInitPromise = null;
   let segmentationBackendKind = 'none';
+  let handle = null;
   let resolveReady = () => { };
   let sourceStopReason = '';
   const markReady = () => {
@@ -152,8 +154,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     markReady,
     Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, runtimeConfig.detectIntervalMs + 100),
   );
-  console.log('[BackgroundFilter] Stream setup complete, initializing segmentation backend');
-  console.log('[BackgroundFilter] timer set to mark ready in', Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, runtimeConfig.detectIntervalMs + 100), 'ms');
   const segmenterStage = createBackgroundSegmenterStage({
     width: canvas.width,
     height: canvas.height,
@@ -169,37 +169,49 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
 
   async function ensureSegmentationBackend() {
     if (segmentationBackend || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) return segmentationBackend;
+    if (segmentationBackendInitPromise) return segmentationBackendInitPromise;
     const initFailures = [];
-    console.log('[BackgroundFilter] Initializing segmentation backend', {
-      backend: 'worker-segmenter',
-    });
-    try {
-      console.log('[BackgroundFilter] Attempting to initialize worker segmenter backend');
+    segmentationBackendInitPromise = (async () => {
       try {
-        segmentationBackend = await createWorkerSegmenterBackend({
-          detectIntervalMs: runtimeConfig.detectIntervalMs,
-        });
-      } catch (error) {
-        initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
+        try {
+          segmentationBackend = await createWorkerSegmenterBackend({
+            detectIntervalMs: runtimeConfig.detectIntervalMs,
+          });
+        } catch (error) {
+          initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
+          segmentationBackend = null;
+        }
+      } catch {
         segmentationBackend = null;
       }
-    } catch {
-      segmentationBackend = null;
-    }
-    segmentationBackendKind = segmentationBackend?.kind || 'none';
-    console.log('[BackgroundFilter] Segmentation backend initialization result', {
-      selected: segmentationBackendKind,
-      requested: 'worker-segmenter',
-      failures: initFailures,
+      segmentationBackendKind = segmentationBackend?.kind || 'none';
+      if (segmentationBackendKind === 'none' && initFailures.length > 0) {
+        console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
+          selected: segmentationBackendKind,
+          requested: 'worker-segmenter',
+          failures: initFailures,
+        });
+      }
+      return segmentationBackend;
+    })().finally(() => {
+      segmentationBackendInitPromise = null;
+      syncPipelineStageStates();
     });
-    if (segmentationBackendKind === 'none' && initFailures.length > 0) {
+    return segmentationBackendInitPromise;
+  }
+
+  function warmSegmentationBackend() {
+    void ensureSegmentationBackend().then(() => {
+      if (handle) handle.backend = segmentationBackendKind;
+    }).catch((error) => {
+      segmentationBackendKind = 'none';
+      if (handle) handle.backend = 'none';
       console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
         selected: segmentationBackendKind,
         requested: 'worker-segmenter',
-        failures: initFailures,
+        failures: [error?.message || 'init_failed'],
       });
-    }
-    return segmentationBackend;
+    });
   }
 
   function syncPipelineStageStates() {
@@ -346,14 +358,13 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   };
   const scheduler = createVideoFrameScheduler({ onFrame: draw, video });
   applyConfigUpdate(options);
-  await ensureSegmentationBackend();
   setSourceActive(runtimeConfig.sourceActive, 'initial');
   scheduler.start();
   const onTrackEnded = () => setSourceActive(false, 'track_ended');
   const onTrackMute = () => setSourceActive(false, 'track_muted');
   const onTrackUnmute = () => {
     setSourceActive(true, 'track_unmuted');
-    void ensureSegmentationBackend();
+    warmSegmentationBackend();
   };
   videoTrack.addEventListener?.('ended', onTrackEnded);
   videoTrack.addEventListener?.('mute', onTrackMute);
@@ -383,7 +394,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     segmenterStage.reset();
     pipelineController?.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.PIPELINE_STOP, {});
   };
-  const handle = {
+  handle = {
     sourceStream,
     stream: out,
     active: runtimeConfig.mode !== 'off',
@@ -396,7 +407,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     async updateConfig(nextOptions = {}) {
       applyConfigUpdate(nextOptions);
       if (runtimeConfig.mode !== 'off') {
-        await ensureSegmentationBackend();
+        warmSegmentationBackend();
       }
       handle.active = runtimeConfig.mode !== 'off';
       handle.reason = runtimeConfig.mode === 'off' ? 'off' : 'ok';
@@ -408,6 +419,9 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     setSourceActive,
     dispose
   };
+  if (runtimeConfig.mode !== 'off' && runtimeConfig.sourceActive) {
+    warmSegmentationBackend();
+  }
   return handle;
 }
 

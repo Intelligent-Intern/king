@@ -337,14 +337,14 @@ export function registerCallWorkspaceLifecycleHelpers({
       },
     }));
 
-    setDetachMediaDeviceWatcher(attachCallMediaDeviceWatcher({ requestPermissions: true }));
+    setDetachMediaDeviceWatcher(attachCallMediaDeviceWatcher());
     const canEnterWorkspace = await resolveRouteCallRef(routeCallRef.value);
     if (!canEnterWorkspace) {
       return;
     }
     ensureRoomBuckets(desiredRoomId.value);
     serverRoomId.value = desiredRoomId.value;
-    await refreshCallMediaDevices({ requestPermissions: true });
+    await refreshCallMediaDevices();
     await loadDynamicIceServers();
     void connectSocket();
 

@@ -221,7 +221,6 @@ async function loadModuleFactory(resolvedWasmPath) {
   if (typeof self.ModuleFactory !== 'function') {
     throw new Error(`ModuleFactory not set after eval of ${url}`);
   }
-  console.log('[Worker] ModuleFactory loaded from:', url);
 }
 
 async function initialize({ modelAssetPath, delegate, wasmPath }) {
@@ -233,7 +232,6 @@ async function initialize({ modelAssetPath, delegate, wasmPath }) {
 
     await loadModuleFactory(resolvedWasm);
 
-    console.log('ModuleFactory before fileset:', typeof self.ModuleFactory);
     const fileset = sanitizeFilesetPaths(await FilesetResolver.forVisionTasks(resolvedWasm));
 
     const response = await fetch(resolvedModel);
@@ -262,7 +260,6 @@ async function initialize({ modelAssetPath, delegate, wasmPath }) {
     });
 
     segmenterLabels = segmenter.getLabels();
-    console.log('Segmenter initialized with labels:', segmenterLabels);
     self.postMessage({ type: 'INIT_DONE', labels: segmenterLabels });
   } catch (error) {
     self.postMessage({ type: 'INIT_ERROR', error: error?.message || String(error) });
@@ -275,7 +272,6 @@ self.onmessage = async (event) => {
   const { type } = event.data;
 
   if (type === 'INIT') {
-    console.log('Worker received INIT message with config', event.data);
     await initialize(event.data);
 
   } else if (type === 'SEGMENT_VIDEO' || type === 'SEGMENT_IMAGE') {
