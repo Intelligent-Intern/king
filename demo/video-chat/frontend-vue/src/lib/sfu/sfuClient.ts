@@ -901,29 +901,38 @@ export class SFUClient {
     metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
     metrics.send_drain_max_wait_ms = drain.maxWaitMs
     if (!drain.ok) {
-      this.reportFrameSendDiagnostic(
-        'sfu_frame_send_aborted',
-        'error',
-        'SFU frame send aborted while waiting for websocket backpressure to drain.',
-        {
-          ...metrics,
-          buffered_amount: drain.bufferedAmount,
-          send_wait_ms: drain.waitedMs,
-          send_drain_target_buffered_bytes: drain.targetBufferedBytes,
-          send_drain_max_wait_ms: drain.maxWaitMs,
-          abort_reason: 'send_buffer_drain_timeout',
-        },
-        true,
-      )
-      this.recordSendFailure(prepared, {
-        reason: 'send_buffer_drain_timeout',
-        stage: 'wait_for_send_buffer_drain',
-        source: 'binary_envelope',
-        message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
-        transportPath: 'binary_envelope',
-        bufferedAmount: drain.bufferedAmount,
-      })
-      return false
+      const projectedBufferedAfterDrainTimeoutBytes = Math.max(0, drain.bufferedAmount) + projectedWirePayloadBytes
+      const mayContinueWithinProfileBufferBudget = bufferedBudgetBytes <= 0
+        || projectedBufferedAfterDrainTimeoutBytes <= bufferedBudgetBytes
+      if (mayContinueWithinProfileBufferBudget) {
+        metrics.send_drain_timeout_continued = true
+        metrics.send_drain_buffered_amount = drain.bufferedAmount
+        metrics.projected_buffered_after_send_bytes = projectedBufferedAfterDrainTimeoutBytes
+      } else {
+        this.reportFrameSendDiagnostic(
+          'sfu_frame_send_aborted',
+          'error',
+          'SFU frame send aborted while waiting for websocket backpressure to drain.',
+          {
+            ...metrics,
+            buffered_amount: drain.bufferedAmount,
+            send_wait_ms: drain.waitedMs,
+            send_drain_target_buffered_bytes: drain.targetBufferedBytes,
+            send_drain_max_wait_ms: drain.maxWaitMs,
+            abort_reason: 'send_buffer_drain_timeout',
+          },
+          true,
+        )
+        this.recordSendFailure(prepared, {
+          reason: 'send_buffer_drain_timeout',
+          stage: 'wait_for_send_buffer_drain',
+          source: 'binary_envelope',
+          message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
+          transportPath: 'binary_envelope',
+          bufferedAmount: drain.bufferedAmount,
+        })
+        return false
+      }
     }
     if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
       this.recordSendFailure(prepared, {
