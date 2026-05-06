@@ -53,7 +53,7 @@ try {
   assert.ok(!imageSegmenterWorker.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'Image segmenter worker must not use the legacy SelfieSegmentation assets');
 
   const backgroundStream = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.js'));
-  assert.ok(backgroundStream.includes("import { createWorkerSegmenterBackend } from './backendWorkerSegmenter';"), 'Background stream must use the worker segmenter backend');
+  assert.ok(backgroundStream.includes("import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';"), 'Background stream must use the shared worker segmenter lease');
   assert.ok(!backgroundStream.includes('backendMediapipe'), 'Background stream must not import the legacy MediaPipe backend');
   assert.ok(!backgroundStream.includes('backendTfjs'), 'Background stream must not import the legacy TensorFlow backend');
 

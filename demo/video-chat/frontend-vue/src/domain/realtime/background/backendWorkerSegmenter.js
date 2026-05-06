@@ -21,6 +21,15 @@ const MEDIAPIPE_WASM_BASE_PATH = '/wasm/';
 const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_multiclass_256x256.tflite`;
 const WASM_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_WASM_BASE_PATH}`;
 const INIT_TIMEOUT_MS = 15000;
+const LEASE_WAIT_TIMEOUT_MS = 2000;
+const LEASE_WAIT_POLL_MS = 25;
+const SHARED_BACKEND_IDLE_TTL_MS = 60000;
+
+let sharedBackend = null;
+let sharedBackendPromise = null;
+let sharedBackendIdleTimer = null;
+let activeLeaseOwner = null;
+let leaseCounter = 0;
 
 export async function createWorkerSegmenterBackend(opts = {}) {
     const modelAssetPath = opts.modelAssetPath || MODEL_PATH;
@@ -109,6 +118,27 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     let disposed = false;
     let hasQueuedFrame = false;
     let queuedFrameParams = null;
+    let sessionId = 0;
+    const resetResolvers = new Map();
+
+    function clearPendingState() {
+        pendingFrame = false;
+        lastDetectAt = -Infinity;
+        pendingSampleMs = null;
+        pendingMaskBitmap?.close?.();
+        pendingMaskBitmap = null;
+        pendingMaskValues = null;
+        pendingMaskWidth = 0;
+        pendingMaskHeight = 0;
+        pendingResultFrame = false;
+        hasQueuedFrame = false;
+        queuedFrameParams = null;
+    }
+
+    function nextSessionId() {
+        sessionId = (sessionId % Number.MAX_SAFE_INTEGER) + 1;
+        return sessionId;
+    }
 
     function queueLatestFrame(params) {
         hasQueuedFrame = true;
@@ -133,14 +163,15 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             pendingFrameCanvas.height = targetHeight;
         }
         pendingFrameCtx.drawImage(video, 0, 0, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+        const dispatchSessionId = sessionId;
 
         createImageBitmap(pendingFrameCanvas).then((bitmap) => {
-            if (disposed) {
+            if (disposed || dispatchSessionId !== sessionId) {
                 bitmap.close();
                 return;
             }
             worker.postMessage(
-                { type: 'SEGMENT_VIDEO', bitmap, timestampMs },
+                { type: 'SEGMENT_VIDEO', bitmap, sessionId: dispatchSessionId, timestampMs },
                 [bitmap],
             );
         }).catch(() => {
@@ -157,7 +188,19 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     worker.onmessage = (event) => {
         const { type } = event.data;
 
-        if (type === 'SEGMENT_RESULT') {
+        if (type === 'RESET_DONE') {
+            const resolvedSessionId = Math.max(0, Math.round(Number(event.data.sessionId) || 0));
+            const resolve = resetResolvers.get(resolvedSessionId);
+            if (resolve) {
+                resetResolvers.delete(resolvedSessionId);
+                resolve();
+            }
+        } else if (type === 'SEGMENT_RESULT') {
+            if (Math.max(0, Math.round(Number(event.data.sessionId) || 0)) !== sessionId) {
+                event.data.maskBitmap?.close?.();
+                pendingFrame = false;
+                return;
+            }
             pendingFrame = false;
             const { maskBitmap, maskValues, width, height, inferenceMs, inferenceTime } = event.data;
             const sample = typeof inferenceMs === 'number'
@@ -208,6 +251,29 @@ export async function createWorkerSegmenterBackend(opts = {}) {
     return {
         kind: 'worker-segmenter',
         labels,
+
+        resetSession() {
+            if (disposed) return Promise.resolve();
+            const nextId = nextSessionId();
+            clearPendingState();
+            return new Promise((resolve) => {
+                const timer = setTimeout(() => {
+                    resetResolvers.delete(nextId);
+                    resolve();
+                }, 1000);
+                resetResolvers.set(nextId, () => {
+                    clearTimeout(timer);
+                    resolve();
+                });
+                try {
+                    worker.postMessage({ type: 'RESET', sessionId: nextId });
+                } catch {
+                    clearTimeout(timer);
+                    resetResolvers.delete(nextId);
+                    resolve();
+                }
+            });
+        },
 
         nextFaces(video, vw, vh, nowMs) {
             if (disposed) return { faces: [], detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
@@ -286,16 +352,87 @@ export async function createWorkerSegmenterBackend(opts = {}) {
             pendingFrameCanvas.height = 1;
             resultFrameCanvas.width = 1;
             resultFrameCanvas.height = 1;
-            pendingFrame = false;
-            pendingSampleMs = null;
-            pendingMaskBitmap?.close?.();
-            pendingMaskBitmap = null;
-            pendingMaskValues = null;
-            pendingMaskWidth = 0;
-            pendingMaskHeight = 0;
-            pendingResultFrame = false;
-            hasQueuedFrame = false;
-            queuedFrameParams = null;
+            clearPendingState();
+            for (const resolve of resetResolvers.values()) {
+                try { resolve(); } catch { /* ignore */ }
+            }
+            resetResolvers.clear();
+        },
+    };
+}
+
+function clearSharedBackendIdleTimer() {
+    if (!sharedBackendIdleTimer) return;
+    clearTimeout(sharedBackendIdleTimer);
+    sharedBackendIdleTimer = null;
+}
+
+function scheduleSharedBackendIdleDispose() {
+    clearSharedBackendIdleTimer();
+    sharedBackendIdleTimer = setTimeout(() => {
+        if (activeLeaseOwner) return;
+        sharedBackend?.dispose?.();
+        sharedBackend = null;
+        sharedBackendPromise = null;
+        sharedBackendIdleTimer = null;
+    }, SHARED_BACKEND_IDLE_TTL_MS);
+}
+
+async function waitForActiveLeaseToRelease() {
+    const startedAt = performance.now();
+    while (activeLeaseOwner && performance.now() - startedAt < LEASE_WAIT_TIMEOUT_MS) {
+        await new Promise((resolve) => setTimeout(resolve, LEASE_WAIT_POLL_MS));
+    }
+    if (activeLeaseOwner) {
+        throw new Error(`Worker segmenter already leased by ${activeLeaseOwner}`);
+    }
+}
+
+async function ensureSharedWorkerSegmenterBackend(opts = {}) {
+    clearSharedBackendIdleTimer();
+    if (sharedBackend) return sharedBackend;
+    if (!sharedBackendPromise) {
+        sharedBackendPromise = createWorkerSegmenterBackend(opts)
+            .then((backend) => {
+                sharedBackend = backend;
+                return backend;
+            })
+            .catch((error) => {
+                sharedBackend = null;
+                sharedBackendPromise = null;
+                throw error;
+            });
+    }
+    return sharedBackendPromise;
+}
+
+export async function acquireWorkerSegmenterBackendLease(opts = {}) {
+    await waitForActiveLeaseToRelease();
+    const backend = await ensureSharedWorkerSegmenterBackend(opts);
+    await waitForActiveLeaseToRelease();
+
+    const ownerId = String(opts.ownerId || `background-pipeline-${++leaseCounter}`);
+    activeLeaseOwner = ownerId;
+    await backend.resetSession?.();
+
+    let released = false;
+    return {
+        backend,
+        ownerId,
+        release({ keepWarm = true } = {}) {
+            if (released) return;
+            released = true;
+            if (activeLeaseOwner !== ownerId) return;
+            activeLeaseOwner = null;
+            void backend.resetSession?.();
+            if (keepWarm) {
+                scheduleSharedBackendIdleDispose();
+            } else {
+                clearSharedBackendIdleTimer();
+                backend.dispose?.();
+                sharedBackend = null;
+                sharedBackendPromise = null;
+            }
         },
     };
 }

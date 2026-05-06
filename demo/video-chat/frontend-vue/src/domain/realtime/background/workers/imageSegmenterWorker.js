@@ -278,6 +278,11 @@ self.onmessage = async (event) => {
     console.log('Worker received INIT message with config', event.data);
     await initialize(event.data);
 
+  } else if (type === 'RESET') {
+    // Keep lastTimestampMs monotonic while the ImageSegmenter stays alive.
+    // MediaPipe VIDEO mode rejects lower timestamps even after our session reset.
+    self.postMessage({ type: 'RESET_DONE', sessionId: Math.max(0, Math.round(Number(event.data.sessionId) || 0)) });
+
   } else if (type === 'SEGMENT_VIDEO' || type === 'SEGMENT_IMAGE') {
     if (!segmenter) {
       event.data.bitmap?.close();
@@ -285,7 +290,8 @@ self.onmessage = async (event) => {
       return;
     }
     
-    const { bitmap, timestampMs } = event.data;
+    const { bitmap, sessionId, timestampMs } = event.data;
+    const requestSessionId = Math.max(0, Math.round(Number(sessionId) || 0));
     const ts = timestampMs > lastTimestampMs ? timestampMs : lastTimestampMs + 1;
     lastTimestampMs = ts;
 
@@ -322,7 +328,7 @@ self.onmessage = async (event) => {
             ? [maskValues.buffer]
             : [];
         self.postMessage(
-          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, maskValues, width, height, inferenceTime },
+          { type: 'SEGMENT_RESULT', mode: 'VIDEO', maskBitmap, maskValues, width, height, inferenceTime, sessionId: requestSessionId },
           transfer,
         );
       });
