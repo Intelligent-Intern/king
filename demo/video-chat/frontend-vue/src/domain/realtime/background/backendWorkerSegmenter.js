@@ -16,9 +16,9 @@
  */
 
 const VIDEOCHAT_CDN_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CDN_ORIGIN || '').replace(/\/+$/, '');
-const MEDIAPIPE_MODEL_BASE_PATH = '/cdn/vendor/mediapipe/models/';
+const MEDIAPIPE_MODEL_BASE_PATH = '/cdn/vendor/mediapipe/selfie_segmentation/';
 const MEDIAPIPE_WASM_BASE_PATH = '/wasm/';
-const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_multiclass_256x256.tflite`;
+const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_segmentation.tflite`;
 const WASM_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_WASM_BASE_PATH}`;
 const INIT_TIMEOUT_MS = 15000;
 
@@ -34,7 +34,12 @@ export async function createWorkerSegmenterBackend(opts = {}) {
 
     // Wait for READY before sending INIT
     await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('Worker READY timeout')), 5000);
+        const fail = (error) => {
+            clearTimeout(timeout);
+            try { worker.terminate(); } catch { /* ignore */ }
+            reject(error);
+        };
+        const timeout = setTimeout(() => fail(new Error('Worker READY timeout')), 5000);
         worker.onmessage = (e) => {
             if (e.data?.type === 'READY') {
                 console.log('Worker is ready');
@@ -44,11 +49,9 @@ export async function createWorkerSegmenterBackend(opts = {}) {
         };
         worker.onerror = (e) => {
             console.error('Worker error before READY:', e);
-            clearTimeout(timeout);
-            reject(new Error(`Worker error: ${e.message}`));
+            fail(new Error(`Worker error: ${e.message || 'init_failed'}`));
         };
     });
-    console.log("worker", worker);
     console.log('Created worker segmenter backend with config', {
         modelAssetPath,
         delegate,
@@ -58,8 +61,13 @@ export async function createWorkerSegmenterBackend(opts = {}) {
 
     // Wait for INIT_DONE (or INIT_ERROR / timeout).
     const ready = await new Promise((resolve, reject) => {
+        const fail = (error) => {
+            clearTimeout(timer);
+            try { worker.terminate(); } catch { /* ignore */ }
+            reject(error);
+        };
         const timer = setTimeout(() => {
-            reject(new Error('WorkerSegmenter: init timeout'));
+            fail(new Error('WorkerSegmenter: init timeout'));
         }, INIT_TIMEOUT_MS);
 
         worker.onmessage = (event) => {
@@ -69,14 +77,12 @@ export async function createWorkerSegmenterBackend(opts = {}) {
                 resolve(event.data.labels || []);
                 console.log('WorkerSegmenter initialized with labels:', event.data.labels);
             } else if (type === 'INIT_ERROR') {
-                clearTimeout(timer);
-                reject(new Error(`WorkerSegmenter: ${event.data.error}`));
+                fail(new Error(`WorkerSegmenter: ${event.data.error}`));
             }
         };
 
         worker.onerror = (err) => {
-            clearTimeout(timer);
-            reject(new Error(`WorkerSegmenter worker error: ${err.message}`));
+            fail(new Error(`WorkerSegmenter worker error: ${err.message || 'init_failed'}`));
         };
 
         worker.postMessage({ type: 'INIT', modelAssetPath, delegate, wasmPath });
