@@ -37,7 +37,11 @@ assert.ok(adminNavigation.some((item) => item.key === 'governance'), 'governance
 assert.ok(adminFlat.every((item) => typeof item.label_key === 'string'), 'navigation entries must carry translation label keys');
 
 const userNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, { role: 'user' });
-assert.deepEqual(userNavigation, [], 'descriptor admin navigation must be hidden for normal users');
+assert.ok(userNavigation.some((item) => item.to === '/calendar'), 'user calendar navigation must be descriptor-built');
+assert.ok(
+  userNavigation.every((item) => item.to === '/calendar'),
+  'descriptor admin navigation must stay hidden for normal users',
+);
 
 const restrictedNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, {
   role: 'admin',

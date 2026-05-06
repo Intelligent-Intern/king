@@ -13,22 +13,15 @@ function moduleRows(registry) {
   return registry.list().map((descriptor) => ({
     entity_key: 'modules',
     id: `module:${descriptor.module_key}`,
-    name: titleFromKey(descriptor.module_key),
+    name: normalizeString(descriptor.catalog?.name) || titleFromKey(descriptor.module_key),
     key: descriptor.module_key,
     status: 'active',
     description: '',
-    description_key: 'governance.catalog.module_description',
-    description_params: {
-      routes: descriptor.routes.length,
-      navigation: descriptor.navigation.length,
-      settings: descriptor.settings_panels.length,
-      grant_targets: descriptor.access.grant_targets.join(', '),
-      permissions: descriptor.permissions.length > 0 ? descriptor.permissions.join(', ') : '',
-      permissions_key: descriptor.permissions.length > 0 ? '' : 'governance.catalog.no_permissions',
-      time_limited_key: descriptor.access.supports_time_limited_grants
-        ? 'governance.catalog.time_limited_supported'
-        : 'governance.catalog.time_limited_not_supported',
-    },
+    preview_kind: normalizeString(descriptor.catalog?.preview_kind) || descriptor.module_key,
+    screenshot_path: normalizeString(descriptor.catalog?.screenshot_path),
+    route_count: descriptor.routes.length,
+    navigation_count: descriptor.navigation.length,
+    settings_count: descriptor.settings_panels.length,
     updatedAt: '',
     readonly: true,
   }));

@@ -3,6 +3,8 @@ import { workspaceModuleRegistry } from '../../src/modules/index.js';
 
 const expectedModules = [
   'administration',
+  'calendar',
+  'calls',
   'governance',
   'localization',
   'marketplace',
@@ -15,13 +17,13 @@ const modules = workspaceModuleRegistry.list();
 assert.deepEqual(
   modules.map((descriptor) => descriptor.module_key).sort(),
   expectedModules,
-  'module registry must expose the first non-call module set',
+  'module registry must expose every workspace module descriptor',
 );
 
 const routes = workspaceModuleRegistry.routes();
 for (const route of routes) {
   assert.ok(route.module_key, 'route must carry owning module key');
-  assert.ok(route.path.startsWith('/admin/'), `unexpected route path ${route.path}`);
+  assert.ok(route.path.startsWith('/admin/') || route.path === '/calendar', `unexpected route path ${route.path}`);
   assert.ok(!String(route.source_path || '').startsWith('domain/calls/'), 'module route must not touch call domain');
   assert.ok(!String(route.source_path || '').startsWith('domain/realtime/'), 'module route must not touch realtime domain');
 }
