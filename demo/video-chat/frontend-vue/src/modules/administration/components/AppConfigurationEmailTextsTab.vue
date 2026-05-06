@@ -2,9 +2,6 @@
   <section class="app-config-crud">
     <section class="app-config-crud-main">
       <section class="app-config-toolbar">
-        <button class="btn btn-cyan" type="button" @click="openCreate">
-          {{ t('administration.email_text_create') }}
-        </button>
         <label class="search-field search-field-main" :aria-label="t('administration.email_text_search')">
           <input
             v-model.trim="query"
@@ -87,7 +84,7 @@
 
     <aside v-if="editor.open" class="app-config-editor">
       <header class="app-config-editor-head">
-        <strong>{{ editor.mode === 'create' ? t('administration.email_text_create') : t('administration.email_text_edit') }}</strong>
+        <strong>{{ t('administration.email_text_edit') }}</strong>
         <AppIconButton
           icon="/assets/orgas/kingrt/icons/cancel.png"
           :title="t('common.close_panel')"
@@ -137,7 +134,6 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import AdminTableFrame from '../../../components/admin/AdminTableFrame.vue';
 import {
-  createWorkspaceEmailText,
   deleteWorkspaceEmailText,
   listWorkspaceEmailTexts,
   updateWorkspaceEmailText,
@@ -149,7 +145,7 @@ const rows = ref([]);
 const query = ref('');
 const pagination = reactive({ page: 1, page_size: 10, total: 0, page_count: 1 });
 const state = reactive({ loading: false, error: '' });
-const editor = reactive({ open: false, mode: 'create', saving: false, error: '' });
+const editor = reactive({ open: false, saving: false, error: '' });
 const form = reactive({
   id: '',
   label: '',
@@ -209,16 +205,8 @@ function resetForm(row = null) {
   form.is_system = Boolean(row?.is_system);
 }
 
-function openCreate() {
-  resetForm();
-  editor.mode = 'create';
-  editor.error = '';
-  editor.open = true;
-}
-
 function openEdit(row) {
   resetForm(row);
-  editor.mode = 'edit';
   editor.error = '';
   editor.open = true;
 }
@@ -243,11 +231,7 @@ async function saveEditor() {
   editor.saving = true;
   editor.error = '';
   try {
-    if (editor.mode === 'create') {
-      await createWorkspaceEmailText(payloadFromForm());
-    } else {
-      await updateWorkspaceEmailText(form.id, payloadFromForm());
-    }
+    await updateWorkspaceEmailText(form.id, payloadFromForm());
     editor.open = false;
     await loadRows();
   } catch (error) {
@@ -296,10 +280,6 @@ onMounted(() => {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 20px;
-}
-
-.app-config-toolbar .btn {
-  margin-inline-end: auto;
 }
 
 .app-config-toolbar .search-field {

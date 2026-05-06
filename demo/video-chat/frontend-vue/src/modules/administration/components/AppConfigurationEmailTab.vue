@@ -4,8 +4,8 @@
     <section v-if="state.error" class="settings-upload-status error">{{ state.error }}</section>
     <section v-if="state.message" class="settings-upload-status">{{ state.message }}</section>
 
-    <section v-if="isPrimaryAdmin" class="app-config-form-grid">
-      <section class="settings-section">
+    <section v-if="isPrimaryAdmin" class="app-config-form-box">
+      <section class="app-config-form-grid">
         <header class="settings-subhead">
           <h5>{{ t('administration.mail_server') }}</h5>
         </header>
@@ -63,34 +63,6 @@
           </label>
         </section>
       </section>
-
-      <section class="settings-section">
-        <header class="settings-subhead">
-          <h5>{{ t('administration.lead_recipients') }}</h5>
-        </header>
-        <section class="settings-recipient-list">
-          <div v-for="(recipient, index) in leadRecipients" :key="recipient.id" class="settings-recipient-row">
-            <input
-              v-model.trim="recipient.email"
-              class="input"
-              type="email"
-              :placeholder="t('administration.lead_recipient_placeholder')"
-              autocomplete="email"
-            />
-            <button
-              class="icon-mini-btn danger"
-              type="button"
-              :aria-label="t('administration.remove_recipient', { number: index + 1 })"
-              @click="removeLeadRecipient(index)"
-            >
-              <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
-            </button>
-          </div>
-          <button class="icon-mini-btn" type="button" :aria-label="t('administration.add_lead_recipient')" @click="addLeadRecipient">
-            <img src="/assets/orgas/kingrt/icons/add.png" alt="" />
-          </button>
-        </section>
-      </section>
     </section>
 
     <section v-else class="settings-upload-status">
@@ -129,25 +101,7 @@ const draft = reactive({
   mail_smtp_password_clear: false,
   mail_smtp_password_set: false,
 });
-const leadRecipients = reactive([]);
 const isPrimaryAdmin = computed(() => Number(sessionState.userId || 0) === 1);
-
-function addLeadRecipient() {
-  leadRecipients.push({ id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`, email: '' });
-}
-
-function removeLeadRecipient(index) {
-  leadRecipients.splice(index, 1);
-  if (leadRecipients.length === 0) addLeadRecipient();
-}
-
-function replaceRecipients(emails = []) {
-  leadRecipients.splice(0, leadRecipients.length, ...emails.map((email) => ({
-    id: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
-    email: String(email || ''),
-  })));
-  if (leadRecipients.length === 0) addLeadRecipient();
-}
 
 function applySettings(result) {
   const settings = result?.settings || {};
@@ -162,7 +116,6 @@ function applySettings(result) {
   draft.mail_smtp_password = '';
   draft.mail_smtp_password_clear = false;
   draft.mail_smtp_password_set = Boolean(settings.mail_smtp_password_set);
-  replaceRecipients(settings.lead_recipients || []);
 }
 
 async function load() {
@@ -188,7 +141,6 @@ function buildPayload() {
     mail_smtp_encryption: draft.mail_smtp_encryption,
     mail_smtp_username: draft.mail_smtp_username,
     mail_smtp_password_clear: draft.mail_smtp_password_clear,
-    lead_recipients: leadRecipients.map((row) => row.email).filter(Boolean),
   };
   if (String(draft.mail_smtp_password || '').trim() !== '') {
     payload.mail_smtp_password = draft.mail_smtp_password;
@@ -221,6 +173,17 @@ onMounted(() => {
   height: 100%;
   min-height: 0;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-config-form-box {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-navy);
+  padding: 20px;
+  overflow: auto;
 }
 
 .app-config-form-grid {
@@ -241,8 +204,7 @@ onMounted(() => {
   color: var(--text-main);
 }
 
-.settings-checkbox-row,
-.settings-recipient-row {
+.settings-checkbox-row {
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -255,20 +217,12 @@ onMounted(() => {
   padding: 0 10px;
 }
 
-.settings-recipient-list {
-  display: grid;
-  gap: 8px;
-}
-
-.settings-recipient-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
 .settings-upload-status.error {
   color: var(--color-heading);
 }
 
 .app-config-actions {
+  margin-top: auto;
   display: flex;
   justify-content: flex-end;
   padding: 20px 0 0;
