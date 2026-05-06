@@ -6,6 +6,7 @@ require_once __DIR__ . '/workspace_theme_migrations.php';
 require_once __DIR__ . '/workspace_app_configuration_migrations.php';
 require_once __DIR__ . '/workspace_calendar_migrations.php';
 require_once __DIR__ . '/call_app_marketplace_migrations.php';
+require_once __DIR__ . '/call_app_session_migrations.php';
 require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
@@ -785,5 +786,6 @@ SQL,
         46 => ['name' => '0046_workspace_calendars', 'statements' => videochat_workspace_calendar_migration_statements()],
         47 => ['name' => '0047_translation_resources_drop_source', 'statements' => videochat_translation_resource_drop_source_migration_statements()],
         48 => ['name' => '0048_call_app_marketplace_entitlements', 'statements' => videochat_call_app_marketplace_entitlement_migration_statements()],
+        49 => ['name' => '0049_call_app_sessions', 'statements' => videochat_call_app_session_migration_statements()],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

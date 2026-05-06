@@ -747,6 +747,37 @@ CAP-06 Organization Installation And App Availability, 2026-05-07:
     app hiding, disabled installation hiding, missing-call 404, and frontend
     no-hard-coded-app catalog behavior
 
+CAP-07 Call App Session Lifecycle, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/support/call_app_session_migrations.php`
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php`
+  - extends `demo/video-chat/backend-king-php/http/module_call_apps.php`
+- Schema:
+  - `call_app_sessions`
+  - `call_app_participant_grants`
+  - `call_app_launch_tokens`
+- Routes:
+  - `GET /api/calls/{call_id}/call-app-sessions`
+  - `POST /api/calls/{call_id}/call-app-sessions`
+  - `PATCH /api/call-app-sessions/{session_id}`
+  - `DELETE /api/call-app-sessions/{session_id}`
+- Lifecycle contract:
+  - call owner/admin can attach installed healthy organization apps
+  - non-owner participants cannot attach apps
+  - sessions can be activated and inactivated without deletion
+  - removal marks the session removed and retires open iframe launch tokens
+  - removed sessions are hidden by default but available through explicit
+    history listing
+- Room-state contract:
+  - `room/snapshot` now includes `call_apps.active_sessions`
+  - snapshot signatures include active Call App session state so websocket room
+    updates can detect app-session changes
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php`
+  - verifies owner-only attach, default participant grants, room snapshot
+    visibility, active/inactive transitions, remove behavior, launch-token
+    retirement, and removed-session history
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -796,7 +827,7 @@ Tickets:
   - Add backend APIs for installed Call Apps per organization.
   - Add frontend store/composable for the call sidebar app catalog.
   - Only installed and healthy apps appear in the Call Apps sidebar.
-- [ ] CAP-07 Call App session lifecycle
+- [x] CAP-07 Call App session lifecycle
   - Create/list/activate/remove Call App Sessions for a call.
   - Room-state snapshots and websocket events include active app session state.
   - Removing an app retires iframe tokens and stops app synchronization.
