@@ -110,10 +110,8 @@
       :relation-selections="relationSelections"
       :error="formError"
       :saving="mutationPending"
-      :maximized="modalMaximized"
       :relation-active="relationNavigatorOpen"
       :relation-title="relationNavigatorTitle"
-      @update:maximized="modalMaximized = $event"
       @close="closeModal"
       @open-relation="openRelationNavigator"
       @submit="submitModal"
@@ -179,7 +177,6 @@ const page = ref(1);
 const pageSize = 8;
 const modalOpen = ref(false);
 const modalMode = ref('create');
-const modalMaximized = ref(false);
 const relationNavigatorOpen = ref(false);
 const relationNavigatorRelation = ref(null);
 const formError = ref('');
@@ -396,7 +393,6 @@ function resetForm(row = null) {
 function openCreateModal() {
   if (!createAction.value) return;
   modalMode.value = 'create';
-  modalMaximized.value = false;
   resetForm();
   modalOpen.value = true;
 }
@@ -404,7 +400,6 @@ function openCreateModal() {
 function openPortabilityModal(action) {
   if (!isDataPortabilityActionKind(action?.kind)) return;
   modalMode.value = String(action.kind);
-  modalMaximized.value = false;
   resetForm();
   form.job_type = modalMode.value;
   modalOpen.value = true;
@@ -412,14 +407,12 @@ function openPortabilityModal(action) {
 
 function openEditModal(row) {
   modalMode.value = 'edit';
-  modalMaximized.value = false;
   resetForm(row);
   modalOpen.value = true;
 }
 
 function closeModal() {
   modalOpen.value = false;
-  modalMaximized.value = false;
   closeRelationNavigator();
   formError.value = '';
 }

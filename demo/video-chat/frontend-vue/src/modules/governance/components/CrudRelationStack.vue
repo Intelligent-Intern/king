@@ -124,7 +124,6 @@
       <button v-if="navigator.stack.value.length > 1" class="btn" type="button" @click="returnToParent">
         {{ t('governance.relation_picker.back') }}
       </button>
-      <button class="btn" type="button" @click="$emit('close')">{{ t('governance.relation_picker.close') }}</button>
       <button class="btn btn-cyan" type="button" @click="applySelection">
         {{ t('governance.relation_picker.apply') }}
       </button>
@@ -340,7 +339,9 @@ function applySelection() {
 <style scoped>
 .crud-relation-stack {
   display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
   gap: 12px;
+  height: 100%;
   min-height: 0;
 }
 
@@ -352,6 +353,15 @@ function applySelection() {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+.crud-relation-footer {
+  justify-content: flex-end;
+  padding: 0 4px 4px 0;
+}
+
+.crud-relation-footer .btn-cyan {
+  margin-inline-start: auto;
 }
 
 .crud-relation-crumb,

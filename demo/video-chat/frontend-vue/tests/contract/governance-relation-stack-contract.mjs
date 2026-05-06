@@ -94,6 +94,8 @@ assert.match(stackSource, /draftSaving/, 'relation stack create must expose pend
 assert.match(stackSource, /pushNestedRelation\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
 assert.match(stackSource, /applyCurrentSelectionToParent/, 'relation stack must apply nested selections back into the selected parent row');
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
+assert.doesNotMatch(stackSource, /@click="\$emit\('close'\)"/, 'relation stack must not render a redundant footer close action');
+assert.match(stackSource, /\.crud-relation-footer\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 4px 4px 0;/, 'relation stack must keep the select button pinned to the bottom right');
 
 const viewSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 assert.match(viewSource, /CrudRelationStack/, 'governance CRUD view must mount the relation stack');

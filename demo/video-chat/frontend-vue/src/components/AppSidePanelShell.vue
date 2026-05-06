@@ -25,13 +25,6 @@
         <slot name="close">
           <div class="app-side-panel-header-actions">
             <AppIconButton
-              v-if="maximizable"
-              :icon="maximized ? restoreIcon : maximizeIcon"
-              :aria-label="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
-              :title="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
-              @click="toggleMaximized"
-            />
-            <AppIconButton
               :icon="closeIcon"
               :aria-label="effectiveCloseLabel"
               @click="$emit('close')"
@@ -136,33 +129,9 @@ const props = defineProps({
     type: Boolean,
     default: true,
   },
-  maximizable: {
-    type: Boolean,
-    default: false,
-  },
-  maximized: {
-    type: Boolean,
-    default: false,
-  },
-  maximizeIcon: {
-    type: String,
-    default: '/assets/orgas/kingrt/icons/forward.png',
-  },
-  restoreIcon: {
-    type: String,
-    default: '/assets/orgas/kingrt/icons/backward.png',
-  },
-  maximizeLabel: {
-    type: String,
-    default: '',
-  },
-  restoreLabel: {
-    type: String,
-    default: '',
-  },
 });
 
-const emit = defineEmits(['close', 'update:maximized']);
+defineEmits(['close']);
 
 const attrs = useAttrs();
 const effectiveLogoSrc = computed(() => {
@@ -177,13 +146,11 @@ const rootClass = computed(() => [
   'app-side-panel',
   props.rootClassName,
   attrs.class,
-  { 'is-side-panel-maximized': props.maximized },
 ]);
 const panelBackdropClass = computed(() => ['app-side-panel-backdrop', props.backdropClass]);
 const panelDialogClass = computed(() => [
   'app-side-panel-dialog',
   props.dialogClass,
-  { 'is-maximized': props.maximized },
 ]);
 const panelHeaderClass = computed(() => ['app-side-panel-head', props.headerClass]);
 const panelHeaderLeftClass = computed(() => ['app-side-panel-head-left', props.headerLeftClass]);
@@ -191,12 +158,6 @@ const panelLogoClass = computed(() => ['app-side-panel-logo', props.logoClass]);
 const panelBodyClass = computed(() => ['app-side-panel-body', props.bodyClass]);
 const panelFooterClass = computed(() => ['app-side-panel-footer', props.footerClass]);
 const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_panel'));
-const effectiveMaximizeLabel = computed(() => props.maximizeLabel || t('common.maximize_panel'));
-const effectiveRestoreLabel = computed(() => props.restoreLabel || t('common.restore_panel_size'));
-
-function toggleMaximized() {
-  emit('update:maximized', !props.maximized);
-}
 </script>
 
 <style scoped>
@@ -237,14 +198,6 @@ function toggleMaximized() {
   background: var(--bg-surface);
   box-shadow: -18px 0 42px color-mix(in srgb, var(--color-primary-navy) 42%, transparent);
   padding: var(--app-side-panel-padding);
-}
-
-.app-side-panel-dialog.is-maximized {
-  width: 100vw;
-  height: 100vh;
-  margin: 0;
-  border-left: 1px solid var(--border-subtle);
-  border-radius: 0;
 }
 
 .app-side-panel-head {
@@ -308,11 +261,6 @@ function toggleMaximized() {
   align-content: stretch;
 }
 
-.app-side-panel-dialog.is-maximized .users-side-panel-body,
-.app-side-panel-dialog.is-maximized .marketplace-side-panel-body {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .app-side-panel-footer {
   display: flex;
   justify-content: flex-end;
@@ -325,11 +273,6 @@ function toggleMaximized() {
     height: 100vh;
     border-left: 0;
     border-radius: 0;
-  }
-
-  .app-side-panel-dialog.is-maximized .users-side-panel-body,
-  .app-side-panel-dialog.is-maximized .marketplace-side-panel-body {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

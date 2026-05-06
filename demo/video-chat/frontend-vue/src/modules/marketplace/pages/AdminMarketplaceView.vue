@@ -63,9 +63,6 @@
       body-class="marketplace-side-panel-body"
       footer-class="marketplace-side-panel-actions"
       :close-label="t('marketplace.close')"
-      maximizable
-      :maximized="dialogMaximized"
-      @update:maximized="dialogMaximized = $event"
       @close="closeDialog"
     >
       <template #body>
@@ -146,7 +143,6 @@ const error = ref('');
 const notice = ref('');
 const mutatingAppId = ref(0);
 const dialogOpen = ref(false);
-const dialogMaximized = ref(false);
 const formSaving = ref(false);
 const formError = ref('');
 const form = reactive({
@@ -257,14 +253,12 @@ function openEditApp(app) {
   form.category = String(app?.category || 'whiteboard').trim() || 'whiteboard';
   form.description = String(app?.description || '').trim();
   formError.value = '';
-  dialogMaximized.value = false;
   dialogOpen.value = true;
 }
 
 function closeDialog() {
   if (formSaving.value) return;
   dialogOpen.value = false;
-  dialogMaximized.value = false;
 }
 
 async function submitForm() {
@@ -295,7 +289,6 @@ async function submitForm() {
     }
 
     dialogOpen.value = false;
-    dialogMaximized.value = false;
     await loadApps();
   } catch (err) {
     formError.value = err instanceof Error ? err.message : t('marketplace.save_failed');
