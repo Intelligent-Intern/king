@@ -556,6 +556,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.appointment-booking-calendar :deep(.fc),
+.appointment-booking-calendar :deep(.fc-view-harness),
+.appointment-booking-calendar :deep(.fc-view-harness-active) {
+  width: 100%;
+  min-height: 0;
+  height: 100% !important;
+}
+
 .appointment-booking-calendar :deep(.fc-timegrid-slot) {
   height: 3em;
 }
@@ -747,6 +755,7 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
   :deep(.appointment-booking-dialog) {
     width: calc(100vw - 6px);
+    height: calc(100dvh - 6px);
     max-height: calc(100dvh - 6px);
   }
 
@@ -760,8 +769,25 @@ onBeforeUnmount(() => {
     grid-template-columns: 1fr;
   }
 
-  .appointment-booking-left {
-    grid-template-rows: minmax(300px, auto) auto;
+  .appointment-booking-grid {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .appointment-booking-left,
+  .appointment-booking-left.has-invitation {
+    min-height: auto;
+    grid-template-rows: auto auto auto;
+  }
+
+  .appointment-booking-calendar {
+    min-height: 300px;
+    height: min(52dvh, 420px);
+    max-height: 420px;
+  }
+
+  .appointment-booking-form {
+    overflow: visible;
   }
 }
 </style>
