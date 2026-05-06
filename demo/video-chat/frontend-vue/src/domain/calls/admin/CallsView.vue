@@ -9,8 +9,8 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
-import AppointmentConfigModal from '../appointment/AppointmentConfigModal.vue';
 import BackgroundPipelineDebugPanel from '../../realtime/background/BackgroundPipelineDebugPanel.vue';
+import AppointmentConfigPanel from '../appointment/AppointmentConfigPanel.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
 import {
@@ -22,6 +22,7 @@ import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { formatDateRangeDisplay, formatDateTimeDisplay, fullCalendarEventTimeFormat } from '../../../support/dateTimeFormat';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
   applyCallBackgroundPreset,
   callMediaPrefs,
@@ -51,6 +52,7 @@ function activeBackgroundPreset() {
 
 const callsCalendarEl = ref(null);
 let calendarInstance = null;
+let calendarRootEl = null;
 let lastCalendarDateClickAt = 0;
 let lastCalendarDateKey = '';
 
@@ -208,22 +210,13 @@ const {
   calendarError,
 } = callListStore;
 const primaryActionLabel = computed(() => (viewMode.value === 'calendar'
-  ? 'Schedule video call'
-  : 'New video call'));
+  ? t('calls.admin.schedule_video_call')
+  : t('calls.admin.new_video_call')));
 const deleteAllCallsBusy = ref(false);
-const appointmentConfigOpen = ref(false);
 const canDeleteAllCalls = computed(() => !deleteAllCallsBusy.value && !loadingCalls.value);
 
 function openPrimaryCompose() {
   openCompose(viewMode.value === 'calendar' ? 'schedule' : 'create');
-}
-
-function openAppointmentConfig() {
-  appointmentConfigOpen.value = true;
-}
-
-function closeAppointmentConfig() {
-  appointmentConfigOpen.value = false;
 }
 
 const {
@@ -533,8 +526,15 @@ function handleCalendarEventMoveOrResize(info) {
 }
 
 async function initCallsCalendar() {
-  if (!(callsCalendarEl.value instanceof HTMLElement) || calendarInstance) return;
+  if (!(callsCalendarEl.value instanceof HTMLElement)) return;
+  if (calendarInstance && calendarRootEl !== callsCalendarEl.value) {
+    calendarInstance.destroy();
+    calendarInstance = null;
+    calendarRootEl = null;
+  }
+  if (calendarInstance) return;
   try {
+    calendarRootEl = callsCalendarEl.value;
     calendarInstance = new Calendar(callsCalendarEl.value, {
       plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
       initialView: 'dayGridMonth',
@@ -543,10 +543,12 @@ async function initCallsCalendar() {
         center: 'title',
         right: 'dayGridMonth,timeGridWeek,timeGridDay',
       },
-      height: 'auto',
-      contentHeight: 'auto',
+      height: '100%',
+      expandRows: true,
       eventTimeFormat: fullCalendarEventTimeFormat(sessionState.timeFormat),
       selectable: true,
+      selectMirror: true,
+      selectMinDistance: 1,
       editable: true,
       eventStartEditable: true,
       eventDurationEditable: true,
@@ -562,7 +564,11 @@ async function initCallsCalendar() {
         openComposeForCalendarDoubleClick(info.date instanceof Date ? info.date : new Date(info.dateStr));
       },
       select(info) {
-        if (String(info.view?.type || '') !== 'timeGridDay') return;
+        const viewType = String(info.view?.type || '');
+        if (!viewType.startsWith('timeGrid')) {
+          calendarInstance?.unselect();
+          return;
+        }
         openComposeForCalendarSelection(info.start, info.end);
         calendarInstance?.unselect();
       },
@@ -580,6 +586,7 @@ async function initCallsCalendar() {
     syncCalendarEvents();
   } catch {
     calendarInstance = null;
+    calendarRootEl = null;
     if (!calendarError.value) {
       calendarError.value = 'Could not load FullCalendar.';
     }
@@ -587,7 +594,7 @@ async function initCallsCalendar() {
 }
 
 function setViewMode(nextMode) {
-  if (nextMode !== 'calls' && nextMode !== 'calendar') {
+  if (nextMode !== 'calls' && nextMode !== 'calendar' && nextMode !== 'personalCalendar') {
     return;
   }
 
@@ -741,11 +748,6 @@ function handleEscape(event) {
 
   if (enterCallState.open) {
     closeEnterCallModal();
-    return;
-  }
-
-  if (appointmentConfigOpen.value) {
-    closeAppointmentConfig();
   }
 }
 
@@ -765,6 +767,7 @@ onBeforeUnmount(() => {
   if (calendarInstance) {
     calendarInstance.destroy();
     calendarInstance = null;
+    calendarRootEl = null;
   }
 });
 

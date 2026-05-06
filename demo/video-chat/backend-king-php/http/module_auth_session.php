@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database_core.php';
 require_once __DIR__ . '/../domain/users/user_emails.php';
+require_once __DIR__ . '/../domain/users/onboarding_progress.php';
+require_once __DIR__ . '/../support/tenant_context.php';
+require_once __DIR__ . '/../support/localization.php';
 
 function videochat_auth_session_is_transient_sqlite_lock(Throwable $error): bool
 {
@@ -46,6 +49,7 @@ function videochat_handle_auth_session_routes(
 
         $email = '';
         $password = '';
+        $loginPayload = null;
 
         $authorization = videochat_request_header_value($request, 'authorization');
         if (
@@ -67,6 +71,7 @@ function videochat_handle_auth_session_routes(
                     'reason' => $decodeError,
                 ]);
             }
+            $loginPayload = $payload;
 
             $email = strtolower(trim((string) ($payload['email'] ?? '')));
             $password = (string) ($payload['password'] ?? '');
@@ -97,6 +102,8 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.locale,
+    users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url,
     roles.slug AS role_slug
@@ -148,6 +155,25 @@ SQL
                 $clientIp = trim((string) ($request['remote_address'] ?? ''));
                 $userAgent = substr(videochat_request_header_value($request, 'user-agent'), 0, 500);
 
+                $tenantContext = null;
+                if (is_array($loginPayload)) {
+                    $tenantPublicId = trim((string) ($loginPayload['tenant_uuid'] ?? ($loginPayload['tenant_public_id'] ?? '')));
+                    if ($tenantPublicId !== '') {
+                        $tenantContext = videochat_tenant_context_for_public_id($pdo, (int) $user['id'], $tenantPublicId);
+                    } elseif (isset($loginPayload['tenant_id']) && is_scalar($loginPayload['tenant_id'])) {
+                        $tenantContext = videochat_tenant_context_for_user($pdo, (int) $user['id'], (int) $loginPayload['tenant_id']);
+                    }
+                }
+                if ($tenantContext === null) {
+                    $tenantContext = videochat_tenant_context_for_user($pdo, (int) $user['id']);
+                }
+                if ($tenantContext === null) {
+                    return $errorResponse(403, 'tenant_membership_required', 'A valid active tenant membership is required.', [
+                        'reason' => 'tenant_membership_inactive',
+                    ]);
+                }
+                $tenantPayload = videochat_tenant_auth_payload($tenantContext);
+
                 $pdo->exec('BEGIN IMMEDIATE');
 
                 if (password_needs_rehash($storedHash, PASSWORD_DEFAULT)) {
@@ -166,24 +192,29 @@ SQL
                     ]);
                 }
 
-                $sessionInsert = $pdo->prepare(
-                    <<<'SQL'
-INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent)
-VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)
-SQL
-                );
-                $sessionInsert->execute([
+                $hasActiveTenantColumn = videochat_tenant_table_has_column($pdo, 'sessions', 'active_tenant_id');
+                $sessionSql = $hasActiveTenantColumn
+                    ? 'INSERT INTO sessions(id, user_id, active_tenant_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :active_tenant_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)'
+                    : 'INSERT INTO sessions(id, user_id, issued_at, expires_at, revoked_at, client_ip, user_agent) VALUES(:id, :user_id, :issued_at, :expires_at, NULL, :client_ip, :user_agent)';
+                $sessionParams = [
                     ':id' => $sessionId,
                     ':user_id' => (int) $user['id'],
                     ':issued_at' => $issuedAt,
                     ':expires_at' => $expiresAt,
                     ':client_ip' => $clientIp === '' ? null : $clientIp,
                     ':user_agent' => $userAgent === '' ? null : $userAgent,
-                ]);
+                ];
+                if ($hasActiveTenantColumn) {
+                    $sessionParams[':active_tenant_id'] = (int) ($tenantPayload['id'] ?? 0);
+                }
+                $sessionInsert = $pdo->prepare($sessionSql);
+                $sessionInsert->execute($sessionParams);
 
                 $pdo->commit();
 
                 $accountType = videochat_user_account_type((string) $user['email'], $user['password_hash'] ?? null);
+                $localization = videochat_localization_payload($pdo, $user['locale'] ?? null);
+                $onboarding = videochat_fetch_onboarding_progress($pdo, (int) $user['id'], (int) ($tenantPayload['id'] ?? 0));
 
                 return $jsonResponse(200, [
                     'status' => 'ok',
@@ -194,6 +225,7 @@ SQL
                         'issued_at' => $issuedAt,
                         'expires_at' => $expiresAt,
                         'expires_in_seconds' => $ttlSeconds,
+                        'active_tenant_id' => (int) ($tenantPayload['id'] ?? 0),
                     ],
                     'user' => [
                         'id' => (int) $user['id'],
@@ -204,13 +236,23 @@ SQL
                         'time_format' => (string) ($user['time_format'] ?? '24h'),
                         'date_format' => (string) ($user['date_format'] ?? 'dmy_dot'),
                         'theme' => (string) ($user['theme'] ?? 'dark'),
+                        'locale' => (string) ($localization['locale'] ?? 'en'),
+                        'direction' => (string) ($localization['direction'] ?? 'ltr'),
+                        'supported_locales' => is_array($localization['supported_locales'] ?? null) ? $localization['supported_locales'] : [],
+                        'can_edit_themes' => (string) ($user['role_slug'] ?? 'user') === 'admin'
+                            || ((int) ($user['theme_editor_enabled'] ?? 0)) === 1
+                            || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),
                         'avatar_path' => is_string($user['avatar_path'] ?? null) ? (string) $user['avatar_path'] : null,
                         'post_logout_landing_url' => is_string($user['post_logout_landing_url'] ?? null)
                             ? trim((string) $user['post_logout_landing_url'])
                             : '',
+                        'onboarding_completed_tours' => $onboarding['completed_tours'],
+                        'onboarding_badges' => $onboarding['badges'],
                         'account_type' => $accountType,
                         'is_guest' => $accountType === 'guest',
+                        'tenant' => $tenantPayload,
                     ],
+                    'tenant' => $tenantPayload,
                     'time' => gmdate('c'),
                 ]);
             } catch (Throwable $error) {
@@ -279,6 +321,7 @@ SQL
                 ],
                 'session' => null,
                 'user' => null,
+                'tenant' => null,
                 'time' => gmdate('c'),
             ]);
         }
@@ -291,6 +334,7 @@ SQL
             ],
             'session' => $probe['session'] ?? null,
             'user' => $probe['user'] ?? null,
+            'tenant' => $probe['tenant'] ?? null,
             'time' => gmdate('c'),
         ]);
     }
@@ -320,6 +364,7 @@ SQL
             'status' => 'ok',
             'session' => $freshContext['session'] ?? null,
             'user' => $freshContext['user'] ?? null,
+            'tenant' => $freshContext['tenant'] ?? null,
             'time' => gmdate('c'),
         ]);
     }
@@ -399,7 +444,9 @@ SQL
                 $issueSessionId,
                 null,
                 trim((string) ($request['remote_address'] ?? '')),
-                videochat_request_header_value($request, 'user-agent')
+                videochat_request_header_value($request, 'user-agent'),
+                null,
+                (int) (($apiAuthContext['tenant'] ?? [])['id'] ?? (($apiAuthContext['session'] ?? [])['active_tenant_id'] ?? 0))
             );
             if (!(bool) ($sessionIssue['ok'] ?? false)) {
                 return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
@@ -427,6 +474,68 @@ SQL
             ]);
         } catch (Throwable) {
             return $errorResponse(500, 'email_change_confirm_failed', 'Email confirmation failed due to a backend error.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
+    if ($path === '/api/auth/tenant') {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/auth/tenant.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'tenant_switch_invalid_request_body', 'Tenant switch payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $currentUserId = (int) ($apiAuthContext['user']['id'] ?? 0);
+        $currentSessionId = is_string($apiAuthContext['session']['id'] ?? null)
+            ? trim((string) $apiAuthContext['session']['id'])
+            : '';
+        if ($currentUserId <= 0 || $currentSessionId === '') {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'missing_session',
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $tenantContext = null;
+            $tenantPublicId = trim((string) ($payload['tenant_uuid'] ?? ($payload['tenant_public_id'] ?? '')));
+            if ($tenantPublicId !== '') {
+                $tenantContext = videochat_tenant_context_for_public_id($pdo, $currentUserId, $tenantPublicId);
+            } elseif (isset($payload['tenant_id']) && is_scalar($payload['tenant_id'])) {
+                $tenantContext = videochat_tenant_context_for_user($pdo, $currentUserId, (int) $payload['tenant_id']);
+            }
+            if ($tenantContext === null) {
+                return $errorResponse(403, 'tenant_switch_forbidden', 'The requested tenant is not available for this session.', [
+                    'reason' => 'tenant_membership_inactive',
+                ]);
+            }
+
+            $tenantPayload = videochat_tenant_auth_payload($tenantContext);
+            if (!videochat_tenant_update_session($pdo, $currentSessionId, (int) ($tenantPayload['id'] ?? 0))) {
+                return $errorResponse(500, 'tenant_switch_failed', 'Tenant switch failed due to a backend error.', [
+                    'reason' => 'session_update_failed',
+                ]);
+            }
+
+            $freshContext = videochat_validate_session_token($pdo, $currentSessionId);
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'session' => $freshContext['session'] ?? null,
+                'user' => $freshContext['user'] ?? null,
+                'tenant' => $freshContext['tenant'] ?? $tenantPayload,
+                'result' => ['state' => 'tenant_switched'],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'tenant_switch_failed', 'Tenant switch failed due to a backend error.', [
                 'reason' => 'internal_error',
             ]);
         }
@@ -498,6 +607,7 @@ SQL
                     'replaces_session_id' => $effectiveCurrentSessionId,
                 ],
                 'user' => $apiAuthContext['user'] ?? null,
+                'tenant' => $apiAuthContext['tenant'] ?? null,
                 'result' => [
                     'replaced_session_id' => $effectiveCurrentSessionId,
                     'revocation_state' => 'rotated',

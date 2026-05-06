@@ -45,14 +45,16 @@ try {
 
   assert.match(strategies, /export function rollingActivityScore\(entry\)/, 'frontend must expose rolling activity scoring');
   assert.match(strategies, /add\(score2s,\s*0\.5\);[\s\S]*add\(score5s,\s*0\.3\);[\s\S]*add\(score15s,\s*0\.2\);/, 'frontend speaker score must blend 2s, 5s, and 15s windows');
-  assert.match(strategies, /existingScore >= Math\.max\(18,\s*topScore \* 0\.82\)/, 'frontend main speaker selection must have hysteresis');
+  assert.match(strategies, /ACTIVE_SPEAKER_MIN_SPEAKING_MS = 2000/, 'frontend active speaker takeover must require sustained speech');
+  assert.match(strategies, /ACTIVE_SPEAKER_RELEASE_PAUSE_MS = 2000/, 'frontend active speaker handoff must wait for a release pause');
+  assert.match(strategies, /canSpeakerTakeOver/, 'frontend active speaker selection must gate takeover through speaker state');
 
   assert.match(activityLayout, /sample_history_json TEXT NOT NULL DEFAULT '\[\]'/, 'backend activity table must persist bounded sample history');
   assert.match(activityLayout, /function videochat_activity_topk_rolling_score/, 'backend must compute rolling top-k speaker scores');
   assert.match(activityLayout, /array_slice\(\$decayed,\s*0,\s*3\)/, 'backend rolling score must average the top three recent samples');
   assert.match(activityLayout, /'topk_score_2s' => \$score2s/, 'backend payload must expose explicit top-k 2s score');
   assert.match(activityLayout, /\$activityByUserId\[\$userId\] = \(float\) \(\$row\['topk_score_2s'\]/, 'backend layout ranking must prefer top-k scores');
-  assert.match(migrations, /0022_call_activity_sample_history/, 'sample history schema change must be a contracted migration');
+  assert.match(migrations, /0044_call_activity_sample_history/, 'sample history schema change must be a contracted migration');
 
   assert.doesNotMatch(videoLayout, /role === REMOTE_RENDER_SURFACE_ROLES\.MINI\)\s*return 1/, 'mini surface aspect must come from its stable slot, not a forced square');
   const rootVars = cssBlock(stageCss, '.workspace-call-view');

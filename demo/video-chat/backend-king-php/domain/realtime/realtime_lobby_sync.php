@@ -6,7 +6,8 @@ function videochat_realtime_presence_has_room_membership(
     array $presenceState,
     string $roomId,
     int $userId,
-    string $sessionId = ''
+    string $sessionId = '',
+    ?int $tenantId = null
 ): bool {
     if ($userId <= 0) {
         return false;
@@ -26,6 +27,9 @@ function videochat_realtime_presence_has_room_membership(
             continue;
         }
         if (videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '') !== $normalizedRoomId) {
+            continue;
+        }
+        if (is_int($tenantId) && $tenantId > 0 && (int) ($connection['tenant_id'] ?? 0) !== $tenantId) {
             continue;
         }
         if ($trimmedSessionId !== '' && trim((string) ($connection['session_id'] ?? '')) !== $trimmedSessionId) {

@@ -7,19 +7,29 @@ import {
   isGuestSession,
   sessionState,
 } from '../domain/auth/session';
+import { workspaceModuleRouteRecords } from '../modules/index.js';
+import {
+  DEFAULT_I18N_NAMESPACES,
+  ensureI18nResources,
+} from '../modules/localization/i18nRuntime.js';
+import { applyPublicRouteLocale } from '../modules/localization/publicLocale.js';
+import {
+  routeAllowsRole,
+  routeAllowsSessionAccess,
+} from './routeAccess.js';
 
 const routes = [
   {
     path: '/join/:accessId',
     name: 'call-access-join',
     component: () => import('../domain/calls/access/JoinView.vue'),
-    meta: { public: true },
+    meta: { public: true, i18nNamespaces: ['public'] },
   },
   {
-    path: '/book/:ownerId',
+    path: '/book/:calendarId',
     name: 'appointment-booking',
     component: () => import('../domain/calls/appointment/AppointmentBookingView.vue'),
-    meta: { public: true },
+    meta: { public: true, i18nNamespaces: ['public'] },
   },
   {
     path: '/call-goodbye',
@@ -43,28 +53,31 @@ const routes = [
         redirect: () => defaultRouteForRole(sessionState.role),
       },
       {
-        path: 'admin/overview',
-        name: 'admin-overview',
-        component: () => import('../domain/users/overview/OverviewView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        path: 'admin/administration',
+        redirect: '/admin/administration/marketplace',
+      },
+      {
+        path: 'admin/governance',
+        redirect: '/admin/governance/users',
       },
       {
         path: 'admin/users',
-        name: 'admin-users',
-        component: () => import('../domain/users/admin/UsersView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        redirect: '/admin/governance/users',
       },
+      ...workspaceModuleRouteRecords,
       {
         path: 'admin/marketplace',
-        name: 'admin-marketplace',
-        component: () => import('../domain/marketplace/AdminMarketplaceView.vue'),
-        meta: { requiresAuth: true, roles: ['admin'] },
+        redirect: '/admin/administration/marketplace',
       },
       {
         path: 'admin/calls',
         name: 'admin-calls',
         component: () => import('../domain/calls/admin/CallsView.vue'),
         meta: { requiresAuth: true, roles: ['admin'] },
+      },
+      {
+        path: 'admin/tenancy',
+        redirect: '/admin/governance/organizations',
       },
       {
         path: 'user/dashboard',
@@ -91,17 +104,15 @@ const router = createRouter({
   routes,
 });
 
-function allowedRolesForRoute(route) {
-  return route.matched.filter((record) => Array.isArray(record.meta?.roles) && record.meta.roles.length > 0);
-}
+export { routeAllowsRole, routeAllowsSessionAccess };
 
-export function routeAllowsRole(route, role) {
-  if (!role) return false;
-
-  const roleBoundRecords = allowedRolesForRoute(route);
-  if (roleBoundRecords.length === 0) return true;
-
-  return roleBoundRecords.every((record) => record.meta.roles.includes(role));
+function routeI18nNamespaces(route) {
+  const namespaces = [...DEFAULT_I18N_NAMESPACES];
+  for (const record of route.matched || []) {
+    const routeNamespaces = Array.isArray(record.meta?.i18nNamespaces) ? record.meta.i18nNamespaces : [];
+    namespaces.push(...routeNamespaces);
+  }
+  return [...new Set(namespaces)].sort();
 }
 
 export function resolveAuthorizedRedirect(target, role, routerInstance = router) {
@@ -120,7 +131,7 @@ export function resolveAuthorizedRedirect(target, role, routerInstance = router)
     return fallback;
   }
 
-  return routeAllowsRole(resolved, role) ? resolved.fullPath : fallback;
+  return routeAllowsSessionAccess(resolved, { ...sessionState, role }) ? resolved.fullPath : fallback;
 }
 
 router.beforeEach(async (to) => {
@@ -148,8 +159,24 @@ router.beforeEach(async (to) => {
     };
   }
 
-  if (loggedIn && !routeAllowsRole(to, sessionState.role)) {
+  if (loggedIn && !routeAllowsSessionAccess(to, sessionState)) {
     return defaultRouteForRole(sessionState.role);
+  }
+
+  if (!requiresAuth) {
+    const publicLocale = applyPublicRouteLocale(to);
+    await ensureI18nResources({
+      locale: publicLocale.locale,
+      namespaces: routeI18nNamespaces(to),
+      public: true,
+    });
+  }
+
+  if (requiresAuth && loggedIn) {
+    await ensureI18nResources({
+      locale: sessionState.locale,
+      namespaces: routeI18nNamespaces(to),
+    });
   }
 
   return true;

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 function videochat_generate_call_access_uuid(): string
 {
     try {
@@ -52,17 +54,21 @@ function videochat_normalize_call_access_id(string $accessId): string
  *   consumed_at: ?string
  * }|null
  */
-function videochat_fetch_call_access_link(PDO $pdo, string $accessId): ?array
+function videochat_fetch_call_access_link(PDO $pdo, string $accessId, ?int $tenantId = null): ?array
 {
     $normalizedAccessId = videochat_normalize_call_access_id($accessId);
     if ($normalizedAccessId === '') {
         return null;
     }
 
+    $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'call_access_links', 'tenant_id');
+    $tenantSelect = $hasTenantColumn ? 'tenant_id,' : 'NULL AS tenant_id,';
+    $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND tenant_id = :tenant_id' : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     id,
+    {$tenantSelect}
     call_id,
     participant_user_id,
     participant_email,
@@ -74,10 +80,15 @@ SELECT
     consumed_at
 FROM call_access_links
 WHERE lower(id) = :id
+  {$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':id' => $normalizedAccessId]);
+    $params = [':id' => $normalizedAccessId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;
@@ -85,6 +96,7 @@ SQL
 
     return [
         'id' => (string) ($row['id'] ?? ''),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
         'call_id' => (string) ($row['call_id'] ?? ''),
         'participant_user_id' => is_numeric($row['participant_user_id'] ?? null)
             ? (int) $row['participant_user_id']
@@ -206,7 +218,7 @@ function videochat_is_call_joinable_status(string $status): bool
  *   is_guest: bool
  * }|null
  */
-function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, ?string $email = null): ?array
+function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, ?string $email = null, ?int $tenantId = null): ?array
 {
     $normalizedEmail = videochat_normalize_call_access_email($email);
     if ($userId <= 0 && $normalizedEmail === '') {
@@ -214,6 +226,9 @@ function videochat_fetch_active_user_for_call_access(PDO $pdo, int $userId = 0, 
     }
 
     if ($userId > 0) {
+        if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, $userId, $tenantId)) {
+            return null;
+        }
         $query = $pdo->prepare(
             <<<'SQL'
 SELECT
@@ -236,8 +251,16 @@ SQL
         );
         $query->execute([':id' => $userId]);
     } else {
+        $hasTenantMemberships = is_int($tenantId) && $tenantId > 0
+            && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id');
+        $tenantJoin = $hasTenantMemberships
+            ? 'INNER JOIN tenant_memberships ON tenant_memberships.user_id = users.id'
+            : '';
+        $tenantWhere = $hasTenantMemberships
+            ? 'AND tenant_memberships.tenant_id = :tenant_id AND tenant_memberships.status = \'active\''
+            : '';
         $query = $pdo->prepare(
-            <<<'SQL'
+            <<<SQL
 SELECT
     users.id,
     users.email,
@@ -251,12 +274,18 @@ SELECT
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
+{$tenantJoin}
 WHERE lower(users.email) = lower(:email)
   AND users.status = 'active'
+  {$tenantWhere}
 LIMIT 1
 SQL
         );
-        $query->execute([':email' => $normalizedEmail]);
+        $params = [':email' => $normalizedEmail];
+        if ($tenantWhere !== '') {
+            $params[':tenant_id'] = $tenantId;
+        }
+        $query->execute($params);
     }
 
     $row = $query->fetch();
@@ -292,7 +321,7 @@ SQL
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_create_guest_user_for_call_access(PDO $pdo, string $displayName): array
+function videochat_create_guest_user_for_call_access(PDO $pdo, string $displayName, ?int $tenantId = null): array
 {
     $name = trim($displayName);
     if ($name === '') {
@@ -363,6 +392,9 @@ SQL
                 ':updated_at' => gmdate('c'),
             ]);
             $createdUserId = (int) $pdo->lastInsertId();
+            if (is_int($tenantId) && $tenantId > 0) {
+                videochat_tenant_attach_user($pdo, $createdUserId, $tenantId);
+            }
             break;
         } catch (Throwable $error) {
             if (videochat_is_sqlite_unique_constraint_error($error)) {
@@ -386,7 +418,7 @@ SQL
         ];
     }
 
-    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null);
+    $user = videochat_fetch_active_user_for_call_access($pdo, $createdUserId, null, $tenantId);
     if (!is_array($user)) {
         return [
             'ok' => false,

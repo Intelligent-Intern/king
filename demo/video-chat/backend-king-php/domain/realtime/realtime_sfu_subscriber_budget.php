@@ -237,6 +237,9 @@ function videochat_sfu_subscriber_frame_route_decision(array $subscriber, array 
     if (!videochat_sfu_frame_is_delta($frame)) {
         return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
     }
+    if (videochat_sfu_frame_requires_contiguous_decode($frame)) {
+        return ['send' => true, 'layer_preference' => $layerPreference, 'drop_reason' => ''];
+    }
 
     $sequence = max(0, (int) ($frame['frame_sequence'] ?? 0));
     if ($sequence <= 0) {
@@ -274,6 +277,15 @@ function videochat_sfu_frame_replay_track_key(array $frame): string
 function videochat_sfu_frame_is_delta(array $frame): bool
 {
     return strtolower(trim((string) ($frame['frame_type'] ?? 'delta'))) !== 'keyframe';
+}
+
+function videochat_sfu_frame_requires_contiguous_decode(array $frame): bool
+{
+    $codecId = function_exists('videochat_sfu_normalize_codec_id')
+        ? videochat_sfu_normalize_codec_id((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? '')))
+        : strtolower(trim((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? ''))));
+
+    return in_array($codecId, ['webcodecs_vp8', 'wlvc_wasm', 'wlvc_ts', 'wlvc_unknown'], true);
 }
 
 /**

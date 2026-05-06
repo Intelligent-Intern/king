@@ -48,9 +48,9 @@ function videochat_validate_cancel_call_payload(array $payload): array
  *   call: ?array<string, mixed>
  * }
  */
-function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload): array
+function videochat_cancel_call(PDO $pdo, string $callId, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -236,9 +236,9 @@ SQL
  *   }
  * }
  */
-function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole): array
+function videochat_delete_call(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
 {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -305,7 +305,7 @@ SQL
  *   deleted_count: int
  * }
  */
-function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole, array $payload): array
+function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole, array $payload, ?int $tenantId = null): array
 {
     if ($authUserId <= 0 || strtolower(trim($authRole)) !== 'admin') {
         return [
@@ -330,8 +330,17 @@ function videochat_delete_all_calls(PDO $pdo, int $authUserId, string $authRole,
 
     $pdo->beginTransaction();
     try {
-        $count = (int) $pdo->query('SELECT COUNT(*) FROM calls')->fetchColumn();
-        $pdo->exec('DELETE FROM calls');
+        $hasTenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
+        if ($hasTenantColumn) {
+            $countQuery = $pdo->prepare('SELECT COUNT(*) FROM calls WHERE tenant_id = :tenant_id');
+            $countQuery->execute([':tenant_id' => $tenantId]);
+            $count = (int) $countQuery->fetchColumn();
+            $delete = $pdo->prepare('DELETE FROM calls WHERE tenant_id = :tenant_id');
+            $delete->execute([':tenant_id' => $tenantId]);
+        } else {
+            $count = (int) $pdo->query('SELECT COUNT(*) FROM calls')->fetchColumn();
+            $pdo->exec('DELETE FROM calls');
+        }
         $pdo->commit();
     } catch (Throwable) {
         if ($pdo->inTransaction()) {

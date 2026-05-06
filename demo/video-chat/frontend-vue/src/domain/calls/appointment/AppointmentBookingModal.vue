@@ -1,8 +1,8 @@
 <template>
   <AppModalShell
     :open="open"
-    title="Request a Demo"
-    aria-label="Public appointment booking"
+    :title="t('public.booking.title')"
+    :aria-label="t('public.booking.dialog_aria')"
     dialog-class="calls-modal-dialog appointment-booking-dialog"
     body-class="calls-modal-body appointment-booking-body"
     footer-class="calls-modal-footer appointment-booking-footer"
@@ -12,18 +12,23 @@
       <section v-if="state.error" class="calls-inline-error">{{ state.error }}</section>
 
       <section v-if="state.success" class="appointment-booking-success">
-        <h2>Thank you.</h2>
-        <p>Your demo request has been received for {{ state.confirmedSlotLabel }}.</p>
-        <p>
-          We are opening demo calls for smaller groups first. Larger calls are welcome,
-          but they will be scheduled later as participant capacity opens.
-        </p>
-        <a v-if="state.joinPath" class="btn btn-cyan" :href="state.joinPath">Open call link</a>
+        <h2>{{ t('public.booking.thank_you') }}</h2>
+        <p>{{ t('public.booking.scheduled_for', { slot: state.confirmedSlotLabel }) }}</p>
+        <div class="appointment-success-actions">
+          <a v-if="bookingLinks.joinUrl" class="btn btn-cyan" :href="bookingLinks.joinUrl">{{ t('public.booking.open_video_call') }}</a>
+          <a v-if="bookingLinks.googleUrl" class="btn" :href="bookingLinks.googleUrl" target="_blank" rel="noopener">
+            {{ t('public.booking.add_google_calendar') }}
+          </a>
+          <button v-if="bookingLinks.canDownloadIcs" class="btn" type="button" @click="downloadIcs">
+            {{ t('public.booking.download_ical') }}
+          </button>
+        </div>
       </section>
 
       <section v-else class="appointment-booking-grid">
-        <section class="appointment-booking-left" aria-label="Available demo slots">
-          <section v-if="state.loading" class="calls-inline-hint">Loading slots...</section>
+        <section class="appointment-booking-left" :class="{ 'has-invitation': invitationText }" :aria-label="t('public.booking.available_slots_aria')">
+          <section v-if="invitationText" class="appointment-invitation-text">{{ invitationText }}</section>
+          <section v-if="state.loading" class="calls-inline-hint">{{ t('public.booking.loading_slots') }}</section>
           <section v-show="!state.loading" ref="calendarEl" class="appointment-booking-calendar"></section>
 
           <div class="appointment-slot-list">
@@ -38,7 +43,7 @@
               {{ slotLabel(slot) }}
             </button>
             <p v-if="!state.loading && state.slots.length === 0" class="calls-inline-hint">
-              No demo slots are currently available.
+              {{ t('public.booking.no_slots') }}
             </p>
           </div>
         </section>
@@ -51,24 +56,24 @@
 
           <div class="appointment-form-row compact">
             <label class="field">
-              <span>Salutation</span>
+              <span>{{ t('public.booking.salutation') }}</span>
               <select v-model="form.salutation" class="input">
-                <option value="">None</option>
-                <option value="Mr.">Mr.</option>
-                <option value="Ms.">Ms.</option>
-                <option value="Mx.">Mx.</option>
-                <option value="Dr.">Dr.</option>
+                <option value="">{{ t('public.booking.salutation_none') }}</option>
+                <option value="Mr.">{{ t('public.booking.salutation_mr') }}</option>
+                <option value="Ms.">{{ t('public.booking.salutation_ms') }}</option>
+                <option value="Mx.">{{ t('public.booking.salutation_mx') }}</option>
+                <option value="Dr.">{{ t('public.booking.salutation_dr') }}</option>
               </select>
             </label>
             <label class="field">
-              <span>Title</span>
+              <span>{{ t('public.booking.honorific_title') }}</span>
               <input v-model.trim="form.title" class="input" type="text" autocomplete="honorific-prefix" />
             </label>
           </div>
 
           <div class="appointment-form-row">
             <label class="field">
-              <span>First name</span>
+              <span>{{ t('public.booking.first_name') }}</span>
               <span v-if="fieldError('first_name')" class="appointment-field-error">{{ fieldError('first_name') }}</span>
               <input
                 v-model.trim="form.first_name"
@@ -79,7 +84,7 @@
               />
             </label>
             <label class="field">
-              <span>Last name</span>
+              <span>{{ t('public.booking.last_name') }}</span>
               <span v-if="fieldError('last_name')" class="appointment-field-error">{{ fieldError('last_name') }}</span>
               <input
                 v-model.trim="form.last_name"
@@ -92,7 +97,7 @@
           </div>
 
           <label class="field">
-            <span>Email</span>
+            <span>{{ t('public.booking.email') }}</span>
             <span v-if="fieldError('email')" class="appointment-field-error">{{ fieldError('email') }}</span>
             <input
               v-model.trim="form.email"
@@ -104,43 +109,30 @@
           </label>
 
           <label class="field">
-            <span>Message</span>
+            <span>{{ t('public.booking.message') }}</span>
             <textarea v-model.trim="form.message" class="calls-textarea appointment-message" rows="5"></textarea>
           </label>
 
           <section v-if="state.privacyOpen" class="appointment-privacy-overlay">
             <header>
-              <h3>Privacy Policy</h3>
-              <button class="icon-mini-btn" type="button" aria-label="Close privacy policy" @click="state.privacyOpen = false">
+              <h3>{{ t('public.booking.privacy_policy') }}</h3>
+              <button class="icon-mini-btn" type="button" :aria-label="t('public.booking.close_privacy_policy')" @click="state.privacyOpen = false">
                 <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
               </button>
             </header>
             <div class="appointment-privacy-copy">
-              <p>
-                We process the details you submit to handle your demo request, contact you,
-                keep a lead list, and prepare a KingRT open-source video call demo.
-              </p>
-              <p>
-                The data can include your name, email address, organization context,
-                message, selected demo time, consent state, and technical server logs.
-              </p>
-              <p>
-                Legal bases are pre-contractual measures and legitimate interest in
-                handling demo requests. Data is deleted when it is no longer needed
-                unless legal retention duties apply.
-              </p>
-              <p>
-                You can request access, correction, deletion, restriction, portability,
-                objection, or consent withdrawal by contacting kontakt@kingrt.com.
-              </p>
+              <p>{{ t('public.booking.privacy_copy_1') }}</p>
+              <p>{{ t('public.booking.privacy_copy_2') }}</p>
+              <p>{{ t('public.booking.privacy_copy_3') }}</p>
+              <p>{{ t('public.booking.privacy_copy_4') }}</p>
             </div>
           </section>
 
           <label class="appointment-consent-row" :class="{ invalid: Boolean(fieldError('privacy_accepted')) }">
             <input v-model="form.privacy_accepted" type="checkbox" />
             <span>
-              I have read and accept the
-              <button class="appointment-link-button" type="button" @click="state.privacyOpen = true">privacy policy</button>.
+              {{ t('public.booking.privacy_accept_prefix') }}
+              <button class="appointment-link-button" type="button" @click="state.privacyOpen = true">{{ t('public.booking.privacy_policy_link') }}</button>{{ t('public.booking.privacy_accept_suffix') }}
             </span>
           </label>
           <span v-if="fieldError('privacy_accepted')" class="appointment-field-error">
@@ -151,7 +143,7 @@
     </template>
 
     <template #footer>
-      <button class="btn" type="button" :disabled="state.submitting" @click="$emit('close')">Close</button>
+      <button class="btn" type="button" :disabled="state.submitting" @click="$emit('close')">{{ t('common.close') }}</button>
       <button
         v-if="!state.success"
         class="btn btn-cyan"
@@ -159,26 +151,27 @@
         :disabled="state.submitting || state.loading"
         @click="submit"
       >
-        {{ state.submitting ? 'Submitting...' : 'Request demo' }}
+        {{ state.submitting ? t('public.booking.submitting') : t('public.booking.book_video_call') }}
       </button>
     </template>
   </AppModalShell>
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { Calendar } from '@fullcalendar/core';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import AppModalShell from '../../../components/AppModalShell.vue';
 import { bookPublicAppointment, loadPublicAppointmentSlots, toLocalSlotLabel } from './appointmentCalendarApi';
+import { i18nState, t } from '../../../modules/localization/i18nRuntime.js';
 
 const props = defineProps({
   open: {
     type: Boolean,
     default: false,
   },
-  ownerId: {
+  calendarId: {
     type: [Number, String],
     required: true,
   },
@@ -206,38 +199,81 @@ const state = reactive({
   serverFields: {},
   success: false,
   joinPath: '',
+  call: null,
   confirmedSlotLabel: '',
   privacyOpen: false,
+  settings: {
+    slot_minutes: 15,
+    invitation_text: '',
+  },
 });
 
 let calendarInstance = null;
 
+function currentDocumentLocale() {
+  if (typeof document === 'undefined') return '';
+  return String(document.documentElement?.lang || '').trim();
+}
+
+const activeLocale = computed(() => String(i18nState.locale || currentDocumentLocale() || 'en').trim() || 'en');
+const activeDirection = computed(() => (i18nState.direction === 'rtl' ? 'rtl' : 'ltr'));
 const selectedSlot = computed(() => state.slots.find((slot) => String(slot.id) === state.selectedSlotId) || null);
-const selectedSlotLabel = computed(() => (selectedSlot.value ? toLocalSlotLabel(selectedSlot.value) : 'Select a demo slot'));
+const selectedSlotLabel = computed(() => (
+  selectedSlot.value ? toLocalSlotLabel(selectedSlot.value, { locale: activeLocale.value }) : t('public.booking.select_slot')
+));
+const invitationText = computed(() => String(state.settings.invitation_text || '').trim());
+const bookingLinks = computed(() => {
+  const joinUrl = absoluteFrontendUrl(state.joinPath);
+  const call = state.call && typeof state.call === 'object' ? state.call : {};
+  const startsAt = new Date(String(call.starts_at || ''));
+  const endsAt = new Date(String(call.ends_at || ''));
+  if (!joinUrl || Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) {
+    return { joinUrl, googleUrl: '', canDownloadIcs: false };
+  }
+
+  return {
+    joinUrl,
+    googleUrl: buildGoogleCalendarUrl(call, joinUrl),
+    canDownloadIcs: true,
+  };
+});
+
+function slotMinutesToDuration(minutes) {
+  const normalized = [5, 10, 15, 20, 30, 45, 60].includes(Number(minutes)) ? Number(minutes) : 15;
+  return `00:${String(normalized).padStart(2, '0')}:00`;
+}
+
+function applySettings(settings) {
+  const minutes = Number.parseInt(String(settings?.slot_minutes || 15), 10);
+  state.settings.slot_minutes = [5, 10, 15, 20, 30, 45, 60].includes(minutes) ? minutes : 15;
+  state.settings.invitation_text = String(settings?.invitation_text || '');
+  calendarInstance?.setOption('slotDuration', slotMinutesToDuration(state.settings.slot_minutes));
+  calendarInstance?.setOption('snapDuration', slotMinutesToDuration(state.settings.slot_minutes));
+}
 
 function slotLabel(slot) {
-  return toLocalSlotLabel(slot);
+  return toLocalSlotLabel(slot, { locale: activeLocale.value });
 }
 
 function localErrors() {
   const errors = {};
   if (!selectedSlot.value) {
-    errors.slot_id = 'Please select a demo slot.';
+    errors.slot_id = t('public.booking.error_select_slot');
   }
   if (String(form.first_name || '').trim() === '') {
-    errors.first_name = 'First name is required.';
+    errors.first_name = t('public.booking.error_first_name_required');
   }
   if (String(form.last_name || '').trim() === '') {
-    errors.last_name = 'Last name is required.';
+    errors.last_name = t('public.booking.error_last_name_required');
   }
   const email = String(form.email || '').trim();
   if (email === '') {
-    errors.email = 'Email is required.';
+    errors.email = t('public.booking.error_email_required');
   } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    errors.email = 'Enter a valid email address.';
+    errors.email = t('public.booking.error_email_invalid');
   }
   if (!form.privacy_accepted) {
-    errors.privacy_accepted = 'Privacy acceptance is required.';
+    errors.privacy_accepted = t('public.booking.error_privacy_required');
   }
   return errors;
 }
@@ -267,11 +303,11 @@ function syncCalendarSlots() {
   for (const slot of state.slots) {
     calendarInstance.addEvent({
       id: String(slot.id || ''),
-      title: 'Demo slot',
+      title: t('public.booking.default_call_title'),
       start: new Date(String(slot.starts_at || '')),
       end: new Date(String(slot.ends_at || '')),
-      backgroundColor: String(slot.id) === state.selectedSlotId ? '#4fd7ff' : '#0e8fb8',
-      borderColor: '#4fd7ff',
+      backgroundColor: String(slot.id) === state.selectedSlotId ? 'var(--color-cyan-hover)' : 'var(--color-cyan-primary)',
+      borderColor: 'var(--color-cyan-hover)',
     });
   }
 }
@@ -281,13 +317,17 @@ async function ensureCalendar() {
   calendarInstance = new Calendar(calendarEl.value, {
     plugins: [timeGridPlugin, interactionPlugin],
     initialView: 'timeGridWeek',
+    locale: activeLocale.value,
+    direction: activeDirection.value,
     headerToolbar: {
       left: 'prev,next today',
       center: 'title',
-      right: 'timeGridWeek,timeGridDay',
+      right: '',
     },
     height: '100%',
     allDaySlot: false,
+    slotDuration: slotMinutesToDuration(state.settings.slot_minutes),
+    snapDuration: slotMinutesToDuration(state.settings.slot_minutes),
     selectable: false,
     editable: false,
     eventClick(info) {
@@ -303,10 +343,12 @@ async function loadSlots() {
   state.error = '';
   state.success = false;
   state.joinPath = '';
+  state.call = null;
   try {
     await nextTick();
     await ensureCalendar();
-    const result = await loadPublicAppointmentSlots(props.ownerId);
+    const result = await loadPublicAppointmentSlots(props.calendarId);
+    applySettings(result.settings || {});
     state.slots = Array.isArray(result.slots) ? result.slots : [];
     if (!selectedSlot.value && state.slots.length > 0) {
       state.selectedSlotId = String(state.slots[0].id || '');
@@ -315,7 +357,7 @@ async function loadSlots() {
     await nextTick();
     calendarInstance?.updateSize();
   } catch (error) {
-    state.error = error instanceof Error ? error.message : 'Could not load demo slots.';
+    state.error = error instanceof Error ? error.message : t('public.booking.load_failed');
   } finally {
     state.loading = false;
   }
@@ -331,7 +373,7 @@ async function submit() {
   state.submitting = true;
   state.error = '';
   try {
-    const result = await bookPublicAppointment(props.ownerId, {
+    const result = await bookPublicAppointment(props.calendarId, {
       slot_id: state.selectedSlotId,
       salutation: form.salutation,
       title: form.title,
@@ -340,19 +382,96 @@ async function submit() {
       email: form.email,
       message: form.message,
       privacy_accepted: form.privacy_accepted,
+      locale: activeLocale.value,
     });
     const joinPath = String(result.join_path || result.booking?.join_path || '');
+    const call = result.call && typeof result.call === 'object' ? result.call : null;
     const confirmedSlotLabel = selectedSlotLabel.value;
     await loadSlots();
     state.joinPath = joinPath;
+    state.call = call;
     state.confirmedSlotLabel = confirmedSlotLabel;
     state.success = true;
   } catch (error) {
     state.serverFields = error?.fields && typeof error.fields === 'object' ? error.fields : {};
-    state.error = error instanceof Error ? error.message : 'Could not submit demo request.';
+    state.error = error instanceof Error ? error.message : t('public.booking.book_failed');
   } finally {
     state.submitting = false;
   }
+}
+
+function absoluteFrontendUrl(path) {
+  const value = String(path || '').trim();
+  if (value === '') return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (typeof window === 'undefined') return value;
+  return `${window.location.origin}/${value.replace(/^\/+/, '')}`;
+}
+
+function calendarDateUtc(value) {
+  const date = value instanceof Date ? value : new Date(String(value || ''));
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+}
+
+function buildGoogleCalendarUrl(call, joinUrl) {
+  const startsAt = calendarDateUtc(call?.starts_at);
+  const endsAt = calendarDateUtc(call?.ends_at);
+  if (!startsAt || !endsAt || !joinUrl) return '';
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: String(call?.title || t('public.booking.default_call_title')),
+    dates: `${startsAt}/${endsAt}`,
+    details: `${t('public.booking.video_call_link_label')}:\n${joinUrl}`,
+    location: joinUrl,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function escapeIcsText(value) {
+  return String(value || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function buildIcsText() {
+  const call = state.call && typeof state.call === 'object' ? state.call : {};
+  const joinUrl = bookingLinks.value.joinUrl;
+  const startsAt = calendarDateUtc(call.starts_at);
+  const endsAt = calendarDateUtc(call.ends_at);
+  if (!startsAt || !endsAt || !joinUrl) return '';
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//KingRT//Video Call Booking//EN',
+    'BEGIN:VEVENT',
+    `UID:${escapeIcsText(String(call.id || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Date.now())))}@kingrt`,
+    `DTSTAMP:${calendarDateUtc(new Date())}`,
+    `DTSTART:${startsAt}`,
+    `DTEND:${endsAt}`,
+    `SUMMARY:${escapeIcsText(String(call.title || t('public.booking.default_call_title')))}`,
+    `DESCRIPTION:${escapeIcsText(`${t('public.booking.video_call_link_label')}:\n${joinUrl}`)}`,
+    `LOCATION:${escapeIcsText(joinUrl)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+function downloadIcs() {
+  const ics = buildIcsText();
+  if (!ics || typeof document === 'undefined') return;
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'video-call.ics';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 watch(
@@ -363,6 +482,18 @@ watch(
     }
   },
 );
+
+watch([activeLocale, activeDirection], ([locale, direction]) => {
+  calendarInstance?.setOption('locale', locale);
+  calendarInstance?.setOption('direction', direction);
+  syncCalendarSlots();
+});
+
+onMounted(() => {
+  if (props.open) {
+    void loadSlots();
+  }
+});
 
 onBeforeUnmount(() => {
   if (calendarInstance) {
@@ -375,6 +506,7 @@ onBeforeUnmount(() => {
 <style scoped>
 :deep(.appointment-booking-dialog) {
   width: min(1180px, calc(100vw - 24px));
+  height: min(960px, calc(100dvh - 24px));
   max-height: calc(100dvh - 24px);
   overflow: hidden;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -395,18 +527,46 @@ onBeforeUnmount(() => {
 .appointment-booking-left {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(340px, 1fr) auto;
+  grid-template-rows: minmax(442px, 1fr) auto;
   gap: 10px;
 }
 
+.appointment-booking-left.has-invitation {
+  grid-template-rows: auto minmax(442px, 1fr) auto;
+}
+
+.appointment-invitation-text {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-border);
+  color: var(--text-main);
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
 .appointment-booking-calendar {
-  min-height: 340px;
+  min-height: 442px;
   height: 100%;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-surface-strong);
   padding: 8px;
   overflow: hidden;
+}
+
+.appointment-booking-calendar :deep(.fc-timegrid-slot) {
+  height: 3em;
+}
+
+.appointment-booking-calendar :deep(.fc-timegrid-col:not(:first-child)),
+.appointment-booking-calendar :deep(.fc-col-header-cell:not(:first-child)) {
+  box-shadow: inset 1px 0 0 var(--border-subtle);
+}
+
+.appointment-booking-calendar :deep(.appointment-slot-event-active) {
+  filter: brightness(1.25);
 }
 
 .appointment-slot-list {
@@ -420,7 +580,7 @@ onBeforeUnmount(() => {
 .appointment-slot-btn {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-122340);
+  background: var(--color-border);
   color: var(--text-main);
   min-height: 34px;
   padding: 0 10px;
@@ -428,8 +588,8 @@ onBeforeUnmount(() => {
 }
 
 .appointment-slot-btn.active {
-  border-color: var(--color-4fd7ff);
-  background: var(--color-0f3a52);
+  border-color: var(--color-cyan-hover);
+  background: var(--color-border);
 }
 
 .appointment-booking-form {
@@ -454,7 +614,7 @@ onBeforeUnmount(() => {
 .appointment-selected-slot {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-main);
   font-size: 12px;
   padding: 8px 10px;
@@ -463,11 +623,11 @@ onBeforeUnmount(() => {
 .appointment-selected-slot.invalid,
 .input.invalid,
 .appointment-consent-row.invalid {
-  border-color: var(--color-a81a1a);
+  border-color: var(--color-error);
 }
 
 .appointment-field-error {
-  color: var(--color-ff9f9f);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -480,16 +640,16 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--color-surface-navy);
   padding: 8px 10px;
   resize: vertical;
 }
 
 .calls-inline-error {
-  border: 1px solid var(--color-6b1f1f);
+  border: 1px solid var(--color-surface-navy);
   border-radius: 6px;
-  background: var(--color-331616);
-  color: var(--color-ffb5b5);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
   font-size: 12px;
   padding: 8px 10px;
 }
@@ -498,7 +658,7 @@ onBeforeUnmount(() => {
   margin: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-132745);
+  background: var(--color-border);
   color: var(--text-muted);
   font-size: 12px;
   padding: 8px 10px;
@@ -519,7 +679,7 @@ onBeforeUnmount(() => {
 .appointment-link-button {
   border: 0;
   background: transparent;
-  color: var(--color-4fd7ff);
+  color: var(--color-cyan-hover);
   padding: 0;
   text-decoration: underline;
 }
@@ -527,8 +687,8 @@ onBeforeUnmount(() => {
 .appointment-privacy-overlay {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-081326);
-  box-shadow: 0 6px 18px var(--color-rgba-0-0-0-0-28);
+  background: var(--color-surface-navy);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -572,6 +732,12 @@ onBeforeUnmount(() => {
 
 .appointment-booking-success p {
   color: var(--text-muted);
+}
+
+.appointment-success-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 :deep(.appointment-booking-footer) {

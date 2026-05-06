@@ -1,3 +1,5 @@
+import { isScreenShareUserId } from '../screenShareIdentity.js';
+
 export function createNativePeerFactory({
   activeRoomId,
   attachMediaSecurityNativeReceiver = () => false,
@@ -42,6 +44,7 @@ export function createNativePeerFactory({
     const normalizedTargetUserId = Number(targetUserId);
     if (!Number.isInteger(normalizedTargetUserId) || normalizedTargetUserId <= 0) return null;
     if (normalizedTargetUserId === currentUserId()) return null;
+    if (isScreenShareUserId(normalizedTargetUserId)) return null;
     if (typeof RTCPeerConnection !== 'function') return null;
 
     const existing = nativePeerConnectionsRef.value.get(normalizedTargetUserId);
@@ -243,6 +246,7 @@ export function createNativePeerFactory({
     for (const row of connectedParticipantUsers.value) {
       const userId = Number(row?.userId || 0);
       if (!Number.isInteger(userId) || userId <= 0 || userId === currentUserId()) continue;
+      if (isScreenShareUserId(userId)) continue;
       activePeerIds.add(userId);
       const existing = nativePeerConnectionsRef.value.get(userId);
       if (nativePeerRequiresAudioOnlyRebuild(existing)) {

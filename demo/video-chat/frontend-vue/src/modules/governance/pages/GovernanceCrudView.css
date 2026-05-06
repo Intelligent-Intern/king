@@ -1,0 +1,229 @@
+.governance-table {
+  width: 100%;
+  table-layout: fixed;
+  margin-top: 10px;
+}
+
+.governance-crud-view .admin-page-frame-toolbar {
+  gap: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 20px 20px;
+  background: transparent;
+}
+
+.governance-search-field {
+  min-width: 0;
+  flex: 0 1 360px;
+  max-width: 360px;
+  margin-inline-start: auto;
+}
+
+.governance-filter-select {
+  min-width: 0;
+  flex: 0 0 180px;
+  width: 180px;
+}
+
+.governance-toolbar-submit-btn {
+  flex: 0 0 48px;
+  width: 48px;
+  height: 40px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-action);
+}
+
+.governance-toolbar-submit-btn:hover {
+  background: var(--bg-action-hover);
+}
+
+.governance-actions-col {
+  width: 120px;
+}
+
+.governance-name {
+  overflow: hidden;
+  color: var(--text-main);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.governance-subline {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.governance-empty-cell {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.governance-empty-state-cell {
+  height: min(48vh, 420px);
+  padding: 0;
+}
+
+.governance-table tbody tr.table-empty-row {
+  background: transparent;
+}
+
+.governance-empty-state {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 36px 18px;
+  color: var(--text-primary);
+}
+
+.governance-empty-state h2,
+.governance-empty-state p {
+  margin: 0;
+}
+
+.governance-empty-state h2 {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.governance-empty-state p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.governance-empty-icon {
+  position: relative;
+  width: 52px;
+  height: 40px;
+  border: 3px solid var(--border-subtle);
+  border-radius: 9px;
+  opacity: 0.95;
+}
+
+.governance-empty-icon::before {
+  content: '';
+  position: absolute;
+  inset-inline: 8px;
+  top: 13px;
+  height: 10px;
+  border: 3px solid var(--border-subtle);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+}
+
+.governance-empty-icon::after {
+  content: '';
+  position: absolute;
+  inset-inline: 10px;
+  top: -7px;
+  height: 14px;
+  border: 3px solid var(--border-subtle);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+}
+
+.governance-state,
+.governance-inline-error {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.governance-inline-error {
+  color: var(--color-heading);
+}
+
+.governance-readonly-label {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .governance-crud-view .admin-page-frame-toolbar {
+    align-items: stretch;
+    padding-inline: 10px;
+  }
+
+  .governance-search-field,
+  .governance-filter-select {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+    margin-inline-start: 0;
+  }
+
+  .governance-toolbar-submit-btn {
+    margin-inline-start: auto;
+  }
+
+  .governance-table {
+    table-layout: auto;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .governance-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .governance-table tbody,
+  .governance-table tr,
+  .governance-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .governance-table tbody tr {
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-row);
+  }
+
+  .governance-table tbody tr.table-empty-row {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .governance-table td {
+    display: grid;
+    grid-template-columns: minmax(100px, 34%) minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .governance-table td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .governance-table td:last-child {
+    border-bottom: 0;
+  }
+
+  .governance-empty-state-cell {
+    height: auto;
+  }
+}

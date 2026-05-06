@@ -13,7 +13,7 @@
 .settings-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-rgba-9-17-30-0-56);
+  background: color-mix(in srgb, var(--color-surface-navy) 56%, transparent);
 }
 
 .settings-dialog {
@@ -26,12 +26,18 @@
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface-strong);
-  box-shadow: 0 2px 10px var(--color-rgba-0-0-0-0-28);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   align-content: stretch;
   gap: 12px;
   padding: var(--settings-dialog-padding);
+}
+
+.settings-dialog.is-maximized {
+  width: calc(100vw - 24px);
+  height: calc(100vh - 24px);
+  max-height: calc(100vh - 24px);
 }
 
 .settings-header {
@@ -45,6 +51,12 @@
   border: 0;
   border-radius: 0;
   background: var(--brand-bg);
+}
+
+.settings-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .settings-title-wrap {
@@ -97,7 +109,7 @@
 .settings-panel {
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--color-122340);
+  background: var(--color-border);
   padding: 12px;
   display: grid;
   align-content: start;
@@ -161,7 +173,7 @@
   object-fit: contain;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0d1e36);
+  background: var(--color-surface-navy);
   padding: 6px 10px;
 }
 
@@ -173,7 +185,7 @@
   min-height: 84px;
   border: 1px dashed var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-152a49);
+  background: var(--color-border);
   padding: 10px;
   display: grid;
   align-content: center;
@@ -190,7 +202,7 @@
 
 .settings-dropzone.is-over {
   border-color: var(--bg-action-hover);
-  background: var(--color-1d3f70);
+  background: var(--color-border);
 }
 
 .settings-dropzone-title {
@@ -209,7 +221,7 @@
   aspect-ratio: 1 / 1;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0d1e36);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -218,7 +230,7 @@
   height: 96px;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0d1e36);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -239,12 +251,12 @@
   content: '';
   position: absolute;
   inset: 0;
-  box-shadow: inset 0 0 0 1px var(--color-000000);
+  box-shadow: inset 0 0 0 1px var(--color-primary-navy);
   pointer-events: none;
 }
 
 .settings-logo-crop-stage::after {
-  box-shadow: inset 0 0 0 1px var(--color-1e3b66);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .settings-crop-image {
@@ -272,8 +284,8 @@
   overflow: auto;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-d8dadd);
-  color: var(--color-0b1323);
+  background: var(--color-heading);
+  color: var(--color-surface-navy);
   padding: 10px;
   line-height: 1.45;
 }
@@ -282,7 +294,7 @@
   height: 12px;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-12233f);
+  background: var(--color-border);
   overflow: hidden;
 }
 
@@ -458,7 +470,7 @@
 
 .settings-theme-preview-left-pane {
   background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
@@ -547,8 +559,7 @@
   flex: 1 1 auto;
   min-height: 0;
   padding-top: 0;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
   overflow: auto;
 }
 
@@ -572,7 +583,7 @@
 .settings-theme-preview-calls-view .call-subline {
   display: block;
   margin-top: 2px;
-  color: var(--color-c7d7f2);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -602,8 +613,7 @@
   display: flex;
   justify-content: center;
   margin-top: auto;
-  padding-left: 10px;
-  padding-right: 10px;
+  padding-inline: 10px;
 }
 
 .settings-theme-preview-calendar-mock {
@@ -661,7 +671,7 @@
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-152a49);
+  background: var(--color-border);
   color: var(--text-main);
   font-size: 12px;
 }
@@ -671,7 +681,7 @@
   padding: 2px 6px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .settings-status-tag.connected {

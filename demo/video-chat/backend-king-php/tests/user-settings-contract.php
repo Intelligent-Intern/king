@@ -66,6 +66,11 @@ SQL
 
     $initialSettings = videochat_fetch_user_settings($pdo, $userId);
     videochat_user_settings_assert(is_array($initialSettings), 'initial settings lookup should succeed');
+    videochat_user_settings_assert((string) ($initialSettings['locale'] ?? '') === 'en', 'initial locale should default to en');
+    videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
+    videochat_user_settings_assert(count($initialSettings['supported_locales'] ?? []) >= 28, 'supported locale metadata missing');
+    videochat_user_settings_assert((string) ($initialSettings['about_me'] ?? 'missing') === '', 'initial about_me should be empty');
+    videochat_user_settings_assert(is_array($initialSettings['messenger_contacts'] ?? null), 'initial messenger_contacts should be an array');
 
     $invalidEmptyPayload = videochat_update_user_settings($pdo, $userId, []);
     videochat_user_settings_assert($invalidEmptyPayload['ok'] === false, 'empty settings update should fail');
@@ -79,6 +84,7 @@ SQL
         'time_format' => '99h',
         'date_format' => 'unknown',
         'theme' => '',
+        'locale' => 'xx',
     ]);
     videochat_user_settings_assert($invalidValues['ok'] === false, 'invalid settings update should fail');
     videochat_user_settings_assert($invalidValues['reason'] === 'validation_failed', 'invalid settings update reason mismatch');
@@ -93,6 +99,41 @@ SQL
     videochat_user_settings_assert(
         (string) ($invalidValues['errors']['theme'] ?? '') === 'required_theme',
         'invalid theme error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidValues['errors']['locale'] ?? '') === 'must_be_supported_locale',
+        'invalid locale error mismatch'
+    );
+
+    $invalidProfileValues = videochat_update_user_settings($pdo, $userId, [
+        'about_me' => str_repeat('x', 2001),
+        'linkedin_url' => 'https://example.com/in/user',
+        'x_url' => 'http://x.com/calluser',
+        'youtube_url' => 'not-a-url',
+        'messenger_contacts' => [
+            ['channel' => 'Signal', 'handle' => ''],
+        ],
+    ]);
+    videochat_user_settings_assert($invalidProfileValues['ok'] === false, 'invalid profile settings should fail');
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['about_me'] ?? '') === 'too_long',
+        'invalid about_me error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['linkedin_url'] ?? '') === 'host_not_allowed',
+        'invalid linkedin_url error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['x_url'] ?? '') === 'must_be_https_url',
+        'invalid x_url error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidProfileValues['errors']['youtube_url'] ?? '') === 'must_be_https_url',
+        'invalid youtube_url error mismatch'
+    );
+    videochat_user_settings_assert(
+        str_starts_with((string) ($invalidProfileValues['errors']['messenger_contacts'] ?? ''), 'channel_and_handle_required'),
+        'invalid messenger_contacts error mismatch'
     );
 
     $unknownFieldPayload = videochat_update_user_settings($pdo, $userId, [
@@ -110,7 +151,16 @@ SQL
         'time_format' => '12h',
         'date_format' => 'ymd_dash',
         'theme' => 'light',
+        'locale' => 'ar',
         'avatar_path' => '/avatars/call-user-updated.png',
+        'about_me' => "  Builds reliable video calls.\nAvailable for tenant onboarding.  ",
+        'linkedin_url' => ' https://www.linkedin.com/in/call-user ',
+        'x_url' => 'https://x.com/calluser',
+        'youtube_url' => 'https://www.youtube.com/@calluser',
+        'messenger_contacts' => [
+            ['channel' => 'Signal', 'handle' => 'call-user.01'],
+            ['channel' => 'telegram', 'handle' => '@calluser'],
+        ],
     ]);
     videochat_user_settings_assert($validUpdate['ok'] === true, 'valid settings update should succeed');
     videochat_user_settings_assert($validUpdate['reason'] === 'updated', 'valid settings update reason mismatch');
@@ -131,9 +181,38 @@ SQL
         'updated theme mismatch'
     );
     videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['locale'] ?? '') === 'ar',
+        'updated locale mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['direction'] ?? '') === 'rtl',
+        'updated locale direction mismatch'
+    );
+    videochat_user_settings_assert(
         (string) (($validUpdate['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',
         'updated avatar_path mismatch'
     );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['about_me'] ?? '') === "Builds reliable video calls.\nAvailable for tenant onboarding.",
+        'updated about_me mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['linkedin_url'] ?? '') === 'https://www.linkedin.com/in/call-user',
+        'updated linkedin_url mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['x_url'] ?? '') === 'https://x.com/calluser',
+        'updated x_url mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) (($validUpdate['user'] ?? [])['youtube_url'] ?? '') === 'https://www.youtube.com/@calluser',
+        'updated youtube_url mismatch'
+    );
+    $messengerContacts = is_array(($validUpdate['user'] ?? [])['messenger_contacts'] ?? null)
+        ? ($validUpdate['user'] ?? [])['messenger_contacts']
+        : [];
+    videochat_user_settings_assert(count($messengerContacts) === 2, 'updated messenger_contacts count mismatch');
+    videochat_user_settings_assert((string) ($messengerContacts[0]['channel'] ?? '') === 'signal', 'messenger channel should normalize');
 
     $reauth = videochat_authenticate_request(
         $pdo,
@@ -160,6 +239,18 @@ SQL
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['theme'] ?? '') === 'light',
         'reauth theme should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['locale'] ?? '') === 'ar',
+        'reauth locale should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        (string) (($reauth['user'] ?? [])['direction'] ?? '') === 'rtl',
+        'reauth direction should reflect persisted settings'
+    );
+    videochat_user_settings_assert(
+        count((array) (($reauth['user'] ?? [])['supported_locales'] ?? [])) >= 28,
+        'reauth should include supported locale metadata'
     );
     videochat_user_settings_assert(
         (string) (($reauth['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',

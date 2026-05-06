@@ -113,7 +113,7 @@
 
 @media (min-width: 1181px) {
   .shell.left-collapsed .main {
-    padding-left: 10px;
+    padding-inline-start: 10px;
   }
 
   .shell.left-collapsed .workspace {
@@ -171,7 +171,7 @@
 
 .section-head-title {
   min-width: 0;
-  padding-left: 2px;
+  padding-inline-start: 2px;
 }
 
 .section-head-left .show-sidebar-inline.show-left-sidebar-overlay {
@@ -190,45 +190,45 @@
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   background: var(--bg-input);
-  color: var(--color-0a1322);
+  color: var(--text-primary);
   padding: 0 12px;
   outline: none;
 }
 
 .input::placeholder {
-  color: var(--color-4f5a6b);
+  color: var(--text-muted);
 }
 
 .input:focus,
 .select:focus {
-  border-color: var(--bg-tab-hover);
+  border-color: var(--brand-cyan-hover);
 }
 
 .input[type='date'],
 .input[type='time'],
 .input[type='datetime-local'] {
-  border-color: var(--color-133262);
-  background-color: var(--color-0b1324);
-  color: var(--color-f7f7f7);
+  border-color: var(--border-subtle);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   color-scheme: dark;
 }
 
 .input[type='date']:focus,
 .input[type='time']:focus,
 .input[type='datetime-local']:focus {
-  border-color: var(--color-3f79d6);
+  border-color: var(--brand-cyan-hover);
 }
 
 .input[type='date']::-webkit-datetime-edit,
 .input[type='time']::-webkit-datetime-edit,
 .input[type='datetime-local']::-webkit-datetime-edit {
-  color: var(--color-f7f7f7);
+  color: var(--color-text-primary);
 }
 
 .input[type='date']::-webkit-datetime-edit-fields-wrapper,
 .input[type='time']::-webkit-datetime-edit-fields-wrapper,
 .input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
-  color: var(--color-f7f7f7);
+  color: var(--color-text-primary);
 }
 
 .input[type='date']::-webkit-calendar-picker-indicator,
@@ -260,7 +260,7 @@ table {
 
 th,
 td {
-  text-align: left;
+  text-align: start;
   padding: 9px 10px;
   border-bottom: 1px solid var(--border-subtle);
   font-size: 12px;
@@ -276,8 +276,13 @@ tbody tr {
   background: var(--bg-row);
 }
 
-tbody tr:hover {
+tbody tr:not(.table-empty-row):hover {
   background: var(--bg-row-hover);
+}
+
+tbody tr.table-empty-row,
+tbody tr.table-empty-row:hover {
+  background: transparent;
 }
 
 .tag {
@@ -287,7 +292,7 @@ tbody tr:hover {
   padding: 3px 8px;
   font-size: 11px;
   font-weight: 700;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
   border-radius: 6px;
 }
 
@@ -377,16 +382,20 @@ tbody tr:hover {
   filter: brightness(0) invert(1);
 }
 
+html[dir="rtl"] .pager-icon-img {
+  transform: scaleX(-1);
+}
+
 .pager-btn:disabled {
   background: transparent;
-  color: var(--color-6f86b0);
+  color: var(--color-cyan-primary);
   opacity: 0.55;
   cursor: not-allowed;
 }
 
 .pager-btn:not(:disabled):hover {
   background: transparent;
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
 }
 
 .pager-btn.is-hidden {
@@ -436,7 +445,7 @@ tbody tr:hover {
 
 .right-list {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
   display: grid;
   gap: 4px;
 }
@@ -480,7 +489,7 @@ tbody tr:hover {
   border: 0;
   border-radius: 6px;
   background: var(--bg-action);
-  color: var(--color-ffffff);
+  color: var(--color-text-primary);
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -496,11 +505,11 @@ tbody tr:hover {
 }
 
 .icon-mini-btn.danger:hover {
-  background: var(--color-cc0000);
+  background: var(--color-error);
 }
 
 .icon-mini-btn:disabled {
-  background: var(--color-233753);
+  background: var(--color-border);
   cursor: not-allowed;
 }
 
@@ -548,7 +557,7 @@ tbody tr:hover {
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 10px;
-  box-shadow: 0 8px 24px var(--color-000000);
+  box-shadow: 0 8px 24px var(--color-primary-navy);
   z-index: 30;
   display: grid;
   gap: 8px;
@@ -575,8 +584,8 @@ tbody tr:hover {
   min-height: 34px;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-0d1e36);
-  color: var(--color-f1f5ff);
+  background: var(--color-surface-navy);
+  color: var(--color-text-primary);
   padding: 7px 10px;
   font-size: 12px;
   overflow: hidden;

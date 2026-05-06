@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/error_envelope.php';
+require_once __DIR__ . '/../../support/tenant_context.php';
 
 function videochat_presence_state_init(): array
 {
@@ -49,6 +50,12 @@ function videochat_presence_normalize_room_id(?string $roomId, string $fallback 
     return $candidate;
 }
 
+function videochat_presence_room_key(string $roomId, ?int $tenantId = null): string
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    return is_int($tenantId) && $tenantId > 0 ? ('tenant:' . $tenantId . ':room:' . $normalizedRoomId) : $normalizedRoomId;
+}
+
 /**
  * @return array{
  *   connection_id: string,
@@ -88,6 +95,8 @@ function videochat_presence_connection_descriptor(
         'session_id' => $effectiveSessionId,
         'socket' => $socket,
         'room_id' => videochat_presence_normalize_room_id($roomId),
+        'room_key' => videochat_presence_room_key($roomId, (int) (($authUser['tenant']['id'] ?? 0))),
+        'tenant_id' => (int) (($authUser['tenant']['id'] ?? 0)),
         'user_id' => (int) ($authUser['id'] ?? 0),
         'display_name' => trim((string) ($authUser['display_name'] ?? '')),
         'role' => videochat_normalize_role_slug((string) ($authUser['role'] ?? '')),
@@ -117,6 +126,7 @@ function videochat_presence_public_connection(array $connection): array
     return [
         'connection_id' => (string) ($connection['connection_id'] ?? ''),
         'room_id' => (string) ($connection['room_id'] ?? ''),
+        'tenant_id' => is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null,
         'user' => [
             'id' => (int) ($connection['user_id'] ?? 0),
             'display_name' => (string) ($connection['display_name'] ?? ''),
@@ -133,10 +143,11 @@ function videochat_presence_public_connection(array $connection): array
 /**
  * @return array<int, array<string, mixed>>
  */
-function videochat_presence_room_participants(array $state, string $roomId): array
+function videochat_presence_room_participants(array $state, string $roomId, ?int $tenantId = null): array
 {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
-    $roomConnections = $state['rooms'][$normalizedRoomId] ?? null;
+    $roomKey = videochat_presence_room_key($normalizedRoomId, $tenantId);
+    $roomConnections = $state['rooms'][$roomKey] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return [];
     }
@@ -213,7 +224,8 @@ function videochat_presence_send_room_snapshot(
     ?callable $sender = null
 ): bool {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''));
-    $participants = videochat_presence_room_participants($state, $roomId);
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
+    $participants = videochat_presence_room_participants($state, $roomId, $tenantId);
 
     return videochat_presence_send_frame(
         $connection['socket'] ?? null,
@@ -249,10 +261,11 @@ function videochat_presence_broadcast_room_event(
     string $roomId,
     array $payload,
     ?string $excludeConnectionId = null,
-    ?callable $sender = null
+    ?callable $sender = null,
+    ?int $tenantId = null
 ): int {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
-    $roomConnections = $state['rooms'][$normalizedRoomId] ?? null;
+    $roomConnections = $state['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return 0;
     }
@@ -306,14 +319,20 @@ function videochat_presence_join_room(
     $previousRoomId = videochat_presence_is_valid_room_id($previousRoomCandidate)
         ? $previousRoomCandidate
         : '';
+    $tenantId = is_numeric($effectiveConnection['tenant_id'] ?? null) ? (int) $effectiveConnection['tenant_id'] : null;
+    $previousRoomKey = is_array($existingConnection) && is_string($existingConnection['room_key'] ?? null)
+        ? (string) $existingConnection['room_key']
+        : ($previousRoomId === '' ? '' : videochat_presence_room_key($previousRoomId, $tenantId));
     $nextRoomId = videochat_presence_normalize_room_id($roomId);
+    $nextRoomKey = videochat_presence_room_key($nextRoomId, $tenantId);
     $effectiveConnection['room_id'] = $nextRoomId;
+    $effectiveConnection['room_key'] = $nextRoomKey;
 
     $state['connections'][$connectionId] = $effectiveConnection;
     if ($previousRoomId !== '' && $previousRoomId !== $nextRoomId) {
-        unset($state['rooms'][$previousRoomId][$connectionId]);
-        if (($state['rooms'][$previousRoomId] ?? []) === []) {
-            unset($state['rooms'][$previousRoomId]);
+        unset($state['rooms'][$previousRoomKey][$connectionId]);
+        if (($state['rooms'][$previousRoomKey] ?? []) === []) {
+            unset($state['rooms'][$previousRoomKey]);
         }
 
         $leavingConnection = $effectiveConnection;
@@ -322,25 +341,25 @@ function videochat_presence_join_room(
             'type' => 'room/left',
             'room_id' => $previousRoomId,
             'participant' => videochat_presence_public_connection($leavingConnection),
-            'participant_count' => count(videochat_presence_room_participants($state, $previousRoomId)),
+            'participant_count' => count(videochat_presence_room_participants($state, $previousRoomId, $tenantId)),
             'time' => gmdate('c'),
         ];
-        videochat_presence_broadcast_room_event($state, $previousRoomId, $leavePayload, $connectionId, $sender);
+        videochat_presence_broadcast_room_event($state, $previousRoomId, $leavePayload, $connectionId, $sender, $tenantId);
     }
 
-    if (!isset($state['rooms'][$nextRoomId]) || !is_array($state['rooms'][$nextRoomId])) {
-        $state['rooms'][$nextRoomId] = [];
+    if (!isset($state['rooms'][$nextRoomKey]) || !is_array($state['rooms'][$nextRoomKey])) {
+        $state['rooms'][$nextRoomKey] = [];
     }
-    $state['rooms'][$nextRoomId][$connectionId] = $effectiveConnection['socket'] ?? null;
+    $state['rooms'][$nextRoomKey][$connectionId] = $effectiveConnection['socket'] ?? null;
 
     $joinPayload = [
         'type' => 'room/joined',
         'room_id' => $nextRoomId,
         'participant' => videochat_presence_public_connection($effectiveConnection),
-        'participant_count' => count(videochat_presence_room_participants($state, $nextRoomId)),
+        'participant_count' => count(videochat_presence_room_participants($state, $nextRoomId, $tenantId)),
         'time' => gmdate('c'),
     ];
-    videochat_presence_broadcast_room_event($state, $nextRoomId, $joinPayload, $connectionId, $sender);
+    videochat_presence_broadcast_room_event($state, $nextRoomId, $joinPayload, $connectionId, $sender, $tenantId);
     videochat_presence_send_room_snapshot(
         $state,
         $effectiveConnection,
@@ -374,12 +393,14 @@ function videochat_presence_remove_connection(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($existingConnection['room_id'] ?? ''), '');
+    $tenantId = is_numeric($existingConnection['tenant_id'] ?? null) ? (int) $existingConnection['tenant_id'] : null;
+    $roomKey = is_string($existingConnection['room_key'] ?? null) ? (string) $existingConnection['room_key'] : videochat_presence_room_key($roomId, $tenantId);
     unset($state['connections'][$trimmedConnectionId]);
 
-    if ($roomId !== '' && isset($state['rooms'][$roomId]) && is_array($state['rooms'][$roomId])) {
-        unset($state['rooms'][$roomId][$trimmedConnectionId]);
-        if ($state['rooms'][$roomId] === []) {
-            unset($state['rooms'][$roomId]);
+    if ($roomId !== '' && isset($state['rooms'][$roomKey]) && is_array($state['rooms'][$roomKey])) {
+        unset($state['rooms'][$roomKey][$trimmedConnectionId]);
+        if ($state['rooms'][$roomKey] === []) {
+            unset($state['rooms'][$roomKey]);
         }
     }
 
@@ -388,10 +409,10 @@ function videochat_presence_remove_connection(
             'type' => 'room/left',
             'room_id' => $roomId,
             'participant' => videochat_presence_public_connection($existingConnection),
-            'participant_count' => count(videochat_presence_room_participants($state, $roomId)),
+            'participant_count' => count(videochat_presence_room_participants($state, $roomId, $tenantId)),
             'time' => gmdate('c'),
         ];
-        videochat_presence_broadcast_room_event($state, $roomId, $leavePayload, $trimmedConnectionId, $sender);
+        videochat_presence_broadcast_room_event($state, $roomId, $leavePayload, $trimmedConnectionId, $sender, $tenantId);
     }
 
     return $existingConnection;

@@ -3,43 +3,95 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
 namespace wlvc {
 
 namespace {
 
-size_t plane_count(int width, int height) {
-    return static_cast<size_t>(width) * static_cast<size_t>(height);
+constexpr int kMaxWireDimension = std::numeric_limits<uint16_t>::max();
+constexpr int kMaxPlaneValues =
+    (std::numeric_limits<int>::max() - kHeaderBytes - (3 * RLE_HEADER_BYTES))
+    / (3 * RLE_PAIR_BYTES);
+
+struct PlaneLayout {
+    int w;
+    int h;
+    int uvW;
+    int uvH;
+    int yCount;
+    int uvCount;
+    size_t yFloatBytes;
+    size_t uvFloatBytes;
+    size_t yInt16Bytes;
+    size_t uvInt16Bytes;
+};
+
+int checked_dimension(int value, const char* label) {
+    if (value <= 0 || value > kMaxWireDimension) {
+        throw std::invalid_argument(label);
+    }
+    return value;
 }
 
-size_t rgba_offset(size_t pixel_index) {
-    return pixel_index * static_cast<size_t>(4);
+int checked_plane_value_count(int width, int height, const char* label) {
+    const size_t product = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (product == 0 || product > static_cast<size_t>(kMaxPlaneValues)) {
+        throw std::overflow_error(label);
+    }
+    return static_cast<int>(product);
 }
 
-size_t rgba_offset(int row, int col, int width) {
-    return rgba_offset(static_cast<size_t>(row) * static_cast<size_t>(width)
-                     + static_cast<size_t>(col));
+size_t checked_value_bytes(int value_count, size_t element_bytes, const char* label) {
+    const size_t count = static_cast<size_t>(value_count);
+    if (element_bytes != 0 && count > std::numeric_limits<size_t>::max() / element_bytes) {
+        throw std::overflow_error(label);
+    }
+    return count * element_bytes;
 }
 
-bool fits_int(size_t value) {
-    return value <= static_cast<size_t>(std::numeric_limits<int>::max());
+int checked_encoded_size(size_t y_bytes, size_t u_bytes, size_t v_bytes) {
+    if (
+        y_bytes > std::numeric_limits<uint32_t>::max()
+        || u_bytes > std::numeric_limits<uint32_t>::max()
+        || v_bytes > std::numeric_limits<uint32_t>::max()
+    ) {
+        throw std::overflow_error("encoded channel byte count");
+    }
+    const size_t payload_bytes = y_bytes + u_bytes + v_bytes;
+    if (payload_bytes > static_cast<size_t>(std::numeric_limits<int>::max() - kHeaderBytes)) {
+        throw std::overflow_error("encoded frame byte count");
+    }
+    return kHeaderBytes + static_cast<int>(payload_bytes);
 }
 
-int count_to_int(size_t value) {
-    return fits_int(value) ? static_cast<int>(value) : -1;
-}
+PlaneLayout make_plane_layout(int width, int height, ColorSpace color_space) {
+    if (color_space != kYUV && color_space != kRGB) {
+        throw std::invalid_argument("color space");
+    }
 
-size_t int16_plane_bytes(size_t value_count) {
-    return value_count * sizeof(int16_t);
-}
+    const int w = checked_dimension(width, "frame width");
+    const int h = checked_dimension(height, "frame height");
+    const int uvW = color_space == kYUV ? (w >> 1) : w;
+    const int uvH = color_space == kYUV ? (h >> 1) : h;
+    if (uvW <= 0 || uvH <= 0) {
+        throw std::invalid_argument("chroma plane dimensions");
+    }
 
-size_t float_plane_bytes(size_t value_count) {
-    return value_count * sizeof(float);
-}
-
-size_t rle_max_bytes_for_count(size_t value_count) {
-    return static_cast<size_t>(RLE_HEADER_BYTES)
-         + value_count * static_cast<size_t>(RLE_PAIR_BYTES);
+    const int yCount = checked_plane_value_count(w, h, "luma plane value count");
+    const int uvCount = checked_plane_value_count(uvW, uvH, "chroma plane value count");
+    return {
+        w,
+        h,
+        uvW,
+        uvH,
+        yCount,
+        uvCount,
+        checked_value_bytes(yCount, sizeof(float), "luma float byte count"),
+        checked_value_bytes(uvCount, sizeof(float), "chroma float byte count"),
+        checked_value_bytes(yCount, sizeof(int16_t), "luma int16 byte count"),
+        checked_value_bytes(uvCount, sizeof(int16_t), "chroma int16 byte count"),
+    };
 }
 
 } // namespace
@@ -49,59 +101,61 @@ size_t rle_max_bytes_for_count(size_t value_count) {
 // ---------------------------------------------------------------------------
 
 Encoder::Encoder(const EncoderConfig& cfg) : cfg_(cfg) {
-    const int w = cfg_.width, h = cfg_.height;
-    const int uvW = cfg_.color_space == kYUV ? (w >> 1) : w;
-    const int uvH = cfg_.color_space == kYUV ? (h >> 1) : h;
-    const size_t y_count = plane_count(w, h);
-    const size_t uv_count = plane_count(uvW, uvH);
+    const PlaneLayout layout = make_plane_layout(cfg_.width, cfg_.height, cfg_.color_space);
 
-    Y_.resize(y_count);
-    U_.resize(uv_count);
-    V_.resize(uv_count);
-    Ydelta_.resize(y_count);
-    Udelta_.resize(uv_count);
-    Vdelta_.resize(uv_count);
-    prevY_.resize(y_count);
-    prevU_.resize(uv_count);
-    prevV_.resize(uv_count);
-    Yq_.resize(y_count);
-    Uq_.resize(uv_count);
-    Vq_.resize(uv_count);
-    tmp_.resize(std::max(w, h));
-    rle_buf_.resize(rle_max_bytes_for_count(std::max(y_count, uv_count)));
+    Y_.resize(static_cast<size_t>(layout.yCount));
+    U_.resize(static_cast<size_t>(layout.uvCount));
+    V_.resize(static_cast<size_t>(layout.uvCount));
+    Ydelta_.resize(static_cast<size_t>(layout.yCount));
+    Udelta_.resize(static_cast<size_t>(layout.uvCount));
+    Vdelta_.resize(static_cast<size_t>(layout.uvCount));
+    prevY_.resize(static_cast<size_t>(layout.yCount));
+    prevU_.resize(static_cast<size_t>(layout.uvCount));
+    prevV_.resize(static_cast<size_t>(layout.uvCount));
+    Yq_.resize(static_cast<size_t>(layout.yCount));
+    Uq_.resize(static_cast<size_t>(layout.uvCount));
+    Vq_.resize(static_cast<size_t>(layout.uvCount));
+    tmp_.resize(static_cast<size_t>(std::max(layout.w, layout.h)));
+    rle_buf_.resize(rle_max_bytes(std::max(layout.yCount, layout.uvCount)));
 }
 
 void Encoder::rgba_to_yuv(const uint8_t* rgba) {
-    const int w = cfg_.width, h = cfg_.height;
-    const int uvW = cfg_.color_space == kYUV ? (w >> 1) : w;
-    const int uvH = cfg_.color_space == kYUV ? (h >> 1) : h;
+    const PlaneLayout layout = make_plane_layout(cfg_.width, cfg_.height, cfg_.color_space);
+    const int w = layout.w;
+    const int h = layout.h;
+    const int uvW = layout.uvW;
+    const int uvH = layout.uvH;
+    const size_t width = static_cast<size_t>(w);
+    const size_t uvWidth = static_cast<size_t>(uvW);
 
     if (cfg_.color_space == kYUV) {
         for (int row = 0; row < h; ++row) {
+            const size_t rowOffset = static_cast<size_t>(row) * width;
             for (int col = 0; col < w; ++col) {
-                const size_t i = rgba_offset(row, col, w);
+                const size_t idx = rowOffset + static_cast<size_t>(col);
+                const size_t i = idx * 4u;
                 const float r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
-                Y_[static_cast<size_t>(row) * static_cast<size_t>(w) + static_cast<size_t>(col)] =
-                    0.299f * r + 0.587f * g + 0.114f * b - 128.0f;
+                Y_[idx] = 0.299f * r + 0.587f * g + 0.114f * b - 128.0f;
             }
         }
         for (int row = 0; row < uvH; ++row) {
+            const size_t uvRowOffset = static_cast<size_t>(row) * uvWidth;
+            const size_t sourceRow = static_cast<size_t>(row) * 2u;
             for (int col = 0; col < uvW; ++col) {
-                const size_t i = rgba_offset(static_cast<size_t>(row) * static_cast<size_t>(2) * static_cast<size_t>(w)
-                                           + static_cast<size_t>(col) * static_cast<size_t>(2));
+                const size_t idx = uvRowOffset + static_cast<size_t>(col);
+                const size_t sourceCol = static_cast<size_t>(col) * 2u;
+                const size_t i = ((sourceRow * width) + sourceCol) * 4u;
                 const float r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
-                const size_t uv_idx = static_cast<size_t>(row) * static_cast<size_t>(uvW)
-                                    + static_cast<size_t>(col);
-                U_[uv_idx] = -0.147f * r - 0.289f * g + 0.436f * b;
-                V_[uv_idx] =  0.615f * r - 0.515f * g - 0.100f * b;
+                U_[idx] = -0.147f * r - 0.289f * g + 0.436f * b;
+                V_[idx] =  0.615f * r - 0.515f * g - 0.100f * b;
             }
         }
     } else {
         for (int row = 0; row < h; ++row) {
+            const size_t rowOffset = static_cast<size_t>(row) * width;
             for (int col = 0; col < w; ++col) {
-                const size_t i = rgba_offset(row, col, w);
-                const size_t idx = static_cast<size_t>(row) * static_cast<size_t>(w)
-                                 + static_cast<size_t>(col);
+                const size_t idx = rowOffset + static_cast<size_t>(col);
+                const size_t i = idx * 4u;
                 Y_[idx] = rgba[i];
                 U_[idx] = rgba[i + 1];
                 V_[idx] = rgba[i + 2];
@@ -112,17 +166,11 @@ void Encoder::rgba_to_yuv(const uint8_t* rgba) {
 
 int Encoder::encode(const uint8_t* rgba, double timestamp_us,
                     uint8_t* out_buf, int out_capacity) {
-    if (out_capacity < 0) return -1;
-
-    const int w = cfg_.width, h = cfg_.height;
-    const int uvW = cfg_.color_space == kYUV ? (w >> 1) : w;
-    const int uvH = cfg_.color_space == kYUV ? (h >> 1) : h;
-    const size_t y_count = plane_count(w, h);
-    const size_t uv_count = plane_count(uvW, uvH);
-    const int y_count_i = count_to_int(y_count);
-    const int uv_count_i = count_to_int(uv_count);
-    if (y_count_i < 0 || uv_count_i < 0) return -1;
-
+    const PlaneLayout layout = make_plane_layout(cfg_.width, cfg_.height, cfg_.color_space);
+    const int w = layout.w;
+    const int h = layout.h;
+    const int uvW = layout.uvW;
+    const int uvH = layout.uvH;
     const bool is_key = (frame_count_ % cfg_.key_frame_interval) == 0;
     ++frame_count_;
 
@@ -135,9 +183,9 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
     float* v_enc = V_.data();
     const bool use_temporal_residual = cfg_.motion_estimation && !is_key && frame_count_ > 1;
     if (use_temporal_residual) {
-        for (size_t i = 0; i < y_count; ++i)
+        for (int i = 0; i < layout.yCount; ++i)
             Ydelta_[i] = Y_[i] - prevY_[i];
-        for (size_t i = 0; i < uv_count; ++i) {
+        for (int i = 0; i < layout.uvCount; ++i) {
             Udelta_[i] = U_[i] - prevU_[i];
             Vdelta_[i] = V_[i] - prevV_[i];
         }
@@ -145,9 +193,9 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
         u_enc = Udelta_.data();
         v_enc = Vdelta_.data();
     }
-    std::memcpy(prevY_.data(), Y_.data(), float_plane_bytes(y_count));
-    std::memcpy(prevU_.data(), U_.data(), float_plane_bytes(uv_count));
-    std::memcpy(prevV_.data(), V_.data(), float_plane_bytes(uv_count));
+    std::memcpy(prevY_.data(), Y_.data(), layout.yFloatBytes);
+    std::memcpy(prevU_.data(), U_.data(), layout.uvFloatBytes);
+    std::memcpy(prevV_.data(), V_.data(), layout.uvFloatBytes);
 
     // Forward DWT
     dwt_forward(y_enc, w, h, cfg_.levels, tmp_.data());
@@ -163,39 +211,19 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
     size_t y_rle_sz = 0;
     size_t u_rle_sz = 0;
     size_t v_rle_sz = 0;
-    size_t y_rle_off = 0;
-    size_t u_rle_off = 0;
-    size_t v_rle_off = 0;
     if (cfg_.entropy_coding == kNone) {
-        y_rle_sz = int16_plane_bytes(y_count);
-        u_rle_sz = int16_plane_bytes(uv_count);
-        v_rle_sz = int16_plane_bytes(uv_count);
+        y_rle_sz = layout.yInt16Bytes;
+        u_rle_sz = layout.uvInt16Bytes;
+        v_rle_sz = layout.uvInt16Bytes;
     } else {
-        const size_t y_cap = int16_plane_bytes(y_count_i);
-        const size_t u_cap = int16_plane_bytes(uv_count_i);
-        const size_t v_cap = int16_plane_bytes(uv_count_i);
-        if (y_cap > std::numeric_limits<size_t>::max() - u_cap) return -1;
-        const size_t yu_cap = y_cap + u_cap;
-        if (yu_cap > std::numeric_limits<size_t>::max() - v_cap) return -1;
-        const size_t total_rle_cap = yu_cap + v_cap;
-        rle_buf_.resize(total_rle_cap);
-
-        y_rle_off = 0;
-        u_rle_off = y_cap;
-        v_rle_off = y_cap + u_cap;
-
-        y_rle_sz = rle_encode(Yq_.data(), y_count_i, rle_buf_.data() + y_rle_off);
-        u_rle_sz = rle_encode(Uq_.data(), uv_count_i, rle_buf_.data() + u_rle_off);
-        v_rle_sz = rle_encode(Vq_.data(), uv_count_i, rle_buf_.data() + v_rle_off);
+        y_rle_sz = rle_encode(Yq_.data(), layout.yCount, rle_buf_.data());
+        u_rle_sz = rle_encode(Uq_.data(), layout.uvCount, rle_buf_.data());
+        v_rle_sz = rle_encode(Vq_.data(), layout.uvCount, rle_buf_.data());
     }
 
     // Pack header + payload
-    const size_t total = static_cast<size_t>(kHeaderBytes) + y_rle_sz + u_rle_sz + v_rle_sz;
-    if (y_rle_sz > static_cast<size_t>(std::numeric_limits<uint32_t>::max())
-        || u_rle_sz > static_cast<size_t>(std::numeric_limits<uint32_t>::max())
-        || v_rle_sz > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) return -1;
-    if (total > static_cast<size_t>(std::numeric_limits<int>::max())
-        || total > static_cast<size_t>(out_capacity)) return -1;
+    const int total = checked_encoded_size(y_rle_sz, u_rle_sz, v_rle_sz);
+    if (total > out_capacity) return -1;
 
     uint8_t* p = out_buf;
     auto w32 = [&](uint32_t v) {
@@ -241,11 +269,11 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
         std::memcpy(p, Vq_.data(), v_rle_sz);
         p += v_rle_sz;
     } else {
-        const size_t y_bytes = rle_encode(Yq_.data(), y_count_i, p);
+        const size_t y_bytes = rle_encode(Yq_.data(), layout.yCount, p);
         p += y_bytes;
-        const size_t u_bytes = rle_encode(Uq_.data(), uv_count_i, p);
+        const size_t u_bytes = rle_encode(Uq_.data(), layout.uvCount, p);
         p += u_bytes;
-        const size_t v_bytes = rle_encode(Vq_.data(), uv_count_i, p);
+        const size_t v_bytes = rle_encode(Vq_.data(), layout.uvCount, p);
         p += v_bytes;
     }
 
@@ -253,24 +281,15 @@ int Encoder::encode(const uint8_t* rgba, double timestamp_us,
 }
 
 int Encoder::max_encoded_bytes() const {
-    const int w = cfg_.width, h = cfg_.height;
-    const int uvW = cfg_.color_space == kYUV ? (w >> 1) : w;
-    const int uvH = cfg_.color_space == kYUV ? (h >> 1) : h;
-    const size_t y_count = plane_count(w, h);
-    const size_t uv_count = plane_count(uvW, uvH);
-    size_t total = 0;
+    const PlaneLayout layout = make_plane_layout(cfg_.width, cfg_.height, cfg_.color_space);
     if (cfg_.entropy_coding == kNone) {
-        total = static_cast<size_t>(kHeaderBytes)
-              + int16_plane_bytes(y_count)
-              + int16_plane_bytes(uv_count)
-              + int16_plane_bytes(uv_count);
-    } else {
-        total = static_cast<size_t>(kHeaderBytes)
-              + rle_max_bytes_for_count(y_count)
-              + rle_max_bytes_for_count(uv_count)
-              + rle_max_bytes_for_count(uv_count);
+        return checked_encoded_size(layout.yInt16Bytes, layout.uvInt16Bytes, layout.uvInt16Bytes);
     }
-    return count_to_int(total);
+    return checked_encoded_size(
+        rle_max_bytes(layout.yCount),
+        rle_max_bytes(layout.uvCount),
+        rle_max_bytes(layout.uvCount)
+    );
 }
 
 void Encoder::reset() {
@@ -285,22 +304,18 @@ void Encoder::reset() {
 // ---------------------------------------------------------------------------
 
 Decoder::Decoder(const DecoderConfig& cfg) : cfg_(cfg) {
-    const int w = cfg_.width, h = cfg_.height;
-    const int uvW = cfg_.color_space == kYUV ? (w >> 1) : w;
-    const int uvH = cfg_.color_space == kYUV ? (h >> 1) : h;
-    const size_t y_count = plane_count(w, h);
-    const size_t uv_count = plane_count(uvW, uvH);
+    const PlaneLayout layout = make_plane_layout(cfg_.width, cfg_.height, cfg_.color_space);
 
-    Y_.resize(y_count);
-    U_.resize(uv_count);
-    V_.resize(uv_count);
-    prevY_.resize(y_count);
-    prevU_.resize(uv_count);
-    prevV_.resize(uv_count);
-    Yq_.resize(y_count);
-    Uq_.resize(uv_count);
-    Vq_.resize(uv_count);
-    tmp_.resize(std::max(w, h));
+    Y_.resize(static_cast<size_t>(layout.yCount));
+    U_.resize(static_cast<size_t>(layout.uvCount));
+    V_.resize(static_cast<size_t>(layout.uvCount));
+    prevY_.resize(static_cast<size_t>(layout.yCount));
+    prevU_.resize(static_cast<size_t>(layout.uvCount));
+    prevV_.resize(static_cast<size_t>(layout.uvCount));
+    Yq_.resize(static_cast<size_t>(layout.yCount));
+    Uq_.resize(static_cast<size_t>(layout.uvCount));
+    Vq_.resize(static_cast<size_t>(layout.uvCount));
+    tmp_.resize(static_cast<size_t>(std::max(layout.w, layout.h)));
 }
 
 int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
@@ -346,26 +361,39 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
         r8(); // blur radius
     }
 
-    const size_t payload_end = static_cast<size_t>(kHeaderBytes)
-                             + static_cast<size_t>(y_bytes)
-                             + static_cast<size_t>(u_bytes)
-                             + static_cast<size_t>(v_bytes);
-    if (payload_end > static_cast<size_t>(enc_size))
-        return -1;
+    if (colorSpace != kYUV && colorSpace != kRGB) return -1;
 
-    const size_t y_count = plane_count(w, h);
-    const size_t uv_count = plane_count(uvW, uvH);
-    const int y_count_i = count_to_int(y_count);
-    const int uv_count_i = count_to_int(uv_count);
-    if (y_count_i < 0 || uv_count_i < 0) return -1;
+    PlaneLayout layout{};
+    try {
+        layout = make_plane_layout(w, h, static_cast<ColorSpace>(colorSpace));
+    } catch (...) {
+        return -1;
+    }
+
+    if (
+        layout.w != cfg_.width
+        || layout.h != cfg_.height
+        || layout.uvW != uvW
+        || layout.uvH != uvH
+        || static_cast<ColorSpace>(colorSpace) != cfg_.color_space
+    ) {
+        return -1;
+    }
+
+    const uint64_t payload_end = static_cast<uint64_t>(kHeaderBytes)
+        + static_cast<uint64_t>(y_bytes)
+        + static_cast<uint64_t>(u_bytes)
+        + static_cast<uint64_t>(v_bytes);
+    if (payload_end > static_cast<uint64_t>(enc_size))
+        return -1;
 
     int yn = 0;
     int un = 0;
     int vn = 0;
     if (entropyMode == kNone) {
-        const size_t y_expected = int16_plane_bytes(y_count);
-        const size_t u_expected = int16_plane_bytes(uv_count);
-        const size_t v_expected = int16_plane_bytes(uv_count);
+        const size_t y_expected = layout.yInt16Bytes;
+        const size_t u_expected = layout.uvInt16Bytes;
+        const size_t v_expected = layout.uvInt16Bytes;
         if (y_bytes != y_expected || u_bytes != u_expected || v_bytes != v_expected) return -1;
         std::memcpy(Yq_.data(), p, y_bytes);
         p += y_bytes;
@@ -373,19 +401,19 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
         p += u_bytes;
         std::memcpy(Vq_.data(), p, v_bytes);
         p += v_bytes;
-        yn = y_count_i;
-        un = uv_count_i;
-        vn = uv_count_i;
+        yn = layout.yCount;
+        un = layout.uvCount;
+        vn = layout.uvCount;
     } else {
-        yn = rle_decode(p, y_bytes, Yq_.data(), y_count_i);
+        yn = rle_decode(p, y_bytes, Yq_.data(), layout.yCount);
         p += y_bytes;
-        un = rle_decode(p, u_bytes, Uq_.data(), uv_count_i);
+        un = rle_decode(p, u_bytes, Uq_.data(), layout.uvCount);
         p += u_bytes;
-        vn = rle_decode(p, v_bytes, Vq_.data(), uv_count_i);
+        vn = rle_decode(p, v_bytes, Vq_.data(), layout.uvCount);
         p += v_bytes;
     }
 
-    if (yn != y_count_i || un != uv_count_i || vn != uv_count_i) return -1;
+    if (yn != layout.yCount || un != layout.uvCount || vn != layout.uvCount) return -1;
 
     // Dequantise
     QuantConfig qcfg = { quality, levels };
@@ -400,22 +428,22 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
 
     // Temporal residual reconstruction
     if (!is_key) {
-        for (size_t i = 0; i < y_count; ++i)
+        for (int i = 0; i < layout.yCount; ++i)
             Y_[i] += prevY_[i];
     }
     if (!is_key && (flags & kFrameFlagChromaTemporalResidual)) {
-        for (size_t i = 0; i < uv_count; ++i) {
+        for (int i = 0; i < layout.uvCount; ++i) {
             U_[i] += prevU_[i];
             V_[i] += prevV_[i];
         }
     }
-    std::memcpy(prevY_.data(), Y_.data(), float_plane_bytes(y_count));
-    std::memcpy(prevU_.data(), U_.data(), float_plane_bytes(uv_count));
-    std::memcpy(prevV_.data(), V_.data(), float_plane_bytes(uv_count));
+    std::memcpy(prevY_.data(), Y_.data(), layout.yFloatBytes);
+    std::memcpy(prevU_.data(), U_.data(), layout.uvFloatBytes);
+    std::memcpy(prevV_.data(), V_.data(), layout.uvFloatBytes);
 
     if (colorSpace == kRGB) {
-        for (size_t i = 0; i < y_count; ++i) {
-            const size_t pi = rgba_offset(i);
+        for (int i = 0; i < layout.yCount; ++i) {
+            const size_t pi = static_cast<size_t>(i) * 4u;
             rgba_out[pi] = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, Y_[i])));
             rgba_out[pi + 1] = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, U_[i])));
             rgba_out[pi + 2] = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, V_[i])));
@@ -430,12 +458,15 @@ int Decoder::decode(const uint8_t* enc, int enc_size, uint8_t* rgba_out) {
 void Decoder::yuv_to_rgba(uint8_t* rgba, int w, int h,
                           const float* Y, const float* U, const float* V,
                           int uvW, int uvH) {
+    (void)uvH;
+    const size_t width = static_cast<size_t>(w);
+    const size_t uvWidth = static_cast<size_t>(uvW);
     for (int row = 0; row < h; ++row) {
+        const size_t rowOffset = static_cast<size_t>(row) * width;
+        const size_t uvRowOffset = static_cast<size_t>(row >> 1) * uvWidth;
         for (int col = 0; col < w; ++col) {
-            const size_t yi = static_cast<size_t>(row) * static_cast<size_t>(w)
-                            + static_cast<size_t>(col);
-            const size_t uvi = static_cast<size_t>(row >> 1) * static_cast<size_t>(uvW)
-                             + static_cast<size_t>(col >> 1);
+            const size_t yi  = rowOffset + static_cast<size_t>(col);
+            const size_t uvi = uvRowOffset + static_cast<size_t>(col >> 1);
 
             const float y = Y[yi] + 128.0f;
             const float u = U[uvi];
@@ -445,7 +476,7 @@ void Decoder::yuv_to_rgba(uint8_t* rgba, int w, int h,
             const float g = y - 0.39465f * u - 0.58060f * v;
             const float b = y + 2.03211f * u;
 
-            const size_t pi = rgba_offset(yi);
+            const size_t pi = yi * 4u;
             rgba[pi]     = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, r)));
             rgba[pi + 1] = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, g)));
             rgba[pi + 2] = static_cast<uint8_t>(std::fmaxf(0.0f, std::fminf(255.0f, b)));

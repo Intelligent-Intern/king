@@ -1,7 +1,9 @@
 <?php
-
 declare(strict_types=1);
-
+require_once __DIR__ . '/tenant_migrations.php';
+require_once __DIR__ . '/localization.php';
+require_once __DIR__ . '/workspace_theme_migrations.php';
+require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
     return [
@@ -647,28 +649,145 @@ WHERE status = 'booked'
 SQL,
             ],
         ],
+        23 => [
+            'name' => '0023_appointment_calendar_public_settings',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_calendar_settings (
+    owner_user_id INTEGER PRIMARY KEY REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,
+    slot_minutes INTEGER NOT NULL DEFAULT 15 CHECK (slot_minutes IN (5, 10, 15, 20, 30, 45, 60)),
+    invitation_text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_appointment_calendar_settings_public_id ON appointment_calendar_settings(public_id)",
+            ],
+        ],
+        24 => [
+            'name' => '0024_appointment_calendar_mail_settings',
+            'statements' => [
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_from_email TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_from_name TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_host TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_port INTEGER NOT NULL DEFAULT 587",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_encryption TEXT NOT NULL DEFAULT 'starttls'",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_username TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_password TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_subject_template TEXT NOT NULL DEFAULT 'Video call scheduled: {call_title}'",
+                <<<'SQL'
+ALTER TABLE appointment_calendar_settings ADD COLUMN mail_body_template TEXT NOT NULL DEFAULT 'Hello {recipient_name},
+
+your video call is scheduled for {starts_at}.
+
+Call link:
+{join_link}
+
+Google Calendar:
+{google_calendar_url}
+
+Participant: {guest_name} ({guest_email})
+Owner: {owner_name} ({owner_email})
+'
+SQL,
+            ],
+        ],
+        25 => [
+            'name' => '0025_workspace_administration_settings',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS workspace_administration_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    mail_from_email TEXT NOT NULL DEFAULT '',
+    mail_from_name TEXT NOT NULL DEFAULT '',
+    mail_smtp_host TEXT NOT NULL DEFAULT '',
+    mail_smtp_port INTEGER NOT NULL DEFAULT 587,
+    mail_smtp_encryption TEXT NOT NULL DEFAULT 'starttls',
+    mail_smtp_username TEXT NOT NULL DEFAULT '',
+    mail_smtp_password TEXT NOT NULL DEFAULT '',
+    lead_recipients TEXT NOT NULL DEFAULT '[]',
+    lead_subject_template TEXT NOT NULL DEFAULT 'New website lead: {name}',
+    lead_body_template TEXT NOT NULL DEFAULT 'A new website lead was submitted.
+
+Name: {name}
+Email: {email}
+Company: {company}
+Participants: {participants}
+Role: {role}
+Use case: {use_case}
+Timing: {timing}
+
+Notes:
+{notes}
+',
+    sidebar_logo_path TEXT NOT NULL DEFAULT '/assets/orgas/kingrt/logo.svg',
+    modal_logo_path TEXT NOT NULL DEFAULT '/assets/orgas/kingrt/logo.svg',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                <<<'SQL'
+INSERT OR IGNORE INTO workspace_administration_settings(id, created_at, updated_at)
+VALUES(1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+SQL,
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS workspace_theme_presets (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    colors_json TEXT NOT NULL,
+    is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_workspace_theme_presets_label ON workspace_theme_presets(label)",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS website_leads (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    company TEXT NOT NULL,
+    participants INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT '',
+    use_case TEXT NOT NULL DEFAULT '',
+    timing TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    remote_addr TEXT NOT NULL DEFAULT ''
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_website_leads_created_at ON website_leads(created_at DESC)",
+                ...videochat_workspace_theme_seed_statements(),
+            ],
+        ],
+        26 => [
+            'name' => '0026_user_theme_editor_permission',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))",
+            ],
+        ],
+        27 => [
+            'name' => '0027_appointment_slot_mode',
+            'statements' => [
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
+            ],
+        ],
         30 => [
-            'name' => '0030_call_activity_sample_history',
+            'name' => '0030_localization_foundation',
+            'statements' => videochat_localization_migration_statements(),
+        ],
+        31 => [
+            'name' => '0031_translation_import_history',
+            'statements' => videochat_translation_import_history_migration_statements(),
+        ],
+        44 => [
+            'name' => '0044_call_activity_sample_history',
             'statements' => [
                 "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
             ],
         ],
-    ];
+    ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }
-
-/**
- * @return array{
- *   path: string,
- *   schema_version: int,
- *   migrations_total: int,
- *   migrations_applied: int,
- *   migrations_newly_applied: int,
- *   migrations_pending: int,
- *   applied_versions: array<int, int>,
- *   table_count: int,
- *   table_names: array<int, string>,
- *   journal_mode: string,
- *   demo_users: array<int, array{email: string, display_name: string, role: string}>,
- *   demo_calls: array<int, array{id: string, room_id: string, title: string, status: string, owner_email: string, starts_at: string, ends_at: string}>
- * }
- */

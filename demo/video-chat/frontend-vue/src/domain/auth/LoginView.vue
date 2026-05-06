@@ -7,7 +7,7 @@
             <img
               class="ii-authSplit__logo"
               src="/assets/orgas/kingrt/logo.svg"
-              alt="logo"
+              :alt="t('auth.logo_alt')"
             />
           </div>
         </div>
@@ -15,7 +15,7 @@
         <div class="ii-authSplit__form">
           <form class="ii-form" method="post" novalidate @submit.prevent="handleSubmit">
             <div>
-              <label class="ii-fieldLabel" for="email">Email</label>
+              <label class="ii-fieldLabel" for="email">{{ t('users.email') }}</label>
               <input
                 id="email"
                 v-model.trim="email"
@@ -23,28 +23,28 @@
                 type="email"
                 inputmode="email"
                 autocomplete="username"
-                aria-label="Email"
-                placeholder="name@company.com"
+                :aria-label="t('users.email')"
+                :placeholder="t('auth.email_placeholder')"
               />
               <div class="ii-fieldError" :hidden="!emailError">{{ emailError }}</div>
             </div>
 
             <div>
-              <label class="ii-fieldLabel" for="password">Password</label>
+              <label class="ii-fieldLabel" for="password">{{ t('users.password') }}</label>
               <input
                 id="password"
                 v-model="password"
                 class="ii-input ii-input-password"
                 type="password"
                 autocomplete="current-password"
-                aria-label="Password"
-                placeholder="••••••••••"
+                :aria-label="t('users.password')"
+                :placeholder="t('auth.password_placeholder')"
               />
               <div class="ii-fieldError" :hidden="!passwordError">{{ passwordError }}</div>
             </div>
 
             <button class="ii-btn ii-btn--primary ii-authBtn ii-btn--block" type="submit" :disabled="submitting">
-              <span class="ii-btn__label">{{ submitting ? 'Signing in…' : 'Sign in' }}</span>
+              <span class="ii-btn__label">{{ submitting ? t('auth.signing_in') : t('auth.sign_in') }}</span>
             </button>
 
             <div class="ii-error" :hidden="!authError">{{ authError }}</div>
@@ -59,6 +59,7 @@
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { resolveAuthorizedRedirect } from '../../http/router';
+import { t } from '../../modules/localization/i18nRuntime.js';
 import { fetchBackend } from '../../support/backendFetch';
 import {
   CALL_UUID_PATTERN,
@@ -192,15 +193,15 @@ async function handleSubmit() {
   let hasError = false;
 
   if (emailValue === '') {
-    emailError.value = 'Email is required.';
+    emailError.value = t('users.email_required');
     hasError = true;
   } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailValue)) {
-    emailError.value = 'Email is invalid.';
+    emailError.value = t('users.email_invalid');
     hasError = true;
   }
 
   if (passwordValue === '') {
-    passwordError.value = 'Password is required.';
+    passwordError.value = t('auth.password_required');
     hasError = true;
   }
 
@@ -212,7 +213,7 @@ async function handleSubmit() {
   try {
     const result = await loginWithPassword(emailValue, passwordValue);
     if (!result.ok) {
-      authError.value = result.message || 'Invalid email or password.';
+      authError.value = result.message || t('auth.invalid_credentials');
       return;
     }
 
@@ -234,7 +235,7 @@ async function handleEmailChangeTokenLogin(token) {
   try {
     const result = await loginWithEmailChangeToken(token);
     if (!result.ok) {
-      authError.value = result.message || 'Email confirmation failed.';
+      authError.value = result.message || t('auth.email_confirmation_failed');
       return;
     }
 

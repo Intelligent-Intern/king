@@ -33,9 +33,18 @@ test('admin can click through all implemented admin routes and logout', async ({
   await expect(page).toHaveURL(/\/admin\/overview$/);
   await expect(page.locator('.view-card h3', { hasText: 'Admin Overview' })).toBeVisible();
 
-  await page.getByRole('link', { name: 'User Management' }).click();
-  await expect(page).toHaveURL(/\/admin\/users$/);
-  await expect(page.locator('.view-card h3', { hasText: 'Admin User Management' })).toBeVisible();
+  await page.getByRole('link', { name: 'Governance' }).click();
+  await expect(page).toHaveURL(/\/admin\/governance\/users$/);
+  await expect(page.getByRole('heading', { name: 'Nutzer' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Gruppen' }).click();
+  await expect(page).toHaveURL(/\/admin\/governance\/groups$/);
+  await expect(page.getByRole('heading', { name: 'Gruppen' })).toBeVisible();
+  await page.getByRole('button', { name: 'Create new' }).click();
+  await expect(page.getByRole('dialog', { name: 'Create Gruppe' })).toBeVisible();
+  await page.getByRole('button', { name: 'Maximize panel' }).click();
+  await expect(page.getByRole('button', { name: 'Restore panel size' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close governance panel' }).click();
 
   await page.getByRole('link', { name: 'Video Calls' }).click();
   await expect(page).toHaveURL(/\/admin\/calls$/);
@@ -65,7 +74,7 @@ test('user role is constrained by RBAC and can still open call workspace', async
   await expect(page).toHaveURL(/\/user\/dashboard$/);
   await expect(page.locator('.view-card h3', { hasText: 'User Dashboard' })).toBeVisible();
 
-  await page.goto('/admin/users');
+  await page.goto('/admin/governance/users');
   await expect(page).toHaveURL(/\/user\/dashboard$/);
   await expect(page.locator('.view-card h3', { hasText: 'User Dashboard' })).toBeVisible();
 

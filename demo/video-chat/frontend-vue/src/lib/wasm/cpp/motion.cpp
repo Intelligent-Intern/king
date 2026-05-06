@@ -111,10 +111,13 @@ void estimate_motion(const uint8_t* curr, const uint8_t* prev,
 
 void motion_compensate(const uint8_t* prev, const MotionVector* mvs,
                        int w, int h, uint8_t* mc_out) {
+    if (w <= 0 || h <= 0) return;
+
     const int bs = kMotionBlockSize;
     const int bw = (w + bs - 1) / bs;
+    const size_t frame_bytes = static_cast<size_t>(w) * static_cast<size_t>(h);
 
-    std::memcpy(mc_out, prev, static_cast<size_t>(w * h));  // default: copy prev
+    std::memcpy(mc_out, prev, frame_bytes);  // default: copy prev
 
     for (int by = 0; by < h / bs; ++by) {
         for (int bx = 0; bx < w / bs; ++bx) {
