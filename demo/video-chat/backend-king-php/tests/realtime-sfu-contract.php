@@ -657,10 +657,12 @@ try {
     videochat_realtime_sfu_assert(
         (string) ($decodedBinaryPayload['codec_id'] ?? '') === 'wlvc_wasm'
         && (string) ($decodedBinaryPayload['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($decodedBinaryPayload['wlvc_js_asset_version'] ?? '') === 'wlvc-js-abi-v2'
+        && (int) ($decodedBinaryPayload['wlvc_wasm_abi_version'] ?? 0) === 2
         && (string) ($decodedBinaryPayload['layout_mode'] ?? '') === 'background_snapshot'
         && (string) ($decodedBinaryPayload['layer_id'] ?? '') === 'background'
         && (int) ($decodedBinaryPayload['cache_epoch'] ?? 0) === 11,
-        'binary SFU frame envelope must preserve codec/runtime/layout metadata through decode'
+        'binary SFU frame envelope must preserve codec/runtime/WLVC ABI/layout metadata through decode'
     );
     videochat_realtime_sfu_assert(
         (int) ($decodedBinaryPayload['payload_bytes'] ?? 0) === strlen('ABC')

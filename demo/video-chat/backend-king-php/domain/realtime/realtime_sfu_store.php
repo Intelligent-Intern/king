@@ -53,6 +53,16 @@ function videochat_sfu_binary_continuation_threshold_bytes(): int
     return 65_535;
 }
 
+function videochat_sfu_wlvc_js_asset_version(): string
+{
+    return 'wlvc-js-abi-v2';
+}
+
+function videochat_sfu_wlvc_wasm_abi_version(): int
+{
+    return 2;
+}
+
 function videochat_sfu_create_frame_id(): string
 {
     return 'frame_' . bin2hex(random_bytes(12));
@@ -709,10 +719,16 @@ function videochat_sfu_extract_stage_transport_metadata(array $frame): array
 function videochat_sfu_extract_layout_metadata(array $frame): array
 {
     $layoutMode = strtolower(trim((string) ($frame['layout_mode'] ?? '')));
+    $codecId = videochat_sfu_normalize_codec_id((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? '')));
+    $runtimeId = videochat_sfu_normalize_runtime_id((string) ($frame['runtime_id'] ?? ($frame['runtimeId'] ?? '')));
     $metadata = array_merge([
-        'codec_id' => videochat_sfu_normalize_codec_id((string) ($frame['codec_id'] ?? ($frame['codecId'] ?? ''))),
-        'runtime_id' => videochat_sfu_normalize_runtime_id((string) ($frame['runtime_id'] ?? ($frame['runtimeId'] ?? ''))),
+        'codec_id' => $codecId,
+        'runtime_id' => $runtimeId,
     ], videochat_sfu_extract_stage_transport_metadata($frame));
+    if ($runtimeId === 'wlvc_sfu') {
+        $metadata['wlvc_js_asset_version'] = videochat_sfu_wlvc_js_asset_version();
+        $metadata['wlvc_wasm_abi_version'] = videochat_sfu_wlvc_wasm_abi_version();
+    }
     if ($layoutMode === '') {
         return $metadata;
     }
