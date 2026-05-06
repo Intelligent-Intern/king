@@ -1,10 +1,12 @@
 import { CALL_WORKSPACE_MESSAGES } from './callWorkspaceMessages.js';
+import { CALENDAR_MESSAGES } from './calendarMessages.js';
 import { GOVERNANCE_MESSAGES } from './governanceMessages.js';
 import { PUBLIC_MESSAGES } from './publicMessages.js';
 import { USERS_OVERVIEW_MESSAGES } from './usersOverviewMessages.js';
 
 export const ENGLISH_MESSAGES = Object.freeze({
   ...CALL_WORKSPACE_MESSAGES,
+  ...CALENDAR_MESSAGES,
   ...GOVERNANCE_MESSAGES,
   ...PUBLIC_MESSAGES,
   ...USERS_OVERVIEW_MESSAGES,
@@ -410,6 +412,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'navigation.administration.theme_editor': 'Theme Editor',
   'navigation.calls.admin': 'Video Calls',
   'navigation.calls.user': 'My Calls',
+  'navigation.calendar': 'Calendar',
   'navigation.group.collapse': 'Collapse {label}',
   'navigation.group.expand': 'Expand {label}',
   'navigation.group.navigation': '{label} navigation',

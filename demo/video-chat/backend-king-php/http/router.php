@@ -11,6 +11,7 @@ require_once __DIR__ . '/module_tenancy.php';
 require_once __DIR__ . '/module_backend_modules.php';
 require_once __DIR__ . '/module_localization.php';
 require_once __DIR__ . '/module_users.php';
+require_once __DIR__ . '/module_workspace_calendars.php';
 require_once __DIR__ . '/module_workspace_administration.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
@@ -32,6 +33,7 @@ function videochat_dispatch_route_module_order(): array
         'backend_modules',
         'localization',
         'users',
+        'workspace_calendars',
         'workspace_administration',
         'invites',
         'calls',
@@ -279,6 +281,17 @@ function videochat_dispatch_request(
                 $corsHeaders,
                 $avatarStorageRoot,
                 $avatarMaxBytes,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'workspace_calendars') {
+            $response = videochat_handle_workspace_calendar_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
                 $jsonResponse,
                 $errorResponse,
                 $decodeJsonBody,
