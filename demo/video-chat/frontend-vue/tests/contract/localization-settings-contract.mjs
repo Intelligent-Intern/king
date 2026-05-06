@@ -8,7 +8,7 @@ async function source(relativePath) {
   return readFile(path.join(root, relativePath), 'utf8');
 }
 
-const sessionStore = await source('src/domain/auth/session.js');
+const sessionStore = await source('src/domain/auth/session.ts');
 const workspaceShell = await source('src/layouts/WorkspaceShell.vue');
 const localizationOptions = await source('src/support/localizationOptions.js');
 const workspaceSettingsDescriptor = await source('src/modules/workspace_settings/descriptor.js');

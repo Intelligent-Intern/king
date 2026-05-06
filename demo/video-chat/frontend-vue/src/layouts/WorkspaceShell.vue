@@ -265,24 +265,26 @@
             </button>
           </div>
 
-          <WorkspaceNavigation
-            :role="sessionState.role || ''"
-            :current-path="route.path"
-            @navigate="handleNavItemClick"
-          />
+          <div class="sidebar-scroll-body">
+            <WorkspaceNavigation
+              :role="sessionState.role || ''"
+              :current-path="route.path"
+              @navigate="handleNavItemClick"
+            />
 
-          <section class="sidebar-profile avatar-only">
-            <button class="sidebar-avatar-trigger" type="button" :aria-label="t('common.open_settings')" @click="openSettingsModal()">
-              <img
-                class="sidebar-avatar-image"
-                :src="profileAvatarSrc"
-                :alt="t('common.profile_avatar')"
-              />
-            </button>
-          </section>
+            <section class="sidebar-profile avatar-only">
+              <button class="sidebar-avatar-trigger" type="button" :aria-label="t('common.open_settings')" @click="openSettingsModal()">
+                <img
+                  class="sidebar-avatar-image"
+                  :src="profileAvatarSrc"
+                  :alt="t('common.profile_avatar')"
+                />
+              </button>
+            </section>
 
-          <div class="logout-wrap">
-            <button class="btn full" type="button" @click="handleSignOut">{{ t('common.log_out') }}</button>
+            <div class="logout-wrap">
+              <button class="btn full" type="button" @click="handleSignOut">{{ t('common.log_out') }}</button>
+            </div>
           </div>
         </div>
       </aside>

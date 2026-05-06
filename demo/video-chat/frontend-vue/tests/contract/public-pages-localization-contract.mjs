@@ -49,12 +49,12 @@ assert.deepEqual(
   { locale: 'en', source: 'fallback', direction: 'ltr' },
 );
 
-const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8');
+const routerSource = await readFile(path.join(root, 'src/http/router.ts'), 'utf8');
 const i18nRuntimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
 const appointmentApiSource = await readFile(path.join(root, 'src/domain/calls/appointment/appointmentCalendarApi.js'), 'utf8');
 const appointmentBookingModalSource = await readFile(path.join(root, 'src/domain/calls/appointment/AppointmentBookingModal.vue'), 'utf8');
 const joinViewSource = await readFile(path.join(root, 'src/domain/calls/access/JoinView.vue'), 'utf8');
-const sessionSource = await readFile(path.join(root, 'src/domain/auth/session.js'), 'utf8');
+const sessionSource = await readFile(path.join(root, 'src/domain/auth/session.ts'), 'utf8');
 const englishMessagesSource = await readFile(path.join(root, 'src/modules/localization/englishMessages.js'), 'utf8');
 assert.match(routerSource, /applyPublicRouteLocale\(to\)/, 'public routes must resolve locale before rendering');
 assert.match(routerSource, /public:\s*true,\s*i18nNamespaces:\s*\['public'\]/, 'public call routes must declare public i18n namespace');

@@ -138,6 +138,7 @@ const { openTour, tourButtonLabel, tourDefinition } = useOnboardingDriver({
 }
 
 .app-page-header-tour-btn {
+  display: none;
   width: 40px;
   height: 40px;
 }

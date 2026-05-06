@@ -171,9 +171,9 @@ const normalizedDebug = computed(() => {
 }
 
 .background-pipeline-debug-preset.active {
-  border-color: var(--brand-blue);
-  background: var(--brand-blue);
-  color: var(--color-white);
+  border-color: var(--brand-cyan);
+  background: var(--brand-cyan);
+  color: var(--color-text-primary);
 }
 
 .background-pipeline-debug-stage {
@@ -182,7 +182,7 @@ const normalizedDebug = computed(() => {
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-border);
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 700;
@@ -190,20 +190,20 @@ const normalizedDebug = computed(() => {
 }
 
 .background-pipeline-debug-stage.state-running {
-  background: rgba(0, 196, 140, 0.2);
-  color: var(--color-bdf6cf);
+  background: var(--color-success);
+  color: var(--color-text-primary);
 }
 
 .background-pipeline-debug-stage.state-paused,
 .background-pipeline-debug-stage.state-idle {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--color-border);
   color: var(--text-muted);
 }
 
 .background-pipeline-debug-stage.state-failed,
 .background-pipeline-debug-stage.state-stopped {
-  background: rgba(224, 50, 50, 0.18);
-  color: var(--color-ffd1dc);
+  background: var(--color-error);
+  color: var(--color-text-primary);
 }
 
 .background-pipeline-debug-btn {
@@ -231,10 +231,10 @@ const normalizedDebug = computed(() => {
   display: grid;
   gap: 10px;
   padding: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  background: var(--color-rgba-8-20-43-0-94);
-  box-shadow: 0 18px 40px var(--color-rgba-0-0-0-0-35);
+  background: var(--color-surface-navy);
+  box-shadow: 0 18px 40px var(--color-primary-navy);
   backdrop-filter: blur(12px);
 }
 
@@ -260,8 +260,8 @@ const normalizedDebug = computed(() => {
 .background-pipeline-debug-canvas-wrap canvas {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: var(--color-0b1324);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--color-primary-navy);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
 }
 

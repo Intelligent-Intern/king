@@ -31,7 +31,7 @@
   --bg-action-hover: var(--color-cyan-primary);
   --bg-icon: var(--color-border);
   --bg-icon-active: var(--color-cyan-primary);
-  --bg-input: var(--color-surface-navy);
+  --bg-input: var(--color-border);
   --border-subtle: var(--color-border);
   --text-main: var(--color-text-primary);
   --text-primary: var(--color-text-primary);
@@ -96,7 +96,8 @@
 
 .sidebar-content.left {
   background: var(--brand-bg);
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .sidebar-content.right {
@@ -242,6 +243,20 @@
   align-content: start;
 }
 
+.sidebar-scroll-body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--brand-bg);
+}
+
+.sidebar-scroll-body .nav {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .nav-link {
   height: 40px;
   text-decoration: none;
@@ -355,11 +370,6 @@
   padding: 10px 10px 0;
 }
 
-.sidebar-content.left .logout-wrap {
-  grid-row: 4;
-  align-self: end;
-}
-
 .sidebar-profile {
   border-top: 1px solid var(--border-subtle);
   padding: 12px 10px;
@@ -370,15 +380,14 @@
 }
 
 .sidebar-profile.avatar-only {
-  grid-row: 3;
   grid-template-columns: 1fr;
   justify-items: center;
   text-align: center;
   gap: 0;
   border-top: 0;
   padding: 0;
+  margin-top: auto;
   margin-bottom: 50px;
-  align-self: end;
 }
 
 .sidebar-avatar-trigger {

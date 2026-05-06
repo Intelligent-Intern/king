@@ -5,7 +5,8 @@
 }
 
 .governance-crud-view .admin-page-frame-toolbar {
-  gap: 20px;
+  column-gap: 20px;
+  row-gap: 20px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
