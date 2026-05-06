@@ -108,6 +108,7 @@ function backgroundUploadPayloadChars(rows) {
   return (Array.isArray(rows) ? rows : []).reduce((total, row) => (
     total
       + String(row?.data_url || '').length
+      + String(row?.original_data_url || '').length
       + String(row?.file_name || '').length
       + String(row?.label || '').length
       + 256
@@ -178,6 +179,29 @@ export async function uploadWorkspaceBackgroundImages(files) {
     rows,
     diagnostics,
   };
+}
+
+export function updateWorkspaceBackgroundImage(id, file) {
+  const row = file && typeof file === 'object' ? file : null;
+  const traceId = createBackgroundUploadTraceId(1);
+  const payloadChars = backgroundUploadPayloadChars(row ? [row] : []);
+  return request(`/api/admin/workspace-administration/background-images/${encodeURIComponent(String(id || '').trim())}`, {
+    method: 'PATCH',
+    body: {
+      files: row ? [row] : [],
+      client_trace_id: traceId,
+      client_batch_index: 1,
+      client_batch_count: 1,
+      client_payload_chars: payloadChars,
+    },
+    headers: {
+      'x-upload-trace-id': traceId,
+      'x-upload-batch-index': '1',
+      'x-upload-batch-count': '1',
+    },
+    serialize: false,
+    timeoutMs: backgroundImageUploadTimeoutMs(row ? [row] : []),
+  });
 }
 
 export function deleteWorkspaceBackgroundImage(id) {

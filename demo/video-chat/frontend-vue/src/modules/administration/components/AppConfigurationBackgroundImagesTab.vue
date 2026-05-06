@@ -1,34 +1,33 @@
 <template>
   <section class="app-config-backgrounds">
-    <section class="app-config-toolbar">
-      <button class="btn btn-cyan" type="button" :disabled="state.uploading" @click="openSingleUpload">
-        {{ t('administration.background_image_upload') }}
-      </button>
-      <button class="btn" type="button" :disabled="state.uploading" @click="openBulkUpload">
-        {{ t('administration.background_image_bulk_upload') }}
-      </button>
-      <input
-        ref="singleInput"
-        class="app-config-file-input"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        @change="handleFileSelection"
-      />
-      <input
-        ref="bulkInput"
-        class="app-config-file-input"
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        multiple
-        @change="handleFileSelection"
-      />
-    </section>
+    <input
+      ref="fileInput"
+      class="app-config-file-input"
+      type="file"
+      accept="image/png,image/jpeg,image/webp"
+      multiple
+      @change="handleFileSelection"
+    />
 
     <section v-if="state.loading" class="settings-upload-status">{{ t('common.loading') }}</section>
     <section v-if="state.uploading" class="settings-upload-status">{{ t('administration.background_image_uploading') }}</section>
     <section v-if="state.error" class="settings-upload-status error">{{ state.error }}</section>
 
     <section class="background-grid">
+      <button
+        class="background-dropzone"
+        :class="{ empty: rows.length === 0, 'is-over': dragActive }"
+        type="button"
+        :disabled="state.uploading"
+        @click="openFilePicker"
+        @dragenter.prevent="dragActive = true"
+        @dragover.prevent="dragActive = true"
+        @dragleave.prevent="dragActive = false"
+        @drop.prevent="handleDrop"
+      >
+        <span class="background-dropzone-title">{{ t('administration.background_dropzone_title') }}</span>
+        <span class="background-dropzone-subtitle">{{ t('administration.background_dropzone_body') }}</span>
+      </button>
       <article v-for="image in rows" :key="image.id" class="background-card">
         <img class="background-card-image" :src="image.file_path" :alt="image.label" />
         <section class="background-card-body">
@@ -36,6 +35,12 @@
           <span>{{ fileSizeLabel(image.file_size) }}</span>
         </section>
         <footer class="background-card-actions">
+          <AppIconButton
+            icon="/assets/orgas/kingrt/icons/gear.png"
+            :title="t('administration.background_image_edit')"
+            :aria-label="t('administration.background_image_edit')"
+            @click="editImage(image)"
+          />
           <AppIconButton
             icon="/assets/orgas/kingrt/icons/remove_user.png"
             :title="t('administration.background_image_delete')"
@@ -45,9 +50,6 @@
           />
         </footer>
       </article>
-      <section v-if="!state.loading && rows.length === 0" class="background-empty">
-        {{ t('administration.background_image_empty') }}
-      </section>
     </section>
 
     <footer class="app-config-pagination">
@@ -67,6 +69,7 @@
       :open="cropModal.open"
       :files="cropModal.files"
       :uploading="state.uploading"
+      :submit-label="cropModal.editImage ? t('administration.background_crop_save') : ''"
       @close="closeCropModal"
       @upload="uploadCroppedImages"
     />
@@ -81,16 +84,17 @@ import BackgroundImageUploadModal from './BackgroundImageUploadModal.vue';
 import {
   deleteWorkspaceBackgroundImage,
   listWorkspaceBackgroundImages,
+  updateWorkspaceBackgroundImage,
   uploadWorkspaceBackgroundImages,
 } from '../../../domain/workspace/administrationApi';
 import { t } from '../../localization/i18nRuntime.js';
 
-const singleInput = ref(null);
-const bulkInput = ref(null);
+const fileInput = ref(null);
+const dragActive = ref(false);
 const rows = ref([]);
 const pagination = reactive({ page: 1, page_size: 12, total: 0, page_count: 1 });
 const state = reactive({ loading: false, uploading: false, error: '' });
-const cropModal = reactive({ open: false, files: [] });
+const cropModal = reactive({ open: false, files: [], editImage: null });
 
 function applyListing(result) {
   rows.value = Array.isArray(result?.rows) ? result.rows : [];
@@ -116,12 +120,9 @@ async function loadRows() {
   }
 }
 
-function openSingleUpload() {
-  singleInput.value?.click?.();
-}
-
-function openBulkUpload() {
-  bulkInput.value?.click?.();
+function openFilePicker() {
+  if (state.uploading) return;
+  fileInput.value?.click?.();
 }
 
 function selectedImageFiles(fileList) {
@@ -131,15 +132,23 @@ function selectedImageFiles(fileList) {
   if (files.length === 0) {
     throw new Error(t('administration.background_image_type_invalid'));
   }
-  return files.slice(0, 50);
+  if (files.length > 12) {
+    throw new Error(t('administration.background_image_limit'));
+  }
+  return files;
+}
+
+function openCropModal(files, editImageRow = null) {
+  cropModal.files = files;
+  cropModal.editImage = editImageRow;
+  cropModal.open = true;
 }
 
 function handleFileSelection(event) {
   const input = event?.target || null;
   state.error = '';
   try {
-    cropModal.files = selectedImageFiles(input?.files || []);
-    cropModal.open = true;
+    openCropModal(selectedImageFiles(input?.files || []));
   } catch (error) {
     state.error = error instanceof Error ? error.message : t('administration.background_image_upload_failed');
   } finally {
@@ -147,25 +156,57 @@ function handleFileSelection(event) {
   }
 }
 
+function handleDrop(event) {
+  dragActive.value = false;
+  state.error = '';
+  try {
+    openCropModal(selectedImageFiles(event?.dataTransfer?.files || []));
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : t('administration.background_image_upload_failed');
+  }
+}
+
 function closeCropModal() {
   if (state.uploading) return;
   cropModal.open = false;
   cropModal.files = [];
+  cropModal.editImage = null;
 }
 
 async function uploadCroppedImages(files) {
   state.error = '';
   state.uploading = true;
   try {
-    await uploadWorkspaceBackgroundImages(files);
+    if (cropModal.editImage?.id) {
+      await updateWorkspaceBackgroundImage(cropModal.editImage.id, Array.isArray(files) ? files[0] : null);
+    } else {
+      await uploadWorkspaceBackgroundImages(files);
+      pagination.page = 1;
+    }
     cropModal.open = false;
     cropModal.files = [];
-    pagination.page = 1;
+    cropModal.editImage = null;
     await loadRows();
   } catch (error) {
     state.error = error instanceof Error ? error.message : t('administration.background_image_upload_failed');
   } finally {
     state.uploading = false;
+  }
+}
+
+async function editImage(image) {
+  if (!image?.id || state.uploading) return;
+  state.error = '';
+  try {
+    const sourcePath = String(image.original_file_path || image.file_path || '');
+    const response = await fetch(sourcePath, { credentials: 'include' });
+    if (!response.ok) throw new Error(t('administration.background_image_edit_load_failed'));
+    const blob = await response.blob();
+    const type = blob.type || image.mime_type || 'image/jpeg';
+    const label = String(image.label || 'background').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'background';
+    openCropModal([new File([blob], `${label}.jpg`, { type })], image);
+  } catch (error) {
+    state.error = error instanceof Error ? error.message : t('administration.background_image_edit_load_failed');
   }
 }
 
@@ -207,14 +248,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.app-config-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
 .app-config-file-input {
   display: none;
 }
@@ -227,6 +260,38 @@ onMounted(() => {
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   align-content: start;
   gap: 20px;
+}
+
+.background-dropzone {
+  min-height: 220px;
+  border: 1px dashed var(--color-cyan-primary);
+  border-radius: 0;
+  background: var(--color-surface-navy);
+  color: var(--text-primary);
+  display: grid;
+  place-content: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.background-dropzone.empty {
+  grid-column: 1 / -1;
+}
+
+.background-dropzone.is-over,
+.background-dropzone:focus-visible {
+  outline: 2px solid var(--color-cyan-hover);
+  outline-offset: 2px;
+}
+
+.background-dropzone-title {
+  font-weight: 800;
+}
+
+.background-dropzone-subtitle {
+  color: var(--text-muted);
 }
 
 .background-card {
@@ -260,17 +325,9 @@ onMounted(() => {
 
 .background-card-actions {
   display: flex;
+  gap: 10px;
   justify-content: flex-end;
   padding: 0 12px 12px;
-}
-
-.background-empty {
-  min-height: 220px;
-  border: 1px solid var(--color-border);
-  display: grid;
-  place-items: center;
-  color: var(--text-muted);
-  grid-column: 1 / -1;
 }
 
 .app-config-pagination {
@@ -283,11 +340,8 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
-  .app-config-toolbar .btn,
-  .app-config-toolbar .icon-mini-btn {
-    flex: 1 1 100%;
-    width: 100%;
-    margin-inline-start: 0;
+  .background-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

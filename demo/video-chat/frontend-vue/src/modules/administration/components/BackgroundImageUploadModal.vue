@@ -82,7 +82,7 @@
         @page-change="goToCropPage"
       />
       <button class="btn btn-cyan" type="button" :disabled="uploading || !state.ready" @click="uploadAll">
-        {{ t('administration.background_crop_upload') }}
+        {{ submitLabel || t('administration.background_crop_upload') }}
       </button>
     </template>
   </AppModalShell>
@@ -123,6 +123,10 @@ const props = defineProps({
   uploading: {
     type: Boolean,
     default: false,
+  },
+  submitLabel: {
+    type: String,
+    default: '',
   },
 });
 
@@ -366,7 +370,24 @@ function renderCroppedPayloadForImage(image, file, draft) {
     file_name: `${fileStem(file)}.jpg`,
     label: draft.label || fileStem(file),
     data_url: canvas.toDataURL('image/jpeg', JPEG_QUALITY),
+    original_data_url: renderOriginalDataUrlForImage(image),
   };
+}
+
+function renderOriginalDataUrlForImage(image) {
+  const naturalWidth = image.naturalWidth || image.width || 0;
+  const naturalHeight = image.naturalHeight || image.height || 0;
+  if (naturalWidth <= 0 || naturalHeight <= 0) return '';
+  const scale = Math.min(1, 2400 / naturalWidth, 1350 / naturalHeight);
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return '';
+  ctx.drawImage(image, 0, 0, width, height);
+  return canvas.toDataURL('image/jpeg', 0.9);
 }
 
 async function uploadAll() {
