@@ -14,6 +14,92 @@ function videochat_handle_appointment_calendar_routes(
     callable $decodeJsonBody,
     callable $openDatabase
 ): ?array {
+    if ($path === '/api/appointment-calendar/settings') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method === 'GET') {
+            try {
+                $pdo = $openDatabase();
+                $settings = videochat_get_or_create_appointment_settings($pdo, $authenticatedUserId, videochat_tenant_id_from_auth_context($apiAuthContext));
+            } catch (Throwable) {
+                return $errorResponse(500, 'appointment_settings_load_failed', 'Could not load appointment settings.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'loaded',
+                    'owner_user_id' => $authenticatedUserId,
+                    'public_path' => '/book/' . (string) ($settings['public_id'] ?? ''),
+                    'settings' => $settings,
+                    'defaults' => [
+                        'mail_subject_template' => videochat_default_appointment_email_subject_template(),
+                        'mail_body_template' => videochat_default_appointment_email_body_template(),
+                    ],
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'PATCH') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or PATCH for /api/appointment-calendar/settings.', [
+                'allowed_methods' => ['GET', 'PATCH'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'appointment_settings_invalid_request_body', 'Appointment settings payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        $settingsValidation = videochat_validate_appointment_settings_payload($payload);
+        if (!(bool) ($settingsValidation['ok'] ?? false)) {
+            return $errorResponse(422, 'appointment_settings_validation_failed', 'Appointment settings payload failed validation.', [
+                'fields' => is_array($settingsValidation['errors'] ?? null) ? $settingsValidation['errors'] : [],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $existingSettings = videochat_get_or_create_appointment_settings($pdo, $authenticatedUserId, videochat_tenant_id_from_auth_context($apiAuthContext));
+            $settings = videochat_save_appointment_settings(
+                $pdo,
+                $authenticatedUserId,
+                (string) ($existingSettings['public_id'] ?? ''),
+                is_array($settingsValidation['settings'] ?? null) ? (array) $settingsValidation['settings'] : [],
+                videochat_tenant_id_from_auth_context($apiAuthContext)
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'appointment_settings_save_failed', 'Could not save appointment settings.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'saved',
+                'owner_user_id' => $authenticatedUserId,
+                'public_path' => '/book/' . (string) ($settings['public_id'] ?? ''),
+                'settings' => $settings,
+                'defaults' => [
+                    'mail_subject_template' => videochat_default_appointment_email_subject_template(),
+                    'mail_body_template' => videochat_default_appointment_email_body_template(),
+                ],
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if ($path === '/api/appointment-calendar/blocks') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
         if ($authenticatedUserId <= 0) {
@@ -25,7 +111,8 @@ function videochat_handle_appointment_calendar_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $blocks = videochat_list_appointment_blocks($pdo, $authenticatedUserId);
+                $blocks = videochat_list_appointment_blocks($pdo, $authenticatedUserId, videochat_tenant_id_from_auth_context($apiAuthContext));
+                $settings = videochat_get_or_create_appointment_settings($pdo, $authenticatedUserId, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'appointment_blocks_load_failed', 'Could not load appointment blocks.', [
                     'reason' => 'internal_error',
@@ -37,7 +124,8 @@ function videochat_handle_appointment_calendar_routes(
                 'result' => [
                     'state' => 'loaded',
                     'owner_user_id' => $authenticatedUserId,
-                    'public_path' => '/book/' . $authenticatedUserId,
+                    'public_path' => '/book/' . (string) ($settings['public_id'] ?? ''),
+                    'settings' => $settings,
                     'blocks' => $blocks,
                 ],
                 'time' => gmdate('c'),
@@ -59,7 +147,7 @@ function videochat_handle_appointment_calendar_routes(
 
         try {
             $pdo = $openDatabase();
-            $saveResult = videochat_save_appointment_blocks($pdo, $authenticatedUserId, $payload);
+            $saveResult = videochat_save_appointment_blocks($pdo, $authenticatedUserId, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'appointment_blocks_save_failed', 'Could not save appointment blocks.', [
                 'reason' => 'internal_error',
@@ -89,24 +177,25 @@ function videochat_handle_appointment_calendar_routes(
             'result' => [
                 'state' => 'saved',
                 'owner_user_id' => $authenticatedUserId,
-                'public_path' => '/book/' . $authenticatedUserId,
+                'public_path' => '/book/' . (string) (($saveResult['settings'] ?? [])['public_id'] ?? ''),
+                'settings' => $saveResult['settings'] ?? null,
                 'blocks' => $saveResult['blocks'] ?? [],
             ],
             'time' => gmdate('c'),
         ]);
     }
 
-    if (preg_match('#^/api/appointment-calendar/public/(\d+)$#', $path, $publicMatch) === 1) {
+    if (preg_match('#^/api/appointment-calendar/public/([A-Fa-f0-9-]{36})$#', $path, $publicMatch) === 1) {
         if ($method !== 'GET') {
-            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/appointment-calendar/public/{ownerId}.', [
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/appointment-calendar/public/{calendarId}.', [
                 'allowed_methods' => ['GET'],
             ]);
         }
 
-        $ownerUserId = (int) ($publicMatch[1] ?? 0);
+        $publicCalendarId = (string) ($publicMatch[1] ?? '');
         try {
             $pdo = $openDatabase();
-            $slotsResult = videochat_public_appointment_slots($pdo, $ownerUserId);
+            $slotsResult = videochat_public_appointment_slots($pdo, $publicCalendarId);
         } catch (Throwable) {
             return $errorResponse(500, 'appointment_slots_load_failed', 'Could not load appointment slots.', [
                 'reason' => 'internal_error',
@@ -115,7 +204,7 @@ function videochat_handle_appointment_calendar_routes(
 
         if (!(bool) ($slotsResult['ok'] ?? false)) {
             return $errorResponse(404, 'appointment_owner_not_found', 'Appointment calendar owner could not be resolved.', [
-                'owner_user_id' => $ownerUserId,
+                'calendar_id' => $publicCalendarId,
             ]);
         }
 
@@ -124,15 +213,16 @@ function videochat_handle_appointment_calendar_routes(
             'result' => [
                 'state' => 'loaded',
                 'owner' => $slotsResult['owner'] ?? null,
+                'settings' => $slotsResult['settings'] ?? null,
                 'slots' => $slotsResult['slots'] ?? [],
             ],
             'time' => gmdate('c'),
         ]);
     }
 
-    if (preg_match('#^/api/appointment-calendar/public/(\d+)/book$#', $path, $bookMatch) === 1) {
+    if (preg_match('#^/api/appointment-calendar/public/([A-Fa-f0-9-]{36})/book$#', $path, $bookMatch) === 1) {
         if ($method !== 'POST') {
-            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/appointment-calendar/public/{ownerId}/book.', [
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/appointment-calendar/public/{calendarId}/book.', [
                 'allowed_methods' => ['POST'],
             ]);
         }
@@ -144,10 +234,10 @@ function videochat_handle_appointment_calendar_routes(
             ]);
         }
 
-        $ownerUserId = (int) ($bookMatch[1] ?? 0);
+        $publicCalendarId = (string) ($bookMatch[1] ?? '');
         try {
             $pdo = $openDatabase();
-            $bookResult = videochat_book_public_appointment($pdo, $ownerUserId, $payload);
+            $bookResult = videochat_book_public_appointment($pdo, $publicCalendarId, $payload);
         } catch (Throwable) {
             return $errorResponse(500, 'appointment_booking_failed', 'Could not book appointment.', [
                 'reason' => 'internal_error',

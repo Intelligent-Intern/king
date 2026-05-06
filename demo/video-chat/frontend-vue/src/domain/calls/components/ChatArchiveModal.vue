@@ -1,57 +1,57 @@
 <template>
   <AppModalShell
     :open="open"
-    title="Chat archive"
-    :subtitle="callTitle || callId || 'Read-only transcript'"
+    :title="t('chat_archive.title')"
+    :subtitle="callTitle || callId || t('chat_archive.read_only_transcript')"
     title-id="chat-archive-title"
     subtitle-class="chat-archive-subtitle"
     dialog-class="calls-modal-dialog chat-archive-dialog"
     body-class="calls-modal-body chat-archive-body"
     footer-class="calls-modal-footer chat-archive-footer"
-    close-label="Close chat archive"
+    :close-label="t('chat_archive.close')"
     class="chat-archive-modal"
     data-testid="chat-archive-modal"
     @close="closeArchive"
   >
     <template #body>
-      <section class="chat-archive-toolbar" aria-label="Chat archive filters" data-testid="chat-archive-toolbar">
+      <section class="chat-archive-toolbar" :aria-label="t('chat_archive.filters_aria')" data-testid="chat-archive-toolbar">
         <label class="chat-archive-field">
-          <span>Search</span>
+          <span>{{ t('chat_archive.search') }}</span>
           <input
             v-model="queryDraft"
             class="input"
             type="search"
-            placeholder="Search messages or files"
+            :placeholder="t('chat_archive.search_placeholder')"
             @keydown.enter.prevent="reloadArchive"
           />
         </label>
         <label class="chat-archive-field">
-          <span>File type</span>
-          <AppSelect v-model="fileKind" aria-label="File type filter" @change="reloadArchive">
+          <span>{{ t('chat_archive.file_type') }}</span>
+          <AppSelect v-model="fileKind" :aria-label="t('chat_archive.file_type_filter')" @change="reloadArchive">
             <option v-for="option in fileKindOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
+              {{ optionLabel(option) }}
             </option>
           </AppSelect>
         </label>
         <button class="btn btn-cyan chat-archive-search" type="button" :disabled="loading || !callId" @click="reloadArchive">
-          Search
+          {{ t('chat_archive.search') }}
         </button>
       </section>
 
       <div class="chat-archive-grid" data-testid="chat-archive-grid">
-        <section class="chat-archive-column chat-archive-messages" aria-label="Archived chat messages" data-testid="chat-archive-messages">
+        <section class="chat-archive-column chat-archive-messages" :aria-label="t('chat_archive.messages_aria')" data-testid="chat-archive-messages">
           <header class="chat-archive-column-header">
-            <span>Messages</span>
-            <small>{{ archive.messages.length }} loaded</small>
+            <span>{{ t('chat_archive.messages') }}</span>
+            <small>{{ t('chat_archive.loaded_count', { count: archive.messages.length }) }}</small>
           </header>
 
-          <section v-if="loading" class="chat-archive-empty">Loading chat archive...</section>
+          <section v-if="loading" class="chat-archive-empty">{{ t('chat_archive.loading') }}</section>
           <section v-else-if="error" class="chat-archive-empty chat-archive-error">{{ error }}</section>
-          <section v-else-if="archive.messages.length === 0" class="chat-archive-empty">No archived messages found.</section>
+          <section v-else-if="archive.messages.length === 0" class="chat-archive-empty">{{ t('chat_archive.no_messages') }}</section>
           <ol v-else class="chat-archive-message-list">
             <li v-for="message in archive.messages" :key="message.id" class="chat-archive-message">
               <div class="chat-archive-message-head">
-                <strong>{{ message.sender?.display_name || 'Unknown' }}</strong>
+                <strong>{{ message.sender?.display_name || t('chat_archive.unknown_sender') }}</strong>
                 <time>{{ formatArchiveTime(message.server_time) }}</time>
               </div>
               <p v-if="message.text" class="chat-archive-message-text">{{ message.text }}</p>
@@ -77,15 +77,15 @@
               :disabled="loading || !archive.pagination.hasNext"
               @click="loadNextPage"
             >
-              {{ archive.pagination.hasNext ? 'Load more' : 'No more messages' }}
+              {{ archive.pagination.hasNext ? t('chat_archive.load_more') : t('chat_archive.no_more_messages') }}
             </button>
           </footer>
         </section>
 
-        <aside class="chat-archive-column chat-archive-files" aria-label="Archived chat files" data-testid="chat-archive-files">
+        <aside class="chat-archive-column chat-archive-files" :aria-label="t('chat_archive.files_aria')" data-testid="chat-archive-files">
           <header class="chat-archive-column-header">
-            <span>Files</span>
-            <small>{{ fileCount }} files</small>
+            <span>{{ t('chat_archive.files') }}</span>
+            <small>{{ t('chat_archive.files_count', { count: fileCount }) }}</small>
           </header>
 
           <section
@@ -94,13 +94,13 @@
             class="chat-archive-file-group"
             :class="{ empty: groupedFiles(group.key).length === 0 }"
           >
-            <h5>{{ group.label }}</h5>
-            <p v-if="groupedFiles(group.key).length === 0">No files</p>
+            <h5>{{ fileGroupLabel(group) }}</h5>
+            <p v-if="groupedFiles(group.key).length === 0">{{ t('chat_archive.no_files') }}</p>
             <ul v-else class="chat-archive-file-list">
               <li v-for="file in groupedFiles(group.key)" :key="file.id" class="chat-archive-file">
                 <div>
                   <strong>{{ file.name }}</strong>
-                  <span>{{ file.sender?.display_name || 'Unknown' }} · {{ formatArchiveBytes(file.size_bytes) }}</span>
+                  <span>{{ file.sender?.display_name || t('chat_archive.unknown_sender') }} · {{ formatArchiveBytes(file.size_bytes) }}</span>
                   <time>{{ formatArchiveTime(file.attached_at || file.created_at) }}</time>
                 </div>
                 <a
@@ -108,9 +108,9 @@
                   :href="file.download_url"
                   target="_blank"
                   rel="noopener noreferrer"
-                  :aria-label="`Download ${file.name}`"
+                  :aria-label="t('chat_archive.download_file', { file: file.name })"
                 >
-                  Download
+                  {{ t('chat_archive.download') }}
                 </a>
               </li>
             </ul>
@@ -120,8 +120,8 @@
     </template>
 
     <template #footer>
-      <span class="chat-archive-readonly">Read-only archive. Messages and files cannot be changed here.</span>
-      <button class="btn" type="button" @click="closeArchive">Close</button>
+      <span class="chat-archive-readonly">{{ t('chat_archive.readonly_notice') }}</span>
+      <button class="btn" type="button" @click="closeArchive">{{ t('common.close') }}</button>
     </template>
   </AppModalShell>
 </template>
@@ -133,6 +133,7 @@ import AppSelect from '../../../components/AppSelect.vue';
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { formatDateTimeDisplay } from '../../../support/dateTimeFormat';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
   CHAT_ARCHIVE_FILE_GROUPS,
   CHAT_ARCHIVE_FILE_KIND_OPTIONS,
@@ -212,16 +213,16 @@ async function loadArchive({ cursor = 0, append = false } = {}) {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      const message = typeof payload?.error?.message === 'string' ? payload.error.message : `Request failed (${response.status}).`;
+      const message = typeof payload?.error?.message === 'string' ? payload.error.message : t('chat_archive.request_failed', { status: response.status });
       throw new Error(message);
     }
     if (!payload || payload.status !== 'ok') {
-      throw new Error('Backend returned an invalid archive payload.');
+      throw new Error(t('chat_archive.invalid_payload'));
     }
     applyArchive(normalizeChatArchivePayload(payload), append);
   } catch (loadError) {
     const message = loadError instanceof Error ? loadError.message.trim() : '';
-    error.value = message || `Could not load chat archive (${currentBackendOrigin()}).`;
+    error.value = message || t('chat_archive.load_failed', { origin: currentBackendOrigin() });
     if (!append) {
       applyArchive(normalizeChatArchivePayload({}), false);
     }
@@ -251,12 +252,22 @@ function formatArchiveTime(isoValue) {
   return formatDateTimeDisplay(isoValue, {
     dateFormat: sessionState.dateFormat,
     timeFormat: sessionState.timeFormat,
-    fallback: 'n/a',
+    fallback: t('common.not_available'),
   });
 }
 
 function formatArchiveBytes(sizeBytes) {
   return formatChatArchiveBytes(sizeBytes);
+}
+
+function optionLabel(option) {
+  const key = String(option?.label_key || '').trim();
+  return key !== '' ? t(key) : String(option?.label || '');
+}
+
+function fileGroupLabel(group) {
+  const key = String(group?.label_key || '').trim();
+  return key !== '' ? t(key) : String(group?.label || '');
 }
 
 watch(
@@ -422,7 +433,7 @@ watch(
 }
 
 .chat-archive-error {
-  color: var(--color-ffb5b5);
+  color: var(--color-heading);
 }
 
 .chat-archive-load-more {

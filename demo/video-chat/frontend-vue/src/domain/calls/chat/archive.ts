@@ -1,18 +1,18 @@
 export const CHAT_ARCHIVE_FILE_GROUPS = [
-  { key: 'images', label: 'Images' },
-  { key: 'pdfs', label: 'PDFs' },
-  { key: 'office', label: 'Office' },
-  { key: 'text', label: 'Text / CSV / MD' },
-  { key: 'documents', label: 'Documents' },
+  { key: 'images', label_key: 'chat_archive.file_group.images', label: 'Images' },
+  { key: 'pdfs', label_key: 'chat_archive.file_group.pdfs', label: 'PDFs' },
+  { key: 'office', label_key: 'chat_archive.file_group.office', label: 'Office' },
+  { key: 'text', label_key: 'chat_archive.file_group.text', label: 'Text / CSV / MD' },
+  { key: 'documents', label_key: 'chat_archive.file_group.documents', label: 'Documents' },
 ];
 
 export const CHAT_ARCHIVE_FILE_KIND_OPTIONS = [
-  { value: 'all', label: 'All files' },
-  { value: 'image', label: 'Images' },
-  { value: 'pdf', label: 'PDFs' },
-  { value: 'office', label: 'Office' },
-  { value: 'text', label: 'Text / CSV / MD' },
-  { value: 'document', label: 'Documents' },
+  { value: 'all', label_key: 'chat_archive.file_kind.all', label: 'All files' },
+  { value: 'image', label_key: 'chat_archive.file_kind.image', label: 'Images' },
+  { value: 'pdf', label_key: 'chat_archive.file_kind.pdf', label: 'PDFs' },
+  { value: 'office', label_key: 'chat_archive.file_kind.office', label: 'Office' },
+  { value: 'text', label_key: 'chat_archive.file_kind.text', label: 'Text / CSV / MD' },
+  { value: 'document', label_key: 'chat_archive.file_kind.document', label: 'Documents' },
 ];
 
 export function normalizeChatArchivePayload(payload) {

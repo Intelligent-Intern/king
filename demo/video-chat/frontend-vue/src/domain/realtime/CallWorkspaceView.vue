@@ -54,13 +54,13 @@ import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWork
 import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspace/participantUi';
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
+import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceMediaSecurityRuntime } from './workspace/callWorkspace/mediaSecurityRuntime';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
 import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace/lifecycle';
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
-import { createCallWorkspaceShellViewport } from './workspace/callWorkspace/shellViewport';
 import {
   createNativePeerAudioElement,
   createNativePeerVideoElement,
@@ -235,6 +235,7 @@ import {
   defaultNativeAudioBridgeFailureMessage,
 } from './workspace/callWorkspace/mediaSecurityTargets';
 import { createSfuTransportState } from './workspace/callWorkspace/sfuTransport';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -579,12 +580,12 @@ const shouldConnectSfu = computed(() => (
 ));
 const {
   isCompactHeaderVisible,
-  isCompactLayoutViewport,
   isCompactMiniStripAbove,
+  isCompactLayoutViewport,
   isShellMobileViewport,
   isShellTabletViewport,
   showLeftSidebarRestoreButton,
-} = createCallWorkspaceShellViewport({
+} = createCallWorkspaceCompactChrome({
   compactMiniStripPlacement,
   isCompactViewport,
   workspaceSidebarState,
@@ -756,7 +757,7 @@ const {
 });
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
-    setNotice('Could not request room snapshot while websocket is offline.', 'error');
+    setNotice(t('calls.workspace.snapshot_request_offline'), 'error');
   }
 }
 
@@ -1135,6 +1136,14 @@ const mediaStack = createCallWorkspaceMediaStack({
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
+    onLocalScreenShareStateChanged: (active, reason = '') => {
+      refreshUsersDirectoryPresentation();
+      void syncControlStateToPeers();
+      publishLocalActivitySample(true);
+      if (!active && reason === 'ended') {
+        setNotice(t('calls.workspace.screen_sharing_ended'), 'ok');
+      }
+    },
     clearMediaSecuritySfuPublisherSeen,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
       if (sfuClientRef.value) {
@@ -1231,6 +1240,7 @@ const mediaStack = createCallWorkspaceMediaStack({
   refs: {
     activeRoomId,
     activeSocketCallId,
+    SFUClient,
     backgroundBaselineCollector,
     backgroundFilterController,
     callMediaPrefs,
@@ -1331,6 +1341,7 @@ const {
   resetWlvcBackpressureCounters,
   resetWlvcFrameSendFailureCounters,
   restartSfuAfterVideoStall: restartSfuAfterVideoStallHelper,
+  setLocalScreenShareEnabled,
   setSfuRemotePeer,
   sfuTrackListHasVideo,
   sfuTrackRows,
@@ -1805,6 +1816,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   rightSidebarCollapsed,
   sendSocketFrame,
   selectCallLayoutParticipants,
+  setLocalScreenShareEnabled,
   showLobbyTab,
   typingByRoom,
   usersDirectoryLoading,
@@ -1972,6 +1984,7 @@ const {
   togglePinned,
   toggleScreenShare,
   toggleVideoFullscreen,
+  toggleVideoFullscreenForEvent,
   toggleUserMuted,
   typingUsers,
   updatePeerControlState,

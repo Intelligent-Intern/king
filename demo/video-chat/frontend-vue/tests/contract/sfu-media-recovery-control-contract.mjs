@@ -54,6 +54,13 @@ function main() {
   requireContains(recoveryBroker, 'CREATE TABLE IF NOT EXISTS sfu_recovery_requests', 'recovery requests have durable cross-worker relay');
   requireContains(recoveryBroker, 'videochat_sfu_recovery_request_ttl_ms(): int', 'recovery broker has TTL bounds');
   requireContains(recoveryBroker, "'sfu/publisher-recovery-request'", 'broker emits publisher recovery request frames');
+  requireContains(recoveryBroker, '$primaryLayerPreferenceRequested', 'backend explicitly classifies primary layer preference');
+  requireContains(recoveryBroker, '&& !$primaryLayerPreferenceRequested', 'backend ignores legacy client full-keyframe flags for primary layer preference');
+  assert.equal(
+    recoveryBroker.includes("|| $requestedVideoLayer === 'primary'"),
+    false,
+    'backend recovery broker must not promote primary layer preference to a full keyframe',
+  );
 
   requireContains(packageJson, 'sfu-media-recovery-control-contract.mjs', 'SFU contract script includes media recovery control contract');
 }

@@ -65,6 +65,10 @@ export function createLocalPublisherPipelineHelpers({
     stopActivityMonitor,
     stopSfuTrackAnnounceTimer,
   } = callbacks;
+  const additionalPublisherFrameMetrics = typeof callbacks.additionalPublisherFrameMetrics === 'function'
+    ? callbacks.additionalPublisherFrameMetrics
+    : () => ({});
+  const mountLocalPreview = callbacks.mountLocalPreview !== false;
 
   function unpublishSfuTracks(tracks) {
     unpublishSfuTracksForClient(refs.sfuClientRef.value, tracks);
@@ -238,11 +242,17 @@ export function createLocalPublisherPipelineHelpers({
       video.autoplay = true;
       refs.localVideoElement.value = video;
     }
-    video.dataset.callLocalPreview = '1';
+    if (mountLocalPreview) {
+      video.dataset.callLocalPreview = '1';
+    } else {
+      video.dataset.callScreenSharePreview = '1';
+    }
     video.srcObject = new MediaStream([videoTrack]);
-    const container = document.getElementById('local-video-container');
-    if (container && video.parentElement !== container) {
-      container.replaceChildren(video);
+    if (mountLocalPreview) {
+      const container = document.getElementById('local-video-container');
+      if (container && video.parentElement !== container) {
+        container.replaceChildren(video);
+      }
     }
     try {
       await video.play();
@@ -703,6 +713,12 @@ export function createLocalPublisherPipelineHelpers({
           keyframeRetryDelayMs,
         });
 
+        const extraTransportMetrics = additionalPublisherFrameMetrics({
+          videoTrack,
+          videoProfile,
+          frameType: encodedFrameType,
+          trackId: videoTrack.id,
+        });
         const outgoingFrame = {
           publisherId: String(refs.currentUserId()),
           publisherUserId: String(refs.currentUserId()),
@@ -710,6 +726,7 @@ export function createLocalPublisherPipelineHelpers({
           timestamp: encoded.timestamp,
           transportMetrics: {
             ...transportStageMetrics,
+            ...(extraTransportMetrics && typeof extraTransportMetrics === 'object' ? extraTransportMetrics : {}),
             ...(tilePatchTransportMetrics || {}),
           },
           data: encoded.data,

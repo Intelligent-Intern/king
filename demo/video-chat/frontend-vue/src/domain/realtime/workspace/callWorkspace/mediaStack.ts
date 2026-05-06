@@ -1,5 +1,15 @@
 import { createLocalPublisherPipelineHelpers } from '../../local/publisherPipeline';
 import { createLocalMediaOrchestrationHelpers } from '../../local/mediaOrchestration';
+import { createScreenShareParticipantPublisher } from '../../local/screenSharePublisher';
+import {
+  SCREEN_SHARE_MEDIA_SOURCE,
+  SCREEN_SHARE_TRACK_LABEL,
+  isScreenShareMediaSource,
+  isScreenShareUserId,
+  screenShareDisplayName,
+  screenShareOwnerOrUserId,
+  screenShareUserIdForOwner,
+} from '../../screenShareIdentity.js';
 import { createSfuFrameDecodeHelpers } from '../../sfu/frameDecode';
 import { createSfuRemotePeerHelpers } from '../../sfu/remotePeers';
 import {
@@ -67,6 +77,111 @@ export function createCallWorkspaceMediaStack(options) {
 
   const promotePeerToTsDecoder = (peer) => promotePeerToTsDecoderInner(peer, createTsDecoder);
 
+  function localScreenSharePublisherId(ownerUserId) {
+    const normalizedOwnerUserId = Number(ownerUserId || 0);
+    return Number.isInteger(normalizedOwnerUserId) && normalizedOwnerUserId > 0
+      ? `local_screen_share:${normalizedOwnerUserId}`
+      : '';
+  }
+
+  function peerMatchesLocalScreenShareLoopback(peer, ownerUserId, screenUserId) {
+    if (!peer || typeof peer !== 'object' || peer.localScreenSharePreview === true) return false;
+    const peerUserId = Number(peer.userId || peer.user_id || 0);
+    const peerPublisherUserId = Number(peer.publisherUserId || peer.publisher_user_id || 0);
+    const peerOwnerUserId = Number(peer.screenShareOwnerUserId || peer.screen_share_owner_user_id || 0);
+    if (peerUserId === screenUserId) return true;
+    if (!isScreenShareMediaSource(peer.mediaSource || peer.media_source)) return false;
+    return peerOwnerUserId === ownerUserId
+      || peerPublisherUserId === ownerUserId
+      || peerPublisherUserId === screenUserId;
+  }
+
+  function removeLocalScreenShareLoopbackPeers(ownerUserId, screenUserId) {
+    const localPublisherId = localScreenSharePublisherId(ownerUserId);
+    let removedAny = false;
+    for (const [publisherId, peer] of Array.from(refs.remotePeersRef.value.entries())) {
+      if (String(publisherId || '') === localPublisherId) continue;
+      if (!peerMatchesLocalScreenShareLoopback(peer, ownerUserId, screenUserId)) continue;
+      callbacks.teardownRemotePeer(peer);
+      removedAny = deleteSfuRemotePeer(publisherId) || removedAny;
+    }
+    return removedAny;
+  }
+
+  function registerLocalScreenSharePeer({ stream = null, videoElement = null, videoTrack = null } = {}) {
+    const ownerUserId = Number(refs.currentUserId.value || refs.sessionState.userId || 0);
+    const screenUserId = screenShareUserIdForOwner(ownerUserId);
+    const publisherId = localScreenSharePublisherId(ownerUserId);
+    if (!Number.isInteger(ownerUserId) || ownerUserId <= 0 || screenUserId <= 0 || publisherId === '') {
+      return null;
+    }
+    const video = typeof HTMLVideoElement !== 'undefined' && videoElement instanceof HTMLVideoElement
+      ? videoElement
+      : null;
+    if (!video) return null;
+
+    video.dataset.userId = String(screenUserId);
+    video.dataset.publisherUserId = String(ownerUserId);
+    video.dataset.mediaSource = SCREEN_SHARE_MEDIA_SOURCE;
+    video.dataset.callScreenSharePreview = '1';
+    video.muted = true;
+    video.playsInline = true;
+    video.autoplay = true;
+
+    const nowMs = Date.now();
+    removeLocalScreenShareLoopbackPeers(ownerUserId, screenUserId);
+    const existingPeer = refs.remotePeersRef.value.get(publisherId) || null;
+    const displayName = screenShareDisplayName(
+      refs.sessionState.displayName || refs.sessionState.email || '',
+      ownerUserId,
+    );
+    const trackId = String(videoTrack?.id || '').trim();
+    const tracks = trackId !== ''
+      ? [{ id: trackId, kind: 'video', label: SCREEN_SHARE_TRACK_LABEL }]
+      : [];
+    const peer = {
+      ...(existingPeer && typeof existingPeer === 'object' ? existingPeer : {}),
+      userId: screenUserId,
+      publisherUserId: ownerUserId,
+      displayName,
+      mediaSource: SCREEN_SHARE_MEDIA_SOURCE,
+      screenShareOwnerUserId: ownerUserId,
+      localScreenSharePreview: true,
+      pc: null,
+      video,
+      tracks,
+      stream,
+      remoteStream: stream,
+      decoder: null,
+      createdAtMs: Number(existingPeer?.createdAtMs || nowMs),
+      frameCount: Math.max(1, Number(existingPeer?.frameCount || 0)),
+      receivedFrameCount: Math.max(1, Number(existingPeer?.receivedFrameCount || 0)),
+      lastFrameAtMs: nowMs,
+      lastReceivedFrameAtMs: nowMs,
+      mediaConnectionState: 'live',
+      mediaConnectionMessage: '',
+      mediaConnectionUpdatedAtMs: nowMs,
+    };
+
+    setSfuRemotePeer(publisherId, peer);
+    removeLocalScreenShareLoopbackPeers(ownerUserId, screenUserId);
+    callbacks.markParticipantActivity?.(screenUserId, 'media_track', nowMs);
+    renderCallVideoLayout();
+    return peer;
+  }
+
+  function unregisterLocalScreenSharePeer() {
+    const ownerUserId = Number(refs.currentUserId.value || refs.sessionState.userId || 0);
+    const publisherId = localScreenSharePublisherId(ownerUserId);
+    if (publisherId === '') return false;
+    const peer = refs.remotePeersRef.value.get(publisherId);
+    if (!peer) return false;
+    callbacks.teardownRemotePeer(peer);
+    deleteSfuRemotePeer(publisherId);
+    renderCallVideoLayout();
+    return true;
+  }
+
   const {
     handleSFUEncodedFrame,
   } = createSfuFrameDecodeHelpers({
@@ -132,38 +247,48 @@ export function createCallWorkspaceMediaStack(options) {
           ...payload,
           requested_action: requestedAction || feedbackAction,
           request_full_keyframe: Boolean(payload?.request_full_keyframe)
-            || requestFullKeyframe
-            || requestedVideoLayer === 'primary',
+            || requestFullKeyframe,
           requested_video_layer: requestedVideoLayer,
           reason: normalizedReason,
         })
         : false;
       if (sfuLayerPreferenceSent && !requestFullKeyframe && !compatibilityCodecRequested) return true;
 
-      const targetUserId = Number(
-        peer?.userId
-        || payload?.publisher_user_id
-        || payload?.publisherUserId
-        || 0
-      );
+      const peerUserId = Number(peer?.userId || 0);
+      const peerPublisherUserId = Number(peer?.publisherUserId || peer?.publisher_user_id || 0);
+      const payloadPublisherUserId = Number(payload?.publisher_user_id || payload?.publisherUserId || 0);
+      const screenShareOwnerUserId = Number(peer?.screenShareOwnerUserId || peer?.screen_share_owner_user_id || 0);
+      const peerIsScreenShare = isScreenShareUserId(peerUserId)
+        || isScreenShareUserId(peerPublisherUserId)
+        || isScreenShareUserId(payloadPublisherUserId)
+        || isScreenShareMediaSource(peer?.mediaSource || peer?.media_source)
+        || isScreenShareMediaSource(payload?.publisher_media_source || payload?.publisherMediaSource);
+      const targetUserId = Number(peerIsScreenShare
+        ? screenShareOwnerOrUserId(
+          screenShareOwnerUserId
+            || peerPublisherUserId
+            || payloadPublisherUserId
+            || peerUserId
+        )
+        : (peerUserId || payloadPublisherUserId));
       const socketRecoverySent = Number.isInteger(targetUserId)
         && targetUserId > 0
         && targetUserId !== localUserId
         && typeof callbacks.sendSocketFrame === 'function'
         ? callbacks.sendSocketFrame({
-        type: 'call/media-quality-pressure',
-        target_user_id: targetUserId,
-        payload: {
-          ...payload,
-          kind: 'sfu-video-quality-pressure',
-          requested_action: feedbackAction,
-          request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
-          reason: normalizedReason,
-          publisher_id: String(publisherId || ''),
-          requester_user_id: localUserId,
-          media_runtime_path: refs.mediaRuntimePath.value,
-        },
-      })
+          type: 'call/media-quality-pressure',
+          target_user_id: targetUserId,
+          payload: {
+            ...payload,
+            kind: 'sfu-video-quality-pressure',
+            requested_action: feedbackAction,
+            request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
+            reason: normalizedReason,
+            publisher_id: String(publisherId || ''),
+            requester_user_id: localUserId,
+            media_runtime_path: refs.mediaRuntimePath.value,
+          },
+        })
         : false;
       return Boolean(sfuRecoverySent || socketRecoverySent || sfuLayerPreferenceSent);
     },
@@ -322,6 +447,82 @@ export function createCallWorkspaceMediaStack(options) {
     state: refs.localPublisherPipelineState,
   });
 
+  const screenSharePublisher = createScreenShareParticipantPublisher({
+    callbacks: {
+      applyCallOutputPreferences: callbacks.applyCallOutputPreferences,
+      canProtectCurrentSfuTargets: callbacks.canProtectCurrentSfuTargets,
+      captureClientDiagnostic: callbacks.captureClientDiagnostic,
+      captureClientDiagnosticError: callbacks.captureClientDiagnosticError,
+      currentSfuVideoProfile: callbacks.currentSfuVideoProfile,
+      ensureMediaSecuritySession: callbacks.ensureMediaSecuritySession,
+      handleWlvcEncodeBackpressure: sfuTransport.handleWlvcEncodeBackpressure,
+      handleWlvcFramePayloadPressure: sfuTransport.handleWlvcFramePayloadPressure,
+      handleWlvcFrameSendFailure: sfuTransport.handleWlvcFrameSendFailure,
+      handleWlvcRuntimeEncodeError: sfuTransport.handleWlvcRuntimeEncodeError,
+      hintMediaSecuritySync: callbacks.hintMediaSecuritySync,
+      isWlvcRuntimePath: runtimeHealth.isWlvcRuntimePath,
+      maybeFallbackToNativeRuntime: callbacks.maybeFallbackToNativeRuntime,
+      mediaDebugLog: callbacks.mediaDebugLog,
+      noteWlvcSourceReadbackSuccess: sfuTransport.noteWlvcSourceReadbackSuccess,
+      onScreenShareStopped: (reason) => {
+        unregisterLocalScreenSharePeer();
+        refs.controlState.screenEnabled = false;
+        callbacks.onLocalScreenShareStateChanged?.(false, reason);
+      },
+      registerLocalScreenSharePeer,
+      renderCallVideoLayout: () => renderCallVideoLayout(),
+      requestWlvcFullFrameKeyframe: sfuTransport.requestWlvcFullFrameKeyframe,
+      resetWlvcBackpressureCounters: sfuTransport.resetWlvcBackpressureCounters,
+      resetWlvcFrameSendFailureCounters: sfuTransport.resetWlvcFrameSendFailureCounters,
+      resolveWlvcEncodeIntervalMs: sfuTransport.resolveWlvcEncodeIntervalMs,
+      shouldDelayWlvcFrameForBackpressure: sfuTransport.shouldDelayWlvcFrameForBackpressure,
+      shouldSendTransportOnlySfuFrame: callbacks.shouldSendTransportOnlySfuFrame,
+      shouldThrottleWlvcEncodeLoop: sfuTransport.shouldThrottleWlvcEncodeLoop,
+      unregisterLocalScreenSharePeer,
+    },
+    constants: {
+      backgroundSnapshotEnabled: constants.backgroundSnapshotEnabled,
+      backgroundSnapshotMaxChangedRatio: constants.backgroundSnapshotMaxChangedRatio,
+      backgroundSnapshotMaxPatchAreaRatio: constants.backgroundSnapshotMaxPatchAreaRatio,
+      backgroundSnapshotMinChangedRatio: constants.backgroundSnapshotMinChangedRatio,
+      backgroundSnapshotMinIntervalMs: constants.backgroundSnapshotMinIntervalMs,
+      backgroundSnapshotSampleStride: constants.backgroundSnapshotSampleStride,
+      backgroundSnapshotTileDiffThreshold: constants.backgroundSnapshotTileDiffThreshold,
+      backgroundSnapshotTileHeight: constants.backgroundSnapshotTileHeight,
+      backgroundSnapshotTileWidth: constants.backgroundSnapshotTileWidth,
+      localTrackRecoveryBaseDelayMs: constants.localTrackRecoveryBaseDelayMs,
+      localTrackRecoveryMaxAttempts: constants.localTrackRecoveryMaxAttempts,
+      localTrackRecoveryMaxDelayMs: constants.localTrackRecoveryMaxDelayMs,
+      protectedMediaEnabled: constants.protectedMediaEnabled,
+      selectiveTileBaseRefreshMs: constants.selectiveTileBaseRefreshMs,
+      selectiveTileDiffThreshold: constants.selectiveTileDiffThreshold,
+      selectiveTileEnabled: constants.selectiveTileEnabled,
+      selectiveTileHeight: constants.selectiveTileHeight,
+      selectiveTileMaxChangedRatio: constants.selectiveTileMaxChangedRatio,
+      selectiveTileMaxPatchAreaRatio: constants.selectiveTileMaxPatchAreaRatio,
+      selectiveTileSampleStride: constants.selectiveTileSampleStride,
+      selectiveTileWidth: constants.selectiveTileWidth,
+      sendBufferHighWaterBytes: constants.sendBufferHighWaterBytes,
+      sfuWlvcFrameQuality: constants.sfuFrameQuality,
+      sfuWlvcMaxDeltaFrameBytes: constants.sfuWlvcMaxDeltaFrameBytes,
+      sfuWlvcMaxKeyframeFrameBytes: constants.sfuWlvcMaxKeyframeFrameBytes,
+      wlvcEncodeErrorLogCooldownMs: constants.wlvcEncodeErrorLogCooldownMs,
+      wlvcEncodeFailureThreshold: constants.wlvcEncodeFailureThreshold,
+      wlvcEncodeFailureWindowMs: constants.wlvcEncodeFailureWindowMs,
+      wlvcEncodeWarmupMs: constants.wlvcEncodeWarmupMs,
+    },
+    refs: {
+      SFUClient: refs.SFUClient,
+      activeRoomId: refs.activeRoomId,
+      activeSocketCallId: refs.activeSocketCallId,
+      mediaRuntimeCapabilities: refs.mediaRuntimeCapabilities,
+      mediaRuntimePath: refs.mediaRuntimePath,
+      sessionState: refs.sessionState,
+      sfuTransportState: refs.sfuTransportState,
+      shouldConnectSfu: refs.shouldConnectSfu,
+    },
+  });
+
   const localMediaOrchestration = createLocalMediaOrchestrationHelpers({
     backgroundBaselineCollector: refs.backgroundBaselineCollector,
     backgroundFilterController: refs.backgroundFilterController,
@@ -335,6 +536,7 @@ export function createCallWorkspaceMediaStack(options) {
       markParticipantActivity: callbacks.markParticipantActivity,
       mediaDebugLog: callbacks.mediaDebugLog,
       normalizeRoomId: callbacks.normalizeRoomId,
+      onLocalScreenShareStateChanged: callbacks.onLocalScreenShareStateChanged,
       refreshCallMediaDevices: callbacks.refreshCallMediaDevices,
       resetCallBackgroundRuntimeState: callbacks.resetCallBackgroundRuntimeState,
       sendSocketFrame: callbacks.sendSocketFrame,
@@ -349,7 +551,9 @@ export function createCallWorkspaceMediaStack(options) {
         clearLocalPreviewElement: localPublisherPipeline.clearLocalPreviewElement,
         scheduleLocalTrackRecovery: localPublisherPipeline.scheduleLocalTrackRecovery,
         startEncodingPipeline: localPublisherPipeline.startEncodingPipeline,
+        startScreenShareParticipant: screenSharePublisher.start,
         stopLocalEncodingPipeline: localPublisherPipeline.stopLocalEncodingPipeline,
+        stopScreenShareParticipant: screenSharePublisher.stop,
         stopRetiredLocalStreams: localPublisherPipeline.stopRetiredLocalStreams,
         unpublishSfuTracks: localPublisherPipeline.unpublishSfuTracks,
       },

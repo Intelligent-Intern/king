@@ -6,20 +6,20 @@
         class="calls-modal-dialog calls-modal-dialog-enter call-access-join-modal"
         role="dialog"
         aria-modal="true"
-        aria-label="Join video call"
+        :aria-label="t('public.join.dialog_aria')"
       >
         <header class="calls-modal-header calls-modal-header-enter">
           <div class="calls-modal-header-enter-left">
             <img class="calls-modal-header-enter-logo" src="/assets/orgas/kingrt/logo.svg" alt="" />
-            <h1 class="calls-enter-title">Join Video Call</h1>
+            <h1 class="calls-enter-title">{{ t('public.join.title') }}</h1>
           </div>
-          <button class="icon-mini-btn" type="button" aria-label="Cancel join" @click="goToLogin">
+          <button class="icon-mini-btn" type="button" :aria-label="t('public.join.cancel_join')" @click="goToLogin">
             <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
           </button>
         </header>
 
         <div v-if="state.loadingContext" class="calls-modal-body call-access-join-context-body">
-          <section class="call-access-join-status">Resolving call access...</section>
+          <section class="call-access-join-status">{{ t('public.join.resolving_access') }}</section>
         </div>
         <div v-else-if="state.contextError" class="calls-modal-body call-access-join-context-body">
           <section class="call-access-join-status error">{{ state.contextError }}</section>
@@ -31,41 +31,41 @@
                 <div class="calls-enter-preview-frame">
                   <video ref="previewVideoRef" autoplay playsinline muted></video>
                   <p v-if="state.previewError" class="calls-inline-error">{{ state.previewError }}</p>
-                  <p v-else-if="!state.previewReady" class="calls-inline-hint">Preparing preview...</p>
+                  <p v-else-if="!state.previewReady" class="calls-inline-hint">{{ t('public.join.preparing_preview') }}</p>
                   <div class="call-access-join-call-badge">
                     <strong>{{ state.callTitle }}</strong>
-                    <span>{{ state.linkKind === 'open' ? 'Free-for-all link' : 'Personalized link' }}</span>
+                    <span>{{ state.linkKind === 'open' ? t('public.join.free_for_all_link') : t('public.join.personalized_link') }}</span>
                   </div>
                 </div>
               </section>
 
               <section class="calls-enter-right calls-enter-right-settings">
                 <div class="call-left-settings">
-                  <section v-if="state.linkKind === 'open'" class="call-left-settings-block" aria-label="Guest name">
-                    <div class="call-left-settings-title">Guest name</div>
+                  <section v-if="state.linkKind === 'open'" class="call-left-settings-block" :aria-label="t('public.join.guest_name')">
+                    <div class="call-left-settings-title">{{ t('public.join.guest_name') }}</div>
                     <div class="call-left-settings-field">
                       <input
                         v-model.trim="state.guestName"
                         class="input"
                         type="text"
                         maxlength="96"
-                        placeholder="Enter your display name"
+                        :placeholder="t('public.join.guest_name_placeholder')"
                         :disabled="state.joining || state.waitingForAdmission"
                         @keydown.enter.prevent="startSessionAndJoin"
                       />
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" aria-label="Camera">
-                    <div class="call-left-settings-title">Camera</div>
+                  <section class="call-left-settings-block" :aria-label="t('public.join.camera')">
+                    <div class="call-left-settings-title">{{ t('public.join.camera') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
                         id="guest-enter-call-camera-select"
-                        aria-label="Camera"
+                        :aria-label="t('public.join.camera')"
                         :model-value="callMediaPrefs.selectedCameraId"
                         @update:model-value="setCallCameraDevice"
                       >
-                        <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+                        <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('public.join.no_camera_detected') : t('public.join.select_camera') }}</option>
                         <option v-for="camera in callMediaPrefs.cameras" :key="camera.id" :value="camera.id">
                           {{ camera.label }}
                         </option>
@@ -73,23 +73,23 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" aria-label="Mic">
-                    <div class="call-left-settings-title">Mic</div>
+                  <section class="call-left-settings-block" :aria-label="t('public.join.microphone')">
+                    <div class="call-left-settings-title">{{ t('public.join.mic') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
                         id="guest-enter-call-mic-select"
-                        aria-label="Mic"
+                        :aria-label="t('public.join.microphone')"
                         :model-value="callMediaPrefs.selectedMicrophoneId"
                         @update:model-value="setCallMicrophoneDevice"
                       >
-                        <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+                        <option value="">{{ callMediaPrefs.microphones.length === 0 ? t('public.join.no_microphone_detected') : t('public.join.select_microphone') }}</option>
                         <option v-for="microphone in callMediaPrefs.microphones" :key="microphone.id" :value="microphone.id">
                           {{ microphone.label }}
                         </option>
                       </AppSelect>
                     </div>
                     <div class="call-left-settings-field">
-                      <label for="guest-enter-call-mic-volume">Volume</label>
+                      <label for="guest-enter-call-mic-volume">{{ t('public.join.volume') }}</label>
                       <div class="call-left-volume-row">
                         <input
                           id="guest-enter-call-mic-volume"
@@ -106,23 +106,23 @@
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" aria-label="Speaker">
-                    <div class="call-left-settings-title">Speaker</div>
+                  <section class="call-left-settings-block" :aria-label="t('public.join.speaker')">
+                    <div class="call-left-settings-title">{{ t('public.join.speaker') }}</div>
                     <div class="call-left-settings-field">
                       <AppSelect
                         id="guest-enter-call-speaker-select"
-                        aria-label="Speaker"
+                        :aria-label="t('public.join.speaker')"
                         :model-value="callMediaPrefs.selectedSpeakerId"
                         @update:model-value="setCallSpeakerDevice"
                       >
-                        <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+                        <option value="">{{ callMediaPrefs.speakers.length === 0 ? t('public.join.no_speaker_detected') : t('public.join.select_speaker') }}</option>
                         <option v-for="speaker in callMediaPrefs.speakers" :key="speaker.id" :value="speaker.id">
                           {{ speaker.label }}
                         </option>
                       </AppSelect>
                     </div>
                     <div class="call-left-settings-field">
-                      <label for="guest-enter-call-speaker-volume">Volume</label>
+                      <label for="guest-enter-call-speaker-volume">{{ t('public.join.volume') }}</label>
                       <div class="call-left-volume-row">
                         <input
                           id="guest-enter-call-speaker-volume"
@@ -139,21 +139,21 @@
                     </div>
                     <div class="call-left-settings-field">
                       <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                        Play test sound
+                        {{ t('public.join.play_test_sound') }}
                       </button>
                     </div>
                   </section>
 
-                  <section class="call-left-settings-block" aria-label="Background">
-                    <div class="call-left-settings-title">Background</div>
-                    <div class="call-left-blur-controls" role="group" aria-label="Background controls">
+                  <section class="call-left-settings-block" :aria-label="t('public.join.background_blur')">
+                    <div class="call-left-settings-title">{{ t('public.join.background_blur') }}</div>
+                    <div class="call-left-blur-controls" role="group" :aria-label="t('public.join.background_blur_controls')">
                       <button
                         class="call-left-blur-btn"
                         :class="{ active: isBackgroundPresetActive('light') }"
                         type="button"
                         :aria-pressed="isBackgroundPresetActive('light')"
-                        aria-label="Blur"
-                        title="Blur"
+                        :aria-label="t('public.join.blur')"
+                        :title="t('public.join.blur')"
                         @click="applyBackgroundPreset('light')"
                       >
                         <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
@@ -163,8 +163,8 @@
                         :class="{ active: isBackgroundPresetActive('strong') }"
                         type="button"
                         :aria-pressed="isBackgroundPresetActive('strong')"
-                        aria-label="Strong blur"
-                        title="Strong blur"
+                        :aria-label="t('public.join.strong_blur')"
+                        :title="t('public.join.strong_blur')"
                         @click="applyBackgroundPreset('strong')"
                       >
                         <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
@@ -196,14 +196,14 @@
             <p v-if="state.joinError" class="calls-inline-error calls-enter-footer-error">
               {{ state.joinError }}
             </p>
-            <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">Cancel</button>
+            <button class="btn" type="button" :disabled="state.joining" @click="goToLogin">{{ t('common.cancel') }}</button>
             <button
               class="btn btn-cyan"
               type="button"
               :disabled="state.joining || state.waitingForAdmission"
               @click="startSessionAndJoin"
             >
-              {{ state.waitingForAdmission ? 'Waiting for host...' : (state.joining ? 'Joining...' : 'Join call') }}
+              {{ state.waitingForAdmission ? t('public.join.waiting_for_host') : (state.joining ? t('public.join.joining') : t('public.join.join_call')) }}
             </button>
           </footer>
         </template>
@@ -229,6 +229,8 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
+import { localizedApiErrorMessage } from '../../../modules/localization/apiErrorMessages.js';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import {
   applyCallBackgroundPreset as applyBackgroundPreset,
@@ -259,7 +261,6 @@ let admissionReconnectAttempt = 0;
 let admissionReconnectAfterForeground = false;
 let admissionLastForegroundReconnectAt = 0;
 
-const ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 const ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
@@ -323,16 +324,6 @@ function admissionSocketUrlForOrigin(origin) {
   return buildWebSocketUrl(origin, '/ws', query);
 }
 
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
-  }
-  return fallback;
-}
-
 function clearAdmissionReconnectTimer() {
   if (admissionReconnectTimer > 0 && typeof window !== 'undefined') {
     window.clearTimeout(admissionReconnectTimer);
@@ -390,7 +381,7 @@ function scheduleAdmissionReconnect(accessId) {
   const delay = ADMISSION_RECONNECT_DELAYS_MS[
     Math.min(admissionReconnectAttempt - 1, ADMISSION_RECONNECT_DELAYS_MS.length - 1)
   ];
-  state.admissionMessage = 'Reconnecting lobby connection...';
+  state.admissionMessage = t('public.join.reconnecting_lobby');
   admissionReconnectTimer = window.setTimeout(() => {
     admissionReconnectTimer = 0;
     connectAdmissionSocket(accessId);
@@ -419,7 +410,7 @@ function reconnectAdmissionAfterForeground() {
   admissionLastForegroundReconnectAt = now;
   admissionReconnectAttempt = 0;
   clearAdmissionReconnectTimer();
-  state.admissionMessage = 'Reconnecting lobby connection...';
+  state.admissionMessage = t('public.join.reconnecting_lobby');
   connectAdmissionSocket(accessId);
 }
 
@@ -429,7 +420,7 @@ async function enterAdmittedCall(accessId) {
     state.waitingForAdmission = false;
     state.joining = false;
     state.admissionMessage = '';
-    state.joinError = 'Could not open the call because the call reference is missing.';
+    state.joinError = t('public.join.missing_call_reference');
     return;
   }
 
@@ -479,14 +470,14 @@ function handleAdmissionWelcome(payload, accessId) {
   if (!sendAdmissionFrame({ type: 'lobby/queue/join', room_id: pendingRoomId })) {
     state.waitingForAdmission = false;
     state.admissionMessage = '';
-    state.joinError = 'Could not notify call owner because the lobby connection is offline.';
+    state.joinError = t('public.join.notify_owner_offline');
     return;
   }
 
   state.waitingForAdmission = true;
   state.joining = false;
   state.joinError = '';
-  state.admissionMessage = ADMISSION_WAIT_MESSAGE;
+  state.admissionMessage = t('public.join.admission_wait');
 }
 
 function handleAdmissionSocketMessage(event, accessId) {
@@ -513,7 +504,7 @@ function handleAdmissionSocketMessage(event, accessId) {
   if (type === 'system/error') {
     const code = String(payload.code || '').trim().toLowerCase();
     if (code === 'lobby_command_failed') {
-      state.joinError = 'Could not notify call owner.';
+      state.joinError = t('public.join.notify_owner_failed');
       state.admissionMessage = '';
       state.waitingForAdmission = false;
     }
@@ -530,7 +521,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
       state.joining = false;
       state.waitingForAdmission = false;
       state.admissionMessage = '';
-      state.joinError = 'Could not connect to call lobby.';
+      state.joinError = t('public.join.lobby_connect_failed');
     }
     return;
   }
@@ -588,7 +579,7 @@ function connectAdmissionSocketWithOriginAt(candidates, originIndex, generation,
       failOverToNextOrigin();
       return;
     }
-    state.admissionMessage = 'Reconnecting lobby connection...';
+    state.admissionMessage = t('public.join.reconnecting_lobby');
   });
 
   socket.addEventListener('close', (event) => {
@@ -617,7 +608,7 @@ function connectAdmissionSocket(accessId) {
 function startAdmissionWait(accessId) {
   if (typeof WebSocket === 'undefined') {
     state.joining = false;
-    state.joinError = 'Realtime lobby is not supported in this browser.';
+    state.joinError = t('public.join.realtime_lobby_unsupported');
     return false;
   }
 
@@ -629,7 +620,7 @@ function startAdmissionWait(accessId) {
   admissionSocketGeneration += 1;
   state.joining = false;
   state.waitingForAdmission = true;
-  state.admissionMessage = 'Connecting lobby connection...';
+  state.admissionMessage = t('public.join.connecting_lobby');
   connectAdmissionSocket(accessId);
   return true;
 }
@@ -649,7 +640,7 @@ async function loadJoinContext() {
   const accessId = normalizeAccessId(route.params.accessId);
   if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(accessId)) {
     state.loadingContext = false;
-    state.contextError = 'Call access id is invalid.';
+    state.contextError = localizedApiErrorMessage({ error: { code: 'call_access_validation_failed' } }, t('public.join.access_invalid'));
     return;
   }
 
@@ -662,20 +653,20 @@ async function loadJoinContext() {
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload || payload.status !== 'ok') {
-      state.contextError = extractErrorMessage(payload, 'Could not resolve call access.');
+      state.contextError = localizedApiErrorMessage(payload, t('public.join.resolve_failed'));
       return;
     }
 
     const call = payload?.result?.call || {};
     state.callId = String(call.id || '').trim();
     state.roomId = normalizeRoomId(call.room_id || 'lobby');
-    state.callTitle = String(call.title || '').trim() || 'Video call';
+    state.callTitle = String(call.title || '').trim() || t('public.join.default_call_title');
     const linkKind = String(payload?.result?.link_kind || '').trim().toLowerCase();
     state.linkKind = linkKind === 'open' ? 'open' : 'personal';
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
     if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-      state.contextError = `Could not reach backend (${currentBackendOrigin()}).`;
+      state.contextError = t('public.join.backend_unreachable', { origin: currentBackendOrigin() });
     } else {
       state.contextError = message;
     }
@@ -694,7 +685,7 @@ function goToLogin() {
 async function startSessionAndJoin() {
   if (state.joining || state.waitingForAdmission || state.loadingContext || state.contextError) return;
   if (state.linkKind === 'open' && String(state.guestName || '').trim() === '') {
-    state.joinError = 'Name is required for this link.';
+    state.joinError = t('public.join.name_required');
     return;
   }
   state.joining = true;
@@ -707,7 +698,8 @@ async function startSessionAndJoin() {
   });
   if (!result.ok) {
     state.joining = false;
-    state.joinError = result.message || 'Could not start call session.';
+    const errorPayload = result.errorCode ? { error: { code: result.errorCode } } : null;
+    state.joinError = localizedApiErrorMessage(errorPayload, t('public.join.start_session_failed'));
     return;
   }
 

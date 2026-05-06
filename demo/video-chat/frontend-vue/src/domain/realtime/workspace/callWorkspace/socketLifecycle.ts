@@ -190,7 +190,6 @@ export function createCallWorkspaceSocketHelpers({
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
       || compatibilityCodecRequested
-      || primaryLayerRequested
       || shouldRequestSfuFullKeyframeForReason(sourceReason);
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {

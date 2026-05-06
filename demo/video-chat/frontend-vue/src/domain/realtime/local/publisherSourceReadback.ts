@@ -29,7 +29,6 @@ import {
 import {
   resolveFramedFrameSizeFromDimensions,
   resolveProfileReadbackIntervalMs,
-  resolvePublisherFramingTarget,
   resolvePublisherFrameSize,
 } from './videoFrameSizing.ts';
 
@@ -39,6 +38,14 @@ const ZERO_COPY_CAPTURE_GATE_SOURCE = 'video_frame_main_thread_canvas_blocked';
 const VIDEO_FRAME_READER_RETRY_COOLDOWN_MS = 250;
 const VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS = 1500;
 const VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT = 3;
+const PUBLISHER_TRANSPORT_FRAMING_TARGET = Object.freeze({
+  mode: 'contain',
+  targetAspectRatio: 0,
+});
+
+export function resolvePublisherTransportFramingTarget() {
+  return PUBLISHER_TRANSPORT_FRAMING_TARGET;
+}
 
 function positiveNumber(value) {
   const normalized = Number(value || 0);
@@ -333,7 +340,7 @@ export function createPublisherSourceReadbackController({
   }
 
   async function nextSource({ trace, videoProfile: activeProfile, videoTrack: activeTrack }) {
-    const framingTarget = resolvePublisherFramingTarget(video);
+    const framingTarget = resolvePublisherTransportFramingTarget();
     const reader = ensureVideoFrameReader('publisher_source_readback_tick');
     if (reader) {
       const readStartedAtMs = highResolutionNowMs();
@@ -506,7 +513,7 @@ export function createPublisherSourceReadbackController({
       }
 
       const canvasFrameSize = sourceBackend === PUBLISHER_VIDEO_FRAME_SOURCE_BACKEND
-        ? resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile, resolvePublisherFramingTarget(video))
+        ? resolveDomCanvasCompatibilityVideoFrameSize(source, activeProfile, resolvePublisherTransportFramingTarget())
         : frameSize;
       const compatibilityIntervalMs = domCanvasCompatibilityReadbackIntervalMs(activeProfile);
       const nowMs = highResolutionNowMs();

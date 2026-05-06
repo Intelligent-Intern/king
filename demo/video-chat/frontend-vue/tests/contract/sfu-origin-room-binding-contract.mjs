@@ -82,7 +82,7 @@ try {
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'binary send resumes only at low-water');
   requireContains(sfuClient, 'private async waitForSendBufferDrain(targetBufferedBytes: number', 'chunk sender waits for budgeted websocket drain');
   requireContains(sfuClient, 'private outboundFrameSequenceByTrack = new Map<string, number>()', 'per-track outgoing frame sequence');
-  requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
+  requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string, videoLayer: unknown = \'\'): number', 'outgoing frame sequence allocator');
   requireContains(sfuClient, 'this.outboundFrameQueue.enqueue(prepared)', 'bounded outbound frame queue');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3', 'bounded queue frame cap');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 12 * 1024 * 1024', 'bounded queue byte cap');

@@ -1,6 +1,6 @@
 .call-access-join-page {
   min-height: 100vh;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
 }
 
 .call-access-join-shell {
@@ -17,7 +17,7 @@
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-09111e);
+  background: var(--color-surface-navy);
 }
 
 .calls-modal-dialog {
@@ -29,7 +29,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
+  box-shadow: 0 16px 32px var(--color-primary-navy);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -112,7 +112,7 @@
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -142,8 +142,8 @@
   gap: 2px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: var(--color-rgba-11-19-36-0-78);
-  color: var(--color-f7f7f7);
+  background: color-mix(in srgb, var(--color-surface-navy) 78%, transparent);
+  color: var(--color-text-primary);
   font-size: 12px;
 }
 
@@ -156,7 +156,7 @@
 }
 
 .call-access-join-call-badge span {
-  color: var(--color-c9d5ea);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -198,8 +198,8 @@
   margin: 0 auto 0 0;
   border: 1px solid var(--brand-cyan);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--brand-cyan) 18%, var(--color-182c4d) 82%);
-  color: var(--color-f7f7f7);
+  background: color-mix(in srgb, var(--brand-cyan) 18%, var(--color-border) 82%);
+  color: var(--color-text-primary);
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 700;
@@ -221,7 +221,7 @@
 
 .calls-inline-error,
 .call-access-join-status.error {
-  color: var(--color-ff0000);
+  color: var(--color-error);
 }
 
 .call-access-join-context-body {

@@ -104,6 +104,10 @@ SQL
     $secondRole = (string) ($rows[1]['role'] ?? '');
     videochat_admin_user_list_assert($firstRole === 'admin', 'first listed role should be admin by priority sort');
     videochat_admin_user_list_assert($secondRole === 'moderator', 'second listed role should be moderator by priority sort');
+    videochat_admin_user_list_assert(
+        array_key_exists('theme_editor_enabled', $rows[0]),
+        'listed users should expose theme editor permission'
+    );
 
     $pageTwo = videochat_admin_list_users($pdo, '', 2, 5, 'role_then_name_asc', 'all');
     $pageOneIds = array_map(static fn (array $row): int => (int) ($row['id'] ?? 0), $rows);

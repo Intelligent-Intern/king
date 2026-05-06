@@ -33,6 +33,7 @@ import {
   shouldBufferRemoteFrameForJitter,
 } from './remoteJitterBuffer';
 import { clearSfuKeyframeRecoveryCoordinator } from './keyframeRecoveryCoordinator.ts';
+import { mediaSecurityPublisherUserIdForFrame } from './screenShareFrameIdentity';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -584,6 +585,7 @@ export function createSfuFrameDecodeHelpers({
         payload: {
           publisher_id: publisherId,
           publisher_user_id: publisherUserId,
+          frame_publisher_user_id: Number(frame?.publisherUserId || 0),
           track_id: frame?.trackId,
           frame_type: frame?.type,
           frame_timestamp: frame?.timestamp,
@@ -821,9 +823,10 @@ export function createSfuFrameDecodeHelpers({
     if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) return;
     peer.receivedFrameCount = Number(peer.receivedFrameCount || 0) + 1;
     peer.lastReceivedFrameAtMs = Date.now();
-    const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
-    if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
-      markRemoteFrameActivity(publisherUserId);
+    const publisherUserId = Number(frame?.publisherUserId || 0);
+    const activityUserId = Number(peer?.userId || publisherUserId || 0);
+    if (Number.isInteger(activityUserId) && activityUserId > 0) {
+      markRemoteFrameActivity(activityUserId);
     }
     if (!options.fromJitterBuffer && maybeBufferRemoteFrameForJitter(publisherId, peer, frame)) {
       return;
@@ -834,14 +837,15 @@ export function createSfuFrameDecodeHelpers({
     }
 
     let frameData = frame.data;
-    if (shouldWaitForMediaSecurityBeforeProtectedDecrypt(publisherId, peer, frame, publisherUserId)) {
+    const securityPublisherUserId = mediaSecurityPublisherUserIdForFrame(peer, frame, publisherUserId);
+    if (shouldWaitForMediaSecurityBeforeProtectedDecrypt(publisherId, peer, frame, securityPublisherUserId)) {
       return;
     }
     if (frame?.protectedFrame) {
       try {
         frameData = await ensureMediaSecuritySession().decryptProtectedFrameEnvelope({
           protectedFrame: frame.protectedFrame,
-          publisherUserId,
+          publisherUserId: securityPublisherUserId,
           runtimePath: 'wlvc_sfu',
           codecId: frame.codecId,
           trackId: frame.trackId,
@@ -859,7 +863,8 @@ export function createSfuFrameDecodeHelpers({
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
-          publisher_user_id: publisherUserId,
+          publisher_user_id: securityPublisherUserId,
+          frame_publisher_user_id: publisherUserId,
           track_id: frame?.trackId,
           frame_type: frame?.type,
           frame_timestamp: frame?.timestamp,
@@ -873,7 +878,7 @@ export function createSfuFrameDecodeHelpers({
           drop_reason: errorCode,
         });
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
-          recoverMediaSecurityForPublisher(publisherUserId);
+          recoverMediaSecurityForPublisher(securityPublisherUserId);
         }
         return;
       }
@@ -882,7 +887,7 @@ export function createSfuFrameDecodeHelpers({
         frameData = await ensureMediaSecuritySession().decryptFrame({
           data: frame.data,
           protected: frame.protected,
-          publisherUserId,
+          publisherUserId: securityPublisherUserId,
           runtimePath: 'wlvc_sfu',
           codecId: frame.codecId,
           trackId: frame.trackId,
@@ -900,7 +905,8 @@ export function createSfuFrameDecodeHelpers({
         mediaDebugLog('[MediaSecurity] protected SFU frame dropped', error);
         captureClientDiagnosticError('sfu_protected_frame_decrypt_failed', error, {
           publisher_id: publisherId,
-          publisher_user_id: publisherUserId,
+          publisher_user_id: securityPublisherUserId,
+          frame_publisher_user_id: publisherUserId,
           track_id: frame?.trackId,
           frame_type: frame?.type,
           frame_timestamp: frame?.timestamp,
@@ -914,7 +920,7 @@ export function createSfuFrameDecodeHelpers({
           drop_reason: errorCode,
         });
         if (shouldRecoverMediaSecurityFromFrameError(error)) {
-          recoverMediaSecurityForPublisher(publisherUserId);
+          recoverMediaSecurityForPublisher(securityPublisherUserId);
         }
         return;
       }
@@ -1082,7 +1088,15 @@ export function createSfuFrameDecodeHelpers({
     if (!isWlvcRuntimePath()) return;
     const publisherId = normalizeSfuPublisherId(frame?.publisherId);
     if (publisherId === '') return;
-    let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId);
+    let peerLookup = getSfuRemotePeerByFrameIdentity(publisherId, frame?.publisherUserId, {
+      publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '',
+    });
+    if (
+      peerLookup?.matchedBy === 'local_screen_share_preview'
+      || peerLookup?.matchedBy === 'local_screen_share_pending'
+    ) {
+      return;
+    }
     let peer = peerLookup?.peer || null;
     if (peerLookup?.matchedBy === 'publisher_user_id') {
       captureClientDiagnostic({
@@ -1098,12 +1112,18 @@ export function createSfuFrameDecodeHelpers({
         },
       });
     }
-    peer = updateSfuRemotePeerUserId(peerLookup?.publisherId || publisherId, peer, frame?.publisherUserId);
-    const publisherUserId = Number(frame?.publisherUserId || peer?.userId || 0);
-    if (Number.isInteger(publisherUserId) && publisherUserId > 0) {
-      markRemoteFrameActivity(publisherUserId);
+    peer = updateSfuRemotePeerUserId(peerLookup?.publisherId || publisherId, peer, frame?.publisherUserId, {
+      publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '',
+    });
+    const publisherUserId = Number(frame?.publisherUserId || 0);
+    const securityPublisherUserId = mediaSecurityPublisherUserIdForFrame(peer, frame, publisherUserId);
+    const activityUserId = Number(peer?.userId || publisherUserId || 0);
+    if (Number.isInteger(activityUserId) && activityUserId > 0) {
+      markRemoteFrameActivity(activityUserId);
+    }
+    if (Number.isInteger(securityPublisherUserId) && securityPublisherUserId > 0) {
       if (frame?.protectedFrame && Number(peer?.frameCount || 0) <= 0) {
-        void sendMediaSecurityHello(publisherUserId);
+        void sendMediaSecurityHello(securityPublisherUserId);
       }
     }
     if (!peer || (!peer.decoder && !isProtectedBrowserEncodedVideoFrame(frame))) {
@@ -1113,7 +1133,8 @@ export function createSfuFrameDecodeHelpers({
           const nextPeer = updateSfuRemotePeerUserId(
             publisherId,
             createdPeer || remotePeersRef.value.get(publisherId),
-            frame?.publisherUserId
+            frame?.publisherUserId,
+            { publisherMediaSource: frame?.publisherMediaSource || frame?.publisher_media_source || '' }
           );
           void decodeSfuFrameForPeer(publisherId, nextPeer, frame);
         });

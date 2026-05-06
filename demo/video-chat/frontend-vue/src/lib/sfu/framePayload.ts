@@ -237,6 +237,7 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   const publisherTraceProfile = String(source.publisher_trace_profile ?? source.publisherTraceProfile ?? '').trim()
   const publisherAspectMode = String(source.publisher_aspect_mode ?? source.publisherAspectMode ?? '').trim()
   const publisherFramingMode = String(source.publisher_framing_mode ?? source.publisherFramingMode ?? '').trim()
+  const publisherMediaSource = String(source.publisher_media_source ?? source.publisherMediaSource ?? '').trim().toLowerCase()
   const sourceTrackReadyState = String(source.source_track_ready_state ?? source.sourceTrackReadyState ?? '').trim()
   const activeCaptureBackend = String(source.active_capture_backend ?? source.activeCaptureBackend ?? publisherSourceBackend).trim()
   const selectedVideoQualityProfile = String(source.selected_video_quality_profile ?? source.selectedVideoQualityProfile ?? profile).trim().toLowerCase()
@@ -263,6 +264,9 @@ function normalizeTransportMetrics(value: unknown): Record<string, unknown> {
   if (publisherTraceProfile !== '') metrics.publisher_trace_profile = publisherTraceProfile
   if (publisherAspectMode !== '') metrics.publisher_aspect_mode = publisherAspectMode
   if (publisherFramingMode !== '') metrics.publisher_framing_mode = publisherFramingMode
+  if (publisherMediaSource === 'screen_share' || publisherMediaSource === 'screen') {
+    metrics.publisher_media_source = 'screen_share'
+  }
   if (sourceTrackReadyState !== '') metrics.source_track_ready_state = sourceTrackReadyState
   if (activeCaptureBackend !== '') metrics.active_capture_backend = activeCaptureBackend
   if (selectedVideoQualityProfile !== '') metrics.selected_video_quality_profile = selectedVideoQualityProfile

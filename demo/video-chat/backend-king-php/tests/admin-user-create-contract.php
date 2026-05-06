@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../support/tenant_context.php';
 require_once __DIR__ . '/../domain/users/user_management.php';
 require_once __DIR__ . '/../http/module_users.php';
 
@@ -37,6 +38,10 @@ try {
     }
 
     videochat_bootstrap_sqlite($databasePath);
+    $authPdo = videochat_open_sqlite_pdo($databasePath);
+    $tenantId = (int) $authPdo->query("SELECT id FROM tenants WHERE slug = 'default' LIMIT 1")->fetchColumn();
+    $adminTenant = videochat_tenant_context_for_user($authPdo, 1);
+    videochat_admin_user_create_assert($tenantId > 0 && is_array($adminTenant), 'tenant auth fixture missing');
 
     $jsonResponse = static function (int $status, array $payload): array {
         return [
@@ -91,6 +96,7 @@ try {
             'status' => 'active',
         ],
         'session' => ['id' => 'sess_admin_contract'],
+        'tenant' => videochat_tenant_auth_payload($adminTenant),
     ];
 
     $invalidJson = videochat_handle_user_routes(
@@ -159,6 +165,7 @@ try {
                 'email' => 'create-contract-user@intelligent-intern.com',
                 'display_name' => 'Create Contract User',
                 'password' => 'create-contract-password',
+                'theme_editor_enabled' => true,
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -185,11 +192,15 @@ try {
         (string) ($createdUser['role'] ?? '') === 'user',
         'create payload role should default to user'
     );
+    videochat_admin_user_create_assert(
+        ($createdUser['theme_editor_enabled'] ?? null) === true,
+        'create payload should expose theme editor permission'
+    );
 
     $pdo = videochat_open_sqlite_pdo($databasePath);
     $persistedUser = $pdo->prepare(
         <<<'SQL'
-SELECT users.email, roles.slug AS role_slug
+SELECT users.email, users.theme_editor_enabled, roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
 WHERE lower(users.email) = lower(:email)
@@ -203,6 +214,135 @@ SQL
         (string) ($persistedRow['role_slug'] ?? '') === 'user',
         'persisted user role should default to user'
     );
+    videochat_admin_user_create_assert(
+        (int) ($persistedRow['theme_editor_enabled'] ?? 0) === 1,
+        'persisted user should keep theme editor permission'
+    );
+
+    $rolePublicId = '00000000-0000-4000-8000-00000000a501';
+    $now = gmdate('c');
+    $insertRole = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO governance_roles(tenant_id, public_id, key, name, status, created_by_user_id, created_at, updated_at)
+VALUES(:tenant_id, :public_id, 'admin.user.create.contract', 'Admin User Create Contract Role', 'active', 1, :created_at, :updated_at)
+SQL
+    );
+    $insertRole->execute([
+        ':tenant_id' => $tenantId,
+        ':public_id' => $rolePublicId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $roleId = (int) $pdo->lastInsertId();
+    $insertRolePermission = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO governance_role_permissions(tenant_id, role_id, permission_key, resource_type, action)
+VALUES(:tenant_id, :role_id, 'governance.groups.create', 'group', 'create')
+SQL
+    );
+    $insertRolePermission->execute([':tenant_id' => $tenantId, ':role_id' => $roleId]);
+    $groupPublicId = '00000000-0000-4000-8000-00000000b501';
+    $insertGroup = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO "groups"(tenant_id, public_id, name, key, status, created_by_user_id, created_at, updated_at)
+VALUES(:tenant_id, :public_id, 'Admin User Create Contract Group', 'admin-user-create-contract', 'active', 1, :created_at, :updated_at)
+SQL
+    );
+    $insertGroup->execute([
+        ':tenant_id' => $tenantId,
+        ':public_id' => $groupPublicId,
+        ':created_at' => $now,
+        ':updated_at' => $now,
+    ]);
+    $groupId = (int) $pdo->lastInsertId();
+
+    $createdRoleUserResponse = videochat_handle_user_routes(
+        '/api/admin/users',
+        'POST',
+        [
+            'method' => 'POST',
+            'uri' => '/api/admin/users',
+            'body' => json_encode([
+                'email' => 'governance-role-user@intelligent-intern.com',
+                'display_name' => 'Governance Role User',
+                'password' => 'governance-role-password',
+                'relationships' => [
+                    'roles' => [
+                        ['entity_key' => 'roles', 'id' => $rolePublicId],
+                    ],
+                    'groups' => [
+                        [
+                            'entity_key' => 'groups',
+                            'id' => $groupPublicId,
+                            'relationships' => [
+                                'permissions' => [
+                                    ['entity_key' => 'permissions', 'id' => 'permission:governance:governance.organizations.create', 'key' => 'governance.organizations.create'],
+                                ],
+                                'modules' => [
+                                    ['entity_key' => 'modules', 'id' => 'module:governance', 'key' => 'governance'],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_admin_user_create_assert(is_array($createdRoleUserResponse), 'create role user response must be an array');
+    videochat_admin_user_create_assert((int) ($createdRoleUserResponse['status'] ?? 0) === 201, 'create role user status should be 201');
+    $createdRoleUserPayload = videochat_admin_user_create_decode_response($createdRoleUserResponse);
+    $createdRoleUser = ($createdRoleUserPayload['result'] ?? [])['user'] ?? null;
+    videochat_admin_user_create_assert(is_array($createdRoleUser), 'created role user payload missing');
+    $createdRoleUserId = (int) ($createdRoleUser['id'] ?? 0);
+    videochat_admin_user_create_assert(
+        (string) (((($createdRoleUser['relationships'] ?? [])['roles'] ?? [])[0] ?? [])['id'] ?? '') === $rolePublicId,
+        'created role user should expose selected governance role'
+    );
+    videochat_admin_user_create_assert(
+        (string) (((($createdRoleUser['relationships'] ?? [])['groups'] ?? [])[0] ?? [])['id'] ?? '') === $groupPublicId,
+        'created role user should expose selected governance group'
+    );
+    $userRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_user_roles WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId} AND role_id = {$roleId}")->fetchColumn();
+    videochat_admin_user_create_assert($userRoleAssignmentCount === 1, 'created user governance role should be persisted');
+    $userGroupAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM group_memberships WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId} AND group_id = {$groupId} AND subject_type = 'user' AND status = 'active'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupAssignmentCount === 1, 'created user governance group should be persisted');
+    $userGroupPermissionGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'group_permissions' AND subject_type = 'group' AND group_id = {$groupId} AND permission_key = 'governance.organizations.create'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupPermissionGrantCount === 1, 'nested user group permissions should sync to group grants');
+    $userGroupModuleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'group_modules' AND subject_type = 'group' AND group_id = {$groupId} AND permission_key = 'module.governance.read'")->fetchColumn();
+    videochat_admin_user_create_assert($userGroupModuleGrantCount === 1, 'nested user group modules should sync to group grants');
+    $userGroupPermissionGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'organization', '*', 'create');
+    videochat_admin_user_create_assert((bool) ($userGroupPermissionGrant['ok'] ?? false), 'nested group permission should be evaluated for created user');
+    $userGroupModuleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'module', 'governance', 'read');
+    videochat_admin_user_create_assert((bool) ($userGroupModuleGrant['ok'] ?? false), 'nested group module should be evaluated for created user');
+    $userRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'user_roles' AND subject_type = 'user' AND user_id = {$createdRoleUserId} AND permission_key = 'governance.groups.create'")->fetchColumn();
+    videochat_admin_user_create_assert($userRoleGrantCount === 1, 'created user governance role should expand into evaluator grant');
+    $userRoleGrant = videochat_tenancy_user_has_resource_permission($pdo, $tenantId, $createdRoleUserId, 'group', '*', 'create');
+    videochat_admin_user_create_assert((bool) ($userRoleGrant['ok'] ?? false), 'created user role grant should be evaluated');
+
+    $clearRole = videochat_tenancy_update_governance_role($pdo, $tenantId, 1, $rolePublicId, [
+        'name' => 'Admin User Create Contract Role',
+        'key' => 'admin.user.create.contract',
+        'status' => 'active',
+        'relationships' => [
+            'permissions' => [],
+            'modules' => [],
+        ],
+    ]);
+    videochat_admin_user_create_assert((bool) ($clearRole['ok'] ?? false), 'clearing user role permissions should succeed');
+    $clearedUserRoleGrantCount = (int) $pdo->query("SELECT COUNT(*) FROM permission_grants WHERE tenant_id = {$tenantId} AND source = 'user_roles' AND subject_type = 'user' AND user_id = {$createdRoleUserId}")->fetchColumn();
+    videochat_admin_user_create_assert($clearedUserRoleGrantCount === 0, 'clearing role permissions should remove user role grants');
+    $deleteRole = videochat_tenancy_delete_governance_role($pdo, $tenantId, $rolePublicId);
+    videochat_admin_user_create_assert((bool) ($deleteRole['ok'] ?? false), 'deleting user role should succeed');
+    $deletedUserRoleAssignmentCount = (int) $pdo->query("SELECT COUNT(*) FROM governance_user_roles WHERE tenant_id = {$tenantId} AND user_id = {$createdRoleUserId}")->fetchColumn();
+    videochat_admin_user_create_assert($deletedUserRoleAssignmentCount === 0, 'deleting role should remove user role assignments');
 
     $duplicateResponse = videochat_handle_user_routes(
         '/api/admin/users',

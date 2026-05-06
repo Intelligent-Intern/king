@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 VIDEOCHAT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 LOCAL_ENV_FILE="${VIDEOCHAT_DIR}/.env.local"
 TIMEOUT="${VIDEOCHAT_DEPLOY_SMOKE_TIMEOUT:-12}"
+ADMIN_SMOKE_SESSION_TOKEN=""
 
 log() {
   printf '[videochat-deploy-smoke] %s\n' "$*"
@@ -14,6 +15,40 @@ fail() {
   printf '[videochat-deploy-smoke] ERROR: %s\n' "$*" >&2
   exit 1
 }
+
+admin_logout_session() {
+  local token="$1" output code
+  [[ -n "${token}" ]] || return 0
+
+  output="$(mktemp)"
+  code="$(
+    curl -sS --max-time "${TIMEOUT}" \
+      -o "${output}" \
+      -w '%{http_code}' \
+      -X POST \
+      -H "authorization: Bearer ${token}" \
+      "https://${DEPLOY_API_DOMAIN}/api/auth/logout" || true
+  )"
+  if [[ "${code}" != "200" ]]; then
+    printf '[videochat-deploy-smoke] admin session cleanup response body:\n' >&2
+    cat "${output}" >&2 || true
+    rm -f "${output}"
+    return 1
+  fi
+
+  rm -f "${output}"
+  log "admin session cleanup: HTTP ${code}"
+}
+
+cleanup_admin_session() {
+  local token="${ADMIN_SMOKE_SESSION_TOKEN:-}"
+  [[ -n "${token}" ]] || return 0
+
+  ADMIN_SMOKE_SESSION_TOKEN=""
+  admin_logout_session "${token}" || log "admin session cleanup failed; smoke session may expire by TTL"
+}
+
+trap cleanup_admin_session EXIT
 
 require_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "missing required command: $1"
@@ -47,6 +82,21 @@ expect_http_code() {
   log "${label}: HTTP ${code}"
 }
 
+public_get_json() {
+  local label="$1" url="$2" output code
+  output="$(mktemp)"
+  code="$(curl -sS --max-time "${TIMEOUT}" -o "${output}" -w '%{http_code}' "${url}" || true)"
+  if [[ "${code}" != "200" ]]; then
+    printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
+    cat "${output}" >&2 || true
+    rm -f "${output}"
+    fail "${label}: expected HTTP 200, got ${code:-none}"
+  fi
+
+  cat "${output}"
+  rm -f "${output}"
+}
+
 assert_public_health_payload() {
   php -r '
     $raw = stream_get_contents(STDIN);
@@ -68,6 +118,47 @@ assert_public_health_payload() {
     if (!is_string($payload["asset_version"] ?? null) || $payload["asset_version"] === "") {
         fwrite(STDERR, "health asset_version is missing\n");
         exit(1);
+    }
+  '
+}
+
+assert_public_localization_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("public localization payload status is not ok");
+    }
+    if ((string) ($payload["locale"] ?? "") !== "de") {
+        fail("public localization locale mismatch");
+    }
+    if ((string) ($payload["direction"] ?? "") !== "ltr") {
+        fail("public localization direction mismatch");
+    }
+    if (($payload["tenant_id"] ?? null) !== null) {
+        fail("public localization payload must not include tenant context");
+    }
+    $supported = $payload["supported_locales"] ?? [];
+    if (!is_array($supported)) {
+        fail("public localization supported_locales missing");
+    }
+    $codes = [];
+    foreach ($supported as $locale) {
+        if (is_array($locale) && is_string($locale["code"] ?? null)) {
+            $codes[] = $locale["code"];
+        }
+    }
+    foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
+        if (!in_array($requiredLocale, $codes, true)) {
+            fail("public localization supported locale missing: " . $requiredLocale);
+        }
+    }
+    if (!is_array($payload["resources"] ?? null) || !is_array($payload["fallback_resources"] ?? null)) {
+        fail("public localization resources and fallback_resources must be objects");
     }
   '
 }
@@ -311,6 +402,91 @@ assert_admin_infrastructure_payload() {
   '
 }
 
+assert_admin_session_payload() {
+  VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE="${VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE:-en}" php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $expectedLocale = trim((string) getenv("VIDEOCHAT_DEPLOY_SMOKE_EXPECT_USER_LOCALE"));
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("admin session payload status is not ok");
+    }
+    $user = $payload["user"] ?? null;
+    if (!is_array($user)) {
+        fail("admin session payload missing user");
+    }
+    $errors = [];
+    $localeValue = array_key_exists("locale", $user) ? (string) $user["locale"] : "<missing>";
+    if ($expectedLocale !== "" && $localeValue !== $expectedLocale) {
+        $errors[] = "locale expected " . $expectedLocale . ", got " . $localeValue;
+    }
+
+    $directionValue = array_key_exists("direction", $user) ? (string) $user["direction"] : "<missing>";
+    if ($expectedLocale === "en" && $directionValue !== "ltr") {
+        $errors[] = "direction expected ltr, got " . $directionValue;
+    }
+
+    $supported = $user["supported_locales"] ?? [];
+    if (!is_array($supported)) {
+        $errors[] = "supported_locales missing";
+        $supported = [];
+    }
+    $codes = [];
+    foreach ($supported as $locale) {
+        if (is_array($locale) && is_string($locale["code"] ?? null)) {
+            $codes[] = $locale["code"];
+        }
+    }
+    foreach (["en", "de", "ar", "sgd"] as $requiredLocale) {
+        if (!in_array($requiredLocale, $codes, true)) {
+            $errors[] = "supported locale missing " . $requiredLocale;
+        }
+    }
+    if ($errors !== []) {
+        fail("admin session payload localization mismatch: " . implode("; ", $errors));
+    }
+  '
+}
+
+assert_admin_localization_preview_payload() {
+  php -r '
+    function fail(string $message): void {
+        fwrite(STDERR, $message . "\n");
+        exit(1);
+    }
+    $raw = stream_get_contents(STDIN);
+    $payload = json_decode($raw, true);
+    if (!is_array($payload) || ($payload["status"] ?? "") !== "ok") {
+        fail("localization CSV preview payload status is not ok");
+    }
+    $preview = $payload["result"]["preview"] ?? null;
+    if (!is_array($preview)) {
+        fail("localization CSV preview payload missing preview");
+    }
+    if (($preview["ok"] ?? null) !== true) {
+        fail("localization CSV preview did not pass validation");
+    }
+    if ((int) ($preview["valid_rows"] ?? 0) < 1) {
+        fail("localization CSV preview must include at least one valid row");
+    }
+    if ((int) ($preview["error_count"] ?? 0) !== 0) {
+        fail("localization CSV preview must not include validation errors");
+    }
+    $summary = is_array($preview["summary"] ?? null) ? $preview["summary"] : [];
+    $locales = is_array($summary["locales"] ?? null) ? $summary["locales"] : [];
+    $namespaces = is_array($summary["namespaces"] ?? null) ? $summary["namespaces"] : [];
+    if (!in_array("de", $locales, true)) {
+        fail("localization CSV preview missing de locale summary");
+    }
+    if (!in_array("deploy_smoke", $namespaces, true)) {
+        fail("localization CSV preview missing deploy_smoke namespace summary");
+    }
+  '
+}
+
 assert_admin_video_operations_payload() {
   php -r '
     function fail(string $message): void {
@@ -376,8 +552,26 @@ verify_admin_operations() {
       ;;
   esac
 
-  local token infrastructure_payload operations_payload
+  local token session_payload csv_preview_request csv_preview_payload infrastructure_payload operations_payload
   token="$(admin_session_token)"
+  ADMIN_SMOKE_SESSION_TOKEN="${token}"
+  session_payload="$(admin_get_json "admin session" "https://${DEPLOY_API_DOMAIN}/api/auth/session" "${token}")"
+  printf '%s' "${session_payload}" | assert_admin_session_payload
+  log "admin session: authenticated default locale payload verified"
+
+  csv_preview_request="$(
+    php -r '
+      echo json_encode([
+          "file_name" => "deploy-smoke-preview.csv",
+          "csv" => "locale,namespace,resource_key,value\n"
+              . "de,deploy_smoke,ready,Bereit\n",
+      ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    '
+  )"
+  csv_preview_payload="$(admin_post_json "admin localization CSV preview" "https://${DEPLOY_API_DOMAIN}/api/admin/localization/imports/preview" "${token}" "${csv_preview_request}")"
+  printf '%s' "${csv_preview_payload}" | assert_admin_localization_preview_payload
+  log "admin localization CSV preview: superadmin preview verified without commit"
+
   infrastructure_payload="$(admin_get_json "admin infrastructure" "https://${DEPLOY_API_DOMAIN}/api/admin/infrastructure" "${token}")"
   printf '%s' "${infrastructure_payload}" | assert_admin_infrastructure_payload
   log "admin infrastructure: provider-neutral safe payload verified"
@@ -385,6 +579,9 @@ verify_admin_operations() {
   operations_payload="$(admin_get_json "admin video operations" "https://${DEPLOY_API_DOMAIN}/api/admin/video-operations" "${token}")"
   printf '%s' "${operations_payload}" | assert_admin_video_operations_payload
   log "admin video operations: realtime safe payload verified"
+
+  admin_logout_session "${token}" || fail "admin session cleanup failed"
+  ADMIN_SMOKE_SESSION_TOKEN=""
 }
 
 admin_get_json() {
@@ -410,6 +607,34 @@ admin_get_json() {
   fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
 }
 
+admin_post_json() {
+  local label="$1" url="$2" token="$3" payload="$4" output code attempt
+  output="$(mktemp)"
+  for attempt in $(seq 1 30); do
+    code="$(
+      curl -sS --max-time "${TIMEOUT}" \
+        -o "${output}" \
+        -w '%{http_code}' \
+        -X POST \
+        -H "authorization: Bearer ${token}" \
+        -H 'content-type: application/json' \
+        --data "${payload}" \
+        "${url}" || true
+    )"
+    if [[ "${code}" == "200" ]]; then
+      cat "${output}"
+      rm -f "${output}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  printf '[videochat-deploy-smoke] %s response body:\n' "${label}" >&2
+  cat "${output}" >&2 || true
+  rm -f "${output}"
+  fail "${label}: expected HTTP 200 after deploy readiness retries, got ${code:-none}"
+}
+
 load_local_env
 require_cmd curl
 require_cmd php
@@ -430,9 +655,13 @@ expect_http_code https-frontend 200 "https://${DEPLOY_DOMAIN}/"
 expect_http_code cdn-mediapipe-wasm-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_solution_simd_wasm_bin.js"
 expect_http_code cdn-tensorflow-fallback-loader 200 "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/tensorflow/tfjs-core/tf-core.min.js"
 
-health_payload="$(curl -fsS --max-time "${TIMEOUT}" "https://${DEPLOY_API_DOMAIN}/health")"
+health_payload="$(public_get_json "api health" "https://${DEPLOY_API_DOMAIN}/health")"
 printf '%s' "${health_payload}" | assert_public_health_payload
 log "api health: public allow-list payload verified"
+
+localization_payload="$(public_get_json "api localization resources" "https://${DEPLOY_API_DOMAIN}/api/localization/resources?locale=de&namespaces=common")"
+printf '%s' "${localization_payload}" | assert_public_localization_payload
+log "api localization resources: public global payload verified"
 
 expect_http_code admin-runtime-auth-boundary 401 "https://${DEPLOY_API_DOMAIN}/api/admin/runtime"
 expect_http_code api-version 200 "https://${DEPLOY_API_DOMAIN}/api/version"

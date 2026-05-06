@@ -4,15 +4,19 @@
       class="pager-btn pager-icon-btn"
       type="button"
       :disabled="!hasPrev || disabled"
+      :aria-label="t('pagination.previous')"
       @click="emitPage(page - 1, 'prev')"
     >
       <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/backward.png" alt="" />
     </button>
-    <div class="page-info">Page {{ page }} / {{ normalizedPageCount }} · {{ total }} {{ totalLabel }}</div>
+    <div class="page-info">
+      {{ t('pagination.page_info', { page, pageCount: normalizedPageCount, total, totalLabel: effectiveTotalLabel }) }}
+    </div>
     <button
       class="pager-btn pager-icon-btn"
       type="button"
       :disabled="!hasNext || disabled"
+      :aria-label="t('pagination.next')"
       @click="emitPage(page + 1, 'next')"
     >
       <img class="pager-icon-img" src="/assets/orgas/kingrt/icons/forward.png" alt="" />
@@ -22,6 +26,7 @@
 
 <script setup>
 import { computed, useAttrs } from 'vue';
+import { t } from '../modules/localization/i18nRuntime.js';
 
 defineOptions({ inheritAttrs: false });
 
@@ -40,7 +45,7 @@ const props = defineProps({
   },
   totalLabel: {
     type: String,
-    default: 'total',
+    default: '',
   },
   hasPrev: {
     type: Boolean,
@@ -59,6 +64,7 @@ const props = defineProps({
 const emit = defineEmits(['page-change', 'prev', 'next']);
 const attrs = useAttrs();
 const normalizedPageCount = computed(() => Math.max(1, props.pageCount));
+const effectiveTotalLabel = computed(() => props.totalLabel || t('pagination.total'));
 const rootAttrs = computed(() => {
   const { class: _class, ...rest } = attrs;
   return rest;

@@ -1,3 +1,5 @@
+import { normalizeLocalizationLanguage } from './localizationOptions.js';
+
 export const SUPPORTED_DATE_FORMATS = Object.freeze([
   'dmy_dot',
   'dmy_slash',
@@ -51,10 +53,63 @@ export function normalizeDateFormat(value) {
   return SUPPORTED_DATE_FORMATS.includes(normalized) ? normalized : 'dmy_dot';
 }
 
+export function normalizeDateTimeLocale(value) {
+  return normalizeLocalizationLanguage(value);
+}
+
+function activeDocumentLocale() {
+  if (typeof document === 'undefined') {
+    return '';
+  }
+  return String(document.documentElement?.lang || '').trim();
+}
+
+function resolveDateTimeLocale(value) {
+  const explicitLocale = typeof value === 'string' && value.trim() !== '' ? value : activeDocumentLocale();
+  return normalizeDateTimeLocale(explicitLocale);
+}
+
 function formatDateParts(date, format) {
   const year = String(date.getFullYear());
   const month = pad2(date.getMonth() + 1);
   const day = pad2(date.getDate());
+
+  switch (format) {
+    case 'dmy_slash':
+      return `${day}/${month}/${year}`;
+    case 'dmy_dash':
+      return `${day}-${month}-${year}`;
+    case 'ymd_dash':
+      return `${year}-${month}-${day}`;
+    case 'ymd_slash':
+      return `${year}/${month}/${day}`;
+    case 'ymd_dot':
+      return `${year}.${month}.${day}`;
+    case 'ymd_compact':
+      return `${year}${month}${day}`;
+    case 'mdy_slash':
+      return `${month}/${day}/${year}`;
+    case 'mdy_dash':
+      return `${month}-${day}-${year}`;
+    case 'mdy_dot':
+      return `${month}.${day}.${year}`;
+    case 'dmy_dot':
+    default:
+      return `${day}.${month}.${year}`;
+  }
+}
+
+function localizedInteger(value, locale, minimumIntegerDigits = 2) {
+  return new Intl.NumberFormat(locale, {
+    minimumIntegerDigits,
+    useGrouping: false,
+  }).format(value);
+}
+
+function formatLocalizedDateParts(date, format, locale) {
+  const year = localizedInteger(date.getFullYear(), locale, 4);
+  const month = localizedInteger(date.getMonth() + 1, locale, 2);
+  const day = localizedInteger(date.getDate(), locale, 2);
 
   switch (format) {
     case 'dmy_slash':
@@ -116,15 +171,58 @@ export function formatDateTimeDisplay(value, options = {}) {
   return `${dateDisplay} ${timeDisplay}`;
 }
 
+export function formatLocalizedDateTimeDisplay(value, options = {}) {
+  const fallback = typeof options.fallback === 'string' && options.fallback !== '' ? options.fallback : 'n/a';
+  const date = toDate(value);
+  if (!date) {
+    return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  }
+
+  const locale = resolveDateTimeLocale(options.locale);
+  try {
+    const dateDisplay = formatLocalizedDateParts(date, normalizeDateFormat(options.dateFormat), locale);
+    const timeDisplay = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: normalizeTimeFormat(options.timeFormat) === '12h',
+    }).format(date);
+    return `${dateDisplay} ${timeDisplay}`;
+  } catch {
+    return formatDateTimeDisplay(value, options);
+  }
+}
+
+export function formatLocalizedTimestampDisplay(value, options = {}) {
+  const fallback = typeof options.fallback === 'string' && options.fallback !== '' ? options.fallback : 'n/a';
+  const date = toDate(value);
+  if (!date) {
+    return typeof value === 'string' && value.trim() !== '' ? value : fallback;
+  }
+
+  try {
+    return new Intl.DateTimeFormat(resolveDateTimeLocale(options.locale), {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).format(date);
+  } catch {
+    return formatDateTimeDisplay(value, options);
+  }
+}
+
 export function formatDateRangeDisplay(startsAt, endsAt, options = {}) {
   const separator = typeof options.separator === 'string' && options.separator !== '' ? options.separator : ' -> ';
   const sharedOptions = {
+    locale: options.locale,
     dateFormat: options.dateFormat,
     timeFormat: options.timeFormat,
     fallback: typeof options.fallback === 'string' ? options.fallback : 'n/a',
   };
 
-  return `${formatDateTimeDisplay(startsAt, sharedOptions)}${separator}${formatDateTimeDisplay(endsAt, sharedOptions)}`;
+  return `${formatLocalizedDateTimeDisplay(startsAt, sharedOptions)}${separator}${formatLocalizedDateTimeDisplay(endsAt, sharedOptions)}`;
 }
 
 export function formatWeekdayShort(value, options = {}) {
@@ -135,10 +233,29 @@ export function formatWeekdayShort(value, options = {}) {
   }
 
   try {
-    return new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date);
+    return new Intl.DateTimeFormat(resolveDateTimeLocale(options.locale), { weekday: 'short' }).format(date);
   } catch {
     return fallback;
   }
+}
+
+export function compareDateTimeStrings(left, right) {
+  const leftText = String(left || '').trim();
+  const rightText = String(right || '').trim();
+  if (leftText === rightText) {
+    return 0;
+  }
+  const leftTime = Date.parse(leftText);
+  const rightTime = Date.parse(rightText);
+  const leftValid = Number.isFinite(leftTime);
+  const rightValid = Number.isFinite(rightTime);
+  if (leftValid && rightValid && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  if (leftValid !== rightValid) {
+    return leftValid ? -1 : 1;
+  }
+  return leftText < rightText ? -1 : 1;
 }
 
 export function fullCalendarEventTimeFormat(timeFormat) {

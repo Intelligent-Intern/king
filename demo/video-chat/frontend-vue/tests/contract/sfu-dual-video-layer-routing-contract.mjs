@@ -28,6 +28,7 @@ try {
   const packageJson = read('package.json');
   const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
+  const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
   const sfuClientTransportSample = read('src/lib/sfu/sfuClientTransportSample.ts');
@@ -66,6 +67,10 @@ try {
   requireContains(framePayload, 'payload.video_layer = videoLayer', 'frontend SFU payload writes video_layer into JSON/binary metadata');
   requireContains(framePayload, 'metrics.video_layer = videoLayer', 'frontend SFU metrics preserve video_layer');
   requireContains(framePayload, 'export function normalizeVideoLayer', 'frontend SFU payload normalizes video layer aliases');
+  requireContains(sfuClient, 'normalizeVideoLayer,', 'SFU client reuses canonical video layer normalization');
+  requireContains(sfuClient, 'this.nextOutboundFrameSequence(', 'SFU client assigns outbound frame sequence before enqueue');
+  requireContains(sfuClient, 'frame.videoLayer ?? frame.transportMetrics?.video_layer ?? frame.transportMetrics?.videoLayer', 'SFU client scopes outbound frame sequence by explicit video layer');
+  requireContains(sfuClient, '`${trackKey}:${normalizedVideoLayer}`', 'primary and thumbnail layers must not share publisher sequence continuity');
   requireContains(messageHandler, 'videoLayer: videoLayerField(msg.videoLayer, msg.video_layer)', 'SFU message handler maps incoming video layer');
   requireContains(sfuTypes, "videoLayer?: 'primary' | 'thumbnail' | string | null", 'SFU frame type carries video layer');
   requireContains(sfuClientTransportSample, 'videoLayer: String(payload.video_layer || \'\')', 'transport sample reports sent video layer');
@@ -76,6 +81,12 @@ try {
   requireContains(sfuSubscriberBudget, 'videochat_sfu_normalize_frame_video_layer', 'backend normalizes frame video layer metadata');
   requireContains(sfuSubscriberBudget, 'thumbnail_subscriber_primary_layer_pruned', 'thumbnail subscribers prune primary frames when dual layers are present');
   requireContains(sfuSubscriberBudget, 'primary_subscriber_thumbnail_layer_pruned', 'primary subscribers prune thumbnail frames when dual layers are present');
+  requireContains(sfuSubscriberBudget, 'videochat_sfu_frame_requires_contiguous_decode', 'backend must not cadence-drop frames that depend on decode continuity');
+  assert.ok(
+    sfuSubscriberBudget.indexOf('videochat_sfu_frame_requires_contiguous_decode($frame)')
+      < sfuSubscriberBudget.indexOf('$sequence = max(0, (int) ($frame[\'frame_sequence\'] ?? 0));'),
+    'decode-dependent frames must bypass legacy thumbnail cadence pruning before sequence modulo routing',
+  );
   assert.ok(
     sfuSubscriberBudget.indexOf('$frameVideoLayer !== \'\'')
       < sfuSubscriberBudget.indexOf('$layerPreference !== \'thumbnail\''),

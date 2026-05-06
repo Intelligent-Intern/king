@@ -209,6 +209,9 @@ export async function createProtectedBrowserVideoEncoderPublisher({
   const captureClientDiagnosticError = callbacks.captureClientDiagnosticError || (() => {});
   const currentSfuVideoProfile = callbacks.currentSfuVideoProfile || (() => videoProfile);
   const onProtectedBrowserEncoderFailure = callbacks.onProtectedBrowserEncoderFailure || (() => {});
+  const additionalPublisherFrameMetrics = typeof callbacks.additionalPublisherFrameMetrics === 'function'
+    ? callbacks.additionalPublisherFrameMetrics
+    : () => ({});
 
   if (!canAttemptProtectedBrowserVideoEncoder(capabilities)) {
     captureClientDiagnostic({
@@ -658,12 +661,22 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       encodeMs,
       maxEncodedPayloadBytes,
     });
+    const extraTransportMetrics = additionalPublisherFrameMetrics({
+      videoTrack,
+      videoProfile,
+      frameType: encodedFrameType,
+      trackId: videoTrack.id,
+      videoLayer: normalizedVideoLayer,
+    });
     const outgoingFrame = {
       publisherId: String(refs.currentUserId()),
       publisherUserId: String(refs.currentUserId()),
       trackId: videoTrack.id,
       timestamp,
-      transportMetrics,
+      transportMetrics: {
+        ...transportMetrics,
+        ...(extraTransportMetrics && typeof extraTransportMetrics === 'object' ? extraTransportMetrics : {}),
+      },
       data: chunk.data,
       type: encodedFrameType,
       codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID,

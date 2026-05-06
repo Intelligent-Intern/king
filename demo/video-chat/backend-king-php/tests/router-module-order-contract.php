@@ -29,7 +29,11 @@ try {
         'infrastructure',
         'operations',
         'marketplace',
+        'tenancy',
+        'backend_modules',
+        'localization',
         'users',
+        'workspace_administration',
         'invites',
         'calls',
         'appointment_calendar',
@@ -38,6 +42,10 @@ try {
     $actualOrder = videochat_dispatch_route_module_order();
     videochat_router_contract_assert($actualOrder === $expectedOrder, 'module order does not match expected deterministic sequence');
     videochat_router_contract_assert(count(array_unique($actualOrder)) === count($actualOrder), 'module order contains duplicates');
+    videochat_router_contract_assert(
+        videochat_rbac_allowed_roles_for_path('/api/localization/resources') === ['admin', 'user'],
+        'localization resource endpoint must be available to authenticated admin and user roles'
+    );
 
     $openDatabaseCalls = 0;
     $openDatabase = static function () use (&$openDatabaseCalls): PDO {
@@ -150,6 +158,33 @@ try {
     videochat_router_contract_assert((string) ($runtimePayload['status'] ?? '') === 'ok', 'runtime payload status mismatch');
     videochat_router_contract_assert($openDatabaseCalls === 0, 'runtime path should not open database');
 
+    $publicLocalizationResponse = videochat_dispatch_request(
+        ['method' => 'GET', 'path' => '/api/localization/resources', 'uri' => '/api/localization/resources?locale=de&namespaces=common', 'headers' => []],
+        $activeWebsocketsBySession,
+        $presenceState,
+        $lobbyState,
+        $typingState,
+        $reactionState,
+        $jsonResponse,
+        $errorResponse,
+        $methodFromRequest,
+        $decodeJsonBody,
+        $openDatabase,
+        $issueSessionId,
+        $pathFromRequest,
+        $runtimeEnvelope,
+        '/ws',
+        '/tmp',
+        1024
+    );
+    videochat_router_contract_assert((int) ($publicLocalizationResponse['status'] ?? 0) === 500, 'public localization path should reach localization handler when DB is unavailable');
+    $publicLocalizationPayload = videochat_router_contract_json_decode((string) ($publicLocalizationResponse['body'] ?? ''));
+    videochat_router_contract_assert(
+        (string) (($publicLocalizationPayload['error'] ?? [])['code'] ?? '') === 'localization_resources_failed',
+        'public localization path must not be blocked by auth before the localization handler'
+    );
+    videochat_router_contract_assert($openDatabaseCalls === 1, 'public localization path should open database once in localization handler');
+
     $authBlockedResponse = videochat_dispatch_request(
         ['method' => 'GET', 'path' => '/api/user/ping', 'uri' => '/api/user/ping', 'headers' => []],
         $activeWebsocketsBySession,
@@ -172,7 +207,7 @@ try {
     videochat_router_contract_assert((int) ($authBlockedResponse['status'] ?? 0) === 500, 'protected path should fail with auth backend error when DB is unavailable');
     $authBlockedPayload = videochat_router_contract_json_decode((string) ($authBlockedResponse['body'] ?? ''));
     videochat_router_contract_assert((string) (($authBlockedPayload['error'] ?? [])['code'] ?? '') === 'auth_failed', 'auth failure code mismatch');
-    videochat_router_contract_assert($openDatabaseCalls === 1, 'protected path should attempt one auth database check');
+    videochat_router_contract_assert($openDatabaseCalls === 2, 'protected path should attempt one auth database check');
 
     fwrite(STDOUT, "[router-module-order-contract] PASS\n");
     exit(0);

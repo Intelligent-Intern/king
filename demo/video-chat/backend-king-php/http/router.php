@@ -7,7 +7,11 @@ require_once __DIR__ . '/module_auth_session.php';
 require_once __DIR__ . '/module_infrastructure.php';
 require_once __DIR__ . '/module_operations.php';
 require_once __DIR__ . '/module_marketplace.php';
+require_once __DIR__ . '/module_tenancy.php';
+require_once __DIR__ . '/module_backend_modules.php';
+require_once __DIR__ . '/module_localization.php';
 require_once __DIR__ . '/module_users.php';
+require_once __DIR__ . '/module_workspace_administration.php';
 require_once __DIR__ . '/module_invites.php';
 require_once __DIR__ . '/module_calls.php';
 require_once __DIR__ . '/module_appointment_calendar.php';
@@ -24,7 +28,11 @@ function videochat_dispatch_route_module_order(): array
         'infrastructure',
         'operations',
         'marketplace',
+        'tenancy',
+        'backend_modules',
+        'localization',
         'users',
+        'workspace_administration',
         'invites',
         'calls',
         'appointment_calendar',
@@ -86,11 +94,23 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if ($requestPath === '/api/workspace/appearance' || $requestPath === '/api/public-leads') {
+            return true;
+        }
+
+        if ($requestPath === '/api/localization/resources') {
+            return true;
+        }
+
+        if (preg_match('#^/api/workspace/branding-files/[^/]+$#', $requestPath) === 1) {
+            return true;
+        }
+
         if (preg_match('#^/api/call-access/[A-Fa-f0-9-]{36}/(join|session)$#', $requestPath) === 1) {
             return true;
         }
 
-        if (preg_match('#^/api/appointment-calendar/public/\d+(?:/book)?$#', $requestPath) === 1) {
+        if (preg_match('#^/api/appointment-calendar/public/[A-Fa-f0-9-]{36}(?:/book)?$#', $requestPath) === 1) {
             return true;
         }
 
@@ -202,6 +222,38 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase
             );
+        } elseif ($moduleName === 'tenancy') {
+            $response = videochat_handle_tenancy_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'backend_modules') {
+            $response = videochat_handle_backend_module_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody
+            );
+        } elseif ($moduleName === 'localization') {
+            $response = videochat_handle_localization_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
         } elseif ($moduleName === 'users') {
             $response = videochat_handle_user_routes(
                 $path,
@@ -209,6 +261,19 @@ function videochat_dispatch_request(
                 $request,
                 $apiAuthContext,
                 $corsHeaders,
+                $avatarStorageRoot,
+                $avatarMaxBytes,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'workspace_administration') {
+            $response = videochat_handle_workspace_administration_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
                 $avatarStorageRoot,
                 $avatarMaxBytes,
                 $jsonResponse,

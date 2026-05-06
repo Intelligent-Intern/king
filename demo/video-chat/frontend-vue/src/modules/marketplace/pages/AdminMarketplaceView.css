@@ -1,0 +1,136 @@
+.search-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  min-width: min(240px, 100%);
+  margin-inline-start: auto;
+}
+
+.marketplace-toolbar-search-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.marketplace-toolbar-search-btn img {
+  width: 18px;
+  height: 18px;
+}
+
+.marketplace-banner {
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.marketplace-banner.ok {
+  border: 1px solid var(--border-subtle);
+  background: var(--color-border);
+}
+
+.marketplace-banner.error {
+  border: 1px solid var(--color-error);
+  background: var(--color-surface-navy);
+  color: var(--color-heading);
+}
+
+.marketplace-empty {
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-border);
+  color: var(--text-main);
+}
+
+.marketplace-table {
+  table-layout: fixed;
+  margin-top: 10px;
+}
+
+.marketplace-table th:nth-child(1),
+.marketplace-table td:nth-child(1) {
+  width: 28%;
+}
+
+.marketplace-table th:nth-child(2),
+.marketplace-table td:nth-child(2) {
+  width: 24%;
+}
+
+.marketplace-table th:nth-child(3),
+.marketplace-table td:nth-child(3) {
+  width: 30%;
+}
+
+.marketplace-table th:nth-child(4),
+.marketplace-table td:nth-child(4) {
+  width: 18%;
+}
+
+.marketplace-name {
+  font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-subline {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-link {
+  color: var(--color-cyan-hover);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.marketplace-link:hover,
+.marketplace-link:focus-visible {
+  text-decoration: underline;
+}
+
+.marketplace-empty-cell {
+  padding: 18px 12px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.marketplace-field {
+  display: grid;
+  gap: 6px;
+}
+
+.marketplace-field span {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.marketplace-field-wide {
+  grid-column: 1 / -1;
+}
+
+.marketplace-textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+@media (max-width: 840px) {
+  .marketplace-table th:nth-child(1),
+  .marketplace-table td:nth-child(1),
+  .marketplace-table th:nth-child(2),
+  .marketplace-table td:nth-child(2),
+  .marketplace-table th:nth-child(3),
+  .marketplace-table td:nth-child(3),
+  .marketplace-table th:nth-child(4),
+  .marketplace-table td:nth-child(4) {
+    width: auto;
+  }
+}

@@ -8,6 +8,11 @@ import {
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 import { runSfuPublisherStallRecoveryLadder } from '../../sfu/stallRecoveryLadder.ts';
+import {
+  isScreenShareMediaSource,
+  isScreenShareUserId,
+  screenShareOwnerOrUserId,
+} from '../../screenShareIdentity.js';
 
 export function createCallWorkspaceRuntimeHealthHelpers({
   callbacks,
@@ -112,6 +117,17 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       bumpMediaRenderVersion();
     }
     return true;
+  }
+
+  function isScreenSharePeer(peer, payload = {}) {
+    const peerUserId = Number(peer?.userId || 0);
+    const publisherUserId = Number(peer?.publisherUserId || peer?.publisher_user_id || 0);
+    const payloadPublisherUserId = Number(payload?.publisher_user_id || payload?.publisherUserId || 0);
+    return isScreenShareUserId(peerUserId)
+      || isScreenShareUserId(publisherUserId)
+      || isScreenShareUserId(payloadPublisherUserId)
+      || isScreenShareMediaSource(peer?.mediaSource || peer?.media_source)
+      || isScreenShareMediaSource(payload?.publisher_media_source || payload?.publisherMediaSource);
   }
 
   function retrySfuSubscription(publisherId, peer, reason, nowMs = Date.now()) {
@@ -219,7 +235,19 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
-    const targetUserId = Number(peer?.userId || 0);
+    const peerUserId = Number(peer?.userId || 0);
+    const publisherUserId = Number(peer?.publisherUserId || peer?.publisher_user_id || 0);
+    const payloadPublisherUserId = Number(payload?.publisher_user_id || payload?.publisherUserId || 0);
+    const screenShareOwnerUserId = Number(peer?.screenShareOwnerUserId || peer?.screen_share_owner_user_id || 0);
+    const isScreenShareRecovery = isScreenSharePeer(peer, payload);
+    const targetUserId = Number(isScreenShareRecovery
+      ? screenShareOwnerOrUserId(
+        screenShareOwnerUserId
+          || publisherUserId
+          || payloadPublisherUserId
+          || peerUserId
+      )
+      : peerUserId);
     const localUserId = Number(currentUserId.value || 0);
     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
     const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_remote_video_frozen');
@@ -278,10 +306,19 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       const lastReceivedFrameAtMs = Number(peer.lastReceivedFrameAtMs || 0);
       const lastDecodedFrameAtMs = Number(peer.lastDecodedFrameAtMs || 0);
       if (createdAtMs <= 0) continue;
+      const peerIsScreenShare = isScreenSharePeer(peer);
 
       if (frameCount > 0) {
         const decodedGapMs = lastDecodedFrameAtMs > 0 ? Math.max(0, nowMs - lastDecodedFrameAtMs) : Number.POSITIVE_INFINITY;
         if (decodedGapMs < remoteVideoFreezeThresholdMs) {
+          if (String(peer.mediaConnectionState || '') !== 'live' || String(peer.mediaConnectionMessage || '') !== '') {
+            setRemoteVideoStatus(peer, 'live', '', nowMs);
+          }
+          continue;
+        }
+        if (peerIsScreenShare && lastFrameAtMs > 0) {
+          peer.stalledLoggedAtMs = 0;
+          peer.freezeRecoveryCount = 0;
           if (String(peer.mediaConnectionState || '') !== 'live' || String(peer.mediaConnectionMessage || '') !== '') {
             setRemoteVideoStatus(peer, 'live', '', nowMs);
           }
