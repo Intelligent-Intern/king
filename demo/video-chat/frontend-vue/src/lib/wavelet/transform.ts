@@ -18,8 +18,8 @@ declare global {
   }
 }
 
-import { createWaveletCodec, WaveletCodec } from './webrtc-shim.js'
-import { debugLog, debugWarn } from '../../support/debugLogs.js'
+import { createWaveletCodec, WaveletCodec } from './webrtc-shim.ts'
+import { debugLog, debugWarn } from '../../support/debugLogs.ts'
 
 export interface WaveletTransformConfig {
   quality: number

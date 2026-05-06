@@ -22,8 +22,8 @@ function read(relativePath) {
 
 async function main() {
   const packageJson = read('package.json');
-  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.js');
-  const benchmarkSource = read('src/domain/realtime/local/publisherReadbackBudgetBenchmark.js');
+  const sourceReadback = read('src/domain/realtime/local/publisherSourceReadback.ts');
+  const benchmarkSource = read('src/domain/realtime/local/publisherReadbackBudgetBenchmark.ts');
 
   requireContains(packageJson, 'sfu-high-motion-readback-budget-contract.mjs', 'SFU contract suite includes high-motion readback proof');
   requireContains(sourceReadback, 'workerResult.drawImageMs > drawBudgetMs || workerResult.readbackMs > readbackBudgetMs', 'Offscreen worker readback is budget gated');
@@ -42,10 +42,10 @@ async function main() {
   });
 
   try {
-    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
-    const capabilities = await server.ssrLoadModule('/src/domain/realtime/local/capturePipelineCapabilities.js');
-    const benchmark = await server.ssrLoadModule('/src/domain/realtime/local/publisherReadbackBudgetBenchmark.js');
-    const domPolicy = await server.ssrLoadModule('/src/domain/realtime/local/domCanvasFallbackPolicy.js');
+    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
+    const capabilities = await server.ssrLoadModule('/src/domain/realtime/local/capturePipelineCapabilities.ts');
+    const benchmark = await server.ssrLoadModule('/src/domain/realtime/local/publisherReadbackBudgetBenchmark.ts');
+    const domPolicy = await server.ssrLoadModule('/src/domain/realtime/local/domCanvasFallbackPolicy.ts');
 
     const { PUBLISHER_CAPTURE_BACKENDS } = capabilities;
     const profileIds = ['rescue', 'realtime', 'balanced', 'quality'];

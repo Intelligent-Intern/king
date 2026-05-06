@@ -430,7 +430,7 @@ if test "$PHP_KING" != "no"; then
     AC_CHECK_FILE([$ext_srcdir/../libcurl/include/curl/curl.h], [
         PHP_ADD_INCLUDE([$ext_srcdir/../libcurl/include])
     ], [
-        AC_MSG_WARN([curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers.])
+        AC_MSG_NOTICE([curl headers are not available under ../libcurl/include; this build will fall back to installed libcurl headers.])
     ])
     PHP_ADD_LIBRARY([dl], [1], [KING_SHARED_LIBADD])
 

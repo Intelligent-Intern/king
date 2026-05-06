@@ -52,12 +52,12 @@ try {
   assert.ok(imageSegmenterWorker.includes('/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite'), 'Image segmenter worker must use the vendored multiclass model path');
   assert.ok(!imageSegmenterWorker.includes('/cdn/vendor/mediapipe/selfie_segmentation/'), 'Image segmenter worker must not use the legacy SelfieSegmentation assets');
 
-  const backgroundStream = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.js'));
+  const backgroundStream = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.ts'));
   assert.ok(backgroundStream.includes("import { createWorkerSegmenterBackend } from './backendWorkerSegmenter';"), 'Background stream must use the worker segmenter backend');
   assert.ok(!backgroundStream.includes('backendMediapipe'), 'Background stream must not import the legacy MediaPipe backend');
   assert.ok(!backgroundStream.includes('backendTfjs'), 'Background stream must not import the legacy TensorFlow backend');
 
-  for (const removedBackend of ['backendMediapipe.js', 'backendTfjs.js', 'backend.js', 'backendSelector.js']) {
+  for (const removedBackend of ['backendMediapipe.js', 'backendTfjs.js', 'backend.js', 'backendSelector.js', 'backendMediapipe.ts', 'backendTfjs.ts', 'backend.ts', 'backendSelector.ts']) {
     assert.ok(!fs.existsSync(path.join(frontendRoot, 'src/domain/realtime/background', removedBackend)), `${removedBackend} must not be restored`);
   }
 
@@ -83,7 +83,7 @@ try {
   const viteConfig = readUtf8(path.join(frontendRoot, 'vite.config.js'));
   assert.ok(!viteConfig.includes("external: ['@mediapipe/tasks-vision']"), 'Vite worker build must not externalize tasks-vision');
 
-  const preferences = readUtf8(path.join(frontendRoot, 'src/domain/realtime/media/preferences.js'));
+  const preferences = readUtf8(path.join(frontendRoot, 'src/domain/realtime/media/preferences.ts'));
   assert.ok(preferences.includes('/assets/orgas/kingrt/social/invitation-preview.png') || preferences.includes('/assets/images/bookshelf.png'), 'Image background preset must use an existing production asset');
 
   const edge = readUtf8(path.join(repoVideoChatRoot, 'edge/edge.php'));

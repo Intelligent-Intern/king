@@ -25,23 +25,23 @@ function readRepo(relativePath) {
 }
 
 try {
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
-  const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.js');
-  const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.js');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.ts');
+  const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const browserRenderer = read('src/domain/realtime/sfu/remoteBrowserEncodedVideo.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
-  const security = read('src/domain/realtime/media/security.js');
-  const securityCore = read('src/domain/realtime/media/securityCore.js');
-  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-  const lifecycle = read('src/domain/realtime/sfu/lifecycle.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.js');
+  const security = read('src/domain/realtime/media/security.ts');
+  const securityCore = read('src/domain/realtime/media/securityCore.ts');
+  const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const lifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const mediaSecurityTargets = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityTargets.ts');
   const packageJson = read('package.json');
   const backendSfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
 
@@ -56,10 +56,10 @@ try {
   requireContains(browserPublisher, 'resolveBrowserEncoderFrameSize(videoProfile, sourceFrame)', 'browser publisher derives encoder dimensions from the actual source VideoFrame');
   requireContains(browserEncoderConfig, 'resolveFramedFrameSizeFromDimensions', 'browser encoder config reuses portrait/cover frame sizing policy');
   requireContains(browserPublisher, 'videoFrameSourceDimensions(result.frame)', 'browser publisher observes real VideoFrame orientation before encode');
-  requireContains(browserPublisher, 'encoder.encode(primaryFrame || result.frame', 'browser publisher encodes a source-aspect VideoFrame without RGBA conversion');
+  requireContains(browserPublisher, 'activePrimaryEncoder.encode(primaryFrame || result.frame', 'browser publisher encodes a source-aspect VideoFrame without RGBA conversion');
   requireContains(browserPublisher, 'primaryFrame = primaryFrameScaler.createScaledFrame(result.frame', 'browser publisher scales portrait sources into a matching WebCodecs frame before encode');
   requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'browser publisher creates a scaled thumbnail VideoFrame without RGBA readback');
-  requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame', 'browser publisher encodes the scaled thumbnail VideoFrame');
+  requireContains(browserPublisher, 'activeThumbnailEncoder.encode(thumbnailFrame', 'browser publisher encodes the scaled thumbnail VideoFrame');
   requireContains(browserPublisher, 'closePublisherVideoFrame(result.frame)', 'browser publisher deterministically closes source VideoFrames');
   requireContains(browserPublisher, 'closePublisherVideoFrame(primaryFrame)', 'browser publisher deterministically closes scaled primary VideoFrames');
   requireContains(browserPublisher, 'closePublisherVideoFrame(thumbnailFrame)', 'browser publisher deterministically closes scaled thumbnail VideoFrames');
@@ -71,6 +71,27 @@ try {
   requireContains(browserPublisher, 'publisher_browser_encoder_layer', 'browser publisher emits backend telemetry for encoder layer');
   requireContains(browserPublisher, 'publisher_browser_encoder_thumbnail_enabled: true', 'browser publisher reports dual encoder activation');
   requireContains(browserPublisher, 'onProtectedBrowserEncoderFailure(error)', 'browser publisher reports fatal browser encoder errors');
+  requireContains(browserPublisher, 'function browserEncoderLifecycleCloseError(error)', 'browser publisher classifies encode calls racing expected encoder close/reconfigure lifecycle');
+  requireContains(browserPublisher, 'function normalizeProtectedBrowserVideoEncoderCloseReason(reason)', 'browser publisher normalizes expected lifecycle close reasons before closing encoders');
+  requireContains(browserPublisher, 'let activeEncoderGeneration = 0', 'browser publisher tracks the active WebCodecs encoder generation');
+  requireContains(browserPublisher, 'const isCurrentEncoderGeneration = (generation) =>', 'browser publisher exposes a current-generation guard for async encode work');
+  requireContains(browserPublisher, 'if (encoderGeneration !== activeEncoderGeneration) return;', 'browser publisher drops stale async encoder output/error callbacks');
+  requireContains(browserPublisher, 'const nextEncoderGeneration = activeEncoderGeneration + 1', 'browser publisher allocates a new generation before swapping encoder instances');
+  requireContains(browserPublisher, 'activeEncoderGeneration = nextEncoderGeneration', 'browser publisher publishes the new encoder generation before closing stale encoders');
+  requireContains(browserPublisher, 'activeEncoderGeneration += 1', 'browser publisher invalidates in-flight encodes when the publisher closes');
+  requireContains(browserPublisher, 'if (!isCurrentEncoderGeneration(encoderGeneration)) return;', 'browser publisher gates encode attempts and async completions on the current generation');
+  requireContains(browserPublisher, 'activePrimaryEncoder.encode(primaryFrame || result.frame', 'browser publisher encodes through the generation-bound primary encoder reference');
+  requireContains(browserPublisher, 'activeThumbnailEncoder.encode(thumbnailFrame', 'browser publisher encodes through the generation-bound thumbnail encoder reference');
+  requireContains(browserPublisher, 'await activePrimaryEncoder.flush()', 'browser publisher flushes only the generation-bound primary encoder reference');
+  requireContains(browserPublisher, 'await activeThumbnailEncoder.flush()', 'browser publisher flushes only the generation-bound thumbnail encoder reference');
+  requireContains(browserPublisher, "await close('protected_browser_video_profile_switch_close')", 'browser publisher has an explicit profile-switch close contract');
+  requireContains(browserPublisher, "await close('protected_browser_video_transport_reconnect_close')", 'browser publisher has an explicit transport-reconnect close contract');
+  requireContains(browserPublisher, "'protected_browser_video_background_pause_close'", 'browser publisher has an explicit background-pause close contract');
+  requireContains(browserPublisher, 'lifecycle_close_reason: activeEncoderCloseReason', 'browser publisher includes the normalized lifecycle close reason in diagnostics');
+  requireContains(browserPublisher, 'encoder_generation: activeEncoderGeneration', 'browser publisher includes the active encoder generation in lifecycle-close diagnostics');
+  requireContains(browserPublisher, "eventType: 'sfu_browser_encoder_lifecycle_close'", 'browser publisher emits a warning diagnostic for expected encoder lifecycle closes');
+  requireContains(browserPublisher, "await close('protected_browser_video_encoder_lifecycle_close')", 'browser publisher closes lifecycle-raced encoder state with a distinct close reason');
+  requireContains(browserPublisher, "new Error('sfu_browser_encoder_lifecycle_close')", 'browser publisher restarts compatibility publisher after lifecycle close without using the fatal encode-failure diagnostic');
   requireContains(browserPublisher, 'maybeStartProtectedBrowserVideoEncoderPublisher', 'browser publisher exposes compatibility fallback startup gate');
   requireContains(browserPublisher, 'gate.disabledUntilMs = Date.now() + 30_000', 'browser publisher temporarily disables failed browser encoder path before WLVC fallback');
   requireContains(sfuTransport, 'sfuBrowserEncoderCompatibilityDisabledUntilMs', 'SFU transport state tracks receiver-forced browser encoder compatibility fallback');
@@ -164,12 +185,12 @@ try {
   requireContains(framePayload, "'webcodecs_vp8'", 'frontend SFU payload normalization preserves webcodecs_vp8');
   requireContains(messageHandler, 'frameWidth: Math.max(0, integerField(0, msg.frameWidth, msg.frame_width))', 'message handler maps browser frame width');
   requireContains(messageHandler, 'frameHeight: Math.max(0, integerField(0, msg.frameHeight, msg.frame_height))', 'message handler maps browser frame height');
-  requireContains(security, "normalized === 'webcodecs_vp8'", 'media security normalizes browser codec id');
+  requireContains(security, "VALID_PROTECTED_CODEC_IDS = new Set(['wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8', 'wlvc_unknown'])", 'media security normalizes browser codec id');
   requireContains(securityCore, "'webcodecs_vp8'", 'protected header validator allows browser codec id');
   requireContains(backendSfuStore, "'wlvc_wasm', 'wlvc_ts', 'webcodecs_vp8'", 'backend SFU store preserves browser codec id');
   requireContains(backendSfuStore, 'publisher_browser_encoder_codec', 'backend SFU store preserves browser encoder telemetry');
   requireContains(
-    read('src/domain/realtime/local/publisherFrameTrace.js'),
+    read('src/domain/realtime/local/publisherFrameTrace.ts'),
     'if (!Array.isArray(trace.stages)) trace.stages = [];',
     'publisher trace stage marker must not crash hand-built browser encoder traces',
   );

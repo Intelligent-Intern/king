@@ -54,10 +54,10 @@ static zend_string *king_mcp_build_transport_target(king_mcp_state *state)
         && !(host_len >= 2 && host[0] == '[' && host[host_len - 1] == ']');
 
     if (needs_brackets) {
-        return strpprintf(0, "tcp://[%s]:%ld", host, state->port);
+        return strpprintf(0, "tcp://[%s]:" ZEND_LONG_FMT, host, state->port);
     }
 
-    return strpprintf(0, "tcp://%s:%ld", host, state->port);
+    return strpprintf(0, "tcp://%s:" ZEND_LONG_FMT, host, state->port);
 }
 
 static zend_long king_mcp_default_transport_timeout_ms(void)
@@ -86,10 +86,7 @@ static size_t king_mcp_remote_line_limit(void)
 
 static uint64_t king_mcp_monotonic_time_ms(void)
 {
-    struct timespec ts;
-
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return ((uint64_t) ts.tv_sec * 1000ULL) + ((uint64_t) ts.tv_nsec / 1000000ULL);
+    return king_hrtime_ms();
 }
 
 static zend_long king_mcp_control_timeout_budget_ms(const king_mcp_runtime_control_t *control)
@@ -451,4 +448,3 @@ static zend_result king_mcp_remote_connect(
     king_set_error("");
     return SUCCESS;
 }
-

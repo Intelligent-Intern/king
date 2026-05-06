@@ -20,10 +20,10 @@ function read(relativePath) {
 }
 
 async function main() {
-  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js');
-  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
+  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+  const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
 
   requireContains(sfuTransport, 'wlvcSourceReadbackFailureCount', 'SFU transport state keeps source-readback consecutive failure count');
   requireContains(publisherBackpressureController, "kind === 'source_readback_failure'", 'publisher controller has source-readback decision path');

@@ -175,7 +175,7 @@ Comparison outcome:
 - The current Kalman filter is stronger because it multiplies the Kalman gain by `SInv`, computes process-noise `dt4` locally, and removes stale module-level `dt2`/`dt3`/`dt4` constants.
 - The current codec test page keeps the experiment live-camera test intent but fixes the V-channel slice and removes unused Kalman result storage.
 - `codec-test.md` and `src/lib/wavelet/README.md` were removed from the active frontend tree and replaced by canonical docs under `documentation/dev/`.
-- `mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain in the current frontend.
+- `mediaRuntimeCapabilities.js` and `mediaRuntimeTelemetry.js` are present in the audited experiment boundary and remain as TypeScript modules in the current frontend.
 - The duplicate legacy `demo/video-chat/frontend/src/lib/**` experiment tree is not reintroduced; the active tree is `demo/video-chat/frontend-vue/**`.
 
 WASM MIME/cache-buster decision:
@@ -186,7 +186,7 @@ WASM MIME/cache-buster decision:
 
 Debug-log abstraction decision:
 - Keep the current production-safe debug abstraction in active codec hotpaths.
-- Active TypeScript codec, WASM wrapper, wavelet transform, wavelet processor, and Kalman processor files must use `debugLog`/`debugWarn` from `demo/video-chat/frontend-vue/src/support/debugLogs.js`.
+- Active TypeScript codec, WASM wrapper, wavelet transform, wavelet processor, and Kalman processor files must use `debugLog`/`debugWarn` from `demo/video-chat/frontend-vue/src/support/debugLogs.ts`.
 - Direct `console.*` calls are forbidden in active `src/lib/wasm`, `src/lib/wavelet`, and `src/lib/kalman` JavaScript/TypeScript hotpath files, except generated Emscripten glue `wlvc.js`.
 - `codec-test.html` remains a standalone manual diagnostic page and may keep browser-console diagnostics; it is not the production media hotpath.
 

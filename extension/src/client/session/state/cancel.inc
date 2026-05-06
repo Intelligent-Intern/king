@@ -56,7 +56,7 @@ zend_result king_client_session_mark_cancelled(
         snprintf(
             message,
             sizeof(message),
-            "%s() stream %ld is already locally cancelled.",
+            "%s() stream " ZEND_LONG_FMT " is already locally cancelled.",
             function_name,
             stream_id
         );

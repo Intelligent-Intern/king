@@ -279,6 +279,39 @@ SQL
     $ownerStrategyResult = videochat_layout_apply_command($pdo, $presenceState, $ownerConnection, $ownerStrategyCommand, $sender, 1_776_000_012_500);
     videochat_realtime_activity_layout_assert((bool) ($ownerStrategyResult['ok'] ?? false), 'owner layout strategy command should succeed');
 
+    $quietSpikeCommand = videochat_activity_decode_client_frame(json_encode([
+        'type' => 'participant/activity',
+        'user_id' => 1003,
+        'audio_level' => 1,
+        'speaking' => true,
+        'motion_score' => 1,
+        'gesture' => 'wave',
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_activity_apply_command($pdo, $presenceState, $quietConnection, $quietSpikeCommand, $sender, 1_776_000_012_700);
+    $sustainedSpeakerCommand = videochat_activity_decode_client_frame(json_encode([
+        'type' => 'participant/activity',
+        'user_id' => 1002,
+        'audio_level' => 0.72,
+        'speaking' => true,
+        'motion_score' => 0.02,
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_activity_apply_command($pdo, $presenceState, $speakerConnection, $sustainedSpeakerCommand, $sender, 1_776_000_013_000);
+    videochat_activity_apply_command($pdo, $presenceState, $speakerConnection, $sustainedSpeakerCommand, $sender, 1_776_000_013_300);
+    videochat_activity_apply_command($pdo, $presenceState, $speakerConnection, $sustainedSpeakerCommand, $sender, 1_776_000_013_600);
+    $rollingSnapshot = videochat_activity_layout_snapshot(
+        $pdo,
+        $callId,
+        $roomId,
+        videochat_presence_room_participants($presenceState, $roomId),
+        1_776_000_013_700
+    );
+    videochat_realtime_activity_layout_assert((int) (($rollingSnapshot['layout']['selection'] ?? [])['main_user_id'] ?? 0) === 1002, 'sustained speaker should beat a single spike in rolling top-k layout');
+    $rollingActivityByUserId = [];
+    foreach ((array) ($rollingSnapshot['activity'] ?? []) as $activityRow) {
+        $rollingActivityByUserId[(int) ($activityRow['user_id'] ?? 0)] = $activityRow;
+    }
+    videochat_realtime_activity_layout_assert((float) ($rollingActivityByUserId[1002]['topk_score_2s'] ?? 0) > (float) ($rollingActivityByUserId[1003]['topk_score_2s'] ?? 0), 'rolling top-k activity should rank sustained speech above a lone spike');
+
     $ownerSelectionCommand = videochat_layout_decode_client_frame(json_encode([
         'type' => 'layout/selection',
         'pinned_user_ids' => [1002],

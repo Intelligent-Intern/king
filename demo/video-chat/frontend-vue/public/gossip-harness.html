@@ -77,6 +77,18 @@
           <option v-for="peer in peers" :key="peer.id" :value="peer.id">{{ peer.label }}</option>
         </select>
       </label>
+      <label>
+        Fanout:
+        <input
+          v-model.number="fanout"
+          type="number"
+          min="1"
+          :max="MAX_FANOUT"
+          step="1"
+          :disabled="running"
+        />
+        <span>{{ activeFanout }} / {{ MAX_FANOUT }} max</span>
+      </label>
       <span>Source: {{ sourceMode }}</span>
       <label>
         Fault:
@@ -164,7 +176,8 @@
 
     const PEER_NAMES = ['Alice', 'Bob', 'Charlie', 'Diana'];
     const PEER_COLORS = ['#ef4444', '#0891b2', '#7c3aed', '#16a34a'];
-    const FANOUT = 2;
+    const DEFAULT_FANOUT = 4;
+    const MAX_FANOUT = 5;
     const INITIAL_TTL = 3;
     const FRAME_INTERVAL_MS = 180;
     const HEARTBEAT_INTERVAL_MS = 1000;
@@ -179,6 +192,7 @@
         const sourceMode = ref('stopped');
         const selectedPeerId = ref('peer_1');
         const faultPeerId = ref('peer_2');
+        const fanout = ref(DEFAULT_FANOUT);
         const events = ref([]);
         const peers = ref([]);
         const viewCanvasRefs = {};
@@ -200,6 +214,7 @@
             neighbors: [],
           };
         });
+        const activeFanout = computed(() => effectiveFanout(peers.value.map((peer) => peer.id)));
 
         function createPeer(index) {
           const id = `peer_${index + 1}`;
@@ -236,7 +251,7 @@
 
           logEvent('mesh', 'topology_change', 'ops', {
             peer_count: nextPeers.length,
-            fanout: FANOUT,
+            fanout: effectiveFanout(nextPeers.map((peer) => peer.id)),
             ttl: INITIAL_TTL,
           });
 
@@ -311,7 +326,13 @@
           const others = allPeerIds.filter((id) => id !== peerId).sort();
           const start = Math.max(0, others.findIndex((id) => id > peerId));
           const rotated = start >= 0 ? others.slice(start).concat(others.slice(0, start)) : others;
-          return rotated.slice(0, FANOUT);
+          return rotated.slice(0, effectiveFanout(allPeerIds));
+        }
+
+        function effectiveFanout(allPeerIds) {
+          const requestedFanout = Number.isFinite(Number(fanout.value)) ? Math.floor(Number(fanout.value)) : DEFAULT_FANOUT;
+          const boundedByHardCap = Math.min(MAX_FANOUT, Math.max(1, requestedFanout));
+          return Math.min(boundedByHardCap, Math.max(0, allPeerIds.length - 1));
         }
 
         function publishAllPeers() {
@@ -355,7 +376,7 @@
             return;
           }
           const neighbors = fromPeer.neighbors.filter((id) => id !== originPeerId || id === frame.publisher_id);
-          for (const targetPeerId of neighbors.slice(0, FANOUT)) {
+          for (const targetPeerId of neighbors.slice(0, effectiveFanout(peers.value.map((peer) => peer.id)))) {
             if (faultType.value === 'neighbor_failure' && fromPeerId === faultPeerId.value) {
               logEvent(fromPeerId, 'drop_data', 'data', frameEvent(frame, {
                 target_peer: targetPeerId,
@@ -423,7 +444,7 @@
           if (ttl > 0) {
             target.stats.forwarded += 1;
             logEvent(targetPeerId, 'forward', 'data', frameEvent(frame, {
-              fanout: FANOUT,
+              fanout: effectiveFanout(peers.value.map((peer) => peer.id)),
               ttl,
             }));
             deliverToNeighbors(targetPeerId, frame, ttl, forwardedFrom);
@@ -651,6 +672,9 @@
           sourceMode,
           selectedPeerId,
           faultPeerId,
+          fanout,
+          activeFanout,
+          MAX_FANOUT,
           selectedPeer,
           events,
           peers,

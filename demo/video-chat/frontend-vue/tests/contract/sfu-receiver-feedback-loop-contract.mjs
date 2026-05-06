@@ -20,11 +20,11 @@ function read(relativePath) {
 }
 
 try {
-  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 
   requireContains(receiverFeedback, 'RECEIVER_RENDER_LAG_PRESSURE_MS = 900', 'receiver render lag threshold');
   requireContains(receiverFeedback, 'maybeSendReceiverRenderLagFeedback', 'receiver render lag feedback helper');

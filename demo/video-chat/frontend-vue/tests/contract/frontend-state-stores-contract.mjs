@@ -8,7 +8,7 @@ import {
   createChatArchiveStore,
   createNoticeStore,
   createParticipantDirectoryStore,
-} from '../../src/domain/calls/dashboard/viewState.js';
+} from '../../src/domain/calls/dashboard/viewState.ts';
 
 function fail(message) {
   throw new Error(`[frontend-state-stores-contract] FAIL: ${message}`);

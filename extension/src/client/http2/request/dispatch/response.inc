@@ -233,11 +233,12 @@ static zend_result king_http2_request_collect_transfer_meta(
                 function_name
             );
         } else {
+            const char *curl_detail = king_http2_curl_error_detail(curl_code, response);
             king_http2_throw(
-                king_http2_map_curl_exception(curl_code),
+                king_http2_map_curl_exception_with_detail(curl_code, curl_detail),
                 "%s() libcurl HTTP/2 transfer failed: %s",
                 function_name,
-                king_http2_libcurl.curl_easy_strerror_fn(curl_code)
+                curl_detail
             );
         }
 
@@ -316,12 +317,12 @@ static zend_result king_http2_request_materialize_response(
     if (response->status_line == NULL) {
         char status_line_buffer[64];
 
-        snprintf(status_line_buffer, sizeof(status_line_buffer), "HTTP/2 %ld", response_code);
+        snprintf(status_line_buffer, sizeof(status_line_buffer), "HTTP/2 " ZEND_LONG_FMT, (zend_long) response_code);
         response->status_line = zend_string_init(status_line_buffer, strlen(status_line_buffer), 0);
     }
 
     array_init(return_value);
-    add_assoc_long(return_value, "status", response_code);
+    add_assoc_long(return_value, "status", (zend_long) response_code);
     add_assoc_str(return_value, "status_line", response->status_line);
     response->status_line = NULL;
     add_assoc_zval(return_value, "headers", &response->headers);

@@ -295,7 +295,7 @@ static zend_result king_stream_object_build_http1_url(
     if (strchr(ZSTR_VAL(session->host), ':') != NULL) {
         *url_out = strpprintf(
             0,
-            "http://[%s]:%ld%s",
+            "http://[%s]:" ZEND_LONG_FMT "%s",
             ZSTR_VAL(session->host),
             session->port,
             ZSTR_VAL(intern->request_path)
@@ -303,7 +303,7 @@ static zend_result king_stream_object_build_http1_url(
     } else {
         *url_out = strpprintf(
             0,
-            "http://%s:%ld%s",
+            "http://%s:" ZEND_LONG_FMT "%s",
             ZSTR_VAL(session->host),
             session->port,
             ZSTR_VAL(intern->request_path)
@@ -312,4 +312,3 @@ static zend_result king_stream_object_build_http1_url(
 
     return SUCCESS;
 }
-

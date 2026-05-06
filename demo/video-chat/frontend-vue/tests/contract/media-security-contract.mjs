@@ -7,7 +7,7 @@ import {
   createMediaSecuritySession,
   MEDIA_SECURITY_SIGNAL_TYPES,
   mediaSecurityInternalsForTests,
-} from '../../src/domain/realtime/media/security.js';
+} from '../../src/domain/realtime/media/security.ts';
 
 function fail(message) {
   throw new Error(`[media-security-frontend-contract] FAIL: ${message}`);
@@ -402,16 +402,16 @@ try {
     'receiver must reject protected frames when codec identity mismatches the transport envelope',
   );
 
-  const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.js');
-  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.js');
-  const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.js');
-  const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.js');
-  const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.js');
-  const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const mediaSecurityParticipantSetSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityParticipantSet.js');
-  const securitySource = read('../../src/domain/realtime/media/security.js');
-  const securityCoreSource = read('../../src/domain/realtime/media/securityCore.js');
+  const mediaSecurityRuntimeSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
+  const runtimeConfigSource = read('../../src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const orchestrationSource = read('../../src/domain/realtime/workspace/callWorkspace/orchestration.ts');
+  const publisherPipelineSource = read('../../src/domain/realtime/local/publisherPipeline.ts');
+  const frameDecodeSource = read('../../src/domain/realtime/sfu/frameDecode.ts');
+  const sfuLifecycleSource = read('../../src/domain/realtime/sfu/lifecycle.ts');
+  const mediaStackSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const mediaSecurityParticipantSetSource = read('../../src/domain/realtime/workspace/callWorkspace/mediaSecurityParticipantSet.ts');
+  const securitySource = read('../../src/domain/realtime/media/security.ts');
+  const securityCoreSource = read('../../src/domain/realtime/media/securityCore.ts');
   assert.match(mediaSecurityRuntimeSource, /function scheduleMediaSecurityParticipantSync\(reason = 'unspecified', forceRekey = false\)/, 'media-security runtime must expose a scheduled participant sync helper');
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('context_changed'\);/, 'media-security runtime must resync after session context resets');
   assert.match(orchestrationSource, /scheduleMediaSecurityParticipantSync\('context_watch'\);/, 'workspace orchestration must resync media security when call or room context changes');
@@ -422,7 +422,11 @@ try {
   assert.match(mediaSecurityRuntimeSource, /function mediaSecurityHandshakeRetryTimeoutMsForAttempt\(retryAttempt\)/, 'handshake retry watchdog must derive timeout from retry attempt');
   assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.set\(normalizedTargetId, retryAttempt \+ 1\);/, 'handshake retry watchdog must advance retry attempt after each timeout');
   assert.match(mediaSecurityRuntimeSource, /state\.mediaSecurityHandshakeRetryCountByUserId\.delete\(normalizedSenderUserId\);/, 'handshake retry watchdog must reset retry attempts when sender-key is accepted');
+  assert.match(mediaSecurityRuntimeSource, /function mediaSecurityErrorCode\(error\)[\s\S]*message\.includes\('participant_set_mismatch'\)[\s\S]*return 'participant_set_mismatch';/m, 'media-security runtime must normalize verbose participant-set mismatch errors into a stable recovery code');
+  assert.match(securitySource, /isParticipantSetMismatchError\(error\)[\s\S]*\.includes\('participant_set_mismatch'\)/m, 'media-security core must detect wrapped participant-set mismatch messages emitted by browser runtimes');
   assert.match(mediaSecurityRuntimeSource, /message\.includes\('participant_set_mismatch'\)/, 'media-security recovery must treat participant-set churn as a reconnectable key path');
+  assert.match(mediaSecurityRuntimeSource, /clearMediaSecuritySignalCaches\(\);[\s\S]*requestRoomSnapshot\(\);[\s\S]*startMediaSecurityHandshakeWatchdog\(\);[\s\S]*scheduleMediaSecurityParticipantSync\('sync_participant_set_recover'/m, 'participant-set mismatch recovery must clear stale signal caches, refresh the authoritative room snapshot, restart the handshake watchdog, and schedule a follow-up sync');
+  assert.match(mediaSecurityRuntimeSource, /eventType: 'media_security_participant_set_recover'[\s\S]*code: 'media_security_participant_set_recover'/m, 'participant-set mismatch recovery must emit a durable diagnostic event for deploy log triage');
   assert.match(mediaSecurityRuntimeSource, /function queueMediaSecuritySyncAfterInFlight\(forceRekey = false\)[\s\S]*state\.mediaSecuritySyncPending = true;[\s\S]*state\.mediaSecuritySyncPendingForceRekey = Boolean\(state\.mediaSecuritySyncPendingForceRekey \|\| forceRekey\);/m, 'media-security runtime must not drop participant-set syncs that arrive while a join rekey is already in flight');
   assert.match(mediaSecurityRuntimeSource, /if \(state\.mediaSecuritySyncInFlight\) \{[\s\S]*queueMediaSecuritySyncAfterInFlight\(forceRekey\);[\s\S]*return;[\s\S]*\}/m, 'media-security runtime must queue in-flight sync churn instead of returning permanently stale participant transcripts');
   assert.match(mediaSecurityRuntimeSource, /scheduleMediaSecurityParticipantSync\('pending_after_inflight', shouldForceRekey\);/, 'queued media-security churn must run a follow-up sync after the active rekey completes');

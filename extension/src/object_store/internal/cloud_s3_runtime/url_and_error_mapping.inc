@@ -126,11 +126,11 @@ static zend_bool king_object_store_s3_response_is_throttled(
         return 0;
     }
 
-    if (response->status_code == 429) {
+    if ((zend_long) response->status_code == 429) {
         return 1;
     }
 
-    if (response->status_code != 503) {
+    if ((zend_long) response->status_code != 503) {
         return 0;
     }
 
@@ -154,11 +154,11 @@ static zend_bool king_object_store_s3_response_is_quota_exhausted(
         return 0;
     }
 
-    if (response->status_code == 507) {
+    if ((zend_long) response->status_code == 507) {
         return 1;
     }
 
-    if (response->status_code != 403 && response->status_code != 409) {
+    if ((zend_long) response->status_code != 403 && (zend_long) response->status_code != 409) {
         return 0;
     }
 
@@ -195,18 +195,18 @@ static void king_object_store_s3_format_response_error(
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 %s for '%s' was rejected because the configured endpoint reported exhausted quota (HTTP %ld).",
+                "cloud_s3 %s for '%s' was rejected because the configured endpoint reported exhausted quota (HTTP " ZEND_LONG_FMT ").",
                 safe_operation,
                 object_id,
-                status_code
+                (zend_long) status_code
             );
         } else {
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 %s was rejected because the configured endpoint reported exhausted quota (HTTP %ld).",
+                "cloud_s3 %s was rejected because the configured endpoint reported exhausted quota (HTTP " ZEND_LONG_FMT ").",
                 safe_operation,
-                status_code
+                (zend_long) status_code
             );
         }
         return;
@@ -217,18 +217,18 @@ static void king_object_store_s3_format_response_error(
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 credentials were rejected during %s for '%s' (HTTP %ld).",
+                "cloud_s3 credentials were rejected during %s for '%s' (HTTP " ZEND_LONG_FMT ").",
                 safe_method,
                 object_id,
-                status_code
+                (zend_long) status_code
             );
         } else {
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 credentials were rejected during %s (HTTP %ld).",
+                "cloud_s3 credentials were rejected during %s (HTTP " ZEND_LONG_FMT ").",
                 safe_operation,
-                status_code
+                (zend_long) status_code
             );
         }
         return;
@@ -239,18 +239,18 @@ static void king_object_store_s3_format_response_error(
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 %s for '%s' was throttled by the configured endpoint (HTTP %ld).",
+                "cloud_s3 %s for '%s' was throttled by the configured endpoint (HTTP " ZEND_LONG_FMT ").",
                 safe_operation,
                 object_id,
-                status_code
+                (zend_long) status_code
             );
         } else {
             snprintf(
                 error,
                 error_size,
-                "cloud_s3 %s was throttled by the configured endpoint (HTTP %ld).",
+                "cloud_s3 %s was throttled by the configured endpoint (HTTP " ZEND_LONG_FMT ").",
                 safe_operation,
-                status_code
+                (zend_long) status_code
             );
         }
         return;
@@ -260,10 +260,10 @@ static void king_object_store_s3_format_response_error(
         snprintf(
             error,
             error_size,
-            "cloud_s3 %s for '%s' returned HTTP %ld.",
+            "cloud_s3 %s for '%s' returned HTTP " ZEND_LONG_FMT ".",
             safe_method,
             object_id,
-            status_code
+            (zend_long) status_code
         );
         return;
     }
@@ -271,9 +271,9 @@ static void king_object_store_s3_format_response_error(
     snprintf(
         error,
         error_size,
-        "cloud_s3 %s returned HTTP %ld.",
+        "cloud_s3 %s returned HTTP " ZEND_LONG_FMT ".",
         safe_operation,
-        status_code
+        (zend_long) status_code
     );
 }
 

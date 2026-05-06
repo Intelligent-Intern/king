@@ -28,8 +28,8 @@ const outboundFrameBudget = read('../../src/lib/sfu/outboundFrameBudget.ts');
 const framePayload = read('../../src/lib/sfu/framePayload.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
-const backendOrigin = read('../../src/support/backendOrigin.js');
-const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
+const backendOrigin = read('../../src/support/backendOrigin.ts');
+const socketLifecycle = read('../../src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
 const stackEnv = read('../../../.env');
 const deployScript = read('../../../scripts/deploy.sh');
 
@@ -109,7 +109,7 @@ try {
   requireContains(inboundFrameAssembler, "reject_reason: 'payload_length_mismatch'", 'direct frame advertised length validation');
 
   requireContains(sfuMessageHandler, "import { stringField, type SfuInboundFrameAssembler } from './inboundFrameAssembler'", 'camel/snake inbound helper import');
-  requireContains(inboundFrameAssembler, 'export function stringField(...values: any[]): string {', 'shared camel/snake inbound helper');
+  requireContains(inboundFrameAssembler, 'export function stringField(...values: unknown[]): string {', 'shared camel/snake inbound helper');
   requireContains(sfuMessageHandler, 'roomId:          stringField(msg.roomId, msg.room_id)', 'room event camel/snake compatibility');
   requireContains(sfuMessageHandler, 'publisherId:     stringField(msg.publisherId, msg.publisher_id)', 'publisher event camel/snake compatibility');
   requireContains(sfuMessageHandler, 'publisherUserId: stringField(msg.publisherUserId, msg.publisher_user_id)', 'publisher user event camel/snake compatibility');

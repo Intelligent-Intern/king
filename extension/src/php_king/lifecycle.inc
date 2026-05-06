@@ -7,23 +7,28 @@
 PHP_MINIT_FUNCTION(king)
 {
     if (king_init_modules(type, module_number) != SUCCESS) {
+        php_error_docref(NULL, E_WARNING, "king_init_modules failed during MINIT");
         return FAILURE;
     }
 
     if (king_proto_registry_minit() != SUCCESS) {
+        php_error_docref(NULL, E_WARNING, "king_proto_registry_minit failed during MINIT");
         return FAILURE;
     }
     if (king_semantic_dns_registry_minit() != SUCCESS) {
+        php_error_docref(NULL, E_WARNING, "king_semantic_dns_registry_minit failed during MINIT");
         king_proto_registry_mshutdown();
         return FAILURE;
     }
     if (king_cdn_cache_registry_minit() != SUCCESS) {
+        php_error_docref(NULL, E_WARNING, "king_cdn_cache_registry_minit failed during MINIT");
         king_semantic_dns_registry_mshutdown();
         king_proto_registry_mshutdown();
         return FAILURE;
     }
 
     if (king_iibin_minit() != SUCCESS) {
+        php_error_docref(NULL, E_WARNING, "king_iibin_minit failed during MINIT");
         king_cdn_cache_registry_mshutdown();
         king_semantic_dns_registry_mshutdown();
         king_proto_registry_mshutdown();
