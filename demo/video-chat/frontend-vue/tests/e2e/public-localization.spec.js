@@ -69,6 +69,23 @@ async function installPublicLocalizationRoutes(page) {
       return;
     }
 
+    if (url.pathname.startsWith('/api/appointment-calendar/public/') && url.pathname.endsWith('/book') && request.method() === 'POST') {
+      await route.fulfill(jsonResponse({
+        status: 'ok',
+        result: {
+          booking: { join_path: '/join/booked-public-localization' },
+          join_path: '/join/booked-public-localization',
+          call: {
+            id: 'booked-public-localization',
+            title: 'Video call',
+            starts_at: '2026-01-02T09:00:00.000Z',
+            ends_at: '2026-01-02T10:00:00.000Z',
+          },
+        },
+      }));
+      return;
+    }
+
     await route.fulfill({ status: 404, contentType: 'application/json', body: JSON.stringify({ status: 'error' }) });
   });
 }
@@ -87,18 +104,22 @@ test('public booking resolves locale and direction without an authenticated sess
       expect(hasHorizontalOverflow, `${viewport.name} ${locale} should not horizontally overflow`).toBe(false);
 
       if (viewport.name === 'mobile' && locale === 'en') {
-        const calendar = page.locator('.appointment-booking-calendar');
-        const form = page.locator('.appointment-booking-form');
-        await expect(calendar).toBeVisible();
-        await expect(form).toBeVisible();
-        const calendarBox = await calendar.boundingBox();
-        const formBox = await form.boundingBox();
-        expect(calendarBox, 'mobile booking calendar must have a layout box').not.toBeNull();
-        expect(formBox, 'mobile booking form must have a layout box').not.toBeNull();
-        expect(
-          calendarBox.y + calendarBox.height <= formBox.y + 1,
-          'mobile booking calendar must end before the form starts',
-        ).toBe(true);
+        await expect(page.locator('.appointment-mobile-flow')).toBeVisible();
+        await expect(page.locator('.appointment-mobile-day-btn')).toHaveCount(1);
+        await expect(page.locator('.appointment-booking-calendar')).toHaveCount(0);
+        await expect(page.locator('.appointment-booking-form')).toHaveCount(0);
+        await page.locator('.appointment-slot-btn').click();
+        await page.getByRole('button', { name: /next/i }).click();
+        await expect(page.locator('.appointment-booking-form')).toBeVisible();
+        await page.locator('input[autocomplete="given-name"]').fill('Alex');
+        await page.locator('input[autocomplete="family-name"]').fill('Tester');
+        await page.locator('input[autocomplete="email"]').fill('alex@example.test');
+        await page.locator('input[type="checkbox"]').check();
+        await page.getByRole('button', { name: /confirm appointment/i }).click();
+        await expect(page.getByRole('heading', { name: /booking confirmed/i })).toBeVisible();
+        await expect(page.getByRole('link', { name: /open video call/i })).toHaveAttribute('href', /\/join\/booked-public-localization$/);
+        await expect(page.getByRole('link', { name: /google calendar/i })).toBeVisible();
+        await expect(page.getByRole('button', { name: /ical/i })).toBeVisible();
       }
     }
   }
