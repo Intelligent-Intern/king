@@ -120,7 +120,7 @@ const { openTour, tourButtonLabel, tourDefinition } = useOnboardingDriver({
 
 .app-page-header h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 14px;
   font-weight: 700;
 }
 
