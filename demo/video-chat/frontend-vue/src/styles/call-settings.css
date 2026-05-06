@@ -139,6 +139,30 @@
   direction: rtl;
 }
 
+.call-left-panel-switch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1px;
+  background: var(--bg-video);
+}
+
+.call-left-panel-tab {
+  min-width: 0;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: var(--bg-surface-strong);
+  color: var(--text-muted);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.call-left-panel-tab:hover,
+.call-left-panel-tab.active {
+  background: var(--color-border);
+  color: var(--text-primary);
+}
+
 .call-left-settings > * {
   direction: var(--app-content-direction);
 }

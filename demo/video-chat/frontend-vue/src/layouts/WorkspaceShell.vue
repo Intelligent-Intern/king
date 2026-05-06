@@ -17,7 +17,34 @@
             </button>
           </div>
 
-          <div class="call-left-settings">
+          <div class="call-left-panel-switch" role="tablist" aria-label="Call sidebar">
+            <button
+              class="call-left-panel-tab"
+              :class="{ active: callLeftPanel === 'settings' }"
+              type="button"
+              @click="callLeftPanel = 'settings'"
+            >
+              Settings
+            </button>
+            <button
+              class="call-left-panel-tab"
+              :class="{ active: callLeftPanel === 'call_apps' }"
+              type="button"
+              @click="callLeftPanel = 'call_apps'"
+            >
+              Call Apps
+            </button>
+          </div>
+
+          <CallAppsSidebarPanel
+            v-if="callLeftPanel === 'call_apps'"
+            :call-id="activeSidebarCallId"
+            :can-manage="canManageSidebarCallApps"
+            :api-request="apiRequest"
+            @session-created="handleCallAppSessionCreated"
+          />
+
+          <div v-else class="call-left-settings">
             <section class="call-left-settings-block" aria-label="Camera">
               <div class="call-left-settings-title">Camera</div>
               <div class="call-left-settings-field">
@@ -616,6 +643,7 @@ import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
+import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
 import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
 import {
@@ -636,7 +664,7 @@ import {
   syncI18nDocumentState,
   t,
 } from '../modules/localization/i18nRuntime.js';
-import { currentBackendOrigin, fetchBackend } from '../support/backendFetch';
+import { apiRequest } from '../domain/realtime/workspace/api';
 import {
   appearanceState,
   loadWorkspaceAppearance,
@@ -823,70 +851,6 @@ function normalizeCallAccessMode(value) {
   return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
 }
 
-function requestHeaders(withBody = false) {
-  const headers = { accept: 'application/json' };
-  if (withBody) headers['content-type'] = 'application/json';
-
-  const token = String(sessionState.sessionToken || '').trim();
-  if (token !== '') {
-    headers.authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
-
-function extractErrorMessage(payload, fallback) {
-  if (payload && typeof payload === 'object') {
-    const message = payload?.error?.message;
-    if (typeof message === 'string' && message.trim() !== '') {
-      return message.trim();
-    }
-  }
-  return fallback;
-}
-
-function buildApiRequestError(payload, fallbackMessage, responseStatus = 0) {
-  const error = new Error(extractErrorMessage(payload, fallbackMessage));
-  error.responseStatus = Number(responseStatus) || 0;
-  error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
-  return error;
-}
-
-async function apiRequest(path, { method = 'GET', query = null, body = null } = {}) {
-  let response = null;
-  try {
-    const result = await fetchBackend(path, {
-      method,
-      query,
-      headers: requestHeaders(body !== null),
-      body: body === null ? undefined : JSON.stringify(body),
-    });
-    response = result.response;
-  } catch (error) {
-    const message = error instanceof Error ? error.message.trim() : '';
-    if (message === '' || /failed to fetch|socket|connection/i.test(message)) {
-      throw new Error(`Could not reach backend (${currentBackendOrigin()}).`);
-    }
-    throw new Error(message);
-  }
-
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    throw buildApiRequestError(payload, `Request failed (${response.status}).`, response.status);
-  }
-
-  if (!payload || payload.status !== 'ok') {
-    throw new Error('Backend returned an invalid payload.');
-  }
-
-  return payload;
-}
-
 function isoToLocalInput(isoValue) {
   if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
   const date = new Date(isoValue);
@@ -916,6 +880,7 @@ const callOwnerEditState = reactive({
   submitting: false,
   error: '',
   callId: '',
+  resolvedCallId: '',
   title: '',
   accessMode: 'invite_only',
   startsLocal: '',
@@ -959,6 +924,7 @@ const callLayoutSidebarState = reactive({
   setMode: null,
   setStrategy: null,
 });
+const callLeftPanel = ref('settings');
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
 const showCallOwnerInviteLink = computed(() => (
@@ -967,6 +933,8 @@ const showCallOwnerInviteLink = computed(() => (
   && normalizeCallAccessMode(callOwnerEditState.accessMode) === 'free_for_all'
 ));
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
+const activeSidebarCallId = computed(() => String(callOwnerEditState.callId || callOwnerEditState.resolvedCallId || '').trim());
+const canManageSidebarCallApps = computed(() => Boolean(callOwnerEditState.visible || callLayoutSidebarState.canModerate));
 
 function applySidebarLayoutMode(mode) {
   if (typeof callLayoutSidebarState.setMode !== 'function') return;
@@ -976,6 +944,10 @@ function applySidebarLayoutMode(mode) {
 function applySidebarLayoutStrategy(strategy) {
   if (typeof callLayoutSidebarState.setStrategy !== 'function') return;
   callLayoutSidebarState.setStrategy(strategy);
+}
+
+function handleCallAppSessionCreated() {
+  applySidebarLayoutMode('call_app_workspace');
 }
 
 function syncViewportState() {
@@ -1229,6 +1201,7 @@ function hydrateCallOwnerDraftFromCall(call) {
   const normalizedCall = call && typeof call === 'object' ? call : {};
 
   callOwnerEditState.callId = String(normalizedCall.id || '').trim();
+  callOwnerEditState.resolvedCallId = callOwnerEditState.callId;
   callOwnerEditState.title = String(normalizedCall.title || '').trim();
   callOwnerEditState.accessMode = normalizeCallAccessMode(normalizedCall.access_mode);
   callOwnerEditState.startsLocal = isoToLocalInput(String(normalizedCall.starts_at || ''));
@@ -1280,6 +1253,8 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.loadingContext = false;
     callOwnerEditState.contextError = '';
     callOwnerEditState.callId = '';
+    callOwnerEditState.resolvedCallId = '';
+    callLeftPanel.value = 'settings';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
     resetCallOwnerInviteLinkState();
@@ -1292,6 +1267,7 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.loadingContext = false;
     callOwnerEditState.contextError = '';
     callOwnerEditState.callId = '';
+    callOwnerEditState.resolvedCallId = '';
     resetCallOwnerInviteLinkState();
     return;
   }
@@ -1306,6 +1282,7 @@ async function refreshCallOwnerContext() {
     const ownerUserId = Number(call?.owner?.user_id || 0);
     const isOwner = Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === ownerUserId;
     callOwnerEditState.visible = isOwner;
+    callOwnerEditState.resolvedCallId = String(call?.id || '').trim();
 
     if (isOwner) {
       hydrateCallOwnerDraftFromCall(call);
@@ -1320,6 +1297,7 @@ async function refreshCallOwnerContext() {
     if (sequence !== callOwnerContextSeq) return;
     callOwnerEditState.visible = false;
     callOwnerEditState.callId = '';
+    callOwnerEditState.resolvedCallId = '';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
     resetCallOwnerInviteLinkState();
