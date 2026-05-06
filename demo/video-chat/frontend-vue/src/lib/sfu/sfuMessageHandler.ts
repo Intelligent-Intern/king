@@ -212,6 +212,7 @@ export function handleSfuClientMessage(ctx: SfuClientMessageHandlerContext, msg:
           chunkCount: Math.max(1, integerField(1, msg.chunkCount, msg.chunk_count)),
           frameId: stringField(msg.frameId, msg.frame_id),
           senderSentAtMs: Math.max(0, integerField(0, msg.senderSentAtMs, msg.sender_sent_at_ms)),
+          publisherJoinStartedAtMs: Math.max(0, integerField(0, msg.publisherJoinStartedAtMs, msg.publisher_join_started_at_ms)),
           codecId: stringField(msg.codecId, msg.codec_id),
           runtimeId: stringField(msg.runtimeId, msg.runtime_id),
           publisherMediaSource: stringField(msg.publisherMediaSource, msg.publisher_media_source),

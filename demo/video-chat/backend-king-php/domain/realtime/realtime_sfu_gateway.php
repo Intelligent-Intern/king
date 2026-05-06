@@ -288,6 +288,7 @@ function videochat_handle_sfu_routes(
         'role' => $role,
         'tracks' => [],
         'layer_preferences' => [],
+        'session_protocol' => [],
     ];
     if ($role === 'publisher') {
         $sfuRooms[$roomStateKey]['publishers'][$clientId] = &$sfuClients[$clientId];
@@ -348,6 +349,10 @@ function videochat_handle_sfu_routes(
         'control_transport' => videochat_sfu_control_transport_id(),
         'media_transport' => videochat_sfu_fallback_media_transport_id(),
         'media_transport_role' => 'fallback_until_real_media_plane',
+        'session_protocol' => videochat_sfu_session_protocol_name(),
+        'session_protocol_version' => videochat_sfu_session_protocol_version(),
+        'join_visible_slo_ms' => videochat_sfu_join_visible_slo_ms(),
+        'session_capabilities_required' => false,
         'server_time' => time(),
     ]));
 
@@ -697,6 +702,17 @@ function videochat_handle_sfu_routes(
             $msgType = (string) ($command['type'] ?? '');
 
             switch ($msgType) {
+                case 'sfu/session-hello':
+                    $sessionAcceptance = videochat_sfu_build_session_acceptance($msg, [
+                        'room_id' => $roomId,
+                        'tenant_id' => $tenantId,
+                        'publisher_id' => (string) $clientId,
+                        'publisher_user_id' => $userIdString,
+                    ]);
+                    $sfuClients[$clientId]['session_protocol'] = $sessionAcceptance;
+                    king_websocket_send($websocket, json_encode($sessionAcceptance, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+                    break;
+
                 case 'sfu/join':
                     break;
 
@@ -710,6 +726,11 @@ function videochat_handle_sfu_routes(
                         'kind' => $kind,
                         'label' => $label,
                     ];
+                    king_websocket_send($websocket, json_encode(videochat_sfu_build_track_acceptance($msg, [
+                        'room_id' => $roomId,
+                        'publisher_id' => (string) $clientId,
+                        'publisher_user_id' => $userIdString,
+                    ]), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                     $activeSfuDatabase = $ensureBrokerDatabase();
                     if ($activeSfuDatabase instanceof PDO) {
                         try {

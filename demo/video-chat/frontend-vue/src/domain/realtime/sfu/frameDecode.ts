@@ -34,6 +34,7 @@ import {
 } from './remoteJitterBuffer';
 import { clearSfuKeyframeRecoveryCoordinator } from './keyframeRecoveryCoordinator.ts';
 import { mediaSecurityPublisherUserIdForFrame } from './screenShareFrameIdentity';
+import { maybeReportFirstRemoteFrameVisible } from './joinVisibilitySlo';
 
 export function createSfuFrameDecodeHelpers({
   captureClientDiagnostic,
@@ -443,6 +444,13 @@ export function createSfuFrameDecodeHelpers({
         outgoing_video_quality_profile: String(frame?.outgoingVideoQualityProfile || ''),
       });
     }
+    maybeReportFirstRemoteFrameVisible({
+      peer,
+      frame,
+      renderedAtMs,
+      mediaRuntimePath: mediaRuntimePathRef.value,
+      captureClientDiagnostic,
+    });
     markRemotePeerRenderable(peer);
     if (
       (previousConnectionState !== 'live' || previousConnectionMessage !== '')
