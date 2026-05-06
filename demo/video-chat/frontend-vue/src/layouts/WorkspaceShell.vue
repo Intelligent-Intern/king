@@ -298,7 +298,6 @@
               <div class="actions">
                 <template v-if="route.path === '/admin/overview'">
                   <button class="btn btn-cyan" type="button" @click="openCallsRegistry">{{ t('common.open_calls') }}</button>
-                  <button class="btn btn-cyan" type="button" @click="openGrafana">{{ t('common.open_grafana') }}</button>
                 </template>
                 <button
                   v-else-if="route.name === 'user-dashboard'"
@@ -1870,10 +1869,6 @@ onBeforeUnmount(() => {
 
 function openCallsRegistry() {
   router.push('/admin/calls');
-}
-
-function openGrafana() {
-  window.open('https://grafana.example.local', '_blank', 'noopener,noreferrer');
 }
 
 function openUserCreateCall() {
