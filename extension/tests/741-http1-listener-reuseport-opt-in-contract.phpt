@@ -11,24 +11,44 @@ if (!is_readable('/proc/net/tcp')) {
     return;
 }
 
-$checkReusePort = @proc_open(
-    ['python3', '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
-    [
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
-    ],
-    $reusePortPipes
-);
-$probe = false;
-if (is_resource($checkReusePort)) {
-    stream_get_contents($reusePortPipes[1]);
-    stream_get_contents($reusePortPipes[2]);
-    foreach ($reusePortPipes as $pipe) {
-        fclose($pipe);
+function king_http1_python_reuseport_probe(): bool
+{
+    $candidates = [];
+    $envPython = getenv('PYTHON');
+    if (is_string($envPython) && trim($envPython) !== '') {
+        $candidates[] = trim($envPython);
     }
-    $probe = proc_close($checkReusePort) === 0;
+    $candidates[] = 'python3';
+    $candidates[] = '/usr/bin/python3';
+    $candidates[] = '/usr/local/bin/python3';
+
+    foreach (array_values(array_unique($candidates)) as $candidate) {
+        $process = @proc_open(
+            [$candidate, '-c', "import socket; raise SystemExit(0 if hasattr(socket, 'SO_REUSEPORT') else 1)"],
+            [
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes
+        );
+        if (!is_resource($process)) {
+            continue;
+        }
+
+        stream_get_contents($pipes[1]);
+        stream_get_contents($pipes[2]);
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        if (proc_close($process) === 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
-if (!$probe) {
+
+if (!king_http1_python_reuseport_probe()) {
     echo "skip python3 with socket.SO_REUSEPORT is required";
 }
 ?>
@@ -87,7 +107,23 @@ finally:
     sock.close()
 PY;
 
-    $command = 'python3 -c ' . escapeshellarg($script) . ' ' . (int) $port;
+    $python3 = null;
+    foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+        if ($directory === '') {
+            continue;
+        }
+
+        $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+        if (is_file($candidate) && is_executable($candidate)) {
+            $python3 = $candidate;
+            break;
+        }
+    }
+    if ($python3 === null) {
+        throw new RuntimeException('python3 is required for duplicate bind probe');
+    }
+
+    $command = [$python3, '-c', $script, (string) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],

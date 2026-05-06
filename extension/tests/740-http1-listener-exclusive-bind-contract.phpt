@@ -107,7 +107,23 @@ finally:
     sock.close()
 PY;
 
-    $command = ['python3', '-c', $script, (string) $port];
+    $python3 = null;
+    foreach (explode(PATH_SEPARATOR, (string) getenv('PATH')) as $directory) {
+        if ($directory === '') {
+            continue;
+        }
+
+        $candidate = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'python3';
+        if (is_file($candidate) && is_executable($candidate)) {
+            $python3 = $candidate;
+            break;
+        }
+    }
+    if ($python3 === null) {
+        throw new RuntimeException('python3 is required for duplicate bind probe');
+    }
+
+    $command = [$python3, '-c', $script, (string) $port];
     $process = proc_open($command, [
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],

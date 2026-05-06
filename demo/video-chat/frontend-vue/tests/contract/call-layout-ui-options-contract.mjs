@@ -5,7 +5,7 @@ import {
   layoutModeOptionsFor,
   layoutStrategyLabel,
   layoutStrategyOptionsFor,
-} from '../../src/domain/realtime/layout/uiOptions.js';
+} from '../../src/domain/realtime/layout/uiOptions.ts';
 
 function fail(message) {
   throw new Error(`[call-layout-ui-options-contract] FAIL: ${message}`);

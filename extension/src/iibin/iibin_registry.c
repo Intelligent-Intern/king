@@ -180,7 +180,7 @@ zend_result king_iibin_define_enum(
             zend_throw_exception_ex(
                 king_ce_validation_exception,
                 0,
-                "Enum '%s': Duplicate number %ld.",
+                "Enum '%s': Duplicate number " ZEND_LONG_FMT ".",
                 ZSTR_VAL(enum_name),
                 Z_LVAL_P(member_number)
             );

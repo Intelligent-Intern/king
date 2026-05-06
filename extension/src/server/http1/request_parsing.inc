@@ -332,7 +332,7 @@ static zend_result king_server_http1_parse_request_head(
     if (host_value == NULL) {
         host_value = strpprintf(
             0,
-            "%s:%ld",
+            "%s:" ZEND_LONG_FMT,
             ZSTR_VAL(session->host),
             session->port
         );

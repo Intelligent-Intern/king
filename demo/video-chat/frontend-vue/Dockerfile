@@ -49,6 +49,8 @@ RUN npm ci
 
 # Copy the rest of the files
 COPY demo/video-chat/frontend-vue/ ./
+COPY packages/iibin/dist/ /packages/iibin/dist/
+RUN npm run build
 
 # Vite's default dev port
 EXPOSE 5174

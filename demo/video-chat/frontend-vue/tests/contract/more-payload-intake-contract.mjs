@@ -42,8 +42,8 @@ try {
   requireContains(intakeDoc, 'binary-frame-aware SFU-client tracker', 'binary-aware stall tracker decision');
 
   const requiredCurrentFiles = [
-    'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.js',
-    'src/domain/realtime/workspace/callWorkspace/runtimeHealth.js',
+    'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts',
+    'src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts',
     'src/lib/sfu/outboundFrameBudget.ts',
     'src/lib/sfu/sendFailureDetails.ts',
     'src/lib/sfu/sfuMessageHandler.ts',
@@ -59,8 +59,6 @@ try {
   for (const relativePath of requiredCurrentFiles) {
     requireExists(frontendRoot, relativePath);
   }
-
-  requireAbsent(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
 
   process.stdout.write('[more-payload-intake-contract] PASS\n');
 } catch (error) {

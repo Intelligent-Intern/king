@@ -10,7 +10,7 @@ import {
   wlvcDecodeFrame,
   wlvcEncodeFrame,
   wlvcFrameToHex,
-} from '../../src/support/wlvcFrame.js';
+} from '../../src/support/wlvcFrame.ts';
 
 function fail(message) {
   throw new Error(`[wlvc-runtime-regression-contract] FAIL: ${message}`);
@@ -122,19 +122,19 @@ try {
   assert.equal(v2Delta.frame.frame_type, 1);
   assert.equal(v2Delta.frame.header_length, WLVC_HEADER_BYTES_V2);
 
-  const capabilities = readFromFrontend('src/domain/realtime/media/runtimeCapabilities.js');
+  const capabilities = readFromFrontend('src/domain/realtime/media/runtimeCapabilities.ts');
   requireContains(capabilities, "preferredPath = 'wlvc_wasm'", 'WLVC preferred runtime');
   requireContains(capabilities, "preferredPath = 'webrtc_native'", 'native fallback runtime');
   requireContains(capabilities, "preferredPath = 'unsupported'", 'unsupported fail-closed runtime');
   requireContains(capabilities, 'const stageA = Boolean(wlvcWasm.encoder)', 'WLVC stage A gate');
   requireContains(capabilities, 'const stageB = Boolean(webRtcNative)', 'native stage B gate');
 
-  const callMediaPreferences = readFromFrontend('src/domain/realtime/media/preferences.js');
+  const callMediaPreferences = readFromFrontend('src/domain/realtime/media/preferences.ts');
   requireContains(callMediaPreferences, 'outgoing_video_quality_profile', 'outgoing video quality profile persists in call media preferences');
   requireContains(callMediaPreferences, 'CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION', 'outgoing video quality migration version is explicit');
   requireContains(callMediaPreferences, 'export function setCallOutgoingVideoQualityProfile(profile)', 'call media preferences export outgoing video quality setter');
 
-  const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.js');
+  const workspaceConfig = readFromFrontend('src/domain/realtime/workspace/config.ts');
   requireContains(workspaceConfig, 'export const SFU_VIDEO_QUALITY_PROFILES', 'WLVC video quality profiles exist');
   requireContains(workspaceConfig, 'rescue: Object.freeze({', 'WLVC backpressure has a low-bitrate rescue profile');
   assert.ok(!workspaceConfig.includes('export const SFU_VIDEO_QUALITY_PROFILE_OPTIONS'), 'WLVC quality profiles must not be exported as user-facing select options');
@@ -146,8 +146,8 @@ try {
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_HIGH_WATER_BYTES', 'WLVC encode loop has backpressure high-water mark');
   requireContains(workspaceConfig, 'export const SFU_WLVC_SEND_BUFFER_CRITICAL_BYTES', 'WLVC encode loop has backpressure critical mark');
 
-  const runtimeSwitching = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.js');
-  const runtimeConfig = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
+  const runtimeSwitching = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+  const runtimeConfig = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   requireContains(runtimeConfig, "realtime: 'rescue'", 'WLVC auto-downgrade can leave realtime when websocket pressure persists');
   requireContains(runtimeSwitching, "if (!['wlvc_wasm', 'webrtc_native', 'unsupported'].includes(normalizedNextPath))", 'runtime path allow-list');
   requireContains(runtimeSwitching, "if (normalizedNextPath === 'wlvc_wasm' && !refs.mediaRuntimeCapabilities.value.stageA)", 'WLVC runtime capability gate');
@@ -160,8 +160,8 @@ try {
   requireContains(runtimeSwitching, 'await startEncodingPipeline(videoTrack);', 'WLVC switch restarts local encode pipeline');
   requireContains(runtimeSwitching, "return switchMediaRuntimePath('webrtc_native', reason);", 'native fallback runtime switch');
 
-  const runtimeHealth = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-  const videoConnectionStatus = readFromFrontend('src/domain/realtime/sfu/videoConnectionStatus.js');
+  const runtimeHealth = readFromFrontend('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const videoConnectionStatus = readFromFrontend('src/domain/realtime/sfu/videoConnectionStatus.ts');
   requireContains(runtimeHealth, "return mediaRuntimePath.value === 'wlvc_wasm';", 'WLVC runtime path helper');
   requireContains(runtimeHealth, "return mediaRuntimePath.value === 'webrtc_native';", 'native runtime path helper');
   requireContains(runtimeHealth, 'if (!mediaSecuritySessionClass.supportsNativeTransforms()) {', 'native audio bridge requires native transforms');
@@ -171,14 +171,14 @@ try {
   requireContains(videoConnectionStatus, "eventType: 'sfu_remote_video_stable'", 'remote video stable status is routed to backend diagnostics');
   requireContains(videoConnectionStatus, 'local_user_id: normalizeUserId(currentUserId)', 'remote video status includes local participant identity');
 
-  const nativeSignaling = readFromFrontend('src/domain/realtime/native/signaling.js');
+  const nativeSignaling = readFromFrontend('src/domain/realtime/native/signaling.ts');
   requireContains(nativeSignaling, "if (sfuRuntimeEnabled() && String(mediaRuntimePath.value || '').trim() !== 'webrtc_native') {", 'native signaling will not hijack WLVC runtime');
 
   const workspace = readFromFrontend('src/domain/realtime/CallWorkspaceView.vue');
   const workspaceStage = readFromFrontend('src/domain/realtime/CallWorkspaceStage.css');
-  const layoutStrategies = readFromFrontend('src/domain/realtime/layout/strategies.js');
-  const mediaStack = readFromFrontend('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const videoLayout = readFromFrontend('src/domain/realtime/workspace/callWorkspace/videoLayout.js');
+  const layoutStrategies = readFromFrontend('src/domain/realtime/layout/strategies.ts');
+  const mediaStack = readFromFrontend('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const videoLayout = readFromFrontend('src/domain/realtime/workspace/callWorkspace/videoLayout.ts');
   requireContains(workspace, "import { createCallWorkspaceRuntimeSwitchingHelpers }", 'workspace must use extracted runtime switching helper');
   requireContains(layoutStrategies, "const remoteMainUserId = mode === 'main_mini'", 'main+mini layout must prefer remote participant as main video');
   requireContains(layoutStrategies, "mainUserId === Number(currentUserId)", 'main+mini layout must not keep unpinned local self as main video');

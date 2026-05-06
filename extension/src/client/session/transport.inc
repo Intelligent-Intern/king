@@ -103,7 +103,7 @@ static zend_result king_client_session_open_udp_transport(
     hints.ai_family = AF_UNSPEC;
     hints.ai_flags = AI_ADDRCONFIG;
 
-    snprintf(port_buffer, sizeof(port_buffer), "%ld", port);
+    snprintf(port_buffer, sizeof(port_buffer), ZEND_LONG_FMT, port);
     gai_status = getaddrinfo(host, port_buffer, &hints, &results);
     if (gai_status != 0) {
         session->transport_last_errno = gai_status;
@@ -154,7 +154,7 @@ static zend_result king_client_session_open_udp_transport(
     king_client_session_set_string(&session->transport_error_scope, "socket_connect");
     king_client_session_throw_transport_exception(
         king_ce_network_exception,
-        "%s() failed to connect a non-blocking UDP socket to '%s:%ld' (errno %d).",
+        "%s() failed to connect a non-blocking UDP socket to '%s:" ZEND_LONG_FMT "' (errno %d).",
         function_name,
         host,
         port,

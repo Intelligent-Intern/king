@@ -21,9 +21,9 @@ function read(relativePath) {
 }
 
 async function main() {
-  const workspaceConfigSource = read('src/domain/realtime/workspace/config.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
+  const workspaceConfigSource = read('src/domain/realtime/workspace/config.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
   const publisherBudgetSource = `${publisherPipeline}\n${publisherFrameTrace}`;
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
 
@@ -44,7 +44,7 @@ async function main() {
   });
 
   try {
-    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
+    const config = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
     const profiles = config.SFU_VIDEO_QUALITY_PROFILES;
     const budgets = config.SFU_VIDEO_QUALITY_PROFILE_BUDGETS;
 

@@ -21,21 +21,21 @@ function read(relativePath) {
 }
 
 async function main() {
-  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.js');
-  const localMediaPermissionPolicy = read('src/domain/realtime/local/localMediaPermissionPolicy.js');
-  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.js');
-  const workspaceConfig = read('src/domain/realtime/workspace/config.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.js');
-  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.js');
-  const audioCaptureConstraints = read('src/domain/realtime/media/audioCaptureConstraints.js');
+  const mediaOrchestration = read('src/domain/realtime/local/mediaOrchestration.ts');
+  const localMediaPermissionPolicy = read('src/domain/realtime/local/localMediaPermissionPolicy.ts');
+  const captureProfileConstraints = read('src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
+  const workspaceConfig = read('src/domain/realtime/workspace/config.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
+  const audioCaptureConstraints = read('src/domain/realtime/media/audioCaptureConstraints.ts');
   const accessJoinView = read('src/domain/calls/access/JoinView.vue');
-  const dashboardEnterCall = read('src/domain/calls/dashboard/enterCall.js');
-  const adminEnterCall = read('src/domain/calls/admin/enterCall.js');
+  const dashboardEnterCall = read('src/domain/calls/dashboard/enterCall.ts');
+  const adminEnterCall = read('src/domain/calls/admin/enterCall.ts');
   const workspaceShell = read('src/layouts/WorkspaceShell.vue');
-  const mediaPreferences = read('src/domain/realtime/media/preferences.js');
+  const mediaPreferences = read('src/domain/realtime/media/preferences.ts');
   const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
-  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.js');
+  const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
 
   requireContains(mediaStack, 'captureClientDiagnostic: callbacks.captureClientDiagnostic', 'media stack passes diagnostics into local media orchestration');
   requireContains(captureProfileConstraints, 'videoTrack.getSettings()', 'capture profile constraints read browser-reported track settings');
@@ -89,13 +89,13 @@ async function main() {
   });
 
   try {
-    const { SFU_VIDEO_QUALITY_PROFILES } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.js');
-    const { resolveContainFrameSizeFromDimensions } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.js');
-    const { buildCallAudioCaptureConstraints } = await server.ssrLoadModule('/src/domain/realtime/media/audioCaptureConstraints.js');
+    const { SFU_VIDEO_QUALITY_PROFILES } = await server.ssrLoadModule('/src/domain/realtime/workspace/config.ts');
+    const { resolveContainFrameSizeFromDimensions } = await server.ssrLoadModule('/src/domain/realtime/local/videoFrameSizing.ts');
+    const { buildCallAudioCaptureConstraints } = await server.ssrLoadModule('/src/domain/realtime/media/audioCaptureConstraints.ts');
     const {
       applySfuVideoProfileConstraintsToStream,
       buildSfuVideoProfileTrackConstraints,
-    } = await server.ssrLoadModule('/src/domain/realtime/local/sfuCaptureProfileConstraints.js');
+    } = await server.ssrLoadModule('/src/domain/realtime/local/sfuCaptureProfileConstraints.ts');
     const quality = SFU_VIDEO_QUALITY_PROFILES.quality;
     const realtime = SFU_VIDEO_QUALITY_PROFILES.realtime;
     const rescue = SFU_VIDEO_QUALITY_PROFILES.rescue;

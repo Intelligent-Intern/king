@@ -24,16 +24,16 @@ const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 
 try {
-  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.js');
-  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.js');
-  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
-  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.js');
-  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.js');
-  const remotePeers = read('src/domain/realtime/sfu/remotePeers.js');
-  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.js');
-  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.js');
-  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
+  const receiverFeedback = read('src/domain/realtime/sfu/receiverFeedback.ts');
+  const remoteCanvas = read('src/domain/realtime/sfu/remoteCanvas.ts');
+  const remotePeers = read('src/domain/realtime/sfu/remotePeers.ts');
+  const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
+  const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const template = read('src/domain/realtime/CallWorkspaceView.template.html');
   const stageCss = read('src/domain/realtime/CallWorkspaceStage.css');
@@ -45,8 +45,9 @@ try {
   requireContains(runtimeConfig, "'call/media-quality-pressure'", 'targeted remote quality-pressure signaling type');
 
   requireContains(runtimeHealth, "setRemoteVideoStatus(peer, 'recovering', 'Reconnecting video', nowMs);", 'remote recovery status update');
-  requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_frozen', nowMs);", 'frozen video resubscribe retry');
-  requireContains(runtimeHealth, "retrySfuSubscription(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs);", 'fresh receive/keyframe-wait resubscribe retry');
+  requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_frozen', nowMs", 'frozen video targets publisher recovery ladder before reconnect');
+  requireContains(runtimeHealth, "recoverSfuPublisherBeforeReconnect(publisherId, peer, 'remote_video_decoder_waiting_keyframe', nowMs", 'fresh receive/keyframe-wait targets publisher recovery ladder before reconnect');
+  requireContains(runtimeHealth, 'resubscribe: (targetPublisherId, recoveryReason, recoveryNowMs) => retrySfuSubscription(', 'publisher recovery ladder starts with resubscribe retry');
   requireContains(runtimeHealth, "eventType: 'sfu_remote_video_decoder_waiting_keyframe'", 'fresh receive/keyframe-wait diagnostic');
   requireContains(runtimeHealth, 'function sendRemoteSfuVideoQualityPressure', 'remote freezes can request sender-side quality downgrade');
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
@@ -103,7 +104,7 @@ try {
   requireNotContains(remotePeers, 'clearDecodedCanvas(peer);', 'rollover clearing the displayed remote canvas');
   requireContains(remotePeers, 'setSfuRemotePeer(normalizedPublisherId, updatedPeer, resolvedPreviousPublisherId)', 'frame alias adoption moves peer to new publisher id');
   requireContains(mediaStack, 'bumpMediaRenderVersion,', 'runtime health and frame decode receive media render invalidation');
-  requireContains(sfuClient, 'private markPublisherFrameReceived(msg: any', 'SFU client tracks publisher frame freshness');
+  requireContains(sfuClient, 'private markPublisherFrameReceived(msg: SfuClientMessage', 'SFU client tracks publisher frame freshness');
   requireContains(sfuClient, "if (stringField(msg?.type) !== 'sfu/frame') return", 'publisher frame tracker keys off normalized SFU frame messages');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'binary frame envelopes flow through the same SFU message handler');
   requireContains(sfuClient, 'this.markPublisherFrameReceived(msg)', 'publisher frame tracker runs for binary-decoded and JSON SFU frames');

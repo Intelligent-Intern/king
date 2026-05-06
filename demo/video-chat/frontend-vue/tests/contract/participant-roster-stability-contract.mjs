@@ -32,8 +32,8 @@ function functionBody(source, name) {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const roomStatePath = path.resolve(__dirname, '../../src/domain/realtime/workspace/callWorkspace/roomState.js');
-const rosterPath = path.resolve(__dirname, '../../src/domain/realtime/workspace/roster.js');
+const roomStatePath = path.resolve(__dirname, '../../src/domain/realtime/workspace/callWorkspace/roomState.ts');
+const rosterPath = path.resolve(__dirname, '../../src/domain/realtime/workspace/roster.ts');
 const roomStateSource = fs.readFileSync(roomStatePath, 'utf8');
 const rosterSource = fs.readFileSync(rosterPath, 'utf8');
 

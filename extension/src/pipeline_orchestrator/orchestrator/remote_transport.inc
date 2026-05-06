@@ -83,7 +83,7 @@ static zend_result king_orchestrator_enforce_max_concurrency(
     snprintf(
         message,
         sizeof(message),
-        "%s() cannot exceed the active orchestrator max_concurrency of %ld while %zu run(s) are already in flight.",
+        "%s() cannot exceed the active orchestrator max_concurrency of " ZEND_LONG_FMT " while %zu run(s) are already in flight.",
         function_name,
         control->max_concurrency,
         active_runs

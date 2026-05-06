@@ -26,14 +26,14 @@ function readRepo(relativePath) {
 
 try {
   const packageJson = read('package.json');
-  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.js');
+  const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
   const framePayload = read('src/lib/sfu/framePayload.ts');
   const messageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const sfuTypes = read('src/lib/sfu/sfuTypes.ts');
   const sfuClientTransportSample = read('src/lib/sfu/sfuClientTransportSample.ts');
-  const remoteJitterBuffer = read('src/domain/realtime/sfu/remoteJitterBuffer.js');
-  const remoteRenderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.js');
-  const frameDecode = read('src/domain/realtime/sfu/frameDecode.js');
+  const remoteJitterBuffer = read('src/domain/realtime/sfu/remoteJitterBuffer.ts');
+  const remoteRenderScheduler = read('src/domain/realtime/sfu/remoteRenderScheduler.ts');
+  const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
   const sfuStore = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_store.php');
   const sfuSubscriberBudget = readRepo('demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_subscriber_budget.php');
 
@@ -41,16 +41,16 @@ try {
 
   requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'primary', frameSize })", 'browser publisher builds a primary encoder config from source-oriented frame size');
   requireContains(browserPublisher, "buildBrowserEncoderConfig(videoProfile, { videoLayer: 'thumbnail', frameSize })", 'browser publisher builds a thumbnail encoder config from source-oriented frame size');
-  requireContains(browserPublisher, 'const createThumbnailEncoder = () => new VideoEncoderCtor({', 'browser publisher creates a second thumbnail encoder');
+  requireContains(browserPublisher, 'const createThumbnailEncoder = (encoderGeneration) => new VideoEncoderCtor({', 'browser publisher creates a generation-bound second thumbnail encoder');
   requireContains(browserPublisher, 'thumbnailFrame = thumbnailFrameScaler.createScaledFrame(result.frame', 'thumbnail encoder receives a scaled VideoFrame derived from the direct source frame');
-  requireContains(browserPublisher, 'thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });', 'thumbnail encoder consumes the scaled VideoFrame before close');
+  requireContains(browserPublisher, 'activeThumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });', 'thumbnail encoder consumes the scaled VideoFrame before close');
   assert.ok(
-    browserPublisher.indexOf('encoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });')
+    browserPublisher.indexOf('activePrimaryEncoder.encode(primaryFrame || result.frame, { keyFrame: forceKeyframe });')
       < browserPublisher.indexOf('closePublisherVideoFrame(result.frame)'),
     'primary encode must happen before source VideoFrame close',
   );
   assert.ok(
-    browserPublisher.indexOf('thumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });')
+    browserPublisher.indexOf('activeThumbnailEncoder.encode(thumbnailFrame, { keyFrame: thumbnailForceKeyframe });')
       < browserPublisher.indexOf('closePublisherVideoFrame(thumbnailFrame)'),
     'thumbnail encode must happen before scaled thumbnail VideoFrame close',
   );

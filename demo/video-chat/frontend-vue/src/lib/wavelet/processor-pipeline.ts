@@ -3,8 +3,8 @@
  * Processes camera stream through wavelet codec and outputs a new stream
  */
 
-import { createWaveletCodec } from './webrtc-shim.js'
-import { debugWarn } from '../../support/debugLogs.js'
+import { createWaveletCodec } from './webrtc-shim.ts'
+import { debugWarn } from '../../support/debugLogs.ts'
 
 export interface WaveletProcessorConfig {
   quality: number

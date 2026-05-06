@@ -126,7 +126,7 @@ PHP_FUNCTION(king_semantic_dns_query)
         zend_throw_exception_ex(
             king_ce_runtime_exception,
             0,
-            "king_semantic_dns_query() could not produce a full response within %ld bytes.",
+            "king_semantic_dns_query() could not produce a full response within " ZEND_LONG_FMT " bytes.",
             max_response_bytes
         );
         RETURN_THROWS();

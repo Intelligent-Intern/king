@@ -14,10 +14,10 @@
  *   - JS wavelet: ~5x compression
  */
 
-import { createEncoder, createDecoder } from '../wavelet/codec.js'
-import { createKalmanFilter } from '../kalman/filter.js'
-import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder } from '../wasm/wasm-codec.js'
-import { debugLog, debugWarn } from '../../support/debugLogs.js'
+import { createEncoder, createDecoder } from '../wavelet/codec.ts'
+import { createKalmanFilter } from '../kalman/filter.ts'
+import { WasmWaveletVideoEncoder, WasmWaveletVideoDecoder } from '../wasm/wasm-codec.ts'
+import { debugLog, debugWarn } from '../../support/debugLogs.ts'
 
 export interface WaveletCodecConfig {
   quality: number

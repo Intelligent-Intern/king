@@ -136,6 +136,34 @@ const wasmStaticCompatibilityPlugin = () => {
 
 const allowedHosts = parseAllowedHosts(process.env.VIDEOCHAT_VUE_ALLOWED_HOSTS || '');
 const hostOptions = allowedHosts === undefined ? {} : { allowedHosts };
+const callWorkspaceChunkForId = (id) => {
+  const normalized = id.replace(/\\/g, '/');
+  if (normalized.includes('/node_modules/')) {
+    if (normalized.includes('/@vue/') || normalized.endsWith('/vue/dist/vue.runtime.esm-bundler.js')) {
+      return 'vendor-vue';
+    }
+    return 'vendor';
+  }
+  if (normalized.includes('/src/lib/wasm/') || normalized.includes('/src/domain/realtime/local/')) {
+    return 'call-workspace-capture';
+  }
+  if (normalized.includes('/src/lib/sfu/') || normalized.includes('/src/domain/realtime/sfu/')) {
+    return 'call-workspace-sfu';
+  }
+  if (
+    normalized.includes('/src/domain/realtime/media/security')
+    || normalized.includes('/src/domain/realtime/workspace/callWorkspace/mediaSecurity')
+  ) {
+    return 'call-workspace-security';
+  }
+  if (normalized.includes('/src/domain/realtime/native/') || normalized.includes('/src/domain/realtime/workspace/callWorkspace/nativeStack')) {
+    return 'call-workspace-native';
+  }
+  if (normalized.includes('/src/domain/realtime/workspace/callWorkspace/')) {
+    return 'call-workspace-runtime';
+  }
+  return undefined;
+};
 
 export default defineConfig({
   plugins: [assetVersionPlugin(),
@@ -158,6 +186,11 @@ export default defineConfig({
     'import.meta.env.VIDEOCHAT_ASSET_VERSION': JSON.stringify(buildAssetVersion),
   },
   build: {
+    rollupOptions: {
+      output: {
+        manualChunks: callWorkspaceChunkForId,
+      },
+    },
     sourcemap: productionSourcemap,
   },
   server: {

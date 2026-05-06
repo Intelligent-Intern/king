@@ -4,8 +4,19 @@
  * zeroization before a slot is reused.
  */
 
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#define KING_TICKET_RING_RANDOM_FILL_ARC4RANDOM 1
+#elif defined(__linux__)
+#define KING_TICKET_RING_RANDOM_FILL_GETRANDOM 1
+#else
+#define KING_TICKET_RING_RANDOM_FILL_DEV_URANDOM 1
+#endif
+
 static void king_best_effort_random_fill(void *buffer, size_t len)
 {
+#if defined(KING_TICKET_RING_RANDOM_FILL_ARC4RANDOM)
+    arc4random_buf(buffer, len);
+#elif defined(KING_TICKET_RING_RANDOM_FILL_GETRANDOM)
     unsigned char *cursor = (unsigned char *) buffer;
     size_t offset = 0;
 
@@ -21,6 +32,34 @@ static void king_best_effort_random_fill(void *buffer, size_t len)
 
         offset += (size_t) written;
     }
+#else
+    unsigned char *cursor = (unsigned char *) buffer;
+    size_t offset = 0;
+    int fd = open("/dev/urandom", O_RDONLY);
+
+    if (fd < 0) {
+        return;
+    }
+
+    while (offset < len) {
+        ssize_t read_len = read(fd, cursor + offset, len - offset);
+
+        if (read_len < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            break;
+        }
+
+        if (read_len == 0) {
+            break;
+        }
+
+        offset += (size_t) read_len;
+    }
+
+    close(fd);
+#endif
 }
 
 static void king_ticket_ring_shred_slot(king_ticket_ring_slot_t *slot)

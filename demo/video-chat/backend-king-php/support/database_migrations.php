@@ -647,6 +647,12 @@ WHERE status = 'booked'
 SQL,
             ],
         ],
+        30 => [
+            'name' => '0030_call_activity_sample_history',
+            'statements' => [
+                "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
+            ],
+        ],
     ];
 }
 

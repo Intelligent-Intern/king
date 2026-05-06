@@ -11,6 +11,8 @@ export const SFU_BINARY_FRAME_MAGIC = 'KSFB'
 export const SFU_BINARY_FRAME_ENVELOPE_VERSION = 1
 export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2
 export const SFU_BINARY_CONTINUATION_THRESHOLD_BYTES = 65535
+export const SFU_WLVC_JS_ASSET_VERSION = 'wlvc-js-abi-v2'
+export const SFU_WLVC_WASM_ABI_VERSION = 2
 
 export type SfuFrameType = 'keyframe' | 'delta'
 export type SfuProtectionMode = 'transport_only' | 'protected' | 'required'
@@ -103,6 +105,10 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
     : frame.transportMetrics)
   if (videoLayer !== '') payload.video_layer = videoLayer
   Object.assign(payload, transportMetrics)
+  if (runtimeId === 'wlvc_sfu') {
+    payload.wlvc_js_asset_version = SFU_WLVC_JS_ASSET_VERSION
+    payload.wlvc_wasm_abi_version = SFU_WLVC_WASM_ABI_VERSION
+  }
   const tilePatch = normalizeTilePatchMetadata(frame.tilePatch || frame)
   Object.assign(payload, flattenTilePatchMetadata(tilePatch))
 
@@ -179,6 +185,12 @@ export function prepareSfuOutboundFramePayload(frame: SfuOutboundFrameInput): Pr
       ...(videoLayer !== '' ? { video_layer: videoLayer } : {}),
       protection_mode: protectionMode,
       ...transportMetrics,
+      ...(runtimeId === 'wlvc_sfu'
+        ? {
+          wlvc_js_asset_version: SFU_WLVC_JS_ASSET_VERSION,
+          wlvc_wasm_abi_version: SFU_WLVC_WASM_ABI_VERSION,
+        }
+        : {}),
       raw_byte_length: rawByteLength,
       payload_bytes: payloadByteLength,
       payload_chars: payloadChars,
@@ -481,6 +493,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
   const payloadBytes = bytes.slice(offset, offset + payloadByteLength).buffer
   const tilePatch = parseTilePatchMetadataJson(metadataJson)
   const { codecId, runtimeId, transportMetrics } = parseSfuEnvelopeMetadata(metadataJson)
+  if (!isSfuWlvcAbiMetadataCompatible(codecId, runtimeId, transportMetrics)) return null
   const videoLayer = normalizeVideoLayer(transportMetrics.video_layer ?? transportMetrics.videoLayer)
 
   const protectedFrame = protectionMode === 'transport_only' ? null : arrayBufferToBase64Url(payloadBytes)
@@ -496,6 +509,7 @@ export function decodeSfuBinaryFrameEnvelope(input: ArrayBuffer): DecodedSfuBina
     runtimeId,
     videoLayer,
     tilePatch,
+    transportMetrics: normalizeTransportMetrics(transportMetrics),
     payload: {
       type: 'sfu/frame',
       protocol_version: protocolVersion,
@@ -601,6 +615,10 @@ function serializeSfuEnvelopeMetadata(input: {
     runtime_id: normalizeRuntimeId(input.runtimeId),
   }
   Object.assign(metadata, normalizeTransportMetrics(input.transportMetrics ?? input.metrics))
+  if (metadata.runtime_id === 'wlvc_sfu') {
+    metadata.wlvc_js_asset_version = SFU_WLVC_JS_ASSET_VERSION
+    metadata.wlvc_wasm_abi_version = SFU_WLVC_WASM_ABI_VERSION
+  }
   Object.assign(metadata, flattenTilePatchMetadata(tilePatch))
   return JSON.stringify(metadata)
 }
@@ -616,14 +634,32 @@ function parseSfuEnvelopeMetadata(value: string): {
       return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime', transportMetrics: {} }
     }
     const source = parsed as Record<string, unknown>
+    const transportMetrics = normalizeTransportMetrics(source)
+    if (source.wlvc_js_asset_version ?? source.wlvcJsAssetVersion) {
+      transportMetrics.wlvc_js_asset_version = source.wlvc_js_asset_version ?? source.wlvcJsAssetVersion
+    }
+    if (source.wlvc_wasm_abi_version ?? source.wlvcWasmAbiVersion) {
+      transportMetrics.wlvc_wasm_abi_version = source.wlvc_wasm_abi_version ?? source.wlvcWasmAbiVersion
+    }
     return {
       codecId: normalizeCodecId(source.codecId ?? source.codec_id),
       runtimeId: normalizeRuntimeId(source.runtimeId ?? source.runtime_id),
-      transportMetrics: normalizeTransportMetrics(source),
+      transportMetrics,
     }
   } catch {
     return { codecId: 'wlvc_unknown', runtimeId: 'unknown_runtime', transportMetrics: {} }
   }
+}
+
+export function isSfuWlvcAbiMetadataCompatible(codecId: unknown, runtimeId: unknown, metadata: Record<string, unknown> | null | undefined): boolean {
+  const normalizedRuntimeId = normalizeRuntimeId(runtimeId)
+  const normalizedCodecId = normalizeCodecId(codecId)
+  if (normalizedRuntimeId !== 'wlvc_sfu') return true
+  if (normalizedCodecId !== 'wlvc_wasm' && normalizedCodecId !== 'wlvc_ts' && normalizedCodecId !== 'wlvc_unknown') return false
+  const source = metadata && typeof metadata === 'object' ? metadata : {}
+  const abiVersion = normalizeNonNegativeInteger(source.wlvc_wasm_abi_version ?? source.wlvcWasmAbiVersion)
+  const jsAssetVersion = String(source.wlvc_js_asset_version ?? source.wlvcJsAssetVersion ?? '').trim()
+  return abiVersion === SFU_WLVC_WASM_ABI_VERSION && jsAssetVersion === SFU_WLVC_JS_ASSET_VERSION
 }
 
 function base64UrlEncodedLength(byteLength: number): number {

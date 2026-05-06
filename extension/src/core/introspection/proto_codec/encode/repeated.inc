@@ -27,7 +27,7 @@ static bool king_proto_runtime_encode_repeated_field(
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "Encoding failed: Required repeated field '%s' (tag %ld) must contain at least one item.",
+            "Encoding failed: Required repeated field '%s' (tag " ZEND_LONG_FMT ") must contain at least one item.",
             ZSTR_VAL(field->name),
             field->tag
         );
@@ -68,7 +68,7 @@ static bool king_proto_runtime_encode_packed_repeated_field(
         zend_throw_exception_ex(
             king_ce_validation_exception,
             0,
-            "Encoding failed: Required repeated field '%s' (tag %ld) must contain at least one item.",
+            "Encoding failed: Required repeated field '%s' (tag " ZEND_LONG_FMT ") must contain at least one item.",
             ZSTR_VAL(field->name),
             field->tag
         );

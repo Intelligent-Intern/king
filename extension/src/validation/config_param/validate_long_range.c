@@ -33,7 +33,7 @@ int kg_validate_long_range(zval *value, zend_long min_value, zend_long max_value
     
     if (val < min_value || val > max_value) {
         zend_throw_exception_ex(spl_ce_InvalidArgumentException, 0, 
-            "Configuration parameter must be between %ld and %ld, %ld given.", 
+            "Configuration parameter must be between " ZEND_LONG_FMT " and " ZEND_LONG_FMT ", " ZEND_LONG_FMT " given.",
             min_value, max_value, val);
         return FAILURE;
     }

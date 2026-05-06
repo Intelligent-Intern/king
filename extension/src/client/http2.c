@@ -20,6 +20,7 @@
 #include "include/config/config.h"
 #include "include/config/http2/base_layer.h"
 #include "include/config/tcp_transport/base_layer.h"
+#include "include/runtime/libcurl_candidates.h"
 #include "include/telemetry/telemetry.h"
 
 #include "Zend/zend_smart_str.h"
@@ -65,6 +66,7 @@ typedef struct _king_http2_response_buffer {
     smart_str body;
     zval headers;
     zend_string *status_line;
+    char error_buffer[CURL_ERROR_SIZE];
     size_t body_bytes;
     size_t header_bytes;
     bool headers_initialized;

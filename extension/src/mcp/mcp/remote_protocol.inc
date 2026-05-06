@@ -226,7 +226,7 @@ static zend_result king_mcp_remote_send_command(
 
     timeout_budget_ms = king_mcp_control_timeout_budget_ms(control);
     deadline_budget_ms = king_mcp_control_deadline_budget_ms(control);
-    smart_str_append_printf(&command, "\t%ld\t%ld", timeout_budget_ms, deadline_budget_ms);
+    smart_str_append_printf(&command, "\t" ZEND_LONG_FMT "\t" ZEND_LONG_FMT, timeout_budget_ms, deadline_budget_ms);
     smart_str_appendc(&command, '\n');
     smart_str_0(&command);
 
