@@ -306,7 +306,12 @@ SQL
         try {
             $pdo = $openDatabase();
             $probe = videochat_authenticate_request($pdo, $request, 'rest');
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            error_log(sprintf(
+                '[video-chat][auth] session probe failed exception=%s message=%s',
+                $exception::class,
+                $exception->getMessage()
+            ));
             return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
                 'reason' => 'internal_error',
             ]);
