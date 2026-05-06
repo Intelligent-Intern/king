@@ -55,7 +55,7 @@ Acceptance criteria:
 - The server does not perform normal media fanout.
 
 Tickets:
-- [ ] GSP-01 Runtime media carrier mode
+- [x] GSP-01 Runtime media carrier mode
   - Add `VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary|sfu_first|sfu_mirror`.
   - Expose a typed runtime config that states whether Gossip may publish without
     SFU readiness and whether SFU send is optional.
