@@ -240,7 +240,18 @@ $writeChunk = static function ($stream, string $buffer): array {
         restore_error_handler();
     }
 
-    if ($writeWarning !== null || $written === false || $written < 0) {
+    $fatalWriteWarning = false;
+    if ($writeWarning !== null) {
+        $message = strtolower($writeWarning);
+        $fatalWriteWarning = str_contains($message, 'broken pipe')
+            || str_contains($message, 'connection reset')
+            || str_contains($message, 'errno=32')
+            || str_contains($message, 'errno 32')
+            || str_contains($message, 'errno=104')
+            || str_contains($message, 'errno 104');
+    }
+
+    if ($fatalWriteWarning || $written === false || $written < 0) {
         return ['ok' => false, 'written' => 0];
     }
 
