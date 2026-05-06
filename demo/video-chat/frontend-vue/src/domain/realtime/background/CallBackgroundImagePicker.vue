@@ -63,14 +63,14 @@ const props = defineProps({
   },
   hideWhenEmpty: {
     type: Boolean,
-    default: false,
+    default: true,
   },
 });
 
 const rows = ref([]);
 const state = reactive({ loading: false, error: '' });
 const effectiveTitle = computed(() => props.title || t('calls.enter.background_images'));
-const shouldRenderPicker = computed(() => !props.hideWhenEmpty || state.loading || state.error || rows.value.length > 0);
+const shouldRenderPicker = computed(() => !props.hideWhenEmpty || rows.value.length > 0);
 const isNoBackgroundActive = computed(() => (
   String(callMediaPrefs.backgroundFilterMode || 'off') === 'off'
     || !callMediaPrefs.backgroundApplyOutgoing

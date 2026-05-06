@@ -220,35 +220,7 @@
                   </div>
                 </section>
 
-                <section class="call-left-settings-block" :aria-label="t('calls.enter.background_blur')">
-                  <div class="call-left-settings-title">{{ t('calls.enter.background_blur') }}</div>
-                  <div class="call-left-blur-controls" role="group" :aria-label="t('calls.enter.background_blur_controls')">
-                    <button
-                      class="call-left-blur-btn"
-                      :class="{ active: isBackgroundPresetActive('light') }"
-                      type="button"
-                      :aria-pressed="isBackgroundPresetActive('light')"
-                      :aria-label="t('calls.enter.blur')"
-                      :title="t('calls.enter.blur')"
-                      @click="applyBackgroundPreset('light')"
-                    >
-                      <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
-                    </button>
-                    <button
-                      class="call-left-blur-btn"
-                      :class="{ active: isBackgroundPresetActive('strong') }"
-                      type="button"
-                      :aria-pressed="isBackgroundPresetActive('strong')"
-                      :aria-label="t('calls.enter.strong_blur')"
-                      :title="t('calls.enter.strong_blur')"
-                      @click="applyBackgroundPreset('strong')"
-                    >
-                      <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
-                    </button>
-                  </div>
-                </section>
-
-                <CallBackgroundImagePicker />
+                <CallBackgroundControls />
 
                 <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
               </div>

@@ -53,35 +53,7 @@
 
               <section class="calls-enter-right calls-enter-right-settings">
                 <div class="call-left-settings">
-                  <section class="call-left-settings-block join-settings-blur" :aria-label="t('public.join.background_blur')">
-                    <div class="call-left-settings-title">{{ t('public.join.background_blur') }}</div>
-                    <div class="call-left-blur-controls" role="group" :aria-label="t('public.join.background_blur_controls')">
-                      <button
-                        class="call-left-blur-btn"
-                        :class="{ active: isBackgroundPresetActive('light') }"
-                        type="button"
-                        :aria-pressed="isBackgroundPresetActive('light')"
-                        :aria-label="t('public.join.blur')"
-                        :title="t('public.join.blur')"
-                        @click="applyBackgroundPreset('light')"
-                      >
-                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blur.png" alt="" />
-                      </button>
-                      <button
-                        class="call-left-blur-btn"
-                        :class="{ active: isBackgroundPresetActive('strong') }"
-                        type="button"
-                        :aria-pressed="isBackgroundPresetActive('strong')"
-                        :aria-label="t('public.join.strong_blur')"
-                        :title="t('public.join.strong_blur')"
-                        @click="applyBackgroundPreset('strong')"
-                      >
-                        <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
-                      </button>
-                    </div>
-                  </section>
-
-                  <CallBackgroundImagePicker :title="t('public.join.background_images')" hide-when-empty />
+                  <CallBackgroundControls i18n-prefix="public.join" :image-title="t('public.join.background_images')" />
 
                   <section class="call-left-settings-block join-settings-microphone" :aria-label="t('public.join.microphone')">
                     <div class="call-left-settings-title">{{ t('public.join.mic') }}</div>
@@ -230,12 +202,10 @@ import { attachForegroundReconnectHandlers } from '../../../support/foregroundRe
 import { localizedApiErrorMessage } from '../../../modules/localization/apiErrorMessages.js';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
-import CallBackgroundImagePicker from '../../realtime/background/CallBackgroundImagePicker.vue';
+import CallBackgroundControls from '../../realtime/background/CallBackgroundControls.vue';
 import {
-  applyCallBackgroundPreset as applyBackgroundPreset,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
-  isCallBackgroundPresetActive as isBackgroundPresetActive,
   refreshCallMediaDevices,
   setCallCameraDevice,
   setCallMicrophoneDevice,
