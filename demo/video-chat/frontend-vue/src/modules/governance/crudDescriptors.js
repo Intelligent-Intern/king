@@ -124,6 +124,17 @@ const descriptors = {
   }),
   groups: descriptor('groups', {
     resource_type: 'group',
+    fields: Object.freeze([
+      textField('name', 'governance.name', { required: true }),
+      textField('description', 'governance.description', { type: 'textarea', wide: true }),
+      enumField('status', 'governance.status', STATUS_OPTIONS, { default: 'active' }),
+    ]),
+    table_columns: Object.freeze([
+      column('name', 'governance.name', { cell: 'primary', width: '28%' }),
+      column('status', 'governance.status', { cell: 'status', width: '14%' }),
+      column('description', 'governance.description', { cell: 'description', width: '38%' }),
+      column('updatedAt', 'governance.updated', { cell: 'datetime', width: '14%' }),
+    ]),
     relationships: Object.freeze([
       relation('organization', 'organizations', 'governance.relation.organization'),
       relation('members', 'users', 'governance.relation.members', { selection_mode: 'multiple' }),
@@ -133,6 +144,7 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.groups', 'group'),
+    search_fields: Object.freeze(['name', 'description', 'status']),
   }),
   organizations: descriptor('organizations', {
     resource_type: 'organization',
