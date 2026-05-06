@@ -1,0 +1,12 @@
+{
+  "package": "@mediapipe/tasks-vision",
+  "version": "0.10.35",
+  "files": [
+    {
+      "path": "vision_bundle.mjs"
+    },
+    {
+      "path": "vision_bundle_mjs.js.map"
+    }
+  ]
+}
