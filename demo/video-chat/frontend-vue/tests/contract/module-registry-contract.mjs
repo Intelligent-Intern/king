@@ -11,6 +11,7 @@ const expectedModules = [
   'calendar',
   'calls',
   'governance',
+  'infrastructure',
   'localization',
   'marketplace',
   'onboarding',
@@ -60,6 +61,7 @@ const manifestPermissions = new Set(modules.flatMap((descriptor) => descriptor.p
 assert.ok(manifestPermissions.has('calls.join'), 'calls module must expose join permission');
 assert.ok(manifestPermissions.has('calendar.share'), 'calendar module must expose share permission');
 assert.ok(manifestPermissions.has('governance.groups.update'), 'governance module must expose group update permission');
+assert.ok(manifestPermissions.has('infrastructure.read'), 'infrastructure module must expose read permission');
 assert.ok(manifestPermissions.has('workspace_settings.update'), 'workspace settings module must expose update permission');
 
 const referencedPermissions = new Set();
