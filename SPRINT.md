@@ -842,10 +842,17 @@ Tickets:
     - Added frontend/backend `call_app_workspace` layout mode support and SQLite
       migration `0050_call_app_workspace_layout_mode`.
     - Added `call-app-workspace-view-contract.mjs`.
-- [ ] CAP-09 Left sidebar Call Apps browser
+- [x] CAP-09 Left sidebar Call Apps browser
   - Add `Call Apps` button.
   - Replace sidebar content with searchable, paginated app list.
   - Add app detail/add flow with default participant permission choice.
+  - Proof:
+    - Added dedicated `CallAppsSidebarPanel.vue` with catalog search,
+      pagination, detail selection, and default participant policy submit.
+    - Wired `WorkspaceShell.vue` to switch the call left sidebar between
+      settings and Call Apps without adding Call App logic to
+      `CallWorkspaceView.vue`.
+    - Added `call-app-sidebar-contract.mjs`.
 - [ ] CAP-10 Right sidebar participant app grants
   - Add app-permission icon when an app is active.
   - Implement default allow/deny and per-participant overrides.
