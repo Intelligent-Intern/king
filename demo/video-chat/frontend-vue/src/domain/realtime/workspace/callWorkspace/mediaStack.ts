@@ -382,6 +382,11 @@ export function createCallWorkspaceMediaStack(options) {
     state: refs.localMediaOrchestrationState,
   });
 
+  function teardownLocalPublisherForWorkspace() {
+    localMediaOrchestration.cancelPendingLocalMediaCapture();
+    localPublisherPipeline.teardownLocalPublisher();
+  }
+
   function teardownSfuRemotePeers() {
     for (const [, peer] of refs.remotePeersRef.value) {
       const peerUserId = Number(peer?.userId || 0);
@@ -446,6 +451,7 @@ export function createCallWorkspaceMediaStack(options) {
     setSfuRemotePeer,
     sfuTrackListHasVideo,
     sfuTrackRows,
+    teardownLocalPublisher: teardownLocalPublisherForWorkspace,
     teardownSfuRemotePeers,
     updateSfuRemotePeerUserId,
     bumpMediaRenderVersion,

@@ -540,6 +540,27 @@ export function createLocalMediaOrchestrationHelpers({
     return queuedMode;
   }
 
+  function nextLocalMediaCaptureGeneration() {
+    const nextGeneration = Math.max(0, Number(state.localMediaCaptureGeneration || 0)) + 1;
+    state.localMediaCaptureGeneration = nextGeneration;
+    return nextGeneration;
+  }
+
+  function isCurrentLocalMediaCaptureGeneration(generation) {
+    return Number(generation || 0) === Math.max(0, Number(state.localMediaCaptureGeneration || 0));
+  }
+
+  function discardStaleLocalMediaCapture(generation, streams = []) {
+    if (isCurrentLocalMediaCaptureGeneration(generation)) return false;
+    stopRetiredLocalStreams(streams, []);
+    return true;
+  }
+
+  function cancelPendingLocalMediaCapture() {
+    nextLocalMediaCaptureGeneration();
+    state.localTrackReconfigureQueuedMode = null;
+  }
+
   async function publishLocalTracks() {
     if (localMediaPermissionRetryAfterMs > Date.now()) {
       if (!(refs.localStreamRef.value instanceof MediaStream)) enterReceiveOnlyLocalMediaMode('permission_denied_cooldown');
@@ -564,12 +585,15 @@ export function createLocalMediaOrchestrationHelpers({
       return false;
     }
 
+    const captureGeneration = nextLocalMediaCaptureGeneration();
     try {
       const rawStream = await acquireLocalMediaStreamWithFallback();
+      if (discardStaleLocalMediaCapture(captureGeneration, [rawStream])) return false;
       refs.localRawStreamRef.value = rawStream;
       reportLocalCaptureSettings(rawStream, 'publish');
 
       const stream = await applyLocalBackgroundFilter(rawStream);
+      if (discardStaleLocalMediaCapture(captureGeneration, [stream, rawStream])) return false;
       refs.localFilteredStreamRef.value = stream;
       refs.localStreamRef.value = stream;
       refs.localTracksRef.value = stream.getTracks();
@@ -596,6 +620,11 @@ export function createLocalMediaOrchestrationHelpers({
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack) {
         await startEncodingPipeline(videoTrack);
+        if (discardStaleLocalMediaCapture(captureGeneration, [stream, rawStream])) {
+          stopLocalEncodingPipeline();
+          clearLocalPreviewElement();
+          return false;
+        }
       } else {
         stopLocalEncodingPipeline();
         clearLocalPreviewElement();
@@ -629,12 +658,14 @@ export function createLocalMediaOrchestrationHelpers({
     }
 
     state.localTrackReconfigureInFlight = true;
+    const captureGeneration = nextLocalMediaCaptureGeneration();
     try {
       const previousFilteredStream = refs.localFilteredStreamRef.value instanceof MediaStream ? refs.localFilteredStreamRef.value : null;
       const previousOutputStream = refs.localStreamRef.value instanceof MediaStream ? refs.localStreamRef.value : null;
       const previousTracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
 
       const nextStream = await applyLocalBackgroundFilter(rawStream);
+      if (discardStaleLocalMediaCapture(captureGeneration, [nextStream])) return false;
       if (!(nextStream instanceof MediaStream)) {
         return false;
       }
@@ -666,6 +697,11 @@ export function createLocalMediaOrchestrationHelpers({
         const videoTrack = nextStream.getVideoTracks()[0] || null;
         if (videoTrack) {
           await startEncodingPipeline(videoTrack);
+          if (discardStaleLocalMediaCapture(captureGeneration, [nextStream])) {
+            stopLocalEncodingPipeline();
+            clearLocalPreviewElement();
+            return false;
+          }
         } else {
           stopLocalEncodingPipeline();
           clearLocalPreviewElement();
@@ -704,6 +740,7 @@ export function createLocalMediaOrchestrationHelpers({
     }
 
     state.localTrackReconfigureInFlight = true;
+    const captureGeneration = nextLocalMediaCaptureGeneration();
     let nextRawStream = null;
     let nextOutputStream = null;
     try {
@@ -713,8 +750,10 @@ export function createLocalMediaOrchestrationHelpers({
       const previousTracks = Array.isArray(refs.localTracksRef.value) ? [...refs.localTracksRef.value] : [];
 
       nextRawStream = await acquireLocalMediaStreamWithFallback();
+      if (discardStaleLocalMediaCapture(captureGeneration, [nextRawStream])) return false;
       reportLocalCaptureSettings(nextRawStream, 'reconfigure');
       nextOutputStream = await applyLocalBackgroundFilter(nextRawStream);
+      if (discardStaleLocalMediaCapture(captureGeneration, [nextOutputStream, nextRawStream])) return false;
       if (!(nextOutputStream instanceof MediaStream)) {
         stopRetiredLocalStreams([nextRawStream], []);
         return false;
@@ -748,6 +787,11 @@ export function createLocalMediaOrchestrationHelpers({
       const videoTrack = nextOutputStream.getVideoTracks()[0] || null;
       if (videoTrack) {
         await startEncodingPipeline(videoTrack);
+        if (discardStaleLocalMediaCapture(captureGeneration, [nextOutputStream, nextRawStream])) {
+          stopLocalEncodingPipeline();
+          clearLocalPreviewElement();
+          return false;
+        }
       } else {
         stopLocalEncodingPipeline();
         clearLocalPreviewElement();
@@ -787,6 +831,7 @@ export function createLocalMediaOrchestrationHelpers({
     publishLocalActivitySample,
     publishLocalTracks,
     publishLocalTracksToSfuIfReady,
+    cancelPendingLocalMediaCapture,
     queueLocalTrackReconfigure,
     consumeQueuedLocalTrackReconfigureMode,
     reconfigureLocalBackgroundFilterOnly,
