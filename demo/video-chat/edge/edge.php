@@ -234,6 +234,9 @@ $writeAll = static function ($stream, string $buffer): bool {
         if ($written === false) {
             return false;
         }
+        if ($written < 0) {
+            return false;
+        }
         if ($written === 0) {
             $read = null;
             $write = [$stream];
@@ -602,7 +605,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         foreach ($write as $stream) {
             if ($stream === $upstreamStream && $toUpstream !== '') {
                 $written = @fwrite($upstreamStream, $toUpstream);
-                if ($written === false) {
+                if ($written === false || $written < 0) {
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
@@ -631,7 +634,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             }
             if ($stream === $client && $toClient !== '') {
                 $written = @fwrite($client, $toClient);
-                if ($written === false) {
+                if ($written === false || $written < 0) {
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
