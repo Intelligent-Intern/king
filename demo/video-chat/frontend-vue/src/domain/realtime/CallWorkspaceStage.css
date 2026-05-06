@@ -24,9 +24,9 @@
   --text-secondary: var(--color-c0d1ef);
   --text-muted: var(--color-94add3);
   --text-dim: var(--color-7f9cc8);
-  --mini-strip-height: 170px;
-  --mini-story-width: 150px;
-  --mini-story-height: 150px;
+  --mini-strip-height: 132px;
+  --mini-story-width: 180px;
+  --mini-story-height: 112px;
   --mini-strip-gap: 8px;
   position: relative;
   height: 100%;
@@ -380,8 +380,11 @@
 
 .video-container.decoded {
   z-index: 15;
-  opacity: 1;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .workspace-grid-video {
@@ -675,7 +678,7 @@
 }
 
 .workspace-mini-tile {
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 16 / 10;
   cursor: zoom-in;
 }
 
@@ -727,6 +730,8 @@
 
 .workspace-mini-video-slot :deep(video),
 .workspace-mini-video-slot :deep(canvas) {
+  position: absolute;
+  inset: 0;
   width: 100% !important;
   height: 100% !important;
   display: block !important;

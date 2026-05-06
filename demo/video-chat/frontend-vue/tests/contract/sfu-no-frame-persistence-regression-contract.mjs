@@ -158,8 +158,8 @@ try {
   ]);
   const frontendSfuSources = collectSource([
     ...listFiles(path.resolve(frontendRoot, 'src/lib/sfu'), (filePath) => /\.(ts|js)$/.test(filePath)),
-    ...listFiles(path.resolve(frontendRoot, 'src/domain/realtime/sfu'), (filePath) => /\.js$/.test(filePath)),
-    ...listFiles(path.resolve(frontendRoot, 'src/domain/realtime/local'), (filePath) => /\.js$/.test(filePath)),
+    ...listFiles(path.resolve(frontendRoot, 'src/domain/realtime/sfu'), (filePath) => /\.ts$/.test(filePath)),
+    ...listFiles(path.resolve(frontendRoot, 'src/domain/realtime/local'), (filePath) => /\.ts$/.test(filePath)),
   ]);
 
   assertNoDisallowedMatches(
