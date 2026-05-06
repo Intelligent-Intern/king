@@ -31,7 +31,7 @@
         :title="image.label"
         @click="selectImage(image)"
       >
-        <img :src="image.file_path" :alt="image.label" loading="lazy" />
+        <img :src="image.file_path" :alt="image.label" loading="lazy" @error="markImageUnavailable(image)" />
       </button>
       <section v-if="rows.length === 0 && !props.hideWhenEmpty" class="call-background-picker-empty">
         {{ t('calls.enter.background_images_empty') }}
@@ -81,6 +81,22 @@ function normalizePath(value) {
   return String(value || '').trim();
 }
 
+function normalizeBackgroundImageRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const status = normalizePath(row.status || 'active').toLowerCase();
+  const filePath = normalizePath(row.file_path);
+  if (status !== 'active' || filePath === '') return null;
+  const id = normalizePath(row.id) || filePath;
+  const filename = filePath.split('/').pop() || '';
+  const label = normalizePath(row.label || row.file_name || filename) || t('calls.enter.background_images');
+  return {
+    ...row,
+    id,
+    label,
+    file_path: filePath,
+  };
+}
+
 function isImageActive(image) {
   return String(callMediaPrefs.backgroundFilterMode || '') === 'replace'
     && String(callMediaPrefs.backgroundBackdropMode || '') === 'image'
@@ -110,6 +126,15 @@ function selectImage(image) {
   setCallBackgroundApplyOutgoing(true);
 }
 
+function markImageUnavailable(image) {
+  const imageId = normalizePath(image?.id);
+  const imagePath = normalizePath(image?.file_path);
+  rows.value = rows.value.filter((row) => normalizePath(row.id) !== imageId && normalizePath(row.file_path) !== imagePath);
+  if (imagePath !== '' && normalizePath(callMediaPrefs.backgroundReplacementImageUrl) === imagePath) {
+    clearBackground();
+  }
+}
+
 async function loadRows() {
   state.loading = true;
   state.error = '';
@@ -118,7 +143,9 @@ async function loadRows() {
       page: 1,
       page_size: Math.max(1, Math.min(100, Number(props.pageSize) || 100)),
     });
-    rows.value = Array.isArray(result?.rows) ? result.rows : [];
+    rows.value = (Array.isArray(result?.rows) ? result.rows : [])
+      .map(normalizeBackgroundImageRow)
+      .filter(Boolean);
     if (props.hideWhenEmpty && rows.value.length === 0) {
       clearUnavailableImageBackground();
     }
