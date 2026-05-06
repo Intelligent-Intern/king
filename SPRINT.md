@@ -574,6 +574,49 @@ CAP-01 Route Boundary Contract:
   - `GET /api/call-app-exports/{job_id}`
   - `GET /api/call-app-exports/{job_id}/download`
 
+CAP-02 Package Layout, 2026-05-07:
+- Package root:
+  - `demo/call-app/<app-key>/`
+- Required package files:
+  - `call-app.manifest.json`
+  - `mcp.descriptor.json`
+  - `crdt.schema.json`
+  - `health.descriptor.json`
+  - `public/index.html`
+- First package:
+  - `demo/call-app/whiteboard`
+  - status is `metadata_stub` until CAP-13 implements runtime whiteboard tools.
+- Whiteboard metadata pins:
+  - Semantic-DNS service type: `call_app`
+  - service name: `call_app.whiteboard`
+  - mother-node registration required
+  - Marketplace order scope: `organization`
+  - default participant access: `blocked_by_default`
+  - iframe bridge protocol: `king.call_app.iframe.v1`
+  - iframe receives primary session token: `false`
+  - CRDT protocol: `king.call_app.crdt.v1`
+  - document kind: `whiteboard_document`
+  - exports: `png`, `pdf`
+- Whiteboard MCP metadata methods:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Whiteboard CRDT operation stubs:
+  - `stroke.add`
+  - `shape.add`
+  - `shape.update`
+  - `shape.delete`
+  - `text.add`
+  - `text.update`
+  - `sticky_note.add`
+  - `sticky_note.update`
+  - `selection.update`
+  - `cursor.move`
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -599,7 +642,7 @@ Tickets:
     `demo/call-app`.
   - Add contract tests that pin the planned Call App capability names and route
     boundaries before implementation starts.
-- [ ] CAP-02 `demo/call-app` package layout
+- [x] CAP-02 `demo/call-app` package layout
   - Create the directory structure for installable Call Apps.
   - Define package manifest, MCP descriptor, CRDT schema descriptor, health
     descriptor, and iframe entrypoint conventions.
