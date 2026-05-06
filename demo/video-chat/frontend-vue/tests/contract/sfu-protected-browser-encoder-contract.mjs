@@ -38,6 +38,7 @@ try {
   const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
@@ -166,6 +167,14 @@ try {
   requireContains(mediaStack, 'shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {})', 'receiver feedback uses websocket signaling for codec compatibility fallback instead of SFU-only recovery rows');
   requireContains(mediaStack, 'payload?.publisher_user_id', 'receiver feedback can target the publisher user id before remote peer hydration');
   requireContains(mediaStack, 'const socketRecoverySent = Number.isInteger(targetUserId)', 'receiver recovery must send user-socket fallback even when SFU publisher-id routing accepts the request');
+  requireContains(runtimeHealth, 'requestPublisherCompatibilityCodecFallback(peer, publisherId', 'runtime health escalates silent remote video stalls to publisher-side WLVC compatibility fallback');
+  requireContains(runtimeHealth, 'requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION', 'runtime health sends explicit compatibility codec action after silent decoder stalls');
+  requireContains(runtimeHealth, "requested_codec_id: 'wlvc_sfu'", 'runtime health names the interoperable WLVC codec target after silent decoder stalls');
+  requireContains(runtimeHealth, "eventType: 'sfu_remote_video_compatibility_fallback_requested'", 'runtime health persists compatibility fallback requests to backend diagnostics');
+  requireContains(runtimeHealth, "fallback_trigger: 'remote_video_never_started'", 'runtime health escalates never-started remote video to compatibility fallback');
+  requireContains(runtimeHealth, "fallback_trigger: 'remote_video_frozen_receiving_frames'", 'runtime health escalates frozen-but-receiving remote video to compatibility fallback');
+  requireContains(runtimeHealth, 'bypass_recovery_throttle: true', 'runtime health lets compatibility fallback bypass the earlier keyframe pressure throttle');
+  requireContains(runtimeHealth, 'const sfuRecoverySent = !compatibilityCodecRequested', 'runtime health avoids SFU-only recovery rows for compatibility codec switching');
   assert.ok(
     mediaStack.indexOf('requestPublisherMediaRecovery') < mediaStack.indexOf('const targetUserId = Number('),
     'SFU publisher recovery by publisher id must run before socket fallback requires a hydrated peer user id',

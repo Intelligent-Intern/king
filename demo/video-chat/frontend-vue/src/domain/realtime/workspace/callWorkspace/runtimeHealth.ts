@@ -3,8 +3,10 @@ import {
   shouldExposeSfuVideoRecoveryAttempt,
 } from '../../sfu/videoConnectionStatus';
 import {
+  SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
   normalizeSfuRecoveryReason,
   resolveSfuRecoveryRequestedAction,
+  shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
 import { runSfuPublisherStallRecoveryLadder } from '../../sfu/stallRecoveryLadder.ts';
@@ -251,11 +253,15 @@ export function createCallWorkspaceRuntimeHealthHelpers({
   }
 
   function sendRemoteSfuVideoQualityPressure(peer, publisherId, reason, nowMs, payload = {}) {
+    const payloadBody = payload && typeof payload === 'object' ? { ...payload } : {};
+    const bypassRecoveryThrottle = Boolean(payloadBody.bypass_recovery_throttle);
+    delete payloadBody.bypass_recovery_throttle;
+
     const peerUserId = Number(peer?.userId || 0);
     const publisherUserId = Number(peer?.publisherUserId || peer?.publisher_user_id || 0);
-    const payloadPublisherUserId = Number(payload?.publisher_user_id || payload?.publisherUserId || 0);
+    const payloadPublisherUserId = Number(payloadBody?.publisher_user_id || payloadBody?.publisherUserId || 0);
     const screenShareOwnerUserId = Number(peer?.screenShareOwnerUserId || peer?.screen_share_owner_user_id || 0);
-    const isScreenShareRecovery = isScreenSharePeer(peer, payload);
+    const isScreenShareRecovery = isScreenSharePeer(peer, payloadBody);
     const targetUserId = Number(isScreenShareRecovery
       ? screenShareOwnerOrUserId(
         screenShareOwnerUserId
@@ -268,22 +274,26 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     if (!Number.isInteger(targetUserId) || targetUserId <= 0 || targetUserId === localUserId) return false;
     const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_remote_video_frozen');
     const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
-    const requestedAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
+    const requestedAction = resolveSfuRecoveryRequestedAction(normalizedReason, payloadBody?.requested_action);
+    const compatibilityCodecRequested = shouldRequestSfuCompatibilityCodecFallback(requestedAction, payloadBody);
 
     const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
     const pressureThrottleKey = remoteSfuQualityPressureThrottleKey(targetUserId, normalizedReason);
-    const lastSentAtMs = Math.max(
-      Number(peer.lastQualityPressureSentAtMs || 0),
-      Number(remoteSfuQualityPressureLastByKey.get(pressureThrottleKey) || 0),
-    );
+    const lastSentAtMs = bypassRecoveryThrottle
+      ? Number(remoteSfuQualityPressureLastByKey.get(pressureThrottleKey) || 0)
+      : Math.max(
+        Number(peer.lastQualityPressureSentAtMs || 0),
+        Number(remoteSfuQualityPressureLastByKey.get(pressureThrottleKey) || 0),
+      );
     if (lastSentAtMs > 0 && (nowMs - lastSentAtMs) < minIntervalMs) return false;
 
-    const sfuRecoverySent = sfuClientRef.value
+    const sfuRecoverySent = !compatibilityCodecRequested
+      && sfuClientRef.value
       && typeof sfuClientRef.value.requestPublisherMediaRecovery === 'function'
       ? sfuClientRef.value.requestPublisherMediaRecovery(String(publisherId || ''), {
-        ...payload,
+        ...payloadBody,
         requested_action: requestedAction,
-        request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
+        request_full_keyframe: Boolean(payloadBody?.request_full_keyframe) || requestFullKeyframe,
         reason: normalizedReason,
       })
       : false;
@@ -292,10 +302,10 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       type: 'call/media-quality-pressure',
       target_user_id: targetUserId,
       payload: {
-        ...payload,
+        ...payloadBody,
         kind: 'sfu-video-quality-pressure',
         requested_action: requestedAction,
-        request_full_keyframe: Boolean(payload?.request_full_keyframe) || requestFullKeyframe,
+        request_full_keyframe: Boolean(payloadBody?.request_full_keyframe) || requestFullKeyframe,
         reason: normalizedReason,
         publisher_id: String(publisherId || ''),
         requester_user_id: localUserId,
@@ -309,6 +319,50 @@ export function createCallWorkspaceRuntimeHealthHelpers({
       rememberRemoteSfuQualityPressure(pressureThrottleKey, nowMs);
     }
     return sent;
+  }
+
+  function requestPublisherCompatibilityCodecFallback(peer, publisherId, reason, nowMs = Date.now(), payload = {}) {
+    if (!peer || typeof peer !== 'object') return false;
+    const fallbackBackoffMs = Math.max(remoteVideoStallThresholdMs * 2, 8000);
+    const lastAtMs = Number(peer.sfuCompatibilityCodecFallbackLastAtMs || 0);
+    if (lastAtMs > 0 && (nowMs - lastAtMs) < fallbackBackoffMs) return false;
+
+    const normalizedReason = normalizeSfuRecoveryReason(reason, 'sfu_browser_decoder_incompatible');
+    const sent = sendRemoteSfuVideoQualityPressure(peer, publisherId, normalizedReason, nowMs, {
+      ...payload,
+      bypass_recovery_throttle: true,
+      incompatible_codec_id: 'webcodecs_vp8',
+      requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+      requested_codec_id: 'wlvc_sfu',
+      requested_video_layer: 'primary',
+      request_full_keyframe: true,
+      recovery_ladder_step: 'compatibility_codec',
+    });
+    if (!sent) return false;
+
+    peer.sfuCompatibilityCodecFallbackLastAtMs = nowMs;
+    peer.sfuCompatibilityCodecFallbackReason = normalizedReason;
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_remote_video_compatibility_fallback_requested',
+      code: 'sfu_remote_video_compatibility_fallback_requested',
+      message: 'Remote SFU video did not render after targeted recovery, so the receiver requested the WLVC compatibility codec.',
+      payload: {
+        lane: 'data',
+        ...payload,
+        publisher_id: String(publisherId || ''),
+        publisher_user_id: Number(peer.userId || 0),
+        publisher_name: String(peer.displayName || '').trim(),
+        reason: normalizedReason,
+        requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION,
+        requested_codec_id: 'wlvc_sfu',
+        compatibility_fallback_backoff_ms: fallbackBackoffMs,
+        media_runtime_path: mediaRuntimePath.value,
+      },
+      immediate: true,
+    });
+    return true;
   }
 
   function checkRemoteVideoStalls() {
@@ -383,6 +437,25 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             }
           )
           : false;
+        const compatibilityFallbackSent = receivingFreshFrames && peer.freezeRecoveryCount >= 2
+          ? requestPublisherCompatibilityCodecFallback(
+            peer,
+            publisherId,
+            'sfu_browser_decoder_incompatible',
+            nowMs,
+            {
+              fallback_trigger: 'remote_video_frozen_receiving_frames',
+              frozen_age_ms: frozenAgeMs,
+              receive_gap_ms: receiveGapMs,
+              freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
+              frame_count: frameCount,
+              received_frame_count: Number(peer.receivedFrameCount || 0),
+              decoded_frame_gap_ms: Number.isFinite(decodedGapMs) ? decodedGapMs : 0,
+              last_decoded_frame_skip_reason: String(peer.lastDecodedFrameSkipReason || ''),
+              previous_remote_quality_pressure_sent: remoteQualityPressureSent,
+            },
+          )
+          : false;
         if (shouldExposeSfuVideoRecoveryAttempt(peer.freezeRecoveryCount)) {
           logSfuVideoRecoveryStatus(sfuRemoteVideoFrozenConsoleLabel, {
             ageMs: frozenAgeMs,
@@ -423,6 +496,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
               receive_gap_ms: receiveGapMs,
               freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
               remote_quality_pressure_sent: remoteQualityPressureSent,
+              compatibility_fallback_sent: compatibilityFallbackSent,
               remote_peer_count: remotePeersRef.value.size,
               sfu_connected: sfuConnected.value,
               connection_state: connectionState.value,
@@ -470,6 +544,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
             receive_gap_ms: receiveGapMs,
             freeze_recovery_count: Number(peer.freezeRecoveryCount || 0),
             remote_quality_pressure_sent: remoteQualityPressureSent,
+            compatibility_fallback_sent: compatibilityFallbackSent,
             socket_restart_attempted: socketRestarted,
             socket_restart_deferred: shouldRestartFrozenVideo && !socketRestarted,
             socket_restart_backoff_remaining_ms: socketRestartBackoffRemainingMs,
@@ -506,6 +581,21 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           received_frame_count: Number(peer.receivedFrameCount || 0),
         })
         : false;
+      const compatibilityFallbackSent = peer.stallRecoveryCount >= 2 || shouldRestartNeverStartedVideo
+        ? requestPublisherCompatibilityCodecFallback(
+          peer,
+          publisherId,
+          'sfu_browser_decoder_incompatible',
+          nowMs,
+          {
+            fallback_trigger: 'remote_video_never_started',
+            age_ms: stalledAgeMs,
+            stall_recovery_count: Number(peer.stallRecoveryCount || 0),
+            received_frame_count: Number(peer.receivedFrameCount || 0),
+            previous_remote_quality_pressure_sent: remoteQualityPressureSent,
+          },
+        )
+        : false;
       if (stalledAgeMs > remoteVideoStallThresholdMs * 3) {
         logSfuVideoRecoveryStatus(sfuNoVideoSignalConsoleLabel, {
           ageMs: stalledAgeMs,
@@ -535,6 +625,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
           received_frame_count: Number(peer.receivedFrameCount || 0),
           age_ms: stalledAgeMs,
           remote_quality_pressure_sent: remoteQualityPressureSent,
+          compatibility_fallback_sent: compatibilityFallbackSent,
           remote_peer_count: remotePeersRef.value.size,
           connected_participant_count: connectedParticipantUsers.value.length,
           sfu_connected: sfuConnected.value,
