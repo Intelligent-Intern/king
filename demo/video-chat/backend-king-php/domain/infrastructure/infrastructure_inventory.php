@@ -162,6 +162,98 @@ function videochat_infra_node_row(
     ];
 }
 
+/** @return array{idle: int, total: int}|null */
+function videochat_infra_cpu_sample(): ?array
+{
+    $lines = is_readable('/proc/stat') ? file('/proc/stat', FILE_IGNORE_NEW_LINES) : false;
+    $line = is_array($lines) ? ($lines[0] ?? '') : '';
+    if (!is_string($line) || !str_starts_with($line, 'cpu ')) {
+        return null;
+    }
+
+    $parts = array_values(array_filter(explode(' ', trim($line)), static fn (string $part): bool => $part !== ''));
+    array_shift($parts);
+    $values = array_map(static fn (string $part): int => max(0, (int) $part), $parts);
+    if (count($values) < 5) {
+        return null;
+    }
+
+    $idle = ($values[3] ?? 0) + ($values[4] ?? 0);
+    return ['idle' => $idle, 'total' => array_sum($values)];
+}
+
+function videochat_infra_cpu_usage_percent(): ?float
+{
+    $first = videochat_infra_cpu_sample();
+    if ($first === null) {
+        return null;
+    }
+
+    usleep(100000);
+    $second = videochat_infra_cpu_sample();
+    if ($second === null) {
+        return null;
+    }
+
+    $totalDelta = $second['total'] - $first['total'];
+    $idleDelta = $second['idle'] - $first['idle'];
+    if ($totalDelta <= 0) {
+        return null;
+    }
+
+    return round(max(0.0, min(100.0, (1 - ($idleDelta / $totalDelta)) * 100)), 1);
+}
+
+/** @return array{percent: float, total_mb: int, used_mb: int}|null */
+function videochat_infra_memory_usage(): ?array
+{
+    if (!is_readable('/proc/meminfo')) {
+        return null;
+    }
+
+    $values = [];
+    foreach (file('/proc/meminfo', FILE_IGNORE_NEW_LINES) ?: [] as $line) {
+        if (preg_match('/^([A-Za-z_()]+):\s+(\d+)\s+kB$/', (string) $line, $matches) === 1) {
+            $values[$matches[1]] = (int) $matches[2];
+        }
+    }
+
+    $totalKb = (int) ($values['MemTotal'] ?? 0);
+    $availableKb = (int) ($values['MemAvailable'] ?? 0);
+    if ($totalKb <= 0 || $availableKb < 0) {
+        return null;
+    }
+
+    $usedKb = max(0, $totalKb - $availableKb);
+    return [
+        'percent' => round(max(0.0, min(100.0, ($usedKb / $totalKb) * 100)), 1),
+        'total_mb' => (int) round($totalKb / 1024),
+        'used_mb' => (int) round($usedKb / 1024),
+    ];
+}
+
+/** @return array<string, mixed> */
+function videochat_infra_local_resource_usage(): array
+{
+    $memory = videochat_infra_memory_usage();
+    $resources = [
+        'cpu_usage_percent' => null,
+        'memory_usage_percent' => null,
+        'memory_total_mb' => null,
+        'memory_used_mb' => null,
+    ];
+    $cpuUsage = videochat_infra_cpu_usage_percent();
+    if ($cpuUsage !== null) {
+        $resources['cpu_usage_percent'] = $cpuUsage;
+    }
+    if ($memory !== null) {
+        $resources['memory_usage_percent'] = $memory['percent'];
+        $resources['memory_total_mb'] = $memory['total_mb'];
+        $resources['memory_used_mb'] = $memory['used_mb'];
+    }
+    return $resources;
+}
+
 /** @return array{ok: bool, status: int, payload: array<string, mixed>|null, error: string} */
 function videochat_infra_http_json(string $url, array $headers, float $timeoutSeconds = 2.5): array
 {
@@ -322,7 +414,8 @@ function videochat_infra_static_inventory(array $deployment): array
         $roles,
         'running',
         videochat_infra_env('VIDEOCHAT_INFRA_REGION', 'local'),
-        filter_var($host, FILTER_VALIDATE_IP) ? $host : ''
+        filter_var($host, FILTER_VALIDATE_IP) ? $host : '',
+        videochat_infra_local_resource_usage()
     );
 
     return [
