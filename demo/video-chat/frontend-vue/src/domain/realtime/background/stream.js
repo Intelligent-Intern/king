@@ -1,5 +1,4 @@
 import { createWorkerSegmenterBackend } from './backendWorkerSegmenter';
-import { createMediaPipeSegmentationBackend } from './backendMediapipe';
 import { toNumber } from './math';
 import { createBackgroundPipelineController } from './pipeline/controller';
 import { createBackgroundCompositorStage } from './pipeline/compositorStage';
@@ -173,42 +172,30 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     const initFailures = [];
     console.log('[BackgroundFilter] Initializing segmentation backend', {
       backend: 'worker-segmenter',
-      fallback: 'mediapipe',
     });
-    console.log('[BackgroundFilter] Attempting to initialize worker segmenter backend');
     try {
-      segmentationBackend = await createWorkerSegmenterBackend({
-        detectIntervalMs: runtimeConfig.detectIntervalMs,
-      });
-    } catch (error) {
-      initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
-      segmentationBackend = null;
-    }
-
-    if (!segmentationBackend) {
-      console.log('[BackgroundFilter] Falling back to MediaPipe selfie segmentation backend');
+      console.log('[BackgroundFilter] Attempting to initialize worker segmenter backend');
       try {
-        segmentationBackend = await createMediaPipeSegmentationBackend({
+        segmentationBackend = await createWorkerSegmenterBackend({
           detectIntervalMs: runtimeConfig.detectIntervalMs,
         });
       } catch (error) {
-        initFailures.push(`mediapipe: ${error?.message || 'init_failed'}`);
+        initFailures.push(`worker-segmenter: ${error?.message || 'init_failed'}`);
         segmentationBackend = null;
       }
+    } catch {
+      segmentationBackend = null;
     }
-
     segmentationBackendKind = segmentationBackend?.kind || 'none';
     console.log('[BackgroundFilter] Segmentation backend initialization result', {
       selected: segmentationBackendKind,
       requested: 'worker-segmenter',
-      fallback: 'mediapipe',
       failures: initFailures,
     });
     if (segmentationBackendKind === 'none' && initFailures.length > 0) {
       console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
         selected: segmentationBackendKind,
         requested: 'worker-segmenter',
-        fallback: 'mediapipe',
         failures: initFailures,
       });
     }
@@ -290,7 +277,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
 
     const segmentation = canRunSegmentation
       ? segmentationBackend.nextFaces(video, segmentationWidth, segmentationHeight, now)
-      : { detectSampleMs: null, matteMaskBitmap: null, matteMaskValues: null };
+      : { detectSampleMs: null, matteMaskValues: null };
     if (typeof segmentation.detectSampleMs === "number" && Number.isFinite(segmentation.detectSampleMs)) {
       detectCount += 1;
       detectDurationSum += Math.max(0, segmentation.detectSampleMs);

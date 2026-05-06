@@ -16,9 +16,9 @@
  */
 
 const VIDEOCHAT_CDN_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CDN_ORIGIN || '').replace(/\/+$/, '');
-const MEDIAPIPE_MODEL_BASE_PATH = '/cdn/vendor/mediapipe/selfie_segmentation/';
+const MEDIAPIPE_MODEL_BASE_PATH = '/cdn/vendor/mediapipe/models/';
 const MEDIAPIPE_WASM_BASE_PATH = '/wasm/';
-const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_segmentation.tflite`;
+const MODEL_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_MODEL_BASE_PATH}selfie_multiclass_256x256.tflite`;
 const WASM_PATH = `${VIDEOCHAT_CDN_ORIGIN}${MEDIAPIPE_WASM_BASE_PATH}`;
 const INIT_TIMEOUT_MS = 15000;
 

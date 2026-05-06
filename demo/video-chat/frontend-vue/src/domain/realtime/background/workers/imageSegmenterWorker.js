@@ -19,12 +19,16 @@
  *   OUT { type: 'CLEANUP_DONE' }
  */
 
-const { DrawingUtils,  ImageSegmenter, FilesetResolver } = await import(
+const tasksVisionModulePath = typeof TASKS_VISION_MODULE_PATH === 'string'
+  ? TASKS_VISION_MODULE_PATH
+  : '/node_modules/@mediapipe/tasks-vision/vision_bundle.mjs';
+
+const { DrawingUtils, ImageSegmenter, FilesetResolver } = await import(
   /* @vite-ignore */
-  TASKS_VISION_MODULE_PATH
+  tasksVisionModulePath
 );
 const DEFAULT_WASM_PATH = '/wasm';
-const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation.tflite';
+const DEFAULT_MODEL_PATH = '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite';
 
 let segmenter = null;
 let segmenterLabels = [];
@@ -66,12 +70,10 @@ function buildModelCandidates(inputPath) {
     return Array.from(new Set([
       configured,
       DEFAULT_MODEL_PATH,
-      '/cdn/vendor/mediapipe/selfie_segmentation/selfie_segmentation_landscape.tflite',
     ]));
   }
   return [
     configured,
-    `/cdn/vendor/mediapipe/selfie_segmentation/${configured.replace(/^\/+/, '')}`,
     `/cdn/vendor/mediapipe/models/${configured.replace(/^\/+/, '')}`,
   ];
 }
