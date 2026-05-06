@@ -304,7 +304,7 @@ $proxyCorsHeaders = static function (): array {
         'Content-Type' => 'text/plain; charset=utf-8',
         'Access-Control-Allow-Origin' => '*',
         'Access-Control-Allow-Methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
-        'Access-Control-Allow-Headers' => 'Authorization, Content-Type, X-Session-Id',
+        'Access-Control-Allow-Headers' => 'Authorization, Content-Type, X-Session-Id, X-Upload-Trace-Id, X-Upload-Batch-Index, X-Upload-Batch-Count',
         'Access-Control-Max-Age' => '600',
         'Vary' => 'Origin',
     ];
@@ -441,6 +441,49 @@ $serveStatic = static function ($client, array $request) use ($staticRoot, $writ
     $writeResponse($client, 200, 'OK', $headers, $body, $request['method'] === 'HEAD');
 };
 
+$isBackgroundUploadRequest = static function (array $request): bool {
+    return (string) ($request['method'] ?? '') === 'POST'
+        && (string) ($request['path'] ?? '') === '/api/admin/workspace-administration/background-images';
+};
+
+$uploadTraceIdFromRequest = static function (array $request): string {
+    $headers = is_array($request['headers'] ?? null) ? (array) $request['headers'] : [];
+    $candidate = trim((string) ($headers['x-upload-trace-id'] ?? ''));
+    if ($candidate !== '' && preg_match('/^[A-Za-z0-9._-]{1,80}$/', $candidate) === 1) {
+        return $candidate;
+    }
+
+    try {
+        return 'edge_bgup_' . bin2hex(random_bytes(8));
+    } catch (Throwable) {
+        return 'edge_bgup_' . substr(hash('sha256', uniqid('background-upload', true) . microtime(true)), 0, 16);
+    }
+};
+
+$edgeUploadLog = static function (string $traceId, string $stage, array $fields = []) use ($log): void {
+    $safe = [];
+    foreach ($fields as $key => $value) {
+        $name = is_string($key) ? $key : (string) $key;
+        if (is_array($value)) {
+            $safe[$name] = array_slice($value, 0, 12, true);
+            continue;
+        }
+        if (is_string($value)) {
+            $safe[$name] = strlen($value) > 240 ? substr($value, 0, 240) . '...' : $value;
+            continue;
+        }
+        if (is_scalar($value) || $value === null) {
+            $safe[$name] = $value;
+        }
+    }
+    $log('[background-upload] ' . json_encode([
+        'trace_id' => $traceId,
+        'stage' => $stage,
+        'time' => gmdate('c'),
+        'details' => $safe,
+    ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+};
+
 $injectForwardHeaders = static function (string $head, array $request): string {
     $parts = explode("\r\n\r\n", $head, 2);
     $headerBlock = $parts[0] ?? '';
@@ -448,11 +491,18 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     $lines = preg_split('/\r\n/', $headerBlock) ?: [];
     $requestLine = array_shift($lines) ?: '';
     $filtered = [];
+    $contentLengthSeen = false;
 
     foreach ($lines as $line) {
         $name = strtolower(trim(strtok($line, ':') ?: ''));
         if (in_array($name, ['connection', 'proxy-connection', 'x-forwarded-proto', 'x-forwarded-host'], true)) {
             continue;
+        }
+        if ($name === 'content-length') {
+            if ($contentLengthSeen) {
+                continue;
+            }
+            $contentLengthSeen = true;
         }
         $filtered[] = $line;
     }
@@ -469,8 +519,26 @@ $injectForwardHeaders = static function (string $head, array $request): string {
     return $requestLine . "\r\n" . implode("\r\n", $filtered) . "\r\n\r\n" . $body;
 };
 
-$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeChunk, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders): void {
+$proxy = static function ($client, string $head, array $request, string $upstream) use ($parseUpstream, $connectTimeout, $httpIdleTimeout, $wsIdleTimeout, $writeStallTimeout, $readStallTimeout, $zeroWriteSleepMicros, $writeChunk, $writeResponse, $proxyCorsHeaders, $injectForwardHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
+    $isBackgroundUpload = $isBackgroundUploadRequest($request);
+    $uploadTraceId = $isBackgroundUpload ? $uploadTraceIdFromRequest($request) : '';
+    $headParts = explode("\r\n\r\n", $head, 2);
+    $initialBodyBytes = strlen((string) ($headParts[1] ?? ''));
+    $clientBodyBytesSeen = $initialBodyBytes;
+    $upstreamBytesWritten = 0;
+    $upstreamResponseStatus = '';
+    $upstreamResponseHead = '';
+    $proxyStartedAt = microtime(true);
     [$upstreamHost, $upstreamPort] = $parseUpstream($upstream);
+    if ($isBackgroundUpload) {
+        $edgeUploadLog($uploadTraceId, 'proxy_connect_started', [
+            'upstream' => $upstream,
+            'content_length' => (string) (($request['headers']['content-length'] ?? '')),
+            'transfer_encoding' => (string) (($request['headers']['transfer-encoding'] ?? '')),
+            'head_bytes' => strlen($head),
+            'initial_body_bytes' => $initialBodyBytes,
+        ]);
+    }
     $upstreamStream = @stream_socket_client(
         "tcp://{$upstreamHost}:{$upstreamPort}",
         $errno,
@@ -480,6 +548,13 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     );
 
     if (!is_resource($upstreamStream)) {
+        if ($isBackgroundUpload) {
+            $edgeUploadLog($uploadTraceId, 'proxy_connect_failed', [
+                'upstream' => $upstream,
+                'errno' => $errno,
+                'error' => $errstr,
+            ]);
+        }
         $writeResponse($client, 502, 'Bad Gateway', $proxyCorsHeaders(), "Bad Gateway\n");
         return;
     }
@@ -639,12 +714,32 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     $lastUpstreamWriteProgress = $lastActivity;
                 }
                 $toUpstream .= $chunk;
+                if ($isBackgroundUpload) {
+                    $clientBodyBytesSeen += strlen($chunk);
+                }
             } else {
                 $lastUpstreamReadProgress = $lastActivity;
                 if ($toClient === '') {
                     $lastClientWriteProgress = $lastActivity;
                 }
                 $toClient .= $chunk;
+                if ($isBackgroundUpload && $upstreamResponseStatus === '') {
+                    $upstreamResponseHead .= $chunk;
+                    if (strpos($upstreamResponseHead, "\r\n") !== false) {
+                        $statusLine = strtok($upstreamResponseHead, "\r\n") ?: '';
+                        if (preg_match('/^HTTP\/\d(?:\.\d)?\s+(\d{3})\b/', $statusLine, $statusMatch) === 1) {
+                            $upstreamResponseStatus = (string) ($statusMatch[1] ?? '');
+                            $edgeUploadLog($uploadTraceId, 'proxy_upstream_response_started', [
+                                'status' => $upstreamResponseStatus,
+                                'client_body_bytes_seen' => $clientBodyBytesSeen,
+                                'upstream_bytes_written' => $upstreamBytesWritten,
+                            ]);
+                        }
+                    }
+                    if (strlen($upstreamResponseHead) > 8192) {
+                        $upstreamResponseHead = substr($upstreamResponseHead, 0, 8192);
+                    }
+                }
             }
             $madeProgress = true;
         }
@@ -653,6 +748,13 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($stream === $upstreamStream && $toUpstream !== '') {
                 $result = $writeChunk($upstreamStream, $toUpstream);
                 if (!$result['ok']) {
+                    if ($isBackgroundUpload) {
+                        $edgeUploadLog($uploadTraceId, 'proxy_upstream_write_failed', [
+                            'client_body_bytes_seen' => $clientBodyBytesSeen,
+                            'upstream_bytes_written' => $upstreamBytesWritten,
+                            'queued_to_upstream_bytes' => strlen($toUpstream),
+                        ]);
+                    }
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
@@ -676,6 +778,9 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     continue;
                 }
                 $toUpstream = substr($toUpstream, $written);
+                if ($isBackgroundUpload) {
+                    $upstreamBytesWritten += $written;
+                }
                 $lastActivity = microtime(true);
                 $lastUpstreamWriteProgress = $lastActivity;
                 $madeProgress = true;
@@ -683,6 +788,13 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
             if ($stream === $client && $toClient !== '') {
                 $result = $writeChunk($client, $toClient);
                 if (!$result['ok']) {
+                    if ($isBackgroundUpload) {
+                        $edgeUploadLog($uploadTraceId, 'proxy_client_write_failed', [
+                            'client_body_bytes_seen' => $clientBodyBytesSeen,
+                            'upstream_bytes_written' => $upstreamBytesWritten,
+                            'upstream_response_status' => $upstreamResponseStatus,
+                        ]);
+                    }
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
@@ -717,6 +829,16 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
         }
     }
 
+    if ($isBackgroundUpload) {
+        $edgeUploadLog($uploadTraceId, 'proxy_finished', [
+            'duration_ms' => (int) round((microtime(true) - $proxyStartedAt) * 1000),
+            'client_body_bytes_seen' => $clientBodyBytesSeen,
+            'upstream_bytes_written' => $upstreamBytesWritten,
+            'upstream_response_status' => $upstreamResponseStatus,
+            'client_open' => $clientOpen,
+            'upstream_open' => $upstreamOpen,
+        ]);
+    }
     @fclose($upstreamStream);
 };
 
@@ -747,7 +869,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     return 'static';
 };
 
-$handleClient = static function ($client, bool $tls) use ($domain, $readRequestHead, $parseRequest, $writeResponse, $route, $serveStatic, $proxy): void {
+$handleClient = static function ($client, bool $tls) use ($domain, $readRequestHead, $parseRequest, $writeResponse, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
     stream_set_timeout($client, 10);
     if ($tls) {
         $crypto = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_SERVER);
@@ -785,6 +907,37 @@ $handleClient = static function ($client, bool $tls) use ($domain, $readRequestH
     }
 
     $upstream = $route($request);
+    if ($isBackgroundUploadRequest($request)) {
+        $traceId = $uploadTraceIdFromRequest($request);
+        $headers = is_array($request['headers'] ?? null) ? (array) $request['headers'] : [];
+        $contentLength = trim((string) ($headers['content-length'] ?? ''));
+        $transferEncoding = strtolower(trim((string) ($headers['transfer-encoding'] ?? '')));
+        if ($transferEncoding !== '' || $contentLength === '' || preg_match('/^\d+$/', $contentLength) !== 1) {
+            $edgeUploadLog($traceId, 'proxy_rejected_invalid_upload_length', [
+                'content_length' => $contentLength,
+                'transfer_encoding' => $transferEncoding,
+                'path' => (string) ($request['path'] ?? ''),
+            ]);
+            $payload = json_encode([
+                'status' => 'error',
+                'error' => [
+                    'code' => 'workspace_background_upload_failed',
+                    'message' => 'Background image uploads require a valid Content-Length.',
+                    'details' => [
+                        'reason' => $transferEncoding !== '' ? 'chunked_upload_not_supported' : 'invalid_content_length',
+                        'trace_id' => $traceId,
+                    ],
+                ],
+                'time' => gmdate('c'),
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $headers = $proxyCorsHeaders();
+            $headers['Content-Type'] = 'application/json; charset=utf-8';
+            $headers['X-Upload-Trace-Id'] = $traceId;
+            $writeResponse($client, $transferEncoding !== '' ? 400 : 411, $transferEncoding !== '' ? 'Bad Request' : 'Length Required', $headers, is_string($payload) ? $payload : '{}');
+            @fclose($client);
+            return;
+        }
+    }
     if ($upstream === 'static') {
         $serveStatic($client, $request);
         @fclose($client);
