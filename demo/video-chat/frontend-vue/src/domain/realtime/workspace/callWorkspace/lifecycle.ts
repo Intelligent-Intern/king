@@ -60,6 +60,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     callMediaPrefs,
     canModerate,
     chatListRef,
+    connectedParticipantUsers,
     connectionReason,
     connectionState,
     desiredRoomId,
