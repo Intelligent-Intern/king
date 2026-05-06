@@ -27,7 +27,19 @@
       />
     </template>
 
-    <AdminTableFrame class="governance-table-wrap">
+    <GovernanceOrganizationsView
+      v-if="isOrganizationsView"
+      v-bind="organizationViewProps"
+      @create="openCreateModal"
+      @edit="openEditModal"
+      @delete="deleteRow"
+      @submit="submitModal"
+      @close="closeModal"
+      @open-relation="openRelationNavigator"
+      @close-relation="closeRelationNavigator"
+      @apply-relation="applyRelationSelection"
+    />
+    <AdminTableFrame v-else class="governance-table-wrap">
       <table class="governance-table">
         <thead>
           <tr>
@@ -87,7 +99,6 @@
         </tbody>
       </table>
     </AdminTableFrame>
-
     <template #footer>
       <AppPagination
         :page="page"
@@ -101,6 +112,7 @@
     </template>
 
     <GovernanceCrudModal
+      v-if="!isOrganizationsView"
       :open="modalOpen"
       :title="modalTitle"
       :submit-label="modalSubmitLabel"
@@ -146,6 +158,7 @@ import GovernanceCrudToolbar from '../components/GovernanceCrudToolbar.vue';
 import GovernanceEmptyState from '../components/GovernanceEmptyState.vue';
 import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
+import GovernanceOrganizationsView from './GovernanceOrganizationsView.vue';
 import { buildGovernanceCatalogRows } from '../../governanceCatalog.js';
 import { descriptorAllowsAction, GOVERNANCE_CRUD_DESCRIPTORS, governanceCrudDescriptorForRoute } from '../crudDescriptors.js';
 import {
@@ -191,6 +204,8 @@ let loadRequestToken = 0;
 const scopeKey = computed(() => String(route.name || route.path));
 const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
 const entityKey = computed(() => String(crudDescriptor.value.entity_key || '').trim());
+const isOrganizationsView = computed(() => entityKey.value === 'organizations');
+const organizationViewProps = computed(() => ({ rows: pagedRows.value, loading: loading.value, loadError: loadError.value, filteredCount: filteredRows.value.length, showEmptyState: showEmptyState.value, emptyStateTitle: emptyStateTitle.value, emptyStateBody: emptyStateBody.value, createLabel: createButtonLabel.value, showCreate: Boolean(createAction.value), editorOpen: modalOpen.value, editorTitle: modalTitle.value, submitLabel: modalSubmitLabel.value, form, fields: modalFields.value, relationships: modalRelationships.value, relationSelections, error: formError.value, saving: mutationPending.value, relationActive: relationNavigatorOpen.value, relation: relationNavigatorRelation.value, rowProvider: relationRowsForEntity, createDraft: createRelationDraft, canCreateDraftForEntity: canCreateRelationDraft, rowActions: rowActions.value }));
 const usesBackend = computed(() => isPersistedGovernanceEntity(entityKey.value));
 const catalogRows = computed(() => buildGovernanceCatalogRows(workspaceModuleRegistry, scopeKey.value));
 const rows = computed(() => {
