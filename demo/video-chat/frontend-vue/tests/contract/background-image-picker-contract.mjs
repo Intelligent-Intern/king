@@ -55,6 +55,21 @@ assert.match(
   'call background picker must not render an empty Background images block while it has no rows',
 );
 assert.match(
+  picker,
+  /normalizeBackgroundImageRow/,
+  'call background picker must normalize backend rows before deciding whether images exist',
+);
+assert.match(
+  picker,
+  /status !== 'active' \|\| filePath === ''/,
+  'call background picker must ignore inactive rows and rows without a usable file path',
+);
+assert.match(
+  picker,
+  /@error="markImageUnavailable\(image\)"/,
+  'call background picker must drop broken image rows when the image asset cannot load',
+);
+assert.match(
   blurControls,
   /call-left-blur-controls/,
   'shared call background blur controls must keep the Blur and Blur+ button group',
