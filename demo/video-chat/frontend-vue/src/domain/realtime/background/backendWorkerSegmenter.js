@@ -1,8 +1,8 @@
 /**
  * Worker-based MediaPipe segmentation backend.
  *
- * Wraps imageSegmenterWorker.js and exposes the same interface as
- * backendMediapipe.js / backendTfjs.js:
+ * Wraps imageSegmenterWorker.js and exposes the background segmentation
+ * interface expected by stream.js:
  *   { kind, nextFaces(video, vw, vh, nowMs), dispose() }
  *
  * Key differences from the old backends:
