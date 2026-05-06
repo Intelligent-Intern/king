@@ -533,19 +533,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       rafId = requestAnimationFrame(draw);
       return;
     }
-    if (overloadDisabled) {
-      const vwFast = video.videoWidth || canvas.width;
-      const vhFast = video.videoHeight || canvas.height;
-      if (vwFast > 1 && vhFast > 1) {
-        ctx.save();
-        ctx.filter = "none";
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
-      }
-      nextFrameDueAt = frameStartedAt + dynamicFrameBudgetMs;
-      rafId = requestAnimationFrame(draw);
-      return;
-    }
     const vw = video.videoWidth || canvas.width;
     const vh = video.videoHeight || canvas.height;
     if (vw <= 1 || vh <= 1) {
@@ -553,7 +540,9 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
       return;
     }
     const now = performance.now();
-    const canRunSegmentation = now >= overloadCooldownUntil;
+    // Overload may pause SINet detection, but it must never turn an active
+    // background effect into a raw-camera pass-through.
+    const canRunSegmentation = !overloadDisabled && now >= overloadCooldownUntil;
     const segmentationWidth = Math.max(1, Math.round(Math.min(vw, canvas.width)));
     const segmentationHeight = Math.max(1, Math.round(Math.min(vh, canvas.height)));
     const segmentation = canRunSegmentation

@@ -37,6 +37,8 @@ try {
   assert.ok(source.includes('const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));'), 'background filter stream must time out readiness if segmentation is slow');
   assert.ok(source.includes('ctx.filter = `blur(${blurPx}px)`;'), 'background filter stream must keep the frame blurred while a fresh matte is still warming up');
   assert.ok(source.includes('if (!backgroundImage && !backgroundColor) {'), 'solid/image backgrounds must not draw raw or blurred camera frames while a fresh matte is still warming up');
+  assert.ok(source.includes('const canRunSegmentation = !overloadDisabled && now >= overloadCooldownUntil;'), 'background overload may pause SINet detection but must keep the active compositor running');
+  assert.ok(!source.includes('if (overloadDisabled) {\n      const vwFast = video.videoWidth || canvas.width;'), 'background overload must not install a raw-camera pass-through branch');
   assert.ok(harness.includes("preset === 'weak_blur' ? 'blur(14px)' : 'blur(32px)'"), 'standalone harness must use stronger thin/thick blur previews');
   for (const [label, file] of [
     ['local orchestration', localOrchestration],
