@@ -7,17 +7,9 @@ export function selectBackgroundFilterBackend() {
     };
   }
 
-  if (typeof window.FaceDetector === 'function') {
-    return {
-      backend: 'face_detector',
-      supported: true,
-      reason: 'ok',
-    };
-  }
-
   return {
-    backend: 'center_mask_fallback',
+    backend: 'king_wasm',
     supported: true,
-    reason: 'fallback_center_mask',
+    reason: 'ok',
   };
 }

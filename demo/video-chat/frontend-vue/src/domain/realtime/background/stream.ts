@@ -1,5 +1,4 @@
-import { createMediaPipeSegmentationBackend } from './backendMediapipe';
-import { createTfjsSegmentationBackend } from './backendTfjs';
+import { createKingWasmSegmentationBackend } from './backendKingWasm';
 import { clamp01, lerp, smoothstep, toNumber } from './math';
 
 // Default matte shaping values for inner mask refinement.
@@ -380,7 +379,6 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   const blurPx = Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3))));
   const backgroundColor = String(options.backgroundColor ?? "").trim();
   const backgroundImageUrl = String(options.backgroundImageUrl ?? "").trim();
-  const facePaddingPx = Math.max(4, Math.min(64, Math.round(toNumber(options.facePaddingPx, 14))));
   const temporalSmoothingAlpha = Math.max(0, Math.min(0.95, toNumber(options.temporalSmoothingAlpha, 0.3)));
   const detectIntervalMs = Math.max(66, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 140))));
   const preferFastMatte = options.preferFastMatte === true;
@@ -448,18 +446,12 @@ async function createBackgroundFilterStream(sourceStream, options = {}) {
   }
   let segmentationBackend = null;
   try {
-    try {
-      segmentationBackend = await createMediaPipeSegmentationBackend({ detectIntervalMs });
-    } catch {
-      segmentationBackend = null;
-    }
-    if (!segmentationBackend) {
-      try {
-        segmentationBackend = await createTfjsSegmentationBackend({ detectIntervalMs, facePaddingPx });
-      } catch {
-        segmentationBackend = null;
-      }
-    }
+    segmentationBackend = await createKingWasmSegmentationBackend({
+      detectIntervalMs,
+      width: canvas.width,
+      height: canvas.height,
+      mattePreset: options.mattePreset,
+    });
   } catch {
     video.pause();
     video.srcObject = null;

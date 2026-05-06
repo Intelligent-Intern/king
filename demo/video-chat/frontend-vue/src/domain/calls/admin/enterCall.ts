@@ -108,6 +108,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     return {
       mode,
       blurPx,
+      mattePreset: backdrop === 'blur9' ? 'hard_blur' : 'weak_blur',
       detectIntervalMs,
       temporalSmoothingAlpha,
       preferFastMatte: qualityProfile !== 'quality',
