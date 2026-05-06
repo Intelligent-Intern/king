@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { workspaceModuleRegistry } from '../../src/modules/index.js';
+import { GOVERNANCE_CRUD_DESCRIPTORS } from '../../src/modules/governance/crudDescriptors.js';
 
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
@@ -44,6 +45,7 @@ for (const route of routes) {
 }
 
 for (const descriptor of modules) {
+  assert.ok(descriptor.permissions.length > 0, `${descriptor.module_key} must expose manifest permissions`);
   assert.ok(Array.isArray(descriptor.access.grant_targets), `${descriptor.module_key} access grant targets missing`);
   assert.ok(descriptor.access.grant_targets.includes('group'), `${descriptor.module_key} must be group-assignable`);
   assert.ok(descriptor.access.grant_targets.includes('organization'), `${descriptor.module_key} must be organization-assignable`);
@@ -53,6 +55,30 @@ for (const descriptor of modules) {
     `${descriptor.module_key} must expose the time-limited grant metadata slot`,
   );
 }
+
+const manifestPermissions = new Set(modules.flatMap((descriptor) => descriptor.permissions));
+assert.ok(manifestPermissions.has('calls.join'), 'calls module must expose join permission');
+assert.ok(manifestPermissions.has('calendar.share'), 'calendar module must expose share permission');
+assert.ok(manifestPermissions.has('governance.groups.update'), 'governance module must expose group update permission');
+assert.ok(manifestPermissions.has('workspace_settings.update'), 'workspace settings module must expose update permission');
+
+const referencedPermissions = new Set();
+for (const descriptor of modules) {
+  for (const entry of [...descriptor.routes, ...descriptor.navigation, ...descriptor.settings_panels]) {
+    collectRequiredPermissions(entry, referencedPermissions);
+    for (const action of Array.isArray(entry.actions) ? entry.actions : []) {
+      collectRequiredPermissions(action, referencedPermissions);
+    }
+  }
+}
+for (const descriptor of Object.values(GOVERNANCE_CRUD_DESCRIPTORS)) {
+  for (const action of descriptor.row_actions || []) {
+    collectRequiredPermissions(action, referencedPermissions);
+  }
+}
+
+const missingPermissions = [...referencedPermissions].filter((permission) => !manifestPermissions.has(permission));
+assert.deepEqual(missingPermissions, [], 'every permission referenced by routes/actions must be exposed by a module manifest');
 
 assert.ok(
   routes.some((route) => route.path === '/admin/administration/marketplace' && route.module_key === 'marketplace'),
@@ -80,3 +106,11 @@ for (const moduleKey of expectedModules) {
 }
 
 console.log('[module-registry-contract] PASS');
+
+function collectRequiredPermissions(entry, output) {
+  if (!entry || typeof entry !== 'object' || !Array.isArray(entry.required_permissions)) return;
+  for (const permission of entry.required_permissions) {
+    const key = String(permission || '').trim();
+    if (key !== '') output.add(key);
+  }
+}

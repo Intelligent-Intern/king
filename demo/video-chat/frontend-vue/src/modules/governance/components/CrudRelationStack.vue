@@ -79,23 +79,28 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="row in navigator.pagedRows.value" :key="navigator.rowId(row)">
-              <td :data-label="t('governance.relation_picker.select')">
-                <input
-                  class="crud-relation-check"
-                  :type="isMultiple ? 'checkbox' : 'radio'"
-                  :checked="navigator.rowSelected(row)"
-                  :name="`relation-${navigator.currentFrame.value?.key || 'root'}`"
-                  @change="navigator.toggleRow(row)"
-                />
-              </td>
-              <td :data-label="t('governance.name')">
-                <div class="crud-relation-name">{{ rowLabel(row) }}</div>
-                <div class="crud-relation-subline">{{ targetEntityLabel }}</div>
-              </td>
-              <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
-              <td :data-label="t('governance.status')">{{ row.status || t('common.not_available') }}</td>
-            </tr>
+            <template v-for="section in relationSections" :key="section.key">
+              <tr v-if="section.label" class="crud-relation-group-row">
+                <td colspan="4">{{ section.label }}</td>
+              </tr>
+              <tr v-for="row in section.rows" :key="navigator.rowId(row)">
+                <td :data-label="t('governance.relation_picker.select')">
+                  <input
+                    class="crud-relation-check"
+                    :type="isMultiple ? 'checkbox' : 'radio'"
+                    :checked="navigator.rowSelected(row)"
+                    :name="`relation-${navigator.currentFrame.value?.key || 'root'}`"
+                    @change="navigator.toggleRow(row)"
+                  />
+                </td>
+                <td :data-label="t('governance.name')">
+                  <div class="crud-relation-name">{{ rowLabel(row) }}</div>
+                  <div class="crud-relation-subline">{{ rowSubline(row) }}</div>
+                </td>
+                <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
+                <td :data-label="t('governance.status')">{{ row.status || t('common.not_available') }}</td>
+              </tr>
+            </template>
             <tr v-if="navigator.filteredRows.value.length === 0">
               <td colspan="4" class="crud-relation-empty">{{ t('governance.relation_picker.empty') }}</td>
             </tr>
@@ -184,8 +189,9 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'apply']);
 
-const navigator = useCrudRelationNavigator({
-  rowProvider: (entityKey) => props.rowProvider(entityKey),
+let navigator = null;
+navigator = useCrudRelationNavigator({
+  rowProvider: (entityKey) => relationRowsForEntity(entityKey),
 });
 const creatingDraft = ref(false);
 const draftSaving = ref(false);
@@ -219,6 +225,7 @@ const targetEntityLabel = computed(() => {
   if (!descriptor) return frameLabel(navigator.currentFrame.value);
   return t(`navigation.governance.${descriptor.entity_key.replace('-', '_')}`);
 });
+const relationSections = computed(() => relationRowSections(navigator.pagedRows.value));
 
 watch(
   () => [props.open, props.relation],
@@ -247,6 +254,10 @@ function frameLabel(frame) {
 
 function rowLabel(row) {
   return String(row?.name || row?.display_name || row?.email || row?.key || row?.id || '').trim() || t('common.not_available');
+}
+
+function rowSubline(row) {
+  return isPermissionRow(row) ? permissionModuleLabel(row) : targetEntityLabel.value;
 }
 
 function fieldLabel(field) {
@@ -315,6 +326,82 @@ async function submitCreateDraft() {
 
 function submitRelationSearch() {
   navigator.goToPage(1);
+}
+
+function normalizeString(value) {
+  return String(value || '').trim();
+}
+
+function titleFromKey(value) {
+  return normalizeString(value)
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function relationRowsForEntity(entityKey) {
+  const key = normalizeString(entityKey);
+  const rows = props.rowProvider(key);
+  if (key !== 'permissions' || !Array.isArray(rows)) return rows;
+  const moduleKeys = selectedModuleKeysForPermissionRows();
+  if (moduleKeys.size === 0) return rows;
+  return rows.filter((row) => moduleKeys.has(permissionModuleKey(row)));
+}
+
+function selectedModuleKeysForPermissionRows() {
+  const keys = new Set();
+  const stack = Array.isArray(navigator?.stack?.value) ? navigator.stack.value : [];
+  const moduleFrame = [...stack].reverse().find((frame) => normalizeString(frame?.target_entity) === 'modules');
+  if (moduleFrame) {
+    for (const row of navigator.selectedRowsForFrame(moduleFrame)) addModuleKey(keys, row);
+  }
+  if (keys.size === 0) {
+    for (const row of selectedRowsForRelation({ key: 'modules' })) addModuleKey(keys, row);
+  }
+  return keys;
+}
+
+function addModuleKey(keys, row) {
+  const key = moduleKeyFromRow(row);
+  if (key !== '') keys.add(key);
+}
+
+function moduleKeyFromRow(row) {
+  const explicit = normalizeString(row?.module_key || row?.key);
+  if (explicit !== '') return explicit.replace(/^module:/, '');
+  return normalizeString(row?.id).replace(/^module:/, '');
+}
+
+function permissionModuleKey(row) {
+  return normalizeString(row?.module_key) || normalizeString(row?.key).split('.')[0];
+}
+
+function permissionModuleLabel(row) {
+  return normalizeString(row?.module_name) || titleFromKey(permissionModuleKey(row));
+}
+
+function isPermissionRow(row) {
+  return normalizeString(row?.entity_key) === 'permissions' || normalizeString(row?.id).startsWith('permission:');
+}
+
+function relationRowSections(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  if (normalizeString(navigator.currentFrame.value?.target_entity) !== 'permissions') {
+    return [{ key: 'default', label: '', rows }];
+  }
+  const sections = new Map();
+  for (const row of rows) {
+    const moduleKey = permissionModuleKey(row) || 'unknown';
+    if (!sections.has(moduleKey)) {
+      sections.set(moduleKey, {
+        key: `permission-module:${moduleKey}`,
+        label: permissionModuleLabel(row),
+        rows: [],
+      });
+    }
+    sections.get(moduleKey).rows.push(row);
+  }
+  return [...sections.values()];
 }
 
 function goBackTo(index) {
@@ -494,6 +581,15 @@ function applySelection() {
 .crud-relation-table th:first-child,
 .crud-relation-table td:first-child {
   width: 82px;
+}
+
+.crud-relation-group-row td {
+  padding: 8px 12px;
+  background: var(--bg-soft);
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .crud-relation-check {

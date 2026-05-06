@@ -20,8 +20,13 @@ assert.ok(moduleRows.every((row) => Number.isInteger(row.route_count)), 'module 
 const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-permissions');
 const permissionKeys = new Set(permissionRows.map((row) => row.key));
 assert.ok(permissionRows.every((row) => row.entity_key === 'permissions'), 'descriptor permission rows must carry their entity key');
+assert.ok(permissionRows.every((row) => row.module_key && row.module_name), 'permission rows must carry their module grouping metadata');
 assert.ok(permissionKeys.has('users.read'), 'users permission row missing');
+assert.ok(permissionKeys.has('users.create'), 'users create permission row missing');
 assert.ok(permissionKeys.has('governance.read'), 'governance permission row missing');
+assert.ok(permissionKeys.has('governance.groups.update'), 'governance group update permission row missing');
+assert.ok(permissionKeys.has('calls.join'), 'call join permission row missing');
+assert.ok(permissionKeys.has('calendar.share'), 'calendar share permission row missing');
 assert.ok(permissionKeys.has('theme_editor.admin'), 'theme editor permission row missing');
 
 assert.deepEqual(

@@ -3,7 +3,6 @@ const governanceRoutes = [
   ['groups', 'Gruppen', 'Gruppe', 'Gruppen', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['organizations', 'Organisationen', 'Organisation', 'Organisationen', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['modules', 'Module', 'Modul', 'Module', 'modules/governance/pages/GovernanceCrudView.vue'],
-  ['permissions', 'Rechte', 'Recht', 'Rechte', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['roles', 'Rollen', 'Rolle', 'Rollen', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['grants', 'Freigaben', 'Freigabe', 'Freigaben', 'modules/governance/pages/GovernanceCrudView.vue'],
   ['policies', 'Richtlinien', 'Richtlinie', 'Richtlinien', 'modules/governance/pages/GovernanceCrudView.vue'],
@@ -45,6 +44,32 @@ const governanceReadonlyReasons = {
   permissions: 'governance.readonly.system_catalog',
 };
 
+const governancePermissions = Object.freeze([
+  'governance.read',
+  'governance.groups.create',
+  'governance.groups.update',
+  'governance.groups.delete',
+  'governance.organizations.create',
+  'governance.organizations.update',
+  'governance.organizations.delete',
+  'governance.roles.create',
+  'governance.roles.update',
+  'governance.roles.delete',
+  'governance.grants.create',
+  'governance.grants.update',
+  'governance.grants.delete',
+  'governance.policies.create',
+  'governance.policies.update',
+  'governance.policies.delete',
+  'governance.audit_log.read',
+  'governance.audit_log.export',
+  'governance.data_portability.export',
+  'governance.data_portability.import',
+  'governance.compliance.create',
+  'governance.compliance.update',
+  'governance.compliance.delete',
+]);
+
 const governanceActions = {
   users: [
     {
@@ -79,16 +104,6 @@ const governanceActions = {
       label_key: 'governance.action.inspect_catalog',
       kind: 'inspect',
       resource_type: 'module',
-      required_permissions: ['governance.read'],
-      readonly_reason_key: 'governance.readonly.system_catalog',
-    },
-  ],
-  permissions: [
-    {
-      key: 'governance.permissions.inspect',
-      label_key: 'governance.action.inspect_catalog',
-      kind: 'inspect',
-      resource_type: 'permission',
       required_permissions: ['governance.read'],
       readonly_reason_key: 'governance.readonly.system_catalog',
     },
@@ -177,6 +192,10 @@ function governanceRouteActions(slug) {
   return [...(governanceActions[slug] || []), tourAction(slug)];
 }
 
+function governanceRequiredPermissions(slug) {
+  return slug === 'users' ? ['users.read'] : ['governance.read'];
+}
+
 function governanceLoader(sourcePath) {
   if (sourcePath === 'modules/users/pages/admin/UsersView.vue') {
     return () => import('../users/pages/admin/UsersView.vue');
@@ -187,7 +206,7 @@ function governanceLoader(sourcePath) {
 export default {
   module_key: 'governance',
   version: '0.1.0',
-  permissions: ['governance.read'],
+  permissions: governancePermissions,
   routes: governanceRoutes.map(([slug, pageTitle, entitySingular, entityPlural, sourcePath]) => ({
     path: `/admin/governance/${slug}`,
     name: `admin-governance-${slug}`,
@@ -199,6 +218,7 @@ export default {
     entityPlural,
     entityPlural_key: governanceEntityKeys[slug]?.[1] || '',
     readonly_reason_key: governanceReadonlyReasons[slug] || '',
+    required_permissions: governanceRequiredPermissions(slug),
     actions: governanceRouteActions(slug),
     source_path: sourcePath,
     loader: governanceLoader(sourcePath),
@@ -210,6 +230,7 @@ export default {
     label_key: governanceLabelKeys[slug] || '',
     order: (index + 1) * 10,
     roles: ['admin'],
+    required_permissions: governanceRequiredPermissions(slug),
   })),
   settings_panels: [],
   i18n_namespaces: ['governance'],

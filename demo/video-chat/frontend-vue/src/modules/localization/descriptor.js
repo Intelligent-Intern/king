@@ -39,6 +39,7 @@ export default {
       label_key: 'settings.localization',
       roles: ['admin', 'user'],
       order: 40,
+      required_permissions: [],
     },
   ],
   i18n_namespaces: ['localization'],

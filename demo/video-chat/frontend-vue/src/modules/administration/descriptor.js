@@ -1,7 +1,7 @@
 export default {
   module_key: 'administration',
   version: '0.1.0',
-  permissions: ['administration.read'],
+  permissions: ['administration.read', 'administration.update'],
   routes: [
     {
       path: '/admin/administration/app-configuration',
@@ -9,6 +9,7 @@ export default {
       roles: ['admin'],
       pageTitle: 'App Configuration',
       pageTitle_key: 'navigation.administration.app_configuration',
+      required_permissions: ['administration.read'],
       actions: [
         {
           key: 'administration.app_configuration.save',
@@ -37,6 +38,7 @@ export default {
       label_key: 'navigation.administration.app_configuration',
       order: 30,
       roles: ['admin'],
+      required_permissions: ['administration.read'],
     },
   ],
   settings_panels: [],

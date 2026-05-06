@@ -94,6 +94,8 @@ assert.match(stackSource, /draftSaving/, 'relation stack create must expose pend
 assert.match(stackSource, /pushNestedRelation\(nestedRelation\)/, 'relation stack must support recursive nested relation navigation');
 assert.match(stackSource, /applyCurrentSelectionToParent/, 'relation stack must apply nested selections back into the selected parent row');
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
+assert.match(stackSource, /permissionModuleLabel/, 'permission relation rows must be grouped under their owning module');
+assert.match(stackSource, /selectedModuleKeysForPermissionRows/, 'permission relation rows must narrow to selected modules when module context exists');
 assert.doesNotMatch(stackSource, /@click="\$emit\('close'\)"/, 'relation stack must not render a redundant footer close action');
 assert.match(stackSource, /AppIconButton[\s\S]*icons\/send\.png/, 'relation stack search must use the shared send submit icon');
 assert.match(stackSource, /<form class="crud-relation-toolbar" @submit\.prevent="submitRelationSearch">/, 'relation stack search must submit through a toolbar form');

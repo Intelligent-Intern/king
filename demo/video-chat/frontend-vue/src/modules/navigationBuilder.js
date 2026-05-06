@@ -82,7 +82,10 @@ function modulesAllow(moduleKey, context) {
 }
 
 export function entryRequiredPermissions(entry, modulePermissions = []) {
-  const ownPermissions = normalizeStringList(entry.required_permissions);
+  if (entry && Object.prototype.hasOwnProperty.call(entry, 'required_permissions')) {
+    return normalizeStringList(entry.required_permissions);
+  }
+  const ownPermissions = normalizeStringList(entry?.required_permissions);
   return ownPermissions.length > 0 ? ownPermissions : normalizeStringList(modulePermissions);
 }
 

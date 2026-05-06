@@ -49,6 +49,36 @@ export function sessionPermissionKeys(tenantPermissions = {}) {
     output.add('users.update');
     output.add('users.delete');
   }
+  if (tenantPermissions?.tenant_admin === true) {
+    output.add('users.read');
+    output.add('users.create');
+    output.add('users.update');
+    output.add('users.delete');
+    output.add('administration.read');
+    output.add('administration.update');
+    output.add('calendar.read');
+    output.add('calendar.create');
+    output.add('calendar.update');
+    output.add('calendar.delete');
+    output.add('calendar.share');
+    output.add('calls.read');
+    output.add('calls.create');
+    output.add('calls.update');
+    output.add('calls.delete');
+    output.add('calls.invite');
+    output.add('calls.join');
+    output.add('calls.moderate');
+    output.add('calls.chat');
+    output.add('calls.screen_share');
+    output.add('calls.backgrounds');
+    output.add('localization.admin');
+    output.add('marketplace.admin');
+    output.add('onboarding.read');
+    output.add('onboarding.complete');
+    output.add('theme_editor.admin');
+    output.add('workspace_settings.read');
+    output.add('workspace_settings.update');
+  }
   if (
     tenantPermissions?.tenant_admin === true
     || tenantPermissions?.manage_organizations === true
