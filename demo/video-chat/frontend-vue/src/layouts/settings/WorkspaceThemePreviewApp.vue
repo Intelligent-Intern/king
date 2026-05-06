@@ -737,7 +737,7 @@ function closeModal() {
   padding: 0 6px;
 }
 .theme-preview-app.compact .theme-preview-toolbar {
-  gap: 8px;
+  gap: 20px;
 }
 .theme-preview-app.compact .theme-preview-toolbar input {
   flex-basis: 140px;

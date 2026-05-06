@@ -515,7 +515,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 20px;
   flex-wrap: nowrap;
 }
 
@@ -524,13 +524,13 @@
   flex: 1 1 auto;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 20px;
 }
 
 .settings-theme-preview-calls-view .calls-toolbar-right {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 20px;
   flex: 0 0 auto;
   flex-wrap: nowrap;
 }

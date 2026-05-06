@@ -9,7 +9,7 @@
 .calls-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 20px;
   margin-bottom: 15px;
 }
 

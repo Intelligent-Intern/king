@@ -46,7 +46,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 20px;
   flex-wrap: wrap;
   margin-bottom: 15px;
 }
@@ -70,7 +70,7 @@
 .calls-toolbar-right {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 20px;
   flex-wrap: wrap;
 }
 
@@ -87,7 +87,7 @@
 .calls-search {
   display: inline-grid;
   grid-template-columns: minmax(220px, 1fr) auto;
-  gap: 8px;
+  gap: 20px;
   align-items: center;
 }
 
