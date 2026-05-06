@@ -92,6 +92,7 @@ defineEmits(['avatar-select', 'avatar-drop']);
 
 .settings-profile-textarea {
   min-height: 96px;
+  padding-top: 5px;
   resize: vertical;
 }
 
