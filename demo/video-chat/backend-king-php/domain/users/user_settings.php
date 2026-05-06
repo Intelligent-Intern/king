@@ -22,7 +22,6 @@ function videochat_allowed_user_settings_patch_fields(): array
         'linkedin_url',
         'x_url',
         'youtube_url',
-        'messenger_contacts',
     ];
 }
 
@@ -132,57 +131,6 @@ function videochat_validate_profile_url(mixed $value, array $allowedHosts): arra
     return ['ok' => false, 'url' => '', 'reason' => 'host_not_allowed'];
 }
 
-function videochat_validate_messenger_contacts(mixed $value): array
-{
-    if ($value === null) {
-        return ['ok' => true, 'contacts' => [], 'reason' => 'empty'];
-    }
-    if (!is_array($value)) {
-        return ['ok' => false, 'contacts' => [], 'reason' => 'must_be_array'];
-    }
-    if (count($value) > 20) {
-        return ['ok' => false, 'contacts' => [], 'reason' => 'too_many'];
-    }
-
-    $contacts = [];
-    foreach ($value as $index => $row) {
-        if (!is_array($row)) {
-            return ['ok' => false, 'contacts' => [], 'reason' => 'row_must_be_object', 'index' => $index];
-        }
-
-        $channel = strtolower(trim((string) ($row['channel'] ?? '')));
-        $handle = trim((string) ($row['handle'] ?? ''));
-        if ($channel === '' || $handle === '') {
-            return ['ok' => false, 'contacts' => [], 'reason' => 'channel_and_handle_required', 'index' => $index];
-        }
-        if (preg_match('/^[a-z0-9_.-]{1,40}$/', $channel) !== 1) {
-            return ['ok' => false, 'contacts' => [], 'reason' => 'invalid_channel', 'index' => $index];
-        }
-        if (strlen($handle) > 160 || preg_match('/[\x00-\x1F\x7F]/', $handle) === 1) {
-            return ['ok' => false, 'contacts' => [], 'reason' => 'invalid_handle', 'index' => $index];
-        }
-
-        $contacts[] = [
-            'channel' => $channel,
-            'handle' => $handle,
-        ];
-    }
-
-    return ['ok' => true, 'contacts' => $contacts, 'reason' => 'ok'];
-}
-
-/**
- * @return array<int, array{channel: string, handle: string}>
- */
-function videochat_decode_messenger_contacts(mixed $value): array
-{
-    $decoded = json_decode(is_string($value) && trim($value) !== '' ? $value : '[]', true);
-    $validation = videochat_validate_messenger_contacts(is_array($decoded) ? $decoded : []);
-    return (bool) ($validation['ok'] ?? false) && is_array($validation['contacts'] ?? null)
-        ? $validation['contacts']
-        : [];
-}
-
 /**
  * @return array<int, string>
  */
@@ -221,9 +169,7 @@ function videochat_supported_user_date_formats(): array
  *   linkedin_url: string,
  *   x_url: string,
  *   youtube_url: string,
- *   messenger_contacts: array<int, array{channel: string, handle: string}>,
  *   onboarding_completed_tours: array<int, string>,
- *   onboarding_badges: array<int, array{tour_key: string, completed_at: string}>
  * }|null
  */
 function videochat_fetch_user_settings(PDO $pdo, int $userId, int $tenantId = 0): ?array
@@ -249,7 +195,6 @@ SELECT
     users.linkedin_url,
     users.x_url,
     users.youtube_url,
-    users.messenger_contacts_json,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -286,9 +231,7 @@ SQL
         'linkedin_url' => is_string($row['linkedin_url'] ?? null) ? (string) $row['linkedin_url'] : '',
         'x_url' => is_string($row['x_url'] ?? null) ? (string) $row['x_url'] : '',
         'youtube_url' => is_string($row['youtube_url'] ?? null) ? (string) $row['youtube_url'] : '',
-        'messenger_contacts' => videochat_decode_messenger_contacts($row['messenger_contacts_json'] ?? '[]'),
         'onboarding_completed_tours' => $onboarding['completed_tours'],
-        'onboarding_badges' => $onboarding['badges'],
     ];
 }
 
@@ -429,19 +372,6 @@ function videochat_validate_user_settings_patch(array $payload, ?PDO $pdo = null
         }
     }
 
-    if (array_key_exists('messenger_contacts', $payload)) {
-        $contacts = videochat_validate_messenger_contacts($payload['messenger_contacts']);
-        if (!(bool) ($contacts['ok'] ?? false)) {
-            $reason = (string) ($contacts['reason'] ?? 'invalid');
-            if (array_key_exists('index', $contacts)) {
-                $reason .= ':' . (string) $contacts['index'];
-            }
-            $errors['messenger_contacts'] = $reason;
-        } else {
-            $data['messenger_contacts'] = is_array($contacts['contacts'] ?? null) ? $contacts['contacts'] : [];
-        }
-    }
-
     if ($data === []) {
         $errors['payload'] = 'at_least_one_supported_field_required';
     }
@@ -507,7 +437,6 @@ SET display_name = :display_name,
     linkedin_url = :linkedin_url,
     x_url = :x_url,
     youtube_url = :youtube_url,
-    messenger_contacts_json = :messenger_contacts_json,
     updated_at = :updated_at
 WHERE id = :id
 SQL
@@ -526,10 +455,6 @@ SQL
         ':linkedin_url' => array_key_exists('linkedin_url', $data) ? (string) $data['linkedin_url'] : (string) ($existing['linkedin_url'] ?? ''),
         ':x_url' => array_key_exists('x_url', $data) ? (string) $data['x_url'] : (string) ($existing['x_url'] ?? ''),
         ':youtube_url' => array_key_exists('youtube_url', $data) ? (string) $data['youtube_url'] : (string) ($existing['youtube_url'] ?? ''),
-        ':messenger_contacts_json' => json_encode(
-            array_key_exists('messenger_contacts', $data) ? $data['messenger_contacts'] : ($existing['messenger_contacts'] ?? []),
-            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-        ) ?: '[]',
         ':updated_at' => gmdate('c'),
         ':id' => $userId,
     ]);
@@ -553,6 +478,154 @@ SQL
 }
 
 /**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   errors: array<string, string>,
+ *   revoked_sessions: int
+ * }
+ */
+function videochat_change_user_password(PDO $pdo, int $userId, array $payload, string $currentSessionId = ''): array
+{
+    if ($userId <= 0) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'revoked_sessions' => 0,
+        ];
+    }
+
+    $currentPassword = is_string($payload['current_password'] ?? null) ? (string) $payload['current_password'] : '';
+    $newPassword = is_string($payload['new_password'] ?? null) ? (string) $payload['new_password'] : '';
+    $repeatPassword = is_string($payload['repeat_password'] ?? null) ? (string) $payload['repeat_password'] : '';
+    $errors = [];
+
+    if ($currentPassword === '') {
+        $errors['current_password'] = 'required_current_password';
+    }
+    if ($newPassword === '') {
+        $errors['new_password'] = 'required_new_password';
+    } elseif (strlen($newPassword) < 8) {
+        $errors['new_password'] = 'password_too_short';
+    } elseif (strlen($newPassword) > 256) {
+        $errors['new_password'] = 'password_too_long';
+    }
+    if ($repeatPassword !== $newPassword) {
+        $errors['repeat_password'] = 'must_match_new_password';
+    }
+
+    if ($errors !== []) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => $errors,
+            'revoked_sessions' => 0,
+        ];
+    }
+
+    $query = $pdo->prepare('SELECT id, password_hash FROM users WHERE id = :id AND status = :status LIMIT 1');
+    $query->execute([
+        ':id' => $userId,
+        ':status' => 'active',
+    ]);
+    $row = $query->fetch();
+    if (!is_array($row)) {
+        return [
+            'ok' => false,
+            'reason' => 'not_found',
+            'errors' => [],
+            'revoked_sessions' => 0,
+        ];
+    }
+
+    $passwordHash = is_string($row['password_hash'] ?? null) ? trim((string) $row['password_hash']) : '';
+    if ($passwordHash === '') {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['current_password' => 'password_login_not_available'],
+            'revoked_sessions' => 0,
+        ];
+    }
+    if (!password_verify($currentPassword, $passwordHash)) {
+        return [
+            'ok' => false,
+            'reason' => 'validation_failed',
+            'errors' => ['current_password' => 'current_password_invalid'],
+            'revoked_sessions' => 0,
+        ];
+    }
+
+    $nextHash = password_hash($newPassword, PASSWORD_DEFAULT);
+    if (!is_string($nextHash) || $nextHash === '') {
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'revoked_sessions' => 0,
+        ];
+    }
+
+    $startedTransaction = false;
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+        $startedTransaction = true;
+    }
+
+    try {
+        $update = $pdo->prepare('UPDATE users SET password_hash = :password_hash, updated_at = :updated_at WHERE id = :id');
+        $update->execute([
+            ':password_hash' => $nextHash,
+            ':updated_at' => gmdate('c'),
+            ':id' => $userId,
+        ]);
+
+        $currentSessionId = trim($currentSessionId);
+        if ($currentSessionId !== '') {
+            $revoke = $pdo->prepare(
+                'UPDATE sessions SET revoked_at = :revoked_at WHERE user_id = :user_id AND id <> :session_id AND (revoked_at IS NULL OR revoked_at = \'\')'
+            );
+            $revoke->execute([
+                ':revoked_at' => gmdate('c'),
+                ':user_id' => $userId,
+                ':session_id' => $currentSessionId,
+            ]);
+        } else {
+            $revoke = $pdo->prepare(
+                'UPDATE sessions SET revoked_at = :revoked_at WHERE user_id = :user_id AND (revoked_at IS NULL OR revoked_at = \'\')'
+            );
+            $revoke->execute([
+                ':revoked_at' => gmdate('c'),
+                ':user_id' => $userId,
+            ]);
+        }
+        $revokedSessions = $revoke->rowCount();
+
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->commit();
+        }
+
+        return [
+            'ok' => true,
+            'reason' => 'changed',
+            'errors' => [],
+            'revoked_sessions' => $revokedSessions,
+        ];
+    } catch (Throwable) {
+        if ($startedTransaction && $pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        return [
+            'ok' => false,
+            'reason' => 'internal_error',
+            'errors' => [],
+            'revoked_sessions' => 0,
+        ];
+    }
+}
+
+/**
  * @return array<string, mixed>
  */
 function videochat_user_settings_payload(array $userSettings): array
@@ -571,12 +644,8 @@ function videochat_user_settings_payload(array $userSettings): array
         'linkedin_url' => (string) ($userSettings['linkedin_url'] ?? ''),
         'x_url' => (string) ($userSettings['x_url'] ?? ''),
         'youtube_url' => (string) ($userSettings['youtube_url'] ?? ''),
-        'messenger_contacts' => is_array($userSettings['messenger_contacts'] ?? null) ? $userSettings['messenger_contacts'] : [],
         'onboarding_completed_tours' => is_array($userSettings['onboarding_completed_tours'] ?? null)
             ? $userSettings['onboarding_completed_tours']
-            : [],
-        'onboarding_badges' => is_array($userSettings['onboarding_badges'] ?? null)
-            ? $userSettings['onboarding_badges']
             : [],
     ];
 }

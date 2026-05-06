@@ -174,7 +174,6 @@ SQL
                     : '';
             })($row),
             'onboarding_completed_tours' => $onboarding['completed_tours'],
-            'onboarding_badges' => $onboarding['badges'],
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
             'tenant' => $tenantPayload,

@@ -46,19 +46,18 @@ const arabicResources = {
   'navigation.group.expand': 'فتح {label}',
   'navigation.main': 'التنقل الرئيسي',
   'settings.about': 'نبذة عني',
-  'settings.application_language': 'لغة التطبيق',
   'settings.category_tabs_aria': 'فئات الإعدادات',
   'settings.close': 'إغلاق',
   'settings.credentials': 'بيانات الدخول والبريد',
+  'settings.date_format': 'تنسيق التاريخ',
   'settings.dialog_aria': 'إعدادات المستخدم',
   'settings.dialog_title': 'الإعدادات',
   'settings.language': 'اللغة',
   'settings.localization': 'الترجمة',
-  'settings.regional_time': 'الوقت والمنطقة',
+  'settings.options': 'خيارات',
   'settings.save_settings': 'حفظ الإعدادات',
   'settings.settings_saved': 'تم حفظ الإعدادات.',
-  'settings.text_direction': 'اتجاه النص',
-  'settings.theme': 'السمة',
+  'settings.time_format': 'تنسيق الوقت',
 };
 
 const viewportMatrix = [

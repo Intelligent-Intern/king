@@ -25,16 +25,15 @@ assert.match(workspaceShell, /locale: language/, 'settings save must send locale
 assert.doesNotMatch(workspaceShell, /settingsDraft\.language = readStoredSettingsLanguage\(\)/, 'settings draft must not be localStorage-only');
 assert.doesNotMatch(workspaceShell, /SETTINGS_LANGUAGE_STORAGE_KEY|storeSettingsLanguage|readStoredSettingsLanguage/, 'settings language must not use localStorage as source of truth');
 assert.match(workspaceShell, /ensureI18nResources\(\{ locale: savedLanguage, force: true \}\)/, 'settings save must refresh i18n resources immediately');
-assert.match(workspaceShell, /activeSettingsTile === 'personal\.localization'[\s\S]*<h4>\{\{ t\('settings\.language'\) \}\}<\/h4>/, 'localization settings panel must focus on language');
-assert.match(workspaceShell, /activeSettingsTile === 'personal\.regional'[\s\S]*<h4>\{\{ t\('settings\.regional_time'\) \}\}<\/h4>/, 'regional settings panel must be split from language');
+assert.match(workspaceShell, /activeSettingsTile === 'personal\.localization'[\s\S]*settingsDraft\.language[\s\S]*settingsDraft\.dateFormat[\s\S]*settingsDraft\.timeFormat/, 'localization settings panel must combine language, date, and time controls');
+assert.doesNotMatch(workspaceShell, /activeSettingsTile === 'personal\.regional'/, 'regional settings panel must be merged into localization');
 assert.match(workspaceShell, /:dir="settingsDraftDirection"/, 'settings dialog must apply the selected language direction');
 assert.match(workspaceShell, /settingsDraftDirection = computed\(\(\) => localizationLanguageDirection\(settingsDraft\.language\)\)/, 'settings dialog direction must derive from the selected language');
-assert.match(workspaceSettingsDescriptor, /key: 'personal\.regional'/, 'regional settings panel must be descriptor registered');
+assert.doesNotMatch(workspaceSettingsDescriptor, /key: 'personal\.regional'/, 'regional settings panel must not be descriptor registered');
 const localizationPanelStart = workspaceShell.indexOf("activeSettingsTile === 'personal.localization'");
-const regionalPanelStart = workspaceShell.indexOf("activeSettingsTile === 'personal.regional'");
-assert.ok(localizationPanelStart > 0 && regionalPanelStart > localizationPanelStart, 'localization and regional panels must be ordered settings sections');
-const localizationPanelSource = workspaceShell.slice(localizationPanelStart, regionalPanelStart);
-assert.doesNotMatch(localizationPanelSource, /settingsDraft\.timeFormat|settingsDraft\.dateFormat/, 'localization panel must not contain regional time controls');
+assert.ok(localizationPanelStart > 0, 'localization panel must exist');
+const localizationPanelSource = workspaceShell.slice(localizationPanelStart, workspaceShell.indexOf('<section v-else', localizationPanelStart + 1));
+assert.doesNotMatch(localizationPanelSource, /settings\.application_language|settings\.text_direction|<h4>/, 'localization panel must not show redundant headings or text direction fields');
 
 assert.match(localizationOptions, /new Set\(\['ar', 'fa', 'ps', 'sgd'\]\)/, 'frontend RTL list must match website runtime');
 assert.doesNotMatch(localizationOptions, /'ur'/, 'frontend RTL list must not include unsupported ur');

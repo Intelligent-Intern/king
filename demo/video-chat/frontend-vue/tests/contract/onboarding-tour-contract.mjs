@@ -39,8 +39,6 @@ for (const key of [
   'onboarding.default.content_body',
   'onboarding.default.pagination_title',
   'onboarding.default.pagination_body',
-  'settings.onboarding_badges',
-  'settings.no_onboarding_badges',
 ]) {
   assert.ok(ENGLISH_MESSAGES[key], `missing English onboarding key: ${key}`);
 }
@@ -73,15 +71,12 @@ assert.match(onboardingDriverStyles, /\.driver-popover\.kingrt-tour-popover/, 'g
 assert.match(onboardingDriverStyles, /\.driver-active-element/, 'guided tours must visibly outline the highlighted page region');
 
 assert.match(sessionStore, /onboardingCompletedTours: \[\]/, 'session state must carry completed tours');
-assert.match(sessionStore, /onboardingBadges: \[\]/, 'session state must carry onboarding badges');
+assert.doesNotMatch(sessionStore, /onboardingBadges/, 'session state must not carry removed onboarding badges');
 assert.match(sessionStore, /completeOnboardingTour/, 'session store must expose tour completion API');
 assert.match(sessionStore, /\/api\/user\/onboarding\/tours\/complete/, 'tour completion must call the backend endpoint');
 assert.match(sessionNormalizers, /normalizeOnboardingCompletedTours/, 'session normalizers must normalize completed tours');
-assert.match(sessionNormalizers, /normalizeOnboardingBadges/, 'session normalizers must normalize badges');
 
-assert.match(aboutPanel, /settings\.onboarding_badges/, 'profile settings must show onboarding badges');
-assert.match(aboutPanel, /settings\.no_onboarding_badges/, 'profile settings must show empty badge state');
+assert.doesNotMatch(aboutPanel, /onboarding/i, 'profile settings must not show onboarding badges');
 assert.doesNotMatch(workspaceShell, /:onboarding-badges=/, 'oversized settings shell must not grow to pass badge props');
-assert.match(aboutPanel, /sessionState\.onboardingBadges/, 'profile panel must read session badges inside the extracted panel');
 
 console.log('[onboarding-tour-contract] PASS');

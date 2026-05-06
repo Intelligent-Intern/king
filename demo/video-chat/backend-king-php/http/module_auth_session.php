@@ -247,7 +247,6 @@ SQL
                             ? trim((string) $user['post_logout_landing_url'])
                             : '',
                         'onboarding_completed_tours' => $onboarding['completed_tours'],
-                        'onboarding_badges' => $onboarding['badges'],
                         'account_type' => $accountType,
                         'is_guest' => $accountType === 'guest',
                         'tenant' => $tenantPayload,
