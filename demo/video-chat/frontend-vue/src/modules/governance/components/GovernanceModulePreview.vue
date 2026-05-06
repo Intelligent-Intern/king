@@ -33,6 +33,10 @@
         <section v-else-if="previewKind === 'marketplace'" class="module-shot-marketplace">
           <span v-for="app in 4" :key="app"></span>
         </section>
+        <section v-else-if="previewKind === 'onboarding'" class="module-shot-onboarding">
+          <span></span>
+          <span></span>
+        </section>
         <section v-else-if="previewKind === 'administration'" class="module-shot-form">
           <span v-for="field in 5" :key="field"></span>
         </section>
@@ -59,6 +63,7 @@ const KNOWN_PREVIEWS = new Set([
   'governance',
   'localization',
   'marketplace',
+  'onboarding',
   'theme_editor',
   'users',
   'workspace_settings',
@@ -191,15 +196,22 @@ const ariaLabel = computed(() => `${props.row?.name || props.row?.key || t('gove
 
 .module-shot-calendar span,
 .module-shot-marketplace span,
+.module-shot-onboarding span,
 .module-shot-swatches span {
   min-height: 0;
 }
 
 .module-shot-marketplace,
+.module-shot-onboarding,
 .module-shot-swatches {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 7px;
+}
+
+.module-shot-onboarding span:first-child {
+  grid-column: 1 / -1;
+  background: var(--color-cyan-hover);
 }
 
 .module-shot-swatches span:nth-child(2n),

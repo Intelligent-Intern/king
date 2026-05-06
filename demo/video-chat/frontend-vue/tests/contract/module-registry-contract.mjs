@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
 import { workspaceModuleRegistry } from '../../src/modules/index.js';
+
+const root = path.resolve(new URL('../..', import.meta.url).pathname);
 
 const expectedModules = [
   'administration',
@@ -8,6 +12,7 @@ const expectedModules = [
   'governance',
   'localization',
   'marketplace',
+  'onboarding',
   'theme_editor',
   'users',
   'workspace_settings',
@@ -18,6 +23,16 @@ assert.deepEqual(
   modules.map((descriptor) => descriptor.module_key).sort(),
   expectedModules,
   'module registry must expose every workspace module descriptor',
+);
+
+const moduleDirectories = (await readdir(path.join(root, 'src/modules'), { withFileTypes: true }))
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name)
+  .sort();
+assert.deepEqual(
+  modules.map((descriptor) => descriptor.module_key).sort(),
+  moduleDirectories,
+  'every src/modules directory must have a catalog descriptor',
 );
 
 const routes = workspaceModuleRegistry.routes();
