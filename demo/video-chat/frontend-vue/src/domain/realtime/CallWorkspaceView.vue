@@ -14,6 +14,7 @@ import {
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
 import {
+  DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
@@ -743,7 +744,7 @@ function applyWorkspaceBackgroundPreset(preset) {
     return;
   }
   if (preset === 'image') {
-    setCallBackgroundReplacementImageUrl('/assets/images/bookshelf.png');
+    setCallBackgroundReplacementImageUrl(DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL);
     setCallBackgroundBackdropMode('image');
     setCallBackgroundFilterMode('replace');
     setCallBackgroundApplyOutgoing(true);

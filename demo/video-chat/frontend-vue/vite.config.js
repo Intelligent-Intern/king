@@ -143,7 +143,6 @@ export default defineConfig({
   vue()],
   optimizeDeps: {
     exclude: [
-      '@mediapipe/tasks-vision',
       '@mediapipe/tasks-audio',
       '@mediapipe/tasks-text'
     ]
@@ -153,13 +152,7 @@ export default defineConfig({
     plugins: () => [
       assetVersionPlugin(),
       wasmStaticCompatibilityPlugin()
-    ],
-    rollupOptions: {
-      external: ['@mediapipe/tasks-vision'],
-    }
-  },
-  optimizeDeps: {
-    exclude: ['@mediapipe/tasks-vision'],
+    ]
   },
   define: {
     'import.meta.env.VIDEOCHAT_ASSET_VERSION': JSON.stringify(buildAssetVersion),
