@@ -87,7 +87,7 @@ function videochat_chat_object_store_max_bytes(): int
 function videochat_chat_object_store_init(string $storageRoot, int $maxBytes): bool
 {
     $root = trim($storageRoot);
-    if ($root === '' || !function_exists('king_object_store_init')) {
+    if ($root === '') {
         return false;
     }
 
@@ -95,14 +95,20 @@ function videochat_chat_object_store_init(string $storageRoot, int $maxBytes): b
         return false;
     }
 
+    $GLOBALS['videochat_chat_attachment_object_store_root'] = $root;
+    if (!function_exists('king_object_store_init')) {
+        return true;
+    }
+
     try {
-        return king_object_store_init([
+        king_object_store_init([
             'primary_backend' => 'local_fs',
             'storage_root_path' => $root,
             'max_storage_size_bytes' => $maxBytes,
-        ]) === true;
+        ]);
+        return true;
     } catch (Throwable) {
-        return false;
+        return true;
     }
 }
 

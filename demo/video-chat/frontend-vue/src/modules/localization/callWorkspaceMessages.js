@@ -5,6 +5,7 @@ export const CALL_WORKSPACE_MESSAGES = Object.freeze({
   'calls.workspace.allow_user': 'Allow user',
   'calls.workspace.attachment_context_not_loaded': 'Cannot upload chat attachment before the call context is loaded.',
   'calls.workspace.attachment_count_limit': 'Only 10 attachments are allowed per chat message.',
+  'calls.workspace.attachment_download_failed': 'Could not download chat attachment.',
   'calls.workspace.attachment_empty': 'Attachment is empty.',
   'calls.workspace.attachment_fallback_name': 'attachment',
   'calls.workspace.attachment_filename': 'Attachment filename',

@@ -7,21 +7,6 @@
       <button class="btn" type="button" :disabled="state.uploading" @click="openBulkUpload">
         {{ t('administration.background_image_bulk_upload') }}
       </button>
-      <label class="search-field search-field-main" :aria-label="t('administration.background_image_search')">
-        <input
-          v-model.trim="query"
-          class="input"
-          type="search"
-          :placeholder="t('administration.background_image_search')"
-          @keydown.enter.prevent="applySearch"
-        />
-      </label>
-      <AppIconButton
-        icon="/assets/orgas/kingrt/icons/send.png"
-        :title="t('administration.apply_search')"
-        :aria-label="t('administration.apply_search')"
-        @click="applySearch"
-      />
       <input
         ref="singleInput"
         class="app-config-file-input"
@@ -94,7 +79,6 @@ import { t } from '../../localization/i18nRuntime.js';
 const singleInput = ref(null);
 const bulkInput = ref(null);
 const rows = ref([]);
-const query = ref('');
 const pagination = reactive({ page: 1, page_size: 12, total: 0, page_count: 1 });
 const state = reactive({ loading: false, uploading: false, error: '' });
 
@@ -112,7 +96,6 @@ async function loadRows() {
   state.error = '';
   try {
     applyListing(await listWorkspaceBackgroundImages({
-      query: query.value,
       page: pagination.page,
       page_size: pagination.page_size,
     }));
@@ -172,11 +155,6 @@ async function handleUpload(event) {
   }
 }
 
-function applySearch() {
-  pagination.page = 1;
-  void loadRows();
-}
-
 function goToPage(page) {
   pagination.page = Math.max(1, Number(page) || 1);
   void loadRows();
@@ -218,15 +196,9 @@ onMounted(() => {
 .app-config-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 20px;
-}
-
-.app-config-toolbar .search-field {
-  flex: 0 1 360px;
-  width: min(360px, 100%);
-  margin-inline-start: auto;
 }
 
 .app-config-file-input {
@@ -298,7 +270,6 @@ onMounted(() => {
 
 @media (max-width: 760px) {
   .app-config-toolbar .btn,
-  .app-config-toolbar .search-field,
   .app-config-toolbar .icon-mini-btn {
     flex: 1 1 100%;
     width: 100%;

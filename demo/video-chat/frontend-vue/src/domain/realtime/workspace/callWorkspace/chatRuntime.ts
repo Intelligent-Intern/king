@@ -22,6 +22,8 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     connectionState,
     currentUserId,
     ensureRoomBuckets,
+    extractErrorMessage,
+    fetchBackend,
     isChatTextInlineAllowed,
     isSocketOnline,
     markParticipantActivity,
@@ -30,6 +32,7 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     normalizeRole,
     normalizeRoomId,
     reconnectAttempt,
+    requestHeaders,
     sanitizeChatAttachmentName,
     sendSocketFrame,
     sessionState,
@@ -253,6 +256,7 @@ async function uploadChatAttachmentDraft(draft) {
     payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
       method: 'POST',
       timeoutMs,
+      serialize: false,
       body: {
         file_name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
         content_type: validation.contentType,
@@ -275,6 +279,62 @@ async function uploadChatAttachmentDraft(draft) {
     throw new Error(t('calls.workspace.invalid_attachment_payload'));
   }
   return attachment;
+}
+
+function chatAttachmentDownloadTimeoutMs(attachment) {
+  const sizeBytes = Math.max(0, Number(attachment?.size_bytes || attachment?.sizeBytes || 0));
+  const sizeMiB = Math.max(1, Math.ceil(sizeBytes / (1024 * 1024)));
+  const timeoutMs = CHAT_ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS + (sizeMiB * CHAT_ATTACHMENT_UPLOAD_TIMEOUT_PER_MIB_MS);
+  return Math.max(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MIN_MS, Math.min(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS, timeoutMs));
+}
+
+function browserDownloadBlob(blob, filename) {
+  if (!(blob instanceof Blob)) return;
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = sanitizeChatAttachmentName(filename || t('calls.workspace.attachment_fallback_name'), 'bin');
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 15_000);
+}
+
+async function downloadChatAttachment(attachment) {
+  const downloadUrl = String(attachment?.download_url || '').trim();
+  if (downloadUrl === '') return;
+
+  setChatAttachmentError('');
+  try {
+    const result = await fetchBackend(downloadUrl, {
+      method: 'GET',
+      headers: requestHeaders(false),
+      serialize: false,
+      timeoutMs: chatAttachmentDownloadTimeoutMs(attachment),
+    });
+    const response = result?.response;
+    if (!(response instanceof Response)) {
+      throw new Error(t('calls.workspace.attachment_download_failed'));
+    }
+
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    if (!response.ok) {
+      let message = '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json().catch(() => null);
+        message = extractErrorMessage(payload, '');
+      }
+      throw new Error(message || t('calls.workspace.attachment_download_failed'));
+    }
+    if (contentType.includes('application/json')) {
+      throw new Error(t('calls.workspace.attachment_download_failed'));
+    }
+
+    browserDownloadBlob(await response.blob(), String(attachment?.name || '').trim());
+  } catch (error) {
+    setChatAttachmentError(error instanceof Error ? error.message : t('calls.workspace.attachment_download_failed'));
+  }
 }
 
 async function uploadChatAttachmentDrafts() {
@@ -543,6 +603,7 @@ function normalizeLobbyEntry(entry) {
     appendChatMessage,
     applyTypingEvent,
     clearTypingStopTimer,
+    downloadChatAttachment,
     focusChatInput,
     formatBytes,
     handleChatAttachmentDrop,

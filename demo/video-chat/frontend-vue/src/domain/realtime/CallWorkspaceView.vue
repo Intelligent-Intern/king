@@ -2021,6 +2021,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   currentUserId,
   ensureRoomBuckets,
   extractErrorMessage,
+  fetchBackend,
   isChatTextInlineAllowed,
   isSocketOnline,
   markParticipantActivity,
@@ -2029,6 +2030,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   normalizeRole,
   normalizeRoomId,
   reconnectAttempt,
+  requestHeaders,
   rightSidebarCollapsed,
   sanitizeChatAttachmentName,
   sendSocketFrame,
@@ -2051,6 +2053,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
 const {
   addChatAttachmentDraft,
   clearTypingStopTimer,
+  downloadChatAttachment,
   focusChatInput,
   formatBytes,
   handleChatAttachmentDrop,
