@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 function fail(message) {
   throw new Error(`[sfu-adaptive-quality-layers-contract] FAIL: ${message}`);
@@ -17,6 +17,44 @@ const frontendRoot = path.resolve(__dirname, '../..');
 
 function read(relativePath) {
   return fs.readFileSync(path.resolve(frontendRoot, relativePath), 'utf8');
+}
+
+async function importAdaptiveLayerModuleForContract(source) {
+  const runnableSource = source
+    .replace(
+      /import\s+\{[\s\S]*?\}\s+from\s+'\.\/remoteRenderScheduler\.ts';/,
+      `const REMOTE_RENDER_SURFACE_ROLES = Object.freeze({
+  FALLBACK: 'fallback',
+  FULLSCREEN: 'fullscreen',
+  GRID: 'grid',
+  MAIN: 'main',
+  MINI: 'mini',
+});
+function normalizeRemoteRenderSurfaceRole(value) {
+  const role = String(value || '').trim().toLowerCase();
+  return Object.values(REMOTE_RENDER_SURFACE_ROLES).includes(role)
+    ? role
+    : REMOTE_RENDER_SURFACE_ROLES.FALLBACK;
+}
+function remoteRenderSurfaceRoleForPeer(peer) {
+  return normalizeRemoteRenderSurfaceRole(peer?.decodedCanvas?.dataset?.callVideoSurfaceRole);
+}`,
+    )
+    .replace(/export\s+const\s+/g, 'const ')
+    .replace(/export\s+function\s+/g, 'function ');
+  const moduleSource = `${runnableSource}
+export {
+  SFU_ADAPTIVE_LAYER_PREFERENCES,
+  SFU_ADAPTIVE_LAYER_ACTIONS,
+  SFU_ADAPTIVE_LAYER_QUALITY_PROFILE,
+  visibleParticipantCountForPeer,
+  sfuLayerPreferenceForRemoteSurfaceRole,
+  sfuLayerPreferenceForPeer,
+  shouldSendSfuLayerPreference,
+  markSfuLayerPreferenceSent,
+  buildSfuLayerPreferencePayload,
+};`;
+  return import(`data:text/javascript;base64,${Buffer.from(moduleSource).toString('base64')}`);
 }
 
 async function main() {
@@ -80,7 +118,7 @@ async function main() {
   requireContains(sfuBrokerReplay, '$subscriber = []', 'cross-worker replay receives subscriber state for layer routing');
 
   requireContains(mediaStack, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'media stack preserves explicit adaptive layer actions');
-  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'runtime health preserves explicit adaptive layer actions');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payloadBody?.requested_action)', 'runtime health preserves explicit adaptive layer actions');
   requireContains(socketLifecycle, 'prefer_primary_video_layer', 'publisher handles primary layer requests');
   requireContains(socketLifecycle, 'prefer_thumbnail_video_layer', 'publisher handles thumbnail layer requests');
   requireContains(socketLifecycle, 'function sfuTransportStateForSocketLifecycle()', 'socket lifecycle guards adaptive layer state wiring');
@@ -108,8 +146,7 @@ async function main() {
     'CallWorkspaceView must inject sfuTransportState into socket lifecycle helpers before adaptive layer messages arrive',
   );
 
-  const moduleUrl = pathToFileURL(path.resolve(frontendRoot, 'src/domain/realtime/sfu/adaptiveQualityLayers.ts')).href;
-  const adaptiveModule = await import(moduleUrl);
+  const adaptiveModule = await importAdaptiveLayerModuleForContract(adaptiveLayers);
   assert.equal(
     adaptiveModule.sfuLayerPreferenceForRemoteSurfaceRole('fullscreen'),
     'primary',
