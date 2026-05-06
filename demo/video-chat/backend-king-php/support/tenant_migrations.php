@@ -558,8 +558,6 @@ function videochat_tenant_legacy_owned_table_names(): array
         'workspace_administration_settings',
         'workspace_theme_presets',
         'website_leads',
-        'workspace_email_texts',
-        'workspace_background_images',
     ];
 }
 
@@ -567,6 +565,8 @@ function videochat_tenant_owned_table_names(): array
 {
     return [
         ...videochat_tenant_legacy_owned_table_names(),
+        'workspace_email_texts',
+        'workspace_background_images',
         'governance_roles',
         'governance_role_permissions',
         'governance_role_modules',

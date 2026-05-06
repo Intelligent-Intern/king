@@ -304,8 +304,7 @@ SQL
         }
 
         try {
-            $pdo = $openDatabase();
-            $probe = videochat_authenticate_request($pdo, $request, 'rest');
+            $probe = videochat_authenticate_request_with_retry($openDatabase, $request, 'rest');
         } catch (Throwable $exception) {
             error_log(sprintf(
                 '[video-chat][auth] session probe failed exception=%s message=%s',
@@ -314,6 +313,19 @@ SQL
             ));
             return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
                 'reason' => 'internal_error',
+            ]);
+        }
+
+        if ((string) ($probe['reason'] ?? '') === 'auth_backend_error') {
+            error_log(sprintf(
+                '[video-chat][auth] session probe temporarily unavailable backend_reason=%s retryable=%s',
+                (string) ($probe['backend_reason'] ?? 'unknown'),
+                ((bool) ($probe['retryable'] ?? false)) ? '1' : '0'
+            ));
+            return $errorResponse(503, 'auth_session_probe_failed', 'Session probe failed due to a temporary backend error.', [
+                'reason' => (string) ($probe['backend_reason'] ?? 'internal_error'),
+                'retryable' => (bool) ($probe['retryable'] ?? false),
+                'retry_after_seconds' => 1,
             ]);
         }
 
@@ -352,10 +364,18 @@ SQL
         }
 
         try {
-            $freshContext = videochat_authenticate_request($openDatabase(), $request, 'rest');
+            $freshContext = videochat_authenticate_request_with_retry($openDatabase, $request, 'rest');
         } catch (Throwable) {
             return $errorResponse(500, 'auth_session_probe_failed', 'Session probe failed due to a backend error.', [
                 'reason' => 'internal_error',
+            ]);
+        }
+
+        if ((string) ($freshContext['reason'] ?? '') === 'auth_backend_error') {
+            return $errorResponse(503, 'auth_session_probe_failed', 'Session probe failed due to a temporary backend error.', [
+                'reason' => (string) ($freshContext['backend_reason'] ?? 'internal_error'),
+                'retryable' => (bool) ($freshContext['retryable'] ?? false),
+                'retry_after_seconds' => 1,
             ]);
         }
 

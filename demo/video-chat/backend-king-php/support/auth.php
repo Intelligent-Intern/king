@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/auth_request.php';
 require_once __DIR__ . '/auth_session_cache.php';
 require_once __DIR__ . '/auth_rbac.php';
+require_once __DIR__ . '/database_core.php';
 require_once __DIR__ . '/tenant_context.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/../domain/users/onboarding_progress.php';
@@ -212,6 +213,65 @@ function videochat_authenticate_request(PDO $pdo, array $request, string $transp
         'session' => $validation['session'],
         'user' => $validation['user'],
         'tenant' => $validation['tenant'] ?? null,
+    ];
+}
+
+/**
+ * @return array{
+ *   ok: bool,
+ *   reason: string,
+ *   token: string,
+ *   session: array<string, mixed>|null,
+ *   user: array<string, mixed>|null,
+ *   tenant?: array<string, mixed>|null,
+ *   retryable?: bool,
+ *   backend_reason?: string
+ * }
+ */
+function videochat_authenticate_request_with_retry(
+    callable $openDatabase,
+    array $request,
+    string $transport,
+    int $maxAttempts = 4
+): array {
+    $attemptLimit = max(1, min($maxAttempts, 8));
+    $lastLockError = null;
+
+    for ($attempt = 1; $attempt <= $attemptLimit; $attempt += 1) {
+        try {
+            $pdo = $openDatabase();
+            return videochat_authenticate_request($pdo, $request, $transport);
+        } catch (Throwable $error) {
+            if (!videochat_sqlite_is_transient_lock($error)) {
+                throw $error;
+            }
+
+            $lastLockError = $error;
+            if ($attempt < $attemptLimit) {
+                usleep(videochat_sqlite_retry_delay_us($attempt, 50_000, 250_000));
+                continue;
+            }
+        }
+    }
+
+    if ($lastLockError instanceof Throwable) {
+        error_log(sprintf(
+            '[video-chat][auth] authentication sqlite lock exhausted transport=%s exception=%s message=%s',
+            $transport,
+            $lastLockError::class,
+            $lastLockError->getMessage()
+        ));
+    }
+
+    return [
+        'ok' => false,
+        'reason' => 'auth_backend_error',
+        'token' => '',
+        'session' => null,
+        'user' => null,
+        'tenant' => null,
+        'retryable' => true,
+        'backend_reason' => 'sqlite_busy',
     ];
 }
 

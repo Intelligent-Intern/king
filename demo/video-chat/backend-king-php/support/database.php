@@ -285,3 +285,87 @@ SQL
         fclose($lockHandle);
     }
 }
+
+function videochat_sqlite_runtime_snapshot(string $databasePath): array
+{
+    $trimmedPath = trim($databasePath);
+    $pdo = videochat_open_sqlite_pdo($trimmedPath);
+
+    $appliedVersions = [];
+    $schemaVersion = 0;
+    if (videochat_bootstrap_sqlite_table_exists($pdo, 'schema_migrations')) {
+        $appliedRows = $pdo->query('SELECT version FROM schema_migrations ORDER BY version ASC');
+        foreach ($appliedRows as $row) {
+            $version = (int) ($row['version'] ?? 0);
+            if ($version > 0) {
+                $appliedVersions[] = $version;
+            }
+        }
+        $schemaVersion = empty($appliedVersions) ? 0 : max($appliedVersions);
+    }
+
+    $tableNames = [];
+    $tableRows = $pdo->query(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name ASC"
+    );
+    foreach ($tableRows as $row) {
+        $name = (string) ($row['name'] ?? '');
+        if ($name !== '') {
+            $tableNames[] = $name;
+        }
+    }
+
+    $demoUsers = [];
+    if (
+        videochat_bootstrap_sqlite_table_exists($pdo, 'users')
+        && videochat_bootstrap_sqlite_table_exists($pdo, 'roles')
+    ) {
+        $demoEmails = array_map(
+            static fn (array $user): string => strtolower(trim((string) ($user['email'] ?? ''))),
+            videochat_demo_user_blueprint()
+        );
+        $demoEmails = array_values(array_filter(array_unique($demoEmails), static fn (string $email): bool => $email !== ''));
+        if ($demoEmails !== []) {
+            $placeholders = implode(',', array_fill(0, count($demoEmails), '?'));
+            $userRows = $pdo->prepare(
+                <<<SQL
+SELECT users.email, users.display_name, roles.slug AS role
+FROM users
+INNER JOIN roles ON roles.id = users.role_id
+WHERE lower(users.email) IN ({$placeholders})
+ORDER BY users.id ASC
+SQL
+            );
+            $userRows->execute($demoEmails);
+            foreach ($userRows as $row) {
+                $email = strtolower(trim((string) ($row['email'] ?? '')));
+                if ($email === '') {
+                    continue;
+                }
+                $demoUsers[] = [
+                    'email' => $email,
+                    'display_name' => (string) ($row['display_name'] ?? ''),
+                    'role' => (string) ($row['role'] ?? 'user'),
+                ];
+            }
+        }
+    }
+
+    $migrationMap = videochat_sqlite_migrations();
+    $journalMode = (string) $pdo->query('PRAGMA journal_mode')->fetchColumn();
+
+    return [
+        'path' => $trimmedPath,
+        'schema_version' => $schemaVersion,
+        'migrations_total' => count($migrationMap),
+        'migrations_applied' => count($appliedVersions),
+        'migrations_newly_applied' => 0,
+        'migrations_pending' => max(count($migrationMap) - count($appliedVersions), 0),
+        'applied_versions' => $appliedVersions,
+        'table_count' => count($tableNames),
+        'table_names' => $tableNames,
+        'journal_mode' => strtoupper($journalMode),
+        'demo_users' => $demoUsers,
+        'demo_calls' => [],
+    ];
+}
