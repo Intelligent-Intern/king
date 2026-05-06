@@ -15,6 +15,7 @@ async function request(path, options = {}) {
     method: options.method || 'GET',
     headers: headers(options.body !== undefined),
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    query: options.query || null,
   }).then((result) => result.response);
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.status !== 'ok') {
@@ -39,6 +40,51 @@ export function saveWorkspaceAdministration(body) {
 export function deleteWorkspaceTheme(themeId) {
   const id = String(themeId || '').trim();
   return request(`/api/admin/workspace-administration/themes/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listWorkspaceEmailTexts(query = {}) {
+  return request('/api/admin/workspace-administration/email-texts', {
+    query,
+  });
+}
+
+export function createWorkspaceEmailText(body) {
+  return request('/api/admin/workspace-administration/email-texts', {
+    method: 'POST',
+    body: body && typeof body === 'object' ? body : {},
+  });
+}
+
+export function updateWorkspaceEmailText(id, body) {
+  return request(`/api/admin/workspace-administration/email-texts/${encodeURIComponent(String(id || '').trim())}`, {
+    method: 'PATCH',
+    body: body && typeof body === 'object' ? body : {},
+  });
+}
+
+export function deleteWorkspaceEmailText(id) {
+  return request(`/api/admin/workspace-administration/email-texts/${encodeURIComponent(String(id || '').trim())}`, {
+    method: 'DELETE',
+  });
+}
+
+export function listWorkspaceBackgroundImages(query = {}) {
+  return request('/api/admin/workspace-administration/background-images', {
+    query,
+  });
+}
+
+export function uploadWorkspaceBackgroundImages(files) {
+  return request('/api/admin/workspace-administration/background-images', {
+    method: 'POST',
+    body: { files: Array.isArray(files) ? files : [] },
+  });
+}
+
+export function deleteWorkspaceBackgroundImage(id) {
+  return request(`/api/admin/workspace-administration/background-images/${encodeURIComponent(String(id || '').trim())}`, {
     method: 'DELETE',
   });
 }
