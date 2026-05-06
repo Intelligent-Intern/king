@@ -100,6 +100,459 @@ Tickets:
   - Produce the final test protocol with commands, observed results, residual
     risks, and remaining rollout gates.
 
+## Sprint: Call Apps Marketplace And CRDT Collaboration Surface
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Planned as of 2026-05-06.
+- This sprint is additional to the Gossip-Primary media sprint above. It must
+  not replace or weaken the Gossip control-plane/media-carrier work.
+- Execute one checkbox at a time after the currently selected Gossip checkbox
+  has been handled, or when explicitly requested.
+- This sprint is a planning sprint until the first implementation checkbox is
+  selected. No deployment is part of this sprint unless a later request says so.
+
+Sprint goal:
+- Add a second video-call workspace view that can host organization-owned
+  collaborative Call Apps next to the participant video strip.
+- Make Call Apps marketplace-orderable for an organization, discoverable through
+  Semantic DNS, self-describing through MCP metadata, and launchable inside a
+  call as sandboxed collaborative iframe apps.
+- Start with a collaborative whiteboard Call App and define the same contract for
+  future text processing and presentation apps.
+- Support per-call and per-participant access control so the call owner can
+  decide which participants may use the active app.
+- Use CRDT-based collaboration so multiple participants can edit the same app
+  state concurrently without forcing the Head Server to become an app-specific
+  editor.
+
+Relationship to the Gossip sprint:
+- Gossip remains the primary media carrier target for video/audio frames.
+- Call Apps use the call control plane for admission, participant identity,
+  app-session grants, presence, CRDT bootstrap, and persistence checkpoints.
+- High-rate app presence such as cursors and drawing preview events may later use
+  bounded Gossip data lanes, but CRDT correctness must not depend on lossy media
+  transport.
+- SFU fallback remains a media concern only. It must not gate whether an already
+  authorized Call App can load or synchronize.
+
+Core product concepts:
+- `Call App`: an installable app package that exposes metadata, permissions,
+  launch URL, CRDT schema, and health via MCP.
+- `Call App Catalog`: Marketplace-facing list of discoverable app packages.
+- `Organization Entitlement`: proof that an organization has ordered/enabled a
+  Call App. Entitlements are organization-scoped, not personal-only.
+- `Call App Installation`: app configuration for one organization, including
+  allowed versions, default permissions, storage policy, and launch constraints.
+- `Call App Session`: a concrete app instance attached to one video call.
+- `Call App Participant Grant`: per-call participant access decision with
+  default allow/deny plus explicit participant overrides.
+- `Call App Host`: the video-call workspace area that renders the participant
+  strip and the sandboxed iframe.
+- `CRDT Document`: app-specific shared document state with versioned schema,
+  operation log, snapshots, and participant presence.
+- `Mother Node Registration`: Semantic-DNS registration that makes an app
+  discoverable through the King mother-node topology.
+
+Initial app catalog:
+- Whiteboard
+  - First implementation target.
+  - Collaborative drawing, shapes, selection, move/resize, erase, text labels,
+    sticky notes, images later, participant cursors, and export.
+  - Multiple participants may draw at the same time when permitted.
+- Text Processing
+  - Collaborative document editing, comments, formatting, export to document
+    formats, and app-owned CRDT document schema.
+- Presentation
+  - Collaborative slide editor similar to PowerPoint.
+  - Must support export to `.pptx` as a hard product contract.
+- Additional Marketplace Apps
+  - Must be discoverable and installable through the same Semantic-DNS/MCP
+    contract before appearing in a call.
+
+Target call workspace layout:
+- Add a new call view mode, for example `call_app_workspace`.
+- Top/content region:
+  - A grouped mini participant video strip above the app area.
+  - Default target: show 5 mini participant videos.
+  - The active speaker/main video rules remain separate from app permissions.
+  - The strip must not block or resize the iframe unpredictably.
+- Main app region:
+  - Sandboxed iframe loads the active Call App.
+  - The iframe fills the remaining app workspace height.
+  - App resize must be stable on desktop, tablet, and mobile.
+- Empty state:
+  - If no Call App is active, show the normal call workspace or an app-selection
+    prompt only when the owner has permission to add apps.
+- Left sidebar:
+  - Add a `Call Apps` button.
+  - Clicking it replaces the normal sidebar content with searchable, paginated
+    organization-available Call Apps.
+  - List entries show app icon, name, category, installed/available state,
+    version, required permissions, and health.
+  - Selecting an app opens its add-to-call flow in the sidebar.
+  - The add flow asks for default usage permission:
+    `allowed_by_default` or `blocked_by_default`.
+- Right sidebar:
+  - When a Call App is active, add an app-permissions icon.
+  - The icon opens participant grants for the active app session.
+  - The owner can allow/deny individual users and change the default.
+  - Non-owners can only see their access state and app status.
+
+Discovery and Marketplace architecture:
+- Call Apps live under `demo/call-apps/<app-key>/`.
+- Every app package exposes:
+  - static package metadata for local/dev builds,
+  - an MCP metadata endpoint for runtime discovery,
+  - a launch endpoint for iframe hosting,
+  - a health endpoint,
+  - a CRDT schema descriptor,
+  - required King capabilities and permissions.
+- Semantic DNS service type:
+  - `call_app`
+  - queryable by app key, category, capability, version, health, region, and
+    organization availability.
+- Mother Node registration:
+  - App service registers with the mother-node topology via Semantic DNS.
+  - Registration includes MCP endpoint, iframe origin, app version, health,
+    supported CRDT protocol, and marketplace metadata hash.
+  - The backend periodically refreshes and validates registrations.
+- MCP metadata contract:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Marketplace flow:
+  - Discover available Call Apps through Semantic DNS/MCP.
+  - Show catalog entries in Marketplace.
+  - User with organization purchase/admin permission orders the app for their
+    organization.
+  - Backend creates organization entitlement and installation record.
+  - Installed app appears in the call's `Call Apps` sidebar list for users in
+    that organization who have permission to attach apps.
+  - Call owner attaches an installed app to a call.
+  - Backend creates a Call App Session and participant grants.
+
+Backend architecture:
+- Add a `call_apps` backend domain, separate from raw video-call media code.
+- Keep app-control endpoints under the existing authenticated backend routing
+  pattern.
+- Required resources:
+  - app catalog records discovered from Semantic DNS/MCP,
+  - organization entitlements,
+  - organization installations,
+  - call app sessions,
+  - call app participant grants,
+  - CRDT documents,
+  - CRDT operation log/checkpoints,
+  - app launch tokens,
+  - app audit events.
+- Required route groups:
+  - catalog/discovery,
+  - marketplace order/enable/disable,
+  - organization installation configuration,
+  - call app session create/list/activate/remove,
+  - participant grant update,
+  - iframe launch token mint/validate,
+  - CRDT bootstrap/snapshot/op append,
+  - export job request/status/download.
+- All mutable routes must enforce tenant/organization permission grants, not
+  browser-only UI flags.
+- Call ownership and organization entitlement both matter:
+  - A user may own a call but still cannot attach an app that the organization
+    has not ordered.
+  - A user may be in the organization but still cannot change participant grants
+    without call-owner or delegated moderator permission.
+
+Frontend architecture:
+- Do not add Call App logic to `CallWorkspaceView.vue`.
+- Add focused modules under the call workspace domain, for example:
+  - `callApps/appCatalog.ts`
+  - `callApps/appSessionStore.ts`
+  - `callApps/appPermissions.ts`
+  - `callApps/callAppHost.ts`
+  - `callApps/crdtBridge.ts`
+  - `callApps/iframeBridge.ts`
+  - `callApps/sidebarCallApps.ts`
+- Add a reusable `CallAppHost` component:
+  - participant strip,
+  - iframe container,
+  - loading/error states,
+  - active app header/status,
+  - fullscreen/app-focus behavior.
+- Add left sidebar content mode:
+  - normal call controls,
+  - background controls,
+  - Call Apps list/search/pagination,
+  - selected app add flow.
+- Add right sidebar app-permission panel:
+  - app status,
+  - default allow/deny,
+  - participant rows,
+  - allow/deny toggles,
+  - pending/invited/guest state,
+  - audit feedback after save.
+- App list pagination and search must follow existing CRUD/search spacing
+  standards and not introduce special layout hacks.
+
+Iframe and security model:
+- Iframes must be sandboxed and origin-restricted.
+- The parent passes only a short-lived launch token and app-session id.
+- The app must not receive the user's normal session token.
+- The app cannot read parent local storage, cookies, or unrelated room state.
+- Parent/app communication uses `postMessage` with:
+  - strict origin checking,
+  - app session id,
+  - protocol version,
+  - participant identity pseudonym where needed,
+  - capability-scoped commands only.
+- App frame capabilities are explicit:
+  - read CRDT state,
+  - append CRDT op,
+  - publish cursor/presence,
+  - request export,
+  - request media references only when later allowed.
+- The parent can suspend or detach an app if health, origin, token, or
+  permission checks fail.
+
+CRDT architecture:
+- Define a King Call App CRDT envelope:
+  - app id,
+  - app version,
+  - call id,
+  - app session id,
+  - document id,
+  - schema version,
+  - actor id,
+  - operation id,
+  - lamport/logical clock,
+  - causal dependencies/vector summary,
+  - payload type,
+  - payload bytes/json,
+  - server admission stamp.
+- App owns domain semantics; King owns admission, persistence, transport,
+  snapshots, audit, and replay safety.
+- Support adapter-based CRDT engines:
+  - first app may use one concrete CRDT implementation,
+  - app manifest declares the CRDT protocol,
+  - parent bridge treats operations through the King envelope.
+- Required channels:
+  - bootstrap snapshot on app load,
+  - operation append from iframe to parent/backend,
+  - operation broadcast to other participants,
+  - checkpoint/snapshot compaction,
+  - presence/cursor updates,
+  - export job coordination.
+- Presence/cursors are not persisted like authoritative document ops.
+- Document ops are idempotent and duplicate-safe.
+- Offline/reconnect behavior:
+  - app reload requests current snapshot and missing ops after last known clock,
+  - parent replays only authorized app sessions,
+  - revoked users stop receiving new ops immediately.
+
+Permissions and owner controls:
+- Owner chooses default app usage when adding the app:
+  - allow all current and future participants,
+  - deny by default and explicitly allow participants.
+- Owner/moderator can change participant grants during the call.
+- Grant changes are realtime room-state events.
+- Grant revocation:
+  - disables iframe input for that participant,
+  - stops sending new CRDT ops to that participant,
+  - keeps already committed document ops in the shared document history.
+- Guests:
+  - can be granted app usage if the call owner allows it,
+  - never receive organization marketplace/admin permissions,
+  - use call-scoped identities only.
+- Audit events:
+  - app attached,
+  - app removed,
+  - default changed,
+  - participant allowed/denied,
+  - export requested,
+  - app health failure,
+  - launch token rejected.
+
+Whiteboard first-slice scope:
+- Create `demo/call-apps/whiteboard`.
+- Package metadata and MCP descriptor.
+- Semantic-DNS local registration entry.
+- Iframe app shell.
+- CRDT document for strokes/shapes/text labels.
+- Multi-user cursors and drawing ownership.
+- Tools:
+  - pointer/select,
+  - pen,
+  - line,
+  - rectangle,
+  - ellipse,
+  - text,
+  - sticky note,
+  - eraser,
+  - undo/redo per actor where CRDT-safe.
+- Export:
+  - PNG/PDF first,
+  - later package can add richer export if needed.
+- Permission behavior:
+  - viewer-only when not granted,
+  - editor when granted,
+  - owner/moderator can switch participants live.
+
+Future app requirements:
+- Text processing:
+  - collaborative rich text,
+  - comments,
+  - export to common document formats,
+  - deterministic CRDT merge for text ranges/formatting.
+- Presentation:
+  - slide list,
+  - slide canvas,
+  - collaborative editing,
+  - speaker notes later,
+  - export to `.pptx` required before it is considered complete.
+- Marketplace apps:
+  - cannot appear in a call until they expose valid metadata, MCP contract,
+    health, launch URL, and CRDT schema.
+
+Data model planning:
+- `call_app_catalog_entries`
+  - app key, version, name, description, category, icon, listing metadata,
+    semantic DNS service id, MCP endpoint, health, verified_at.
+- `organization_call_app_entitlements`
+  - organization id, app key, plan/license, status, ordered_by, ordered_at,
+    expires_at, marketplace order reference.
+- `organization_call_app_installations`
+  - organization id, app key, pinned version/range, config, default app policy,
+    storage/export settings.
+- `call_app_sessions`
+  - call id, organization id, app key, app version, document id, active state,
+    created_by, created_at, removed_at.
+- `call_app_participant_grants`
+  - app session id, participant id/user id/guest id, grant state, source
+    default/explicit, changed_by, changed_at.
+- `call_app_crdt_documents`
+  - document id, app key, schema version, snapshot pointer, clock summary,
+    created_at, updated_at.
+- `call_app_crdt_ops`
+  - operation id, document id, actor id, causal metadata, payload pointer,
+    received_at, admitted_by.
+- `call_app_audit_events`
+  - organization id, call id, app session id, actor, event type, payload,
+    created_at.
+
+Observability and operations:
+- App launch latency.
+- Discovery refresh success/failure.
+- Semantic-DNS registration freshness.
+- MCP metadata validation failures.
+- iframe origin/token rejection count.
+- CRDT op append rate, replay lag, snapshot compaction time.
+- Participant grant changes.
+- App health by organization/app version.
+- Export job latency/failure.
+
+Acceptance criteria:
+- The call has an additional Call App workspace view with mini participant
+  videos above a sandboxed app iframe.
+- The left sidebar can switch to a searchable, paginated Call Apps catalog for
+  organization-installed apps.
+- A call owner can attach an installed app to the current call and choose default
+  participant access.
+- The right sidebar exposes app participant grants while an app is active.
+- Whiteboard app can be discovered, attached, loaded, and edited by multiple
+  permitted participants.
+- Revoked participants cannot submit new app operations.
+- Call Apps are discovered through Semantic DNS/MCP metadata rather than a
+  hard-coded frontend list.
+- Marketplace order is organization-scoped.
+- The app iframe never receives the user's primary session token.
+- CRDT document ops are persisted/replayed through a King envelope.
+
+Tickets:
+- [ ] CAP-01 Architecture inventory and contracts
+  - Audit existing Semantic DNS, MCP, Marketplace, module descriptors, video-call
+    room-state, and permission-grant surfaces.
+  - Produce exact source ownership for backend, frontend, extension, and
+    `demo/call-apps`.
+  - Add contract tests that pin the planned Call App capability names and route
+    boundaries before implementation starts.
+- [ ] CAP-02 `demo/call-apps` package layout
+  - Create the directory structure for installable Call Apps.
+  - Define package manifest, MCP descriptor, CRDT schema descriptor, health
+    descriptor, and iframe entrypoint conventions.
+  - Add whiteboard as the first package stub with real metadata.
+- [ ] CAP-03 Semantic-DNS and Mother Node registration
+  - Register Call Apps as `call_app` services.
+  - Include MCP endpoint, iframe origin, app key/version, health, category,
+    supported CRDT protocol, and marketplace metadata hash.
+  - Add backend refresh/validation of discovered app services.
+- [ ] CAP-04 MCP metadata provider
+  - Implement MCP metadata methods for Call Apps:
+    describe, capabilities, CRDT schema, launch contract, health, export formats,
+    and marketplace listing.
+  - Reject incomplete or inconsistent metadata.
+- [ ] CAP-05 Marketplace organization entitlement flow
+  - Add catalog discovery from Semantic DNS/MCP.
+  - Add organization-scoped order/enable/disable records.
+  - Ensure users order apps for their own organization, not globally and not only
+    for their personal account.
+- [ ] CAP-06 Organization installation and app availability
+  - Add backend APIs for installed Call Apps per organization.
+  - Add frontend store/composable for the call sidebar app catalog.
+  - Only installed and healthy apps appear in the Call Apps sidebar.
+- [ ] CAP-07 Call App session lifecycle
+  - Create/list/activate/remove Call App Sessions for a call.
+  - Room-state snapshots and websocket events include active app session state.
+  - Removing an app retires iframe tokens and stops app synchronization.
+- [ ] CAP-08 Call App workspace view
+  - Add `call_app_workspace` layout mode.
+  - Render 5 mini participant videos above the iframe.
+  - Keep iframe sizing stable and responsive.
+  - Do not add implementation weight to `CallWorkspaceView.vue`.
+- [ ] CAP-09 Left sidebar Call Apps browser
+  - Add `Call Apps` button.
+  - Replace sidebar content with searchable, paginated app list.
+  - Add app detail/add flow with default participant permission choice.
+- [ ] CAP-10 Right sidebar participant app grants
+  - Add app-permission icon when an app is active.
+  - Implement default allow/deny and per-participant overrides.
+  - Emit realtime grant updates and audit events.
+- [ ] CAP-11 Iframe launch and parent bridge
+  - Mint short-lived launch tokens.
+  - Enforce iframe sandbox/origin/CSP.
+  - Implement strict `postMessage` protocol between parent and app.
+  - Do not expose primary user session token to the iframe.
+- [ ] CAP-12 CRDT envelope and synchronization
+  - Implement King Call App CRDT envelope.
+  - Add snapshot bootstrap, op append, op replay, duplicate suppression,
+    reconnect backfill, and snapshot compaction.
+  - Keep app semantic CRDT engine behind an adapter boundary.
+- [ ] CAP-13 Whiteboard Call App first implementation
+  - Implement iframe whiteboard shell, tools, CRDT state, cursors, and export.
+  - Support simultaneous drawing by multiple permitted participants.
+  - Enforce viewer/editor mode based on grants.
+- [ ] CAP-14 App permissions and revocation hardening
+  - Verify revoked participants cannot append ops or receive new private app
+    state.
+  - Ensure grant changes apply across reconnects and guest sessions.
+  - Add audit trail coverage.
+- [ ] CAP-15 Marketplace-to-call end-to-end journey
+  - Order app for organization.
+  - Install/enable app.
+  - Attach app to call.
+  - Grant participant access.
+  - Collaborate in whiteboard.
+  - Remove app from call.
+- [ ] CAP-16 Test protocol and readiness record
+  - Document contract, backend, frontend, e2e, security, and observability test
+    results.
+  - List residual risks before any deployment request.
+
 ## Sprint: Governance UX, Recursive CRUD, Permissions, And Onboarding
 
 Branch:
