@@ -140,7 +140,6 @@ const descriptors = {
       relation('members', 'users', 'governance.relation.members', { selection_mode: 'multiple' }),
       relation('roles', 'roles', 'governance.relation.roles', { selection_mode: 'multiple' }),
       relation('modules', 'modules', 'governance.relation.modules', { selection_mode: 'multiple' }),
-      relation('permissions', 'permissions', 'governance.relation.permissions', { selection_mode: 'multiple' }),
     ]),
     allowed_actions: Object.freeze(['create', 'edit', 'delete']),
     row_actions: mutableRowActions('governance.groups', 'group'),
@@ -169,6 +168,9 @@ const descriptors = {
     ]),
     allowed_actions: Object.freeze(['inspect']),
     selection_mode: 'multiple',
+    relationships: Object.freeze([
+      relation('permissions', 'permissions', 'governance.relation.permissions', { selection_mode: 'multiple' }),
+    ]),
     search_fields: Object.freeze(['name', 'key', 'status']),
   }),
   permissions: descriptor('permissions', {

@@ -70,6 +70,18 @@ for (const entity of ['modules', 'permissions', 'audit-log']) {
   assert.equal(GOVERNANCE_CRUD_DESCRIPTORS[entity].row_actions.length, 0, `${entity} must not expose edit/delete row actions`);
 }
 
+assert.ok(
+  GOVERNANCE_CRUD_DESCRIPTORS.modules.relationships.some((relation) => (
+    relation.key === 'permissions' && relation.target_entity === 'permissions'
+  )),
+  'module assignment must expose nested module permissions',
+);
+assert.equal(
+  GOVERNANCE_CRUD_DESCRIPTORS.groups.relationships.some((relation) => relation.key === 'permissions'),
+  false,
+  'groups must receive permissions through their selected modules instead of a detached permission relation',
+);
+
 for (const entity of ['groups', 'organizations', 'roles', 'grants', 'policies', 'compliance']) {
   const descriptor = GOVERNANCE_CRUD_DESCRIPTORS[entity];
   assert.equal(descriptorAllowsAction(descriptor, 'create'), true, `${entity} must allow create`);

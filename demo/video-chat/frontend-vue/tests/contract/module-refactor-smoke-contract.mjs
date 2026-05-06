@@ -18,7 +18,6 @@ const expectedModuleRoutes = new Map([
   ['/admin/governance/groups', 'admin-governance-groups'],
   ['/admin/governance/organizations', 'admin-governance-organizations'],
   ['/admin/governance/modules', 'admin-governance-modules'],
-  ['/admin/governance/permissions', 'admin-governance-permissions'],
   ['/admin/governance/roles', 'admin-governance-roles'],
   ['/admin/governance/grants', 'admin-governance-grants'],
   ['/admin/governance/policies', 'admin-governance-policies'],
@@ -31,6 +30,11 @@ const generatedByPath = new Map(workspaceModuleRouteRecords.map((record) => [`/$
 for (const [pathName, routeName] of expectedModuleRoutes) {
   assert.equal(generatedByPath.get(pathName)?.name, routeName, `${pathName} must keep its route name`);
 }
+assert.equal(
+  generatedByPath.has('/admin/governance/permissions'),
+  false,
+  'permissions must be embedded in module assignment forms, not registered as a Governance route',
+);
 
 const routeSourcePaths = workspaceModuleRouteRecords
   .map((record) => record.meta?.source_path || '')

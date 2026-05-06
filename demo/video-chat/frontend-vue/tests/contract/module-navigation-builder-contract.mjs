@@ -42,6 +42,12 @@ assert.ok(
   userNavigation.every((item) => item.to === '/calendar'),
   'descriptor admin navigation must stay hidden for normal users',
 );
+const calendarRoute = routes.find((route) => route.name === 'workspace-calendar');
+assert.deepEqual(calendarRoute?.meta.required_permissions, [], 'calendar route must opt out of manifest fallback permissions');
+assert.ok(
+  calendarRoute.meta.actions.some((action) => action.key === 'calendar.create' && action.required_permissions.includes('calendar.create')),
+  'calendar create action must still expose its manifest permission',
+);
 
 const restrictedNavigation = buildWorkspaceNavigation(workspaceModuleRegistry, {
   role: 'admin',
@@ -70,6 +76,7 @@ assert.deepEqual(
 
 const settingsPanels = buildSettingsPanels(workspaceModuleRegistry, { role: 'user' });
 assert.ok(settingsPanels.some((panel) => panel.key === 'personal.theme'), 'user settings panels must be descriptor built');
+assert.ok(settingsPanels.some((panel) => panel.key === 'personal.localization'), 'user localization settings must remain visible');
 assert.ok(settingsPanels.every((panel) => Array.isArray(panel.required_permissions)), 'settings panels must carry permissions');
 assert.ok(settingsPanels.every((panel) => typeof panel.label_key === 'string'), 'settings panels must carry translation label keys');
 

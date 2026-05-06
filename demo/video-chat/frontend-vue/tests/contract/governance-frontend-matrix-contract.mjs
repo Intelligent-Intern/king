@@ -51,7 +51,7 @@ assert.equal(
   'manage_groups must not expose organization creation',
 );
 
-for (const routeName of ['admin-governance-modules', 'admin-governance-permissions']) {
+for (const routeName of ['admin-governance-modules']) {
   const route = routeByName(routeName);
   assert.equal(
     firstRouteActionByKind(routeActionsForContext(route, { role: 'admin', allPermissions: true }), 'create'),
@@ -60,6 +60,11 @@ for (const routeName of ['admin-governance-modules', 'admin-governance-permissio
   );
   assert.ok(route.meta.readonly_reason_key, `${routeName} must expose a readonly reason key`);
 }
+assert.equal(
+  workspaceModuleRouteRecords.some((record) => record.name === 'admin-governance-permissions'),
+  false,
+  'permissions must stay an embedded module form catalog, not a first-level navigation route',
+);
 
 const moduleRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-modules');
 assert.ok(moduleRows.length > 0, 'module catalog rows must exist');
@@ -71,6 +76,7 @@ const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admi
 assert.ok(permissionRows.length > 0, 'permission catalog rows must exist');
 assert.ok(permissionRows.every((row) => row.readonly === true), 'permission catalog rows must be readonly');
 assert.ok(permissionRows.every((row) => row.description_key === 'governance.catalog.permission_description'), 'permission rows must use keyed descriptions');
+assert.ok(permissionRows.every((row) => row.module_key), 'permission rows must be grouped by module');
 
 const governanceCrudSource = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 const governanceCrudStyles = await source('src/modules/governance/pages/GovernanceCrudView.css');

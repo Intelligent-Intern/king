@@ -91,7 +91,7 @@ assert.ok(
   'platform admin context must expose group creation',
 );
 
-for (const name of ['admin-governance-modules', 'admin-governance-permissions']) {
+for (const name of ['admin-governance-modules']) {
   const record = routeByName(name);
   assert.equal(actionKinds(record).has('create'), false, `${name} must not offer create for system catalog rows`);
   assert.ok(record.meta.readonly_reason_key, `${name} must carry a readonly reason`);
@@ -101,6 +101,11 @@ for (const name of ['admin-governance-modules', 'admin-governance-permissions'])
   );
   assert.ok(actionKinds(record).has('inspect'), `${name} must keep an inspect action`);
 }
+assert.equal(
+  workspaceModuleRouteRecords.some((record) => record.name === 'admin-governance-permissions'),
+  false,
+  'permissions must not be generated as their own Governance navigation route',
+);
 
 const auditRoute = routeByName('admin-governance-audit-log');
 assert.equal(actionKinds(auditRoute).has('create'), false, 'audit log must not offer create');

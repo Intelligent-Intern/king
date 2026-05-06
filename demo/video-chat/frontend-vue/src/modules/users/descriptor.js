@@ -1,7 +1,7 @@
 export default {
   module_key: 'users',
   version: '0.1.0',
-  permissions: ['users.read'],
+  permissions: ['users.read', 'users.create', 'users.update', 'users.delete'],
   routes: [
     {
       path: '/admin/overview',
@@ -9,6 +9,7 @@ export default {
       roles: ['admin'],
       pageTitle: 'Overview',
       pageTitle_key: 'navigation.overview',
+      required_permissions: ['users.read'],
       actions: [
         {
           key: 'users.overview.tour',
@@ -30,6 +31,7 @@ export default {
       label_key: 'navigation.overview',
       order: 10,
       roles: ['admin'],
+      required_permissions: ['users.read'],
     },
   ],
   settings_panels: [
@@ -39,6 +41,7 @@ export default {
       label_key: 'settings.about',
       roles: ['admin', 'user'],
       order: 10,
+      required_permissions: [],
     },
     {
       key: 'personal.credentials',
@@ -46,6 +49,7 @@ export default {
       label_key: 'settings.credentials',
       roles: ['admin', 'user'],
       order: 20,
+      required_permissions: [],
     },
   ],
   i18n_namespaces: ['users'],

@@ -29,20 +29,25 @@ function moduleRows(registry) {
 
 function permissionRows(registry) {
   return registry.list().flatMap((descriptor) => (
-    descriptor.permissions.map((permission) => ({
-      entity_key: 'permissions',
-      id: `permission:${descriptor.module_key}:${permission}`,
-      name: permission,
-      key: permission,
-      status: 'active',
-      description: '',
-      description_key: 'governance.catalog.permission_description',
-      description_params: {
-        module: descriptor.module_key,
-      },
-      updatedAt: '',
-      readonly: true,
-    }))
+    descriptor.permissions.map((permission) => {
+      const moduleName = normalizeString(descriptor.catalog?.name) || titleFromKey(descriptor.module_key);
+      return {
+        entity_key: 'permissions',
+        id: `permission:${descriptor.module_key}:${permission}`,
+        name: permission,
+        key: permission,
+        module_key: descriptor.module_key,
+        module_name: moduleName,
+        status: 'active',
+        description: '',
+        description_key: 'governance.catalog.permission_description',
+        description_params: {
+          module: moduleName,
+        },
+        updatedAt: '',
+        readonly: true,
+      };
+    })
   ));
 }
 

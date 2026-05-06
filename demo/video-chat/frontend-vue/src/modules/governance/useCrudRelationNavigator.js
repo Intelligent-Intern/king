@@ -125,6 +125,8 @@ export function useCrudRelationNavigator(options = {}) {
       row?.key,
       row?.email,
       row?.description,
+      row?.module_key,
+      row?.module_name,
       row?.status,
     ].map(normalizeString).join(' ').toLowerCase();
   }
