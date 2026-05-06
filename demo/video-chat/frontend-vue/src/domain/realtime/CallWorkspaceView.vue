@@ -13,15 +13,10 @@ import {
   setBackendWebSocketOrigin,
 } from '../../support/backendOrigin';
 import {
-  DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL,
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
   resetCallBackgroundRuntimeState,
-  setCallBackgroundApplyOutgoing,
-  setCallBackgroundBackdropMode,
-  setCallBackgroundFilterMode,
-  setCallBackgroundReplacementImageUrl,
   setCallOutgoingVideoQualityProfile,
 } from './media/preferences';
 import {
@@ -34,7 +29,6 @@ import {
   reportClientDiagnostic,
 } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
-import BackgroundPipelineDebugPanel from './background/BackgroundPipelineDebugPanel.vue';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
 import { evaluateBackgroundFilterGates } from './background/gates';
 import { detectMediaRuntimeCapabilities } from './media/runtimeCapabilities';
@@ -279,18 +273,6 @@ const socketLifecycleState = {
   set reconnectTimer(value) { reconnectTimer = value; },
 };
 const connectedParticipantUsersRef = ref(computed(() => []));
-const backgroundPipelineDebug = reactive({
-  active: false,
-  available: false,
-  backend: 'none',
-  mode: 'off',
-  reactive: false,
-  reason: 'idle',
-  sourceActive: false,
-  sourceState: 'idle',
-  stages: [],
-});
-
 const participantsRaw = ref([]);
 let participantsRawSignature = '';
 const currentUserConnectedAt = new Date().toISOString();
@@ -654,79 +636,6 @@ const liveGridVideoParticipants = computed(() => gridVideoParticipants.value);
 const liveMiniVideoParticipants = computed(() => miniVideoParticipants.value);
 const liveNormalizedCallLayout = computed(() => normalizedCallLayout.value);
 const livePrimaryVideoUserId = computed(() => primaryVideoUserId.value);
-const showLocalPipelinePanel = computed(() => currentLayoutMode.value !== 'grid');
-
-function syncBackgroundPipelineDebug(snapshot = {}) {
-  backgroundPipelineDebug.active = Boolean(snapshot?.active);
-  backgroundPipelineDebug.available = Boolean(snapshot?.available);
-  backgroundPipelineDebug.backend = String(snapshot?.backend || 'none');
-  backgroundPipelineDebug.mode = String(snapshot?.mode || 'off');
-  backgroundPipelineDebug.reactive = Boolean(snapshot?.reactive);
-  backgroundPipelineDebug.reason = String(snapshot?.reason || 'idle');
-  backgroundPipelineDebug.sourceActive = snapshot?.sourceActive !== false;
-  backgroundPipelineDebug.sourceState = String(snapshot?.sourceState || 'idle');
-  backgroundPipelineDebug.stages = Array.isArray(snapshot?.stages)
-    ? snapshot.stages.map((stage) => ({
-        name: String(stage?.name || ''),
-        state: String(stage?.state || 'idle'),
-      }))
-    : [];
-}
-
-function applyWorkspaceBackgroundPreset(preset) {
-  if (preset === 'off') {
-    setCallBackgroundReplacementImageUrl('');
-    setCallBackgroundBackdropMode('blur7');
-    setCallBackgroundFilterMode('off');
-    setCallBackgroundApplyOutgoing(false);
-    return;
-  }
-  if (preset === 'green') {
-    setCallBackgroundReplacementImageUrl('');
-    setCallBackgroundBackdropMode('green');
-    setCallBackgroundFilterMode('replace');
-    setCallBackgroundApplyOutgoing(true);
-    return;
-  }
-  if (preset === 'image') {
-    setCallBackgroundReplacementImageUrl(DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL);
-    setCallBackgroundBackdropMode('image');
-    setCallBackgroundFilterMode('replace');
-    setCallBackgroundApplyOutgoing(true);
-    return;
-  }
-  setCallBackgroundReplacementImageUrl('');
-  setCallBackgroundFilterMode('blur');
-  setCallBackgroundApplyOutgoing(true);
-  if (preset === 'strong') {
-    setCallBackgroundBackdropMode('blur9');
-    return;
-  }
-  setCallBackgroundBackdropMode('blur7');
-}
-
-function isWorkspaceBackgroundPresetActive(preset) {
-  const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
-  const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
-  const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-  if (preset === 'off') return mode === 'off' || !applyOutgoing;
-  if (preset === 'green') return mode === 'replace' && applyOutgoing && backdrop === 'green';
-  if (preset === 'image') {
-    return mode === 'replace' && applyOutgoing && backdrop === 'image'
-      && String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() !== '';
-  }
-  if (preset === 'strong') return mode === 'blur' && applyOutgoing && backdrop === 'blur9';
-  return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
-}
-
-function activeWorkspaceBackgroundPreset() {
-  if (isWorkspaceBackgroundPresetActive('image')) return 'image';
-  if (isWorkspaceBackgroundPresetActive('green')) return 'green';
-  if (isWorkspaceBackgroundPresetActive('strong')) return 'strong';
-  if (isWorkspaceBackgroundPresetActive('light')) return 'light';
-  return 'off';
-}
-
 function sendSocketFrame(payload) {
   const socket = socketRef.value;
   if (!(socket instanceof WebSocket)) return false;
@@ -1070,7 +979,6 @@ let localPublisherTeardownInProgress = false;
 let localTrackRecoveryTimer = null;
 let localTrackRecoveryAttempts = 0;
 const backgroundFilterController = new BackgroundFilterController();
-const stopBackgroundPipelineDebugSubscription = backgroundFilterController.subscribe(syncBackgroundPipelineDebug);
 const backgroundBaselineCollector = new BackgroundFilterBaselineCollector(10);
 let backgroundBaselineCaptured = false;
 let backgroundRuntimeToken = 0;
@@ -2259,9 +2167,6 @@ registerCallWorkspaceLifecycleHelpers({
   },
 });
 
-onBeforeUnmount(() => {
-  stopBackgroundPipelineDebugSubscription();
-});
 </script>
 
 <style scoped src="./CallWorkspaceStage.css"></style>

@@ -689,6 +689,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       callMediaPrefs.backgroundApplyOutgoing,
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],

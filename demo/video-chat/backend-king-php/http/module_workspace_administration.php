@@ -90,6 +90,51 @@ function videochat_handle_workspace_administration_routes(
         return videochat_workspace_branding_file_response((string) ($match[1] ?? ''), $brandingStorageRoot, $errorResponse);
     }
 
+    if ($path === '/api/workspace/background-images') {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for workspace background images.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+
+        $filters = videochat_workspace_app_filters(videochat_request_query_params($request), 48);
+        if (!(bool) ($filters['ok'] ?? false)) {
+            return $errorResponse(422, 'workspace_background_images_query_invalid', 'Background image query failed validation.', [
+                'fields' => $filters['errors'] ?? [],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $tenantId = videochat_workspace_effective_tenant_id($pdo, videochat_tenant_id_from_auth_context($apiAuthContext));
+            $listing = videochat_workspace_list_background_images(
+                $pdo,
+                $tenantId,
+                '',
+                (int) ($filters['page'] ?? 1),
+                (int) ($filters['page_size'] ?? 48)
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'workspace_background_images_failed', 'Could not load background images.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'rows' => is_array($listing['rows'] ?? null) ? $listing['rows'] : [],
+                'pagination' => [
+                    'page' => (int) ($listing['page'] ?? 1),
+                    'page_size' => (int) ($listing['page_size'] ?? 48),
+                    'total' => (int) ($listing['total'] ?? 0),
+                    'page_count' => (int) ($listing['page_count'] ?? 1),
+                ],
+            ],
+            'time' => gmdate('c'),
+        ]);
+    }
+
     if (preg_match('#^/api/workspace/background-images/([^/]+)$#', $path, $match) === 1) {
         if (!in_array($method, ['GET', 'HEAD'], true)) {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for workspace background images.', [

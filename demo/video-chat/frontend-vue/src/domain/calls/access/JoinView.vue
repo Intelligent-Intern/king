@@ -183,6 +183,8 @@
                     </div>
                   </section>
 
+                  <CallBackgroundImagePicker :title="t('public.join.background_images')" />
+
                   <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
                 </div>
               </section>
@@ -232,6 +234,7 @@ import { attachForegroundReconnectHandlers } from '../../../support/foregroundRe
 import { localizedApiErrorMessage } from '../../../modules/localization/apiErrorMessages.js';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
+import CallBackgroundImagePicker from '../../realtime/background/CallBackgroundImagePicker.vue';
 import {
   applyCallBackgroundPreset as applyBackgroundPreset,
   attachCallMediaDeviceWatcher,
@@ -720,6 +723,7 @@ watch(
     callMediaPrefs.backgroundMaskVariant,
     callMediaPrefs.backgroundBlurTransition,
     callMediaPrefs.backgroundApplyOutgoing,
+    callMediaPrefs.backgroundReplacementImageUrl,
     callMediaPrefs.backgroundMaxProcessWidth,
     callMediaPrefs.backgroundMaxProcessFps,
   ],
