@@ -8,7 +8,7 @@ export function selectBackgroundFilterBackend() {
   }
 
   return {
-    backend: 'king_wasm',
+    backend: 'sinet_wasm',
     supported: true,
     reason: 'ok',
   };
