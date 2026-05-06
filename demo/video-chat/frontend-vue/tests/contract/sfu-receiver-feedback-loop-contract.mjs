@@ -38,6 +38,8 @@ try {
   requireContains(receiverFeedback, 'missing_frame_count', 'receiver feedback includes missing sequence count');
   requireContains(receiverFeedback, "requested_action: 'force_full_keyframe'", 'sequence-gap feedback explicitly asks for publisher keyframe');
   requireContains(receiverFeedback, 'request_full_keyframe: true', 'sequence-gap feedback sets full keyframe flag');
+  requireContains(receiverFeedback, 'function receiverFeedbackRequestedVideoLayer(frame', 'sequence-gap feedback preserves the affected video layer');
+  requireContains(receiverFeedback, 'requested_video_layer: receiverFeedbackRequestedVideoLayer(frame)', 'sequence-gap recovery asks for the frame layer keyframe');
   requireContains(receiverFeedback, 'subscriber_send_latency_ms', 'receiver feedback includes subscriber pressure evidence');
   requireContains(receiverFeedback, 'buildSfuLayerPreferencePayload', 'receiver feedback can request automatic primary/thumbnail layers');
   requireContains(frameDecode, 'createSfuReceiverFeedback', 'frame decoder uses receiver feedback helper');
@@ -56,6 +58,9 @@ try {
   requireContains(recoveryReasons, "'sfu_receiver_sequence_gap'", 'sequence gaps are full-keyframe recovery reasons');
   requireContains(recoveryReasons, "'sfu_remote_video_never_started'", 'never-started video is a full-keyframe recovery reason');
   requireContains(socketLifecycle, 'shouldRequestSfuFullKeyframeForReason(sourceReason)', 'socket fallback pressure also promotes recovery reasons to full keyframes');
+  requireContains(socketLifecycle, 'const keyframeOnlyRequest = fullKeyframeRequested', 'pure keyframe recovery is separated from quality/profile changes');
+  requireContains(socketLifecycle, '} else if (keyframeOnlyRequest) {', 'pure keyframe recovery does not downshift video quality');
+  requireContains(socketLifecycle, 'keyframe_only_request: keyframeOnlyRequest', 'publisher records keyframe-only recovery diagnostics');
   assert.equal(
     socketLifecycle.includes('|| primaryLayerRequested'),
     false,

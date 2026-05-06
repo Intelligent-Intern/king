@@ -191,6 +191,12 @@ export function createCallWorkspaceSocketHelpers({
       || requestedAction === 'force_full_keyframe'
       || compatibilityCodecRequested
       || shouldRequestSfuFullKeyframeForReason(sourceReason);
+    const keyframeOnlyRequest = fullKeyframeRequested
+      && requestedAction === 'force_full_keyframe'
+      && !compatibilityCodecRequested
+      && !primaryLayerRequested
+      && !thumbnailLayerRequested
+      && requestedVideoQualityProfile === '';
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
         ...payloadBody,
@@ -205,6 +211,9 @@ export function createCallWorkspaceSocketHelpers({
       if (compatibilityCodecRequested) {
         // Codec compatibility is handled by the publisher pipeline switching
         // away from WebCodecs; quality profile changes are a separate signal.
+      } else if (keyframeOnlyRequest) {
+        // Full-frame recovery already resets the encoder; avoid profile churn
+        // that can hide the next keyframe behind another layer rollover.
       } else if (primaryLayerRequested) {
         upgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_primary_layer_requested', {
           direction: 'up',
@@ -238,6 +247,7 @@ export function createCallWorkspaceSocketHelpers({
         source_reason: sourceReason,
         source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
         full_keyframe_requested: forcedFullKeyframe,
+        keyframe_only_request: keyframeOnlyRequest,
         compatibility_codec_requested: compatibilityCodecRequested,
         compatibility_disabled_until_ms: Number(sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
         primary_layer_active: primaryLayerActive,
