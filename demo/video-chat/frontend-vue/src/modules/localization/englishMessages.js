@@ -292,6 +292,7 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'errors.api.localization_bundle_fetch_failed': 'Could not load the translation bundle.',
   'errors.api.localization_bundle_list_failed': 'Could not load translation bundles.',
   'errors.api.localization_bundle_not_found': 'The requested translation bundle does not exist.',
+  'errors.api.localization_csv_import_disabled': 'Localization CSV imports are disabled.',
   'errors.api.localization_import_failed': 'Localization CSV import failed due to a backend error.',
   'errors.api.localization_import_fetch_failed': 'Could not load the localization import.',
   'errors.api.localization_import_invalid_request_body': 'Localization CSV import payload is invalid.',
