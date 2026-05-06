@@ -41,7 +41,13 @@ async function main() {
   requireContains(publisherPipeline, 'keyframeRetryBlockedUntilMs', 'publisher blocks repeated forced keyframe retries');
   requireContains(publisherPipeline, '&& !forcedKeyframeRecoveryPending', 'publisher disables selective patches while a full-frame recovery keyframe is pending');
   requireContains(publisherPipeline, '&& !remoteKeyframeRequestPending', 'publisher disables selective patches while a remote receiver waits for a full-frame keyframe');
-  requireContains(publisherPipeline, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'publisher clears remote keyframe request after full-frame keyframe send');
+  requireContains(publisherPipeline, 'lastRemoteRecoveryEncoderResetAtMs', 'publisher paces a recovery keyframe burst while a remote receiver waits');
+  requireContains(publisherPipeline, 'fullFrameEncoder.reset?.();', 'publisher can force repeated WLVC keyframes during the receiver recovery window');
+  assert.equal(
+    publisherPipeline.includes('refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0'),
+    false,
+    'publisher must not clear receiver keyframe recovery after a single full-frame send',
+  );
   requireContains(publisherTelemetry, 'budget_min_keyframe_retry_ms', 'publisher emits keyframe retry budget telemetry');
   requireContains(publisherPipeline, 'keyframe_retry_after_ms', 'publisher reports retry delay after payload pressure');
   requireContains(sfuPublisherControl, 'requestWlvcFullFrameKeyframe', 'publisher controller exposes remote full-frame keyframe recovery');

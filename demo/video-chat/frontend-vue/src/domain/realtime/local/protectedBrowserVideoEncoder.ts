@@ -1005,9 +1005,6 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           });
           if (sentPrimaryChunk && forceKeyframe) {
             forceNextSecurityKeyframe = false;
-            if (forceRemoteRecoveryKeyframe && refs.sfuTransportState) {
-              refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
-            }
           }
         }
         if (shouldEncodeThumbnail && !thumbnailEncoderDisabled) {

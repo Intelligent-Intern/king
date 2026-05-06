@@ -43,8 +43,14 @@ try {
   const sfuClient = read('src/lib/sfu/sfuClient.ts');
   const sfuMessageHandler = read('src/lib/sfu/sfuMessageHandler.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameTrace = read('src/domain/realtime/local/publisherFrameTrace.ts');
+  const wasmCodec = read('src/lib/wasm/wasm-codec.ts');
+  const tsCodec = read('src/lib/wavelet/codec.ts');
   requireContains(publisherPipeline, "runtimeId: 'wlvc_sfu'", 'publisher sends explicit runtime id');
   requireContains(publisherPipeline, 'codecId: currentSfuCodecId', 'publisher sends explicit codec id');
+  requireContains(publisherFrameTrace, 'encoder?.sfuCodecId', 'publisher codec id detection must not depend on minifiable constructor names');
+  requireContains(wasmCodec, "public readonly sfuCodecId = 'wlvc_wasm'", 'WASM encoder exposes stable SFU codec id');
+  requireContains(tsCodec, "public readonly sfuCodecId = 'wlvc_ts'", 'TypeScript encoder exposes stable SFU codec id');
   requireContains(sfuMessageHandler, 'normalizeTilePatchMetadata(tileMetadataInput)', 'inbound frame path uses centralized tile metadata normalization');
   requireContains(sfuMessageHandler, 'invalid_tile_metadata', 'inbound frame path rejects invalid tile metadata');
   assert.ok(!sfuClient.includes('legacy_chunked_json'), 'outbound SFU sender must not preserve a legacy JSON media transport path');
