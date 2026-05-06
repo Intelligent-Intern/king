@@ -53,6 +53,22 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     getRemoteVideoStallTimer,
     setRemoteVideoStallTimer,
   } = state;
+  const remoteSfuQualityPressureLastByKey = new Map();
+
+  function remoteSfuQualityPressureThrottleKey(targetUserId, reason) {
+    return [
+      Number(targetUserId || 0),
+      String(reason || '').trim().toLowerCase(),
+    ].join(':');
+  }
+
+  function rememberRemoteSfuQualityPressure(key, nowMs) {
+    if (remoteSfuQualityPressureLastByKey.size > 200) {
+      const oldestKey = remoteSfuQualityPressureLastByKey.keys().next().value;
+      if (oldestKey !== undefined) remoteSfuQualityPressureLastByKey.delete(oldestKey);
+    }
+    remoteSfuQualityPressureLastByKey.set(key, nowMs);
+  }
 
   function resetWlvcEncoderAfterDroppedEncodedFrame(reason = 'dropped_encoded_frame') {
     const encoder = videoEncoderRef.value;
@@ -254,8 +270,12 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     const requestFullKeyframe = shouldRequestSfuFullKeyframeForReason(normalizedReason);
     const requestedAction = resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action);
 
-    const lastSentAtMs = Number(peer.lastQualityPressureSentAtMs || 0);
     const minIntervalMs = Math.max(remoteVideoFreezeThresholdMs * 2, 4000);
+    const pressureThrottleKey = remoteSfuQualityPressureThrottleKey(targetUserId, normalizedReason);
+    const lastSentAtMs = Math.max(
+      Number(peer.lastQualityPressureSentAtMs || 0),
+      Number(remoteSfuQualityPressureLastByKey.get(pressureThrottleKey) || 0),
+    );
     if (lastSentAtMs > 0 && (nowMs - lastSentAtMs) < minIntervalMs) return false;
 
     const sfuRecoverySent = sfuClientRef.value
@@ -286,6 +306,7 @@ export function createCallWorkspaceRuntimeHealthHelpers({
     if (sent) {
       peer.lastQualityPressureSentAtMs = nowMs;
       peer.lastQualityPressureReason = String(reason || '').trim();
+      rememberRemoteSfuQualityPressure(pressureThrottleKey, nowMs);
     }
     return sent;
   }
