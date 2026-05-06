@@ -186,12 +186,12 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     } catch {
       segmentationBackend = null;
     }
+    segmentationBackendKind = segmentationBackend?.kind || 'none';
     console.log('[BackgroundFilter] Segmentation backend initialization result', {
       selected: segmentationBackendKind,
       requested: 'worker-segmenter',
       failures: initFailures,
     });
-    segmentationBackendKind = segmentationBackend?.kind || 'none';
     if (segmentationBackendKind === 'none' && initFailures.length > 0) {
       console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
         selected: segmentationBackendKind,
@@ -290,6 +290,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       : (segmenterStage.reset(), segmenterStage.getState());
     compositorStage.render({
       hasMatteMask: segmenterState.hasMatteMask,
+      maskBitmap: segmenterState.maskBitmap,
       maskHeight: segmenterState.maskHeight,
       maskUpdated: segmenterState.maskUpdated,
       maskValues: segmenterState.maskValues,
