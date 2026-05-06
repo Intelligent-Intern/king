@@ -212,11 +212,11 @@
   display: grid;
   gap: 8px;
   padding: 10px;
-  border: 1px solid var(--color-rgba-255-255-255-0-12);
+  border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  background: var(--color-rgba-8-20-43-0-78);
+  background: var(--color-surface-navy);
   backdrop-filter: blur(12px);
-  box-shadow: 0 12px 28px var(--color-rgba-0-0-0-0-28);
+  box-shadow: 0 12px 28px var(--color-primary-navy);
 }
 
 .workspace-local-pipeline-controls {
@@ -244,7 +244,7 @@
 
 .workspace-local-pipeline-btn.active {
   background: var(--bg-control-active);
-  color: var(--color-0b1324);
+  color: var(--color-primary-navy);
   border-color: transparent;
 }
 

@@ -73,7 +73,7 @@ try {
 }
 
 const runtimeSource = await readFile(path.join(root, 'src/modules/localization/i18nRuntime.js'), 'utf8');
-const routerSource = await readFile(path.join(root, 'src/http/router.js'), 'utf8');
+const routerSource = await readFile(path.join(root, 'src/http/router.ts'), 'utf8');
 const appSource = await readFile(path.join(root, 'src/App.vue'), 'utf8');
 const shellSource = await readFile(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
 assert.match(runtimeSource, /\/api\/localization\/resources/, 'runtime must load backend translation resources');

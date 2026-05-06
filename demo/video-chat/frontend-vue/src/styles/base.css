@@ -18,7 +18,7 @@
   --brand-bg: var(--color-primary-navy);
   --bg-surface: var(--color-surface-navy);
   --bg-surface-strong: var(--color-surface-navy);
-  --bg-input: var(--color-surface-navy);
+  --bg-input: var(--color-border);
   --bg-action: var(--color-cyan-primary);
   --bg-action-hover: var(--color-cyan-hover);
   --bg-row: var(--color-surface-navy);

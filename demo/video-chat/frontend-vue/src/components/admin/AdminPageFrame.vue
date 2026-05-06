@@ -60,6 +60,8 @@ defineProps({
 
 .admin-page-frame-toolbar {
   gap: 20px;
+  column-gap: 20px;
+  row-gap: 20px;
   justify-content: flex-end;
   padding: 0 20px 20px;
 }
@@ -82,6 +84,7 @@ defineProps({
 
 .admin-page-frame-toolbar :deep(.icon-mini-btn) {
   flex: 0 0 auto;
+  margin-inline-start: 0;
 }
 
 .admin-page-frame-toolbar :deep(.settings-upload-status),
