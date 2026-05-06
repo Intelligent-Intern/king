@@ -1,85 +1,97 @@
 <template>
-  <div class="calls-modal background-upload-modal" :hidden="!open" role="dialog" aria-modal="true" :aria-label="t('administration.background_crop_dialog')">
-    <div class="calls-modal-backdrop" @click="emitClose"></div>
-    <section class="calls-modal-dialog background-upload-dialog">
-      <header class="calls-modal-header calls-modal-header-enter">
-        <div class="calls-modal-header-enter-left">
-          <h4 class="calls-enter-title">{{ t('administration.background_crop_title') }}</h4>
-          <p class="background-upload-progress">{{ progressLabel }}</p>
-        </div>
-        <button class="icon-mini-btn" type="button" :aria-label="t('common.close')" :disabled="uploading" @click="emitClose">
-          <img src="/assets/orgas/kingrt/icons/cancel.png" alt="" />
-        </button>
-      </header>
-
-      <section class="calls-modal-body background-upload-body">
-        <section
-          ref="stageRef"
-          class="background-crop-stage"
-          :class="{ dragging: drag.active }"
-          @pointerdown="startDrag"
-          @pointermove="moveDrag"
-          @pointerup="endDrag"
-          @pointercancel="endDrag"
-          @wheel.prevent="zoomWithWheel"
-        >
-          <img
-            v-if="state.imageUrl"
-            class="background-crop-image"
-            :src="state.imageUrl"
-            :style="imageStyle"
-            alt=""
-            @dragstart.prevent
-          />
-        </section>
-
-        <section class="background-crop-controls">
-          <label class="settings-field">
-            <span>{{ t('administration.background_image_label') }}</span>
-            <input v-model.trim="state.label" class="input" type="text" maxlength="120" />
-          </label>
-
-          <label class="settings-field">
-            <span>{{ t('administration.background_crop_zoom') }}</span>
-            <input
-              v-model.number="state.zoom"
-              class="call-left-range"
-              type="range"
-              min="1"
-              max="3"
-              step="0.01"
-              @input="clampCrop"
-            />
-          </label>
-
-          <section class="background-filter-grid" :aria-label="t('administration.background_crop_filters')">
-            <button
-              v-for="filter in filterOptions"
-              :key="filter.key"
-              class="background-filter-btn"
-              :class="{ active: state.filterKey === filter.key }"
-              type="button"
-              :aria-pressed="state.filterKey === filter.key"
-              @click="state.filterKey = filter.key"
-            >
-              {{ filter.label }}
-            </button>
-          </section>
-        </section>
+  <AppModalShell
+    class="background-upload-modal"
+    :open="open"
+    :title="t('administration.background_crop_title')"
+    :subtitle="progressLabel"
+    :aria-label="t('administration.background_crop_dialog')"
+    dialog-class="calls-modal-dialog background-upload-dialog"
+    body-class="calls-modal-body background-upload-body"
+    footer-class="calls-modal-footer background-upload-footer"
+    maximizable
+    v-model:maximized="maximized"
+    @close="emitClose"
+  >
+    <template #body>
+      <section
+        ref="stageRef"
+        class="background-crop-stage"
+        :class="{ dragging: drag.active }"
+        @pointerdown="startDrag"
+        @pointermove="moveDrag"
+        @pointerup="endDrag"
+        @pointercancel="endDrag"
+        @wheel.prevent="zoomWithWheel"
+      >
+        <img
+          v-if="state.imageUrl"
+          class="background-crop-image"
+          :src="state.imageUrl"
+          :style="imageStyle"
+          alt=""
+          @dragstart.prevent
+        />
       </section>
 
-      <footer class="calls-modal-footer background-upload-footer">
-        <button class="btn" type="button" :disabled="uploading" @click="emitClose">{{ t('common.cancel') }}</button>
-        <button class="btn btn-cyan" type="button" :disabled="uploading || !state.ready" @click="saveCurrent">
-          {{ saveLabel }}
-        </button>
-      </footer>
-    </section>
-  </div>
+      <section class="background-crop-controls">
+        <label class="settings-field">
+          <span>{{ t('administration.background_image_label') }}</span>
+          <input v-model.trim="state.label" class="input" type="text" maxlength="120" />
+        </label>
+
+        <label class="settings-field">
+          <span>{{ t('administration.background_crop_zoom') }}</span>
+          <input
+            v-model.number="state.zoom"
+            class="call-left-range"
+            type="range"
+            min="1"
+            max="3"
+            step="0.01"
+            @input="clampCrop"
+          />
+        </label>
+
+        <section class="background-filter-grid" :aria-label="t('administration.background_crop_filters')">
+          <button
+            v-for="filter in filterOptions"
+            :key="filter.key"
+            class="background-filter-btn"
+            :class="{ active: state.filterKey === filter.key }"
+            type="button"
+            :aria-pressed="state.filterKey === filter.key"
+            @click="state.filterKey = filter.key"
+          >
+            {{ filter.label }}
+          </button>
+        </section>
+      </section>
+    </template>
+
+    <template #footer>
+      <AppPagination
+        v-if="sourceFiles.length > 1"
+        class="background-upload-pagination"
+        :page="state.index + 1"
+        :page-count="sourceFiles.length"
+        :total="sourceFiles.length"
+        :total-label="t('administration.background_images_total')"
+        :has-prev="state.index > 0"
+        :has-next="state.index + 1 < sourceFiles.length"
+        :disabled="uploading"
+        @page-change="goToCropPage"
+      />
+      <button class="btn btn-cyan" type="button" :disabled="uploading || !state.ready" @click="uploadAll">
+        {{ t('administration.background_crop_upload') }}
+      </button>
+    </template>
+  </AppModalShell>
 </template>
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
+import AppModalShell from '../../../components/AppModalShell.vue';
+import AppPagination from '../../../components/AppPagination.vue';
 import { t } from '../../localization/i18nRuntime.js';
 
 const OUTPUT_WIDTH = 1600;
@@ -117,7 +129,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'upload']);
 const stageRef = ref(null);
 const imageElement = ref(null);
-const processed = ref([]);
+const maximized = ref(false);
+const drafts = ref([]);
 const state = reactive({
   index: 0,
   imageUrl: '',
@@ -140,18 +153,30 @@ const drag = reactive({
 const sourceFiles = computed(() => props.files.filter((file) => file instanceof File));
 const currentFile = computed(() => sourceFiles.value[state.index] || null);
 const progressLabel = computed(() => t('administration.background_crop_progress', {
-  current: Math.min(sourceFiles.value.length, state.index + 1),
+  current: Math.min(sourceFiles.value.length || 1, state.index + 1),
   total: sourceFiles.value.length,
 }));
-const saveLabel = computed(() => (
-  state.index + 1 >= sourceFiles.value.length
-    ? t('administration.background_crop_upload')
-    : t('administration.background_crop_next')
-));
 const activeFilter = computed(() => filterOptions.find((filter) => filter.key === state.filterKey) || filterOptions[0]);
 
 function fileStem(file) {
   return String(file?.name || 'background').replace(/\.[^.]+$/, '').slice(0, 120) || 'background';
+}
+
+function createDraft(file) {
+  return {
+    label: fileStem(file),
+    zoom: 1,
+    offsetX: 0,
+    offsetY: 0,
+    naturalWidth: 0,
+    naturalHeight: 0,
+    filterKey: 'none',
+    ready: false,
+  };
+}
+
+function resetDrafts() {
+  drafts.value = sourceFiles.value.map((file) => createDraft(file));
 }
 
 function revokeImageUrl() {
@@ -162,21 +187,47 @@ function revokeImageUrl() {
 }
 
 function resetCropForFile(file) {
-  state.label = fileStem(file);
-  state.zoom = 1;
-  state.offsetX = 0;
-  state.offsetY = 0;
-  state.naturalWidth = 0;
-  state.naturalHeight = 0;
-  state.filterKey = 'none';
-  state.ready = false;
+  const draft = drafts.value[state.index] || createDraft(file);
+  state.label = draft.label || fileStem(file);
+  state.zoom = Number(draft.zoom || 1);
+  state.offsetX = Number(draft.offsetX || 0);
+  state.offsetY = Number(draft.offsetY || 0);
+  state.naturalWidth = Number(draft.naturalWidth || 0);
+  state.naturalHeight = Number(draft.naturalHeight || 0);
+  state.filterKey = String(draft.filterKey || 'none');
+  state.ready = Boolean(draft.ready);
+}
+
+function persistCurrentDraft() {
+  const file = currentFile.value;
+  if (!file) return;
+  drafts.value[state.index] = {
+    label: state.label || fileStem(file),
+    zoom: Number(state.zoom || 1),
+    offsetX: Number(state.offsetX || 0),
+    offsetY: Number(state.offsetY || 0),
+    naturalWidth: Number(state.naturalWidth || 0),
+    naturalHeight: Number(state.naturalHeight || 0),
+    filterKey: String(state.filterKey || 'none'),
+    ready: Boolean(state.ready),
+  };
 }
 
 function loadCurrentFile() {
   revokeImageUrl();
   imageElement.value = null;
   const file = currentFile.value;
-  if (!file) return;
+  if (!file) {
+    state.label = '';
+    state.zoom = 1;
+    state.offsetX = 0;
+    state.offsetY = 0;
+    state.naturalWidth = 0;
+    state.naturalHeight = 0;
+    state.filterKey = 'none';
+    state.ready = false;
+    return;
+  }
   resetCropForFile(file);
   const url = URL.createObjectURL(file);
   const image = new Image();
@@ -185,26 +236,33 @@ function loadCurrentFile() {
     state.naturalWidth = image.naturalWidth || image.width || 0;
     state.naturalHeight = image.naturalHeight || image.height || 0;
     state.ready = state.naturalWidth > 0 && state.naturalHeight > 0;
-    void nextTick(clampCrop);
+    void nextTick(() => {
+      clampCrop();
+      persistCurrentDraft();
+    });
   };
   image.src = url;
   state.imageUrl = url;
 }
 
-function cropMetrics() {
-  const naturalWidth = Math.max(1, Number(state.naturalWidth || 1));
-  const naturalHeight = Math.max(1, Number(state.naturalHeight || 1));
+function cropMetricsFor(cropState) {
+  const naturalWidth = Math.max(1, Number(cropState?.naturalWidth || 1));
+  const naturalHeight = Math.max(1, Number(cropState?.naturalHeight || 1));
   const baseScale = Math.max(OUTPUT_WIDTH / naturalWidth, OUTPUT_HEIGHT / naturalHeight);
-  const zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(state.zoom || 1)));
+  const zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, Number(cropState?.zoom || 1)));
   const scale = baseScale * zoom;
   const drawW = naturalWidth * scale;
   const drawH = naturalHeight * scale;
   return {
     drawW,
     drawH,
-    x: (OUTPUT_WIDTH - drawW) / 2 + state.offsetX,
-    y: (OUTPUT_HEIGHT - drawH) / 2 + state.offsetY,
+    x: (OUTPUT_WIDTH - drawW) / 2 + Number(cropState?.offsetX || 0),
+    y: (OUTPUT_HEIGHT - drawH) / 2 + Number(cropState?.offsetY || 0),
   };
+}
+
+function cropMetrics() {
+  return cropMetricsFor(state);
 }
 
 function clampCrop() {
@@ -214,6 +272,7 @@ function clampCrop() {
   const maxY = Math.max(0, (drawH - OUTPUT_HEIGHT) / 2);
   state.offsetX = Math.max(-maxX, Math.min(maxX, Number(state.offsetX || 0)));
   state.offsetY = Math.max(-maxY, Math.min(maxY, Number(state.offsetY || 0)));
+  persistCurrentDraft();
 }
 
 const imageStyle = computed(() => {
@@ -270,36 +329,72 @@ function zoomWithWheel(event) {
   clampCrop();
 }
 
-function renderCroppedPayload() {
-  const image = imageElement.value;
-  if (!image || !state.ready) return null;
+function loadImageForFile(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = async () => {
+      try {
+        await image.decode?.();
+      } catch {
+      }
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    image.src = url;
+  });
+}
+
+function renderCroppedPayloadForImage(image, file, draft) {
+  if (!image || !draft?.ready) return null;
   const canvas = document.createElement('canvas');
   canvas.width = OUTPUT_WIDTH;
   canvas.height = OUTPUT_HEIGHT;
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
-  const { drawW, drawH, x, y } = cropMetrics();
+  const { drawW, drawH, x, y } = cropMetricsFor(draft);
   ctx.fillStyle = '#000010';
   ctx.fillRect(0, 0, OUTPUT_WIDTH, OUTPUT_HEIGHT);
-  ctx.filter = activeFilter.value.css;
+  const filter = filterOptions.find((option) => option.key === draft.filterKey) || filterOptions[0];
+  ctx.filter = filter.css;
   ctx.drawImage(image, x, y, drawW, drawH);
   return {
-    file_name: `${fileStem(currentFile.value)}.jpg`,
-    label: state.label || fileStem(currentFile.value),
+    file_name: `${fileStem(file)}.jpg`,
+    label: draft.label || fileStem(file),
     data_url: canvas.toDataURL('image/jpeg', JPEG_QUALITY),
   };
 }
 
-function saveCurrent() {
-  const payload = renderCroppedPayload();
-  if (!payload) return;
-  processed.value.push(payload);
-  if (state.index + 1 < sourceFiles.value.length) {
-    state.index += 1;
-    loadCurrentFile();
-    return;
+async function uploadAll() {
+  if (props.uploading || !state.ready) return;
+  persistCurrentDraft();
+  const payloads = [];
+  for (const [index, file] of sourceFiles.value.entries()) {
+    const draft = drafts.value[index] || createDraft(file);
+    const image = index === state.index && imageElement.value ? imageElement.value : await loadImageForFile(file);
+    const effectiveDraft = { ...draft };
+    if (!effectiveDraft.ready && image) {
+      effectiveDraft.naturalWidth = image.naturalWidth || image.width || 0;
+      effectiveDraft.naturalHeight = image.naturalHeight || image.height || 0;
+      effectiveDraft.ready = effectiveDraft.naturalWidth > 0 && effectiveDraft.naturalHeight > 0;
+    }
+    const payload = renderCroppedPayloadForImage(image, file, effectiveDraft);
+    if (payload) payloads.push(payload);
   }
-  emit('upload', processed.value.slice());
+  if (payloads.length > 0) emit('upload', payloads);
+}
+
+function goToCropPage(page) {
+  if (props.uploading) return;
+  const nextIndex = Math.max(0, Math.min(sourceFiles.value.length - 1, Number(page || 1) - 1));
+  if (nextIndex === state.index) return;
+  persistCurrentDraft();
+  state.index = nextIndex;
+  loadCurrentFile();
 }
 
 function emitClose() {
@@ -313,12 +408,13 @@ watch(
     if (!open) {
       revokeImageUrl();
       imageElement.value = null;
-      processed.value = [];
+      drafts.value = [];
       state.index = 0;
+      maximized.value = false;
       return;
     }
-    processed.value = [];
     state.index = 0;
+    resetDrafts();
     loadCurrentFile();
   },
 );
@@ -327,8 +423,8 @@ watch(
   () => props.files,
   () => {
     if (props.open) {
-      processed.value = [];
       state.index = 0;
+      resetDrafts();
       loadCurrentFile();
     }
   },
@@ -336,24 +432,20 @@ watch(
 </script>
 
 <style scoped>
-.background-upload-modal[hidden] {
-  display: none;
-}
-
-.background-upload-dialog {
+:deep(.background-upload-dialog) {
   width: min(980px, calc(100vw - 28px));
   max-height: calc(100vh - 28px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
-.background-upload-progress {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 12px;
+:deep(.background-upload-dialog.is-maximized) {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
 }
 
-.background-upload-body {
+:deep(.background-upload-body) {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
@@ -423,18 +515,23 @@ watch(
   border-color: var(--color-cyan-primary);
 }
 
-.background-upload-footer {
-  justify-content: flex-end;
+:deep(.background-upload-footer) {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.background-upload-pagination {
+  margin-inline-end: auto;
 }
 
 @media (max-width: 820px) {
-  .background-upload-dialog {
+  :deep(.background-upload-dialog) {
     width: 100vw;
     height: 100vh;
     max-height: 100vh;
   }
 
-  .background-upload-body {
+  :deep(.background-upload-body) {
     grid-template-columns: 1fr;
   }
 }

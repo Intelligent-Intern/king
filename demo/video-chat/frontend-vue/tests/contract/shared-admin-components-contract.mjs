@@ -17,6 +17,7 @@ const users = await source('src/modules/users/pages/admin/UsersView.vue');
 const usersTable = await source('src/modules/users/pages/components/UsersTable.vue');
 const usersStyles = await source('src/modules/users/pages/admin/UsersView.css');
 const appConfiguration = await source('src/modules/administration/pages/AppConfigurationView.vue');
+const backgroundUploadModal = await source('src/modules/administration/components/BackgroundImageUploadModal.vue');
 const marketplace = await source('src/modules/marketplace/pages/AdminMarketplaceView.vue');
 const marketplaceTable = await source('src/modules/marketplace/pages/AdminMarketplaceTable.vue');
 const marketplaceStyles = await source('src/modules/marketplace/pages/AdminMarketplaceView.css');
@@ -40,7 +41,7 @@ assert.match(pageHeader, /\.app-page-header-actions[\s\S]*?margin-inline-start:\
 assert.match(pageHeader, /\.app-page-header[\s\S]*?width:\s*100%;[\s\S]*?display:\s*flex;/, 'page header root must own full-width flex alignment');
 assert.match(pageHeader, /\.app-page-header-tour-btn[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px;/, 'tour button must match CRUD action button height');
 assert.match(pageFrame, /\.admin-page-frame-toolbar\s*\{[\s\S]*?gap:\s*20px;[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 20px 20px;/, 'admin toolbar search controls must be right-aligned with 20px spacing');
-assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field-main\)[\s\S]*?margin-inline-start:\s*auto;/, 'admin toolbar search field must push the filter cluster to the right');
+assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field-main\)[\s\S]*?margin-inline-start:\s*0;/, 'admin toolbar search controls must rely on the shared 20px flex gap instead of auto spacing');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field\)[\s\S]*?flex:\s*0 1 360px;/, 'admin toolbar search fields must keep a stable desktop width');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.ii-select\)[\s\S]*?flex:\s*0 0 180px;/, 'admin toolbar selects must align beside the search submit control');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
@@ -94,12 +95,16 @@ assert.match(relationStack, /\.crud-relation-footer \.btn-cyan\s*\{[\s\S]*?margi
 assert.match(themeSettings, /theme_settings\.close_editor/, 'theme editor must use a neutral close editor label instead of generic cancel');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
+assert.match(backgroundUploadModal, /AppModalShell/, 'background image upload cropper must use the shared modal shell');
+assert.match(backgroundUploadModal, /\bmaximizable\b/, 'background image upload cropper must expose standard modal maximization');
+assert.match(backgroundUploadModal, /AppPagination/, 'bulk background upload cropper must provide pagination between selected images');
+assert.doesNotMatch(backgroundUploadModal, /common\.cancel|>\s*Cancel\s*</, 'background upload cropper must rely on the standard modal close control instead of a footer cancel button');
 assert.match(sidePanelShell, /\.app-side-panel[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/, 'CRUD side panels must be anchored to the right edge');
 assert.match(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-left:\s*1px solid var\(--border-subtle\);[\s\S]*?border-radius:\s*0;/, 'right side panels must only render the left divider with no rounded corners');
 assert.doesNotMatch(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*1px solid/, 'right side panels must not render top, right, and bottom borders');
 assert.doesNotMatch(sidePanelShell, /border-radius:\s*10px 0 0 10px/, 'right side panels must not keep the old rounded drawer corners');
 assert.doesNotMatch(sidePanelShell, /toggleMaximized|maximizeIcon|restoreIcon|update:maximized/, 'right side panels must not expose resize or maximize controls');
-assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*auto;/, 'users search field must use right-aligned standard toolbar sizing');
-assert.match(marketplaceStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*auto;/, 'marketplace search field must use right-aligned standard toolbar sizing');
+assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'users search field must not add extra auto spacing inside the standard toolbar');
+assert.match(marketplaceStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'marketplace search field must not add extra auto spacing inside the standard toolbar');
 
 console.log('[shared-admin-components-contract] PASS');
