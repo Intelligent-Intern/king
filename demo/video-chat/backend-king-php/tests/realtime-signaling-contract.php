@@ -242,6 +242,30 @@ try {
     videochat_realtime_signaling_assert((string) ($mediaQualityPressureTargetFrame['type'] ?? '') === 'call/media-quality-pressure', 'target should receive media-quality-pressure');
     videochat_realtime_signaling_assert((string) (($mediaQualityPressureTargetFrame['payload'] ?? [])['kind'] ?? '') === 'sfu-video-quality-pressure', 'media-quality-pressure payload kind mismatch');
 
+    $decodedMediaSecuritySyncRequest = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/media-security-sync-request',
+        'target_user_id' => 200,
+        'payload' => [
+            'kind' => 'sfu-publisher-stall-security-resync',
+            'publisher_id' => 'publisher-100',
+            'reason' => 'sfu_publisher_stall_security_resync',
+            'requester_user_id' => 100,
+            'media_runtime_path' => 'wlvc_sfu',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaSecuritySyncRequest['ok'] ?? false), 'call/media-security-sync-request should decode');
+    $mediaSecuritySyncRequestPublish = videochat_signaling_publish(
+        $presenceState,
+        $senderConnection,
+        $decodedMediaSecuritySyncRequest,
+        $sender,
+        1_780_300_125_500
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaSecuritySyncRequestPublish['ok'] ?? false), 'call/media-security-sync-request publish should succeed');
+    $mediaSecuritySyncRequestTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-target-1');
+    videochat_realtime_signaling_assert((string) ($mediaSecuritySyncRequestTargetFrame['type'] ?? '') === 'call/media-security-sync-request', 'target should receive media-security sync request');
+    videochat_realtime_signaling_assert((string) (($mediaSecuritySyncRequestTargetFrame['payload'] ?? [])['kind'] ?? '') === 'sfu-publisher-stall-security-resync', 'media-security sync request payload kind mismatch');
+
     $decodedModerationState = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/moderation-state',
         'target_user_id' => 200,

@@ -4,9 +4,11 @@ import {
 } from '../../sfu/recoveryReasons';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
+const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
   'call/ice',
   'call/media-quality-pressure',
+  MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE,
   'call/offer',
 ]);
 
@@ -281,6 +283,33 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'call/media-quality-pressure') {
       handleMediaQualityPressure(payloadBody || {}, sender);
+      return;
+    }
+
+    if (type === MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'media_security_sync_request_received',
+        code: 'media_security_sync_request_received',
+        message: 'A remote receiver requested a media-security resync before video reconnect.',
+        payload: {
+          sender_user_id: senderUserId,
+          requester_user_id: Number(payloadBody?.requester_user_id || senderUserId || 0),
+          source_reason: String(payloadBody?.reason || '').trim(),
+          source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
+          media_runtime_path: refs.mediaRuntimePath.value,
+        },
+        immediate: true,
+      });
+      void sendMediaSecuritySync(true);
+      if (typeof requestWlvcFullFrameKeyframe === 'function') {
+        requestWlvcFullFrameKeyframe('media_security_sync_request_received', {
+          requested_action: 'force_full_keyframe',
+          request_full_keyframe: true,
+          sender_user_id: senderUserId,
+        });
+      }
       return;
     }
 

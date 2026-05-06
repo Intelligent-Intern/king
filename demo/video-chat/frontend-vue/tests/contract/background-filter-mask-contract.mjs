@@ -15,6 +15,7 @@ try {
   const source = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.ts'));
   const controller = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/controller.ts'));
   const localOrchestration = readUtf8(path.join(frontendRoot, 'src/domain/realtime/local/mediaOrchestration.ts'));
+  const publisherPipeline = readUtf8(path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts'));
   const joinPreview = readUtf8(path.join(frontendRoot, 'src/domain/calls/access/joinPreview.ts'));
   const dashboardEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/dashboard/enterCall.ts'));
   const adminEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/admin/enterCall.ts'));
@@ -65,6 +66,9 @@ try {
   assert.ok(localOrchestration.includes('const videoTrack = stream.getVideoTracks()[0];'), 'initial local publisher must encode the processed stream video track');
   assert.ok(localOrchestration.includes('const videoTrack = nextStream.getVideoTracks()[0] || null;'), 'background reconfigure must encode the replacement processed stream video track');
   assert.ok(localOrchestration.includes("eventType: 'local_background_sinet_unavailable'"), 'local media must emit a diagnostic if SINet cannot initialize in the call path');
+  assert.ok(publisherPipeline.includes('videoTrack === activeRawVideoTrack'), 'publisher startup must detect accidental raw-track starts');
+  assert.ok(publisherPipeline.includes('videoTrack = activeOutputVideoTrack;'), 'publisher startup must force the active processed stream track over a stale raw track');
+  assert.ok(publisherPipeline.includes("eventType: 'local_background_stream_publisher_active'"), 'publisher startup must prove preview and SFU publishing use the processed background stream');
   assert.ok(!source.includes('ctx.filter = "none";\n      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);\n      ctx.restore();'), 'background filter stream must not fall back to raw video while blur presets switch');
   assert.ok(source.includes('ready,'), 'background filter stream handle must return the readiness promise');
   assert.ok(controller.includes('const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);'), 'background filter controller must gate blur-to-blur swaps on ready handoff');
