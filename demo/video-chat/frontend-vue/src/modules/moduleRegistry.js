@@ -12,10 +12,21 @@ export function normalizeModuleDescriptor(descriptor) {
     version,
     permissions: Array.isArray(source.permissions) ? [...source.permissions] : [],
     access: normalizeAccessMetadata(source.access),
+    catalog: normalizeCatalogMetadata(source.catalog, moduleKey),
     routes: Array.isArray(source.routes) ? [...source.routes] : [],
     navigation: Array.isArray(source.navigation) ? [...source.navigation] : [],
     settings_panels: Array.isArray(source.settings_panels) ? [...source.settings_panels] : [],
     i18n_namespaces: Array.isArray(source.i18n_namespaces) ? [...source.i18n_namespaces] : [],
+  });
+}
+
+function normalizeCatalogMetadata(catalog, moduleKey) {
+  const source = catalog && typeof catalog === 'object' ? catalog : {};
+
+  return Object.freeze({
+    name: typeof source.name === 'string' ? source.name.trim() : '',
+    preview_kind: typeof source.preview_kind === 'string' ? source.preview_kind.trim() : moduleKey,
+    screenshot_path: typeof source.screenshot_path === 'string' ? source.screenshot_path.trim() : '',
   });
 }
 

@@ -161,8 +161,15 @@ const descriptors = {
     resource_type: 'module',
     readonly: true,
     endpoint: '/api/governance/module-catalog',
+    table_columns: Object.freeze([
+      column('preview_kind', 'governance.screenshot', { cell: 'module_preview', width: '28%' }),
+      column('name', 'governance.name', { cell: 'primary', width: '26%' }),
+      column('key', 'governance.key', { width: '24%' }),
+      column('status', 'governance.status', { cell: 'status', width: '16%' }),
+    ]),
     allowed_actions: Object.freeze(['inspect']),
     selection_mode: 'multiple',
+    search_fields: Object.freeze(['name', 'key', 'status']),
   }),
   permissions: descriptor('permissions', {
     resource_type: 'permission',

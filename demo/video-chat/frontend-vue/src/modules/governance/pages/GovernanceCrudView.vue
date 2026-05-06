@@ -65,6 +65,7 @@
                 {{ statusLabel(row[column.key]) }}
               </span>
               <template v-else-if="column.cell === 'description'">{{ rowDescription(row) }}</template>
+              <GovernanceModulePreview v-else-if="column.cell === 'module_preview'" :row="row" />
               <template v-else-if="column.cell === 'datetime'">{{ formatDate(row[column.key]) }}</template>
               <template v-else>{{ rowCellValue(row, column) }}</template>
             </td>
@@ -156,6 +157,7 @@ import { moduleAccessContextFromSession } from '../../../http/routeAccess.js';
 import { formatLocalizedDateTimeDisplay } from '../../../support/dateTimeFormat';
 import GovernanceCrudToolbar from '../components/GovernanceCrudToolbar.vue';
 import GovernanceEmptyState from '../components/GovernanceEmptyState.vue';
+import GovernanceModulePreview from '../components/GovernanceModulePreview.vue';
 import CrudRelationStack from '../components/CrudRelationStack.vue';
 import GovernanceCrudModal from './GovernanceCrudModal.vue';
 import GovernanceOrganizationsView from './GovernanceOrganizationsView.vue';
@@ -187,7 +189,6 @@ const router = useRouter();
 const governancePersistence = createGovernanceCrudPersistence({ router });
 const rowsByScope = reactive({});
 const page = ref(1);
-const pageSize = 8;
 const modalOpen = ref(false);
 const modalMode = ref('create');
 const relationNavigatorOpen = ref(false);
@@ -204,6 +205,7 @@ let loadRequestToken = 0;
 const scopeKey = computed(() => String(route.name || route.path));
 const crudDescriptor = computed(() => governanceCrudDescriptorForRoute(route) || {});
 const entityKey = computed(() => String(crudDescriptor.value.entity_key || '').trim());
+const pageSize = computed(() => (entityKey.value === 'modules' ? 24 : 8));
 const isOrganizationsView = computed(() => entityKey.value === 'organizations');
 const organizationViewProps = computed(() => ({ rows: pagedRows.value, loading: loading.value, loadError: loadError.value, filteredCount: filteredRows.value.length, showEmptyState: showEmptyState.value, emptyStateTitle: emptyStateTitle.value, emptyStateBody: emptyStateBody.value, createLabel: createButtonLabel.value, showCreate: Boolean(createAction.value), editorOpen: modalOpen.value, editorTitle: modalTitle.value, submitLabel: modalSubmitLabel.value, form, fields: modalFields.value, relationships: modalRelationships.value, relationSelections, error: formError.value, saving: mutationPending.value, relationActive: relationNavigatorOpen.value, relation: relationNavigatorRelation.value, rowProvider: relationRowsForEntity, createDraft: createRelationDraft, canCreateDraftForEntity: canCreateRelationDraft, rowActions: rowActions.value }));
 const usesBackend = computed(() => isPersistedGovernanceEntity(entityKey.value));
@@ -258,10 +260,10 @@ const {
   resetFilters,
   applyToolbarSearch,
 } = useGovernanceCrudFilters({ rows: visibleRows, tableColumns, crudDescriptor, rowDescription });
-const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize)));
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / pageSize.value)));
 const pagedRows = computed(() => {
-  const offset = (page.value - 1) * pageSize;
-  return filteredRows.value.slice(offset, offset + pageSize);
+  const offset = (page.value - 1) * pageSize.value;
+  return filteredRows.value.slice(offset, offset + pageSize.value);
 });
 const modalTitle = computed(() => {
   const portabilityTitleKey = dataPortabilityModalTitle(entityKey.value, modalMode.value);
@@ -778,15 +780,8 @@ function statusClass(status) {
 
 function statusLabel(status) {
   const normalized = normalizeStatus(status);
-  if (normalized === 'active') return t('governance.status_active');
-  if (normalized === 'archived') return t('governance.status_archived');
-  if (normalized === 'completed') return t('governance.status_completed');
-  if (normalized === 'draft') return t('governance.status_draft');
-  if (normalized === 'disabled') return t('governance.status_disabled');
-  if (normalized === 'failed') return t('governance.status_failed');
-  if (normalized === 'queued') return t('governance.status_queued');
-  if (normalized === 'running') return t('governance.status_running');
-  return String(status || '');
+  const key = `governance.status_${normalized}`;
+  return key !== '' ? t(key) : String(status || '');
 }
 
 function formatDate(value) {

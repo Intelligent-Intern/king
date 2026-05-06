@@ -14,16 +14,13 @@ const governanceCrudView = await source('src/modules/governance/pages/Governance
 const navigationBuilder = await source('src/modules/navigationBuilder.js');
 
 for (const key of [
-  'governance.catalog.module_description',
-  'governance.catalog.no_permissions',
   'governance.catalog.permission_description',
-  'governance.catalog.time_limited_not_supported',
-  'governance.catalog.time_limited_supported',
 ]) {
   assert.ok(ENGLISH_MESSAGES[key], `missing governance catalog i18n key: ${key}`);
 }
 
-assert.match(governanceCatalog, /description_key: 'governance\.catalog\.module_description'/, 'module catalog rows must use description keys');
+assert.doesNotMatch(governanceCatalog, /description_key: 'governance\.catalog\.module_description'/, 'module catalog rows must not render descriptions');
+assert.match(governanceCatalog, /preview_kind/, 'module catalog rows must expose screenshot preview metadata');
 assert.match(governanceCatalog, /description_key: 'governance\.catalog\.permission_description'/, 'permission catalog rows must use description keys');
 assert.doesNotMatch(governanceCatalog, /`\\$\\{descriptor\.routes\.length\\} routes`/, 'module descriptions must not concatenate English route text');
 assert.doesNotMatch(governanceCatalog, /`Module: \\$\\{descriptor\.module_key\\}`/, 'permission descriptions must not concatenate English module text');

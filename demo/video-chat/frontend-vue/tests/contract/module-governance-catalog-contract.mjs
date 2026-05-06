@@ -11,10 +11,10 @@ assert.equal(moduleRows.length, workspaceModuleRegistry.list().length, 'governan
 assert.ok(moduleRows.every((row) => row.entity_key === 'modules'), 'descriptor module rows must carry their entity key');
 assert.ok(moduleRows.every((row) => row.readonly === true), 'descriptor module rows must be readonly system rows');
 assert.ok(moduleRows.some((row) => row.key === 'governance'), 'governance module row missing');
-assert.ok(moduleRows.every((row) => row.description_key === 'governance.catalog.module_description'), 'module rows must expose localized descriptions');
-assert.ok(moduleRows.some((row) => row.description_params.permissions === 'governance.read'), 'module rows must expose permissions as localized params');
-assert.ok(moduleRows.every((row) => typeof row.description_params.grant_targets === 'string'), 'module rows must expose grant target metadata');
-assert.ok(moduleRows.every((row) => typeof row.description_params.time_limited_key === 'string'), 'module rows must expose time-limited grant metadata');
+assert.ok(moduleRows.some((row) => row.key === 'calls'), 'calls module row missing');
+assert.ok(moduleRows.every((row) => !row.description_key), 'module rows must not render descriptions');
+assert.ok(moduleRows.every((row) => typeof row.preview_kind === 'string' && row.preview_kind !== ''), 'module rows must expose screenshot preview metadata');
+assert.ok(moduleRows.every((row) => Number.isInteger(row.route_count)), 'module rows must expose route counts for diagnostics');
 
 const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-permissions');
 const permissionKeys = new Set(permissionRows.map((row) => row.key));

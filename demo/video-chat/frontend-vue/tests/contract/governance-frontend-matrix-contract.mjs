@@ -64,8 +64,8 @@ for (const routeName of ['admin-governance-modules', 'admin-governance-permissio
 const moduleRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-modules');
 assert.ok(moduleRows.length > 0, 'module catalog rows must exist');
 assert.ok(moduleRows.every((row) => row.readonly === true), 'module catalog rows must be readonly');
-assert.ok(moduleRows.every((row) => row.description_key === 'governance.catalog.module_description'), 'module rows must use keyed descriptions');
-assert.ok(moduleRows.every((row) => row.description_params && typeof row.description_params === 'object'), 'module rows must expose description params');
+assert.ok(moduleRows.every((row) => !row.description_key), 'module rows must not render descriptions');
+assert.ok(moduleRows.every((row) => typeof row.preview_kind === 'string' && row.preview_kind !== ''), 'module rows must expose screenshot preview metadata');
 
 const permissionRows = buildGovernanceCatalogRows(workspaceModuleRegistry, 'admin-governance-permissions');
 assert.ok(permissionRows.length > 0, 'permission catalog rows must exist');
