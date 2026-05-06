@@ -95,6 +95,7 @@ const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
+const SFU_INVALID_BINARY_ENVELOPE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS = 1000
 const SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS = 6000
 const SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS = 5000
@@ -136,6 +137,7 @@ export class SFUClient {
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
+  private lastInvalidBinaryEnvelopeDiagnosticAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
   private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
@@ -334,7 +336,10 @@ export class SFUClient {
     ws.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer) {
         const decoded = decodeSfuBinaryFrameEnvelope(ev.data)
-        if (!decoded) return
+        if (!decoded) {
+          this.reportInvalidBinaryEnvelope(ev.data)
+          return
+        }
         this.handleMessage({
           ...decoded.payload,
           data: decoded.payloadBytes,
@@ -429,6 +434,29 @@ export class SFUClient {
       })
       failToNextCandidateAfterSocketClose('negotiation_timeout')
     }, SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS)
+  }
+
+  private reportInvalidBinaryEnvelope(data: ArrayBuffer): void {
+    const nowMs = Date.now()
+    if ((nowMs - this.lastInvalidBinaryEnvelopeDiagnosticAtMs) < SFU_INVALID_BINARY_ENVELOPE_DIAGNOSTIC_COOLDOWN_MS) {
+      return
+    }
+    this.lastInvalidBinaryEnvelopeDiagnosticAtMs = nowMs
+    const bytes = new Uint8Array(data || new ArrayBuffer(0))
+    const prefix = Array.from(bytes.subarray(0, 8)).map((value) => value.toString(16).padStart(2, '0')).join('')
+    this.reportClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_binary_frame_rejected',
+      code: 'sfu_binary_frame_rejected',
+      message: 'SFU binary media frame could not be decoded and was dropped.',
+      payload: {
+        lane: 'data',
+        byte_length: bytes.byteLength,
+        prefix_hex: prefix,
+      },
+      immediate: true,
+    })
   }
 
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {

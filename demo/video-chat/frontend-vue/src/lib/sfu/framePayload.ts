@@ -660,6 +660,7 @@ export function isSfuWlvcAbiMetadataCompatible(codecId: unknown, runtimeId: unkn
   const normalizedRuntimeId = normalizeRuntimeId(runtimeId)
   const normalizedCodecId = normalizeCodecId(codecId)
   if (normalizedRuntimeId !== 'wlvc_sfu') return true
+  if (normalizedCodecId === 'webcodecs_vp8') return true
   if (normalizedCodecId !== 'wlvc_wasm' && normalizedCodecId !== 'wlvc_ts' && normalizedCodecId !== 'wlvc_unknown') return false
   const source = metadata && typeof metadata === 'object' ? metadata : {}
   const abiVersion = normalizeNonNegativeInteger(source.wlvc_wasm_abi_version ?? source.wlvcWasmAbiVersion)
