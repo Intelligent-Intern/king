@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="king-call-app-key" content="whiteboard">
+    <meta name="king-call-app-bridge" content="king.call_app.iframe.v1">
+    <title>Whiteboard Call App</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #000010;
+        color: #ffffff;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+      }
+
+      main {
+        width: min(720px, calc(100vw - 32px));
+        border: 1px solid #03275a;
+        background: #00052d;
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+
+      p {
+        margin: 0;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Whiteboard</h1>
+      <p>This iframe entrypoint is a metadata stub for the CRDT Call App host.</p>
+    </main>
+    <script>
+      (() => {
+        const bridgeProtocol = 'king.call_app.iframe.v1';
+        let parentOrigin = '';
+
+        function emit(type, payload = {}) {
+          if (!parentOrigin || !window.parent) return;
+          window.parent.postMessage({
+            type,
+            bridge_protocol: bridgeProtocol,
+            app_key: 'whiteboard',
+            ...payload,
+          }, parentOrigin);
+        }
+
+        window.addEventListener('message', (event) => {
+          const message = event.data && typeof event.data === 'object' ? event.data : null;
+          if (!message || message.bridge_protocol !== bridgeProtocol) return;
+          if (message.type === 'call_app.launch') {
+            parentOrigin = event.origin;
+            emit('call_app.ready', {
+              launch_token_received: Boolean(message.launch_token),
+              primary_session_token_received: false,
+              capabilities: [
+                'call_apps.crdt.read',
+                'call_apps.crdt.append',
+                'call_apps.presence.publish',
+              ],
+            });
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
