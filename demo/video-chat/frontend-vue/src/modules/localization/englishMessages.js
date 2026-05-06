@@ -24,7 +24,6 @@ export const ENGLISH_MESSAGES = Object.freeze({
   'common.new_call': 'New call',
   'common.next': 'Next',
   'common.not_available': 'n/a',
-  'common.open_calls': 'Open Calls',
   'common.open_settings': 'Open settings',
   'common.previous': 'Previous',
   'common.profile_avatar': 'Profile avatar',

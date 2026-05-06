@@ -296,11 +296,8 @@
                 </div>
               </div>
               <div class="actions">
-                <template v-if="route.path === '/admin/overview'">
-                  <button class="btn btn-cyan" type="button" @click="openCallsRegistry">{{ t('common.open_calls') }}</button>
-                </template>
                 <button
-                  v-else-if="route.name === 'user-dashboard'"
+                  v-if="route.name === 'user-dashboard'"
                   class="btn btn-cyan"
                   type="button"
                   @click="openUserCreateCall"
@@ -1866,10 +1863,6 @@ onBeforeUnmount(() => {
   mobileMedia = null;
   syncMobileScrollLock(true);
 });
-
-function openCallsRegistry() {
-  router.push('/admin/calls');
-}
 
 function openUserCreateCall() {
   if (typeof window === 'undefined') return;
