@@ -4,6 +4,7 @@ require_once __DIR__ . '/tenant_migrations.php';
 require_once __DIR__ . '/localization.php';
 require_once __DIR__ . '/workspace_theme_migrations.php';
 require_once __DIR__ . '/workspace_app_configuration_migrations.php';
+require_once __DIR__ . '/workspace_calendar_migrations.php';
 require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
@@ -793,6 +794,10 @@ SQL,
         45 => [
             'name' => '0045_workspace_app_configuration_assets',
             'statements' => videochat_workspace_app_configuration_migration_statements(),
+        ],
+        46 => [
+            'name' => '0046_workspace_calendars',
+            'statements' => videochat_workspace_calendar_migration_statements(),
         ],
     ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
 }

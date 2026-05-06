@@ -1,4 +1,5 @@
 import administration from './administration/descriptor.js';
+import calendar from './calendar/descriptor.js';
 import governance from './governance/descriptor.js';
 import localization from './localization/descriptor.js';
 import marketplace from './marketplace/descriptor.js';
@@ -10,6 +11,7 @@ import { buildModuleRouteRecords } from './navigationBuilder.js';
 
 export const workspaceModuleDescriptors = [
   administration,
+  calendar,
   governance,
   localization,
   marketplace,
