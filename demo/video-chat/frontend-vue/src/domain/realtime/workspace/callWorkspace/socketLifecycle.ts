@@ -470,12 +470,24 @@ export function createCallWorkspaceSocketHelpers({
           clearLobbyActionText(failedTargetUserId, 'remove');
         }
       }
+      const transientAuthBackendError = code === 'websocket_auth_temporarily_unavailable'
+        || closeReason === 'auth_backend_error';
+      if (transientAuthBackendError) {
+        state.manualSocketClose = false;
+        refs.workspaceError.value = '';
+        refs.workspaceNotice.value = '';
+        refs.connectionReason.value = 'auth_backend_error';
+        refs.connectionState.value = 'retrying';
+        closeSocketLocal();
+        scheduleReconnect();
+        return;
+      }
       if (code === 'websocket_session_invalidated' || closeReason === 'session_invalidated') {
         state.manualSocketClose = true;
         refs.connectionReason.value = closeReason || 'session_invalidated';
         refs.connectionState.value = 'expired';
         closeSocketLocal();
-      } else if (code === 'websocket_auth_failed' || code === 'websocket_forbidden' || closeReason === 'auth_backend_error' || closeReason === 'role_not_allowed') {
+      } else if (code === 'websocket_auth_failed' || code === 'websocket_forbidden' || closeReason === 'role_not_allowed') {
         state.manualSocketClose = true;
         refs.connectionReason.value = closeReason || code || 'blocked';
         refs.connectionState.value = 'blocked';
@@ -647,6 +659,9 @@ export function createCallWorkspaceSocketHelpers({
       const code = String(payload?.error?.code || '').trim().toLowerCase();
       const detailReason = String(payload?.error?.details?.reason || '').trim().toLowerCase();
       const failureReason = detailReason || code || 'invalid_session';
+      if (failureReason === 'auth_backend_error' || code === 'auth_session_probe_failed') {
+        return { ok: false, state: 'retrying', reason: 'auth_backend_error', message: extractErrorMessage(payload, 'Session validation is temporarily unavailable.') };
+      }
       if (response.status === 403 || failureReason === 'role_not_allowed') {
         return { ok: false, state: 'blocked', reason: failureReason, message: extractErrorMessage(payload, 'Session is blocked by policy.') };
       }
@@ -925,9 +940,16 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
+        if (closeReason === 'auth_backend_error' || event?.code === 1011) {
+          refs.connectionState.value = 'retrying';
+          refs.connectionReason.value = closeReason || 'socket_internal_error';
+          finishConnectInFlight();
+          scheduleReconnect();
+          return;
+        }
+        if (event?.code === 1008 && closeReason !== '') {
           refs.connectionState.value = 'blocked';
-          refs.connectionReason.value = closeReason || 'blocked';
+          refs.connectionReason.value = closeReason;
           state.manualSocketClose = true;
           finishConnectInFlight();
           return;

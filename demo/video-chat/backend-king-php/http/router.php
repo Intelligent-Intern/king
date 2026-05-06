@@ -125,7 +125,13 @@ function videochat_dispatch_request(
         try {
             $pdo = $openDatabase();
             return videochat_authenticate_request($pdo, $authRequest, $transport);
-        } catch (Throwable) {
+        } catch (Throwable $exception) {
+            error_log(sprintf(
+                '[video-chat][auth] authentication backend error transport=%s exception=%s message=%s',
+                $transport,
+                $exception::class,
+                $exception->getMessage()
+            ));
             return [
                 'ok' => false,
                 'reason' => 'auth_backend_error',

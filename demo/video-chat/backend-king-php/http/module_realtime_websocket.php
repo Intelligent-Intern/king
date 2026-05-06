@@ -389,17 +389,23 @@ function videochat_handle_realtime_websocket_route(
                     $wsPath
                 );
                 if (!(bool) ($sessionLiveness['ok'] ?? false)) {
+                    $sessionLivenessReason = (string) ($sessionLiveness['reason'] ?? 'invalid_session');
                     $sessionCloseDescriptor = videochat_realtime_close_descriptor_for_reason(
-                        (string) ($sessionLiveness['reason'] ?? 'invalid_session')
+                        $sessionLivenessReason
                     );
+                    $transientAuthBackendError = strtolower(trim($sessionLivenessReason)) === 'auth_backend_error';
                     videochat_presence_send_frame(
                         $websocket,
                         [
                             'type' => 'system/error',
-                            'code' => 'websocket_session_invalidated',
-                            'message' => 'Session is no longer valid for realtime commands.',
+                            'code' => $transientAuthBackendError
+                                ? 'websocket_auth_temporarily_unavailable'
+                                : 'websocket_session_invalidated',
+                            'message' => $transientAuthBackendError
+                                ? 'Session validation is temporarily unavailable for realtime commands.'
+                                : 'Session is no longer valid for realtime commands.',
                             'details' => [
-                                'reason' => (string) ($sessionLiveness['reason'] ?? 'invalid_session'),
+                                'reason' => $sessionLivenessReason,
                                 'close' => $sessionCloseDescriptor,
                             ],
                             'time' => gmdate('c'),
