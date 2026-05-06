@@ -27,6 +27,16 @@ function drawContainImage(ctx, image, width, height) {
     ctx.drawImage(image, dx, dy, dw, dh);
 }
 
+function resolveCanvasColor(color, fallback = '#000010') {
+    const value = String(color || '').trim();
+    const cssVariable = value.match(/^var\((--[A-Za-z0-9_-]+)\)$/);
+    if (!cssVariable || typeof window === 'undefined' || typeof document === 'undefined') {
+        return value || fallback;
+    }
+    const resolved = window.getComputedStyle(document.documentElement).getPropertyValue(cssVariable[1]).trim();
+    return resolved || fallback;
+}
+
 async function loadImageCanvas(url) {
     const src = String(url || '').trim();
     if (!src) return null;
@@ -231,7 +241,7 @@ export function createBackgroundCompositorStage({
             drawCoverImage(ctx, backgroundImageCanvas, canvas.width, canvas.height);
         } else if (backgroundColor) {
             ctx.filter = 'none';
-            ctx.fillStyle = backgroundColor;
+            ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');
             ctx.fillRect(0, 0, canvas.width, canvas.height);
         } else if (mode === 'blur') {
             ctx.filter = `blur(${blurPx}px)`;
@@ -273,9 +283,12 @@ export function createBackgroundCompositorStage({
         debugMaskCtx.putImageData(maskImage, 0, 0);
 
         if (nonZeroPixels === 0) {
-            debugMaskCtx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+            const previousAlpha = debugMaskCtx.globalAlpha;
+            debugMaskCtx.globalAlpha = 0.9;
+            debugMaskCtx.fillStyle = resolveCanvasColor('var(--color-error)', '#ef4423');
             debugMaskCtx.font = '12px monospace';
             debugMaskCtx.fillText('mask empty', 8, 18);
+            debugMaskCtx.globalAlpha = previousAlpha;
         }
 
         const personOnlyCanvas = debugRoot.querySelector?.('#personDebug') || null;

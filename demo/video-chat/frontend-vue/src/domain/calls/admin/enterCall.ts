@@ -111,7 +111,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
     return {
       mode,
-      backgroundColor: mode === 'replace' && backdrop === 'green' ? '#16a34a' : '',
+      backgroundColor: mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '',
       backgroundImageUrl: mode === 'replace' ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() : '',
       blurPx,
       detectIntervalMs,

@@ -307,12 +307,12 @@ function startAllPeersPublishing(): void {
       ctx.fillStyle = colors[i]
       ctx.fillRect(0, 0, 640, 360)
 
-      ctx.fillStyle = 'white'
+      ctx.fillStyle = '#ffffff'
       ctx.beginPath()
       ctx.arc(320 + Math.cos(time + i) * 150, 180 + Math.sin(time + i) * 100, 50, 0, Math.PI * 2)
       ctx.fill()
 
-      ctx.fillStyle = 'white'
+      ctx.fillStyle = '#ffffff'
       ctx.font = '20px monospace'
       ctx.fillText(`${PEER_NAMES[i]}: Frame ${seq}`, 20, 30)
 
