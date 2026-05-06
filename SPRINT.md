@@ -720,6 +720,33 @@ CAP-05 Marketplace Organization Entitlement Flow, 2026-05-07:
     rejection, installation create, disable/enable, and duplicate-order
     idempotency
 
+CAP-06 Organization Installation And App Availability, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_availability.php`
+  - `demo/video-chat/backend-king-php/http/module_call_apps.php`
+- Route:
+  - `GET /api/calls/{call_id}/call-apps/available`
+  - requires authenticated call visibility for the active tenant
+  - refreshes Semantic-DNS/MCP catalog metadata before listing
+- Availability contract:
+  - returns only organization-installed Call Apps
+  - hides disabled installations
+  - hides inactive or expired entitlements
+  - hides unhealthy catalog entries
+  - returns pagination and filters for the future sidebar browser
+- Frontend contract:
+  - `demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js`
+  - `demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppsCatalog.js`
+  - Pinia store/composable load the call availability endpoint and expose only
+    installed, enabled, healthy apps
+  - no implementation weight was added to `CallWorkspaceView.vue`
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-availability-contract.php`
+  - `demo/video-chat/frontend-vue/tests/contract/call-app-availability-frontend-contract.mjs`
+  - verifies empty-before-install, healthy installed app visibility, unhealthy
+    app hiding, disabled installation hiding, missing-call 404, and frontend
+    no-hard-coded-app catalog behavior
+
 Acceptance criteria:
 - The call has an additional Call App workspace view with mini participant
   videos above a sandboxed app iframe.
@@ -765,7 +792,7 @@ Tickets:
   - Add organization-scoped order/enable/disable records.
   - Ensure users order apps for their own organization, not globally and not only
     for their personal account.
-- [ ] CAP-06 Organization installation and app availability
+- [x] CAP-06 Organization installation and app availability
   - Add backend APIs for installed Call Apps per organization.
   - Add frontend store/composable for the call sidebar app catalog.
   - Only installed and healthy apps appear in the Call Apps sidebar.
