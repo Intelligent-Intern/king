@@ -13,6 +13,11 @@ const root = path.resolve(__dirname, '../..');
 const srcRoot = path.join(root, 'src');
 const colorTokenFile = path.join(srcRoot, 'styles/base.css');
 const workspaceStageFile = path.join(srcRoot, 'domain/realtime/CallWorkspaceStage.css');
+const appPageHeaderFile = path.join(srcRoot, 'components/AppPageHeader.vue');
+const workspaceShellFile = path.join(srcRoot, 'layouts/WorkspaceShell.vue');
+const workspaceSharedFile = path.join(srcRoot, 'styles/workspace-shared.css');
+const callsViewTemplateFile = path.join(srcRoot, 'domain/calls/admin/CallsView.template.html');
+const callsViewStylesFile = path.join(srcRoot, 'domain/calls/admin/CallsView.css');
 const rawColorPattern = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/g;
 const allowedRawHexColors = new Set([
   '#000010',
@@ -136,6 +141,11 @@ try {
   assert.equal(colorDefinitions.length, 12, 'base CSS must define exactly 12 KingRT styleguide color slots');
   assert.doesNotMatch(tokenSource, /--color-rgba-|rgba?\(|hsla?\(/, 'base CSS must not define arbitrary rgba or hsl color tokens');
   const workspaceStageSource = fs.readFileSync(workspaceStageFile, 'utf8');
+  const appPageHeaderSource = fs.readFileSync(appPageHeaderFile, 'utf8');
+  const workspaceShellSource = fs.readFileSync(workspaceShellFile, 'utf8');
+  const workspaceSharedSource = fs.readFileSync(workspaceSharedFile, 'utf8');
+  const callsViewTemplateSource = fs.readFileSync(callsViewTemplateFile, 'utf8');
+  const callsViewStylesSource = fs.readFileSync(callsViewStylesFile, 'utf8');
   assert.doesNotMatch(
     workspaceStageSource,
     /rgba?\(/,
@@ -145,6 +155,36 @@ try {
     workspaceStageSource,
     /--color-rgba-/,
     'workspace stage CSS must not consume rgba color tokens',
+  );
+  assert.match(
+    appPageHeaderSource,
+    /<h1>\{\{\s*title\s*\}\}<\/h1>/,
+    'admin module page headers must render navigation page titles as h1',
+  );
+  assert.match(
+    appPageHeaderSource,
+    /\.app-page-header h1\s*\{[\s\S]*?font-size:\s*14px;/,
+    'admin module page h1 titles must stay at 14px',
+  );
+  assert.match(
+    workspaceShellSource,
+    /<h1 class="title">\{\{\s*pageTitle\s*\}\}<\/h1>/,
+    'workspace navigation page titles must render as h1',
+  );
+  assert.match(
+    workspaceSharedSource,
+    /\.title\s*\{[\s\S]*?font-size:\s*14px;/,
+    'workspace navigation page h1 titles must stay at 14px',
+  );
+  assert.match(
+    callsViewTemplateSource,
+    /<h1>\{\{\s*t\('calls\.admin\.title'\)\s*\}\}<\/h1>/,
+    'video call management navigation title must render as h1',
+  );
+  assert.match(
+    callsViewStylesSource,
+    /\.calls-header h1\s*\{[\s\S]*?font-size:\s*14px;/,
+    'video call management h1 title must stay at 14px',
   );
 
   process.stdout.write('[visual-standards-contract] PASS\n');
