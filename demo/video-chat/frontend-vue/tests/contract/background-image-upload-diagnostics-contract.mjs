@@ -66,6 +66,21 @@ assert.match(
 );
 assert.match(
   edge,
+  /VIDEOCHAT_EDGE_BACKGROUND_UPLOAD_MAX_BODY_BYTES/,
+  'edge proxy must bound buffered background upload bodies',
+);
+assert.match(
+  edge,
+  /proxy_body_read_complete/,
+  'edge proxy must fully read background upload bodies before upstream forwarding',
+);
+assert.match(
+  edge,
+  /proxy_upstream_request_written/,
+  'edge proxy must report completed background upload upstream writes',
+);
+assert.match(
+  edge,
   /proxy_rejected_invalid_upload_length/,
   'edge proxy must reject malformed background upload Content-Length with diagnostics',
 );
