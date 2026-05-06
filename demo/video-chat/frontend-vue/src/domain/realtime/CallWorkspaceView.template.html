@@ -84,6 +84,13 @@
             <div id="local-video-container" class="video-container local"></div>
             <div id="remote-video-container" class="video-container remote"></div>
             <div id="decoded-video-container" class="video-container decoded"></div>
+            <section v-if="showLocalPipelinePanel" class="workspace-local-pipeline-panel" aria-label="Local media pipeline controls">
+              <BackgroundPipelineDebugPanel
+                :active-preset="activeWorkspaceBackgroundPreset()"
+                :debug-state="backgroundPipelineDebug"
+                @select-preset="applyWorkspaceBackgroundPreset"
+              />
+            </section>
             <div
               v-if="showParticipantMediaOverlay(primaryVideoUserId)"
               class="workspace-video-status-overlay workspace-main-video-status-overlay"

@@ -346,6 +346,16 @@
   margin: 0;
 }
 
+.calls-enter-pipeline-debug {
+  width: min(100%, 560px);
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(8, 20, 43, 0.78);
+  box-shadow: 0 12px 28px var(--color-rgba-0-0-0-0-28);
+}
+
 .calls-enter-right {
   min-height: 0;
   display: grid;

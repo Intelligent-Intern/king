@@ -188,6 +188,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
       callMediaPrefs.backgroundApplyOutgoing,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],
@@ -202,6 +203,7 @@ export function registerCallWorkspaceLifecycleHelpers({
         && nextValue[6] === previousValue[6]
         && nextValue[7] === previousValue[7]
         && nextValue[8] === previousValue[8]
+        && nextValue[9] === previousValue[9]
       ) {
         return;
       }
