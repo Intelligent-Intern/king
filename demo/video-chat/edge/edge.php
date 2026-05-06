@@ -224,19 +224,40 @@ $parseRequest = static function (string $head) use ($normalizeHost): array {
     ];
 };
 
-$writeAll = static function ($stream, string $buffer): bool {
+$writeChunk = static function ($stream, string $buffer): array {
+    if (!is_resource($stream) || feof($stream)) {
+        return ['ok' => false, 'written' => 0];
+    }
+
+    $writeWarning = null;
+    set_error_handler(static function (int $severity, string $message) use (&$writeWarning): bool {
+        $writeWarning = $message;
+        return true;
+    });
+    try {
+        $written = fwrite($stream, $buffer);
+    } finally {
+        restore_error_handler();
+    }
+
+    if ($writeWarning !== null || $written === false || $written < 0) {
+        return ['ok' => false, 'written' => 0];
+    }
+
+    return ['ok' => true, 'written' => $written];
+};
+
+$writeAll = static function ($stream, string $buffer) use ($writeChunk): bool {
     $offset = 0;
     $length = strlen($buffer);
 
     while ($offset < $length) {
         $chunk = substr($buffer, $offset, 65536);
-        $written = @fwrite($stream, $chunk);
-        if ($written === false) {
+        $result = $writeChunk($stream, $chunk);
+        if (!$result['ok']) {
             return false;
         }
-        if ($written < 0) {
-            return false;
-        }
+        $written = (int) $result['written'];
         if ($written === 0) {
             $read = null;
             $write = [$stream];
@@ -604,8 +625,8 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
 
         foreach ($write as $stream) {
             if ($stream === $upstreamStream && $toUpstream !== '') {
-                $written = @fwrite($upstreamStream, $toUpstream);
-                if ($written === false || $written < 0) {
+                $result = $writeChunk($upstreamStream, $toUpstream);
+                if (!$result['ok']) {
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
@@ -614,6 +635,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     $toUpstream = '';
                     continue;
                 }
+                $written = (int) $result['written'];
                 if ($written === 0) {
                     if ((microtime(true) - $lastUpstreamWriteProgress) >= $writeStallTimeout) {
                         if ($isWebSocket) {
@@ -633,8 +655,8 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                 $madeProgress = true;
             }
             if ($stream === $client && $toClient !== '') {
-                $written = @fwrite($client, $toClient);
-                if ($written === false || $written < 0) {
+                $result = $writeChunk($client, $toClient);
+                if (!$result['ok']) {
                     if ($isWebSocket) {
                         $closeWebSocketTunnel();
                         continue;
@@ -643,6 +665,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
                     $toClient = '';
                     continue;
                 }
+                $written = (int) $result['written'];
                 if ($written === 0) {
                     if ((microtime(true) - $lastClientWriteProgress) >= $writeStallTimeout) {
                         if ($isWebSocket) {
