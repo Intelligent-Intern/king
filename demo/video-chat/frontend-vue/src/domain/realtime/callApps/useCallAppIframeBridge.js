@@ -56,6 +56,8 @@ export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest
     error: error.value,
     token_id: launch.value?.tokenId || '',
     expires_at: launch.value?.expiresAt || '',
+    grant_state: String(launch.value?.context?.grant_state || '').trim().toLowerCase(),
+    capabilities: Array.isArray(launch.value?.context?.capabilities) ? launch.value.context.capabilities : [],
   }));
 
   function resetLaunchState(nextStatus = 'idle') {

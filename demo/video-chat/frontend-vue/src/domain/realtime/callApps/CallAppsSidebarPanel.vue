@@ -38,8 +38,13 @@
         <span class="call-apps-item-main">
           <span class="call-apps-item-name">{{ app.name }}</span>
           <span class="call-apps-item-meta">{{ app.category }} - {{ app.version || 'unversioned' }}</span>
+          <span class="call-apps-item-badges" aria-label="Call App availability">
+            <span class="call-apps-status-badge state-installed">{{ installationStateLabel(app) }}</span>
+            <span class="call-apps-status-badge" :class="installationStatusClass(app)">{{ installationStatusLabel(app) }}</span>
+            <span class="call-apps-status-badge" :class="healthStatusClass(app)">{{ healthStatusLabel(app) }}</span>
+          </span>
         </span>
-        <span class="call-apps-item-state">{{ app.health_status }}</span>
+        <span class="call-apps-item-state">{{ app.app_key }}</span>
       </button>
 
       <div v-if="!loading && availableApps.length === 0" class="call-apps-empty">
@@ -69,10 +74,10 @@
       </button>
     </div>
 
-    <section v-if="selectedApp" class="call-apps-detail" aria-label="Selected Call App">
+    <section v-if="selectedApp" class="call-apps-detail" aria-label="Selected Call App" data-call-app-attach-flow="inline">
       <div class="call-apps-detail-head">
         <h2>{{ selectedApp.name }}</h2>
-        <span>{{ selectedApp.category }}</span>
+        <span>{{ selectedApp.category }} - {{ selectedApp.app_key }}</span>
       </div>
       <dl class="call-apps-detail-grid">
         <div>
@@ -82,6 +87,14 @@
         <div>
           <dt>Runtime</dt>
           <dd>{{ selectedApp.runtime || 'iframe' }}</dd>
+        </div>
+        <div>
+          <dt>Installation</dt>
+          <dd>{{ installationStateLabel(selectedApp) }} / {{ installationStatusLabel(selectedApp) }}</dd>
+        </div>
+        <div>
+          <dt>Health</dt>
+          <dd>{{ healthStatusLabel(selectedApp) }}</dd>
         </div>
       </dl>
       <label class="call-apps-policy">
@@ -153,6 +166,32 @@ const selectedApp = computed(() => availableApps.value.find((app) => app.app_key
 
 function normalizeDefaultPolicy(value) {
   return value === 'allowed_by_default' ? 'allowed_by_default' : 'blocked_by_default';
+}
+
+function availabilityFlag(app, key) {
+  return app?.availability && app.availability[key] === true;
+}
+
+function installationStateLabel(app) {
+  return availabilityFlag(app, 'installed') ? 'Installed' : 'Not installed';
+}
+
+function installationStatusLabel(app) {
+  const status = String(app?.installation?.status || '').trim().toLowerCase();
+  return status === 'enabled' ? 'Enabled' : (status || 'Disabled');
+}
+
+function healthStatusLabel(app) {
+  const status = String(app?.health_status || '').trim().toLowerCase();
+  return status === 'healthy' || availabilityFlag(app, 'healthy') ? 'Healthy' : (status || 'Unknown');
+}
+
+function installationStatusClass(app) {
+  return installationStatusLabel(app).toLowerCase() === 'enabled' ? 'state-enabled' : 'state-disabled';
+}
+
+function healthStatusClass(app) {
+  return healthStatusLabel(app).toLowerCase() === 'healthy' ? 'state-healthy' : 'state-unhealthy';
 }
 
 function selectApp(app) {
@@ -240,22 +279,26 @@ watch(
 }
 
 .call-apps-search {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 34px;
-  gap: 8px;
-  padding: 10px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 20px;
+  padding: 20px;
   background: var(--bg-surface-strong);
 }
 
 .call-apps-search-input {
   height: 34px;
   min-width: 0;
+  flex: 1 1 auto;
   background: var(--border-subtle);
 }
 
 .call-apps-search-submit {
   width: 34px;
   height: 34px;
+  flex: 0 0 34px;
 }
 
 .call-apps-search-submit img {
@@ -279,8 +322,8 @@ watch(
   border: 0;
   background: var(--bg-surface-strong);
   color: var(--text-primary);
-  min-height: 58px;
-  padding: 10px;
+  min-height: 82px;
+  padding: 12px 20px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -297,7 +340,7 @@ watch(
 .call-apps-item-main {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 6px;
 }
 
 .call-apps-item-name {
@@ -321,16 +364,51 @@ watch(
   letter-spacing: 0.04em;
 }
 
+.call-apps-item-badges {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.call-apps-status-badge {
+  min-height: 20px;
+  padding: 3px 7px;
+  border: 1px solid var(--color-border);
+  background: var(--color-primary-navy);
+  color: var(--color-heading);
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 12px;
+  text-transform: uppercase;
+}
+
+.call-apps-status-badge.state-installed,
+.call-apps-status-badge.state-enabled,
+.call-apps-status-badge.state-healthy {
+  color: var(--color-success);
+}
+
+.call-apps-status-badge.state-disabled,
+.call-apps-status-badge.state-unhealthy {
+  color: var(--color-error);
+}
+
 .call-apps-pagination {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
   background: var(--bg-surface-strong);
-  padding: 10px;
+  padding: 20px;
 }
 
 .call-apps-detail {
   background: var(--bg-surface-strong);
-  padding: 10px;
+  padding: 20px;
   display: grid;
-  gap: 10px;
+  gap: 20px;
 }
 
 .call-apps-detail-head {

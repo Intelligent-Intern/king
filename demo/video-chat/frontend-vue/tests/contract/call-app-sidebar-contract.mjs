@@ -59,8 +59,32 @@ assert.match(
 
 assert.match(
   sidebarSource,
+  /\.call-apps-search[\s\S]*flex-direction:\s*row-reverse[\s\S]*gap:\s*20px[\s\S]*padding:\s*20px/s,
+  'Call Apps sidebar search must keep the submit icon right-aligned with 20px spacing',
+);
+
+assert.match(
+  sidebarSource,
   /pagination\.has_prev[\s\S]*pagination\.has_next/s,
   'Call Apps sidebar must paginate the available app list',
+);
+
+assert.match(
+  sidebarSource,
+  /\.call-apps-pagination[\s\S]*justify-content:\s*flex-end[\s\S]*gap:\s*20px[\s\S]*padding:\s*20px/s,
+  'Call Apps sidebar pagination must use the standard right-aligned 20px action spacing',
+);
+
+assert.match(
+  sidebarSource,
+  /call-apps-status-badge[\s\S]*Installed[\s\S]*Enabled[\s\S]*Healthy/s,
+  'Call Apps sidebar must show installed, enabled, and healthy app state clearly',
+);
+
+assert.match(
+  sidebarSource,
+  /data-call-app-attach-flow="inline"[\s\S]*Default participant access[\s\S]*default_app_policy/s,
+  'Call Apps attach flow must choose default participant access inline without modal stacking',
 );
 
 assert.match(

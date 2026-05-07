@@ -51,6 +51,7 @@ assert.match(componentSource, /<iframe[\s\S]*sandbox="allow-scripts allow-forms 
 assert.doesNotMatch(componentSource, /allow-same-origin/, 'Call App iframe sandbox must not include allow-same-origin');
 assert.doesNotMatch(componentSource + stateSource, /sessionToken|Authorization|localStorage/, 'Call App workspace shell must not expose primary auth material to the iframe');
 assert.match(componentSource, /referrerpolicy="no-referrer"/, 'Call App iframe must not leak referrer data');
-assert.match(componentSource, /grid-template-rows:\s*minmax\(104px,\s*auto\)\s*minmax\(0,\s*1fr\)/, 'Call App workspace must keep mini strip and iframe sizing stable');
+assert.match(componentSource, /grid-template-rows:\s*112px\s*minmax\(0,\s*1fr\)[\s\S]*height:\s*112px/, 'Call App workspace must keep mini strip and iframe sizing stable');
+assert.match(componentSource, /accessNoticeState[\s\S]*no-access[\s\S]*call_apps\.crdt\.read[\s\S]*call_apps\.crdt\.append[\s\S]*read-only/s, 'Call App workspace must show explicit no-access and read-only states from launch grant capabilities');
 
 console.log('[call-app-workspace-view-contract] PASS');
