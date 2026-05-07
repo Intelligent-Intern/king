@@ -118,6 +118,10 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if (preg_match('#^/api/call-app-sessions/[A-Za-z0-9._:-]+/launch-token/validate$#', $requestPath) === 1) {
+            return true;
+        }
+
         if (preg_match('#^/api/appointment-calendar/public/[A-Fa-f0-9-]{36}(?:/book)?$#', $requestPath) === 1) {
             return true;
         }

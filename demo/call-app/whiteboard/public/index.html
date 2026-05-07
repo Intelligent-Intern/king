@@ -65,6 +65,7 @@
           if (message.type === 'call_app.launch') {
             parentOrigin = event.origin;
             emit('call_app.ready', {
+              app_session_id: String(message.app_session_id || ''),
               launch_token_received: Boolean(message.launch_token),
               primary_session_token_received: false,
               capabilities: [

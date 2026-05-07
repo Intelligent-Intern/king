@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../domain/call_apps/call_app_sessions.php';
+require_once __DIR__ . '/../domain/call_apps/call_app_launch_tokens.php';
 require_once __DIR__ . '/../support/tenant_context.php';
 
 function videochat_call_app_module_json_body(array $request, ?callable $decodeJsonBody): array
@@ -275,6 +275,88 @@ function videochat_handle_call_app_routes(
         }
 
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
+    }
+
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/launch-token/validate$#', $path, $launchValidateMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-app-sessions/{session_id}/launch-token/validate.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+
+        $sessionId = rawurldecode((string) ($launchValidateMatch[1] ?? ''));
+        [$payload, $decodeError] = videochat_call_app_module_json_body($request, $decodeJsonBody);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'call_app_launch_token_invalid_request_body', 'Call App launch token payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $result = videochat_call_app_validate_launch_token($pdo, $sessionId, (string) ($payload['launch_token'] ?? ''));
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_launch_token_validation_failed', 'Could not validate Call App launch token.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'validation_failed' ? 422 : ($reason === 'session_not_found' ? 404 : 401);
+            return $errorResponse($status, 'call_app_launch_token_validation_failed', 'Call App launch token is not valid.', [
+                'reason' => $reason,
+                'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
+            ]);
+        }
+
+        return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
+    }
+
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/launch-token$#', $path, $launchMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-app-sessions/{session_id}/launch-token.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+        if ($authenticatedUserId <= 0 || $tenantId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token and tenant context are required.', [
+                'reason' => 'invalid_user_or_tenant_context',
+            ]);
+        }
+
+        $sessionId = rawurldecode((string) ($launchMatch[1] ?? ''));
+        try {
+            $pdo = $openDatabase();
+            $sessionRecord = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+            if (!is_array($sessionRecord)) {
+                return $errorResponse(404, 'call_app_session_not_found', 'The requested Call App session does not exist.', [
+                    'session_id' => $sessionId,
+                ]);
+            }
+            $callId = (string) ($sessionRecord['call_id'] ?? '');
+            $callResolution = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $tenantId);
+            $callError = videochat_call_app_module_call_response_error($callResolution, $callId, $errorResponse);
+            if ($callError !== null) {
+                return $callError;
+            }
+
+            $result = videochat_call_app_mint_launch_token($pdo, $tenantId, $sessionId, $authenticatedUserId);
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_grant_denied' ? 403 : 409);
+            return $errorResponse($status, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
+                'reason' => $reason,
+            ]);
+        }
+
+        return $jsonResponse(201, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
     }
 
     if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)$#', $path, $sessionMatch) === 1) {
