@@ -74,10 +74,15 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
 
   const thresholds = { ...DEFAULT_THRESHOLDS, ...(options.thresholds || {}) };
   const requestedMode = normalizeMode(options.mode || input.data_lane_mode || input.mode);
+  const mediaCarrierMode = normalizeMediaCarrierMode(
+    options.mediaCarrierMode || options.media_carrier_mode || input.media_carrier_mode || input.mediaCarrierMode,
+  );
+  const gossipPrimary = mediaCarrierMode === 'gossip_primary';
   if (requestedMode === 'off') {
     return {
       ...inertGateState('data_lane_off'),
       data_lane_mode: 'off',
+      media_carrier_mode: mediaCarrierMode,
     };
   }
 
@@ -127,6 +132,7 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
       && lateDropRate <= thresholds.maxLateDropRate
       && repairRate <= thresholds.maxRepairRate);
   const participantSetRecoveryInFlight = aggregate.totals.participant_set_recovery_in_flight;
+  const gossipTopologyHealthy = rtcReady && telemetryReady;
   const mediaSecurityRecoveryReady = participantSetRecoveryInFlight <= thresholds.maxParticipantSetRecoveryInFlight
     && participantSetRecoveryRate <= thresholds.maxParticipantSetRecoveryRate
     && protectedFrameDecryptFailureRate <= thresholds.maxProtectedFrameDecryptFailureRate;
@@ -135,33 +141,53 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     && staleTargetPruneRate <= thresholds.maxStaleTargetPruneRate
     && encoderLifecycleCloseRate <= thresholds.maxEncoderLifecycleCloseRate
     && sendBackpressureAbortRate <= thresholds.maxSendBackpressureAbortRate;
-  const blockingBuckets = [];
-  if (!rtcReady) blockingBuckets.push('rtc_topology_unready');
-  if (!telemetryReady) blockingBuckets.push('gossip_telemetry_noisy');
-  if (participantSetRecoveryInFlight > thresholds.maxParticipantSetRecoveryInFlight) blockingBuckets.push('participant_set_recovery_in_flight');
-  if (participantSetRecoveryRate > thresholds.maxParticipantSetRecoveryRate) blockingBuckets.push('participant_set_recovery_storm');
-  if (protectedFrameDecryptFailureRate > thresholds.maxProtectedFrameDecryptFailureRate) blockingBuckets.push('protected_decrypt_burst');
-  if (keyframeRequestRate > thresholds.maxKeyframeRequestRate) blockingBuckets.push('keyframe_storm');
-  if (staleTargetPruneRate > thresholds.maxStaleTargetPruneRate) blockingBuckets.push('stale_target_prune_storm');
-  if (encoderLifecycleCloseRate > thresholds.maxEncoderLifecycleCloseRate) blockingBuckets.push('encoder_lifecycle_close_storm');
-  if (sendBackpressureAbortRate > thresholds.maxSendBackpressureAbortRate) blockingBuckets.push('send_backpressure_abort_storm');
-  const activeAllowed = requestedMode === 'active' && rtcReady && telemetryReady && sfuBaselineHealthy && mediaSecurityRecoveryReady;
+  const gossipTopologyBuckets = [];
+  if (!rtcReady) gossipTopologyBuckets.push('rtc_topology_unready');
+  if (!telemetryReady) gossipTopologyBuckets.push('gossip_telemetry_noisy');
+  const mediaSecurityBuckets = [];
+  if (participantSetRecoveryInFlight > thresholds.maxParticipantSetRecoveryInFlight) mediaSecurityBuckets.push('participant_set_recovery_in_flight');
+  if (participantSetRecoveryRate > thresholds.maxParticipantSetRecoveryRate) mediaSecurityBuckets.push('participant_set_recovery_storm');
+  if (protectedFrameDecryptFailureRate > thresholds.maxProtectedFrameDecryptFailureRate) mediaSecurityBuckets.push('protected_decrypt_burst');
+  const sfuFallbackBuckets = [];
+  if (keyframeRequestRate > thresholds.maxKeyframeRequestRate) sfuFallbackBuckets.push('keyframe_storm');
+  if (staleTargetPruneRate > thresholds.maxStaleTargetPruneRate) sfuFallbackBuckets.push('stale_target_prune_storm');
+  if (encoderLifecycleCloseRate > thresholds.maxEncoderLifecycleCloseRate) sfuFallbackBuckets.push('encoder_lifecycle_close_storm');
+  if (sendBackpressureAbortRate > thresholds.maxSendBackpressureAbortRate) sfuFallbackBuckets.push('send_backpressure_abort_storm');
+  const sfuBaselineRequiredForActive = !gossipPrimary;
+  const blockingBuckets = [
+    ...gossipTopologyBuckets,
+    ...mediaSecurityBuckets,
+    ...(sfuBaselineRequiredForActive ? sfuFallbackBuckets : []),
+  ];
+  const activeAllowed = requestedMode === 'active'
+    && gossipTopologyHealthy
+    && mediaSecurityRecoveryReady
+    && (!sfuBaselineRequiredForActive || sfuBaselineHealthy);
   const decision = requestedMode === 'shadow'
     ? 'shadow_observe'
-    : (activeAllowed ? 'active_allowed_diagnostic' : 'sfu_first_explicit');
+    : (activeAllowed
+      ? (gossipPrimary ? 'gossip_primary_active_allowed' : 'active_allowed_diagnostic')
+      : (gossipPrimary ? 'gossip_topology_blocked' : 'sfu_first_explicit'));
 
   return {
     kind: 'gossip_rollout_gate_state',
     data_lane_mode: requestedMode,
+    media_carrier_mode: mediaCarrierMode,
     decision,
     active_allowed: activeAllowed,
     observational_only: requestedMode !== 'active' || !activeAllowed,
-    sfu_first: !activeAllowed,
+    sfu_first: !gossipPrimary && !activeAllowed,
+    gossip_topology_healthy: gossipTopologyHealthy,
+    sfu_baseline_required_for_active: sfuBaselineRequiredForActive,
+    sfu_fallback_healthy: sfuBaselineHealthy,
     rtc_ready: rtcReady,
     telemetry_ready: telemetryReady,
     sfu_baseline_healthy: sfuBaselineHealthy,
     media_security_recovery_ready: mediaSecurityRecoveryReady,
     blocking_buckets: blockingBuckets,
+    gossip_topology_buckets: gossipTopologyBuckets,
+    media_security_buckets: mediaSecurityBuckets,
+    sfu_fallback_buckets: sfuFallbackBuckets,
     peer_count: aggregate.peer_count,
     rtc_peer_count: aggregate.rtc_peer_count,
     min_neighbor_count: aggregate.min_neighbor_count,
@@ -186,15 +212,22 @@ function inertGateState(reason) {
   return {
     kind: 'gossip_rollout_gate_state',
     data_lane_mode: 'off',
+    media_carrier_mode: 'sfu_first',
     decision: 'sfu_first_explicit',
     active_allowed: false,
     observational_only: true,
     sfu_first: true,
+    gossip_topology_healthy: false,
+    sfu_baseline_required_for_active: true,
+    sfu_fallback_healthy: false,
     rtc_ready: false,
     telemetry_ready: false,
     sfu_baseline_healthy: false,
     media_security_recovery_ready: false,
     blocking_buckets: [reason],
+    gossip_topology_buckets: [reason],
+    media_security_buckets: [],
+    sfu_fallback_buckets: [],
     reason,
     peer_count: 0,
     rtc_peer_count: 0,
@@ -294,6 +327,13 @@ function emptyCounters() {
 function normalizeMode(value) {
   const mode = String(value || '').trim().toLowerCase();
   return mode === 'shadow' || mode === 'active' ? mode : 'off';
+}
+
+function normalizeMediaCarrierMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'gossip_primary' || mode === 'gossip-primary' || mode === 'gossip') return 'gossip_primary';
+  if (mode === 'sfu_mirror' || mode === 'sfu-mirror' || mode === 'mirror') return 'sfu_mirror';
+  return 'sfu_first';
 }
 
 function boundedRate(numerator, denominator) {
