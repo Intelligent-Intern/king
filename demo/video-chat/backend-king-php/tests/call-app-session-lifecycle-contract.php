@@ -23,6 +23,30 @@ function videochat_call_app_session_lifecycle_decode(array $response): array
     return is_array($decoded) ? $decoded : [];
 }
 
+function videochat_call_app_session_lifecycle_diagnostics(array $payload): array
+{
+    $diagnostics = [];
+    $resultDiagnostics = ($payload['result'] ?? [])['diagnostics'] ?? [];
+    if (is_array($resultDiagnostics)) {
+        $diagnostics = array_merge($diagnostics, $resultDiagnostics);
+    }
+    $errorDiagnostic = (($payload['error'] ?? [])['details'] ?? [])['diagnostic'] ?? null;
+    if (is_array($errorDiagnostic)) {
+        $diagnostics[] = $errorDiagnostic;
+    }
+    return $diagnostics;
+}
+
+function videochat_call_app_session_lifecycle_assert_diagnostic(array $payload, string $eventType, string $message): void
+{
+    foreach (videochat_call_app_session_lifecycle_diagnostics($payload) as $diagnostic) {
+        if ((string) ($diagnostic['event_type'] ?? '') === $eventType) {
+            return;
+        }
+    }
+    videochat_call_app_session_lifecycle_assert(false, $message);
+}
+
 function videochat_call_app_session_lifecycle_auth(PDO $pdo, int $userId, string $role): array
 {
     $tenant = videochat_tenant_context_for_user($pdo, $userId);
@@ -264,6 +288,7 @@ SQL
     ]);
     $grantPatchPayload = videochat_call_app_session_lifecycle_decode($grantPatch);
     videochat_call_app_session_lifecycle_assert((int) ($grantPatch['status'] ?? 0) === 200, 'owner grant patch should return 200');
+    videochat_call_app_session_lifecycle_assert_diagnostic($grantPatchPayload, 'call_app_grants_changed', 'grant patch must emit a grant-change diagnostic');
     videochat_call_app_session_lifecycle_assert(count((array) (($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])) === 1, 'grant patch should create one audit event');
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['changed_grants'] ?? [])[0] ?? [])['retired_launch_tokens'] ?? 0) === 1, 'denying a participant must revoke their active launch token');
     videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant audit must record retired launch tokens');
@@ -338,7 +363,9 @@ SQL
     $invalidLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
         'launch_token' => 'not-a-real-launch-token',
     ]);
+    $invalidLaunchPayload = videochat_call_app_session_lifecycle_decode($invalidLaunch);
     videochat_call_app_session_lifecycle_assert((int) ($invalidLaunch['status'] ?? 0) === 401, 'invalid launch token should fail closed');
+    videochat_call_app_session_lifecycle_assert_diagnostic($invalidLaunchPayload, 'call_app_launch_token_failed', 'invalid launch token validation must emit a launch-token failure diagnostic');
 
     $bootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
     $bootstrapPayload = videochat_call_app_session_lifecycle_decode($bootstrap);
@@ -364,6 +391,7 @@ SQL
     ]);
     $appendPayload = videochat_call_app_session_lifecycle_decode($append);
     videochat_call_app_session_lifecycle_assert((int) ($append['status'] ?? 0) === 201, 'allowed participant append should admit CRDT op');
+    videochat_call_app_session_lifecycle_assert_diagnostic($appendPayload, 'call_app_crdt_append_latency', 'admitted CRDT append must emit append-latency diagnostic');
     videochat_call_app_session_lifecycle_assert((string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['server_admission_stamp'] ?? [])['duplicate_policy'] ?? '') === 'ignore_after_first_admission', 'CRDT op must carry server admission stamp');
     $adminActorId = (string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['actor_id'] ?? ''));
 
@@ -424,15 +452,18 @@ SQL
     $duplicatePayload = videochat_call_app_session_lifecycle_decode($duplicateAppend);
     videochat_call_app_session_lifecycle_assert((int) ($duplicateAppend['status'] ?? 0) === 200, 'duplicate CRDT op should return 200');
     videochat_call_app_session_lifecycle_assert((string) (($duplicatePayload['result'] ?? [])['state'] ?? '') === 'duplicate', 'duplicate CRDT op must be suppressed');
+    videochat_call_app_session_lifecycle_assert_diagnostic($duplicatePayload, 'call_app_crdt_duplicate_suppressed', 'duplicate CRDT op must emit duplicate-suppression diagnostic');
 
     $ops = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $adminAuth);
     $opsPayload = videochat_call_app_session_lifecycle_decode($ops);
     $replayedOps = (array) (($opsPayload['result'] ?? [])['ops'] ?? []);
+    videochat_call_app_session_lifecycle_assert_diagnostic($opsPayload, 'call_app_crdt_replay_latency', 'CRDT replay must emit replay-latency diagnostic');
     videochat_call_app_session_lifecycle_assert(count($replayedOps) === 2, 'CRDT replay should return both collaborative admitted ops');
     videochat_call_app_session_lifecycle_assert((string) ($replayedOps[0]['payload_type'] ?? '') === 'stroke.add' && (string) ($replayedOps[1]['payload_type'] ?? '') === 'sticky_note.add', 'CRDT replay should preserve collaborative operation order');
 
     $snapshot = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/snapshots', $adminAuth);
     $snapshotPayload = videochat_call_app_session_lifecycle_decode($snapshot);
+    videochat_call_app_session_lifecycle_assert_diagnostic($snapshotPayload, 'call_app_crdt_snapshot_compacted', 'CRDT snapshot must emit snapshot-compaction diagnostic');
     videochat_call_app_session_lifecycle_assert((int) (((($snapshotPayload['result'] ?? [])['snapshot'] ?? [])['compacted_through_clock'] ?? 0)) === 2, 'CRDT snapshot must compact through collaborative admitted clock');
 
     $compactedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);

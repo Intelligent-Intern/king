@@ -41,6 +41,41 @@ function videochat_call_app_module_call_response_error(array $callResolution, st
     ]);
 }
 
+function videochat_call_app_module_now_ms(): float
+{
+    if (function_exists('hrtime')) {
+        return (float) hrtime(true) / 1_000_000.0;
+    }
+    return microtime(true) * 1_000.0;
+}
+
+function videochat_call_app_module_elapsed_ms(float $startedAt): int
+{
+    if ($startedAt <= 0.0) {
+        return 0;
+    }
+    return max(0, (int) round(videochat_call_app_module_now_ms() - $startedAt));
+}
+
+function videochat_call_app_module_diagnostic(string $eventType, array $fields = []): array
+{
+    return array_merge([
+        'event_type' => $eventType,
+        'recorded_at' => gmdate('c'),
+    ], $fields);
+}
+
+function videochat_call_app_module_with_diagnostic(array $result, string $eventType, array $fields = [], float $startedAt = 0.0): array
+{
+    if ($startedAt > 0.0) {
+        $fields['latency_ms'] = videochat_call_app_module_elapsed_ms($startedAt);
+    }
+    $diagnostics = is_array($result['diagnostics'] ?? null) ? $result['diagnostics'] : [];
+    $diagnostics[] = videochat_call_app_module_diagnostic($eventType, $fields);
+    $result['diagnostics'] = $diagnostics;
+    return $result;
+}
+
 function videochat_handle_call_app_routes(
     string $path,
     string $method,
@@ -274,6 +309,17 @@ function videochat_handle_call_app_routes(
             ]);
         }
 
+        $retiredLaunchTokens = 0;
+        foreach ((array) ($result['changed_grants'] ?? []) as $changedGrant) {
+            $retiredLaunchTokens += (int) ($changedGrant['retired_launch_tokens'] ?? 0);
+        }
+        $result = videochat_call_app_module_with_diagnostic($result, 'call_app_grants_changed', [
+            'session_id' => $sessionId,
+            'changed_grant_count' => count((array) ($result['changed_grants'] ?? [])),
+            'audit_event_count' => count((array) ($result['audit_events'] ?? [])),
+            'retired_launch_token_count' => $retiredLaunchTokens,
+        ]);
+
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
     }
 
@@ -328,17 +374,23 @@ function videochat_handle_call_app_routes(
         }
 
         $sessionId = rawurldecode((string) ($crdtOpsMatch[1] ?? ''));
+        $startedAt = videochat_call_app_module_now_ms();
+        $payloadType = '';
+        $afterClock = 0;
+        $limit = 250;
         try {
             $pdo = $openDatabase();
             if ($method === 'GET') {
                 $query = videochat_request_query_params($request);
+                $afterClock = videochat_call_app_crdt_positive_int($query['after_clock'] ?? 0, 0, 0, 1_000_000_000);
+                $limit = videochat_call_app_crdt_positive_int($query['limit'] ?? 250, 250, 1, 500);
                 $result = videochat_call_app_crdt_list_ops(
                     $pdo,
                     $tenantId,
                     $sessionId,
                     $authenticatedUserId,
-                    videochat_call_app_crdt_positive_int($query['after_clock'] ?? 0, 0, 0, 1_000_000_000),
-                    videochat_call_app_crdt_positive_int($query['limit'] ?? 250, 250, 1, 500)
+                    $afterClock,
+                    $limit
                 );
             } else {
                 [$payload, $decodeError] = videochat_call_app_module_json_body($request, $decodeJsonBody);
@@ -347,6 +399,8 @@ function videochat_handle_call_app_routes(
                         'reason' => $decodeError,
                     ]);
                 }
+                $operation = is_array($payload['operation'] ?? null) ? $payload['operation'] : $payload;
+                $payloadType = trim((string) ($operation['payload_type'] ?? ''));
                 $result = videochat_call_app_crdt_append_op($pdo, $tenantId, $sessionId, $authenticatedUserId, $payload);
             }
         } catch (Throwable) {
@@ -362,6 +416,31 @@ function videochat_handle_call_app_routes(
                 'reason' => $reason,
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
             ]);
+        }
+
+        if ($method === 'GET') {
+            $result = videochat_call_app_module_with_diagnostic($result, 'call_app_crdt_replay_latency', [
+                'session_id' => $sessionId,
+                'operation_count' => count((array) ($result['ops'] ?? [])),
+                'after_clock' => $afterClock,
+                'limit' => $limit,
+                'replay_cursor' => is_array($result['replay_cursor'] ?? null) ? $result['replay_cursor'] : [],
+            ], $startedAt);
+        } else {
+            $operation = is_array($result['operation'] ?? null) ? $result['operation'] : [];
+            $result = videochat_call_app_module_with_diagnostic($result, 'call_app_crdt_append_latency', [
+                'session_id' => $sessionId,
+                'state' => (string) ($result['state'] ?? ''),
+                'payload_type' => $payloadType !== '' ? $payloadType : (string) ($operation['payload_type'] ?? ''),
+                'logical_clock' => (int) ($operation['logical_clock'] ?? 0),
+            ], $startedAt);
+            if ((string) ($result['state'] ?? '') === 'duplicate') {
+                $result = videochat_call_app_module_with_diagnostic($result, 'call_app_crdt_duplicate_suppressed', [
+                    'session_id' => $sessionId,
+                    'operation_id' => (string) ($operation['operation_id'] ?? ''),
+                    'payload_type' => (string) ($operation['payload_type'] ?? ''),
+                ]);
+            }
         }
 
         return $jsonResponse($method === 'POST' && (string) ($result['state'] ?? '') === 'admitted' ? 201 : 200, [
@@ -384,6 +463,7 @@ function videochat_handle_call_app_routes(
         }
 
         $sessionId = rawurldecode((string) ($crdtSnapshotMatch[1] ?? ''));
+        $startedAt = videochat_call_app_module_now_ms();
         try {
             $pdo = $openDatabase();
             $result = videochat_call_app_crdt_compact_snapshot($pdo, $tenantId, $sessionId, $authenticatedUserId);
@@ -397,6 +477,14 @@ function videochat_handle_call_app_routes(
             $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_grant_denied' ? 403 : 409);
             return $errorResponse($status, 'call_app_crdt_snapshot_failed', 'Could not compact Call App CRDT snapshot.', ['reason' => $reason]);
         }
+
+        $snapshot = is_array($result['snapshot'] ?? null) ? $result['snapshot'] : [];
+        $result = videochat_call_app_module_with_diagnostic($result, 'call_app_crdt_snapshot_compacted', [
+            'session_id' => $sessionId,
+            'snapshot_clock' => (int) ($result['snapshot_clock'] ?? 0),
+            'compacted_through_clock' => (int) ($snapshot['compacted_through_clock'] ?? 0),
+            'operation_count' => (int) ($snapshot['operation_count'] ?? 0),
+        ], $startedAt);
 
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
     }
@@ -413,6 +501,11 @@ function videochat_handle_call_app_routes(
         if (!is_array($payload)) {
             return $errorResponse(400, 'call_app_launch_token_invalid_request_body', 'Call App launch token payload must be a JSON object.', [
                 'reason' => $decodeError,
+                'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                    'session_id' => $sessionId,
+                    'reason' => (string) $decodeError,
+                    'stage' => 'validate_request',
+                ]),
             ]);
         }
 
@@ -422,6 +515,11 @@ function videochat_handle_call_app_routes(
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_launch_token_validation_failed', 'Could not validate Call App launch token.', [
                 'reason' => 'internal_error',
+                'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                    'session_id' => $sessionId,
+                    'reason' => 'internal_error',
+                    'stage' => 'validate',
+                ]),
             ]);
         }
 
@@ -431,6 +529,11 @@ function videochat_handle_call_app_routes(
             return $errorResponse($status, 'call_app_launch_token_validation_failed', 'Call App launch token is not valid.', [
                 'reason' => $reason,
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
+                'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                    'session_id' => $sessionId,
+                    'reason' => $reason,
+                    'stage' => 'validate',
+                ]),
             ]);
         }
 
@@ -456,6 +559,11 @@ function videochat_handle_call_app_routes(
             if (!is_array($sessionRecord)) {
                 return $errorResponse(404, 'call_app_session_not_found', 'The requested Call App session does not exist.', [
                     'session_id' => $sessionId,
+                    'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                        'session_id' => $sessionId,
+                        'reason' => 'session_not_found',
+                        'stage' => 'mint',
+                    ]),
                 ]);
             }
             $callId = (string) ($sessionRecord['call_id'] ?? '');
@@ -469,6 +577,11 @@ function videochat_handle_call_app_routes(
         } catch (Throwable) {
             return $errorResponse(500, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
                 'reason' => 'internal_error',
+                'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                    'session_id' => $sessionId,
+                    'reason' => 'internal_error',
+                    'stage' => 'mint',
+                ]),
             ]);
         }
 
@@ -477,6 +590,11 @@ function videochat_handle_call_app_routes(
             $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_grant_denied' ? 403 : 409);
             return $errorResponse($status, 'call_app_launch_token_failed', 'Could not issue Call App launch token.', [
                 'reason' => $reason,
+                'diagnostic' => videochat_call_app_module_diagnostic('call_app_launch_token_failed', [
+                    'session_id' => $sessionId,
+                    'reason' => $reason,
+                    'stage' => 'mint',
+                ]),
             ]);
         }
 

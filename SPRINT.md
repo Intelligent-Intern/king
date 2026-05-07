@@ -254,10 +254,29 @@ Tickets:
       - Both commands passed. Host-PHP PDO-SQLite contracts still skip in
         `test:contract:call-apps` when the local driver is unavailable.
 
-- [ ] WCA-08 Observability and acceptance form
+- [x] WCA-08 Observability and acceptance form
   - Add diagnostics for launch-token failures, grant changes, CRDT append/replay
     latency, duplicate suppression, snapshot compaction, and iframe bridge
     errors.
   - Create a Whiteboard acceptance form without filling it as passed.
   - Include manual call checks for owner, moderator, participant, guest,
     revoked participant, reconnect, and export.
+  - Proof:
+    - Backend Call App routes now attach diagnostics for grant changes, launch
+      token failures, CRDT append/replay latency, duplicate suppression, and
+      snapshot compaction.
+    - Frontend Call App bridges emit `king:call-app-diagnostic` browser events
+      and redact sensitive fields before dispatching diagnostics.
+    - `WHITEBOARD_CHECK.md` is an unfilled manual acceptance form for owner,
+      moderator, participant, guest, revoked participant, reconnect, and export.
+    - Exact commands:
+      - `php -l demo/video-chat/backend-king-php/http/module_call_apps.php`
+      - `php -l demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php`
+      - `npm run test:contract:call-apps`
+      - `npm run test:contract:call-apps:sqlite`
+      - `npm run build`
+      - `git diff --check -- SPRINT.md WHITEBOARD_CHECK.md demo/video-chat/backend-king-php/http/module_call_apps.php demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php demo/video-chat/frontend-vue/package.json demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppDiagnostics.js demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js demo/video-chat/frontend-vue/tests/contract/call-app-observability-acceptance-contract.mjs`
+    - Result:
+      - All commands passed. Host-PHP PDO-SQLite contracts still skip in
+        `test:contract:call-apps` when the local driver is unavailable; the
+        pinned `php:8.5-cli-trixie` SQLite proof passes in Docker.
