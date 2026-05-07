@@ -934,10 +934,43 @@ Tickets:
       the iframe CRDT append bridge so the UI remains backend-backed instead of
       fixture-driven.
     - Added `call-app-marketplace-to-call-journey-contract.mjs`.
-- [ ] CAP-16 Test protocol and readiness record
+- [x] CAP-16 Test protocol and readiness record
   - Document contract, backend, frontend, e2e, security, and observability test
     results.
   - List residual risks before any deployment request.
+  - Test protocol, 2026-05-07:
+    - Contract: `cd demo/video-chat/frontend-vue && npm run
+      test:contract:call-apps` passed for frontend Call App architecture,
+      package layout, availability, workspace, sidebar, participant grants,
+      iframe launch, CRDT sync, whiteboard runtime, permission revocation,
+      marketplace-to-call journey, Semantic-DNS, and MCP metadata.
+    - Backend: local PHP syntax passed for
+      `backend-king-php/tests/call-app-session-lifecycle-contract.php`.
+      The shell-wrapped backend PDO contracts were present in the suite but
+      skipped locally because this PHP runtime lacks `pdo_sqlite`.
+    - Frontend: `cd demo/video-chat/frontend-vue && npm run build` passed after
+      CAP-15.
+    - E2E: no browser-level Call Apps Playwright journey exists yet, so CAP
+      readiness is contract/build-ready, not production-e2e-ready.
+    - Security: contracts cover sandboxed iframe launch, short-lived launch
+      tokens, no primary session-token exposure, grant denial, token revocation,
+      CRDT read/append gating, and removed-session token retirement.
+    - Observability: contracts cover persistent grant audit events, room snapshot
+      app-session state, `call-app/grants-updated` signaling, and CRDT server
+      admission stamps. There is no production OpenTelemetry/dashboard proof
+      for Call Apps yet.
+  - Residual risks before deployment:
+    - Run the PDO-backed backend contracts in a SQLite-enabled PHP runtime.
+    - Add a browser E2E test that orders/installs a Call App, attaches it to a
+      call, draws/sticks from two participants, revokes one participant, and
+      verifies iframe state after reconnect.
+    - Validate iframe CSP/sandbox behavior in real browsers, including blocked
+      primary auth access and allowed postMessage traffic only.
+    - Add production telemetry dashboards/alerts for Call App session creation,
+      launch-token validation failures, grant updates, CRDT append/replay
+      latency, duplicate suppression, and snapshot compaction.
+    - Test concurrent CRDT edits under reconnect/churn with more than two
+      participants before enabling this beyond controlled beta use.
 
 ## Sprint: Governance UX, Recursive CRUD, Permissions, And Onboarding
 
