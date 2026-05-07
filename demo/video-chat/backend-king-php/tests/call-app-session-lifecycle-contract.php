@@ -225,6 +225,17 @@ SQL
 
     $sessionRowId = (int) $pdo->query("SELECT id FROM call_app_sessions WHERE public_id = " . $pdo->quote($sessionId) . " LIMIT 1")->fetchColumn();
     videochat_call_app_session_lifecycle_assert($sessionRowId > 0, 'created session database id missing');
+    $guestId = videochat_call_app_session_guest_id('guest@example.test');
+
+    $regularAllowedLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $userAuth);
+    $regularAllowedLaunchPayload = videochat_call_app_session_lifecycle_decode($regularAllowedLaunch);
+    $regularAllowedLaunchResult = is_array($regularAllowedLaunchPayload['result'] ?? null) ? $regularAllowedLaunchPayload['result'] : [];
+    $regularAllowedCapabilities = (array) ((($regularAllowedLaunchResult['context'] ?? [])['capabilities'] ?? []));
+    $regularAllowedLaunchToken = (string) ($regularAllowedLaunchResult['launch_token'] ?? '');
+    $regularAllowedLaunchTokenId = (string) ($regularAllowedLaunchResult['launch_token_id'] ?? '');
+    videochat_call_app_session_lifecycle_assert((int) ($regularAllowedLaunch['status'] ?? 0) === 201, 'default-allowed participant launch token should return 201');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.read', $regularAllowedCapabilities, true), 'default-allowed participant launch must allow CRDT read');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.append', $regularAllowedCapabilities, true), 'default-allowed participant launch must allow CRDT append');
 
     $forbiddenGrantPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $userAuth, [
         'grants' => [[
@@ -245,16 +256,40 @@ SQL
     $grantPatchPayload = videochat_call_app_session_lifecycle_decode($grantPatch);
     videochat_call_app_session_lifecycle_assert((int) ($grantPatch['status'] ?? 0) === 200, 'owner grant patch should return 200');
     videochat_call_app_session_lifecycle_assert(count((array) (($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])) === 1, 'grant patch should create one audit event');
+    videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['changed_grants'] ?? [])[0] ?? [])['retired_launch_tokens'] ?? 0) === 1, 'denying a participant must revoke their active launch token');
+    videochat_call_app_session_lifecycle_assert((int) (((($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant audit must record retired launch tokens');
     $patchedSession = is_array(($grantPatchPayload['result'] ?? [])['session'] ?? null) ? ($grantPatchPayload['result'] ?? [])['session'] : [];
     $regularGrant = array_values(array_filter((array) ($patchedSession['grants'] ?? []), static fn (array $grant): bool => (int) ($grant['user_id'] ?? 0) === $regularUserId))[0] ?? [];
     videochat_call_app_session_lifecycle_assert((string) ($regularGrant['grant_state'] ?? '') === 'denied', 'regular user grant should be denied after patch');
+    $regularTokenRevokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = " . $pdo->quote($regularAllowedLaunchTokenId) . " LIMIT 1")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($regularTokenRevokedAt !== '', 'denied participant active launch token must be revoked');
+    $revokedRegularValidate = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
+        'launch_token' => $regularAllowedLaunchToken,
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($revokedRegularValidate['status'] ?? 0) === 401, 'revoked participant launch token must fail reconnect validation');
 
     $grantList = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth);
     $grantListPayload = videochat_call_app_session_lifecycle_decode($grantList);
     videochat_call_app_session_lifecycle_assert((int) ($grantList['status'] ?? 0) === 200, 'grant list should return 200');
     videochat_call_app_session_lifecycle_assert(count((array) (($grantListPayload['result'] ?? [])['audit_events'] ?? [])) >= 1, 'grant list should include audit events');
+    videochat_call_app_session_lifecycle_assert((int) (((($grantListPayload['result'] ?? [])['audit_events'] ?? [])[0] ?? [])['payload']['retired_launch_tokens'] ?? 0) === 1, 'grant list audit trail should expose revocation metadata');
     $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_audit_events WHERE app_session_id = {$sessionRowId} AND event_type = 'participant_grant_changed'")->fetchColumn();
     videochat_call_app_session_lifecycle_assert($auditCount === 1, 'grant patch should persist exactly one audit event');
+
+    $sessionRecordAfterUserDeny = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+    videochat_call_app_session_lifecycle_assert(is_array($sessionRecordAfterUserDeny), 'session record should still exist after user deny');
+    videochat_call_app_session_lifecycle_assert(videochat_call_app_launch_guest_grant_state($pdo, $tenantId, $sessionRecordAfterUserDeny, $guestId) === 'allowed', 'guest grant should inherit default allow before explicit patch');
+    $guestGrantPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
+        'grants' => [[
+            'subject_type' => 'guest',
+            'guest_id' => $guestId,
+            'grant_state' => 'denied',
+        ]],
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($guestGrantPatch['status'] ?? 0) === 200, 'owner should update guest app grants');
+    $sessionRecordAfterGuestDeny = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+    videochat_call_app_session_lifecycle_assert(is_array($sessionRecordAfterGuestDeny), 'session record should still exist after guest deny');
+    videochat_call_app_session_lifecycle_assert(videochat_call_app_launch_guest_grant_state($pdo, $tenantId, $sessionRecordAfterGuestDeny, $guestId) === 'denied', 'guest grant state must apply across reconnect lookups');
 
     $unknownGrant = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
         'grants' => [[
@@ -268,8 +303,9 @@ SQL
     $deniedLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $userAuth);
     $deniedLaunchPayload = videochat_call_app_session_lifecycle_decode($deniedLaunch);
     $deniedCapabilities = (array) (((($deniedLaunchPayload['result'] ?? [])['context'] ?? [])['capabilities'] ?? []));
-    videochat_call_app_session_lifecycle_assert((int) ($deniedLaunch['status'] ?? 0) === 201, 'denied participant should receive a read-only launch token');
-    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.read', $deniedCapabilities, true), 'denied participant launch must allow readonly CRDT bootstrap');
+    videochat_call_app_session_lifecycle_assert((int) ($deniedLaunch['status'] ?? 0) === 201, 'denied participant should receive only a status launch token');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.launch', $deniedCapabilities, true), 'denied participant launch must allow app status bootstrap');
+    videochat_call_app_session_lifecycle_assert(!in_array('call_apps.crdt.read', $deniedCapabilities, true), 'denied participant launch must not allow CRDT read');
     videochat_call_app_session_lifecycle_assert(!in_array('call_apps.crdt.append', $deniedCapabilities, true), 'denied participant launch must not allow CRDT append');
 
     $launch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
@@ -320,6 +356,11 @@ SQL
     $appendPayload = videochat_call_app_session_lifecycle_decode($append);
     videochat_call_app_session_lifecycle_assert((int) ($append['status'] ?? 0) === 201, 'allowed participant append should admit CRDT op');
     videochat_call_app_session_lifecycle_assert((string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['server_admission_stamp'] ?? [])['duplicate_policy'] ?? '') === 'ignore_after_first_admission', 'CRDT op must carry server admission stamp');
+
+    $deniedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $userAuth);
+    videochat_call_app_session_lifecycle_assert((int) ($deniedBootstrap['status'] ?? 0) === 403, 'denied participant must not bootstrap private CRDT state');
+    $deniedOps = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $userAuth);
+    videochat_call_app_session_lifecycle_assert((int) ($deniedOps['status'] ?? 0) === 403, 'denied participant must not replay private CRDT state');
 
     $duplicateAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
         'operation' => [

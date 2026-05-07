@@ -163,6 +163,7 @@ SQL
         if (!is_array($row)) {
             continue;
         }
+        $payload = videochat_call_app_marketplace_decode_json((string) ($row['payload_json'] ?? '{}'), []);
         $events[] = [
             'id' => (string) ($row['public_id'] ?? ''),
             'event_type' => (string) ($row['event_type'] ?? ''),
@@ -171,6 +172,7 @@ SQL
             'guest_id' => (string) ($row['guest_id'] ?? ''),
             'grant_state' => (string) ($row['grant_state'] ?? ''),
             'actor_user_id' => is_numeric($row['actor_user_id'] ?? null) ? (int) $row['actor_user_id'] : null,
+            'payload' => is_array($payload) ? $payload : [],
             'created_at' => (string) ($row['created_at'] ?? ''),
         ];
     }
@@ -274,6 +276,8 @@ function videochat_call_app_write_grant_audit_event(PDO $pdo, int $tenantId, arr
         'user_id' => $grant['user_id'] ?? null,
         'guest_id' => (string) ($grant['guest_id'] ?? ''),
         'grant_state' => (string) ($grant['grant_state'] ?? ''),
+        'retired_launch_tokens' => (int) ($grant['retired_launch_tokens'] ?? 0),
+        'reconnect_policy' => (string) ($grant['reconnect_policy'] ?? 'current_grant_rechecked_on_reconnect'),
     ];
     $statement = $pdo->prepare(
         <<<'SQL'
@@ -307,8 +311,39 @@ SQL
         'guest_id' => (string) ($grant['guest_id'] ?? ''),
         'grant_state' => (string) ($grant['grant_state'] ?? ''),
         'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'payload' => $payload,
         'created_at' => $now,
     ];
+}
+
+function videochat_call_app_retire_launch_tokens_for_grant(PDO $pdo, int $tenantId, int $sessionRowId, array $grant, string $now): int
+{
+    if ((string) ($grant['grant_state'] ?? '') !== 'denied') {
+        return 0;
+    }
+    if ((string) ($grant['subject_type'] ?? '') !== 'user' || (int) ($grant['user_id'] ?? 0) <= 0) {
+        return 0;
+    }
+
+    $statement = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_app_launch_tokens
+SET revoked_at = :revoked_at,
+    updated_at = :updated_at
+WHERE tenant_id = :tenant_id
+  AND app_session_id = :app_session_id
+  AND issued_to_user_id = :issued_to_user_id
+  AND (revoked_at IS NULL OR trim(revoked_at) = '')
+SQL
+    );
+    $statement->execute([
+        ':revoked_at' => $now,
+        ':updated_at' => $now,
+        ':tenant_id' => $tenantId,
+        ':app_session_id' => $sessionRowId,
+        ':issued_to_user_id' => (int) $grant['user_id'],
+    ]);
+    return max(0, (int) $statement->rowCount());
 }
 
 function videochat_call_app_update_participant_grants(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, array $payload): array
@@ -399,8 +434,13 @@ SQL
                 ':created_at' => $now,
             ]);
         }
-        $changed[] = $grant;
-        $auditEvents[] = videochat_call_app_write_grant_audit_event($pdo, $tenantId, $record, $actorUserId, $grant);
+        $retiredTokens = videochat_call_app_retire_launch_tokens_for_grant($pdo, $tenantId, $sessionRowId, $grant, $now);
+        $auditedGrant = $grant + [
+            'retired_launch_tokens' => $retiredTokens,
+            'reconnect_policy' => $retiredTokens > 0 ? 'active_launch_tokens_revoked_on_denied_grant' : 'current_grant_rechecked_on_reconnect',
+        ];
+        $changed[] = $auditedGrant;
+        $auditEvents[] = videochat_call_app_write_grant_audit_event($pdo, $tenantId, $record, $actorUserId, $auditedGrant);
     }
 
     return [

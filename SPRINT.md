@@ -902,11 +902,22 @@ Tickets:
       drawing controls when the participant only has read access.
     - Added `call-app-whiteboard-runtime-contract.mjs` and moved the manifest
       status to `runtime_ready`.
-- [ ] CAP-14 App permissions and revocation hardening
+- [x] CAP-14 App permissions and revocation hardening
   - Verify revoked participants cannot append ops or receive new private app
     state.
   - Ensure grant changes apply across reconnects and guest sessions.
   - Add audit trail coverage.
+  - Proof:
+    - CRDT bootstrap, replay, append, and snapshot compaction now require an
+      allowed current grant before returning document state.
+    - Denying a user grant retires active Call App launch tokens, records
+      revocation metadata in the grant audit payload, and forces reconnect token
+      validation to fail closed.
+    - Launch contexts for denied participants expose only app status capability,
+      and the whiteboard iframe avoids CRDT bootstrap/replay unless read
+      capability is present.
+    - Added guest grant reconnect coverage and
+      `call-app-permission-revocation-contract.mjs`.
 - [ ] CAP-15 Marketplace-to-call end-to-end journey
   - Order app for organization.
   - Install/enable app.
