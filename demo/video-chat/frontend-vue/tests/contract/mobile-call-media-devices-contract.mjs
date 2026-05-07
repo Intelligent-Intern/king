@@ -27,6 +27,7 @@ try {
   const adminEnterCall = readFrontend('src/domain/calls/admin/enterCall.ts');
   const dashboardEnterCall = readFrontend('src/domain/calls/dashboard/enterCall.ts');
   const workspaceShell = readFrontend('src/layouts/WorkspaceShell.vue');
+  const workspaceMicLevelMonitor = readFrontend('src/layouts/useWorkspaceMicLevelMonitor.js');
 
   requireContains(cameraConstraints, 'constraints.deviceId = { ideal: normalizedDeviceId };', 'selected mobile camera ids are hints instead of hard exact constraints');
   requireContains(cameraConstraints, "facingMode: { ideal: 'user' }", 'camera fallback prefers front camera on phones');
@@ -53,6 +54,18 @@ try {
   requireContains(adminEnterCall, 'playCallSpeakerTestSound(callMediaPrefs)', 'admin test tone uses shared speaker routing');
   requireContains(dashboardEnterCall, 'playCallSpeakerTestSound(callMediaPrefs)', 'dashboard test tone uses shared speaker routing');
   requireContains(workspaceShell, 'playCallSpeakerTestSound(callMediaPrefs)', 'in-call sidebar test tone uses shared speaker routing');
+  requireContains(mediaPreferences, 'if (isLikelyMobileAudioDevice()) {\n    return;\n  }', 'mobile device refresh does not open camera and mic just to unlock labels');
+  requireContains(mediaPreferences, 'waitForCallMediaDeviceRelease', 'mobile call entry waits for hardware release between preview and live call');
+  requireContains(accessPreview, 'releasePreviewForCallEntry', 'public join preview exposes a media-release transition');
+  requireContains(accessPreview, 'await waitForCallMediaDeviceRelease();', 'public join preview releases mobile capture before entering call');
+  requireContains(adminEnterCall, 'await releaseEnterCallPreviewForWorkspace();', 'admin call entry releases preview before opening workspace');
+  requireContains(dashboardEnterCall, 'await releaseEnterCallPreviewForWorkspace();', 'dashboard call entry releases preview before opening workspace');
+  requireContains(workspaceShell, 'setMicLevelMonitorStream: attachMicLevelStream', 'call workspace sidebar can reuse the live call microphone stream for the mic meter');
+  requireContains(workspaceMicLevelMonitor, 'if (!isCallWorkspace.value || isMobileViewport.value) return;', 'mobile call workspace must not open a second microphone stream for the sidebar meter');
+  requireContains(workspaceMicLevelMonitor, 'micLevelMonitorOwnsStream', 'borrowed live streams are not stopped by sidebar mic meter cleanup');
+  requireContains(workspaceMicLevelMonitor, "typeof MediaStream !== 'undefined'", 'sidebar mic meter checks MediaStream before cleanup');
+  requireContains(workspaceShell, '() => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId, isMobileViewport.value]', 'sidebar mic meter reacts to mobile viewport changes');
+  requireContains(readFrontend('src/domain/realtime/workspace/callWorkspace/lifecycle.ts'), 'setMicLevelMonitorStream(mediaStream);', 'call workspace binds the live local stream into the sidebar mic meter');
 
   process.stdout.write('[mobile-call-media-devices-contract] PASS\n');
 } catch (error) {

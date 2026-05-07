@@ -2143,6 +2143,7 @@ registerCallWorkspaceLifecycleHelpers({
     localTracksPublishedToSfuRef: {
       set: (value) => { localTracksPublishedToSfu = value; },
     },
+    workspaceSidebarState,
   },
   state: {
     getCompactMediaQuery: () => compactMediaQuery,

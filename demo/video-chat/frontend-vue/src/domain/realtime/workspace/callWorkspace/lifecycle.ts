@@ -87,6 +87,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     usersRefreshTimer,
     typingByRoom,
     localTracksPublishedToSfuRef,
+    workspaceSidebarState,
   } = refs;
   const {
     getCompactMediaQuery,
@@ -166,6 +167,17 @@ export function registerCallWorkspaceLifecycleHelpers({
     () => {
       applyCallInputPreferences();
     }
+  );
+
+  watch(
+    () => localStreamRef.value,
+    (stream) => {
+      const setMicLevelMonitorStream = workspaceSidebarState?.setMicLevelMonitorStream;
+      if (typeof setMicLevelMonitorStream !== 'function') return;
+      const mediaStream = typeof MediaStream !== 'undefined' && stream instanceof MediaStream ? stream : null;
+      setMicLevelMonitorStream(mediaStream);
+    },
+    { immediate: true }
   );
 
   watch(
@@ -480,6 +492,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       setTypingSweepTimer(null);
     }
     closeSocket({ leaveRoom: true });
+    workspaceSidebarState?.setMicLevelMonitorStream?.(null);
     teardownLocalPublisher();
     callbacks.teardownGossipDataLane?.();
     teardownNativePeerConnections();

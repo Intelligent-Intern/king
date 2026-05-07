@@ -253,6 +253,7 @@ const state = reactive({
 const {
   applyPreviewAudioVolume,
   playSpeakerTestSound,
+  releasePreviewForCallEntry,
   startPreview,
   stopPreview,
 } = createJoinAccessPreviewController({
@@ -396,7 +397,7 @@ async function enterAdmittedCall(accessId) {
 
   admissionAccepted = true;
   closeAdmissionSocket({ cancel: false });
-  stopPreview();
+  await releasePreviewForCallEntry();
   state.waitingForAdmission = false;
   state.joining = false;
   state.admissionMessage = '';

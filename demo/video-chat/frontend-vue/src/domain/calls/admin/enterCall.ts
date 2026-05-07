@@ -3,6 +3,7 @@ import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
   refreshCallMediaDevices,
+  waitForCallMediaDeviceRelease,
 } from '../../realtime/media/preferences';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { capturePreviewMediaWithCameraFallback } from '../../realtime/media/cameraCaptureConstraints';
@@ -23,6 +24,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   const callAccessLinkEndpointAvailable = ref(true);
   let detachCallMediaWatcher = null;
   let enterCallPreviewResizeHandler = null;
+  let enterCallPreviewStartToken = 0;
 
   const enterCallState = reactive({
     open: false,
@@ -182,6 +184,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   }
 
   function stopEnterCallPreview() {
+    enterCallPreviewStartToken += 1;
     enterCallPreviewBackgroundController.dispose();
 
     const previewNode = enterCallPreviewVideoRef.value;
@@ -212,6 +215,11 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     enterCallState.previewReady = false;
   }
 
+  async function releaseEnterCallPreviewForWorkspace() {
+    stopEnterCallPreview();
+    await waitForCallMediaDeviceRelease();
+  }
+
   function buildPreviewAudioConstraints() {
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
     return buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
@@ -219,6 +227,8 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
   async function startEnterCallPreview() {
     stopEnterCallPreview();
+    const token = enterCallPreviewStartToken + 1;
+    enterCallPreviewStartToken = token;
     enterCallState.previewReady = false;
     enterCallState.previewError = '';
 
@@ -228,11 +238,19 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
 
     try {
-      const rawStream = await capturePreviewMediaWithCameraFallback({
+      const nextRawStream = await capturePreviewMediaWithCameraFallback({
         audio: buildPreviewAudioConstraints(),
         cameraDeviceId: callMediaPrefs.selectedCameraId,
       });
+      if (token !== enterCallPreviewStartToken) {
+        for (const track of nextRawStream.getTracks()) {
+          track.stop();
+        }
+        return;
+      }
+      const rawStream = nextRawStream;
       enterCallPreviewRawStreamRef.value = rawStream;
+      void refreshCallMediaDevices({ force: true, requestPermissions: false });
       const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
       for (const track of rawStream.getAudioTracks()) {
         if (typeof track.applyConstraints === 'function') {
@@ -245,6 +263,17 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
+          if (token !== enterCallPreviewStartToken) {
+            if (result?.stream instanceof MediaStream) {
+              for (const track of result.stream.getTracks()) {
+                track.stop();
+              }
+            }
+            for (const track of rawStream.getTracks()) {
+              track.stop();
+            }
+            return;
+          }
           if (result?.stream instanceof MediaStream) {
             previewStream = result.stream;
           }
@@ -255,6 +284,15 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       enterCallPreviewStreamRef.value = previewStream;
 
       await nextTick();
+      if (token !== enterCallPreviewStartToken) {
+        for (const stream of [rawStream, previewStream]) {
+          if (!(stream instanceof MediaStream)) continue;
+          for (const track of stream.getTracks()) {
+            track.stop();
+          }
+        }
+        return;
+      }
       const previewNode = enterCallPreviewVideoRef.value;
       if (!(previewNode instanceof HTMLVideoElement)) return;
 
@@ -263,6 +301,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       await previewNode.play().catch(() => {});
       enterCallState.previewReady = true;
     } catch (error) {
+      if (token !== enterCallPreviewStartToken) return;
       const message = error instanceof Error ? error.message : t('calls.enter.preview_failed');
       enterCallState.previewError = message || t('calls.enter.preview_failed');
     }
@@ -409,7 +448,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     console.log('Opening call workspace with target:', target);
     const routeSegment = await resolveWorkspaceRouteSegment(target);
     console.log('Resolved workspace route segment:', routeSegment);
-    closeEnterCallModal();
+    enterCallState.open = false;
+    resetEnterCallState();
+    await releaseEnterCallPreviewForWorkspace();
     await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
   }
 
