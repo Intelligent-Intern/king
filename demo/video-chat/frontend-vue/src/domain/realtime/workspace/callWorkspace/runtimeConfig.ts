@@ -43,6 +43,13 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD = 1;
 export const SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS = 15_000;
 export const SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS = 30_000;
 export const SFU_AUTO_QUALITY_RECOVERY_MAX_READBACK_BUDGET_RATIO = 0.6;
+export const SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS = Object.freeze([
+  5_000,
+  10_000,
+  30_000,
+  120_000,
+  300_000,
+]);
 export const SFU_WLVC_MOTION_DELTA_CADENCE_WINDOW_MS = 9_000;
 export const SFU_WLVC_MOTION_DELTA_PROFILE_DOWNSHIFT_THRESHOLD = 3;
 export const SFU_WLVC_MOTION_DELTA_MAX_CADENCE_LEVEL = 3;
@@ -60,7 +67,7 @@ export const SFU_AUTO_QUALITY_DOWNGRADE_NEXT = Object.freeze({
 export const SFU_AUTO_QUALITY_RECOVERY_NEXT = Object.freeze({
   rescue: 'realtime',
   realtime: 'balanced',
-  balanced: '',
+  balanced: 'quality',
 });
 export const NATIVE_FRAME_ERROR_LOG_COOLDOWN_MS = 2500;
 export const NATIVE_AUDIO_TRACK_RECOVERY_MAX_ATTEMPTS = 2;

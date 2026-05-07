@@ -22,6 +22,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     clearReactionQueueTimer,
     clearReconnectTimer,
     clearRemoteVideoStallTimer,
+    clearSfuVideoQualityRecoveryProbeTimer,
     clearTypingStopTimer,
     closeSocket,
     connectSocket,
@@ -30,6 +31,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     flushQueuedReactions,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
+    ensureSfuVideoQualityRecoveryProbeSeries,
     initSFU,
     loadDynamicIceServers,
     markWorkspaceReconnectAfterForeground,
@@ -194,6 +196,11 @@ export function registerCallWorkspaceLifecycleHelpers({
       if (nextValue === previousValue) return;
       resetSfuOutboundMediaForAutomaticProfileSwitch(nextValue, previousValue);
       void reconfigureLocalTracksFromSelectedDevices();
+      ensureSfuVideoQualityRecoveryProbeSeries?.('outgoing_video_profile_changed', {
+        trigger: 'profile_watch',
+        previous_video_quality_profile: previousValue,
+        outgoing_video_quality_profile: nextValue,
+      });
     }
   );
 
@@ -391,6 +398,9 @@ export function registerCallWorkspaceLifecycleHelpers({
     }
 
     await publishLocalTracks();
+    ensureSfuVideoQualityRecoveryProbeSeries?.('initial_outgoing_video_quality_probe', {
+      trigger: 'workspace_publish_local_tracks',
+    });
 
     if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
       initSFU();
@@ -478,6 +488,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     clearLobbyToastTimer();
     clearReconnectTimer();
     clearPingTimer();
+    clearSfuVideoQualityRecoveryProbeTimer?.();
     clearMediaSecurityResyncTimer();
     clearMediaSecurityHandshakeWatchdog();
     clearLocalTrackRecoveryTimer();
