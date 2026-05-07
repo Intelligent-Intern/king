@@ -109,10 +109,26 @@ Tickets:
     - Removed workspace wiring that bound Gossip media to arbitrary Native
       media peer connections.
     - Added `gossip-dedicated-neighbor-lifecycle-contract.mjs`.
-- [ ] GSP-05 Authoritative topology repair
+- [x] GSP-05 Authoritative topology repair
   - Make `gossip/topology-repair/request` operational: client failure report,
     server replacement assignment, client edge setup, old edge retirement.
   - Add contracts for reassignment and cleanup.
+  - Proof:
+    - `gossip/topology-repair/request` now records the failed edge, computes a
+      fresh server-authoritative room topology with failed pairs excluded, and
+      sends peer-scoped `topology_hint` reassignment payloads to active room
+      connections.
+    - Repair payloads include authoritative metadata with retired edges,
+      per-peer `retired_peer_ids`, and replacement neighbor ids so both ends of
+      the failed edge cleanly close the old dedicated DataChannel.
+    - The frontend consumes authoritative repair metadata before applying the
+      new topology and retires old dedicated neighbor links with
+      `repair_retired_edge`.
+    - Added `gossip-authoritative-topology-repair-contract.mjs` and extended the
+      backend runtime contract to prove peer-scoped reassignment, cleanup, and
+      no media-frame fanout.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
 - [ ] GSP-06 Gossip health rollout gates
   - In `gossip_primary`, gate media Gossip on Gossip topology health.
   - SFU health may influence fallback/relay usage, not whether Gossip is active.
