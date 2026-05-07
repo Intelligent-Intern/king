@@ -9,6 +9,7 @@ function captureNativeAudioBridgeDiagnostic(event = {}) {
 }
 
 export function createNativeAudioBridgeRecovery({
+  applyCallOutputPreferences = () => {},
   captureClientDiagnostic = captureNativeAudioBridgeDiagnostic,
   closeNativePeerConnection = () => {},
   currentMediaSecurityRuntimePath = () => '',
@@ -119,6 +120,7 @@ export function createNativeAudioBridgeRecovery({
     if (!streamHasLiveTrackKind(peer.remoteStream, 'audio')) return false;
 
     try {
+      applyCallOutputPreferences();
       await peer.audio.play();
       setNativePeerAudioBridgeState(peer, 'playing', '');
       resetNativeAudioTrackRecovery(peer.userId);

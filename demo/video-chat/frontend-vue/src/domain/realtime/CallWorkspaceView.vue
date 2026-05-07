@@ -1337,6 +1337,7 @@ const nativeStack = createCallWorkspaceNativeStack({
   callbacks: {
     activeRoomId: () => activeRoomId.value,
     apiRequest,
+    applyCallOutputPreferences: (...args) => applyCallOutputPreferences(...args),
     attachMediaSecurityNativeReceiverBase: (session, receiver, senderUserId, track) => session.attachNativeReceiverTransform(receiver, senderUserId, {
       trackId: String(track?.id || ''),
     }),
