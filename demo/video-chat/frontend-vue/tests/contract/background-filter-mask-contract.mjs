@@ -59,7 +59,9 @@ try {
   requireContains(compositor, "ctx.globalCompositeOperation = 'destination-over';", 'compositor draws replacement background behind cut foreground');
   requireContains(compositor, "ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');", 'compositor solid background replacement');
   requireContains(compositor, 'ctx.fillRect(0, 0, canvas.width, canvas.height);', 'compositor solid background fills the full background');
-  requireContains(compositor, 'ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;', 'compositor keeps a visibly blurred fallback while mask warms');
+  requireContains(compositor, 'if (backgroundColor) {', 'compositor no-mask fallback honors solid replacement backgrounds');
+  requireContains(compositor, "ctx.fillStyle = '#061a4a';", 'compositor uses deep-blue privacy placeholder while mask warms');
+  requireMissing(compositor, 'ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;', 'compositor warmup raw-camera blur fallback');
   requireContains(compositor, 'return maskLayer?.getImageData?.(0, 0, maskCanvas.width, maskCanvas.height) || null;', 'compositor exposes matte snapshot');
 
   requireContains(segmenter, 'latestMaskValues = hasValueMask ? segmentation.matteMaskValues : null;', 'segmenter keeps latest value mask');
