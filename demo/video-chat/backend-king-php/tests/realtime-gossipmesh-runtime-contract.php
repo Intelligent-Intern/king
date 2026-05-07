@@ -14,6 +14,14 @@ require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../http/module_realtime_websocket_commands.php';
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
+$gossipmeshFrameSender = static function (mixed $socket, array $payload): bool {
+    $GLOBALS['gossipmesh_sent_frames'][] = [
+        'socket' => $socket,
+        'payload' => $payload,
+    ];
+
+    return true;
+};
 
 if (!function_exists('king_websocket_send')) {
     function king_websocket_send(mixed $socket, string $payload): bool
@@ -717,7 +725,8 @@ $repairResult = videochat_realtime_handle_gossipmesh_topology_repair_command(
     $socketOwner,
     $presenceState,
     $ownerConnection,
-    $openEmptyDatabase
+    $openEmptyDatabase,
+    $gossipmeshFrameSender
 );
 videochat_gossipmesh_test_assert((bool) ($repairResult['handled'] ?? false), 'websocket topology repair command should be handled');
 videochat_gossipmesh_test_assert(array_key_exists($healthObjectKey, $GLOBALS['gossipmesh_topology_health_store']), 'websocket topology repair must persist link health observation');
@@ -736,14 +745,27 @@ videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'socket') === false, 
 videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'sdp') === false, 'persisted topology health must not include SDP fields');
 videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'ice') === false, 'persisted topology health must not include ICE fields');
 videochat_gossipmesh_test_assert(strpos($storedHealthJson, 'protected_frame') === false, 'persisted topology health must not include protected media frames');
-videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1, 'websocket topology repair should emit exactly one frame');
-$repairPayload = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
-videochat_gossipmesh_test_assert((string) ($repairPayload['type'] ?? '') === 'call/gossip-topology', 'websocket repair payload type mismatch');
-videochat_gossipmesh_test_assert((string) (($repairPayload['payload'] ?? [])['peer_id'] ?? '') === '10', 'websocket repair must target authenticated peer');
-videochat_gossipmesh_test_assert((string) (($repairPayload['payload'] ?? [])['lane'] ?? '') === 'ops', 'websocket repair payload lane mismatch');
-videochat_gossipmesh_test_assert(count((array) (($repairPayload['payload'] ?? [])['neighbors'] ?? [])) <= VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS, 'websocket repair neighbors must be bounded');
-videochat_gossipmesh_test_assert(!in_array('20', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) (($repairPayload['payload'] ?? [])['neighbors'] ?? [])), true), 'websocket replacement topology must avoid the fresh failed pair');
-videochat_gossipmesh_test_assert(!in_array('50', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) (($repairPayload['payload'] ?? [])['neighbors'] ?? [])), true), 'websocket replacement topology must avoid recent object_store readback failed pair');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 3, 'websocket topology repair should emit peer-scoped room reassignment frames, got ' . count($GLOBALS['gossipmesh_sent_frames']));
+$repairPayloadsBySocket = [];
+foreach ($GLOBALS['gossipmesh_sent_frames'] as $sentFrame) {
+    $repairPayloadsBySocket[(string) ($sentFrame['socket'] ?? '')] = (array) ($sentFrame['payload'] ?? []);
+}
+$repairPayload = (array) ($repairPayloadsBySocket[$socketOwner] ?? []);
+$peerRepairPayload = (array) ($repairPayloadsBySocket[$socketPeer] ?? []);
+$moderatorRepairPayload = (array) ($repairPayloadsBySocket[$socketModerator] ?? []);
+videochat_gossipmesh_test_assert((string) ($repairPayload['type'] ?? '') === 'topology_hint', 'websocket repair payload type mismatch');
+videochat_gossipmesh_test_assert((string) ($repairPayload['peer_id'] ?? '') === '10', 'websocket repair must target authenticated peer');
+videochat_gossipmesh_test_assert((string) ($peerRepairPayload['peer_id'] ?? '') === '20', 'websocket repair must send the retired edge peer its scoped assignment');
+videochat_gossipmesh_test_assert((string) ($moderatorRepairPayload['peer_id'] ?? '') === '50', 'websocket repair must send replacement peers their scoped assignment');
+videochat_gossipmesh_test_assert((string) ($repairPayload['lane'] ?? '') === 'ops', 'websocket repair payload lane mismatch');
+videochat_gossipmesh_test_assert((string) ($repairPayload['topology_feature'] ?? '') === 'topology_repair', 'websocket repair topology feature mismatch');
+videochat_gossipmesh_test_assert(count((array) ($repairPayload['neighbors'] ?? [])) <= VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS, 'websocket repair neighbors must be bounded');
+videochat_gossipmesh_test_assert(!in_array('20', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) ($repairPayload['neighbors'] ?? [])), true), 'websocket replacement topology must avoid the fresh failed pair');
+videochat_gossipmesh_test_assert(!in_array('50', array_map(static fn(array $neighbor): string => (string) ($neighbor['peer_id'] ?? ''), (array) ($repairPayload['neighbors'] ?? [])), true), 'websocket replacement topology must avoid recent object_store readback failed pair');
+videochat_gossipmesh_test_assert((bool) (($repairPayload['repair'] ?? [])['authoritative'] ?? false) === true, 'websocket repair metadata must be authoritative');
+videochat_gossipmesh_test_assert(in_array('20', (array) (($repairPayload['repair'] ?? [])['retired_peer_ids'] ?? []), true), 'requesting peer must retire the failed neighbor edge');
+videochat_gossipmesh_test_assert(in_array('10', (array) (($peerRepairPayload['repair'] ?? [])['retired_peer_ids'] ?? []), true), 'lost neighbor peer must retire the reverse failed edge');
+videochat_gossipmesh_test_assert((array) (($moderatorRepairPayload['repair'] ?? [])['retired_peer_ids'] ?? []) === [], 'uninvolved replacement peer must not retire unrelated edges');
 videochat_gossipmesh_test_assert(strpos(json_encode($repairPayload, JSON_UNESCAPED_SLASHES) ?: '', 'sdp') === false, 'websocket repair must not distribute signaling payloads');
 videochat_gossipmesh_test_assert(strpos(json_encode($repairPayload, JSON_UNESCAPED_SLASHES) ?: '', 'protected_frame') === false, 'websocket repair must not distribute media frames');
 
@@ -752,7 +774,8 @@ $telemetryResult = videochat_realtime_handle_gossipmesh_telemetry_snapshot_comma
     $telemetryCommand,
     $socketOwner,
     $presenceState,
-    $ownerConnection
+    $ownerConnection,
+    $gossipmeshFrameSender
 );
 videochat_gossipmesh_test_assert((bool) ($telemetryResult['handled'] ?? false), 'websocket telemetry snapshot command should be handled');
 videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1, 'websocket telemetry should emit exactly one ack');
@@ -777,7 +800,8 @@ videochat_realtime_handle_gossipmesh_topology_repair_command(
     $socketOwner,
     $presenceState,
     $ownerConnection,
-    $openEmptyDatabase
+    $openEmptyDatabase,
+    $gossipmeshFrameSender
 );
 $forgedError = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
 videochat_gossipmesh_test_assert((string) ($forgedError['type'] ?? '') === 'system/error', 'forged peer repair must emit an error');
@@ -793,7 +817,8 @@ videochat_realtime_handle_gossipmesh_topology_repair_command(
     $socketOwner,
     $presenceState,
     $ownerConnection,
-    $openEmptyDatabase
+    $openEmptyDatabase,
+    $gossipmeshFrameSender
 );
 $contextError = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
 videochat_gossipmesh_test_assert((string) (($contextError['details'] ?? [])['error'] ?? '') === 'context_mismatch', 'context mismatch repair error mismatch');

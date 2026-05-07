@@ -226,6 +226,24 @@ export function createCallWorkspaceGossipDataLane({
     };
   }
 
+  function topologyRepairRetiredPeerIdsForLocalPeer(topologyHint, peerId) {
+    const repair = topologyHint?.repair && typeof topologyHint.repair === 'object' ? topologyHint.repair : null;
+    if (!repair || repair.authoritative !== true) return [];
+    const localPeerIdValue = String(peerId || '').trim();
+    const retiredPeerIds = new Set(
+      (Array.isArray(repair.retired_peer_ids) ? repair.retired_peer_ids : [])
+        .map((value) => String(value || '').trim())
+        .filter((value) => value !== '' && value !== localPeerIdValue)
+    );
+    for (const edge of Array.isArray(repair.retired_edges) ? repair.retired_edges : []) {
+      const leftPeerId = String(edge?.peer_id || '').trim();
+      const rightPeerId = String(edge?.neighbor_peer_id || edge?.lost_peer_id || '').trim();
+      if (leftPeerId === localPeerIdValue && rightPeerId !== '') retiredPeerIds.add(rightPeerId);
+      if (rightPeerId === localPeerIdValue && leftPeerId !== '') retiredPeerIds.add(leftPeerId);
+    }
+    return Array.from(retiredPeerIds);
+  }
+
   function bindAssignedGossipNeighbors(topologyHint) {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return 0;
     for (const peerId of assignedGossipNeighborIds) {
@@ -322,6 +340,12 @@ export function createCallWorkspaceGossipDataLane({
     const controller = ensureLiveGossipController();
     if (!controller) return false;
 
+    const repairRetiredPeerIds = topologyRepairRetiredPeerIdsForLocalPeer(topologyHint, peerId);
+    for (const retiredPeerId of repairRetiredPeerIds) {
+      assignedGossipNeighborIds.delete(retiredPeerId);
+      gossipNeighborLifecycle?.closePeer?.(retiredPeerId, 'repair_retired_edge');
+    }
+
     controller.addPeer(peerId);
     for (const neighbor of Array.isArray(topologyHint.neighbors) ? topologyHint.neighbors : []) {
       const neighborId = String(neighbor?.peer_id || '').trim();
@@ -359,6 +383,8 @@ export function createCallWorkspaceGossipDataLane({
         topology_epoch: Number(topologyHint.topology_epoch || 0),
         neighbor_count: assignedGossipNeighborIds.size,
         bound_dedicated_neighbor_count: boundCount,
+        repair_authoritative: topologyHint?.repair?.authoritative === true,
+        repair_retired_peer_count: repairRetiredPeerIds.length,
       },
     });
     return true;
