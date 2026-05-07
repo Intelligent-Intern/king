@@ -326,6 +326,24 @@ SQL
         $GLOBALS['videochat_chat_archive_store_put'],
         $GLOBALS['videochat_chat_archive_store_get']
     );
+
+    $localStoreRoot = sys_get_temp_dir() . '/videochat-chat-archive-local-store-' . bin2hex(random_bytes(6));
+    videochat_chat_archive_contract_assert(
+        videochat_chat_object_store_init($localStoreRoot, 64 * 1024 * 1024),
+        'object store init should keep archive local fs fallback available'
+    );
+    $localArchiveKey = 'vcarch_contract_local_fallback';
+    videochat_chat_archive_contract_assert(
+        videochat_chat_archive_store_put($localArchiveKey, '{"archive":true}'),
+        'archive local object-store fallback put should succeed'
+    );
+    videochat_chat_archive_contract_assert(
+        videochat_chat_archive_store_get($localArchiveKey) === '{"archive":true}',
+        'archive local object-store fallback get should return stored payload'
+    );
+    videochat_chat_attachment_local_store_delete($localArchiveKey);
+    @rmdir($localStoreRoot);
+
     @unlink($databasePath);
 
     fwrite(STDOUT, "[chat-archive-contract] PASS\n");
