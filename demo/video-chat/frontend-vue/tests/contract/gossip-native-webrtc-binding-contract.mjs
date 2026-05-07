@@ -17,7 +17,9 @@ function assert(condition, message) {
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const gossipNeighborLifecycle = read('src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts')
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts')
+const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}\n${gossipNeighborLifecycle}\n${socketLifecycle}`
 const nativeStack = read('src/domain/realtime/workspace/callWorkspace/nativeStack.ts')
 const peerFactory = read('src/domain/realtime/native/peerFactory.ts')
 const peerLifecycle = read('src/domain/realtime/native/peerLifecycle.ts')
@@ -42,8 +44,8 @@ assert(
   'workspace gossip data-lane implementation must lazily create a gossip RTCDataChannel transport for the local peer',
 )
 assert(
-  /transport\.bindPeerConnection\(peerId,\s*peer\.pc,\s*Boolean\(peer\.initiator\)\)/.test(workspaceGossipSurface),
-  'native peers must bind their RTCPeerConnection to the gossip data transport',
+  /transport\?\.bindPeerConnection\?\.\(normalizedPeerId,\s*pc,\s*peer\.initiator\)/.test(gossipNeighborLifecycle),
+  'dedicated gossip neighbor peers must bind their RTCPeerConnection to the gossip data transport',
 )
 assert(
   /if \(!GOSSIP_DATA_LANE_CONFIG\.receive\)[\s\S]*gossip_data_lane_shadow_message_dropped[\s\S]*return;/.test(workspaceGossipSurface),
@@ -54,36 +56,39 @@ assert(
   'active mode must emit a diagnostic when an accepted gossip frame is routed toward decode',
 )
 assert(
-  /peer\.gossipDataLaneMode = GOSSIP_DATA_LANE_CONFIG\.mode/.test(workspaceGossipSurface)
-    && /peer\.gossipDataChannelState = String\(channel\?\.readyState \|\| 'pending'\)/.test(workspaceGossipSurface),
-  'native peer state must expose gossip data-lane mode and channel readiness',
+  /gossip_neighbor_offer/.test(gossipNeighborLifecycle)
+    && /gossip_neighbor_answer/.test(gossipNeighborLifecycle)
+    && /gossip_neighbor_ice/.test(gossipNeighborLifecycle)
+    && /GOSSIP_NEIGHBOR_RUNTIME_PATH = 'gossip_primary_neighbor'/.test(gossipNeighborLifecycle),
+  'dedicated gossip neighbor lifecycle must use its own signaling kinds and runtime path',
 )
 assert(
-  /bindGossipDataChannelForNativePeer,\s*\n\s*bumpMediaRenderVersion/.test(callWorkspace)
-    && /closeGossipDataChannelForNativePeer,\s*\n\s*clearRemoteVideoContainer/.test(callWorkspace),
-  'native stack callbacks must include gossip bind and close hooks',
+  /handleGossipNeighborSignal/.test(callWorkspace)
+    && /if \(handleGossipNeighborSignal\(type,\s*senderUserId,\s*payloadBody \|\| \{\}\)\) return;[\s\S]*const payloadKind/.test(socketLifecycle),
+  'workspace socket handling must route gossip neighbor signaling before native media signaling',
+)
+assert(
+  !/bindGossipDataChannelForNativePeer/.test(gossipDataLane)
+    && !/closeGossipDataChannelForNativePeer/.test(callWorkspace)
+    && !/bindGossipDataChannelForNativePeer,\s*\n\s*bumpMediaRenderVersion/.test(callWorkspace),
+  'workspace gossip data lane must not attach media gossip to arbitrary native media peer connections',
 )
 assert(
   /bindGossipDataChannelForNativePeer = \(\) => false/.test(peerFactory),
-  'native peer factory must keep gossip binding optional for off mode and tests',
+  'native peer factory may keep an inert optional compatibility callback for older tests',
 )
 assert(
-  /bindGossipDataChannelForNativePeer\(existing\)/.test(peerFactory)
-    && /bindGossipDataChannelForNativePeer\(peer\)/.test(peerFactory),
-  'native peer factory must bind gossip channels for existing and new native peers',
+  !/bindGossipDataChannelForNativePeer: callbacks\.bindGossipDataChannelForNativePeer/.test(nativeStack),
+  'call workspace native stack must not receive active gossip bind callbacks',
 )
 assert(
-  /bindGossipDataChannelForNativePeer: callbacks\.bindGossipDataChannelForNativePeer/.test(nativeStack),
-  'call workspace native stack must pass the gossip bind callback into peer factory',
-)
-assert(
-  /closeGossipDataChannelForNativePeer: callbacks\.closeGossipDataChannelForNativePeer/.test(nativeStack),
-  'call workspace native stack must pass the gossip close callback into peer lifecycle',
+  !/closeGossipDataChannelForNativePeer: callbacks\.closeGossipDataChannelForNativePeer/.test(nativeStack),
+  'call workspace native stack must not receive active gossip close callbacks',
 )
 assert(
   /closeGossipDataChannelForNativePeer = \(\) => false/.test(peerLifecycle)
     && /closeGossipDataChannelForNativePeer\(normalizedTargetUserId\)/.test(peerLifecycle),
-  'native peer lifecycle must close gossip data channels when native peers close',
+  'native peer lifecycle keeps an inert optional close hook for compatibility but no active workspace callback is passed',
 )
 assert(
   packageJson.includes('gossip-native-webrtc-binding-contract.mjs'),
