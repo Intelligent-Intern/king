@@ -17,6 +17,20 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 App Configuration email settings extraction: split the
+  administration email server tab into `AppConfigurationEmailTab.vue`,
+  `AppConfigurationEmailSettingsForm.vue`, and
+  `useAppConfigurationEmailSettings.js`. The wrapper now only owns tab status
+  and the bottom save action; the form owns sender/SMTP/encryption/password
+  fields; the composable owns primary-admin gating, load/save state, payload
+  shaping, and the no-cleartext saved-password contract. Proof:
+  `node tests/contract/app-configuration-refactor-contract.mjs`,
+  `node tests/contract/shared-admin-components-contract.mjs`,
+  `node tests/contract/background-image-upload-diagnostics-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`. `background-image-picker`
+  remains blocked in this dirty worktree by existing Call sidebar changes
+  outside this App Configuration slice.
+
 - 2026-05-07 Settings credentials extraction: split
   `WorkspaceCredentialsSettings.vue` into a thin wrapper, extracted
   `WorkspaceEmailAddressSettings.vue`, `WorkspacePasswordSettingsForm.vue`,
