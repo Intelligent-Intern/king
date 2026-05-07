@@ -150,7 +150,7 @@ try {
   requireContains(mediaTransport, 'socket.send(payload)', 'WebSocket fallback media transport performs the actual binary send');
   requireContains(sfuClient, 'binary_media_required: true', 'client marks binary-required media');
   requireContains(sfuClient, 'direct legacy JSON/base64 fallback has been removed', 'client has no legacy JSON media fallback');
-  requireContains(publisherPipeline, 'const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);', 'publisher pipeline sends frames to live SFU client');
+  requireContains(publisherPipeline, 'frameSent = await sendClient.sendEncodedFrame(outgoingFrame);', 'publisher pipeline sends frames to live SFU client');
 
   const backendSources = collectSource([
     ...listFiles(backendRealtimeRoot, (filePath) => filePath.endsWith('.php')),

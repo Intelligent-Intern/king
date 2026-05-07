@@ -10,6 +10,7 @@ require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_context.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby_sync.php';
+require_once __DIR__ . '/../domain/realtime/realtime_activity_layout.php';
 require_once __DIR__ . '/../domain/realtime/realtime_room_snapshot.php';
 require_once __DIR__ . '/../http/module_realtime_websocket_commands.php';
 
@@ -388,12 +389,34 @@ videochat_gossipmesh_test_assert((string) ($telemetryCommand['rollout_strategy']
 videochat_gossipmesh_test_assert((int) (($telemetryCommand['counters'] ?? [])['sent'] ?? -1) === 7, 'telemetry counters must include sent');
 videochat_gossipmesh_test_assert(!array_key_exists('unknown_counter_must_be_dropped', (array) ($telemetryCommand['counters'] ?? [])), 'telemetry counters must drop unknown counters');
 
+$carrierTelemetryCommand = videochat_gossipmesh_decode_telemetry_snapshot(json_encode([
+    'type' => 'gossip/telemetry/snapshot',
+    'lane' => 'ops',
+    'payload' => [
+        'kind' => 'gossip_telemetry_snapshot',
+        'room_id' => 'room-alpha',
+        'call_id' => 'call-alpha',
+        'peer_id' => '10',
+        'transport_kind' => 'rtc_datachannel',
+        'data_lane_mode' => 'active',
+        'media_carrier_mode' => 'gossip_primary',
+        'rollout_strategy' => 'gossip_primary',
+        'neighbor_count' => 4,
+        'topology_epoch' => 123457,
+        'counters' => ['sent' => 1],
+    ],
+], JSON_UNESCAPED_SLASHES));
+videochat_gossipmesh_test_assert((bool) ($carrierTelemetryCommand['ok'] ?? false), 'gossip-primary telemetry snapshot should decode on ops lane');
+videochat_gossipmesh_test_assert((string) ($carrierTelemetryCommand['media_carrier_mode'] ?? '') === 'gossip_primary', 'telemetry must preserve explicit gossip-primary media carrier');
+videochat_gossipmesh_test_assert((string) ($carrierTelemetryCommand['rollout_strategy'] ?? '') === 'gossip_primary', 'telemetry must preserve gossip-primary rollout strategy');
+
 $telemetryState = [];
 $aggregate = videochat_gossipmesh_aggregate_telemetry_snapshot($telemetryState, $telemetryCommand, 123456789);
 videochat_gossipmesh_test_assert((bool) ($aggregate['ok'] ?? false), 'telemetry snapshot should aggregate');
 videochat_gossipmesh_test_assert((int) (($aggregate['totals'] ?? [])['sent'] ?? -1) === 7, 'telemetry aggregate sent total mismatch');
 videochat_gossipmesh_test_assert((int) (($aggregate['transports'] ?? [])['rtc_datachannel'] ?? -1) === 1, 'telemetry aggregate transport label mismatch');
 videochat_gossipmesh_test_assert((string) (($aggregate['rollout_gate'] ?? [])['kind'] ?? '') === 'gossip_rollout_gate_state', 'telemetry aggregate must expose rollout gate state');
+videochat_gossipmesh_test_assert((string) (($telemetryState['gossipmesh_telemetry']['room-alpha']['peers']['10'] ?? [])['media_carrier_mode'] ?? '') === 'sfu_mirror', 'telemetry aggregate must default legacy snapshots to SFU mirror carrier');
 videochat_gossipmesh_test_assert(array_key_exists('duplicate_rate', (array) ($aggregate['rollout_gate'] ?? [])), 'telemetry rollout gate must expose duplicate rate');
 videochat_gossipmesh_test_assert(array_key_exists('ttl_exhaustion_rate', (array) ($aggregate['rollout_gate'] ?? [])), 'telemetry rollout gate must expose TTL exhaustion rate');
 videochat_gossipmesh_test_assert(array_key_exists('late_drop_rate', (array) ($aggregate['rollout_gate'] ?? [])), 'telemetry rollout gate must expose late drop rate');
@@ -683,6 +706,49 @@ $presenceState['rooms']['room-alpha']['conn-50'] = $socketModerator;
 $openEmptyDatabase = static function (): PDO {
     return new PDO('sqlite::memory:');
 };
+
+$GLOBALS['gossipmesh_sent_frames'] = [];
+$snapshotResult = videochat_realtime_send_room_snapshot(
+    $presenceState,
+    $ownerConnection,
+    $openEmptyDatabase,
+    'contract_snapshot'
+);
+videochat_gossipmesh_test_assert((string) (($snapshotResult['payload'] ?? [])['type'] ?? '') === 'room/snapshot', 'room snapshot payload mismatch');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) >= 2, 'room snapshot must emit a sibling gossip topology hint');
+$snapshotTopologyFrames = array_values(array_filter(
+    $GLOBALS['gossipmesh_sent_frames'],
+    static fn(array $sent): bool => (string) (($sent['payload'] ?? [])['type'] ?? '') === 'call/gossip-topology'
+));
+videochat_gossipmesh_test_assert(count($snapshotTopologyFrames) === 1, 'single-connection room snapshot must emit one topology hint');
+$snapshotTopology = (array) (($snapshotTopologyFrames[0]['payload'] ?? [])['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($snapshotTopology['peer_id'] ?? '') === '10', 'room snapshot topology must target the authenticated peer');
+videochat_gossipmesh_test_assert((string) ($snapshotTopology['lane'] ?? '') === 'ops', 'room snapshot topology must stay on ops lane');
+videochat_gossipmesh_test_assert((string) ($snapshotTopology['reconnect_reason'] ?? '') === 'contract_snapshot', 'room snapshot topology reason mismatch');
+videochat_gossipmesh_test_assert(count((array) ($snapshotTopology['neighbors'] ?? [])) <= VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS, 'room snapshot topology neighbors must be bounded');
+videochat_gossipmesh_test_assert(strpos(json_encode($snapshotTopology, JSON_UNESCAPED_SLASHES) ?: '', 'protected_frame') === false, 'room snapshot topology must not contain media frames');
+
+$GLOBALS['gossipmesh_sent_frames'] = [];
+$broadcastSnapshotCount = videochat_realtime_broadcast_room_snapshot(
+    $presenceState,
+    'room-alpha',
+    $openEmptyDatabase,
+    'participant_churn',
+    'conn-20'
+);
+videochat_gossipmesh_test_assert($broadcastSnapshotCount === 2, 'broadcast snapshot should send to remaining room peers only');
+$broadcastTopologyFrames = array_values(array_filter(
+    $GLOBALS['gossipmesh_sent_frames'],
+    static fn(array $sent): bool => (string) (($sent['payload'] ?? [])['type'] ?? '') === 'call/gossip-topology'
+));
+videochat_gossipmesh_test_assert(count($broadcastTopologyFrames) === 2, 'participant churn broadcast must emit peer-specific topology hints');
+videochat_gossipmesh_test_assert(
+    array_values(array_unique(array_map(
+        static fn(array $sent): string => (string) ((($sent['payload'] ?? [])['payload'] ?? [])['peer_id'] ?? ''),
+        $broadcastTopologyFrames
+    ))) === ['10', '50'],
+    'participant churn topology hints must target remaining peers'
+);
 
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $GLOBALS['gossipmesh_topology_health_store'] = [];

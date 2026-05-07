@@ -783,8 +783,13 @@ function videochat_gossipmesh_decode_telemetry_snapshot(string $frame): array
     );
     $rolloutStrategy = videochat_gossipmesh_safe_label(
         $payload['rollout_strategy'] ?? '',
-        ['sfu_first_explicit'],
-        'sfu_first_explicit'
+        ['gossip_primary', 'sfu_first', 'sfu_mirror', 'sfu_first_explicit'],
+        'sfu_mirror'
+    );
+    $mediaCarrierMode = videochat_gossipmesh_safe_label(
+        $payload['media_carrier_mode'] ?? $rolloutStrategy,
+        ['gossip_primary', 'sfu_first', 'sfu_mirror'],
+        $rolloutStrategy === 'gossip_primary' || $rolloutStrategy === 'sfu_first' ? $rolloutStrategy : 'sfu_mirror'
     );
 
     return [
@@ -796,6 +801,7 @@ function videochat_gossipmesh_decode_telemetry_snapshot(string $frame): array
         'peer_id' => $peerId,
         'transport_kind' => $transportKind,
         'data_lane_mode' => $dataLaneMode,
+        'media_carrier_mode' => $mediaCarrierMode,
         'rollout_strategy' => $rolloutStrategy,
         'neighbor_count' => videochat_gossipmesh_clamp_int($payload['neighbor_count'] ?? 0, 0, 0, VIDEOCHAT_GOSSIPMESH_MAX_NEIGHBORS),
         'topology_epoch' => videochat_gossipmesh_clamp_int($payload['topology_epoch'] ?? 0, 0, 0, PHP_INT_MAX),
@@ -836,6 +842,7 @@ function videochat_gossipmesh_aggregate_telemetry_snapshot(array &$presenceState
         'peer_id' => $peerId,
         'transport_kind' => (string) ($snapshot['transport_kind'] ?? 'unknown'),
         'data_lane_mode' => (string) ($snapshot['data_lane_mode'] ?? 'off'),
+        'media_carrier_mode' => (string) ($snapshot['media_carrier_mode'] ?? 'sfu_mirror'),
         'rollout_strategy' => (string) ($snapshot['rollout_strategy'] ?? 'sfu_first_explicit'),
         'neighbor_count' => (int) ($snapshot['neighbor_count'] ?? 0),
         'topology_epoch' => (int) ($snapshot['topology_epoch'] ?? 0),

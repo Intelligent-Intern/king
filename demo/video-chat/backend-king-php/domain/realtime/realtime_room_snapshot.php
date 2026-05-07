@@ -233,6 +233,75 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
 
+function videochat_realtime_gossipmesh_room_allows_topology(string $roomId): bool
+{
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($normalizedRoomId === '' || $normalizedRoomId === 'lobby') {
+        return false;
+    }
+    if (
+        function_exists('videochat_realtime_waiting_room_id')
+        && $normalizedRoomId === videochat_realtime_waiting_room_id()
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+function videochat_realtime_send_gossipmesh_topology_hint(
+    array $presenceState,
+    array $connection,
+    callable $openDatabase,
+    string $reason,
+    ?int $epochMs = null
+): bool {
+    if (
+        !function_exists('videochat_gossipmesh_members_from_room_participants')
+        || !function_exists('videochat_gossipmesh_plan_topology')
+        || !function_exists('videochat_gossipmesh_call_topology_payload')
+        || !function_exists('videochat_gossipmesh_safe_id')
+    ) {
+        return false;
+    }
+
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+    $callId = videochat_realtime_normalize_call_id(
+        (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
+        ''
+    );
+    $peerId = videochat_gossipmesh_safe_id((string) ($connection['user_id'] ?? ''));
+    if (!videochat_realtime_gossipmesh_room_allows_topology($roomId) || $callId === '' || $peerId === '') {
+        return false;
+    }
+
+    $participants = videochat_realtime_merge_room_participants(
+        videochat_presence_room_participants($presenceState, $roomId),
+        videochat_realtime_db_room_participants($openDatabase, $connection)
+    );
+    $members = videochat_gossipmesh_members_from_room_participants($participants);
+    try {
+        $topologyPlan = videochat_gossipmesh_plan_topology($callId, $roomId, $members, [
+            'seed' => 'room_lifecycle',
+            'max_neighbors' => VIDEOCHAT_GOSSIPMESH_DEFAULT_NEIGHBORS,
+            'forward_count' => VIDEOCHAT_GOSSIPMESH_DEFAULT_FORWARD_COUNT,
+        ]);
+        if (!is_array($topologyPlan['topology'][$peerId] ?? null)) {
+            return false;
+        }
+        $payload = videochat_gossipmesh_call_topology_payload(
+            $topologyPlan,
+            $peerId,
+            trim($reason) === '' ? 'room_snapshot' : trim($reason),
+            $epochMs
+        );
+    } catch (Throwable) {
+        return false;
+    }
+
+    return videochat_presence_send_frame($connection['socket'] ?? null, $payload);
+}
+
 function videochat_realtime_send_room_snapshot(
     array $presenceState,
     array $connection,
@@ -241,6 +310,7 @@ function videochat_realtime_send_room_snapshot(
 ): array {
     $payload = videochat_realtime_room_snapshot_payload($presenceState, $connection, $openDatabase, $reason);
     videochat_presence_send_frame($connection['socket'] ?? null, $payload);
+    videochat_realtime_send_gossipmesh_topology_hint($presenceState, $connection, $openDatabase, $reason);
     return [
         'signature' => videochat_realtime_room_snapshot_signature($payload),
         'payload' => $payload,
@@ -261,6 +331,7 @@ function videochat_realtime_send_room_snapshot_if_changed(
     }
     $lastSignature = $signature;
     videochat_presence_send_frame($connection['socket'] ?? null, $payload);
+    videochat_realtime_send_gossipmesh_topology_hint($presenceState, $connection, $openDatabase, $reason);
 }
 
 function videochat_realtime_broadcast_room_snapshot(
@@ -283,6 +354,7 @@ function videochat_realtime_broadcast_room_snapshot(
 
     $sentCount = 0;
     $excludedId = trim($excludeConnectionId);
+    $topologyEpochMs = (int) floor(microtime(true) * 1000);
     foreach ($roomConnections as $connectionId => $_socket) {
         if (!is_string($connectionId) || $connectionId === '') {
             continue;
@@ -298,6 +370,13 @@ function videochat_realtime_broadcast_room_snapshot(
 
         $payload = videochat_realtime_room_snapshot_payload($presenceState, $connection, $openDatabase, $reason);
         if (videochat_presence_send_frame($connection['socket'] ?? null, $payload, $sender)) {
+            videochat_realtime_send_gossipmesh_topology_hint(
+                $presenceState,
+                $connection,
+                $openDatabase,
+                $reason,
+                $topologyEpochMs
+            );
             $sentCount++;
         }
     }

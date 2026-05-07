@@ -6,6 +6,7 @@ import {
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
+  'call/answer',
   'call/ice',
   'call/media-quality-pressure',
   MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE,
@@ -44,6 +45,7 @@ export function createCallWorkspaceSocketHelpers({
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleGossipSignalingEvent = () => false,
     handleMediaSecuritySignal,
     handleNativeSignalingEvent,
     hideLobbyJoinToast,
@@ -269,6 +271,14 @@ export function createCallWorkspaceSocketHelpers({
     }
 
     const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
+    if (
+      ['call/offer', 'call/answer', 'call/ice'].includes(type)
+      && payloadKind.startsWith('gossip_webrtc_')
+    ) {
+      handleGossipSignalingEvent(type, senderUserId, payloadBody || {});
+      return;
+    }
+
     const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
     const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
     const isNativeSignal = payloadKind.startsWith('webrtc_')

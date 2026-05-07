@@ -57,8 +57,8 @@ assert(
   'topology repair requests must be gated to the active gossip data lane, not off or shadow mode',
 )
 assert(
-  /function requestGossipTopologyRepair\(peerId,\s*reason[\s\S]*if \(!assignedGossipNativeNeighborIds\.has\(String\(peerId \|\| ''\)\)\) return false;/.test(workspaceGossipSurface),
-  'topology repair requests must only fire for currently assigned native gossip neighbors',
+  /function requestGossipTopologyRepair\(peerId,\s*reason[\s\S]*if \(!assignedGossipNeighborIds\.has\(String\(peerId \|\| ''\)\)\) return false;/.test(workspaceGossipSurface),
+  'topology repair requests must only fire for currently assigned gossip neighbors',
 )
 assert(
   /sendSocketFrame\(\{[\s\S]*type:\s*'gossip\/topology-repair\/request'[\s\S]*lane:\s*'ops'[\s\S]*lost_peer_id:\s*String\(peerId \|\| ''\)[\s\S]*reason:\s*String\(reason \|\| ''\)/.test(workspaceGossipSurface),
@@ -67,6 +67,10 @@ assert(
 assert(
   /onStateChange:\s*\(peerId,\s*state,\s*(eventType|reason)\)\s*=>\s*\{[\s\S]*if \(\(state === 'closed' \|\| (eventType|reason) === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*(eventType|reason)\)/.test(workspaceGossipSurface),
   'RTCDataChannel close/error for an assigned neighbor must trigger a topology repair request',
+)
+assert(
+  /function handleDedicatedGossipPeerState\(entry,\s*eventType\)[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'lost'[\s\S]*closeDedicatedGossipPeerConnection\(peerId,\s*`gossip_peer_\$\{eventType\}`,\s*true\)/.test(workspaceGossipSurface),
+  'dedicated gossip RTCPeerConnection failed/closed states must mark carrier lost and request topology repair',
 )
 assert(
   /eventType:\s*'gossip_topology_repair_requested'/.test(workspaceGossipSurface)

@@ -581,7 +581,8 @@ export class GossipController {
   createTelemetrySnapshot(peerId: string, options: {
     dataLaneMode?: 'off' | 'shadow' | 'active'
     diagnosticsLabel?: string
-    rolloutStrategy?: 'sfu_first_explicit'
+    mediaCarrierMode?: 'gossip_primary' | 'sfu_first' | 'sfu_mirror'
+    rolloutStrategy?: 'gossip_primary' | 'sfu_first' | 'sfu_mirror' | 'sfu_first_explicit'
   } = {}): Record<string, unknown> | null {
     const peer = this.peers.get(peerId)
     if (!peer) return null
@@ -593,7 +594,8 @@ export class GossipController {
       transport_kind: this.dataTransport.kind || 'unknown',
       data_lane_mode: options.dataLaneMode || this.dataLaneConfig.mode,
       diagnostics_label: options.diagnosticsLabel || this.dataLaneConfig.diagnosticsLabel,
-      rollout_strategy: options.rolloutStrategy || 'sfu_first_explicit',
+      media_carrier_mode: options.mediaCarrierMode || 'sfu_mirror',
+      rollout_strategy: options.rolloutStrategy || options.mediaCarrierMode || 'sfu_mirror',
       neighbor_count: peer.neighbor_set.length,
       topology_epoch: peer.topology_epoch,
       counters: { ...peer.telemetry },
