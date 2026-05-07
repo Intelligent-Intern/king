@@ -11,11 +11,15 @@ async function read(relativePath) {
 
 const [
   sidebarSource,
+  leftSidebarSource,
+  tabsComposableSource,
   shellSource,
   storeSource,
   sprintSource,
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue'),
+  read('demo/video-chat/frontend-vue/src/layouts/CallWorkspaceLeftSidebar.vue'),
+  read('demo/video-chat/frontend-vue/src/layouts/useCallLeftSidebarTabs.js'),
   read('demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue'),
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
   read('SPRINT.md'),
@@ -23,32 +27,38 @@ const [
 
 assert.match(
   shellSource,
+  /import CallWorkspaceLeftSidebar from ['"]\.\/CallWorkspaceLeftSidebar\.vue['"]/,
+  'WorkspaceShell must delegate the in-call left sidebar to a focused component',
+);
+
+assert.match(
+  leftSidebarSource,
   /import CallAppsSidebarPanel from ['"]\.\.\/domain\/realtime\/callApps\/CallAppsSidebarPanel\.vue['"]/,
-  'WorkspaceShell must import the dedicated Call Apps sidebar panel',
+  'CallWorkspaceLeftSidebar must import the dedicated Call Apps sidebar panel',
 );
 
 assert.match(
-  shellSource,
-  /callLeftPanel\s*=\s*ref\(['"]settings['"]\)/,
-  'WorkspaceShell must keep the left call sidebar mode as shell state',
+  tabsComposableSource,
+  /activePanel\s*=\s*ref\(['"]settings['"]\)/,
+  'Call left sidebar tabs must default to the Settings panel',
 );
 
 assert.match(
-  shellSource,
+  tabsComposableSource,
   /useCallAppsCatalogStore\(\)/,
-  'WorkspaceShell must probe the real Call Apps catalog before showing the Call Apps tab',
+  'Call left sidebar tabs must probe the real Call Apps catalog before showing the Call Apps tab',
 );
 
 assert.match(
-  shellSource,
-  /showCallAppsSidebarTabs[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
-  'WorkspaceShell must only show Call Apps tabs once Call Apps are available or active in the call',
+  tabsComposableSource,
+  /showTabs[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
+  'Call left sidebar tabs must only show once Call Apps are available or active in the call',
 );
 
 assert.match(
-  shellSource,
-  /v-if="showCallAppsSidebarTabs"[\s\S]*Call Apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsSidebarPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="handleCallAppSessionCreated"/,
-  'WorkspaceShell must expose Call Apps as a conditional left-sidebar tab and hand active call context to the panel',
+  leftSidebarSource,
+  /v-if="showTabs"[\s\S]*Call Apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="\$emit\('call-app-session-created', \$event\)"/,
+  'CallWorkspaceLeftSidebar must expose Call Apps as a conditional left-sidebar tab and hand active call context to the panel',
 );
 
 assert.match(

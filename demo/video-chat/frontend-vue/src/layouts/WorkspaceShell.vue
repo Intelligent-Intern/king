@@ -2,258 +2,35 @@
   <main class="app">
     <div class="shell no-right-sidebar" :class="shellClasses">
       <aside class="sidebar sidebar-left" :class="leftSidebarClasses">
-        <div v-if="isCallWorkspace" class="sidebar-content left left-call-content">
-          <div class="brand-strip">
-            <img data-brand-logo :src="sidebarLogoSrc" alt="KingRT" />
-            <button
-              class="sidebar-toggle-btn"
-              type="button"
-              :title="leftSidebarToggleLabel"
-              :aria-label="leftSidebarToggleLabel"
-              @click="handleLeftSidebarToggle"
-            >
-              <span v-if="isMobileViewport" class="sidebar-close-mark" aria-hidden="true">x</span>
-              <img v-else class="arrow-icon-image" :src="leftSidebarToggleIcon" alt="" />
-            </button>
-          </div>
-
-          <div v-if="showCallAppsSidebarTabs" class="call-left-panel-switch" role="tablist" aria-label="Call sidebar">
-            <button
-              class="call-left-panel-tab"
-              :class="{ active: callLeftPanel === 'settings' }"
-              type="button"
-              role="tab"
-              :aria-selected="callLeftPanel === 'settings'"
-              @click="callLeftPanel = 'settings'"
-            >
-              Settings
-            </button>
-            <button
-              class="call-left-panel-tab"
-              :class="{ active: callLeftPanel === 'call_apps' }"
-              type="button"
-              role="tab"
-              :aria-selected="callLeftPanel === 'call_apps'"
-              @click="callLeftPanel = 'call_apps'"
-            >
-              Call Apps
-            </button>
-          </div>
-
-          <CallAppsSidebarPanel
-            v-if="showCallAppsSidebarPanel"
-            :call-id="activeSidebarCallId"
-            :can-manage="canManageSidebarCallApps"
-            :api-request="apiRequest"
-            @session-created="handleCallAppSessionCreated"
-          />
-
-          <div v-if="showCallSettingsPanel" class="call-left-settings">
-            <section class="call-left-settings-block" aria-label="Camera">
-              <div class="call-left-settings-title">Camera</div>
-              <div class="call-left-settings-field">
-                <AppSelect
-                  id="call-left-camera-select"
-                  aria-label="Camera"
-                  :model-value="callMediaPrefs.selectedCameraId"
-                  @update:model-value="setCallCameraDevice"
-                >
-                  <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
-                  <option
-                    v-for="camera in callMediaPrefs.cameras"
-                    :key="camera.id"
-                    :value="camera.id"
-                  >
-                    {{ camera.label }}
-                  </option>
-                </AppSelect>
-              </div>
-            </section>
-
-            <section class="call-left-settings-block" aria-label="Mic">
-              <div class="call-left-settings-title">Mic</div>
-              <div class="call-left-settings-field">
-                <AppSelect
-                  id="call-left-mic-select"
-                  aria-label="Mic"
-                  :model-value="callMediaPrefs.selectedMicrophoneId"
-                  @update:model-value="setCallMicrophoneDevice"
-                >
-                  <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
-                  <option
-                    v-for="microphone in callMediaPrefs.microphones"
-                    :key="microphone.id"
-                    :value="microphone.id"
-                  >
-                    {{ microphone.label }}
-                  </option>
-                </AppSelect>
-              </div>
-              <div class="call-left-settings-field">
-                <label for="call-left-mic-volume">Volume</label>
-                <div class="call-left-volume-row">
-                  <input
-                    id="call-left-mic-volume"
-                    class="call-left-range"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :value="callMediaPrefs.microphoneVolume"
-                    @input="setCallMicrophoneVolume($event.target.value)"
-                  />
-                  <span class="call-left-volume-value">{{ callMediaPrefs.microphoneVolume }}%</span>
-                </div>
-                <div
-                  class="call-left-meter"
-                  role="meter"
-                  aria-label="Microphone level"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  :aria-valuenow="micLevelPercent"
-                >
-                  <span class="call-left-meter-bar" :style="{ width: `${micLevelPercent}%` }"></span>
-                </div>
-              </div>
-            </section>
-
-            <section class="call-left-settings-block" aria-label="Speaker">
-              <div class="call-left-settings-title">Speaker</div>
-              <div class="call-left-settings-field">
-                <AppSelect
-                  id="call-left-speaker-select"
-                  aria-label="Speaker"
-                  :model-value="callMediaPrefs.selectedSpeakerId"
-                  @update:model-value="setCallSpeakerDevice"
-                >
-                  <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
-                  <option
-                    v-for="speaker in callMediaPrefs.speakers"
-                    :key="speaker.id"
-                    :value="speaker.id"
-                  >
-                    {{ speaker.label }}
-                  </option>
-                </AppSelect>
-              </div>
-              <div class="call-left-settings-field">
-                <label for="call-left-speaker-volume">Volume</label>
-                <div class="call-left-volume-row">
-                  <input
-                    id="call-left-speaker-volume"
-                    class="call-left-range"
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    :value="callMediaPrefs.speakerVolume"
-                    @input="setCallSpeakerVolume($event.target.value)"
-                  />
-                  <span class="call-left-volume-value">{{ callMediaPrefs.speakerVolume }}%</span>
-                </div>
-              </div>
-              <div class="call-left-settings-field">
-                <button class="btn full call-left-test-btn" type="button" @click="playSpeakerTestSound">
-                  Play test sound
-                </button>
-              </div>
-            </section>
-
-            <CallBackgroundControls />
-
-            <section
-              v-if="showCallOwnerInviteLink"
-              class="call-left-settings-block call-left-invite-link-block"
-              aria-label="Free-for-all invite link"
-            >
-              <div class="call-left-settings-title">Invite link</div>
-              <div class="call-left-invite-link-row">
-                <input
-                  class="input call-left-invite-link-input"
-                  type="text"
-                  readonly
-                  :value="callOwnerInviteLinkState.url"
-                  :placeholder="callOwnerInviteLinkState.loading ? 'Generating invite link...' : 'Invite link unavailable'"
-                  @focus="$event.target.select()"
-                />
-                <button
-                  class="icon-mini-btn call-left-invite-link-copy"
-                  type="button"
-                  title="Copy invite link"
-                  aria-label="Copy invite link"
-                  :disabled="callOwnerInviteLinkState.loading || callOwnerInviteLinkState.url === ''"
-                  @click="copyCallOwnerInviteLink"
-                >
-                  <span aria-hidden="true">⧉</span>
-                </button>
-              </div>
-              <p v-if="callOwnerInviteLinkState.copyNotice" class="call-left-settings-value">
-                {{ callOwnerInviteLinkState.copyNotice }}
-              </p>
-              <p v-if="callOwnerInviteLinkState.error" class="call-left-settings-error">
-                {{ callOwnerInviteLinkState.error }}
-              </p>
-            </section>
-
-            <section
-              v-if="showInCallOwnerEditCard"
-              class="call-left-settings-block call-left-owner-edit-block"
-              aria-label="Call settings"
-            >
-              <div class="call-left-settings-title">Call settings</div>
-              <button
-                class="btn btn-cyan full call-left-owner-edit-btn"
-                type="button"
-                :disabled="callOwnerEditState.loadingContext || callOwnerEditState.submitting"
-                @click="openInCallEditModal"
-              >
-                {{ callOwnerEditState.loadingContext ? 'Loading…' : 'Edit call' }}
-              </button>
-              <p v-if="callOwnerEditState.contextError" class="call-left-settings-error">
-                {{ callOwnerEditState.contextError }}
-              </p>
-
-              <template v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate">
-                <div class="call-left-settings-field">
-                  <label for="call-left-layout-mode">Video layout</label>
-                  <AppSelect
-                    id="call-left-layout-mode"
-                    aria-label="Video layout mode"
-                    :model-value="callLayoutSidebarState.currentMode"
-                    @update:model-value="applySidebarLayoutMode"
-                  >
-                    <option
-                      v-for="option in callLayoutSidebarState.modeOptions"
-                      :key="option.mode"
-                      :value="option.mode"
-                    >
-                      {{ option.label }}
-                    </option>
-                  </AppSelect>
-                </div>
-                <div class="call-left-settings-field">
-                  <label for="call-left-layout-strategy">Activity strategy</label>
-                  <AppSelect
-                    id="call-left-layout-strategy"
-                    aria-label="Activity strategy"
-                    :model-value="callLayoutSidebarState.currentStrategy"
-                    @update:model-value="applySidebarLayoutStrategy"
-                  >
-                    <option
-                      v-for="option in callLayoutSidebarState.strategyOptions"
-                      :key="option.strategy"
-                      :value="option.strategy"
-                    >
-                      {{ option.label }}
-                    </option>
-                  </AppSelect>
-                </div>
-              </template>
-            </section>
-
-            <div v-if="callMediaPrefs.error" class="call-left-settings-error">{{ callMediaPrefs.error }}</div>
-          </div>
-        </div>
+        <CallWorkspaceLeftSidebar
+          v-if="isCallWorkspace"
+          :sidebar-logo-src="sidebarLogoSrc"
+          :left-sidebar-toggle-label="leftSidebarToggleLabel"
+          :left-sidebar-toggle-icon="leftSidebarToggleIcon"
+          :is-mobile-viewport="isMobileViewport"
+          :call-media-prefs="callMediaPrefs"
+          :mic-level-percent="micLevelPercent"
+          :show-call-owner-invite-link="showCallOwnerInviteLink"
+          :call-owner-invite-link-state="callOwnerInviteLinkState"
+          :show-in-call-owner-edit-card="showInCallOwnerEditCard"
+          :call-owner-edit-state="callOwnerEditState"
+          :call-layout-sidebar-state="callLayoutSidebarState"
+          :active-sidebar-call-id="activeSidebarCallId"
+          :can-manage-sidebar-call-apps="canManageSidebarCallApps"
+          :api-request="apiRequest"
+          @toggle-sidebar="handleLeftSidebarToggle"
+          @set-camera-device="setCallCameraDevice"
+          @set-microphone-device="setCallMicrophoneDevice"
+          @set-microphone-volume="setCallMicrophoneVolume"
+          @set-speaker-device="setCallSpeakerDevice"
+          @set-speaker-volume="setCallSpeakerVolume"
+          @play-speaker-test="playSpeakerTestSound"
+          @copy-invite-link="copyCallOwnerInviteLink"
+          @open-edit-modal="openInCallEditModal"
+          @apply-layout-mode="applySidebarLayoutMode"
+          @apply-layout-strategy="applySidebarLayoutStrategy"
+          @call-app-session-created="handleCallAppSessionCreated"
+        />
 
         <div v-else class="sidebar-content left">
           <div class="brand-strip">
@@ -653,10 +430,8 @@ import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
 import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
-import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
-import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
+import CallWorkspaceLeftSidebar from './CallWorkspaceLeftSidebar.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
-import { useCallAppsCatalogStore } from '../stores/callAppsCatalogStore.js';
 import {
   logoutSession,
   postLogoutRedirectTarget,
@@ -695,7 +470,6 @@ import { useWorkspaceMicLevelMonitor } from './useWorkspaceMicLevelMonitor';
 const router = useRouter();
 const route = useRoute();
 const moduleStore = useWorkspaceModuleStore();
-const callAppsCatalogStore = useCallAppsCatalogStore();
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);
@@ -961,8 +735,6 @@ const callLayoutSidebarState = reactive({
   setMode: null,
   setStrategy: null,
 });
-const callLeftPanel = ref('settings');
-let callAppsSidebarProbeSeq = 0;
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
 const showCallOwnerInviteLink = computed(() => (
@@ -973,16 +745,6 @@ const showCallOwnerInviteLink = computed(() => (
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
 const activeSidebarCallId = computed(() => String(callOwnerEditState.callId || callOwnerEditState.resolvedCallId || '').trim());
 const canManageSidebarCallApps = computed(() => Boolean(callOwnerEditState.visible || callLayoutSidebarState.canModerate));
-const showCallAppsSidebarTabs = computed(() => Boolean(
-  isCallWorkspace.value
-  && activeSidebarCallId.value !== ''
-  && (
-    callAppsCatalogStore.hasAvailableApps
-    || callLayoutSidebarState.currentMode === 'call_app_workspace'
-  ),
-));
-const showCallAppsSidebarPanel = computed(() => showCallAppsSidebarTabs.value && callLeftPanel.value === 'call_apps');
-const showCallSettingsPanel = computed(() => !showCallAppsSidebarTabs.value || callLeftPanel.value === 'settings');
 
 function applySidebarLayoutMode(mode) {
   if (typeof callLayoutSidebarState.setMode !== 'function') return;
@@ -1302,7 +1064,6 @@ async function refreshCallOwnerContext() {
     callOwnerEditState.contextError = '';
     callOwnerEditState.callId = '';
     callOwnerEditState.resolvedCallId = '';
-    callLeftPanel.value = 'settings';
     closeInCallEditModal();
     resetCallOwnerParticipantsState();
     resetCallOwnerInviteLinkState();
@@ -1629,34 +1390,6 @@ watch(isCallWorkspace, (nextValue) => {
     detachCallMediaWatcher = null;
   }
 }, { immediate: true });
-
-watch([isCallWorkspace, activeSidebarCallId], ([inCallWorkspace, callId]) => {
-  callAppsSidebarProbeSeq += 1;
-  const sequence = callAppsSidebarProbeSeq;
-  const normalizedCallId = String(callId || '').trim();
-  if (!inCallWorkspace || normalizedCallId === '') {
-    callAppsCatalogStore.resetCallAppsCatalog();
-    callLeftPanel.value = 'settings';
-    return;
-  }
-
-  void callAppsCatalogStore.loadAvailableApps({
-    callId: normalizedCallId,
-    page: 1,
-    pageSize: 1,
-  }).then(() => {
-    if (sequence !== callAppsSidebarProbeSeq) return;
-    if (!showCallAppsSidebarTabs.value && callLeftPanel.value === 'call_apps') {
-      callLeftPanel.value = 'settings';
-    }
-  });
-}, { immediate: true });
-
-watch(showCallAppsSidebarTabs, (visible) => {
-  if (!visible && callLeftPanel.value === 'call_apps') {
-    callLeftPanel.value = 'settings';
-  }
-});
 
 watch(
   () => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId, isMobileViewport.value],
