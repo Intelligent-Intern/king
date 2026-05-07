@@ -59,7 +59,7 @@ Rules:
 2. [ ] Right-sidebar/forms: roll the shared side-panel form state/submit footer beyond the Governance, Marketplace, and User editor proof surfaces, then close any remaining route-specific close/cancel variants after contract review.
 3. [ ] Governance/User Management: finish breadcrumb/draft-create extraction and broader recursive-flow browser proof; relation navigator, picker table, row sectioning, shared Governance relationship payload normalizer, and User -> Group -> Module -> Permission contracts are now pinned.
 4. [ ] Settings/Profile: extract settings registry, shared section frame, and merged localization/date-format form; credentials now have extracted email/password components plus a shared credentials composable.
-5. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
+5. [ ] Administration/App Configuration: extract email texts CRUD controller/table/editor and background image dropzone/crop queue; email server settings now have extracted form/state components and object-store upload diagnostics remain contract-pinned.
 6. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
 7. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
 8. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
