@@ -17,6 +17,18 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Governance relation picker extraction: moved the recursive
+  relation table into `CrudRelationPickerTable.vue`, moved permission/module
+  grouping into `relationPickerRows.js`, and extracted shared Governance
+  relationship payload normalization into `governanceRelationshipPayload.js`.
+  `CrudRelationStack.vue` dropped from 634 to 522 lines while keeping the
+  single side-panel recursive relation flow, nested User -> Group -> Module ->
+  Permission payload preservation, module-filtered permission grouping, and
+  row-toggle ownership pinned by contracts. Proof:
+  `node tests/contract/governance-relation-stack-contract.mjs`,
+  `node tests/contract/user-editor-relation-controls-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Right-sidebar form footer extraction: added
   `AdminSidePanelSubmitFooter.vue` and `useAdminSidePanelForm.js` so admin
   side panels share a bottom-right submit action, save-state handling, and

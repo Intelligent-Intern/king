@@ -51,10 +51,13 @@ assert.match(viewSource, /relationships:\s*\{[\s\S]*roles: governanceRoleRelatio
 assert.match(viewSource, /groups: governanceGroupRelationshipPayload\(form\.governance_groups\)/, 'user save payload must submit governance group relationships');
 
 const governanceRolesSource = await source('src/modules/users/pages/admin/governanceRoles.js');
+const governanceRelationshipPayloadSource = await source('src/modules/governance/governanceRelationshipPayload.js');
 assert.match(governanceRolesSource, /\/api\/governance\/roles/, 'user management must load governance role options from the backend');
 assert.match(governanceRolesSource, /\/api\/governance\/groups/, 'user management must load governance group options from the backend');
-assert.match(governanceRolesSource, /payload\.relationships = relationships/, 'governance group payloads must preserve nested relation selections');
-assert.match(governanceRolesSource, /entity_key: String\(row\?\.entity_key/, 'governance relation payloads must preserve nested entity keys');
+assert.match(governanceRolesSource, /governanceRelationshipPayload/, 'user management must delegate relationship payload shaping to the shared Governance normalizer');
+assert.match(governanceRelationshipPayloadSource, /export function governanceRelationshipPayload\(rows, entityKey\)/, 'shared Governance normalizer must expose relationship payload shaping');
+assert.match(governanceRelationshipPayloadSource, /payload\.relationships = relationships/, 'governance group payloads must preserve nested relation selections');
+assert.match(governanceRelationshipPayloadSource, /entity_key: String\(row\?\.entity_key/, 'governance relation payloads must preserve nested entity keys');
 
 const backendAdminUsersSource = await source('../backend-king-php/http/module_users_admin_accounts.php');
 assert.match(

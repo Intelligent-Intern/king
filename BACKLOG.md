@@ -57,7 +57,7 @@ Rules:
 
 1. [ ] CRUD scaffold: roll the shared list/search scaffold beyond Marketplace and extract remaining entity action-bar semantics; list controller, search toolbar, shared table frame, and one non-call CRUD migration are now contract-pinned.
 2. [ ] Right-sidebar/forms: roll the shared side-panel form state/submit footer beyond the Governance, Marketplace, and User editor proof surfaces, then close any remaining route-specific close/cancel variants after contract review.
-3. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
+3. [ ] Governance/User Management: finish breadcrumb/draft-create extraction and broader recursive-flow browser proof; relation navigator, picker table, row sectioning, shared Governance relationship payload normalizer, and User -> Group -> Module -> Permission contracts are now pinned.
 4. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
 5. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
 6. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.

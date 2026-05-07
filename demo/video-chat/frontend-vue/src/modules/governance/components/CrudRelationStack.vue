@@ -69,43 +69,16 @@
       </form>
 
       <section class="crud-relation-content">
-        <table class="crud-relation-table">
-          <thead>
-            <tr>
-              <th>{{ t('governance.relation_picker.select') }}</th>
-              <th>{{ t('governance.name') }}</th>
-              <th>{{ t('governance.key') }}</th>
-              <th>{{ t('governance.status') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <template v-for="section in relationSections" :key="section.key">
-              <tr v-if="section.label" class="crud-relation-group-row">
-                <td colspan="4">{{ section.label }}</td>
-              </tr>
-              <tr v-for="row in section.rows" :key="navigator.rowId(row)">
-                <td :data-label="t('governance.relation_picker.select')">
-                  <input
-                    class="crud-relation-check"
-                    :type="isMultiple ? 'checkbox' : 'radio'"
-                    :checked="navigator.rowSelected(row)"
-                    :name="`relation-${navigator.currentFrame.value?.key || 'root'}`"
-                    @change="navigator.toggleRow(row)"
-                  />
-                </td>
-                <td :data-label="t('governance.name')">
-                  <div class="crud-relation-name">{{ rowLabel(row) }}</div>
-                  <div class="crud-relation-subline">{{ rowSubline(row) }}</div>
-                </td>
-                <td :data-label="t('governance.key')">{{ row.key || t('common.not_available') }}</td>
-                <td :data-label="t('governance.status')">{{ row.status || t('common.not_available') }}</td>
-              </tr>
-            </template>
-            <tr v-if="navigator.filteredRows.value.length === 0">
-              <td colspan="4" class="crud-relation-empty">{{ t('governance.relation_picker.empty') }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <CrudRelationPickerTable
+          :sections="relationSections"
+          :selected-ids="navigator.currentSelectionIds.value"
+          :multiple="isMultiple"
+          :frame-key="navigator.currentFrame.value?.key || 'root'"
+          :row-id="navigator.rowId"
+          :row-label="rowLabel"
+          :row-subline="rowSubline"
+          @toggle-row="navigator.toggleRow"
+        />
 
         <section v-if="nestedRelations.length > 0" class="crud-relation-nested">
           <button
@@ -150,7 +123,9 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import { t } from '../../localization/i18nRuntime.js';
 import { descriptorAllowsAction } from '../crudDescriptors.js';
+import { isPermissionRow, moduleKeyFromRelationRow, permissionModuleKey, permissionModuleLabel, relationRowSections as buildRelationRowSections } from '../relationPickerRows.js';
 import { useCrudRelationNavigator } from '../useCrudRelationNavigator.js';
+import CrudRelationPickerTable from './CrudRelationPickerTable.vue';
 
 const props = defineProps({
   open: {
@@ -225,7 +200,10 @@ const targetEntityLabel = computed(() => {
   if (!descriptor) return frameLabel(navigator.currentFrame.value);
   return t(`navigation.governance.${descriptor.entity_key.replace('-', '_')}`);
 });
-const relationSections = computed(() => relationRowSections(navigator.pagedRows.value));
+const relationSections = computed(() => buildRelationRowSections(
+  navigator.pagedRows.value,
+  navigator.currentFrame.value?.target_entity || '',
+));
 
 watch(
   () => [props.open, props.relation],
@@ -332,13 +310,6 @@ function normalizeString(value) {
   return String(value || '').trim();
 }
 
-function titleFromKey(value) {
-  return normalizeString(value)
-    .replace(/[._-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function relationRowsForEntity(entityKey) {
   const key = normalizeString(entityKey);
   const rows = props.rowProvider(key);
@@ -362,46 +333,8 @@ function selectedModuleKeysForPermissionRows() {
 }
 
 function addModuleKey(keys, row) {
-  const key = moduleKeyFromRow(row);
+  const key = moduleKeyFromRelationRow(row);
   if (key !== '') keys.add(key);
-}
-
-function moduleKeyFromRow(row) {
-  const explicit = normalizeString(row?.module_key || row?.key);
-  if (explicit !== '') return explicit.replace(/^module:/, '');
-  return normalizeString(row?.id).replace(/^module:/, '');
-}
-
-function permissionModuleKey(row) {
-  return normalizeString(row?.module_key) || normalizeString(row?.key).split('.')[0];
-}
-
-function permissionModuleLabel(row) {
-  return normalizeString(row?.module_name) || titleFromKey(permissionModuleKey(row));
-}
-
-function isPermissionRow(row) {
-  return normalizeString(row?.entity_key) === 'permissions' || normalizeString(row?.id).startsWith('permission:');
-}
-
-function relationRowSections(rows) {
-  if (!Array.isArray(rows) || rows.length === 0) return [];
-  if (normalizeString(navigator.currentFrame.value?.target_entity) !== 'permissions') {
-    return [{ key: 'default', label: '', rows }];
-  }
-  const sections = new Map();
-  for (const row of rows) {
-    const moduleKey = permissionModuleKey(row) || 'unknown';
-    if (!sections.has(moduleKey)) {
-      sections.set(moduleKey, {
-        key: `permission-module:${moduleKey}`,
-        label: permissionModuleLabel(row),
-        rows: [],
-      });
-    }
-    sections.get(moduleKey).rows.push(row);
-  }
-  return [...sections.values()];
 }
 
 function goBackTo(index) {
@@ -571,51 +504,6 @@ function applySelection() {
 .crud-relation-content {
   min-height: 0;
   overflow: auto;
-}
-
-.crud-relation-table {
-  width: 100%;
-  table-layout: fixed;
-}
-
-.crud-relation-table th:first-child,
-.crud-relation-table td:first-child {
-  width: 82px;
-}
-
-.crud-relation-group-row td {
-  padding: 8px 12px;
-  background: var(--bg-soft);
-  color: var(--text-main);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.crud-relation-check {
-  width: 18px;
-  height: 18px;
-}
-
-.crud-relation-name {
-  overflow: hidden;
-  color: var(--text-main);
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.crud-relation-subline {
-  display: block;
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: 11px;
-}
-
-.crud-relation-empty {
-  padding: 18px 12px;
-  color: var(--text-muted);
-  text-align: center;
 }
 
 @media (max-width: 760px) {
