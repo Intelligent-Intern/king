@@ -48,5 +48,15 @@ SQL,
                 'ALTER TABLE users DROP COLUMN onboarding_progress_json',
             ],
         ],
+        53 => [
+            'name' => '0053_user_web_app_notification_settings',
+            'statements' => [
+                'ALTER TABLE users ADD COLUMN web_app_notifications_enabled INTEGER NOT NULL DEFAULT 0 CHECK (web_app_notifications_enabled IN (0, 1))',
+                'ALTER TABLE users ADD COLUMN web_app_notification_sound_enabled INTEGER NOT NULL DEFAULT 1 CHECK (web_app_notification_sound_enabled IN (0, 1))',
+                'ALTER TABLE users ADD COLUMN web_app_notification_call_invites_enabled INTEGER NOT NULL DEFAULT 1 CHECK (web_app_notification_call_invites_enabled IN (0, 1))',
+                'ALTER TABLE users ADD COLUMN web_app_notification_call_reminders_enabled INTEGER NOT NULL DEFAULT 1 CHECK (web_app_notification_call_reminders_enabled IN (0, 1))',
+                'ALTER TABLE users ADD COLUMN web_app_notification_chat_mentions_enabled INTEGER NOT NULL DEFAULT 1 CHECK (web_app_notification_chat_mentions_enabled IN (0, 1))',
+            ],
+        ],
     ];
 }

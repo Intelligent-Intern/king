@@ -3,6 +3,7 @@ import { fetchBackend } from '../../support/backendFetch';
 import {
   inferAccountType,
   localizationLanguageDirection,
+  normalizeBooleanPreference,
   normalizeDateFormat,
   normalizeOnboardingCompletedTours,
   normalizePostLogoutLandingUrl,
@@ -63,6 +64,11 @@ export const sessionState = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
+  webAppNotificationsEnabled: false,
+  webAppNotificationSoundEnabled: true,
+  webAppNotificationCallInvitesEnabled: true,
+  webAppNotificationCallRemindersEnabled: true,
+  webAppNotificationChatMentionsEnabled: true,
   onboardingCompletedTours: [],
   status: '',
   sessionId: loaded?.sessionId || '',
@@ -113,6 +119,11 @@ function resetUserFields() {
   sessionState.linkedinUrl = '';
   sessionState.xUrl = '';
   sessionState.youtubeUrl = '';
+  sessionState.webAppNotificationsEnabled = false;
+  sessionState.webAppNotificationSoundEnabled = true;
+  sessionState.webAppNotificationCallInvitesEnabled = true;
+  sessionState.webAppNotificationCallRemindersEnabled = true;
+  sessionState.webAppNotificationChatMentionsEnabled = true;
   sessionState.onboardingCompletedTours = [];
   sessionState.status = '';
 }
@@ -158,6 +169,11 @@ function applyUserSnapshot(user, tenant = null) {
   sessionState.linkedinUrl = normalizeString(user.linkedin_url);
   sessionState.xUrl = normalizeString(user.x_url);
   sessionState.youtubeUrl = normalizeString(user.youtube_url);
+  sessionState.webAppNotificationsEnabled = normalizeBooleanPreference(user.web_app_notifications_enabled, false);
+  sessionState.webAppNotificationSoundEnabled = normalizeBooleanPreference(user.web_app_notification_sound_enabled, true);
+  sessionState.webAppNotificationCallInvitesEnabled = normalizeBooleanPreference(user.web_app_notification_call_invites_enabled, true);
+  sessionState.webAppNotificationCallRemindersEnabled = normalizeBooleanPreference(user.web_app_notification_call_reminders_enabled, true);
+  sessionState.webAppNotificationChatMentionsEnabled = normalizeBooleanPreference(user.web_app_notification_chat_mentions_enabled, true);
   if (Object.prototype.hasOwnProperty.call(user, 'onboarding_completed_tours')) {
     sessionState.onboardingCompletedTours = normalizeOnboardingCompletedTours(user.onboarding_completed_tours);
   }

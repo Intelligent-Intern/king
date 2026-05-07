@@ -56,6 +56,11 @@ SELECT
     users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url AS user_post_logout_landing_url,
+    users.web_app_notifications_enabled,
+    users.web_app_notification_sound_enabled,
+    users.web_app_notification_call_invites_enabled,
+    users.web_app_notification_call_reminders_enabled,
+    users.web_app_notification_chat_mentions_enabled,
     roles.slug AS role_slug
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
@@ -173,6 +178,11 @@ SQL
                     ? trim((string) $source['user_post_logout_landing_url'])
                     : '';
             })($row),
+            'web_app_notifications_enabled' => ((int) ($row['web_app_notifications_enabled'] ?? 0)) === 1,
+            'web_app_notification_sound_enabled' => ((int) ($row['web_app_notification_sound_enabled'] ?? 1)) === 1,
+            'web_app_notification_call_invites_enabled' => ((int) ($row['web_app_notification_call_invites_enabled'] ?? 1)) === 1,
+            'web_app_notification_call_reminders_enabled' => ((int) ($row['web_app_notification_call_reminders_enabled'] ?? 1)) === 1,
+            'web_app_notification_chat_mentions_enabled' => ((int) ($row['web_app_notification_chat_mentions_enabled'] ?? 1)) === 1,
             'onboarding_completed_tours' => $onboarding['completed_tours'],
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',

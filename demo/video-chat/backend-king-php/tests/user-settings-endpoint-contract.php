@@ -146,6 +146,8 @@ SQL
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['locale'] ?? '') === 'en', 'GET settings locale default mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['direction'] ?? '') === 'ltr', 'GET settings direction mismatch');
     videochat_user_settings_endpoint_assert((string) (($getPayload['settings'] ?? [])['about_me'] ?? 'missing') === '', 'GET settings about_me default mismatch');
+    videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notifications_enabled'] ?? null) === false, 'GET settings web app notifications default mismatch');
+    videochat_user_settings_endpoint_assert((($getPayload['settings'] ?? [])['web_app_notification_sound_enabled'] ?? null) === true, 'GET settings web app notification sound default mismatch');
     videochat_user_settings_endpoint_assert(!array_key_exists('messenger_contacts', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose removed messenger contacts');
     videochat_user_settings_endpoint_assert(!array_key_exists('onboarding_badges', (array) ($getPayload['settings'] ?? [])), 'GET settings must not expose onboarding badges');
     videochat_user_settings_endpoint_assert(
@@ -186,6 +188,7 @@ SQL
                 'locale' => 'unknown',
                 'post_logout_landing_url' => 'https://evil.example/logout',
                 'linkedin_url' => 'https://example.com/in/user',
+                'web_app_notification_sound_enabled' => 'loud',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -223,6 +226,10 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['linkedin_url'] ?? '') === 'host_not_allowed',
         'PATCH invalid-value linkedin_url field mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (string) (((($patchInvalidValuePayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['web_app_notification_sound_enabled'] ?? '') === 'must_be_boolean',
+        'PATCH invalid-value web app notification boolean field mismatch'
     );
     $patchUnknownField = videochat_handle_user_routes(
         '/api/user/settings',
@@ -269,6 +276,11 @@ SQL
                 'linkedin_url' => ' https://linkedin.com/in/endpoint-user ',
                 'x_url' => 'https://x.com/endpointuser',
                 'youtube_url' => 'https://youtu.be/abcdefghijk',
+                'web_app_notifications_enabled' => true,
+                'web_app_notification_sound_enabled' => false,
+                'web_app_notification_call_invites_enabled' => true,
+                'web_app_notification_call_reminders_enabled' => false,
+                'web_app_notification_chat_mentions_enabled' => true,
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
         $apiAuthContext,
@@ -331,6 +343,18 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['youtube_url'] ?? '')) === 'https://youtu.be/abcdefghijk',
         'PATCH valid youtube_url should be normalized'
+    );
+    videochat_user_settings_endpoint_assert(
+        (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['web_app_notifications_enabled'] ?? null)) === true,
+        'PATCH valid web app notifications mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['web_app_notification_sound_enabled'] ?? null)) === false,
+        'PATCH valid web app notification sound mismatch'
+    );
+    videochat_user_settings_endpoint_assert(
+        (((($patchValidPayload['result'] ?? [])['settings'] ?? [])['web_app_notification_call_reminders_enabled'] ?? null)) === false,
+        'PATCH valid web app call reminder notifications mismatch'
     );
     videochat_user_settings_endpoint_assert(
         !array_key_exists('messenger_contacts', (array) ((($patchValidPayload['result'] ?? [])['settings'] ?? []))),
@@ -402,6 +426,14 @@ SQL
     videochat_user_settings_endpoint_assert(
         (string) ((($sessionPayload['user'] ?? [])['post_logout_landing_url'] ?? '')) === '/call-goodbye?from=settings',
         'session-check should reflect updated post_logout_landing_url'
+    );
+    videochat_user_settings_endpoint_assert(
+        (($sessionPayload['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true,
+        'session-check should reflect updated web app notifications'
+    );
+    videochat_user_settings_endpoint_assert(
+        (($sessionPayload['user'] ?? [])['web_app_notification_sound_enabled'] ?? null) === false,
+        'session-check should reflect updated web app notification sound'
     );
 
     $emailsResponse = videochat_handle_user_routes(
