@@ -3,14 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  ACTIVE_SPEAKER_MIN_SPEAKING_MS,
-  ACTIVITY_TOP_POOL_MIN_TENURE_MS,
-  ROUND_ROBIN_REFRESH_MS,
-  selectCallLayoutParticipants,
-} from '../../src/domain/realtime/layout/strategies.js';
-import { createParticipantActivityState } from '../../src/domain/realtime/workspace/callWorkspace/participantActivityState.js';
-
 function fail(message) {
   throw new Error(`[call-layout-active-strategy-contract] FAIL: ${message}`);
 }
@@ -24,8 +16,18 @@ function participants(count) {
   }));
 }
 
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+
 try {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const {
+    ACTIVE_SPEAKER_MIN_SPEAKING_MS,
+    ACTIVITY_TOP_POOL_MIN_TENURE_MS,
+    ROUND_ROBIN_REFRESH_MS,
+    selectCallLayoutParticipants,
+  } = await import('../../src/domain/realtime/layout/strategies.ts');
+  const {
+    createParticipantActivityState,
+  } = await import('../../src/domain/realtime/workspace/callWorkspace/participantActivityState.js');
   const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
   const nowMs = 1_777_000_000_000;
 
@@ -41,6 +43,43 @@ try {
 
     assert.equal(activityByUserId[2].isSpeaking, false, 'remote media-frame deltas must not extend stale speech ownership');
     assert.equal(activityByUserId[2].activityDeltaCount, 2, 'activity deltas still count for main activity ranking');
+  }
+
+  {
+    const activityByUserId = {};
+    const activityState = createParticipantActivityState({
+      participantActivityByUserId: activityByUserId,
+      participantActivityWeight: (source) => (source === 'speaking' ? 1 : 0.5),
+      participantActivityWindowMs: 15_000,
+    });
+    activityState.applyParticipantActivityPayload({
+      user_id: 2,
+      score: 95,
+      score_2s: 95,
+      score_5s: 90,
+      score_15s: 85,
+      is_speaking: true,
+      speaking_since_ms: nowMs - 3000,
+      speaking_last_at_ms: nowMs,
+      updated_at_ms: nowMs,
+    });
+
+    const result = selectCallLayoutParticipants({
+      participants: participants(2),
+      currentUserId: 1,
+      activityByUserId,
+      layoutState: {
+        mode: 'main_mini',
+        strategy: 'active_speaker_main',
+        main_user_id: 1,
+      },
+      selectionState: { activeSpeakerUserId: 1, topActivityEnteredAtMsByUserId: {} },
+      nowMs,
+    });
+
+    assert.equal(activityByUserId[2].speakingStartedAtMs, nowMs - 3000, 'server activity may carry explicit stable speech tenure');
+    assert.equal(result.mainUserId, 2, 'stable server activity should move the active speaker into main video');
+    assert.deepEqual(result.miniParticipants.map((row) => row.userId), [1], 'previous main should remain visible as the mini tile');
   }
 
   {
@@ -187,12 +226,13 @@ try {
   }
 
   {
-    const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.js');
-    const moderationSync = read('src/domain/realtime/workspace/callWorkspace/moderationSync.js');
+    const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
+    const moderationSync = read('src/domain/realtime/workspace/callWorkspace/moderationSync.ts');
     const template = read('src/domain/realtime/CallWorkspaceView.template.html');
-    const togglePinnedMatch = /function togglePinned\(userId\) \{[\s\S]*?\n\}\n\nfunction currentPinnedUserIds/.exec(participantUi);
-    assert.ok(togglePinnedMatch, 'togglePinned function must exist');
-    const togglePinnedBody = togglePinnedMatch[0];
+    const togglePinnedStart = participantUi.indexOf('function togglePinned(userId)');
+    const togglePinnedEnd = participantUi.indexOf('\n\nfunction callRoleUpdateEndpoint', togglePinnedStart);
+    assert.ok(togglePinnedStart >= 0 && togglePinnedEnd > togglePinnedStart, 'togglePinned function must exist');
+    const togglePinnedBody = participantUi.slice(togglePinnedStart, togglePinnedEnd);
     assert.match(togglePinnedBody, /for \(const key of Object\.keys\(pinnedUsers\)\)/, 'local pin selection must be single-owner for the viewer');
     assert.equal(togglePinnedBody.includes('normalizedUserId === currentUserId.value'), false, 'self pin must not be blocked in local pin handler');
     assert.equal(togglePinnedBody.includes('queueModerationSync'), false, 'local pin must not broadcast moderation state');

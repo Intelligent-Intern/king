@@ -652,13 +652,27 @@ export async function installFakeMediaAndRealtime(context, user) {
       socket.readyState = FakeWebSocket.OPEN;
       return socket;
     };
-    window.__matrixEmitActivity = (userId, score) => dispatchToOpenSockets({
-      type: 'participant/activity',
-      room_id: roomId,
-      call_id: callId,
-      activity: { user_id: userId, score, score_2s: score, score_5s: Math.max(0, score - 5), score_15s: Math.max(0, score - 10), is_speaking: score >= 50, updated_at_ms: Date.now() },
-      participant: { user_id: userId, display_name: userId === 1 ? 'Layout Admin' : 'Active User' },
-    });
+    window.__matrixEmitActivity = (userId, score) => {
+      const nowMs = Date.now();
+      const speaking = score >= 50;
+      return dispatchToOpenSockets({
+        type: 'participant/activity',
+        room_id: roomId,
+        call_id: callId,
+        activity: {
+          user_id: userId,
+          score,
+          score_2s: score,
+          score_5s: Math.max(0, score - 5),
+          score_15s: Math.max(0, score - 10),
+          is_speaking: speaking,
+          speaking_since_ms: speaking ? nowMs - 3000 : 0,
+          speaking_last_at_ms: speaking ? nowMs : 0,
+          updated_at_ms: nowMs,
+        },
+        participant: { user_id: userId, display_name: userId === 1 ? 'Layout Admin' : 'Active User' },
+      });
+    };
     window.__matrixSetFakeMedia = (audioLevel, motionScore) => {
       window.__matrixFakeMedia = { audioLevel: Number(audioLevel) || 0, motionScore: Number(motionScore) || 0 };
     };
