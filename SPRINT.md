@@ -129,9 +129,23 @@ Tickets:
       no media-frame fanout.
     - Validation: `npm run test:contract:gossip`, `npm run build`,
       `git diff --check`.
-- [ ] GSP-06 Gossip health rollout gates
+- [x] GSP-06 Gossip health rollout gates
   - In `gossip_primary`, gate media Gossip on Gossip topology health.
   - SFU health may influence fallback/relay usage, not whether Gossip is active.
+  - Proof:
+    - `deriveGossipRolloutGateState()` now evaluates the media-carrier mode and
+      separates Gossip topology health, media-security recovery health, and SFU
+      fallback health.
+    - In `gossip_primary`, active Gossip media requires healthy bounded
+      topology and clean Gossip telemetry, but no longer requires
+      `sfu_baseline_healthy`; SFU fallback buckets remain reported separately.
+    - `sfu_first` keeps the conservative SFU-baseline requirement.
+    - The workspace data lane passes `VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode` into
+      the gate and only applies the SFU baseline requirement for non
+      `gossip_primary` modes.
+    - Added `gossip-primary-health-gate-contract.mjs`.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
 - [ ] GSP-07 Gossip-native recovery
   - Add per-publisher keyframe requests, recent keyframe cache, missing-frame
     retransmit, duplicate suppression, TTL/fanout limits, and recovery messages

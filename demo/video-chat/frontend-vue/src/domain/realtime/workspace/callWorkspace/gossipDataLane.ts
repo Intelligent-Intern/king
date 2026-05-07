@@ -477,9 +477,12 @@ export function createCallWorkspaceGossipDataLane({
   }
 
   function gossipActiveDataLaneAllowed() {
-    return GOSSIP_DATA_LANE_CONFIG.mode === 'active'
-      && Boolean(lastGossipRolloutGateState?.active_allowed)
-      && Boolean(lastGossipRolloutGateState?.sfu_baseline_healthy)
+    if (GOSSIP_DATA_LANE_CONFIG.mode !== 'active' || !lastGossipRolloutGateState?.active_allowed) return false;
+    if (VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary) {
+      return Boolean(lastGossipRolloutGateState?.gossip_topology_healthy)
+        && Boolean(lastGossipRolloutGateState?.media_security_recovery_ready);
+    }
+    return Boolean(lastGossipRolloutGateState?.sfu_baseline_healthy)
       && Boolean(lastGossipRolloutGateState?.media_security_recovery_ready);
   }
 
@@ -502,7 +505,10 @@ export function createCallWorkspaceGossipDataLane({
         reason: String(reason || 'shadow_observe'),
         gate_decision: String(lastGossipRolloutGateState?.decision || 'no_rollout_gate_ack'),
         active_allowed: Boolean(lastGossipRolloutGateState?.active_allowed),
+        gossip_topology_healthy: Boolean(lastGossipRolloutGateState?.gossip_topology_healthy),
+        sfu_baseline_required_for_active: Boolean(lastGossipRolloutGateState?.sfu_baseline_required_for_active),
         sfu_baseline_healthy: Boolean(lastGossipRolloutGateState?.sfu_baseline_healthy),
+        sfu_fallback_healthy: Boolean(lastGossipRolloutGateState?.sfu_fallback_healthy),
         media_security_recovery_ready: Boolean(lastGossipRolloutGateState?.media_security_recovery_ready),
         blocking_buckets: Array.isArray(lastGossipRolloutGateState?.blocking_buckets)
           ? lastGossipRolloutGateState.blocking_buckets.slice(0, 8).map((bucket) => String(bucket || ''))
@@ -609,6 +615,7 @@ export function createCallWorkspaceGossipDataLane({
     if (type !== 'gossip/telemetry/ack') return false;
     const gateState = deriveGossipRolloutGateState(payload, {
       mode: GOSSIP_DATA_LANE_CONFIG.mode,
+      mediaCarrierMode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode,
     });
     lastGossipRolloutGateState = gateState;
     captureClientDiagnostic({
