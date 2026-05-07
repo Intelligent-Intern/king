@@ -4,6 +4,11 @@ import {
   normalizeSfuVideoQualityProfile,
 } from '../workspace/config';
 import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstraints';
+import {
+  CALL_PHONE_SPEAKER_DEVICE_ID,
+  isLikelyMobileAudioDevice,
+  shouldOfferPhoneSpeakerRoute,
+} from './speakerOutputRouting';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
@@ -165,6 +170,12 @@ function mapMediaDevices(devices, kind, fallbackLabel) {
     .filter((device) => device.id !== '');
 }
 
+function phoneSpeakerFallbackRows(enumeratedSpeakers = []) {
+  return (shouldOfferPhoneSpeakerRoute() || (isLikelyMobileAudioDevice() && enumeratedSpeakers.length === 0))
+    ? [{ id: CALL_PHONE_SPEAKER_DEVICE_ID, label: 'Phone speaker' }]
+    : [];
+}
+
 function resolveSelectedDevice(previousId, rows) {
   const normalizedPreviousId = String(previousId || '').trim();
   if (normalizedPreviousId !== '' && rows.some((row) => row.id === normalizedPreviousId)) {
@@ -258,7 +269,8 @@ function applyEnumeratedDevices(devices) {
   const rows = Array.isArray(devices) ? devices : [];
   const nextCameras = mapMediaDevices(rows, 'videoinput', 'Camera');
   const nextMicrophones = mapMediaDevices(rows, 'audioinput', 'Microphone');
-  const nextSpeakers = mapMediaDevices(rows, 'audiooutput', 'Speaker');
+  const enumeratedSpeakers = mapMediaDevices(rows, 'audiooutput', 'Speaker');
+  const nextSpeakers = phoneSpeakerFallbackRows(enumeratedSpeakers).concat(enumeratedSpeakers);
 
   callMediaPrefs.cameras = nextCameras;
   callMediaPrefs.microphones = nextMicrophones;

@@ -5,6 +5,8 @@ import {
   refreshCallMediaDevices,
 } from '../../realtime/media/preferences';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
+import { capturePreviewMediaWithCameraFallback } from '../../realtime/media/cameraCaptureConstraints';
+import { playCallSpeakerTestSound } from '../../realtime/media/speakerOutputRouting';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 
@@ -210,12 +212,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     enterCallState.previewReady = false;
   }
 
-  function buildPreviewConstraints() {
-    const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
+  function buildPreviewAudioConstraints() {
     const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-    const video = cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } };
-    const audio = buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
-    return { video, audio };
+    return buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
   }
 
   async function startEnterCallPreview() {
@@ -229,7 +228,10 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
 
     try {
-      const rawStream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints());
+      const rawStream = await capturePreviewMediaWithCameraFallback({
+        audio: buildPreviewAudioConstraints(),
+        cameraDeviceId: callMediaPrefs.selectedCameraId,
+      });
       enterCallPreviewRawStreamRef.value = rawStream;
       const volume = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
       for (const track of rawStream.getAudioTracks()) {
@@ -267,52 +269,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   }
 
   async function playSpeakerTestSound() {
-    if (typeof window === 'undefined') return;
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-
-    let context = null;
-    const audio = new Audio();
-    try {
-      context = new AudioContextCtor();
-      const destination = context.createMediaStreamDestination();
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-      const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
-
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 880;
-      gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
-      oscillator.connect(gainNode);
-      gainNode.connect(destination);
-
-      audio.srcObject = destination.stream;
-      audio.playsInline = true;
-      audio.muted = false;
-      audio.volume = 1;
-
-      const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
-      if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
-        await audio.setSinkId(speakerDeviceId).catch(() => {});
-      }
-
-      await audio.play();
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.22);
-      await new Promise((resolve) => setTimeout(resolve, 260));
-    } catch {
-      // ignore
-    } finally {
-      try {
-        audio.pause();
-      } catch {
-        // ignore
-      }
-      audio.srcObject = null;
-      if (context && typeof context.close === 'function') {
-        await context.close().catch(() => {});
-      }
-    }
+    await playCallSpeakerTestSound(callMediaPrefs);
   }
 
   function closeEnterCallModal() {

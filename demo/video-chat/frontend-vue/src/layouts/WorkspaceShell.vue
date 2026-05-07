@@ -679,6 +679,7 @@ import {
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
 import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/media/audioCaptureConstraints';
+import { playCallSpeakerTestSound } from '../domain/realtime/media/speakerOutputRouting';
 
 const router = useRouter();
 const route = useRoute();
@@ -1663,52 +1664,7 @@ async function startMicLevelMonitor() {
 }
 
 async function playSpeakerTestSound() {
-  if (typeof window === 'undefined') return;
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextCtor) return;
-
-  let context = null;
-  const audio = new Audio();
-  try {
-    context = new AudioContextCtor();
-    const destination = context.createMediaStreamDestination();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
-
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
-    oscillator.connect(gainNode);
-    gainNode.connect(destination);
-
-    audio.srcObject = destination.stream;
-    audio.playsInline = true;
-    audio.muted = false;
-    audio.volume = 1;
-
-    const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
-    if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
-      await audio.setSinkId(speakerDeviceId).catch(() => {});
-    }
-
-    await audio.play();
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.22);
-    await new Promise((resolve) => setTimeout(resolve, 260));
-  } catch {
-    // ignore
-  } finally {
-    try {
-      audio.pause();
-    } catch {
-      // ignore
-    }
-    audio.srcObject = null;
-    if (context && typeof context.close === 'function') {
-      await context.close().catch(() => {});
-    }
-  }
+  await playCallSpeakerTestSound(callMediaPrefs);
 }
 
 provide('workspaceSidebarState', {
