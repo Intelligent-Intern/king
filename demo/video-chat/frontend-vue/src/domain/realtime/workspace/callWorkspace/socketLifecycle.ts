@@ -43,6 +43,7 @@ export function createCallWorkspaceSocketHelpers({
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleGossipNeighborSignal = () => false,
     handleMediaSecuritySignal,
     handleNativeSignalingEvent,
     hideLobbyJoinToast,
@@ -275,6 +276,7 @@ export function createCallWorkspaceSocketHelpers({
       void handleMediaSecuritySignal(type, senderUserId, payloadBody || {});
       return;
     }
+    if (handleGossipNeighborSignal(type, senderUserId, payloadBody || {})) return;
 
     const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
     const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');

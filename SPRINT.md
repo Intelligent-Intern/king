@@ -93,11 +93,22 @@ Tickets:
       existing Gossip topology application path before snapshot backfill.
     - Added `gossip-room-state-topology-contract.mjs` and
       `realtime-gossipmesh-room-state-topology-contract.php`.
-- [ ] GSP-04 Dedicated bounded neighbor lifecycle
+- [x] GSP-04 Dedicated bounded neighbor lifecycle
   - Add client lifecycle for assigned neighbor links:
     `assigned -> create/renegotiate DataChannel -> media gossip -> retired`.
   - Do not attach Gossip media to arbitrary existing peer connections.
   - Enforce bounded active links from server assignment.
+  - Proof:
+    - Added `gossipNeighborLifecycle.ts` to own dedicated Gossip neighbor
+      `RTCPeerConnection` instances and `gossip_neighbor_*` offer/answer/ice
+      signaling.
+    - `gossipDataLane.ts` now syncs server-assigned `rtc_datachannel`
+      neighbors into that lifecycle and retires edges removed by topology.
+    - Socket handling consumes `gossip_neighbor_*` signaling before Native
+      WebRTC media signaling sees SDP/ICE payloads.
+    - Removed workspace wiring that bound Gossip media to arbitrary Native
+      media peer connections.
+    - Added `gossip-dedicated-neighbor-lifecycle-contract.mjs`.
 - [ ] GSP-05 Authoritative topology repair
   - Make `gossip/topology-repair/request` operational: client failure report,
     server replacement assignment, client edge setup, old edge retirement.

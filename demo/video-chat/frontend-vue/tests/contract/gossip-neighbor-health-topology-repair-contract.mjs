@@ -57,8 +57,8 @@ assert(
   'topology repair requests must be gated to the active gossip data lane, not off or shadow mode',
 )
 assert(
-  /function requestGossipTopologyRepair\(peerId,\s*reason[\s\S]*if \(!assignedGossipNativeNeighborIds\.has\(String\(peerId \|\| ''\)\)\) return false;/.test(workspaceGossipSurface),
-  'topology repair requests must only fire for currently assigned native gossip neighbors',
+  /function requestGossipTopologyRepair\(peerId,\s*reason[\s\S]*if \(!assignedGossipNeighborIds\.has\(String\(peerId \|\| ''\)\)\) return false;/.test(workspaceGossipSurface),
+  'topology repair requests must only fire for currently assigned dedicated gossip neighbors',
 )
 assert(
   /sendSocketFrame\(\{[\s\S]*type:\s*'gossip\/topology-repair\/request'[\s\S]*lane:\s*'ops'[\s\S]*lost_peer_id:\s*String\(peerId \|\| ''\)[\s\S]*reason:\s*String\(reason \|\| ''\)/.test(workspaceGossipSurface),

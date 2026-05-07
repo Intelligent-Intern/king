@@ -648,8 +648,7 @@ function sendSocketFrame(payload) {
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
-  bindGossipDataChannelForNativePeer,
-  closeGossipDataChannelForNativePeer,
+  handleGossipNeighborSignal,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -660,7 +659,6 @@ const {
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
     sendSocketFrame,
   },
-  refs: { nativePeerConnectionsRef },
 });
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
@@ -1346,9 +1344,7 @@ const nativeStack = createCallWorkspaceNativeStack({
       trackKind: String(track.kind || 'video'),
       trackId: String(track.id || ''),
     }),
-    bindGossipDataChannelForNativePeer,
     bumpMediaRenderVersion,
-    closeGossipDataChannelForNativePeer,
     clearRemoteVideoContainer,
     createNativePeerAudioElement,
     createNativePeerVideoElement,
@@ -1523,6 +1519,7 @@ const {
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleGossipNeighborSignal,
     handleMediaSecuritySignal: (...args) => handleMediaSecuritySignal(...args),
     handleNativeSignalingEvent,
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),

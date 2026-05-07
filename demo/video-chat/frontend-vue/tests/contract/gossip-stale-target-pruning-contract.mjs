@@ -21,8 +21,8 @@ const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socket
 const packageJson = read('package.json');
 
 assert(
-  /function pruneGossipNeighborForUserId\(userId,\s*reason = 'target_not_in_room'\)[\s\S]*assignedGossipNativeNeighborIds\.delete\(peerId\);[\s\S]*gossipTopologyRepairRequestedAtByPeerId\.delete\(peerId\);[\s\S]*closeGossipDataChannelForNativePeer\(peerId\);/m.test(gossipDataLane),
-  'gossip data lane must expose stale-neighbor pruning that removes assignment state and closes the native data channel',
+  /function pruneGossipNeighborForUserId\(userId,\s*reason = 'target_not_in_room'\)[\s\S]*assignedGossipNeighborIds\.delete\(peerId\);[\s\S]*gossipTopologyRepairRequestedAtByPeerId\.delete\(peerId\);[\s\S]*gossipNeighborLifecycle\?\.closePeer\?\.\(peerId,\s*String\(reason \|\| 'target_not_in_room'\)\);/m.test(gossipDataLane),
+  'gossip data lane must expose stale-neighbor pruning that removes assignment state and closes the dedicated data-channel edge',
 );
 assert(
   /eventType: 'gossip_assigned_neighbor_pruned'[\s\S]*code: 'gossip_assigned_neighbor_pruned'[\s\S]*reason: String\(reason \|\| 'target_not_in_room'\)/m.test(gossipDataLane),

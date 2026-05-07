@@ -3,10 +3,10 @@ import { GOSSIP_DATA_LANE_CONFIG, VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../.
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
+import { createGossipNeighborLifecycle } from './gossipNeighborLifecycle';
 
 export function createCallWorkspaceGossipDataLane({
   callbacks,
-  refs,
 }) {
   const {
     captureClientDiagnostic,
@@ -17,15 +17,12 @@ export function createCallWorkspaceGossipDataLane({
     handleSFUEncodedFrame,
     sendSocketFrame,
   } = callbacks;
-  const {
-    nativePeerConnectionsRef,
-  } = refs;
-
   let gossipDataChannelTransport = null;
+  let gossipNeighborLifecycle = null;
   let liveGossipController = null;
   let liveGossipControllerKey = '';
   let unsubscribeLiveGossipDelivery = null;
-  const assignedGossipNativeNeighborIds = new Set();
+  const assignedGossipNeighborIds = new Set();
   const liveGossipFrameSequenceByTrack = new Map();
   const gossipTopologyRepairRequestedAtByPeerId = new Map();
   let lastGossipTelemetrySnapshotSentAtMs = 0;
@@ -103,11 +100,11 @@ export function createCallWorkspaceGossipDataLane({
       onStateChange: (peerId, state, eventType) => {
         const normalizedPeerId = String(peerId || '');
         const controller = ensureLiveGossipController();
-        if (controller && assignedGossipNativeNeighborIds.has(normalizedPeerId)) {
+        if (controller && assignedGossipNeighborIds.has(normalizedPeerId)) {
           ensureLiveGossipPeer(normalizedPeerId);
           controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
         }
-        if ((state === 'closed' || eventType === 'error') && assignedGossipNativeNeighborIds.has(normalizedPeerId)) {
+        if ((state === 'closed' || eventType === 'error') && assignedGossipNeighborIds.has(normalizedPeerId)) {
           requestGossipTopologyRepair(peerId, eventType);
         }
         captureClientDiagnostic({
@@ -137,6 +134,22 @@ export function createCallWorkspaceGossipDataLane({
     return gossipDataChannelTransport;
   }
 
+  function ensureGossipNeighborLifecycle() {
+    if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
+    if (gossipNeighborLifecycle) return gossipNeighborLifecycle;
+    gossipNeighborLifecycle = createGossipNeighborLifecycle({
+      callbacks: {
+        activeCallId: callId,
+        activeRoomId: roomId,
+        captureClientDiagnostic,
+        currentUserId: localPeerId,
+        getDataTransport: ensureGossipDataChannelTransport,
+        sendSocketFrame,
+      },
+    });
+    return gossipNeighborLifecycle;
+  }
+
   function ensureLiveGossipController() {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return null;
     const peerId = localPeerId();
@@ -152,8 +165,10 @@ export function createCallWorkspaceGossipDataLane({
       liveGossipController.dispose?.();
       liveGossipController = null;
       liveGossipControllerKey = '';
-      assignedGossipNativeNeighborIds.clear();
+      assignedGossipNeighborIds.clear();
       gossipTopologyRepairRequestedAtByPeerId.clear();
+      gossipNeighborLifecycle?.teardown?.();
+      gossipNeighborLifecycle = null;
       lastGossipTelemetrySnapshotSentAtMs = 0;
       gossipDataChannelTransport?.close();
       gossipDataChannelTransport = null;
@@ -211,21 +226,17 @@ export function createCallWorkspaceGossipDataLane({
     };
   }
 
-  function bindAssignedGossipNativeNeighbors() {
+  function bindAssignedGossipNeighbors(topologyHint) {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return 0;
-    let boundCount = 0;
-    for (const peerId of assignedGossipNativeNeighborIds) {
-      const peer = nativePeerConnectionsRef.value.get(Number(peerId));
-      if (bindGossipDataChannelForNativePeer(peer)) {
-        boundCount += 1;
-      }
+    for (const peerId of assignedGossipNeighborIds) {
+      ensureLiveGossipPeer(peerId);
     }
-    return boundCount;
+    return ensureGossipNeighborLifecycle()?.applyAssignedNeighbors(topologyHint, assignedGossipNeighborIds) || 0;
   }
 
   function requestGossipTopologyRepair(peerId, reason) {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;
-    if (!assignedGossipNativeNeighborIds.has(String(peerId || ''))) return false;
+    if (!assignedGossipNeighborIds.has(String(peerId || ''))) return false;
     const normalizedPeerId = String(peerId || '').trim();
     if (normalizedPeerId === '') return false;
     const nowMs = Date.now();
@@ -321,33 +332,33 @@ export function createCallWorkspaceGossipDataLane({
     const applied = controller.applyTopologyHint(peerId, topologyHint);
     if (!applied) return false;
     const peer = controller.getPeer(peerId);
-    const previousAssignedNeighborIds = new Set(assignedGossipNativeNeighborIds);
-    assignedGossipNativeNeighborIds.clear();
+    const previousAssignedNeighborIds = new Set(assignedGossipNeighborIds);
+    assignedGossipNeighborIds.clear();
     for (const neighborId of peer?.neighbor_set || []) {
       const normalizedNeighborId = String(neighborId || '').trim();
       if (gossipTopologyNeighborUsesRtcDataChannel(topologyHint, normalizedNeighborId)) {
-        assignedGossipNativeNeighborIds.add(normalizedNeighborId);
+        assignedGossipNeighborIds.add(normalizedNeighborId);
       }
     }
     for (const previousPeerId of previousAssignedNeighborIds) {
-      if (!assignedGossipNativeNeighborIds.has(previousPeerId)) {
-        closeGossipDataChannelForNativePeer(previousPeerId);
+      if (!assignedGossipNeighborIds.has(previousPeerId)) {
+        gossipNeighborLifecycle?.closePeer?.(previousPeerId, 'retired_by_topology');
       }
     }
-    const boundCount = bindAssignedGossipNativeNeighbors();
+    const boundCount = bindAssignedGossipNeighbors(topologyHint);
     emitGossipTelemetrySnapshot('topology_hint_applied');
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
       eventType: 'gossip_topology_hint_applied',
       code: 'gossip_topology_hint_applied',
-      message: 'Gossip topology hint applied to native data-channel neighbor bindings.',
+      message: 'Gossip topology hint applied to dedicated data-channel neighbor bindings.',
       payload: {
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
         topology_epoch: Number(topologyHint.topology_epoch || 0),
-        neighbor_count: assignedGossipNativeNeighborIds.size,
-        bound_native_neighbor_count: boundCount,
+        neighbor_count: assignedGossipNeighborIds.size,
+        bound_dedicated_neighbor_count: boundCount,
       },
     });
     return true;
@@ -542,34 +553,15 @@ export function createCallWorkspaceGossipDataLane({
     };
   }
 
-  function bindGossipDataChannelForNativePeer(peer) {
-    if (!GOSSIP_DATA_LANE_CONFIG.enabled) return false;
-    if (!peer?.pc) return false;
-    const peerId = String(peer.userId || '').trim();
-    if (peerId === '' || peerId === '0') return false;
-    if (!assignedGossipNativeNeighborIds.has(peerId)) return false;
-    const transport = ensureGossipDataChannelTransport();
-    if (!transport) return false;
-    ensureLiveGossipPeer(peerId);
-    const channel = transport.bindPeerConnection(peerId, peer.pc, Boolean(peer.initiator));
-    peer.gossipDataLaneMode = GOSSIP_DATA_LANE_CONFIG.mode;
-    peer.gossipDataChannelState = String(channel?.readyState || 'pending');
-    return true;
-  }
-
-  function closeGossipDataChannelForNativePeer(peerId) {
-    gossipDataChannelTransport?.close(String(peerId || ''));
-  }
-
   function pruneGossipNeighborForUserId(userId, reason = 'target_not_in_room') {
     const peerId = String(userId || '').trim();
     if (peerId === '' || peerId === '0') return false;
-    if (!assignedGossipNativeNeighborIds.has(peerId)) return false;
+    if (!assignedGossipNeighborIds.has(peerId)) return false;
 
-    assignedGossipNativeNeighborIds.delete(peerId);
+    assignedGossipNeighborIds.delete(peerId);
     gossipTopologyRepairRequestedAtByPeerId.delete(peerId);
     liveGossipController?.updateCarrierStateFromDataChannel?.(peerId, 'lost', String(reason || 'target_not_in_room'));
-    closeGossipDataChannelForNativePeer(peerId);
+    gossipNeighborLifecycle?.closePeer?.(peerId, String(reason || 'target_not_in_room'));
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -621,10 +613,12 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipController = null;
     liveGossipControllerKey = '';
     liveGossipFrameSequenceByTrack.clear();
-    assignedGossipNativeNeighborIds.clear();
+    assignedGossipNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();
     lastGossipRolloutGateState = null;
     lastGossipTelemetrySnapshotSentAtMs = 0;
+    gossipNeighborLifecycle?.teardown?.();
+    gossipNeighborLifecycle = null;
     gossipDataChannelTransport?.close();
     gossipDataChannelTransport = null;
   }
@@ -632,9 +626,8 @@ export function createCallWorkspaceGossipDataLane({
   return {
     applyGossipTelemetryAck,
     applyGossipTopologyHint,
-    bindGossipDataChannelForNativePeer,
-    closeGossipDataChannelForNativePeer,
     getGossipRolloutGateState,
+    handleGossipNeighborSignal: (...args) => ensureGossipNeighborLifecycle()?.handleGossipNeighborSignal?.(...args) || false,
     pruneGossipNeighborForUserId,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,
