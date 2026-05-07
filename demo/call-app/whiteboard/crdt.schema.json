@@ -15,9 +15,7 @@
         "text.add",
         "text.update",
         "sticky_note.add",
-        "sticky_note.update",
-        "selection.update",
-        "cursor.move"
+        "sticky_note.update"
       ]
     }
   ],

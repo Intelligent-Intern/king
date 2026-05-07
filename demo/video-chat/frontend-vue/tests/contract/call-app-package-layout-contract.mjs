@@ -38,6 +38,8 @@ for (const requiredFile of [
   'crdt.schema.json',
   'health.descriptor.json',
   'public/index.html',
+  'public/whiteboard.css',
+  'public/whiteboard.js',
 ]) {
   assert(readme.includes(requiredFile), `README must document ${requiredFile}`)
   assert(fs.existsSync(path.join(whiteboardRoot, requiredFile)), `whiteboard package must include ${requiredFile}`)
@@ -106,11 +108,15 @@ for (const operationType of [
   'shape.update',
   'shape.delete',
   'text.add',
+  'text.update',
   'sticky_note.add',
-  'selection.update',
-  'cursor.move',
+  'sticky_note.update',
 ]) {
   assertArrayIncludes(operationTypes, operationType, `CRDT schema missing operation type ${operationType}`)
+}
+for (const presenceType of ['cursor.move', 'selection.update', 'tool.preview']) {
+  assert(!operationTypes.includes(presenceType), `${presenceType} must not be listed as a persisted document operation`)
+  assertArrayIncludes(crdtSchema.presence?.types, presenceType, `CRDT schema missing non-persistent presence type ${presenceType}`)
 }
 for (const field of [
   'app_id',
@@ -140,21 +146,37 @@ for (const healthPath of [
   'mcp.descriptor.json',
   'crdt.schema.json',
   'public/index.html',
+  'public/whiteboard.css',
+  'public/whiteboard.js',
 ]) {
   assertArrayIncludes(healthPaths, healthPath, `health descriptor missing check for ${healthPath}`)
 }
 
 const iframe = read('demo/call-app/whiteboard/public/index.html')
+const iframeRuntime = read('demo/call-app/whiteboard/public/whiteboard.js')
+const iframeBundle = `${iframe}\n${iframeRuntime}`
 assert(iframe.includes('king.call_app.iframe.v1'), 'iframe entrypoint must declare bridge protocol')
-assert(iframe.includes("message.type === 'call_app.launch'"), 'iframe entrypoint must wait for launch message')
-assert(iframe.includes("'call_app.ready'"), 'iframe entrypoint must emit ready message after launch')
-assert(iframe.includes('primary_session_token_received: false'), 'iframe entrypoint must not accept a primary session token')
-assert(!iframe.includes('sessionToken'), 'iframe entrypoint must not reference parent session tokens')
-assert(!iframe.includes('Authorization'), 'iframe entrypoint must not reference authorization headers')
+assert(iframe.includes('whiteboard.css'), 'iframe entrypoint must load the extracted stylesheet')
+assert(iframe.includes('whiteboard.js'), 'iframe entrypoint must load the extracted runtime')
+assert(iframeRuntime.includes("message.type === 'call_app.launch'"), 'iframe runtime must wait for launch message')
+assert(iframeRuntime.includes("'call_app.ready'"), 'iframe runtime must emit ready message after launch')
+assert(iframeRuntime.includes('primary_session_token_received: false'), 'iframe runtime must not accept a primary session token')
+assert(!iframeBundle.includes('sessionToken'), 'iframe bundle must not reference parent session tokens')
+assert(!iframeBundle.includes('Authorization'), 'iframe bundle must not reference authorization headers')
 
 const sprint = read('SPRINT.md')
-assert(sprint.includes('- [x] CAP-02 `demo/call-app` package layout'), 'SPRINT.md must mark CAP-02 complete')
+assert(sprint.includes('- [x] WCA-01 Sprint/backlog hygiene and package contract'), 'SPRINT.md must track the active Whiteboard package sprint ticket')
 const packageJson = read('demo/video-chat/frontend-vue/package.json')
 assert(packageJson.includes('call-app-package-layout-contract.mjs'), 'package scripts must include package layout contract')
+assert(packageJson.includes('test:contract:call-apps:sqlite'), 'package scripts must expose the SQLite-backed Call App backend proof')
+const sqliteRuntimeProof = read('demo/video-chat/backend-king-php/tests/call-app-sqlite-runtime-proof.sh')
+assert(sqliteRuntimeProof.includes('CALL_APP_SQLITE_PHP_IMAGE'), 'SQLite runtime proof must allow the PHP container image to be pinned')
+for (const contract of [
+  'call-app-marketplace-entitlement-contract.sh',
+  'call-app-availability-contract.sh',
+  'call-app-session-lifecycle-contract.sh',
+]) {
+  assert(sqliteRuntimeProof.includes(contract), `SQLite runtime proof must run ${contract}`)
+}
 
 console.log('[call-app-package-layout-contract] PASS')

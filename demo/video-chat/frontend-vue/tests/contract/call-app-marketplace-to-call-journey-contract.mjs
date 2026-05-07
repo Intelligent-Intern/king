@@ -24,6 +24,7 @@ const [
   catalogStoreSource,
   crdtBridgeSource,
   whiteboardSource,
+  whiteboardRuntimeSource,
   sprintSource,
 ] = await Promise.all([
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
@@ -31,8 +32,11 @@ const [
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('SPRINT.md'),
 ]);
+
+const whiteboardBundleSource = `${whiteboardSource}\n${whiteboardRuntimeSource}`;
 
 assertOrdered(
   lifecycleTestSource,
@@ -99,21 +103,21 @@ assert.match(
 );
 
 assert.match(
-  whiteboardSource,
+  whiteboardBundleSource,
   /appendOperation\('stroke\.add'[\s\S]*appendOperation\(editorKind === 'sticky' \? 'sticky_note\.add' : 'text\.add'/,
   'whiteboard runtime must emit real sticky-note and stroke operations for collaboration',
 );
 
 assert.doesNotMatch(
-  sidebarSource + crdtBridgeSource + whiteboardSource,
+  sidebarSource + crdtBridgeSource + whiteboardBundleSource,
   /sessionToken|localStorage|Authorization|primary_session_token_received:\s*true/,
   'marketplace-to-call app journey must not leak primary auth material into sidebar, bridge, or iframe',
 );
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-15 Marketplace-to-call end-to-end journey/,
-  'SPRINT.md must mark CAP-15 complete after the journey proof is added',
+  /Whiteboard can be discovered from the package metadata and Marketplace\/Call\s+App catalog path/,
+  'SPRINT.md must keep the Marketplace-to-call Whiteboard journey in active acceptance criteria',
 );
 
 console.log('[call-app-marketplace-to-call-journey-contract] PASS');

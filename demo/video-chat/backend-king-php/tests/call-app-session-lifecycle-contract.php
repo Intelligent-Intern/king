@@ -367,6 +367,19 @@ SQL
     videochat_call_app_session_lifecycle_assert((string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['server_admission_stamp'] ?? [])['duplicate_policy'] ?? '') === 'ignore_after_first_admission', 'CRDT op must carry server admission stamp');
     $adminActorId = (string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['actor_id'] ?? ''));
 
+    $presenceAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
+        'operation' => [
+            'operation_id' => 'op_admin_cursor_presence',
+            'payload_type' => 'cursor.move',
+            'payload' => ['x' => 20, 'y' => 30],
+        ],
+    ]);
+    $presenceAppendPayload = videochat_call_app_session_lifecycle_decode($presenceAppend);
+    videochat_call_app_session_lifecycle_assert((int) ($presenceAppend['status'] ?? 0) === 422, 'presence updates must not be persisted as CRDT ops');
+    videochat_call_app_session_lifecycle_assert((string) ((((($presenceAppendPayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['payload_type'] ?? '')) === 'presence_must_not_be_persisted', 'presence append must report the non-persistent payload contract');
+    $presencePersistedCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_crdt_ops WHERE payload_type IN ('cursor.move', 'selection.update', 'tool.preview')")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($presencePersistedCount === 0, 'presence payloads must not be written to call_app_crdt_ops');
+
     $deniedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $userAuth);
     videochat_call_app_session_lifecycle_assert((int) ($deniedBootstrap['status'] ?? 0) === 403, 'denied participant must not bootstrap private CRDT state');
     $deniedOps = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $userAuth);

@@ -17,6 +17,7 @@ const [
   bridgeSource,
   templateSource,
   iframeSource,
+  iframeRuntimeSource,
   lifecycleTestSource,
   sprintSource,
 ] = await Promise.all([
@@ -27,9 +28,12 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppIframeBridge.js'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.template.html'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('SPRINT.md'),
 ]);
+
+const whiteboardSource = `${iframeSource}\n${iframeRuntimeSource}`;
 
 assert.match(
   launchDomainSource,
@@ -116,7 +120,7 @@ assert.doesNotMatch(
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /message\.type === 'call_app\.launch'[\s\S]*emit\('call_app\.ready'[\s\S]*app_session_id/s,
   'whiteboard iframe must acknowledge launch with the app session id',
 );
@@ -129,8 +133,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-11 Iframe launch and parent bridge/,
-  'SPRINT.md must mark CAP-11 complete',
+  /iframe never receives[\s\S]*primary session token/,
+  'SPRINT.md must keep the no-primary-token iframe contract in the active Whiteboard sprint',
 );
 
 console.log('[call-app-iframe-launch-contract] PASS');

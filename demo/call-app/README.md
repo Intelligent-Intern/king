@@ -14,6 +14,8 @@ demo/call-app/<app-key>/
   crdt.schema.json
   health.descriptor.json
   public/index.html
+  public/whiteboard.css
+  public/whiteboard.js
 ```
 
 Required package contracts:
@@ -25,6 +27,8 @@ Required package contracts:
   fields, replay policy, and snapshot policy.
 - `health.descriptor.json` defines package health checks for discovery.
 - `public/index.html` is the iframe launch entrypoint.
+- `public/*.css` and `public/*.js` hold the app runtime assets used by the
+  sandbox entrypoint.
 
 Runtime invariants:
 
