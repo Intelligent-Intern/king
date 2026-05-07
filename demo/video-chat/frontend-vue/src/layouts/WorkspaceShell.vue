@@ -17,11 +17,13 @@
             </button>
           </div>
 
-          <div class="call-left-panel-switch" role="tablist" aria-label="Call sidebar">
+          <div v-if="showCallAppsSidebarTabs" class="call-left-panel-switch" role="tablist" aria-label="Call sidebar">
             <button
               class="call-left-panel-tab"
               :class="{ active: callLeftPanel === 'settings' }"
               type="button"
+              role="tab"
+              :aria-selected="callLeftPanel === 'settings'"
               @click="callLeftPanel = 'settings'"
             >
               Settings
@@ -30,6 +32,8 @@
               class="call-left-panel-tab"
               :class="{ active: callLeftPanel === 'call_apps' }"
               type="button"
+              role="tab"
+              :aria-selected="callLeftPanel === 'call_apps'"
               @click="callLeftPanel = 'call_apps'"
             >
               Call Apps
@@ -37,14 +41,14 @@
           </div>
 
           <CallAppsSidebarPanel
-            v-if="callLeftPanel === 'call_apps'"
+            v-if="showCallAppsSidebarPanel"
             :call-id="activeSidebarCallId"
             :can-manage="canManageSidebarCallApps"
             :api-request="apiRequest"
             @session-created="handleCallAppSessionCreated"
           />
 
-          <div v-else class="call-left-settings">
+          <div v-if="showCallSettingsPanel" class="call-left-settings">
             <section class="call-left-settings-block" aria-label="Camera">
               <div class="call-left-settings-title">Camera</div>
               <div class="call-left-settings-field">
@@ -652,6 +656,7 @@ import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
 import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
 import { useWorkspaceModuleStore } from '../stores/workspaceModuleStore.js';
+import { useCallAppsCatalogStore } from '../stores/callAppsCatalogStore.js';
 import {
   logoutSession,
   postLogoutRedirectTarget,
@@ -690,6 +695,7 @@ import { useWorkspaceMicLevelMonitor } from './useWorkspaceMicLevelMonitor';
 const router = useRouter();
 const route = useRoute();
 const moduleStore = useWorkspaceModuleStore();
+const callAppsCatalogStore = useCallAppsCatalogStore();
 const leftSidebarCollapsed = ref(false);
 const isTabletSidebarOpen = ref(false);
 const isMobileSidebarOpen = ref(false);
@@ -956,6 +962,7 @@ const callLayoutSidebarState = reactive({
   setStrategy: null,
 });
 const callLeftPanel = ref('settings');
+let callAppsSidebarProbeSeq = 0;
 
 const showInCallOwnerEditCard = computed(() => isCallWorkspace.value && callOwnerEditState.visible);
 const showCallOwnerInviteLink = computed(() => (
@@ -966,6 +973,16 @@ const showCallOwnerInviteLink = computed(() => (
 const canLoadCallOwnerInternalDirectory = computed(() => normalizeRole(sessionState.role) === 'admin');
 const activeSidebarCallId = computed(() => String(callOwnerEditState.callId || callOwnerEditState.resolvedCallId || '').trim());
 const canManageSidebarCallApps = computed(() => Boolean(callOwnerEditState.visible || callLayoutSidebarState.canModerate));
+const showCallAppsSidebarTabs = computed(() => Boolean(
+  isCallWorkspace.value
+  && activeSidebarCallId.value !== ''
+  && (
+    callAppsCatalogStore.hasAvailableApps
+    || callLayoutSidebarState.currentMode === 'call_app_workspace'
+  ),
+));
+const showCallAppsSidebarPanel = computed(() => showCallAppsSidebarTabs.value && callLeftPanel.value === 'call_apps');
+const showCallSettingsPanel = computed(() => !showCallAppsSidebarTabs.value || callLeftPanel.value === 'settings');
 
 function applySidebarLayoutMode(mode) {
   if (typeof callLayoutSidebarState.setMode !== 'function') return;
@@ -1612,6 +1629,34 @@ watch(isCallWorkspace, (nextValue) => {
     detachCallMediaWatcher = null;
   }
 }, { immediate: true });
+
+watch([isCallWorkspace, activeSidebarCallId], ([inCallWorkspace, callId]) => {
+  callAppsSidebarProbeSeq += 1;
+  const sequence = callAppsSidebarProbeSeq;
+  const normalizedCallId = String(callId || '').trim();
+  if (!inCallWorkspace || normalizedCallId === '') {
+    callAppsCatalogStore.resetCallAppsCatalog();
+    callLeftPanel.value = 'settings';
+    return;
+  }
+
+  void callAppsCatalogStore.loadAvailableApps({
+    callId: normalizedCallId,
+    page: 1,
+    pageSize: 1,
+  }).then(() => {
+    if (sequence !== callAppsSidebarProbeSeq) return;
+    if (!showCallAppsSidebarTabs.value && callLeftPanel.value === 'call_apps') {
+      callLeftPanel.value = 'settings';
+    }
+  });
+}, { immediate: true });
+
+watch(showCallAppsSidebarTabs, (visible) => {
+  if (!visible && callLeftPanel.value === 'call_apps') {
+    callLeftPanel.value = 'settings';
+  }
+});
 
 watch(
   () => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId, isMobileViewport.value],

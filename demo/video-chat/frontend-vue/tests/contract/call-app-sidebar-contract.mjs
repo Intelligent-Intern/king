@@ -35,8 +35,20 @@ assert.match(
 
 assert.match(
   shellSource,
-  /Call Apps[\s\S]*<CallAppsSidebarPanel[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="handleCallAppSessionCreated"/,
-  'WorkspaceShell must expose a Call Apps tab and hand active call context to the panel',
+  /useCallAppsCatalogStore\(\)/,
+  'WorkspaceShell must probe the real Call Apps catalog before showing the Call Apps tab',
+);
+
+assert.match(
+  shellSource,
+  /showCallAppsSidebarTabs[\s\S]*callAppsCatalogStore\.hasAvailableApps[\s\S]*call_app_workspace/s,
+  'WorkspaceShell must only show Call Apps tabs once Call Apps are available or active in the call',
+);
+
+assert.match(
+  shellSource,
+  /v-if="showCallAppsSidebarTabs"[\s\S]*Call Apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsSidebarPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="handleCallAppSessionCreated"/,
+  'WorkspaceShell must expose Call Apps as a conditional left-sidebar tab and hand active call context to the panel',
 );
 
 assert.match(
