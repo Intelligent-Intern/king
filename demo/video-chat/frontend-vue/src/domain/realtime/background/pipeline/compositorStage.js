@@ -1,5 +1,95 @@
 const backgroundCanvasCache = new Map();
 
+const WEBGL_VERTEX_SHADER = `
+attribute vec2 aPosition;
+varying vec2 vUv;
+
+void main(void) {
+  vUv = aPosition * 0.5 + 0.5;
+  gl_Position = vec4(aPosition, 0.0, 1.0);
+}
+`;
+
+const WEBGL_FRAGMENT_SHADER = `
+precision highp float;
+
+uniform sampler2D uFrame;
+uniform sampler2D uMask;
+uniform sampler2D uBackground;
+uniform vec2 uOutputSize;
+uniform vec2 uMaskSize;
+uniform vec4 uBackgroundColor;
+uniform vec4 uBackgroundUvTransform;
+uniform float uBlurPx;
+uniform float uMaskFeather;
+uniform float uMaskFlipY;
+uniform float uMaskHigh;
+uniform float uMaskLow;
+uniform int uEffect;
+uniform int uBackgroundMode;
+uniform int uHasMask;
+varying vec2 vUv;
+
+float readMask(vec2 uv) {
+  vec2 maskUv = uMaskFlipY > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv;
+  vec4 maskColor = texture2D(uMask, maskUv);
+  return maskColor.a < 0.999 ? maskColor.a : maskColor.r;
+}
+
+float featherMask(vec2 uv) {
+  vec2 texel = vec2(max(uMaskFeather, 0.0)) / uMaskSize;
+  float center = readMask(uv);
+  if (uMaskFeather <= 0.0) {
+    return center;
+  }
+
+  float sum = center * 4.0;
+  sum += readMask(uv + texel * vec2(-1.0, 0.0)) * 2.0;
+  sum += readMask(uv + texel * vec2(1.0, 0.0)) * 2.0;
+  sum += readMask(uv + texel * vec2(0.0, -1.0)) * 2.0;
+  sum += readMask(uv + texel * vec2(0.0, 1.0)) * 2.0;
+  sum += readMask(uv + texel * vec2(-1.0, -1.0));
+  sum += readMask(uv + texel * vec2(1.0, -1.0));
+  sum += readMask(uv + texel * vec2(-1.0, 1.0));
+  sum += readMask(uv + texel * vec2(1.0, 1.0));
+  return sum / 16.0;
+}
+
+vec4 readBlurredFrame(vec2 uv) {
+  vec2 texel = vec2(max(uBlurPx, 1.0)) / uOutputSize;
+  vec4 sum = texture2D(uFrame, uv) * 0.20;
+  sum += texture2D(uFrame, uv + texel * vec2(-1.0, 0.0)) * 0.12;
+  sum += texture2D(uFrame, uv + texel * vec2(1.0, 0.0)) * 0.12;
+  sum += texture2D(uFrame, uv + texel * vec2(0.0, -1.0)) * 0.12;
+  sum += texture2D(uFrame, uv + texel * vec2(0.0, 1.0)) * 0.12;
+  sum += texture2D(uFrame, uv + texel * vec2(-0.707, -0.707)) * 0.08;
+  sum += texture2D(uFrame, uv + texel * vec2(0.707, -0.707)) * 0.08;
+  sum += texture2D(uFrame, uv + texel * vec2(-0.707, 0.707)) * 0.08;
+  sum += texture2D(uFrame, uv + texel * vec2(0.707, 0.707)) * 0.08;
+  return sum;
+}
+
+void main(void) {
+  vec4 frame = texture2D(uFrame, vUv);
+  if (uEffect == 0) {
+    gl_FragColor = frame;
+    return;
+  }
+
+  float maskAlpha = uHasMask == 1 ? smoothstep(uMaskLow, uMaskHigh, featherMask(vUv)) : 0.0;
+  vec4 background = uBackgroundColor;
+
+  if (uBackgroundMode == 1) {
+    vec2 backgroundUv = vUv * uBackgroundUvTransform.xy + uBackgroundUvTransform.zw;
+    background = texture2D(uBackground, backgroundUv);
+  } else if (uBackgroundMode == 2) {
+    background = readBlurredFrame(vUv);
+  }
+
+  gl_FragColor = vec4(mix(background.rgb, frame.rgb, maskAlpha), 1.0);
+}
+`;
+
 function drawCoverImage(ctx, image, width, height) {
     const iw = Math.max(1, image.width || width);
     const ih = Math.max(1, image.height || height);
@@ -9,6 +99,35 @@ function drawCoverImage(ctx, image, width, height) {
     const dx = (width - dw) * 0.5;
     const dy = (height - dh) * 0.5;
     ctx.drawImage(image, dx, dy, dw, dh);
+}
+
+function resolveCoverUvTransform(image, width, height) {
+    const iw = Math.max(1, image?.width || width);
+    const ih = Math.max(1, image?.height || height);
+    const scale = Math.max(width / iw, height / ih);
+    const dw = iw * scale;
+    const dh = ih * scale;
+    const dx = (width - dw) * 0.5;
+    const dy = (height - dh) * 0.5;
+    return [
+        width / dw,
+        height / dh,
+        -dx / dw,
+        -dy / dh,
+    ];
+}
+
+function colorToVec4(value) {
+    const text = String(value || '').trim();
+    const match = /^#?([0-9a-f]{6})$/i.exec(text);
+    if (!match) return [0, 0, 0, 1];
+    const hex = match[1];
+    return [
+        Number.parseInt(hex.slice(0, 2), 16) / 255,
+        Number.parseInt(hex.slice(2, 4), 16) / 255,
+        Number.parseInt(hex.slice(4, 6), 16) / 255,
+        1,
+    ];
 }
 
 async function loadImageCanvas(url) {
@@ -45,14 +164,54 @@ async function loadImageCanvas(url) {
     return promise;
 }
 
-export function createBackgroundCompositorStage({
-    canvas,
-    ctx,
-    getBackgroundColor,
-    getBackgroundImageUrl,
-    getBlurPx,
-    video,
-}) {
+function resizeCanvas(targetCanvas, width, height) {
+    const nextWidth = Math.max(1, Math.round(Number(width) || 1));
+    const nextHeight = Math.max(1, Math.round(Number(height) || 1));
+    if (targetCanvas.width !== nextWidth || targetCanvas.height !== nextHeight) {
+        targetCanvas.width = nextWidth;
+        targetCanvas.height = nextHeight;
+        return true;
+    }
+    return false;
+}
+
+function processMaskForAlpha(mask, width, height) {
+    if (!(mask instanceof Float32Array)) return mask;
+    const processed = new Float32Array(mask.length);
+    const threshold = 0.5;
+    const blurRadius = 2;
+
+    for (let i = 0; i < mask.length; i += 1) {
+        const value = Number(mask[i]) || 0;
+        processed[i] = value > threshold
+            ? Math.min(1, (value - threshold) / (1 - threshold))
+            : 0;
+    }
+
+    return blurMask(processed, width, height, blurRadius);
+}
+
+function blurMask(mask, width, height, radius) {
+    const output = new Float32Array(mask.length);
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+            let sum = 0;
+            let count = 0;
+            for (let ky = -radius; ky <= radius; ky += 1) {
+                for (let kx = -radius; kx <= radius; kx += 1) {
+                    const nx = Math.max(0, Math.min(width - 1, x + kx));
+                    const ny = Math.max(0, Math.min(height - 1, y + ky));
+                    sum += mask[ny * width + nx];
+                    count += 1;
+                }
+            }
+            output[y * width + x] = sum / count;
+        }
+    }
+    return output;
+}
+
+function createMaskCanvasTools(canvas) {
     const maskCanvas = document.createElement('canvas');
     const maskLayer = maskCanvas.getContext('2d', {
         alpha: true,
@@ -64,78 +223,15 @@ export function createBackgroundCompositorStage({
         willReadFrequently: true,
     });
     let maskSourceImageData = null;
-    let backgroundImageCanvas = null;
-    let backgroundImageUrl = '';
 
-    function resizeCanvas(targetCanvas, width, height) {
-        const nextWidth = Math.max(1, Math.round(Number(width) || 1));
-        const nextHeight = Math.max(1, Math.round(Number(height) || 1));
-        if (targetCanvas.width !== nextWidth || targetCanvas.height !== nextHeight) {
-            targetCanvas.width = nextWidth;
-            targetCanvas.height = nextHeight;
-            return true;
-        }
-        return false;
-    }
-
-    // 1D Gaussian-like blur + threshold. fast enough for video yet
-    // WIP coming to do most if not all using webgl, which will do it in single pass or two
-    // for the ops done here, keeping data needed, when possible, in gpu mem
-    function processMaskForAlpha(mask, width, height) {
-        if (!(mask instanceof Float32Array)) return mask;
-        const processed = new Float32Array(mask.length);
-        const threshold = 0.5;   // Tune this (0.1 ~ 0.25 works well)
-        const blurRadius = 2;     // 2–4 is sweet spot
-
-        // 1. Threshold + stretch
-        for (let i = 0; i < mask.length; i++) {
-            let v = mask[i];
-            if (v > threshold) {
-                v = Math.min(1.0, (v - threshold) / (1.0 - threshold));
-            } else {
-                v = 0.0;
-            }
-            processed[i] = v;
-        }
-
-        // 2. Blur (feather edges)
-        return blurMask(processed, width, height, blurRadius);
-    }
-
-    // Simple box blur (fast)
-    function blurMask(mask, w, h, radius) {
-        const output = new Float32Array(mask.length);
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                let sum = 0, count = 0;
-                for (let ky = -radius; ky <= radius; ky++) {
-                    for (let kx = -radius; kx <= radius; kx++) {
-                        const nx = Math.max(0, Math.min(w - 1, x + kx));
-                        const ny = Math.max(0, Math.min(h - 1, y + ky));
-                        sum += mask[ny * w + nx];
-                        count++;
-                    }
-                }
-                output[y * w + x] = sum / count;
-            }
-        }
-        return output;
-    }
     function clearMask() {
         if (!maskLayer) return;
         resizeCanvas(maskCanvas, canvas.width, canvas.height);
         maskLayer.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
     }
 
-    function drawMaskBitmap(maskBitmap, maskWidth, maskHeight) {
+    function drawMaskBitmap(maskBitmap) {
         if (!(maskBitmap instanceof ImageBitmap) || !maskLayer) {
-            clearMask();
-            return false;
-        }
-
-        const sourceWidth = Math.max(1, Math.round(Number(maskWidth) || maskBitmap.width || 0));
-        const sourceHeight = Math.max(1, Math.round(Number(maskHeight) || maskBitmap.height || 0));
-        if (sourceWidth <= 1 || sourceHeight <= 1) {
             clearMask();
             return false;
         }
@@ -195,38 +291,6 @@ export function createBackgroundCompositorStage({
         return true;
     }
 
-    function setBackgroundImageUrl(url) {
-        const nextUrl = String(url || '').trim();
-        if (nextUrl === backgroundImageUrl) return;
-        backgroundImageUrl = nextUrl;
-        backgroundImageCanvas = null;
-        if (!backgroundImageUrl) return;
-        loadImageCanvas(backgroundImageUrl).then((imageCanvas) => {
-            if (backgroundImageUrl !== nextUrl) return;
-            backgroundImageCanvas = imageCanvas;
-        });
-    }
-
-    function drawBackground(source, mode, backgroundColor, blurPx) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-over';
-        if (mode === 'replace' && backgroundImageCanvas) {
-            ctx.filter = 'none';
-            drawCoverImage(ctx, backgroundImageCanvas, canvas.width, canvas.height);
-        } else if (backgroundColor) {
-            ctx.filter = 'none';
-            ctx.fillStyle = backgroundColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-        } else if (mode === 'blur') {
-            ctx.filter = `blur(${blurPx}px)`;
-            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-        } else {
-            ctx.filter = 'none';
-            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-        }
-        ctx.restore();
-    }
-
     function drawDebugCanvases(source) {
         const debugRoot = document.getElementById('backgroundPipelineDebugDialog');
         const debugMaskCanvas = debugRoot?.querySelector?.('#maskDebug') || null;
@@ -275,6 +339,72 @@ export function createBackgroundCompositorStage({
         personOnlyCtx.globalCompositeOperation = 'source-over';
     }
 
+    function getMatteMaskSnapshot() {
+        try {
+            return maskLayer?.getImageData?.(0, 0, maskCanvas.width, maskCanvas.height) || null;
+        } catch {
+            return null;
+        }
+    }
+
+    return {
+        clearMask,
+        drawDebugCanvases,
+        drawMaskBitmap,
+        drawMaskValues,
+        get maskCanvas() {
+            return maskCanvas;
+        },
+        getMatteMaskSnapshot,
+    };
+}
+
+function createCanvasBackgroundCompositorStage({
+    canvas,
+    getBackgroundColor,
+    getBackgroundImageUrl,
+    getBlurPx,
+    video,
+}) {
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+    if (!ctx) throw new Error('2d compositor unavailable');
+
+    const maskTools = createMaskCanvasTools(canvas);
+    let backgroundImageCanvas = null;
+    let backgroundImageUrl = '';
+
+    function setBackgroundImageUrl(url) {
+        const nextUrl = String(url || '').trim();
+        if (nextUrl === backgroundImageUrl) return;
+        backgroundImageUrl = nextUrl;
+        backgroundImageCanvas = null;
+        if (!backgroundImageUrl) return;
+        loadImageCanvas(backgroundImageUrl).then((imageCanvas) => {
+            if (backgroundImageUrl !== nextUrl) return;
+            backgroundImageCanvas = imageCanvas;
+        });
+    }
+
+    function drawBackground(source, mode, backgroundColor, blurPx) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-over';
+        if (mode === 'replace' && backgroundImageCanvas) {
+            ctx.filter = 'none';
+            drawCoverImage(ctx, backgroundImageCanvas, canvas.width, canvas.height);
+        } else if (backgroundColor) {
+            ctx.filter = 'none';
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        } else if (mode === 'blur') {
+            ctx.filter = `blur(${blurPx}px)`;
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        } else {
+            ctx.filter = 'none';
+            ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        }
+        ctx.restore();
+    }
+
     function render({
         hasMatteMask,
         maskBitmap = null,
@@ -304,12 +434,13 @@ export function createBackgroundCompositorStage({
         let hasRenderableMask = false;
         if (maskUpdated) {
             hasRenderableMask = maskBitmap instanceof ImageBitmap
-                ? drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
-                : drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
+                ? maskTools.drawMaskBitmap(maskBitmap, maskWidth, maskHeight)
+                : maskTools.drawMaskValues(processMaskForAlpha(maskValues, maskWidth, maskHeight), maskWidth, maskHeight);
         } else {
             hasRenderableMask = Boolean(hasMatteMask);
         }
-        drawDebugCanvases(foregroundSource);
+
+        maskTools.drawDebugCanvases(foregroundSource);
 
         if (!hasRenderableMask) {
             ctx.save();
@@ -329,28 +460,298 @@ export function createBackgroundCompositorStage({
         ctx.save();
         ctx.globalCompositeOperation = 'destination-in';
         ctx.filter = 'none';
-        ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(maskTools.maskCanvas, 0, 0, canvas.width, canvas.height);
         ctx.restore();
 
         drawBackground(foregroundSource, mode, backgroundColor, blurPx);
     }
 
-    function reset() {
-        clearMask();
+    return {
+        backend: 'canvas',
+        getMatteMaskSnapshot: () => maskTools.getMatteMaskSnapshot(),
+        render,
+        reset: () => maskTools.clearMask(),
+        setBackgroundImageUrl,
+    };
+}
+
+function createShader(gl, type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const message = gl.getShaderInfoLog(shader) || 'shader_compile_failed';
+        gl.deleteShader(shader);
+        throw new Error(message);
+    }
+    return shader;
+}
+
+function createProgram(gl) {
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, WEBGL_VERTEX_SHADER);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, WEBGL_FRAGMENT_SHADER);
+    const program = gl.createProgram();
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    gl.deleteShader(vertexShader);
+    gl.deleteShader(fragmentShader);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const message = gl.getProgramInfoLog(program) || 'program_link_failed';
+        gl.deleteProgram(program);
+        throw new Error(message);
+    }
+    return program;
+}
+
+function createTexture(gl) {
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    return texture;
+}
+
+function uploadTexture(gl, texture, unit, source) {
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+}
+
+function createWebGlBackgroundCompositorStage({
+    canvas,
+    getBackgroundColor,
+    getBackgroundImageUrl,
+    getBlurPx,
+    video,
+}) {
+    console.log('[BackgroundFilter] Using WebGL compositor');
+    const gl = canvas.getContext('webgl2', {
+        alpha: false,
+        desynchronized: true,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false,
+    }) || canvas.getContext('webgl', {
+        alpha: false,
+        desynchronized: true,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false,
+    });
+    if (!gl) throw new Error('webgl compositor unavailable');
+
+    const program = createProgram(gl);
+    const locations = {
+        aPosition: gl.getAttribLocation(program, 'aPosition'),
+        uBackground: gl.getUniformLocation(program, 'uBackground'),
+        uBackgroundColor: gl.getUniformLocation(program, 'uBackgroundColor'),
+        uBackgroundMode: gl.getUniformLocation(program, 'uBackgroundMode'),
+        uBackgroundUvTransform: gl.getUniformLocation(program, 'uBackgroundUvTransform'),
+        uBlurPx: gl.getUniformLocation(program, 'uBlurPx'),
+        uEffect: gl.getUniformLocation(program, 'uEffect'),
+        uFrame: gl.getUniformLocation(program, 'uFrame'),
+        uHasMask: gl.getUniformLocation(program, 'uHasMask'),
+        uMask: gl.getUniformLocation(program, 'uMask'),
+        uMaskFeather: gl.getUniformLocation(program, 'uMaskFeather'),
+        uMaskFlipY: gl.getUniformLocation(program, 'uMaskFlipY'),
+        uMaskHigh: gl.getUniformLocation(program, 'uMaskHigh'),
+        uMaskLow: gl.getUniformLocation(program, 'uMaskLow'),
+        uMaskSize: gl.getUniformLocation(program, 'uMaskSize'),
+        uOutputSize: gl.getUniformLocation(program, 'uOutputSize'),
+    };
+    const vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,
+        1, -1,
+        -1, 1,
+        -1, 1,
+        1, -1,
+        1, 1,
+    ]), gl.STATIC_DRAW);
+
+    const textures = {
+        background: createTexture(gl),
+        frame: createTexture(gl),
+        mask: createTexture(gl),
+    };
+    const maskTools = createMaskCanvasTools(canvas);
+    let backgroundImageCanvas = null;
+    let backgroundImageUrl = '';
+    let hasUploadedMask = false;
+    let latestMaskBitmap = null;
+    let latestMaskValues = null;
+    let latestMaskWidth = 0;
+    let latestMaskHeight = 0;
+    let latestMaskFlipY = 0;
+
+    gl.useProgram(program);
+    gl.uniform1i(locations.uFrame, 0);
+    gl.uniform1i(locations.uMask, 1);
+    gl.uniform1i(locations.uBackground, 2);
+
+    function setBackgroundImageUrl(url) {
+        const nextUrl = String(url || '').trim();
+        if (nextUrl === backgroundImageUrl) return;
+        backgroundImageUrl = nextUrl;
+        backgroundImageCanvas = null;
+        if (!backgroundImageUrl) return;
+        loadImageCanvas(backgroundImageUrl).then((imageCanvas) => {
+            if (backgroundImageUrl !== nextUrl) return;
+            backgroundImageCanvas = imageCanvas;
+            if (backgroundImageCanvas && !gl.isContextLost()) {
+                uploadTexture(gl, textures.background, 2, backgroundImageCanvas);
+            }
+        });
     }
 
-    function getMatteMaskSnapshot() {
-        try {
-            return maskLayer?.getImageData?.(0, 0, maskCanvas.width, maskCanvas.height) || null;
-        } catch {
-            return null;
+    function uploadMask({ maskBitmap, maskValues, maskWidth, maskHeight }) {
+        latestMaskBitmap = maskBitmap instanceof ImageBitmap ? maskBitmap : null;
+        latestMaskValues = maskValues instanceof Float32Array ? maskValues : null;
+        latestMaskWidth = Math.max(1, Math.round(Number(maskWidth) || latestMaskBitmap?.width || canvas.width));
+        latestMaskHeight = Math.max(1, Math.round(Number(maskHeight) || latestMaskBitmap?.height || canvas.height));
+
+        if (latestMaskBitmap) {
+            uploadTexture(gl, textures.mask, 1, latestMaskBitmap);
+            latestMaskFlipY = 1;
+            hasUploadedMask = true;
+            if (document.getElementById('backgroundPipelineDebugDialog')) {
+                maskTools.drawMaskBitmap(latestMaskBitmap, latestMaskWidth, latestMaskHeight);
+            }
+            return true;
+        }
+
+        if (latestMaskValues) {
+            const drawn = maskTools.drawMaskValues(
+                processMaskForAlpha(latestMaskValues, latestMaskWidth, latestMaskHeight),
+                latestMaskWidth,
+                latestMaskHeight,
+            );
+            if (!drawn) {
+                hasUploadedMask = false;
+                return false;
+            }
+            uploadTexture(gl, textures.mask, 1, maskTools.maskCanvas);
+            latestMaskFlipY = 0;
+            hasUploadedMask = true;
+            return true;
+        }
+
+        hasUploadedMask = false;
+        latestMaskFlipY = 0;
+        maskTools.clearMask();
+        return false;
+    }
+
+    function ensureMaskCanvasForSnapshot() {
+        if (latestMaskBitmap) {
+            maskTools.drawMaskBitmap(latestMaskBitmap, latestMaskWidth, latestMaskHeight);
+        } else if (latestMaskValues) {
+            maskTools.drawMaskValues(
+                processMaskForAlpha(latestMaskValues, latestMaskWidth, latestMaskHeight),
+                latestMaskWidth,
+                latestMaskHeight,
+            );
         }
     }
 
+    function render({
+        hasMatteMask,
+        maskBitmap = null,
+        maskHeight = 0,
+        maskUpdated = false,
+        maskValues = null,
+        maskWidth = 0,
+        mode = 'blur',
+        sourceFrame = null,
+    }) {
+        if (gl.isContextLost()) return;
+
+        const backgroundColor = String(getBackgroundColor?.() || '').trim();
+        setBackgroundImageUrl(getBackgroundImageUrl?.() || '');
+        const blurPx = Math.max(1, Math.round(Number(getBlurPx?.() || 3)));
+        const foregroundSource = sourceFrame || video;
+
+        if (hasMatteMask && !maskUpdated && mode !== 'off') return;
+
+        if (maskUpdated) {
+            uploadMask({ maskBitmap, maskHeight, maskValues, maskWidth });
+        }
+
+        const hasRenderableMask = hasUploadedMask && hasMatteMask;
+
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.useProgram(program);
+        gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+        gl.enableVertexAttribArray(locations.aPosition);
+        gl.vertexAttribPointer(locations.aPosition, 2, gl.FLOAT, false, 0, 0);
+        uploadTexture(gl, textures.frame, 0, mode === 'off' ? video : foregroundSource);
+
+        let backgroundMode = 0;
+        let backgroundUvTransform = [1, 1, 0, 0];
+        if (mode === 'replace' && !hasRenderableMask) {
+            backgroundMode = 0;
+        } else if (mode === 'replace' && backgroundImageCanvas) {
+            backgroundMode = 1;
+            backgroundUvTransform = resolveCoverUvTransform(backgroundImageCanvas, canvas.width, canvas.height);
+            uploadTexture(gl, textures.background, 2, backgroundImageCanvas);
+        } else if (mode === 'blur' && !backgroundColor) {
+            backgroundMode = 2;
+        }
+
+        gl.uniform1i(locations.uEffect, mode === 'off' || (mode === 'replace' && !hasRenderableMask) ? 0 : 1);
+        gl.uniform1i(locations.uBackgroundMode, backgroundMode);
+        gl.uniform1i(locations.uHasMask, hasRenderableMask ? 1 : 0);
+        gl.uniform1f(locations.uBlurPx, blurPx);
+        gl.uniform1f(locations.uMaskFeather, 4.35);
+        gl.uniform1f(locations.uMaskFlipY, latestMaskFlipY);
+        gl.uniform1f(locations.uMaskLow, 0.12);
+        gl.uniform1f(locations.uMaskHigh, 0.88);
+        gl.uniform2f(locations.uOutputSize, canvas.width, canvas.height);
+        gl.uniform2f(locations.uMaskSize, latestMaskWidth || canvas.width, latestMaskHeight || canvas.height);
+        gl.uniform4fv(locations.uBackgroundColor, colorToVec4(backgroundColor || '#000000'));
+        gl.uniform4fv(locations.uBackgroundUvTransform, backgroundUvTransform);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        if (document.getElementById('backgroundPipelineDebugDialog')) {
+            ensureMaskCanvasForSnapshot();
+            maskTools.drawDebugCanvases(foregroundSource);
+        }
+    }
+
+    function reset() {
+        hasUploadedMask = false;
+        latestMaskBitmap = null;
+        latestMaskValues = null;
+        latestMaskWidth = 0;
+        latestMaskHeight = 0;
+        latestMaskFlipY = 0;
+        maskTools.clearMask();
+    }
+
     return {
-        getMatteMaskSnapshot,
+        backend: 'webgl',
+        getMatteMaskSnapshot() {
+            ensureMaskCanvasForSnapshot();
+            return maskTools.getMatteMaskSnapshot();
+        },
         render,
         reset,
         setBackgroundImageUrl,
     };
+}
+
+export function createBackgroundCompositorStage(options = {}) {
+    console.log('[BackgroundFilter] Initializing compositor stage', options);
+    const preferWebGl = options.preferWebGl !== false;
+    if (preferWebGl) {
+        try {
+            return createWebGlBackgroundCompositorStage(options);
+        } catch (error) {
+            console.warn('[BackgroundFilter] WebGL compositor unavailable; falling back to canvas.', error);
+        }
+    }
+    return createCanvasBackgroundCompositorStage(options);
 }
