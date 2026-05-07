@@ -32,9 +32,9 @@ const marketplaceDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules
 const callsDescriptor = readRepo('demo/video-chat/frontend-vue/src/modules/calls/descriptor.js')
 const packageJson = readRepo('demo/video-chat/frontend-vue/package.json')
 
-assertIncludes(sprint, '## Sprint: Call Apps Marketplace And CRDT Collaboration Surface', 'SPRINT.md must contain the Call Apps sprint')
-assertIncludes(sprint, 'CAP-01 Architecture Inventory, 2026-05-07', 'SPRINT.md must contain the CAP-01 source inventory')
-assertIncludes(sprint, '- [x] CAP-01 Architecture inventory and contracts', 'CAP-01 must be closed only after inventory and contract proof exist')
+assertIncludes(sprint, '## Sprint: Whiteboard Call App Hardening And Production Integration', 'SPRINT.md must contain the active Whiteboard Call App sprint')
+assertIncludes(sprint, '- [x] WCA-01 Sprint/backlog hygiene and package contract', 'WCA-01 must be closed only after sprint/backlog cleanup and contract proof exist')
+assertIncludes(sprint, '- [x] WCA-02 Whiteboard runtime tool completeness first pass', 'WCA-02 must be closed after the first Whiteboard runtime hardening pass')
 assertIncludes(sprint, 'demo/call-app/<app-key>/', 'Call Apps must live under demo/call-app/<app-key>/')
 assertIncludes(sprint, 'demo/call-app/whiteboard/', 'whiteboard must be the first concrete Call App package path')
 assertIncludes(sprint, 'CallWorkspaceView.vue` must not', 'Call App implementation must not grow CallWorkspaceView.vue')

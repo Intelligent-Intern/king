@@ -32,6 +32,10 @@ export function buildApiRequestError(payload, fallbackMessage, responseStatus = 
   const error = new Error(extractErrorMessage(payload, fallbackMessage));
   error.responseStatus = Number(responseStatus) || 0;
   error.responseCode = String(payload?.error?.code || '').trim().toLowerCase();
+  error.responseDetails = payload?.error?.details && typeof payload.error.details === 'object'
+    ? payload.error.details
+    : {};
+  error.responseReason = String(error.responseDetails?.reason || '').trim().toLowerCase();
   return error;
 }
 

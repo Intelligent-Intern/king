@@ -89,8 +89,8 @@ assert.doesNotMatch(
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-09 Left sidebar Call Apps browser/,
-  'SPRINT.md must mark CAP-09 complete',
+  /## Sprint: Whiteboard Call App Hardening And Production Integration/,
+  'SPRINT.md must keep Whiteboard Call Apps as the active sprint',
 );
 
 console.log('[call-app-sidebar-contract] PASS');

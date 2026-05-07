@@ -17,13 +17,23 @@ const [
   manifest,
   crdtSchema,
   iframeSource,
+  stylesheetSource,
+  runtimeSource,
+  e2eSource,
+  packageJsonSource,
   sprintSource,
 ] = await Promise.all([
   readJson('demo/call-app/whiteboard/call-app.manifest.json'),
   readJson('demo/call-app/whiteboard/crdt.schema.json'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.css'),
+  read('demo/call-app/whiteboard/public/whiteboard.js'),
+  read('demo/video-chat/frontend-vue/tests/e2e/call-app-whiteboard.spec.js'),
+  read('demo/video-chat/frontend-vue/package.json'),
   read('SPRINT.md'),
 ]);
+
+const whiteboardSource = `${iframeSource}\n${stylesheetSource}\n${runtimeSource}`;
 
 assert.equal(
   manifest.status,
@@ -37,7 +47,7 @@ assert.match(
   'whiteboard runtime must render a fixed-format canvas workspace',
 );
 
-for (const tool of ['pen', 'highlighter', 'rect', 'text', 'sticky', 'delete']) {
+for (const tool of ['select', 'pen', 'highlighter', 'line', 'rect', 'ellipse', 'text', 'sticky', 'delete']) {
   assert.match(
     iframeSource,
     new RegExp(`data-tool="${tool}"`),
@@ -45,20 +55,28 @@ for (const tool of ['pen', 'highlighter', 'rect', 'text', 'sticky', 'delete']) {
   );
 }
 
+for (const control of ['id="undo"', 'id="redo"']) {
+  assert.match(
+    iframeSource,
+    new RegExp(control),
+    `whiteboard runtime must expose ${control} control`,
+  );
+}
+
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /function canAppend\(\)[\s\S]*grantState === 'allowed'/,
   'whiteboard runtime must derive editor mode from the launch grant',
 );
 
 assert.match(
-  iframeSource,
-  /document\.querySelectorAll\('\[data-tool\], \.swatch, #width'\)[\s\S]*element\.disabled = !canAppend\(\)/,
+  whiteboardSource,
+  /document\.querySelectorAll\('\[data-tool\], \.swatch, #width, #undo, #redo'\)[\s\S]*element\.disabled = !canAppend\(\)/,
   'viewer mode must disable drawing controls in the iframe',
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /call_app\.crdt\.bootstrap\.request[\s\S]*call_app\.crdt\.ops\.request[\s\S]*setInterval\(requestOps, 1500\)/,
   'whiteboard runtime must bootstrap and continuously replay CRDT ops',
 );
@@ -72,52 +90,110 @@ for (const operationType of [
   'text.update',
   'sticky_note.add',
   'sticky_note.update',
-  'cursor.move',
 ]) {
   assert(
     crdtSchema.documents[0].operation_types.includes(operationType),
     `CRDT schema must include ${operationType}`,
   );
   assert(
-    iframeSource.includes(operationType),
+    whiteboardSource.includes(operationType),
     `whiteboard runtime must handle or emit ${operationType}`,
   );
 }
 
-assert.match(
-  iframeSource,
-  /function sendCursor[\s\S]*appendOperation\('cursor\.move'/,
-  'whiteboard runtime must publish participant cursor movement',
+for (const presenceType of ['cursor.move', 'selection.update', 'tool.preview']) {
+  assert(
+    !crdtSchema.documents[0].operation_types.includes(presenceType),
+    `${presenceType} must not be a persisted CRDT document operation`,
+  );
+  assert(
+    crdtSchema.presence?.types?.includes(presenceType),
+    `CRDT schema must advertise ${presenceType} as non-persistent presence`,
+  );
+}
+
+assert.equal(
+  crdtSchema.presence?.persisted,
+  false,
+  'whiteboard presence must stay non-authoritative and non-persistent',
 );
 
 assert.match(
-  iframeSource,
-  /function applyEnvelope[\s\S]*state\.applied\.has\(envelope\.operation_id\)[\s\S]*payload_type === 'stroke\.add'[\s\S]*payload_type === 'cursor\.move'/,
-  'whiteboard runtime must idempotently apply CRDT envelopes for drawing and cursor state',
+  whiteboardSource,
+  /function publishPresence[\s\S]*call_app\.presence\.publish[\s\S]*payload_type/,
+  'whiteboard runtime must publish cursor and selection state through the presence lane',
+);
+
+assert.doesNotMatch(
+  whiteboardSource,
+  /appendOperation\('(cursor\.move|selection\.update)'/,
+  'whiteboard runtime must not persist cursor or selection presence as CRDT ops',
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
+  /function updateObjectPosition[\s\S]*shape\.update[\s\S]*text\.update[\s\S]*sticky_note\.update/,
+  'whiteboard runtime must move selected shapes, text, and sticky notes through CRDT update operations',
+);
+
+assert.match(
+  whiteboardSource,
+  /function undoLast\(\)[\s\S]*action\.before[\s\S]*function redoLast\(\)[\s\S]*action\.after/,
+  'whiteboard runtime must expose actor-local undo and redo handlers, including CRDT-safe move updates',
+);
+
+assert.match(
+  whiteboardSource,
+  /function applyEnvelope[\s\S]*state\.applied\.has\(envelope\.operation_id\)[\s\S]*payload_type === 'stroke\.add'[\s\S]*payload_type === 'sticky_note\.update'/,
+  'whiteboard runtime must idempotently apply CRDT envelopes for drawing and object state',
+);
+
+assert.match(
+  whiteboardSource,
   /exportCanvas\('image\/png'\)[\s\S]*kingrt-whiteboard\.png/,
   'whiteboard runtime must support PNG export',
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /function exportPdf\(\)[\s\S]*application\/pdf[\s\S]*kingrt-whiteboard\.pdf/,
   'whiteboard runtime must support PDF export',
 );
 
 assert.doesNotMatch(
-  iframeSource,
+  whiteboardSource,
   /sessionToken|Authorization|localStorage|primary_session_token_received:\s*true/,
   'whiteboard runtime must not access parent auth material',
 );
 
 assert.match(
+  iframeSource,
+  /<link rel="stylesheet" href="\.\/whiteboard\.css">[\s\S]*<script src="\.\/whiteboard\.js"><\/script>/,
+  'whiteboard entrypoint must be a thin sandbox shell that loads extracted runtime assets',
+);
+
+assert.match(
+  e2eSource,
+  /orderInstallAndAttach[\s\S]*launchAll[\s\S]*stroke\.add[\s\S]*sticky_note\.add[\s\S]*injectReplay\('owner'\)[\s\S]*compactSnapshot\(\)[\s\S]*revoke\('participant'\)[\s\S]*reload\('owner'\)/,
+  'whiteboard browser E2E must cover attach, drawing, duplicate replay, snapshot compaction, revoke, and reconnect replay',
+);
+
+assert.match(
+  e2eSource,
+  /expect\.not\.arrayContaining\(\['cursor\.move', 'selection\.update'\]\)[\s\S]*presenceBeforeCursorBurst[\s\S]*toBeLessThanOrEqual[\s\S]*selection\.update/,
+  'whiteboard browser E2E must prove throttled non-persistent cursor and selection presence',
+);
+
+assert.match(
+  packageJsonSource,
+  /"test:e2e:call-app-whiteboard":\s*"playwright test tests\/e2e\/call-app-whiteboard\.spec\.js"/,
+  'package scripts must expose the Whiteboard Call App browser E2E proof',
+);
+
+assert.match(
   sprintSource,
-  /- \[x\] CAP-13 Whiteboard Call App first implementation/,
-  'SPRINT.md must mark CAP-13 complete',
+  /- \[x\] WCA-02 Whiteboard runtime tool completeness first pass/,
+  'SPRINT.md must keep the active Whiteboard runtime ticket closed after implementation proof',
 );
 
 console.log('[call-app-whiteboard-runtime-contract] PASS');

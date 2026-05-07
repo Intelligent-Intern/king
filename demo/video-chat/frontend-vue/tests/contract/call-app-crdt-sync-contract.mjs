@@ -17,6 +17,7 @@ const [
   hostSource,
   bridgeSource,
   iframeSource,
+  iframeRuntimeSource,
   lifecycleTestSource,
   sprintSource,
 ] = await Promise.all([
@@ -27,9 +28,12 @@ const [
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppWorkspaceHost.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('SPRINT.md'),
 ]);
+
+const whiteboardSource = `${iframeSource}\n${iframeRuntimeSource}`;
 
 assert.match(
   migrationSource,
@@ -53,6 +57,12 @@ assert.match(
   domainSource,
   /function videochat_call_app_crdt_append_op[\s\S]*operation_id[\s\S]*state' => 'duplicate'[\s\S]*ignore_after_first_admission/s,
   'append path must suppress duplicate operation ids after first admission',
+);
+
+assert.match(
+  domainSource,
+  /presence_payload_types[\s\S]*cursor\.move[\s\S]*presence_must_not_be_persisted/s,
+  'append path must reject non-persistent presence payloads before CRDT persistence',
 );
 
 assert.match(
@@ -103,6 +113,12 @@ assert.match(
   'frontend bridge must translate iframe append requests to backend append',
 );
 
+assert.match(
+  bridgeSource,
+  /call_app\.presence\.published[\s\S]*persisted:\s*false[\s\S]*call_app\.presence\.publish/s,
+  'frontend bridge must accept non-persistent Call App presence without routing it through CRDT persistence',
+);
+
 assert.doesNotMatch(
   bridgeSource + hostSource,
   /sessionToken|Authorization|localStorage|primary_session_token/,
@@ -110,21 +126,21 @@ assert.doesNotMatch(
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /call_app\.crdt\.bootstrap\.request[\s\S]*call_app\.crdt\.bootstrap\.response/s,
   'whiteboard iframe must use the parent CRDT bridge for bootstrap',
 );
 
 assert.match(
   lifecycleTestSource,
-  /CRDT bootstrap should return 200[\s\S]*denied participant must not append CRDT ops[\s\S]*duplicate CRDT op must be suppressed[\s\S]*CRDT snapshot must compact through collaborative admitted clock/s,
-  'backend lifecycle contract must cover bootstrap, denied append, duplicate suppression, replay, and snapshot compaction',
+  /CRDT bootstrap should return 200[\s\S]*denied participant must not append CRDT ops[\s\S]*presence updates must not be persisted as CRDT ops[\s\S]*duplicate CRDT op must be suppressed[\s\S]*CRDT snapshot must compact through collaborative admitted clock/s,
+  'backend lifecycle contract must cover bootstrap, denied append, non-persistent presence, duplicate suppression, replay, and snapshot compaction',
 );
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-12 CRDT envelope and synchronization/,
-  'SPRINT.md must mark CAP-12 complete',
+  /synchronized through King CRDT envelopes/,
+  'SPRINT.md must keep the King CRDT envelope contract in the active Whiteboard sprint',
 );
 
 console.log('[call-app-crdt-sync-contract] PASS');

@@ -20,6 +20,54 @@ Rules:
 4. [ ] The native King PHP IIBIN SFU control/metadata boundary is proven; plan deeper runtime integration only after the shipped media path remains stable.
 5. [ ] Do a second cleanup pass over superseded experiment artifacts after the `1.0.7` closure is merged.
 
+## Parked From Sprint Cleanup 2026-05-07
+
+### Governance UX, Recursive CRUD, Permissions, And Onboarding
+
+1. [ ] Descriptor-driven page action bars: create/edit/delete/import/export/save actions must be described, permission-filtered, and locally named per entity instead of generic page-local buttons.
+2. [ ] Backend route authorization: wire tenant/resource grant evaluation into Governance/Admin resource actions beyond role/path checks.
+3. [ ] Governance entity semantics: Groups, Organizations, Roles, Grants, Policies, Export/Import, Audit Log, Compliance, Modules, and Permissions need entity-specific fields, validation, and correct action names.
+4. [ ] Recursive relation flow: implement linked `+1` selection/creation flow for User -> Group -> Module -> Permission and similar entity references without stacked modals.
+5. [ ] Relation data loading: replace row-by-row relation label fetches with normalized rows, included summaries, batch summary endpoints, and frontend entity caches.
+6. [ ] Navigation/i18n hardening: descriptors should use localization keys as the source of truth and render structured localized fields instead of concatenated English descriptions.
+7. [ ] Onboarding tours: add per-area `?` tour entry points, persisted completion badges, and profile display for completed tours.
+8. [ ] Profile expansion: add about/social/contact fields only through the intended settings/profile architecture, not one-off UI state.
+
+### Admin UX And Visual Standards
+
+1. [ ] Keep CRUD search/action bars right-aligned with exactly 20px spacing and the standard submit icon.
+2. [ ] Remove redundant cancel/close buttons where a right-sidebar or modal already has the standard close affordance.
+3. [ ] Normalize right-sidebar forms: no border radius, no top/bottom border, non-resizable, sticky bottom-right submit.
+4. [ ] Normalize inputs/selects to the 12 King styleguide color tokens and remove hard-coded non-token colors.
+5. [ ] Replace wrong generic create actions on readonly/system catalog pages with correct entity-specific actions or no action.
+6. [ ] Keep page headings as the standard `h1` size and avoid unreachable/overlapping content.
+7. [ ] Theme management still needs real mini-app/iframe preview cards, theme editor in main content, and screenshot previews after save.
+8. [ ] Localization admin still needs two-language side-by-side editing and removal of CSV/source/bundle/import-history UI from the active path.
+9. [ ] App Configuration still needs dropzone-based background image upload/crop/filter flow and metadata-free UI without search.
+
+### Calendar And Booking
+
+1. [ ] Move Calendar tabs out of Video Call Management into the top-level Calendar route.
+2. [ ] Support up to five calendars with colors, tabs, settings gear, sharing, sync options, and access levels.
+3. [ ] Replace mobile public booking calendar grid with day strip + slot list + details/confirmation step.
+4. [ ] Keep desktop calendar behavior intact while mobile uses the two-step booking flow.
+5. [ ] Include correct logo, call link, iCal, Google Calendar, and confirmation details.
+
+### Clean Refactoring With Composables And Components
+
+1. [ ] Shell/sidebar: extract layout composable, brand strip, primary navigation, user dock, and responsive scroll proof.
+2. [ ] CRUD scaffold: extract list controller, action bar, search toolbar, table frame, and migrate one reusable non-call CRUD surface.
+3. [ ] Right-sidebar/forms: extract sidebar form shell, form composable, sticky submit contract, remove duplicated close/cancel variants, and prove on multiple admin surfaces.
+4. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
+5. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
+6. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
+7. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
+8. [ ] In-Call Sidebar: extract panel tabs, device settings, invite card, layout controls, and prove background pipeline internals are untouched.
+9. [ ] Theme Editor: extract preview frame, preview navigation, palette editor for exactly 12 tokens, asset editor, and screenshot-card proof.
+10. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
+11. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
+12. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
+
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 
 - Compatibility anchor for existing smoke/deployment contracts.

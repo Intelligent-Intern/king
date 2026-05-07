@@ -58,6 +58,15 @@ function videochat_call_app_crdt_requires_allowed_grant(array $resolved): ?array
     ];
 }
 
+function videochat_call_app_crdt_presence_payload_types(array $session): array
+{
+    $appKey = (string) ($session['app_key'] ?? (($session['app'] ?? [])['app_key'] ?? ''));
+    if ($appKey !== 'whiteboard') {
+        return [];
+    }
+    return ['cursor.move', 'selection.update', 'tool.preview'];
+}
+
 function videochat_call_app_crdt_ensure_document(PDO $pdo, int $tenantId, array $record, array $session): array
 {
     $documentId = trim((string) ($record['document_id'] ?? ($session['document_id'] ?? '')));
@@ -216,6 +225,8 @@ function videochat_call_app_crdt_normalize_append(array $payload, array $session
     }
     if ($payloadType === '' || strlen($payloadType) > 120) {
         $errors['payload_type'] = 'required_max_120';
+    } elseif (in_array($payloadType, videochat_call_app_crdt_presence_payload_types($session), true)) {
+        $errors['payload_type'] = 'presence_must_not_be_persisted';
     }
     if (!is_array($payloadBody) && !is_scalar($payloadBody) && $payloadBody !== null) {
         $errors['payload'] = 'must_be_json_value';

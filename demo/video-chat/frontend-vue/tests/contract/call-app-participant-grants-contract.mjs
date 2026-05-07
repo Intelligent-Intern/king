@@ -92,8 +92,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-10 Right sidebar participant app grants/,
-  'SPRINT.md must mark CAP-10 complete',
+  /## Sprint: Whiteboard Call App Hardening And Production Integration/,
+  'SPRINT.md must keep Call App grant hardening under the active Whiteboard sprint',
 );
 
 console.log('[call-app-participant-grants-contract] PASS');

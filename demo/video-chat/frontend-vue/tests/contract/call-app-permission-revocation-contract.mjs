@@ -14,7 +14,10 @@ const [
   sessionsDomainSource,
   crdtDomainSource,
   routeSource,
+  workspaceApiSource,
+  crdtBridgeSource,
   iframeSource,
+  iframeRuntimeSource,
   lifecycleTestSource,
   sprintSource,
 ] = await Promise.all([
@@ -22,10 +25,15 @@ const [
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php'),
   read('demo/video-chat/backend-king-php/domain/call_apps/call_app_crdt.php'),
   read('demo/video-chat/backend-king-php/http/module_call_apps.php'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/workspace/api.ts'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppCrdtBridge.js'),
   read('demo/call-app/whiteboard/public/index.html'),
+  read('demo/call-app/whiteboard/public/whiteboard.js'),
   read('demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php'),
   read('SPRINT.md'),
 ]);
+
+const whiteboardSource = `${iframeSource}\n${iframeRuntimeSource}`;
 
 assert.match(
   launchDomainSource,
@@ -76,21 +84,39 @@ assert.match(
 );
 
 assert.match(
-  iframeSource,
+  workspaceApiSource,
+  /responseDetails[\s\S]*responseReason/,
+  'workspace api errors must preserve backend error details and denial reason for iframe bridges',
+);
+
+assert.match(
+  crdtBridgeSource,
+  /participant_grant_denied[\s\S]*denied[\s\S]*call_app\.crdt\.error[\s\S]*grant_state/s,
+  'CRDT iframe bridge must forward participant grant denial to the sandbox runtime',
+);
+
+assert.match(
+  whiteboardSource,
   /let capabilities = new Set\(\)[\s\S]*function canRead\(\)[\s\S]*capabilities\.has\('call_apps\.crdt\.read'\)/,
   'whiteboard iframe must derive read access from launch capabilities',
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /function requestBootstrap\(afterClock = 0\)[\s\S]*if \(!canRead\(\)\) return/s,
   'whiteboard iframe must not request private CRDT bootstrap without read capability',
 );
 
 assert.match(
-  iframeSource,
+  whiteboardSource,
   /if \(canRead\(\)\)[\s\S]*requestBootstrap\(0\)[\s\S]*setInterval\(requestOps, 1500\)[\s\S]*Access not granted for this whiteboard/s,
   'whiteboard launch path must avoid CRDT polling when access is revoked',
+);
+
+assert.match(
+  whiteboardSource,
+  /function applyAccessState[\s\S]*grantState = nextGrantState[\s\S]*clearInterval\(pollTimer\)[\s\S]*call_app\.crdt\.error[\s\S]*participant_grant_denied/s,
+  'whiteboard runtime must consume runtime grant denial and disable polling/editing after revocation',
 );
 
 assert.match(
@@ -113,8 +139,8 @@ assert.match(
 
 assert.match(
   sprintSource,
-  /- \[x\] CAP-14 App permissions and revocation hardening/,
-  'SPRINT.md must mark CAP-14 complete',
+  /revoked participants cannot submit CRDT ops/,
+  'SPRINT.md must keep revocation hardening in the active Whiteboard acceptance criteria',
 );
 
 console.log('[call-app-permission-revocation-contract] PASS');

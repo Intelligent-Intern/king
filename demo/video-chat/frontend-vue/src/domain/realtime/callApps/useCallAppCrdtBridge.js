@@ -70,10 +70,28 @@ export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest }
     });
   }
 
+  function handlePresencePublish(frameWindow, session, message) {
+    postToIframe(frameWindow, session, 'call_app.presence.published', {
+      request_id: requestId(message),
+      result: {
+        ok: true,
+        state: 'accepted',
+        persisted: false,
+        payload_type: String(message?.payload_type || '').trim(),
+      },
+    });
+  }
+
   function postError(frameWindow, session, message, error) {
+    const reason = String(error?.responseReason || error?.responseDetails?.reason || '').trim().toLowerCase();
+    const grantState = reason === 'participant_grant_denied' ? 'denied' : '';
     postToIframe(frameWindow, session, 'call_app.crdt.error', {
       request_id: requestId(message),
       message: error instanceof Error ? error.message : 'Call App CRDT request failed.',
+      reason,
+      grant_state: grantState,
+      response_status: Number(error?.responseStatus || 0) || 0,
+      response_code: String(error?.responseCode || '').trim().toLowerCase(),
     });
   }
 
@@ -99,6 +117,8 @@ export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest }
         await handleAppend(frameWindow, session, message);
       } else if (type === 'call_app.crdt.snapshot.request') {
         await handleSnapshot(frameWindow, session, message);
+      } else if (type === 'call_app.presence.publish') {
+        handlePresencePublish(frameWindow, session, message);
       }
     };
     void run().catch((error) => postError(frameWindow, session, message, error));

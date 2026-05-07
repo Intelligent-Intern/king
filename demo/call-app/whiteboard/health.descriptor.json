@@ -25,6 +25,18 @@
       "type": "static_file",
       "path": "public/index.html",
       "required": true
+    },
+    {
+      "name": "iframe_stylesheet",
+      "type": "static_file",
+      "path": "public/whiteboard.css",
+      "required": true
+    },
+    {
+      "name": "iframe_runtime",
+      "type": "static_file",
+      "path": "public/whiteboard.js",
+      "required": true
     }
   ],
   "status_mapping": {
