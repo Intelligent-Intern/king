@@ -16,6 +16,7 @@ try {
   const iconPath = path.join(frontendRoot, 'public/assets/orgas/kingrt/icons/background-blue.svg');
   const preferences = readUtf8('src/domain/realtime/media/preferences.ts');
   const callSettingsCss = readUtf8('src/styles/call-settings.css');
+  const blurControls = readUtf8('src/domain/realtime/background/CallBackgroundBlurControls.vue');
   const templates = [
     ['join preview', readUtf8('src/domain/calls/access/JoinView.vue')],
     ['dashboard preview', readUtf8('src/domain/calls/dashboard/UserDashboardView.template.html')],
@@ -36,11 +37,13 @@ try {
   assert.ok(preferences.includes("setCallBackgroundBackdropMode('exclusion');"), 'exclusion preset must select the exclusion backdrop');
   assert.ok(preferences.includes("setCallBackgroundQualityProfile('quality');"), 'exclusion preset must use the quality mask path');
 
+  assert.ok(blurControls.includes("isCallBackgroundPresetActive('exclusion')"), 'shared blur controls must expose active state for the blue background selector');
+  assert.ok(blurControls.includes("applyCallBackgroundPreset('exclusion')"), 'shared blur controls must apply the blue background selector');
+  assert.ok(blurControls.includes('/assets/orgas/kingrt/icons/background-blue.svg'), 'shared blur controls must render the blue background icon image');
+  assert.ok(blurControls.includes('aria-label="Blue background"'), 'shared blur controls must label the blue background control');
+
   for (const [label, source] of templates) {
-    assert.ok(source.includes("isBackgroundPresetActive('exclusion')"), `${label} must expose active state for the blue background selector`);
-    assert.ok(source.includes("applyBackgroundPreset('exclusion')"), `${label} must apply the blue background selector`);
-    assert.ok(source.includes('/assets/orgas/kingrt/icons/background-blue.svg'), `${label} must render the blue background icon image`);
-    assert.ok(source.includes('aria-label="Blue background"'), `${label} must label the blue background control`);
+    assert.ok(source.includes('<CallBackgroundControls'), `${label} must render the shared background controls`);
   }
 
   console.log('[background-blue-selector-contract] PASS');
