@@ -33,7 +33,7 @@ assert(
   'workspace gossip data-lane implementation must track topology repair cooldown state by assigned neighbor',
 )
 assert(
-  /onStateChange:\s*\(peerId,\s*state,\s*eventType\) => \{[\s\S]*assignedGossipNativeNeighborIds\.has\((String\(peerId \|\| ''\)|normalizedPeerId)\)[\s\S]*controller\.updateCarrierStateFromDataChannel\((String\(peerId \|\| ''\)|normalizedPeerId),\s*state,\s*eventType\)/.test(workspaceGossipSurface),
+  /onStateChange:\s*\(peerId,\s*state,\s*eventType\) => \{[\s\S]*assignedGossipNeighborIds\.has\((String\(peerId \|\| ''\)|normalizedPeerId)\)[\s\S]*controller\.updateCarrierStateFromDataChannel\((String\(peerId \|\| ''\)|normalizedPeerId),\s*state,\s*eventType\)/.test(workspaceGossipSurface),
   'RTCDataChannel state changes must update carrier state only for assigned gossip neighbors while the lane is enabled',
 )
 assert(
@@ -46,7 +46,7 @@ assert(
   'RTCDataChannel state callback must feed carrier health before emitting diagnostics',
 )
 assert(
-  /function requestGossipTopologyRepair\(peerId,\s*reason\)[\s\S]*if \(!GOSSIP_DATA_LANE_CONFIG\.enabled \|\| !GOSSIP_DATA_LANE_CONFIG\.publish \|\| !GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*!assignedGossipNativeNeighborIds\.has\(String\(peerId \|\| ''\)\)[\s\S]*\(nowMs - lastRequestedAtMs\) < 3000[\s\S]*type:\s*'gossip\/topology-repair\/request'/.test(workspaceGossipSurface),
+  /function requestGossipTopologyRepair\(peerId,\s*reason\)[\s\S]*if \(!GOSSIP_DATA_LANE_CONFIG\.enabled \|\| !GOSSIP_DATA_LANE_CONFIG\.publish \|\| !GOSSIP_DATA_LANE_CONFIG\.receive\) return false;[\s\S]*!assignedGossipNeighborIds\.has\(String\(peerId \|\| ''\)\)[\s\S]*\(nowMs - lastRequestedAtMs\) < 3000[\s\S]*type:\s*'gossip\/topology-repair\/request'/.test(workspaceGossipSurface),
   'topology repair requests must be enabled-gated, assigned-neighbor-gated, cooldown-bound, and sent on the ops lane',
 )
 assert(
@@ -63,6 +63,10 @@ assert(
 assert(
   /\(state === 'closed' \|\| eventType === 'error'\)[\s\S]*requestGossipTopologyRepair\((peerId|normalizedPeerId),\s*eventType\)/.test(workspaceGossipSurface),
   'lost assigned RTCDataChannel carriers must request topology repair',
+)
+assert(
+  /function handleDedicatedGossipPeerState\(entry,\s*eventType\)[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'connected'[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'lost'[\s\S]*requestGossipTopologyRepair\(peerId,\s*`gossip_peer_\$\{eventType\}`\)/.test(workspaceGossipSurface),
+  'dedicated gossip RTCPeerConnection health must feed carrier state and topology repair independently of native peers',
 )
 assert(
   /gossipTopologyRepairRequestedAtByPeerId\.clear\(\);[\s\S]*gossipDataChannelTransport\?\.close\(\)/.test(workspaceGossipSurface),

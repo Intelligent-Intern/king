@@ -652,6 +652,7 @@ const {
   applyGossipTopologyHint,
   bindGossipDataChannelForNativePeer,
   closeGossipDataChannelForNativePeer,
+  handleGossipSignalingEvent,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -662,7 +663,10 @@ const {
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
     sendSocketFrame,
   },
-  refs: { nativePeerConnectionsRef },
+  constants: {
+    defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS,
+  },
+  refs: { dynamicIceServers },
 });
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
@@ -1513,6 +1517,7 @@ const {
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
+    handleGossipSignalingEvent,
     handleMediaSecuritySignal: (...args) => handleMediaSecuritySignal(...args),
     handleNativeSignalingEvent,
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),

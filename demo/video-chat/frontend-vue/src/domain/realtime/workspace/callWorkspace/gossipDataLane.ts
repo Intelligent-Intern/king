@@ -1,11 +1,12 @@
 import { arrayBufferToBase64Url, base64UrlToArrayBuffer } from '../../../../lib/sfu/framePayload';
-import { GOSSIP_DATA_LANE_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
+import { GOSSIP_DATA_LANE_CONFIG, MEDIA_CARRIER_CONFIG } from '../../../../lib/gossipmesh/featureFlags';
 import { GossipController } from '../../../../lib/gossipmesh/gossipController';
 import { deriveGossipRolloutGateState } from '../../../../lib/gossipmesh/rolloutGate';
 import { GossipRtcDataChannelTransport } from '../../../../lib/gossipmesh/rtcDataChannelTransport';
 
 export function createCallWorkspaceGossipDataLane({
   callbacks,
+  constants = {},
   refs,
 }) {
   const {
@@ -18,14 +19,18 @@ export function createCallWorkspaceGossipDataLane({
     sendSocketFrame,
   } = callbacks;
   const {
-    nativePeerConnectionsRef,
+    dynamicIceServers,
   } = refs;
+  const {
+    defaultNativeIceServers = [],
+  } = constants;
 
   let gossipDataChannelTransport = null;
   let liveGossipController = null;
   let liveGossipControllerKey = '';
   let unsubscribeLiveGossipDelivery = null;
-  const assignedGossipNativeNeighborIds = new Set();
+  const assignedGossipNeighborIds = new Set();
+  const dedicatedGossipPeerConnections = new Map();
   const liveGossipFrameSequenceByTrack = new Map();
   const gossipTopologyRepairRequestedAtByPeerId = new Map();
   let lastGossipTelemetrySnapshotSentAtMs = 0;
@@ -41,6 +46,68 @@ export function createCallWorkspaceGossipDataLane({
 
   function callId() {
     return String(activeSocketCallId() || activeCallId() || '').trim() || 'call';
+  }
+
+  function normalizePeerId(value) {
+    return String(value || '').trim();
+  }
+
+  function numericPeerId(value) {
+    const numeric = Number(value);
+    return Number.isInteger(numeric) && numeric > 0 ? numeric : 0;
+  }
+
+  function gossipPeerInitiatesConnection(peerId) {
+    const local = normalizePeerId(localPeerId());
+    const remote = normalizePeerId(peerId);
+    if (local === '' || remote === '') return false;
+    const localNumeric = numericPeerId(local);
+    const remoteNumeric = numericPeerId(remote);
+    if (localNumeric > 0 && remoteNumeric > 0) return localNumeric < remoteNumeric;
+    return local < remote;
+  }
+
+  function currentGossipIceServers() {
+    const dynamicServers = Array.isArray(dynamicIceServers?.value) ? dynamicIceServers.value : [];
+    if (dynamicServers.length > 0) return dynamicServers;
+    return Array.isArray(defaultNativeIceServers) ? defaultNativeIceServers : [];
+  }
+
+  function gossipRtcConfig() {
+    return {
+      iceCandidatePoolSize: 4,
+      iceServers: currentGossipIceServers(),
+    };
+  }
+
+  function normalizeGossipSdpForRemoteDescription(value) {
+    const raw = String(value || '').trim();
+    if (raw === '') return '';
+    const normalized = raw.replace(/\r?\n/g, '\r\n');
+    return normalized.endsWith('\r\n') ? normalized : `${normalized}\r\n`;
+  }
+
+  function gossipSignalPayload(kind, payload = {}) {
+    return {
+      ...payload,
+      kind,
+      runtime_path: 'gossipmesh',
+      room_id: roomId(),
+      call_id: callId(),
+      data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+      diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+      media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
+    };
+  }
+
+  function sendDedicatedGossipSignal(type, targetPeerId, kind, payload = {}) {
+    const targetUserId = numericPeerId(targetPeerId);
+    if (targetUserId <= 0) return false;
+    return sendSocketFrame({
+      type,
+      target_user_id: targetUserId,
+      payload: gossipSignalPayload(kind, payload),
+    });
   }
 
   function ensureGossipDataChannelTransport() {
@@ -94,11 +161,11 @@ export function createCallWorkspaceGossipDataLane({
       onStateChange: (peerId, state, eventType) => {
         const normalizedPeerId = String(peerId || '');
         const controller = ensureLiveGossipController();
-        if (controller && assignedGossipNativeNeighborIds.has(normalizedPeerId)) {
+        if (controller && assignedGossipNeighborIds.has(normalizedPeerId)) {
           ensureLiveGossipPeer(normalizedPeerId);
           controller.updateCarrierStateFromDataChannel(normalizedPeerId, state, eventType);
         }
-        if ((state === 'closed' || eventType === 'error') && assignedGossipNativeNeighborIds.has(normalizedPeerId)) {
+        if ((state === 'closed' || eventType === 'error') && assignedGossipNeighborIds.has(normalizedPeerId)) {
           requestGossipTopologyRepair(peerId, eventType);
         }
         captureClientDiagnostic({
@@ -143,7 +210,8 @@ export function createCallWorkspaceGossipDataLane({
       liveGossipController.dispose?.();
       liveGossipController = null;
       liveGossipControllerKey = '';
-      assignedGossipNativeNeighborIds.clear();
+      closeAllDedicatedGossipPeerConnections('controller_key_changed');
+      assignedGossipNeighborIds.clear();
       gossipTopologyRepairRequestedAtByPeerId.clear();
       lastGossipTelemetrySnapshotSentAtMs = 0;
       gossipDataChannelTransport?.close();
@@ -202,21 +270,426 @@ export function createCallWorkspaceGossipDataLane({
     };
   }
 
-  function bindAssignedGossipNativeNeighbors() {
+  function ensureAssignedGossipNeighborConnections(reason = 'topology_hint') {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return 0;
-    let boundCount = 0;
-    for (const peerId of assignedGossipNativeNeighborIds) {
-      const peer = nativePeerConnectionsRef.value.get(Number(peerId));
-      if (bindGossipDataChannelForNativePeer(peer)) {
-        boundCount += 1;
+    let ensuredCount = 0;
+    for (const peerId of assignedGossipNeighborIds) {
+      if (ensureDedicatedGossipNeighborConnection(peerId, reason)) {
+        ensuredCount += 1;
       }
     }
-    return boundCount;
+    return ensuredCount;
+  }
+
+  function ensureDedicatedGossipNeighborConnection(peerId, reason = 'topology_hint') {
+    const normalizedPeerId = normalizePeerId(peerId);
+    if (!GOSSIP_DATA_LANE_CONFIG.enabled) return false;
+    if (normalizedPeerId === '' || normalizedPeerId === '0' || normalizedPeerId === localPeerId()) return false;
+    if (!assignedGossipNeighborIds.has(normalizedPeerId)) return false;
+    if (typeof RTCPeerConnection !== 'function') {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_dedicated_peer_connection_unavailable',
+        code: 'gossip_dedicated_peer_connection_unavailable',
+        message: 'Dedicated gossip neighbor connection could not be created because RTCPeerConnection is unavailable.',
+        payload: {
+          peer_id: normalizedPeerId,
+          reason: String(reason || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      return false;
+    }
+
+    const existing = dedicatedGossipPeerConnections.get(normalizedPeerId);
+    if (existing?.pc && String(existing.pc.signalingState || '').trim().toLowerCase() !== 'closed') {
+      if (!existing.bound) {
+        const transport = ensureGossipDataChannelTransport();
+        if (transport) {
+          transport.bindPeerConnection(normalizedPeerId, existing.pc, Boolean(existing.initiator));
+          existing.bound = true;
+        }
+      }
+      if (existing.initiator && !existing.pc.localDescription) {
+        void negotiateDedicatedGossipNeighbor(existing, reason);
+      }
+      return true;
+    }
+
+    let pc = null;
+    try {
+      pc = new RTCPeerConnection(gossipRtcConfig());
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'error',
+        eventType: 'gossip_dedicated_peer_connection_create_failed',
+        code: 'gossip_dedicated_peer_connection_create_failed',
+        message: 'Dedicated gossip neighbor connection creation failed.',
+        payload: {
+          peer_id: normalizedPeerId,
+          reason: String(reason || ''),
+          error: String(error?.message || error || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+        immediate: true,
+      });
+      return false;
+    }
+
+    const entry = {
+      peerId: normalizedPeerId,
+      pc,
+      initiator: gossipPeerInitiatesConnection(normalizedPeerId),
+      pendingIce: [],
+      negotiating: false,
+      bound: false,
+      createdAtMs: Date.now(),
+    };
+    dedicatedGossipPeerConnections.set(normalizedPeerId, entry);
+
+    pc.addEventListener('icecandidate', (event) => {
+      if (!event?.candidate) return;
+      sendDedicatedGossipSignal('call/ice', normalizedPeerId, 'gossip_webrtc_ice', {
+        candidate: typeof event.candidate.toJSON === 'function'
+          ? event.candidate.toJSON()
+          : event.candidate,
+      });
+    });
+    pc.addEventListener('connectionstatechange', () => {
+      handleDedicatedGossipPeerState(entry, 'connectionstatechange');
+    });
+    pc.addEventListener('iceconnectionstatechange', () => {
+      handleDedicatedGossipPeerState(entry, 'iceconnectionstatechange');
+    });
+    if (entry.initiator) {
+      pc.addEventListener('negotiationneeded', () => {
+        void negotiateDedicatedGossipNeighbor(entry, 'negotiationneeded');
+      });
+    }
+
+    const transport = ensureGossipDataChannelTransport();
+    if (transport) {
+      transport.bindPeerConnection(normalizedPeerId, pc, entry.initiator);
+      entry.bound = true;
+    }
+    ensureLiveGossipPeer(normalizedPeerId);
+    if (entry.initiator) {
+      void negotiateDedicatedGossipNeighbor(entry, reason);
+    }
+    captureClientDiagnostic({
+      category: 'media',
+      level: 'info',
+      eventType: 'gossip_dedicated_peer_connection_created',
+      code: 'gossip_dedicated_peer_connection_created',
+      message: 'Dedicated gossip-only RTCPeerConnection created for a server-assigned neighbor.',
+      payload: {
+        peer_id: normalizedPeerId,
+        initiator: entry.initiator,
+        reason: String(reason || ''),
+        ice_server_count: currentGossipIceServers().length,
+        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+      },
+    });
+    return true;
+  }
+
+  function handleDedicatedGossipPeerState(entry, eventType) {
+    if (!entry?.pc) return;
+    const peerId = normalizePeerId(entry.peerId);
+    const connectionState = String(entry.pc.connectionState || '').trim().toLowerCase();
+    const iceConnectionState = String(entry.pc.iceConnectionState || '').trim().toLowerCase();
+    const states = [connectionState, iceConnectionState];
+    const effectiveState = states.includes('failed')
+      ? 'failed'
+      : (states.includes('closed')
+        ? 'closed'
+        : (states.includes('disconnected')
+          ? 'disconnected'
+          : (states.includes('connected') || states.includes('completed') ? 'connected' : (connectionState || iceConnectionState))));
+    const controller = ensureLiveGossipController();
+    if (controller && assignedGossipNeighborIds.has(peerId)) {
+      if (effectiveState === 'connected' || effectiveState === 'completed') {
+        controller.setCarrierState?.(peerId, 'connected', `gossip_peer_${eventType}`);
+      } else if (effectiveState === 'failed' || effectiveState === 'closed') {
+        controller.setCarrierState?.(peerId, 'lost', `gossip_peer_${eventType}`);
+      } else if (effectiveState === 'disconnected') {
+        controller.setCarrierState?.(peerId, 'degraded', `gossip_peer_${eventType}`);
+      }
+    }
+    captureClientDiagnostic({
+      category: 'media',
+      level: effectiveState === 'failed' || effectiveState === 'closed' ? 'warning' : 'info',
+      eventType: 'gossip_dedicated_peer_connection_state',
+      code: 'gossip_dedicated_peer_connection_state',
+      message: 'Dedicated gossip neighbor RTCPeerConnection state changed.',
+      payload: {
+        peer_id: peerId,
+        event_type: String(eventType || ''),
+        connection_state: connectionState,
+        ice_connection_state: iceConnectionState,
+        data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+        diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+      },
+    });
+    if (effectiveState === 'failed' || effectiveState === 'closed') {
+      closeDedicatedGossipPeerConnection(peerId, `gossip_peer_${eventType}`, true);
+    } else if (effectiveState === 'disconnected') {
+      requestGossipTopologyRepair(peerId, `gossip_peer_${eventType}`);
+    }
+  }
+
+  async function negotiateDedicatedGossipNeighbor(entry, reason = 'topology_hint') {
+    if (!entry?.pc || !entry.initiator || entry.negotiating) return false;
+    if (String(entry.pc.signalingState || '').trim().toLowerCase() === 'closed') return false;
+    entry.negotiating = true;
+    try {
+      const offer = await entry.pc.createOffer();
+      await entry.pc.setLocalDescription(offer);
+      const local = entry.pc.localDescription;
+      if (!local?.sdp) return false;
+      return sendDedicatedGossipSignal('call/offer', entry.peerId, 'gossip_webrtc_offer', {
+        reason: String(reason || ''),
+        sdp: {
+          type: local.type,
+          sdp: local.sdp,
+        },
+      });
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_dedicated_offer_failed',
+        code: 'gossip_dedicated_offer_failed',
+        message: 'Dedicated gossip neighbor offer negotiation failed.',
+        payload: {
+          peer_id: normalizePeerId(entry.peerId),
+          reason: String(reason || ''),
+          error: String(error?.message || error || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      requestGossipTopologyRepair(entry.peerId, 'gossip_offer_failed');
+      return false;
+    } finally {
+      entry.negotiating = false;
+    }
+  }
+
+  async function flushDedicatedGossipPendingIce(entry) {
+    if (!entry?.pc?.remoteDescription?.type) return false;
+    let flushed = 0;
+    while (entry.pendingIce.length > 0) {
+      const candidatePayload = entry.pendingIce.shift();
+      if (!candidatePayload) continue;
+      try {
+        await entry.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
+        flushed += 1;
+      } catch (error) {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'warning',
+          eventType: 'gossip_dedicated_pending_ice_failed',
+          code: 'gossip_dedicated_pending_ice_failed',
+          message: 'Queued dedicated gossip ICE candidate could not be applied.',
+          payload: {
+            peer_id: normalizePeerId(entry.peerId),
+            error: String(error?.message || error || ''),
+            data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+            diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+          },
+        });
+      }
+    }
+    return flushed > 0;
+  }
+
+  function closeDedicatedGossipPeerConnection(peerId, reason = 'closed', requestRepair = false) {
+    const normalizedPeerId = normalizePeerId(peerId);
+    if (normalizedPeerId === '') return false;
+    const entry = dedicatedGossipPeerConnections.get(normalizedPeerId);
+    if (!entry) {
+      gossipDataChannelTransport?.close(normalizedPeerId);
+      return false;
+    }
+    dedicatedGossipPeerConnections.delete(normalizedPeerId);
+    try {
+      entry.pc?.close?.();
+    } catch {}
+    gossipDataChannelTransport?.close(normalizedPeerId);
+    if (liveGossipController && assignedGossipNeighborIds.has(normalizedPeerId)) {
+      liveGossipController.setCarrierState?.(normalizedPeerId, 'lost', String(reason || 'closed'));
+    }
+    if (requestRepair && assignedGossipNeighborIds.has(normalizedPeerId)) {
+      requestGossipTopologyRepair(normalizedPeerId, reason);
+    }
+    return true;
+  }
+
+  function closeAllDedicatedGossipPeerConnections(reason = 'teardown') {
+    let closed = 0;
+    for (const peerId of Array.from(dedicatedGossipPeerConnections.keys())) {
+      if (closeDedicatedGossipPeerConnection(peerId, reason, false)) {
+        closed += 1;
+      }
+    }
+    gossipDataChannelTransport?.close();
+    return closed;
+  }
+
+  function handleGossipSignalingEvent(type, senderUserId, payloadBody = {}) {
+    const kind = String(payloadBody?.kind || '').trim().toLowerCase();
+    if (!['gossip_webrtc_offer', 'gossip_webrtc_answer', 'gossip_webrtc_ice'].includes(kind)) return false;
+    if (!GOSSIP_DATA_LANE_CONFIG.enabled) return true;
+    const peerId = normalizePeerId(senderUserId);
+    if (peerId === '' || peerId === '0') return true;
+    if (!assignedGossipNeighborIds.has(peerId)) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_signaling_unassigned_peer_ignored',
+        code: 'gossip_signaling_unassigned_peer_ignored',
+        message: 'Dedicated gossip WebRTC signaling was ignored because the sender is not in the server-assigned neighbor set.',
+        payload: {
+          peer_id: peerId,
+          signal_type: String(type || ''),
+          kind,
+          assigned_neighbor_count: assignedGossipNeighborIds.size,
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      return true;
+    }
+    ensureDedicatedGossipNeighborConnection(peerId, 'signaling');
+    if (kind === 'gossip_webrtc_offer') {
+      void handleDedicatedGossipOffer(peerId, payloadBody || {});
+    } else if (kind === 'gossip_webrtc_answer') {
+      void handleDedicatedGossipAnswer(peerId, payloadBody || {});
+    } else if (kind === 'gossip_webrtc_ice') {
+      void handleDedicatedGossipIce(peerId, payloadBody || {});
+    }
+    return true;
+  }
+
+  async function handleDedicatedGossipOffer(peerId, payloadBody) {
+    const entry = dedicatedGossipPeerConnections.get(normalizePeerId(peerId));
+    if (!entry?.pc) return false;
+    const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
+    const type = String(sdpPayload?.type || '').trim().toLowerCase();
+    const sdp = normalizeGossipSdpForRemoteDescription(sdpPayload?.sdp);
+    if (type !== 'offer' || sdp === '') return false;
+    try {
+      const signalingState = String(entry.pc.signalingState || '').trim().toLowerCase();
+      if (signalingState === 'have-local-offer') {
+        const remoteOfferHasPriority = !gossipPeerInitiatesConnection(peerId);
+        if (!remoteOfferHasPriority) return false;
+        await entry.pc.setLocalDescription({ type: 'rollback' });
+      } else if (signalingState !== 'stable' && signalingState !== '') {
+        return false;
+      }
+      await entry.pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+      await flushDedicatedGossipPendingIce(entry);
+      const answer = await entry.pc.createAnswer();
+      await entry.pc.setLocalDescription(answer);
+      const local = entry.pc.localDescription;
+      if (!local?.sdp) return false;
+      return sendDedicatedGossipSignal('call/answer', peerId, 'gossip_webrtc_answer', {
+        sdp: {
+          type: local.type,
+          sdp: local.sdp,
+        },
+      });
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_dedicated_offer_handle_failed',
+        code: 'gossip_dedicated_offer_handle_failed',
+        message: 'Dedicated gossip neighbor offer handling failed.',
+        payload: {
+          peer_id: normalizePeerId(peerId),
+          error: String(error?.message || error || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      requestGossipTopologyRepair(peerId, 'gossip_offer_handle_failed');
+      return false;
+    }
+  }
+
+  async function handleDedicatedGossipAnswer(peerId, payloadBody) {
+    const entry = dedicatedGossipPeerConnections.get(normalizePeerId(peerId));
+    if (!entry?.pc) return false;
+    const sdpPayload = payloadBody && typeof payloadBody.sdp === 'object' ? payloadBody.sdp : null;
+    const type = String(sdpPayload?.type || '').trim().toLowerCase();
+    const sdp = normalizeGossipSdpForRemoteDescription(sdpPayload?.sdp);
+    if (type !== 'answer' || sdp === '') return false;
+    try {
+      const signalingState = String(entry.pc.signalingState || '').trim().toLowerCase();
+      if (signalingState !== 'have-local-offer') return false;
+      await entry.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+      await flushDedicatedGossipPendingIce(entry);
+      return true;
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_dedicated_answer_handle_failed',
+        code: 'gossip_dedicated_answer_handle_failed',
+        message: 'Dedicated gossip neighbor answer handling failed.',
+        payload: {
+          peer_id: normalizePeerId(peerId),
+          error: String(error?.message || error || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      requestGossipTopologyRepair(peerId, 'gossip_answer_handle_failed');
+      return false;
+    }
+  }
+
+  async function handleDedicatedGossipIce(peerId, payloadBody) {
+    const entry = dedicatedGossipPeerConnections.get(normalizePeerId(peerId));
+    if (!entry?.pc) return false;
+    const candidatePayload = payloadBody ? payloadBody.candidate : null;
+    if (!candidatePayload || typeof candidatePayload !== 'object') return false;
+    if (!entry.pc.remoteDescription?.type) {
+      entry.pendingIce.push(candidatePayload);
+      return true;
+    }
+    try {
+      await entry.pc.addIceCandidate(new RTCIceCandidate(candidatePayload));
+      return true;
+    } catch (error) {
+      captureClientDiagnostic({
+        category: 'media',
+        level: 'warning',
+        eventType: 'gossip_dedicated_ice_failed',
+        code: 'gossip_dedicated_ice_failed',
+        message: 'Dedicated gossip ICE candidate could not be applied.',
+        payload: {
+          peer_id: normalizePeerId(peerId),
+          error: String(error?.message || error || ''),
+          data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
+          diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        },
+      });
+      requestGossipTopologyRepair(peerId, 'gossip_ice_failed');
+      return false;
+    }
   }
 
   function requestGossipTopologyRepair(peerId, reason) {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;
-    if (!assignedGossipNativeNeighborIds.has(String(peerId || ''))) return false;
+    if (!assignedGossipNeighborIds.has(String(peerId || ''))) return false;
     const normalizedPeerId = String(peerId || '').trim();
     if (normalizedPeerId === '') return false;
     const nowMs = Date.now();
@@ -267,7 +740,8 @@ export function createCallWorkspaceGossipDataLane({
     const snapshot = controller.createTelemetrySnapshot?.(peerId, {
       dataLaneMode: GOSSIP_DATA_LANE_CONFIG.mode,
       diagnosticsLabel: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
-      rolloutStrategy: 'sfu_first_explicit',
+      mediaCarrierMode: MEDIA_CARRIER_CONFIG.mode,
+      rolloutStrategy: MEDIA_CARRIER_CONFIG.mode,
     });
     if (!snapshot) return false;
     const sent = sendSocketFrame({
@@ -312,33 +786,33 @@ export function createCallWorkspaceGossipDataLane({
     const applied = controller.applyTopologyHint(peerId, topologyHint);
     if (!applied) return false;
     const peer = controller.getPeer(peerId);
-    const previousAssignedNeighborIds = new Set(assignedGossipNativeNeighborIds);
-    assignedGossipNativeNeighborIds.clear();
+    const previousAssignedNeighborIds = new Set(assignedGossipNeighborIds);
+    assignedGossipNeighborIds.clear();
     for (const neighborId of peer?.neighbor_set || []) {
       const normalizedNeighborId = String(neighborId || '').trim();
       if (gossipTopologyNeighborUsesRtcDataChannel(topologyHint, normalizedNeighborId)) {
-        assignedGossipNativeNeighborIds.add(normalizedNeighborId);
+        assignedGossipNeighborIds.add(normalizedNeighborId);
       }
     }
     for (const previousPeerId of previousAssignedNeighborIds) {
-      if (!assignedGossipNativeNeighborIds.has(previousPeerId)) {
-        closeGossipDataChannelForNativePeer(previousPeerId);
+      if (!assignedGossipNeighborIds.has(previousPeerId)) {
+        closeDedicatedGossipPeerConnection(previousPeerId, 'topology_neighbor_removed');
       }
     }
-    const boundCount = bindAssignedGossipNativeNeighbors();
+    const dedicatedConnectionCount = ensureAssignedGossipNeighborConnections('topology_hint_applied');
     emitGossipTelemetrySnapshot('topology_hint_applied');
     captureClientDiagnostic({
       category: 'media',
       level: 'info',
       eventType: 'gossip_topology_hint_applied',
       code: 'gossip_topology_hint_applied',
-      message: 'Gossip topology hint applied to native data-channel neighbor bindings.',
+      message: 'Gossip topology hint applied to dedicated data-channel neighbor connections.',
       payload: {
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
         topology_epoch: Number(topologyHint.topology_epoch || 0),
-        neighbor_count: assignedGossipNativeNeighborIds.size,
-        bound_native_neighbor_count: boundCount,
+        neighbor_count: assignedGossipNeighborIds.size,
+        dedicated_neighbor_connection_count: dedicatedConnectionCount,
       },
     });
     return true;
@@ -431,8 +905,13 @@ export function createCallWorkspaceGossipDataLane({
   }
 
   function gossipActiveDataLaneAllowed() {
-    return GOSSIP_DATA_LANE_CONFIG.mode === 'active'
-      && Boolean(lastGossipRolloutGateState?.active_allowed)
+    if (GOSSIP_DATA_LANE_CONFIG.mode !== 'active') return false;
+    if (MEDIA_CARRIER_CONFIG.gossipPrimary) {
+      return Boolean(lastGossipRolloutGateState?.active_allowed)
+        && Boolean(lastGossipRolloutGateState?.gossip_topology_healthy)
+        && Boolean(lastGossipRolloutGateState?.media_security_recovery_ready);
+    }
+    return Boolean(lastGossipRolloutGateState?.active_allowed)
       && Boolean(lastGossipRolloutGateState?.sfu_baseline_healthy)
       && Boolean(lastGossipRolloutGateState?.media_security_recovery_ready);
   }
@@ -452,6 +931,7 @@ export function createCallWorkspaceGossipDataLane({
       payload: {
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
         reason: String(reason || 'shadow_observe'),
         gate_decision: String(lastGossipRolloutGateState?.decision || 'no_rollout_gate_ack'),
         active_allowed: Boolean(lastGossipRolloutGateState?.active_allowed),
@@ -534,32 +1014,26 @@ export function createCallWorkspaceGossipDataLane({
 
   function bindGossipDataChannelForNativePeer(peer) {
     if (!GOSSIP_DATA_LANE_CONFIG.enabled) return false;
-    if (!peer?.pc) return false;
-    const peerId = String(peer.userId || '').trim();
-    if (peerId === '' || peerId === '0') return false;
-    if (!assignedGossipNativeNeighborIds.has(peerId)) return false;
-    const transport = ensureGossipDataChannelTransport();
-    if (!transport) return false;
-    ensureLiveGossipPeer(peerId);
-    const channel = transport.bindPeerConnection(peerId, peer.pc, Boolean(peer.initiator));
-    peer.gossipDataLaneMode = GOSSIP_DATA_LANE_CONFIG.mode;
-    peer.gossipDataChannelState = String(channel?.readyState || 'pending');
-    return true;
+    if (peer && typeof peer === 'object') {
+      peer.gossipDataLaneMode = GOSSIP_DATA_LANE_CONFIG.mode;
+      peer.gossipDataChannelState = 'dedicated_peer_connection';
+    }
+    return false;
   }
 
-  function closeGossipDataChannelForNativePeer(peerId) {
-    gossipDataChannelTransport?.close(String(peerId || ''));
+  function closeGossipDataChannelForNativePeer(_peerId) {
+    return false;
   }
 
   function pruneGossipNeighborForUserId(userId, reason = 'target_not_in_room') {
     const peerId = String(userId || '').trim();
     if (peerId === '' || peerId === '0') return false;
-    if (!assignedGossipNativeNeighborIds.has(peerId)) return false;
+    if (!assignedGossipNeighborIds.has(peerId)) return false;
 
-    assignedGossipNativeNeighborIds.delete(peerId);
+    assignedGossipNeighborIds.delete(peerId);
     gossipTopologyRepairRequestedAtByPeerId.delete(peerId);
-    liveGossipController?.updateCarrierStateFromDataChannel?.(peerId, 'lost', String(reason || 'target_not_in_room'));
-    closeGossipDataChannelForNativePeer(peerId);
+    liveGossipController?.setCarrierState?.(peerId, 'lost', String(reason || 'target_not_in_room'));
+    closeDedicatedGossipPeerConnection(peerId, reason);
     captureClientDiagnostic({
       category: 'media',
       level: 'warning',
@@ -581,6 +1055,7 @@ export function createCallWorkspaceGossipDataLane({
     if (type !== 'gossip/telemetry/ack') return false;
     const gateState = deriveGossipRolloutGateState(payload, {
       mode: GOSSIP_DATA_LANE_CONFIG.mode,
+      mediaCarrierMode: MEDIA_CARRIER_CONFIG.mode,
     });
     lastGossipRolloutGateState = gateState;
     captureClientDiagnostic({
@@ -593,6 +1068,7 @@ export function createCallWorkspaceGossipDataLane({
         ...gateState,
         data_lane_mode: GOSSIP_DATA_LANE_CONFIG.mode,
         diagnostics_label: GOSSIP_DATA_LANE_CONFIG.diagnosticsLabel,
+        media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
       },
     });
     return true;
@@ -611,7 +1087,8 @@ export function createCallWorkspaceGossipDataLane({
     liveGossipController = null;
     liveGossipControllerKey = '';
     liveGossipFrameSequenceByTrack.clear();
-    assignedGossipNativeNeighborIds.clear();
+    closeAllDedicatedGossipPeerConnections('teardown');
+    assignedGossipNeighborIds.clear();
     gossipTopologyRepairRequestedAtByPeerId.clear();
     lastGossipRolloutGateState = null;
     lastGossipTelemetrySnapshotSentAtMs = 0;
@@ -625,6 +1102,7 @@ export function createCallWorkspaceGossipDataLane({
     bindGossipDataChannelForNativePeer,
     closeGossipDataChannelForNativePeer,
     getGossipRolloutGateState,
+    handleGossipSignalingEvent,
     pruneGossipNeighborForUserId,
     publishLocalEncodedFrameToGossip,
     teardownGossipDataLane,

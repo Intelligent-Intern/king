@@ -1,5 +1,6 @@
 import { markRaw } from 'vue';
 import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
+import { MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
 import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
@@ -291,19 +292,21 @@ export function createLocalPublisherPipelineHelpers({
     const pipelineProfileId = String(videoProfile.id || '').trim() || 'balanced';
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
-    const protectedBrowserPublisher = await maybeStartProtectedBrowserVideoEncoderPublisher({
-      videoTrack,
-      videoProfile,
-      pipelineProfileId,
-      constants,
-      refs,
-      callbacks,
-      captureClientDiagnostic,
-      captureClientDiagnosticError,
-      currentSfuVideoProfile,
-      restartPublisher: startEncodingPipeline,
-      gate: protectedBrowserEncoderGate,
-    });
+    const protectedBrowserPublisher = MEDIA_CARRIER_CONFIG.gossipPrimary
+      ? null
+      : await maybeStartProtectedBrowserVideoEncoderPublisher({
+        videoTrack,
+        videoProfile,
+        pipelineProfileId,
+        constants,
+        refs,
+        callbacks,
+        captureClientDiagnostic,
+        captureClientDiagnosticError,
+        currentSfuVideoProfile,
+        restartPublisher: startEncodingPipeline,
+        gate: protectedBrowserEncoderGate,
+      });
     if (protectedBrowserPublisher) {
       activeSourceReadbackController = protectedBrowserPublisher;
       return;
@@ -488,7 +491,8 @@ export function createLocalPublisherPipelineHelpers({
         if (!isWlvcRuntimePath()) return;
         if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
-        if (!refs.videoEncoderRef.value || !currentOpenSfuClient()) return;
+        if (!refs.videoEncoderRef.value) return;
+        if (!MEDIA_CARRIER_CONFIG.gossipPrimary && !currentOpenSfuClient()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
@@ -841,7 +845,39 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (stopIfPipelineProfileChanged()) return;
+        let gossipFramePublished = false;
+        const tryPublishFrameToGossip = (stage) => {
+          try {
+            const published = publishLocalEncodedFrameToGossip(outgoingFrame);
+            gossipFramePublished = gossipFramePublished || Boolean(published);
+            if (published) {
+              outgoingFrame.transportMetrics = {
+                ...outgoingFrame.transportMetrics,
+                media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
+                gossip_publish_stage: String(stage || ''),
+              };
+            }
+            return Boolean(published);
+          } catch (gossipError) {
+            captureClientDiagnosticError('gossip_data_lane_publish_failed', gossipError, {
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+              track_id: videoTrack.id,
+              media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
+              stage: String(stage || ''),
+            }, {
+              code: 'gossip_data_lane_publish_failed',
+            });
+            return false;
+          }
+        };
+
+        if (MEDIA_CARRIER_CONFIG.gossipPrimary) {
+          tryPublishFrameToGossip('gossip_primary_after_encode');
+        }
+
         const sendClient = currentOpenSfuClient();
+        let frameSent = false;
+        let sfuSendAttempted = false;
         if (!sendClient) {
           reportSfuClientUnavailableAfterEncode({
             getSfuClientBufferedAmount,
@@ -850,11 +886,18 @@ export function createLocalPublisherPipelineHelpers({
             trace,
             timestamp,
           });
-          return;
+          if (MEDIA_CARRIER_CONFIG.sfuFirst) {
+            tryPublishFrameToGossip('sfu_first_fallback_no_sfu_client');
+          }
+          if (!gossipFramePublished) return;
+        } else {
+          sfuSendAttempted = true;
+          frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
         }
-        const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
-        if (frameSent === false) {
-          paceForcedKeyframeRecovery();
+        if (sfuSendAttempted && frameSent === false) {
+          if (!MEDIA_CARRIER_CONFIG.gossipPrimary) {
+            paceForcedKeyframeRecovery();
+          }
           const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
           handleWlvcFrameSendFailure(
             getSfuClientBufferedAmount(),
@@ -862,55 +905,58 @@ export function createLocalPublisherPipelineHelpers({
             String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
             sfuSendFailureDetails,
           );
-          return;
+          if (MEDIA_CARRIER_CONFIG.sfuFirst) {
+            tryPublishFrameToGossip('sfu_first_fallback_after_sfu_failure');
+          }
+          if (!gossipFramePublished) return;
         }
-        try {
-          publishLocalEncodedFrameToGossip(outgoingFrame);
-        } catch (gossipError) {
-          captureClientDiagnosticError('gossip_data_lane_publish_failed', gossipError, {
-            media_runtime_path: refs.mediaRuntimePathRef.value,
-            track_id: videoTrack.id,
-          }, {
-            code: 'gossip_data_lane_publish_failed',
-          });
+        if (frameSent && MEDIA_CARRIER_CONFIG.sfuMirror) {
+          tryPublishFrameToGossip('sfu_mirror_after_sfu_send');
         }
-        const postSendBufferedAmount = getSfuClientBufferedAmount();
-        const postSendPressureBytes = Math.max(
-          2 * 1024 * 1024,
-          Math.floor(Math.max(
-            Number(videoProfile.maxBufferedBytes || 0),
-            Number(constants.sendBufferHighWaterBytes || 0),
-          ) * 0.5),
-        );
-        if (postSendBufferedAmount >= postSendPressureBytes) {
-          paceForcedKeyframeRecovery();
-          handleWlvcFrameSendFailure(
-            postSendBufferedAmount,
-            videoTrack.id,
-            'sfu_frame_send_pressure',
-            {
-              reason: 'sfu_frame_send_pressure',
-              stage: 'browser_websocket_post_send_pressure',
-              source: 'websocket_buffered_amount',
-              message: 'Encoded SFU frame was sent, but websocket buffering crossed the soft pressure budget.',
-              transportPath: 'binary_envelope',
-              bufferedAmount: postSendBufferedAmount,
-              payloadBytes: encodedPayloadBytes,
-              wirePayloadBytes: Number(outgoingFrame.transportMetrics?.wire_payload_bytes || 0),
-              chunkCount: Number(outgoingFrame.transportMetrics?.chunk_count || 0),
-              publisherFrameTraceId: String(outgoingFrame.transportMetrics?.publisher_frame_trace_id || ''),
-              publisherPathTraceStages: String(outgoingFrame.transportMetrics?.publisher_path_trace_stages || ''),
-              encodeMs,
-              drawImageMs,
-              readbackMs,
-            },
+        if (frameSent) {
+          const postSendBufferedAmount = getSfuClientBufferedAmount();
+          const postSendPressureBytes = Math.max(
+            2 * 1024 * 1024,
+            Math.floor(Math.max(
+              Number(videoProfile.maxBufferedBytes || 0),
+              Number(constants.sendBufferHighWaterBytes || 0),
+            ) * 0.5),
           );
-          return;
+          if (postSendBufferedAmount >= postSendPressureBytes) {
+            if (!MEDIA_CARRIER_CONFIG.gossipPrimary) {
+              paceForcedKeyframeRecovery();
+            }
+            handleWlvcFrameSendFailure(
+              postSendBufferedAmount,
+              videoTrack.id,
+              'sfu_frame_send_pressure',
+              {
+                reason: 'sfu_frame_send_pressure',
+                stage: 'browser_websocket_post_send_pressure',
+                source: 'websocket_buffered_amount',
+                message: 'Encoded SFU frame was sent, but websocket buffering crossed the soft pressure budget.',
+                transportPath: 'binary_envelope',
+                bufferedAmount: postSendBufferedAmount,
+                payloadBytes: encodedPayloadBytes,
+                wirePayloadBytes: Number(outgoingFrame.transportMetrics?.wire_payload_bytes || 0),
+                chunkCount: Number(outgoingFrame.transportMetrics?.chunk_count || 0),
+                publisherFrameTraceId: String(outgoingFrame.transportMetrics?.publisher_frame_trace_id || ''),
+                publisherPathTraceStages: String(outgoingFrame.transportMetrics?.publisher_path_trace_stages || ''),
+                encodeMs,
+                drawImageMs,
+                readbackMs,
+              },
+            );
+            if (!MEDIA_CARRIER_CONFIG.gossipPrimary || !gossipFramePublished) {
+              return;
+            }
+          }
+          if (postSendBufferedAmount < constants.sendBufferHighWaterBytes) {
+            resetWlvcBackpressureCounters();
+          }
+          resetWlvcFrameSendFailureCounters();
         }
-        if (postSendBufferedAmount < constants.sendBufferHighWaterBytes) {
-          resetWlvcBackpressureCounters();
-        }
-        resetWlvcFrameSendFailureCounters();
+        if (!frameSent && !gossipFramePublished) return;
         state.wlvcEncodeFailureCount = 0;
         state.wlvcEncodeFirstFailureAtMs = 0;
         previousFullFrameImageData = imageData;

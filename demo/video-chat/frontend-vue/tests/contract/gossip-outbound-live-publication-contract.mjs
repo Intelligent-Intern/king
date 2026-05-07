@@ -53,13 +53,29 @@ assert(
   /publishLocalEncodedFrameToGossip = \(\) => false/.test(publisherPipeline),
   'publisher pipeline must default the gossip hook to a no-op for non-gossip callers',
 )
-
-const sfuSendIndex = publisherPipeline.indexOf('const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);')
-const sendFailureIndex = publisherPipeline.indexOf('if (frameSent === false)', sfuSendIndex)
-const gossipPublishIndex = publisherPipeline.indexOf('publishLocalEncodedFrameToGossip(outgoingFrame);', sendFailureIndex)
 assert(
-  sfuSendIndex >= 0 && sendFailureIndex > sfuSendIndex && gossipPublishIndex > sendFailureIndex,
-  'publisher pipeline must keep sendClient.sendEncodedFrame(outgoingFrame) as the conservative path before gossip publish',
+  /MEDIA_CARRIER_CONFIG/.test(publisherPipeline),
+  'publisher pipeline must use the explicit media carrier policy when ordering SFU and gossip sends',
+)
+
+const sfuSendIndex = publisherPipeline.indexOf('frameSent = await sendClient.sendEncodedFrame(outgoingFrame);')
+const mirrorPublishIndex = publisherPipeline.indexOf("tryPublishFrameToGossip('sfu_mirror_after_sfu_send');", sfuSendIndex)
+const primaryPublishIndex = publisherPipeline.indexOf("tryPublishFrameToGossip('gossip_primary_after_encode');")
+assert(
+  sfuSendIndex >= 0 && mirrorPublishIndex > sfuSendIndex,
+  'SFU mirror mode must keep sendClient.sendEncodedFrame(outgoingFrame) before gossip publish',
+)
+assert(
+  primaryPublishIndex >= 0 && primaryPublishIndex < sfuSendIndex,
+  'gossip_primary mode must publish gossip after encode before optional SFU send',
+)
+assert(
+  /if \(!MEDIA_CARRIER_CONFIG\.gossipPrimary && !currentOpenSfuClient\(\)\) return/.test(publisherPipeline),
+  'gossip_primary mode must allow the WLVC encode loop to run without an open SFU client',
+)
+assert(
+  /if \(MEDIA_CARRIER_CONFIG\.sfuFirst\)[\s\S]*tryPublishFrameToGossip\('sfu_first_fallback_after_sfu_failure'\)/.test(publisherPipeline),
+  'sfu_first mode must allow gossip fallback after SFU send failure',
 )
 assert(
   /captureClientDiagnosticError\('gossip_data_lane_publish_failed'/.test(publisherPipeline),

@@ -17,73 +17,77 @@ function assert(condition, message) {
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts')
 const nativeStack = read('src/domain/realtime/workspace/callWorkspace/nativeStack.ts')
 const peerFactory = read('src/domain/realtime/native/peerFactory.ts')
 const peerLifecycle = read('src/domain/realtime/native/peerLifecycle.ts')
 const packageJson = read('package.json')
 
 assert(
-  /import \{ createCallWorkspaceGossipDataLane \} from '\.\/workspace\/callWorkspace\/gossipDataLane';/.test(callWorkspace)
-    || /import \{ GOSSIP_DATA_LANE_CONFIG \} from '..\/..\/lib\/gossipmesh\/featureFlags';/.test(callWorkspace),
-  'call workspace must import the gossip data-lane helper or feature flag',
+  /import \{ createCallWorkspaceGossipDataLane \} from '\.\/workspace\/callWorkspace\/gossipDataLane';/.test(callWorkspace),
+  'call workspace must import the gossip data-lane helper',
 )
 assert(
-  /import \{ GossipRtcDataChannelTransport \} from '(..\/..\/)?(\.\.\/\.\.\/)?lib\/gossipmesh\/rtcDataChannelTransport';/.test(workspaceGossipSurface),
+  /import \{ GossipRtcDataChannelTransport \} from '(..\/..\/)?(\.\.\/\.\.\/)?lib\/gossipmesh\/rtcDataChannelTransport';/.test(gossipDataLane),
   'workspace gossip data-lane implementation must import the RTCDataChannel gossip transport',
 )
 assert(
-  /if \(!GOSSIP_DATA_LANE_CONFIG\.enabled\) return null;/.test(workspaceGossipSurface)
-    && /if \(!GOSSIP_DATA_LANE_CONFIG\.enabled\) return false;/.test(workspaceGossipSurface),
-  'off mode must avoid creating or binding gossip data channels',
+  /const assignedGossipNeighborIds = new Set\(\);/.test(gossipDataLane)
+    && /const dedicatedGossipPeerConnections = new Map\(\);/.test(gossipDataLane),
+  'gossip data lane must track server-assigned gossip neighbors separately from dedicated gossip RTCPeerConnections',
 )
 assert(
-  /new GossipRtcDataChannelTransport\(\{[\s\S]*localPeerId/.test(workspaceGossipSurface),
-  'workspace gossip data-lane implementation must lazily create a gossip RTCDataChannel transport for the local peer',
+  /function ensureDedicatedGossipNeighborConnection\(peerId,\s*reason = 'topology_hint'\)[\s\S]*new RTCPeerConnection\(gossipRtcConfig\(\)\)/.test(gossipDataLane),
+  'server-assigned gossip neighbors must create dedicated gossip-only RTCPeerConnections',
 )
 assert(
-  /transport\.bindPeerConnection\(peerId,\s*peer\.pc,\s*Boolean\(peer\.initiator\)\)/.test(workspaceGossipSurface),
-  'native peers must bind their RTCPeerConnection to the gossip data transport',
+  /transport\.bindPeerConnection\(normalizedPeerId,\s*pc,\s*entry\.initiator\)/.test(gossipDataLane)
+    && !/transport\.bindPeerConnection\(peerId,\s*peer\.pc,\s*Boolean\(peer\.initiator\)\)/.test(gossipDataLane),
+  'gossip RTCDataChannels must bind to dedicated gossip RTCPeerConnections, not native media peer connections',
 )
 assert(
-  /if \(!GOSSIP_DATA_LANE_CONFIG\.receive\)[\s\S]*gossip_data_lane_shadow_message_dropped[\s\S]*return;/.test(workspaceGossipSurface),
-  'shadow mode must observe inbound data channel messages but drop before media decode',
+  /'gossip_webrtc_offer'/.test(gossipDataLane)
+    && /'gossip_webrtc_answer'/.test(gossipDataLane)
+    && /'gossip_webrtc_ice'/.test(gossipDataLane),
+  'dedicated gossip peer connections must use gossip-specific WebRTC signaling kinds',
 )
 assert(
-  /gossip_data_lane_frame_routed/.test(workspaceGossipSurface),
-  'active mode must emit a diagnostic when an accepted gossip frame is routed toward decode',
+  /function handleGossipSignalingEvent\(type,\s*senderUserId,\s*payloadBody = \{\}\)[\s\S]*gossip_webrtc_offer[\s\S]*handleDedicatedGossipOffer[\s\S]*handleDedicatedGossipAnswer[\s\S]*handleDedicatedGossipIce/.test(gossipDataLane),
+  'gossip data lane must expose a dedicated signaling handler for gossip offers, answers, and ICE',
 )
 assert(
-  /peer\.gossipDataLaneMode = GOSSIP_DATA_LANE_CONFIG\.mode/.test(workspaceGossipSurface)
-    && /peer\.gossipDataChannelState = String\(channel\?\.readyState \|\| 'pending'\)/.test(workspaceGossipSurface),
-  'native peer state must expose gossip data-lane mode and channel readiness',
+  /handleGossipSignalingEvent,/.test(gossipDataLane)
+    && /handleGossipSignalingEvent,/.test(callWorkspace)
+    && /handleGossipSignalingEvent = \(\) => false/.test(socketLifecycle),
+  'call workspace must pass dedicated gossip signaling into socket lifecycle with a safe default',
 )
 assert(
-  /bindGossipDataChannelForNativePeer,\s*\n\s*bumpMediaRenderVersion/.test(callWorkspace)
-    && /closeGossipDataChannelForNativePeer,\s*\n\s*clearRemoteVideoContainer/.test(callWorkspace),
-  'native stack callbacks must include gossip bind and close hooks',
+  /payloadKind\.startsWith\('gossip_webrtc_'\)[\s\S]*handleGossipSignalingEvent\(type,\s*senderUserId,\s*payloadBody \|\| \{\}\)[\s\S]*return;/.test(socketLifecycle),
+  'socket lifecycle must consume gossip WebRTC signaling before native media signaling detection',
 )
 assert(
-  /bindGossipDataChannelForNativePeer = \(\) => false/.test(peerFactory),
-  'native peer factory must keep gossip binding optional for off mode and tests',
+  /constants:\s*\{[\s\S]*defaultNativeIceServers:\s*DEFAULT_NATIVE_ICE_SERVERS[\s\S]*\}[\s\S]*refs:\s*\{\s*dynamicIceServers\s*\}/.test(callWorkspace),
+  'call workspace must give gossip-only peer connections the same ICE-server source as native WebRTC',
 )
 assert(
-  /bindGossipDataChannelForNativePeer\(existing\)/.test(peerFactory)
+  /function bindGossipDataChannelForNativePeer\(peer\)[\s\S]*gossipDataChannelState = 'dedicated_peer_connection'[\s\S]*return false;/.test(gossipDataLane),
+  'legacy native binding hook must be compatibility-only after dedicated gossip peer connections are introduced',
+)
+assert(
+  /function closeGossipDataChannelForNativePeer\(_peerId\)[\s\S]*return false;/.test(gossipDataLane),
+  'legacy native close hook must not tear down dedicated gossip-only peer connections',
+)
+assert(
+  /bindGossipDataChannelForNativePeer = \(\) => false/.test(peerFactory)
+    && /bindGossipDataChannelForNativePeer\(existing\)/.test(peerFactory)
     && /bindGossipDataChannelForNativePeer\(peer\)/.test(peerFactory),
-  'native peer factory must bind gossip channels for existing and new native peers',
+  'native peer factory may keep the optional compatibility hook but must not own the gossip carrier',
 )
 assert(
-  /bindGossipDataChannelForNativePeer: callbacks\.bindGossipDataChannelForNativePeer/.test(nativeStack),
-  'call workspace native stack must pass the gossip bind callback into peer factory',
-)
-assert(
-  /closeGossipDataChannelForNativePeer: callbacks\.closeGossipDataChannelForNativePeer/.test(nativeStack),
-  'call workspace native stack must pass the gossip close callback into peer lifecycle',
-)
-assert(
-  /closeGossipDataChannelForNativePeer = \(\) => false/.test(peerLifecycle)
-    && /closeGossipDataChannelForNativePeer\(normalizedTargetUserId\)/.test(peerLifecycle),
-  'native peer lifecycle must close gossip data channels when native peers close',
+  /bindGossipDataChannelForNativePeer: callbacks\.bindGossipDataChannelForNativePeer/.test(nativeStack)
+    && /closeGossipDataChannelForNativePeer: callbacks\.closeGossipDataChannelForNativePeer/.test(nativeStack)
+    && /closeGossipDataChannelForNativePeer = \(\) => false/.test(peerLifecycle),
+  'native stack compatibility wiring must remain non-breaking while gossip carrier lifecycle is dedicated',
 )
 assert(
   packageJson.includes('gossip-native-webrtc-binding-contract.mjs'),
