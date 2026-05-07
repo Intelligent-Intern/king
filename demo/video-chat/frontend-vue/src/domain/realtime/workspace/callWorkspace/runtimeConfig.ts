@@ -1,6 +1,7 @@
 export const CALL_STATE_SIGNAL_TYPES = Object.freeze([
   'call/control-state',
   'call-app/grants-updated',
+  'call/gossip-recovery',
   'call/media-quality-pressure',
   'call/moderation-state',
 ]);

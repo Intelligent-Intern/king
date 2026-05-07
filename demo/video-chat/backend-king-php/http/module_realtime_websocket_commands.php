@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/module_realtime_gossipmesh_recovery.php';
+
 function videochat_realtime_secondary_handled_result(): array
 {
     return [
@@ -84,6 +86,18 @@ function videochat_realtime_handle_secondary_websocket_command(
     );
     if ($gossipRepairResult !== null) {
         return $gossipRepairResult;
+    }
+
+    $gossipRecoveryCommand = videochat_gossipmesh_decode_recovery_request($frame);
+    $gossipRecoveryResult = videochat_realtime_handle_gossipmesh_recovery_request_command(
+        $gossipRecoveryCommand,
+        $websocket,
+        $presenceState,
+        $presenceConnection,
+        $openDatabase
+    );
+    if ($gossipRecoveryResult !== null) {
+        return $gossipRecoveryResult;
     }
 
     $gossipTelemetryCommand = videochat_gossipmesh_decode_telemetry_snapshot($frame);
