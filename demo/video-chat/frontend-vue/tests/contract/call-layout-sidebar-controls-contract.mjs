@@ -31,6 +31,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 const shell = fs.readFileSync(path.join(root, 'src/layouts/WorkspaceShell.vue'), 'utf8');
+const leftSidebar = fs.readFileSync(path.join(root, 'src/layouts/CallWorkspaceLeftSidebar.vue'), 'utf8');
 const workspace = fs.readFileSync(path.join(root, 'src/domain/realtime/CallWorkspaceView.vue'), 'utf8');
 const participantUi = fs.readFileSync(path.join(root, 'src/domain/realtime/workspace/callWorkspace/participantUi.ts'), 'utf8');
 const preferences = fs.readFileSync(path.join(root, 'src/domain/realtime/media/preferences.ts'), 'utf8');
@@ -45,11 +46,15 @@ const adminCallsResponsiveCss = fs.readFileSync(path.join(root, 'src/domain/call
 const userDashboardCss = fs.readFileSync(path.join(root, 'src/domain/calls/dashboard/UserDashboardView.css'), 'utf8');
 
 try {
-  const callSettingsStart = shell.indexOf('class="call-left-settings-block call-left-owner-edit-block"');
+  assert.match(shell, /<CallWorkspaceLeftSidebar[\s\S]*:call-layout-sidebar-state="callLayoutSidebarState"/, 'workspace shell must delegate call layout controls to the left sidebar component');
+  assert.match(leftSidebar, /import CallBackgroundControls from ['"]\.\.\/domain\/realtime\/background\/CallBackgroundControls\.vue['"]/, 'left sidebar must embed the shared background controls component');
+  assert.doesNotMatch(leftSidebar, /BackgroundFilterController|imageSegmenter|mediapipe/i, 'left sidebar extraction must not reach into Pierre-owned background pipeline internals');
+
+  const callSettingsStart = leftSidebar.indexOf('class="call-left-settings-block call-left-owner-edit-block"');
   assert.notEqual(callSettingsStart, -1, 'call settings sidebar block must exist');
-  const nextSettingsBlock = shell.indexOf('<div v-if="callMediaPrefs.error"', callSettingsStart);
+  const nextSettingsBlock = leftSidebar.indexOf('<div v-if="callMediaPrefs.error"', callSettingsStart);
   assert.notEqual(nextSettingsBlock, -1, 'call settings block must end before media error block');
-  const callSettingsMarkup = shell.slice(callSettingsStart, nextSettingsBlock);
+  const callSettingsMarkup = leftSidebar.slice(callSettingsStart, nextSettingsBlock);
 
   assert.match(settingsCss, /\.shell\.call-workspace-mode \.sidebar-content\.left\.left-call-content \.call-left-settings-block\s*\{[\s\S]*?width:\s*100%;[\s\S]*?margin:\s*0;/, 'call workspace settings blocks must share one width rule');
   assert.doesNotMatch(settingsCss, /\.shell\.call-workspace-mode[^{]*\.call-left-owner-edit-block\s*\{/, 'call settings must not use owner-specific width rules');
@@ -59,10 +64,10 @@ try {
   assert.match(callSettingsMarkup, /class="call-left-settings-field"[\s\S]*id="call-left-layout-strategy"/, 'activity strategy must use the existing call-left settings field wrapper');
   assert.doesNotMatch(callSettingsMarkup, /class="call-left-layout-controls"/, 'layout controls must not use a bespoke styling wrapper');
   assert.doesNotMatch(callSettingsMarkup, /aria-label="Call settings video layout"/, 'layout controls must not introduce a bespoke nested panel');
-  assert.doesNotMatch(shell, /call-left-video-quality/, 'video quality must not be user-selectable in the sidebar');
-  assert.doesNotMatch(shell, /callVideoQualityOptions/, 'sidebar must not expose SFU quality options');
+  assert.doesNotMatch(leftSidebar, /call-left-video-quality/, 'video quality must not be user-selectable in the sidebar');
+  assert.doesNotMatch(leftSidebar, /callVideoQualityOptions/, 'sidebar must not expose SFU quality options');
   assert.doesNotMatch(shell, /SFU_VIDEO_QUALITY_PROFILE_OPTIONS/, 'sidebar must not import SFU quality options');
-  assert.doesNotMatch(shell, /@update:model-value="setCallOutgoingVideoQualityProfile"/, 'sidebar must not persist user-selected video quality');
+  assert.doesNotMatch(leftSidebar, /@update:model-value="setCallOutgoingVideoQualityProfile"/, 'sidebar must not persist user-selected video quality');
   assert.match(preferences, /export function setCallOutgoingVideoQualityProfile\(profile\) \{[\s\S]*?toOutgoingVideoQualityProfile\(profile\)[\s\S]*?persistCallMediaPrefs\(\);[\s\S]*?\}/, 'video quality setter must normalize and persist the automatic profile');
   assert.match(lifecycle, /\(\) => callMediaPrefs\.outgoingVideoQualityProfile,[\s\S]*?void reconfigureLocalTracksFromSelectedDevices\(\);/, 'video quality changes must reconfigure local tracks in active calls');
   assert.match(runtimeSwitching, /return resolveSfuVideoQualityProfile\(refs\.callMediaPrefs\.outgoingVideoQualityProfile\);/, 'runtime must resolve the active SFU profile from automatic state');
@@ -85,7 +90,7 @@ try {
   assert.match(participantUi, /controls\.setStrategy = setCallLayoutStrategy;/, 'call workspace must route strategy changes through sidebar callbacks');
   assert.doesNotMatch(workspace, /Activity strategy/, 'activity strategy UI must not render inside the workspace stage overlay');
   assert.doesNotMatch(workspace, /call-layout-controls/, 'workspace stage must not own layout control markup');
-  assert.doesNotMatch(shell, /call-left-layout-controls/, 'sidebar layout controls must not use bespoke CSS hooks');
+  assert.doesNotMatch(leftSidebar, /call-left-layout-controls/, 'sidebar layout controls must not use bespoke CSS hooks');
   assert.doesNotMatch(settingsCss, /\.call-left-layout-controls\b/, 'sidebar layout controls must not add ad-hoc CSS');
   assert.match(
     responsiveCss,

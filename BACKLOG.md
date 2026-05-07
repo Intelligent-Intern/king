@@ -62,11 +62,10 @@ Rules:
 5. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
 6. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
 7. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-8. [ ] In-Call Sidebar: extract panel tabs, device settings, invite card, layout controls, and prove background pipeline internals are untouched.
-9. [ ] Theme Editor: extract preview frame, preview navigation, palette editor for exactly 12 tokens, asset editor, and screenshot-card proof.
-10. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
-11. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
-12. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
+8. [ ] Theme Editor: extract preview frame, preview navigation, palette editor for exactly 12 tokens, asset editor, and screenshot-card proof.
+9. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
+10. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
+11. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
 
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 

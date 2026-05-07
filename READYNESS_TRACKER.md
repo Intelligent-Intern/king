@@ -17,6 +17,18 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 In-call sidebar extraction: closed the parked refactor item for
+  the video-call left sidebar without touching Pierre-owned MediaPipe/background
+  pipeline internals. `WorkspaceShell.vue` now delegates the call sidebar to
+  `CallWorkspaceLeftSidebar.vue`, while Call App tab availability lives in the
+  focused `useCallLeftSidebarTabs.js` composable. The extracted sidebar owns the
+  Settings/Call Apps tabs, device controls, invite card, background-control
+  embedding, and layout controls, keeping the shell on a smaller orchestration
+  path. Proof: `node tests/contract/call-app-sidebar-contract.mjs`,
+  `node tests/contract/call-layout-sidebar-controls-contract.mjs`,
+  `cd demo/video-chat/frontend-vue && npm run test:contract:call-apps`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Call Apps marketplace/CRDT sprint closure: closed the Call Apps
   sprint on `develop/1.0.8-beta` as contract/build-ready, not yet
   production-e2e-ready. The video-call workspace now has a planned and
