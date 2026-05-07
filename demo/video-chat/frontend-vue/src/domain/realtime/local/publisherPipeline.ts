@@ -850,6 +850,7 @@ export function createLocalPublisherPipelineHelpers({
           mediaRuntimePath: refs.mediaRuntimePathRef.value,
           currentOpenSfuClient,
           getSfuClientBufferedAmount,
+          handleWlvcFrameSendFailure,
           publishLocalEncodedFrameToGossip,
           captureClientDiagnostic,
           captureClientDiagnosticError,
