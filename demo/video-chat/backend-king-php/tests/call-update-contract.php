@@ -266,6 +266,41 @@ SQL
         'default access link for free_for_all should be open'
     );
 
+    $moderatorRoleUpdate = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $moderatorUserId,
+        'moderator',
+        $adminUserId,
+        'admin'
+    );
+    videochat_call_update_assert($moderatorRoleUpdate['ok'] === true, 'admin should assign moderator role');
+
+    $moderatorOpenLink = videochat_create_call_access_link_for_user($pdo, $callId, $moderatorUserId, 'user', [
+        'link_kind' => 'open',
+    ]);
+    videochat_call_update_assert((bool) ($moderatorOpenLink['ok'] ?? false), 'call moderator should create open invite link');
+
+    $moderatorCallUpdate = videochat_update_call($pdo, $callId, $moderatorUserId, 'user', [
+        'title' => 'Moderator Updated',
+    ]);
+    videochat_call_update_assert($moderatorCallUpdate['ok'] === true, 'call moderator should update call settings');
+    videochat_call_update_assert(
+        (string) (($moderatorCallUpdate['call'] ?? [])['title'] ?? '') === 'Moderator Updated',
+        'call moderator update title mismatch'
+    );
+
+    $moderatorOwnerTransfer = videochat_update_call_participant_role(
+        $pdo,
+        $callId,
+        $moderatorUserId,
+        'owner',
+        $moderatorUserId,
+        'user'
+    );
+    videochat_call_update_assert($moderatorOwnerTransfer['ok'] === false, 'call moderator must not transfer ownership');
+    videochat_call_update_assert($moderatorOwnerTransfer['reason'] === 'forbidden', 'call moderator owner-transfer reason mismatch');
+
     $freeForAllPersonalLink = videochat_create_call_access_link_for_user($pdo, $callId, $adminUserId, 'admin', [
         'link_kind' => 'personal',
         'participant_user_id' => $moderatorUserId,

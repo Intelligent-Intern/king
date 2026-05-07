@@ -211,6 +211,8 @@ export function createCallWorkspaceMediaSecurityRuntime({
       'sender_key_',
       'signal_failed_',
       'sync_participant_',
+      'remote_sync_',
+      'publisher_recovery_',
     ].some((prefix) => normalizedReason.startsWith(prefix));
     const resyncDelayMs = shouldSettleParticipantChurn ? settleMs : 0;
 
@@ -788,6 +790,27 @@ export function createCallWorkspaceMediaSecurityRuntime({
       || message.includes('blocked_capability');
   }
 
+  function requestRemoteMediaSecuritySync(publisherUserId, reason = 'media_security_recovery', extraPayload = {}) {
+    const normalizedUserId = Number(publisherUserId || 0);
+    if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return false;
+    const nowMs = Date.now();
+    const throttleKey = `remote-sync:${normalizedUserId}`;
+    const lastRecoveryMs = Number(state.mediaSecurityRecoveryLastByUserId.get(throttleKey) || 0);
+    if ((nowMs - lastRecoveryMs) < 3000) return false;
+    state.mediaSecurityRecoveryLastByUserId.set(throttleKey, nowMs);
+    return sendSocketFrame({
+      type: 'call/media-security-sync-request',
+      target_user_id: normalizedUserId,
+      payload: {
+        kind: 'media-security-runtime-sync-request',
+        reason: String(reason || 'media_security_recovery'),
+        requester_user_id: Number(currentUserId.value || 0),
+        media_runtime_path: mediaRuntimePath.value,
+        ...extraPayload,
+      },
+    });
+  }
+
   function recoverMediaSecurityForPublisher(publisherUserId) {
     const normalizedUserId = Number(publisherUserId || 0);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0 || normalizedUserId === currentUserId.value) return;
@@ -797,10 +820,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecurityRecoveryLastByUserId.set(normalizedUserId, nowMs);
 
     requestRoomSnapshot();
+    requestRemoteMediaSecuritySync(normalizedUserId, 'receiver_media_frame_error');
     void (async () => {
       await sendMediaSecurityHello(normalizedUserId, true);
-      await sendMediaSecuritySenderKey(normalizedUserId, true);
-      await syncMediaSecurityWithParticipants();
+      scheduleMediaSecurityParticipantSync('publisher_recovery_request');
     })();
   }
 
@@ -994,6 +1017,28 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const session = ensureMediaSecuritySession();
 
     try {
+      if (type === 'call/media-security-sync-request') {
+        const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
+        const marked = session.markParticipantSet(mergeMediaSecurityParticipantIds(
+          session,
+          remoteMediaSecurityTargetIds(),
+          normalizedSenderUserId,
+        ));
+        const participantDelta = mediaSecurityParticipantSetDelta(previousUserIds, marked.userIds);
+        const shouldForceRekey = shouldForceRekeyForParticipantSetDelta(participantDelta, false);
+        if (marked.changed || shouldForceRekey) {
+          mediaSecurityStateVersion.value += 1;
+          if (shouldForceRekey) clearMediaSecuritySignalCaches();
+        }
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
+        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        requestRoomSnapshot();
+        await sendMediaSecurityHello(normalizedSenderUserId, true);
+        scheduleMediaSecurityParticipantSync('remote_sync_request', shouldForceRekey);
+        startMediaSecurityHandshakeWatchdog();
+        return;
+      }
+
       if (type === 'media-security/hello') {
         const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
         const marked = session.markParticipantSet(mergeMediaSecurityParticipantIds(
@@ -1056,6 +1101,10 @@ export function createCallWorkspaceMediaSecurityRuntime({
         state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
         state.mediaSecurityHelloSentAtByUserId.set(normalizedSenderUserId, Date.now());
         requestRoomSnapshot();
+        requestRemoteMediaSecuritySync(normalizedSenderUserId, 'signal_failed_reconnect', {
+          error_code: errorCode,
+          signal_type: type,
+        });
         scheduleMediaSecurityParticipantSync('signal_failed_reconnect', shouldForceRekeyAfterSignalFailure);
         startMediaSecurityHandshakeWatchdog();
       }

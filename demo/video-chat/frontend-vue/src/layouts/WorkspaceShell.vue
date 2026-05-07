@@ -398,6 +398,11 @@
 
       <WorkspaceCredentialsSettings v-else-if="activeSettingsTile === 'personal.credentials'" />
 
+      <WorkspaceNotificationSettings
+        v-else-if="activeSettingsTile === 'personal.notifications'"
+        :draft="settingsDraft"
+      />
+
       <section v-else-if="activeSettingsTile === 'personal.theme'" class="settings-panel">
         <WorkspaceThemeSettings
           v-model="settingsDraft.theme"
@@ -642,6 +647,7 @@ import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
+import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
 import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
@@ -678,7 +684,8 @@ import {
   setCallSpeakerDevice,
   setCallSpeakerVolume,
 } from '../domain/realtime/media/preferences';
-import { buildOptionalCallAudioCaptureConstraints } from '../domain/realtime/media/audioCaptureConstraints';
+import { playCallSpeakerTestSound } from '../domain/realtime/media/speakerOutputRouting';
+import { useWorkspaceMicLevelMonitor } from './useWorkspaceMicLevelMonitor';
 
 const router = useRouter();
 const route = useRoute();
@@ -777,14 +784,12 @@ const shellClasses = computed(() => ({
 const leftSidebarClasses = computed(() => ({
   collapsed: (isDesktopLikeViewport.value && leftSidebarCollapsed.value) || (isMobileViewport.value && !isMobileSidebarOpen.value),
 }));
-const micLevelPercent = ref(0);
-let micLevelStream = null;
-let micLevelAudioContext = null;
-let micLevelSource = null;
-let micLevelAnalyser = null;
-let micLevelData = null;
-let micLevelFrame = 0;
-let micLevelMonitorToken = 0;
+const {
+  attachMicLevelStream,
+  micLevelPercent,
+  startMicLevelMonitor,
+  stopMicLevelMonitor,
+} = useWorkspaceMicLevelMonitor({ isCallWorkspace, isMobileViewport });
 
 const settingsDraft = reactive({
   displayName: '',
@@ -798,6 +803,11 @@ const settingsDraft = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
+  webAppNotificationsEnabled: false,
+  webAppNotificationSoundEnabled: true,
+  webAppNotificationCallInvitesEnabled: true,
+  webAppNotificationCallRemindersEnabled: true,
+  webAppNotificationChatMentionsEnabled: true,
 });
 
 const settingsState = reactive({
@@ -849,6 +859,27 @@ function normalizeRole(value) {
 function normalizeCallAccessMode(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
+}
+
+function normalizeCallParticipantRole(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['owner', 'moderator', 'participant'].includes(normalized) ? normalized : 'participant';
+}
+
+function callParticipantRoleForUser(call, userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 'participant';
+
+  const ownerUserId = Number(call?.owner?.user_id || 0);
+  if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === normalizedUserId) {
+    return 'owner';
+  }
+
+  const internalParticipants = Array.isArray(call?.participants?.internal)
+    ? call.participants.internal
+    : [];
+  const participant = internalParticipants.find((row) => Number(row?.user_id || 0) === normalizedUserId);
+  return normalizeCallParticipantRole(participant?.call_role || participant?.callRole || 'participant');
 }
 
 function isoToLocalInput(isoValue) {
@@ -1279,12 +1310,13 @@ async function refreshCallOwnerContext() {
     if (sequence !== callOwnerContextSeq) return;
 
     const currentUserId = Number(sessionState.userId || 0);
-    const ownerUserId = Number(call?.owner?.user_id || 0);
-    const isOwner = Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === ownerUserId;
-    callOwnerEditState.visible = isOwner;
+    const currentCallRole = callParticipantRoleForUser(call, currentUserId);
+    const isGlobalAdmin = normalizeRole(sessionState.role) === 'admin';
+    const canManageCall = isGlobalAdmin || currentCallRole === 'owner' || currentCallRole === 'moderator';
+    callOwnerEditState.visible = canManageCall;
     callOwnerEditState.resolvedCallId = String(call?.id || '').trim();
 
-    if (isOwner) {
+    if (canManageCall) {
       hydrateCallOwnerDraftFromCall(call);
       void generateCallOwnerInviteLink();
     } else {
@@ -1540,175 +1572,8 @@ async function submitInCallEditModal() {
   }
 }
 
-function stopMicLevelMonitor() {
-  micLevelMonitorToken += 1;
-  if (micLevelFrame !== 0 && typeof cancelAnimationFrame === 'function') {
-    cancelAnimationFrame(micLevelFrame);
-  }
-  micLevelFrame = 0;
-
-  if (micLevelSource && typeof micLevelSource.disconnect === 'function') {
-    try {
-      micLevelSource.disconnect();
-    } catch {
-      // ignore
-    }
-  }
-  micLevelSource = null;
-
-  if (micLevelAnalyser && typeof micLevelAnalyser.disconnect === 'function') {
-    try {
-      micLevelAnalyser.disconnect();
-    } catch {
-      // ignore
-    }
-  }
-  micLevelAnalyser = null;
-  micLevelData = null;
-
-  if (micLevelStream instanceof MediaStream) {
-    for (const track of micLevelStream.getTracks()) {
-      try {
-        track.stop();
-      } catch {
-        // ignore
-      }
-    }
-  }
-  micLevelStream = null;
-
-  if (micLevelAudioContext && typeof micLevelAudioContext.close === 'function') {
-    micLevelAudioContext.close().catch(() => {});
-  }
-  micLevelAudioContext = null;
-  micLevelPercent.value = 0;
-}
-
-function sampleMicLevel(token) {
-  if (token !== micLevelMonitorToken) return;
-  if (!micLevelAnalyser || !micLevelData) {
-    micLevelPercent.value = 0;
-    return;
-  }
-
-  micLevelAnalyser.getByteTimeDomainData(micLevelData);
-  let energy = 0;
-  let peak = 0;
-  for (let index = 0; index < micLevelData.length; index += 1) {
-    const centered = (micLevelData[index] - 128) / 128;
-    energy += centered * centered;
-    const amplitude = Math.abs(centered);
-    if (amplitude > peak) peak = amplitude;
-  }
-
-  const rms = Math.sqrt(energy / micLevelData.length);
-  const micScale = Math.max(0, Math.min(100, Number(callMediaPrefs.microphoneVolume || 100))) / 100;
-  const gated = Math.max(0, Math.max(rms * 8.6, peak * 1.28) - 0.02);
-  const normalized = Math.min(1, gated / 0.98);
-  const boostedPercent = normalized * 100 * micScale * 3;
-  micLevelPercent.value = Math.max(0, Math.min(100, Math.round(boostedPercent)));
-
-  if (typeof requestAnimationFrame === 'function') {
-    micLevelFrame = requestAnimationFrame(() => sampleMicLevel(token));
-  }
-}
-
-async function startMicLevelMonitor() {
-  stopMicLevelMonitor();
-  if (!isCallWorkspace.value) return;
-  if (
-    typeof window === 'undefined'
-    || typeof navigator === 'undefined'
-    || !navigator.mediaDevices
-    || typeof navigator.mediaDevices.getUserMedia !== 'function'
-  ) {
-    return;
-  }
-
-  const token = micLevelMonitorToken + 1;
-  micLevelMonitorToken = token;
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextCtor) return;
-
-  const selectedMicId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  const audioConstraints = buildOptionalCallAudioCaptureConstraints(true, selectedMicId);
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
-    if (token !== micLevelMonitorToken) {
-      for (const track of stream.getTracks()) {
-        track.stop();
-      }
-      return;
-    }
-
-    const context = new AudioContextCtor({ latencyHint: 'interactive' });
-    const source = context.createMediaStreamSource(stream);
-    const analyser = context.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.08;
-    source.connect(analyser);
-
-    micLevelStream = stream;
-    micLevelAudioContext = context;
-    micLevelSource = source;
-    micLevelAnalyser = analyser;
-    micLevelData = new Uint8Array(analyser.fftSize);
-    sampleMicLevel(token);
-  } catch {
-    if (token === micLevelMonitorToken) {
-      micLevelPercent.value = 0;
-    }
-  }
-}
-
 async function playSpeakerTestSound() {
-  if (typeof window === 'undefined') return;
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextCtor) return;
-
-  let context = null;
-  const audio = new Audio();
-  try {
-    context = new AudioContextCtor();
-    const destination = context.createMediaStreamDestination();
-    const oscillator = context.createOscillator();
-    const gainNode = context.createGain();
-    const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
-
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
-    oscillator.connect(gainNode);
-    gainNode.connect(destination);
-
-    audio.srcObject = destination.stream;
-    audio.playsInline = true;
-    audio.muted = false;
-    audio.volume = 1;
-
-    const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
-    if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
-      await audio.setSinkId(speakerDeviceId).catch(() => {});
-    }
-
-    await audio.play();
-    oscillator.start();
-    oscillator.stop(context.currentTime + 0.22);
-    await new Promise((resolve) => setTimeout(resolve, 260));
-  } catch {
-    // ignore
-  } finally {
-    try {
-      audio.pause();
-    } catch {
-      // ignore
-    }
-    audio.srcObject = null;
-    if (context && typeof context.close === 'function') {
-      await context.close().catch(() => {});
-    }
-  }
+  await playCallSpeakerTestSound(callMediaPrefs);
 }
 
 provide('workspaceSidebarState', {
@@ -1717,6 +1582,7 @@ provide('workspaceSidebarState', {
   isMobileViewport,
   isTabletSidebarOpen,
   showLeftSidebar,
+  setMicLevelMonitorStream: attachMicLevelStream,
   callLayoutControls: callLayoutSidebarState,
 });
 
@@ -1748,9 +1614,9 @@ watch(isCallWorkspace, (nextValue) => {
 }, { immediate: true });
 
 watch(
-  () => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId],
-  ([inCallWorkspace]) => {
-    if (inCallWorkspace) {
+  () => [isCallWorkspace.value, callMediaPrefs.selectedMicrophoneId, isMobileViewport.value],
+  ([inCallWorkspace, , mobileViewport]) => {
+    if (inCallWorkspace && !mobileViewport) {
       void startMicLevelMonitor();
       return;
     }
@@ -1765,6 +1631,7 @@ watch(
     String(route.params.callRef || '').trim(),
     Number(sessionState.userId || 0),
     normalizeRole(sessionState.role),
+    Boolean(callLayoutSidebarState.canModerate),
   ],
   () => {
     void refreshCallOwnerContext();
@@ -1867,6 +1734,11 @@ function resetSettingsDraft() {
   settingsDraft.linkedinUrl = sessionState.linkedinUrl || '';
   settingsDraft.xUrl = sessionState.xUrl || '';
   settingsDraft.youtubeUrl = sessionState.youtubeUrl || '';
+  settingsDraft.webAppNotificationsEnabled = sessionState.webAppNotificationsEnabled === true;
+  settingsDraft.webAppNotificationSoundEnabled = sessionState.webAppNotificationSoundEnabled !== false;
+  settingsDraft.webAppNotificationCallInvitesEnabled = sessionState.webAppNotificationCallInvitesEnabled !== false;
+  settingsDraft.webAppNotificationCallRemindersEnabled = sessionState.webAppNotificationCallRemindersEnabled !== false;
+  settingsDraft.webAppNotificationChatMentionsEnabled = sessionState.webAppNotificationChatMentionsEnabled !== false;
 }
 
 function setAvatarStatus(message = '') {
@@ -2022,6 +1894,11 @@ async function saveSettings() {
       linkedin_url: settingsDraft.linkedinUrl,
       x_url: settingsDraft.xUrl,
       youtube_url: settingsDraft.youtubeUrl,
+      web_app_notifications_enabled: settingsDraft.webAppNotificationsEnabled === true,
+      web_app_notification_sound_enabled: settingsDraft.webAppNotificationSoundEnabled === true,
+      web_app_notification_call_invites_enabled: settingsDraft.webAppNotificationCallInvitesEnabled === true,
+      web_app_notification_call_reminders_enabled: settingsDraft.webAppNotificationCallRemindersEnabled === true,
+      web_app_notification_chat_mentions_enabled: settingsDraft.webAppNotificationChatMentionsEnabled === true,
     });
 
     if (!saveResult.ok) {

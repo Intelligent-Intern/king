@@ -38,13 +38,16 @@ const ZERO_COPY_CAPTURE_GATE_SOURCE = 'video_frame_main_thread_canvas_blocked';
 const VIDEO_FRAME_READER_RETRY_COOLDOWN_MS = 250;
 const VIDEO_FRAME_READER_FALLBACK_COOLDOWN_MS = 1500;
 const VIDEO_FRAME_READER_TRANSIENT_FAILURE_LIMIT = 3;
-const PUBLISHER_TRANSPORT_FRAMING_TARGET = Object.freeze({
-  mode: 'contain',
-  targetAspectRatio: 0,
-});
-
-export function resolvePublisherTransportFramingTarget() {
-  return PUBLISHER_TRANSPORT_FRAMING_TARGET;
+export function resolvePublisherTransportFramingTarget(videoProfile = {}) {
+  const profileWidth = positiveNumber(videoProfile?.frameWidth);
+  const profileHeight = positiveNumber(videoProfile?.frameHeight);
+  const targetAspectRatio = profileWidth > 0 && profileHeight > 0
+    ? profileWidth / profileHeight
+    : 16 / 9;
+  return {
+    mode: 'cover',
+    targetAspectRatio,
+  };
 }
 
 function positiveNumber(value) {
@@ -186,9 +189,10 @@ export function createPublisherSourceReadbackController({
     throw new Error('publisher_source_readback_document_missing');
   }
 
+  const initialFramingTarget = resolvePublisherTransportFramingTarget();
   const initialFrameSize = captureCapabilities.preferredCaptureBackend === PUBLISHER_CAPTURE_BACKENDS.DOM_CANVAS_FALLBACK
-    ? resolveDomCanvasCompatibilityFrameSize(video, videoProfile, videoTrack)
-    : resolvePublisherFrameSize(video, videoProfile, videoTrack);
+    ? resolveDomCanvasCompatibilityFrameSize(video, videoProfile, videoTrack, initialFramingTarget)
+    : resolvePublisherFrameSize(video, videoProfile, videoTrack, initialFramingTarget);
   const { canvas, context } = createDomCanvas(documentRef, initialFrameSize);
   let videoFrameReader = null;
   let videoFrameReaderRetryAfterMs = 0;

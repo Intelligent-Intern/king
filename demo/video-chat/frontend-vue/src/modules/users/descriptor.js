@@ -51,6 +51,16 @@ export default {
       order: 20,
       required_permissions: [],
     },
+    {
+      key: 'personal.notifications',
+      label: 'Notifications',
+      label_key: 'settings.notifications',
+      roles: ['admin', 'user'],
+      order: 30,
+      required_permissions: [],
+      source_path: 'layouts/settings/WorkspaceNotificationSettings.vue',
+      loader: () => import('../../layouts/settings/WorkspaceNotificationSettings.vue'),
+    },
   ],
   i18n_namespaces: ['users'],
 };

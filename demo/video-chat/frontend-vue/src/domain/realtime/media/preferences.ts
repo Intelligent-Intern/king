@@ -4,10 +4,16 @@ import {
   normalizeSfuVideoQualityProfile,
 } from '../workspace/config';
 import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstraints';
+import {
+  CALL_PHONE_SPEAKER_DEVICE_ID,
+  isLikelyMobileAudioDevice,
+  shouldOfferPhoneSpeakerRoute,
+} from './speakerOutputRouting';
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
 const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
+const MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS = 250;
 export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
 
 function clampVolume(value) {
@@ -166,6 +172,12 @@ function mapMediaDevices(devices, kind, fallbackLabel) {
     .filter((device) => device.id !== '');
 }
 
+function phoneSpeakerFallbackRows(enumeratedSpeakers = []) {
+  return (shouldOfferPhoneSpeakerRoute() || (isLikelyMobileAudioDevice() && enumeratedSpeakers.length === 0))
+    ? [{ id: CALL_PHONE_SPEAKER_DEVICE_ID, label: 'Phone speaker' }]
+    : [];
+}
+
 function resolveSelectedDevice(previousId, rows) {
   const normalizedPreviousId = String(previousId || '').trim();
   if (normalizedPreviousId !== '' && rows.some((row) => row.id === normalizedPreviousId)) {
@@ -232,6 +244,10 @@ let lastDeviceRefreshAt = 0;
 let lastDeviceRefreshHadPermissions = false;
 
 async function maybeRequestDeviceLabels() {
+  if (isLikelyMobileAudioDevice()) {
+    return;
+  }
+
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices
@@ -259,7 +275,8 @@ function applyEnumeratedDevices(devices) {
   const rows = Array.isArray(devices) ? devices : [];
   const nextCameras = mapMediaDevices(rows, 'videoinput', 'Camera');
   const nextMicrophones = mapMediaDevices(rows, 'audioinput', 'Microphone');
-  const nextSpeakers = mapMediaDevices(rows, 'audiooutput', 'Speaker');
+  const enumeratedSpeakers = mapMediaDevices(rows, 'audiooutput', 'Speaker');
+  const nextSpeakers = phoneSpeakerFallbackRows(enumeratedSpeakers).concat(enumeratedSpeakers);
 
   callMediaPrefs.cameras = nextCameras;
   callMediaPrefs.microphones = nextMicrophones;
@@ -317,6 +334,22 @@ export async function refreshCallMediaDevices({ force = false, requestPermission
   });
 
   return refreshPromise;
+}
+
+export function callMediaDeviceReleaseDelayMs() {
+  return isLikelyMobileAudioDevice() ? MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS : 0;
+}
+
+export async function waitForCallMediaDeviceRelease() {
+  const delayMs = callMediaDeviceReleaseDelayMs();
+  await new Promise((resolve) => {
+    const finish = () => setTimeout(resolve, delayMs);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(finish);
+      return;
+    }
+    finish();
+  });
 }
 
 export function setCallCameraDevice(deviceId) {

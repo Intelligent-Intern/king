@@ -212,7 +212,13 @@ function videochat_update_call(PDO $pdo, string $callId, int $authUserId, string
         ];
     }
 
-    if (!videochat_can_edit_call($authRole, $authUserId, (int) $existingCall['owner_user_id'])) {
+    if (!videochat_can_administer_call(
+        $pdo,
+        (string) ($existingCall['id'] ?? $callId),
+        $authRole,
+        $authUserId,
+        (int) $existingCall['owner_user_id']
+    )) {
         return [
             'ok' => false,
             'reason' => 'forbidden',

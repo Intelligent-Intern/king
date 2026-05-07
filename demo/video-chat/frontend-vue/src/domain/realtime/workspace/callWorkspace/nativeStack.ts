@@ -87,6 +87,7 @@ export function createCallWorkspaceNativeStack(options) {
   };
 
   nativeAudioBridgeRecovery = createNativeAudioBridgeRecovery({
+    applyCallOutputPreferences: callbacks.applyCallOutputPreferences,
     captureClientDiagnostic: callbacks.captureClientDiagnostic,
     closeNativePeerConnection: callbacks.closeNativePeerConnection,
     currentMediaSecurityRuntimePath: callbacks.currentMediaSecurityRuntimePath,

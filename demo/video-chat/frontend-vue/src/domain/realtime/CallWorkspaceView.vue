@@ -195,6 +195,7 @@ import {
   SFU_AUTO_QUALITY_DOWNGRADE_BACKPRESSURE_WINDOW_MS,
   SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS,
   SFU_AUTO_QUALITY_DOWNGRADE_NEXT,
+  SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
   SFU_AUTO_QUALITY_DOWNGRADE_SEND_FAILURE_THRESHOLD,
   SFU_AUTO_QUALITY_DOWNGRADE_SKIP_THRESHOLD,
   SFU_BACKGROUND_SNAPSHOT_DIFF_THRESHOLD,
@@ -618,6 +619,7 @@ let ensureNativePeerConnection = () => null;
 let shouldSuppressExpectedSignalingError, syncControlStateToPeers, syncModerationStateToPeers, tryDirectJoinWithModeratorBypass;
 let applyCallOutputPreferences = () => {};
 let currentSfuVideoProfile = computed(() => 'quality'); let downgradeSfuVideoQualityAfterEncodePressure = () => false;
+let clearSfuVideoQualityRecoveryProbeTimer = () => {}; let ensureSfuVideoQualityRecoveryProbeSeries = () => false;
 let initSFU = () => {};
 let maybeFallbackToNativeRuntime = async () => false;
 let removeSfuRemotePeersForUserId;
@@ -1338,6 +1340,7 @@ const nativeStack = createCallWorkspaceNativeStack({
   callbacks: {
     activeRoomId: () => activeRoomId.value,
     apiRequest,
+    applyCallOutputPreferences: (...args) => applyCallOutputPreferences(...args),
     attachMediaSecurityNativeReceiverBase: (session, receiver, senderUserId, track) => session.attachNativeReceiverTransform(receiver, senderUserId, {
       trackId: String(track?.id || ''),
     }),
@@ -1590,8 +1593,10 @@ const {
 });
 
 const {
+  clearSfuVideoQualityRecoveryProbeTimer: clearSfuVideoQualityRecoveryProbeTimerHelper,
   currentSfuVideoProfile: currentSfuVideoProfileHelper,
   downgradeSfuVideoQualityAfterEncodePressure: downgradeSfuVideoQualityAfterEncodePressureHelper,
+  ensureSfuVideoQualityRecoveryProbeSeries: ensureSfuVideoQualityRecoveryProbeSeriesHelper,
   maybeFallbackToNativeRuntime: maybeFallbackToNativeRuntimeHelper,
   setMediaRuntimePath: setMediaRuntimePathHelper,
   switchMediaRuntimePath: switchMediaRuntimePathHelper,
@@ -1617,6 +1622,7 @@ const {
   constants: {
     sfuAutoQualityDowngradeCooldownMs: SFU_AUTO_QUALITY_DOWNGRADE_COOLDOWN_MS,
     sfuAutoQualityDowngradeNext: SFU_AUTO_QUALITY_DOWNGRADE_NEXT,
+    sfuAutoQualityRecoveryProbeDelaysMs: SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
     sfuRuntimeEnabled: SFU_RUNTIME_ENABLED,
   },
   refs: {
@@ -1644,14 +1650,17 @@ const {
   },
 });
 
+clearSfuVideoQualityRecoveryProbeTimer = clearSfuVideoQualityRecoveryProbeTimerHelper;
 currentSfuVideoProfile = currentSfuVideoProfileHelper;
 downgradeSfuVideoQualityAfterEncodePressure = downgradeSfuVideoQualityAfterEncodePressureHelper;
+ensureSfuVideoQualityRecoveryProbeSeries = ensureSfuVideoQualityRecoveryProbeSeriesHelper;
 maybeFallbackToNativeRuntime = maybeFallbackToNativeRuntimeHelper;
 setMediaRuntimePath = setMediaRuntimePathHelper;
 switchMediaRuntimePath = switchMediaRuntimePathHelper;
 
 const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   activeReactions,
+  activeCallId,
   activeRoomId,
   activeTab,
   admissionGateState,
@@ -1659,6 +1668,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   apiRequest,
   callLayoutState,
   callParticipantRoles,
+  canManageOwnerRole,
   canModerate,
   chatAttachmentDrafts,
   chatByRoom,
@@ -1887,11 +1897,13 @@ const {
   toggleCompactMiniStripPlacement,
   toggleHandRaised,
   toggleMicrophone,
+  toggleModeratorRole,
   togglePinned,
   toggleScreenShare,
   toggleVideoFullscreen,
   toggleVideoFullscreenForEvent,
   toggleUserMuted,
+  transferOwnerRole,
   typingUsers,
   updatePeerControlState,
   userRowSnapshot,
@@ -2067,6 +2079,7 @@ registerCallWorkspaceLifecycleHelpers({
     clearReactionQueueTimer,
     clearReconnectTimer,
     clearRemoteVideoStallTimer,
+    clearSfuVideoQualityRecoveryProbeTimer,
     clearTypingStopTimer,
     closeSocket,
     connectSocket,
@@ -2076,6 +2089,7 @@ registerCallWorkspaceLifecycleHelpers({
     flushQueuedReactions,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
+    ensureSfuVideoQualityRecoveryProbeSeries,
     initSFU,
     loadDynamicIceServers,
     markWorkspaceReconnectAfterForeground,
@@ -2139,6 +2153,7 @@ registerCallWorkspaceLifecycleHelpers({
     localTracksPublishedToSfuRef: {
       set: (value) => { localTracksPublishedToSfu = value; },
     },
+    workspaceSidebarState,
   },
   state: {
     getCompactMediaQuery: () => compactMediaQuery,

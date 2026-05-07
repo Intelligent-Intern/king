@@ -56,4 +56,26 @@ assert.match(governanceRolesSource, /\/api\/governance\/groups/, 'user managemen
 assert.match(governanceRolesSource, /payload\.relationships = relationships/, 'governance group payloads must preserve nested relation selections');
 assert.match(governanceRolesSource, /entity_key: String\(row\?\.entity_key/, 'governance relation payloads must preserve nested entity keys');
 
+const backendAdminUsersSource = await source('../backend-king-php/http/module_users_admin_accounts.php');
+assert.match(
+  backendAdminUsersSource,
+  /function videochat_admin_user_core_update_payload\(array \$payload\): array[\s\S]*unset\(\$corePayload\['relationships'\], \$corePayload\['roles'\], \$corePayload\['groups'\]\);/,
+  'admin user updates must strip governance relationship payload before core user validation',
+);
+assert.match(
+  backendAdminUsersSource,
+  /\$coreUpdatePayload = videochat_admin_user_core_update_payload\(\$payload\);[\s\S]*videochat_admin_update_user\(\$pdo, \$userId, \$coreUpdatePayload, \$tenantId\)/,
+  'admin user updates must pass only core fields to the user field updater',
+);
+assert.match(
+  backendAdminUsersSource,
+  /videochat_tenancy_governance_sync_user_roles\(\$pdo, \$tenantId, \$userId, \$actorUserId, \$payload\)/,
+  'admin user updates must keep using the original payload for governance role sync',
+);
+assert.match(
+  backendAdminUsersSource,
+  /videochat_tenancy_governance_sync_user_groups\(\$pdo, \$tenantId, \$userId, \$payload, \$actorUserId\)/,
+  'admin user updates must keep using the original payload for governance group sync',
+);
+
 console.log('[user-editor-relation-controls-contract] PASS');

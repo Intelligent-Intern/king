@@ -201,6 +201,16 @@ function videochat_chat_attachment_store_delete(string $objectKey): bool
     }
 }
 
+function videochat_chat_attachment_local_store_root(): string
+{
+    $configured = trim((string) ($GLOBALS['videochat_chat_attachment_object_store_root'] ?? (getenv('VIDEOCHAT_OBJECT_STORE_ROOT') ?: '')));
+    if ($configured !== '') {
+        return $configured;
+    }
+
+    return dirname(__DIR__, 2) . '/.local/object-store';
+}
+
 function videochat_chat_attachment_local_store_path(string $objectKey): ?string
 {
     $normalizedKey = trim($objectKey);
@@ -208,7 +218,7 @@ function videochat_chat_attachment_local_store_path(string $objectKey): ?string
         return null;
     }
 
-    $root = trim((string) ($GLOBALS['videochat_chat_attachment_object_store_root'] ?? (getenv('VIDEOCHAT_OBJECT_STORE_ROOT') ?: '')));
+    $root = videochat_chat_attachment_local_store_root();
     if ($root === '') {
         return null;
     }

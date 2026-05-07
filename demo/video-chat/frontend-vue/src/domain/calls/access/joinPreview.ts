@@ -1,7 +1,13 @@
 import { nextTick } from 'vue';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 import { buildOptionalCallAudioCaptureConstraints as defaultBuildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
-import { callMediaPrefs } from '../../realtime/media/preferences';
+import {
+  callMediaPrefs,
+  refreshCallMediaDevices,
+  waitForCallMediaDeviceRelease,
+} from '../../realtime/media/preferences';
+import { capturePreviewMediaWithCameraFallback } from '../../realtime/media/cameraCaptureConstraints';
+import { playCallSpeakerTestSound } from '../../realtime/media/speakerOutputRouting';
 
 function finiteNumber(value, fallback) {
   const numeric = Number(value);
@@ -82,15 +88,11 @@ function applyVolumeToStreams(streams) {
   }
 }
 
-function buildPreviewConstraints(
+function buildPreviewAudioConstraints(
   buildOptionalCallAudioCaptureConstraints = defaultBuildOptionalCallAudioCaptureConstraints,
 ) {
-  const cameraDeviceId = String(callMediaPrefs.selectedCameraId || '').trim();
   const microphoneDeviceId = String(callMediaPrefs.selectedMicrophoneId || '').trim();
-  return {
-    video: cameraDeviceId === '' ? true : { deviceId: { exact: cameraDeviceId } },
-    audio: buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId),
-  };
+  return buildOptionalCallAudioCaptureConstraints(true, microphoneDeviceId);
 }
 
 function stopStreams(streams) {
@@ -118,6 +120,7 @@ export function createJoinAccessPreviewController({
   let micLevelData = null;
   let micLevelFrame = 0;
   let micLevelMonitorToken = 0;
+  let previewStartToken = 0;
 
   function stopMicLevelMonitor() {
     micLevelMonitorToken += 1;
@@ -201,6 +204,7 @@ export function createJoinAccessPreviewController({
   }
 
   function stopPreview() {
+    previewStartToken += 1;
     backgroundController.dispose();
     stopMicLevelMonitor();
 
@@ -222,6 +226,8 @@ export function createJoinAccessPreviewController({
 
   async function startPreview() {
     stopPreview();
+    const token = previewStartToken + 1;
+    previewStartToken = token;
     state.previewReady = false;
     state.previewError = '';
 
@@ -235,24 +241,42 @@ export function createJoinAccessPreviewController({
     }
 
     try {
-      rawStream = await navigator.mediaDevices.getUserMedia(buildPreviewConstraints(buildOptionalCallAudioCaptureConstraints));
+      const nextRawStream = await capturePreviewMediaWithCameraFallback({
+        audio: buildPreviewAudioConstraints(buildOptionalCallAudioCaptureConstraints),
+        cameraDeviceId: callMediaPrefs.selectedCameraId,
+      });
+      if (token !== previewStartToken) {
+        stopStreams([nextRawStream]);
+        return;
+      }
+      rawStream = nextRawStream;
       applyVolumeToStreams([rawStream]);
       startMicLevelMonitor(rawStream);
+      void refreshCallMediaDevices({ force: true, requestPermissions: false });
 
-      previewStream = rawStream;
+      let nextPreviewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
       if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await backgroundController.apply(rawStream, backgroundOptions);
+          if (token !== previewStartToken) {
+            stopStreams([rawStream, result?.stream]);
+            return;
+          }
           if (result?.stream instanceof MediaStream) {
-            previewStream = result.stream;
+            nextPreviewStream = result.stream;
           }
         } catch {
-          previewStream = rawStream;
+          nextPreviewStream = rawStream;
         }
       }
+      previewStream = nextPreviewStream;
 
       await nextTick();
+      if (token !== previewStartToken) {
+        stopStreams([rawStream, previewStream]);
+        return;
+      }
       const node = previewVideoRef.value;
       if (!(node instanceof HTMLVideoElement)) return;
       node.muted = true;
@@ -260,8 +284,14 @@ export function createJoinAccessPreviewController({
       await node.play().catch(() => {});
       state.previewReady = true;
     } catch (error) {
+      if (token !== previewStartToken) return;
       state.previewError = error instanceof Error ? error.message : 'Could not start camera preview.';
     }
+  }
+
+  async function releasePreviewForCallEntry() {
+    stopPreview();
+    await waitForCallMediaDeviceRelease();
   }
 
   function applyPreviewAudioVolume() {
@@ -269,59 +299,13 @@ export function createJoinAccessPreviewController({
   }
 
   async function playSpeakerTestSound() {
-    if (typeof window === 'undefined') return;
-    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContextCtor) return;
-
-    let context = null;
-    const audio = new Audio();
-    try {
-      context = new AudioContextCtor();
-      const destination = context.createMediaStreamDestination();
-      const oscillator = context.createOscillator();
-      const gainNode = context.createGain();
-      const normalizedVolume = Math.max(0, Math.min(100, Number(callMediaPrefs.speakerVolume || 100))) / 100;
-
-      oscillator.type = 'sine';
-      oscillator.frequency.value = 880;
-      gainNode.gain.value = Math.max(0.01, normalizedVolume * 0.45);
-      oscillator.connect(gainNode);
-      gainNode.connect(destination);
-
-      audio.srcObject = destination.stream;
-      audio.playsInline = true;
-      audio.muted = false;
-      audio.volume = 1;
-
-      const speakerDeviceId = String(callMediaPrefs.selectedSpeakerId || '').trim();
-      if (speakerDeviceId !== '' && typeof audio.setSinkId === 'function') {
-        await audio.setSinkId(speakerDeviceId).catch(() => {});
-      }
-
-      await audio.play();
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.22);
-      await new Promise((resolve) => {
-        window.setTimeout(resolve, 260);
-      });
-    } catch {
-      // best-effort test sound; unsupported output routing must not block join.
-    } finally {
-      try {
-        audio.pause();
-      } catch {
-        // ignore
-      }
-      audio.srcObject = null;
-      if (context && typeof context.close === 'function') {
-        await context.close().catch(() => {});
-      }
-    }
+    await playCallSpeakerTestSound(callMediaPrefs);
   }
 
   return {
     applyPreviewAudioVolume,
     playSpeakerTestSound,
+    releasePreviewForCallEntry,
     startPreview,
     stopPreview,
   };
