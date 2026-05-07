@@ -585,7 +585,7 @@ CAP-02 Package Layout, 2026-05-07:
   - `public/index.html`
 - First package:
   - `demo/call-app/whiteboard`
-  - status is `metadata_stub` until CAP-13 implements runtime whiteboard tools.
+  - status is `runtime_ready` after CAP-13 added runtime whiteboard tools.
 - Whiteboard metadata pins:
   - Semantic-DNS service type: `call_app`
   - service name: `call_app.whiteboard`
@@ -890,10 +890,18 @@ Tickets:
       compaction.
     - Added iframe parent CRDT bridge for bootstrap, replay, append, and
       snapshot requests without exposing primary auth material.
-- [ ] CAP-13 Whiteboard Call App first implementation
+- [x] CAP-13 Whiteboard Call App first implementation
   - Implement iframe whiteboard shell, tools, CRDT state, cursors, and export.
   - Support simultaneous drawing by multiple permitted participants.
   - Enforce viewer/editor mode based on grants.
+  - Proof:
+    - Replaced the whiteboard iframe stub with a real canvas runtime, tool
+      controls, CRDT replay polling, operation application, cursor publishing,
+      and PNG/PDF export.
+    - The iframe derives editor/viewer mode from the launch grant and disables
+      drawing controls when the participant only has read access.
+    - Added `call-app-whiteboard-runtime-contract.mjs` and moved the manifest
+      status to `runtime_ready`.
 - [ ] CAP-14 App permissions and revocation hardening
   - Verify revoked participants cannot append ops or receive new private app
     state.

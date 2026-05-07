@@ -3,7 +3,7 @@
   "app_key": "whiteboard",
   "name": "Whiteboard",
   "version": "0.1.0",
-  "status": "metadata_stub",
+  "status": "runtime_ready",
   "category": "whiteboard",
   "manufacturer": "KINGRT",
   "description": "Collaborative call whiteboard with CRDT-backed strokes, shapes, notes, text labels, and participant cursors.",
