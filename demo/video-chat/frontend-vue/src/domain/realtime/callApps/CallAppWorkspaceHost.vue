@@ -64,6 +64,7 @@
 import { computed, ref } from 'vue';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import { CALL_APP_WORKSPACE_MINI_LIMIT, callAppWorkspaceIframeUrl } from './callAppWorkspaceState.js';
+import { createCallAppCrdtBridge } from './useCallAppCrdtBridge.js';
 import { createCallAppIframeBridge } from './useCallAppIframeBridge.js';
 
 const props = defineProps({
@@ -118,6 +119,11 @@ const iframeTitle = computed(() => {
 });
 const visibleMiniParticipants = computed(() => props.miniParticipants.slice(0, CALL_APP_WORKSPACE_MINI_LIMIT));
 const { launchState, handleIframeLoad } = createCallAppIframeBridge({
+  activeSession: activeSessionRef,
+  iframeRef,
+  apiRequest: props.apiRequest,
+});
+createCallAppCrdtBridge({
   activeSession: activeSessionRef,
   iframeRef,
   apiRequest: props.apiRequest,
