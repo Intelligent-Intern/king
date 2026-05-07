@@ -862,6 +862,48 @@ foreach (['protected_frame', 'data_base64', 'sdp', 'ice_candidate', 'raw_media_k
     videochat_gossipmesh_test_assert(strpos(json_encode($GLOBALS['gossipmesh_sent_frames'], JSON_UNESCAPED_SLASHES) ?: '', $unsafeRecoveryToken) === false, 'websocket recovery must not distribute unsafe token: ' . $unsafeRecoveryToken);
 }
 
+$normalMediaGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
+    'type' => 'sfu/frame',
+    'protected_frame' => 'KPMF',
+    'track_id' => 'camera',
+], JSON_UNESCAPED_SLASHES));
+videochat_gossipmesh_test_assert((bool) ($normalMediaGuardClassification['blocked'] ?? false), 'normal realtime websocket must classify sfu/frame as forbidden media fanout');
+$mediaFieldGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
+    'type' => 'chat/send',
+    'payload' => [
+        'protected_frame' => 'KPMF',
+    ],
+], JSON_UNESCAPED_SLASHES));
+videochat_gossipmesh_test_assert((bool) ($mediaFieldGuardClassification['blocked'] ?? false), 'normal realtime websocket must reject media payload fields on control commands');
+$controlGuardClassification = videochat_realtime_classify_normal_media_fanout_frame(json_encode([
+    'type' => 'gossip/recovery/request',
+    'lane' => 'ops',
+    'payload' => [
+        'request_id' => 'ggr-control-ok',
+        'publisher_id' => '20',
+        'track_id' => 'camera',
+    ],
+], JSON_UNESCAPED_SLASHES));
+videochat_gossipmesh_test_assert(!(bool) ($controlGuardClassification['blocked'] ?? true), 'control-plane recovery ops must not be blocked by media fanout guard');
+
+$GLOBALS['gossipmesh_sent_frames'] = [];
+$normalMediaGuardResult = videochat_realtime_guard_no_normal_media_fanout(
+    json_encode([
+        'type' => 'sfu/frame',
+        'protected_frame' => 'KPMF',
+        'track_id' => 'camera',
+    ], JSON_UNESCAPED_SLASHES) ?: '',
+    $socketOwner,
+    $ownerConnection,
+    $gossipmeshFrameSender
+);
+videochat_gossipmesh_test_assert((bool) ($normalMediaGuardResult['handled'] ?? false), 'normal media fanout guard should handle forbidden control-socket media');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 1, 'normal media fanout guard must only answer the offending websocket');
+$mediaGuardError = (array) ($GLOBALS['gossipmesh_sent_frames'][0]['payload'] ?? []);
+videochat_gossipmesh_test_assert((string) ($mediaGuardError['type'] ?? '') === 'system/error', 'normal media fanout guard should emit system error');
+videochat_gossipmesh_test_assert((string) ($mediaGuardError['code'] ?? '') === VIDEOCHAT_REALTIME_MEDIA_FANOUT_GUARD_CODE, 'normal media fanout guard error code mismatch');
+videochat_gossipmesh_test_assert(strpos(json_encode($mediaGuardError, JSON_UNESCAPED_SLASHES) ?: '', 'protected_frame') === false, 'normal media fanout guard error must not echo media payloads');
+
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $forgedPeerCommand = [
     ...$repairCommand,

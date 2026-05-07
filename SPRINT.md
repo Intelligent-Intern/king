@@ -165,10 +165,24 @@ Tickets:
       no media fanout.
     - Validation: `npm run test:contract:gossip`, `npm run build`,
       `git diff --check`.
-- [ ] GSP-08 Server no-normal-media-fanout guard
+- [x] GSP-08 Server no-normal-media-fanout guard
   - Audit backend realtime Gossip/SFU paths and add tests ensuring the server
     does not distribute every normal media frame to all peers.
   - Keep fallback/relay/recording explicitly separate.
+  - Proof:
+    - Added a normal Realtime websocket media-fanout guard before chat,
+      signaling, Gossip, and layout command dispatch.
+    - The guard rejects `sfu/frame`, `sfu/frame-chunk`, and Gossip media
+      commands, plus media-bearing fields such as `protected_frame` and
+      `data_base64`, and only answers the offending websocket with a
+      `normal_media_fanout_forbidden` error.
+    - SFU direct fanout, live relay publish, and SQLite frame buffer insert
+      remain explicitly isolated in the SFU gateway/subscriber-budget paths as
+      fallback/relay/recording behavior.
+    - Added `gossip-server-no-media-fanout-contract.mjs` and extended the
+      backend Gossip runtime contract for forbidden media commands, media-field
+      rejection, and control-plane recovery pass-through.
+    - Validation: `npm run test:contract:gossip`, `git diff --check`.
 - [ ] GSP-09 Integration contracts and smoke checks
   - Cover `gossip_primary`, `sfu_first`, and `sfu_mirror` behavior at contract
     level.

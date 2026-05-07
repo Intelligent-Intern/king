@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/module_realtime_gossipmesh_recovery.php';
+require_once __DIR__ . '/module_realtime_media_fanout_guard.php';
 
 function videochat_realtime_secondary_handled_result(): array
 {
@@ -38,6 +39,15 @@ function videochat_realtime_handle_secondary_websocket_command(
     ?PDO $reactionBrokerDatabase,
     callable $openDatabase
 ): array {
+    $mediaFanoutGuardResult = videochat_realtime_guard_no_normal_media_fanout(
+        $frame,
+        $websocket,
+        $presenceConnection
+    );
+    if ($mediaFanoutGuardResult !== null) {
+        return $mediaFanoutGuardResult;
+    }
+
     $chatCommand = videochat_chat_decode_client_frame($frame);
     $chatResult = videochat_realtime_handle_chat_websocket_command(
         $chatCommand,
