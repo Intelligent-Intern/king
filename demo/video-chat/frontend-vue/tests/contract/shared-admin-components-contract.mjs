@@ -13,9 +13,12 @@ const pageHeader = await source('src/components/AppPageHeader.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
 const searchToolbar = await source('src/components/admin/AdminSearchToolbar.vue');
 const listController = await source('src/components/admin/useAdminListController.js');
+const sidePanelSubmitFooter = await source('src/components/admin/AdminSidePanelSubmitFooter.vue');
+const sidePanelForm = await source('src/components/admin/useAdminSidePanelForm.js');
 const governance = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
 const users = await source('src/modules/users/pages/admin/UsersView.vue');
+const userEditorModal = await source('src/modules/users/pages/components/UserEditorModal.vue');
 const usersTable = await source('src/modules/users/pages/components/UsersTable.vue');
 const usersStyles = await source('src/modules/users/pages/admin/UsersView.css');
 const appConfiguration = await source('src/modules/administration/pages/AppConfigurationView.vue');
@@ -55,6 +58,12 @@ assert.match(listController, /export function useAdminListController\(options\)/
 assert.match(listController, /const queryDraft = ref\(''\);[\s\S]*const queryApplied = ref\(''\);[\s\S]*const pagination = reactive/, 'shared admin list controller must own query and pagination state');
 assert.match(listController, /let loadToken = 0;[\s\S]*if \(token !== loadToken\) return;/, 'shared admin list controller must guard stale loads');
 assert.match(listController, /watch\(queryDraft[\s\S]*globalThis\.setTimeout[\s\S]*debounceMs/, 'shared admin list controller must debounce search changes');
+assert.match(sidePanelSubmitFooter, /class="btn btn-cyan admin-side-panel-submit"/, 'shared side panel submit footer must own the standard cyan submit action');
+assert.match(sidePanelSubmitFooter, /margin-inline-start:\s*auto;/, 'shared side panel submit action must stay pinned to the footer right edge');
+assert.doesNotMatch(sidePanelSubmitFooter, /common\.cancel|>\s*Cancel\s*</, 'shared side panel submit footer must not reintroduce cancel actions');
+assert.match(sidePanelForm, /export function useAdminSidePanelForm\(\)/, 'shared side panel form composable must expose panel form state');
+assert.match(sidePanelForm, /const open = ref\(false\);[\s\S]*const saving = ref\(false\);[\s\S]*const error = ref\(''\);/, 'shared side panel form composable must own open, saving, and error state');
+assert.match(sidePanelForm, /async function runSubmit\(action[\s\S]*saving\.value = true;[\s\S]*error\.value = '';[\s\S]*finally[\s\S]*saving\.value = false;/, 'shared side panel form composable must wrap save state and error handling');
 assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');
 assert.match(workspaceStyles, /tbody tr:not\(\.table-empty-row\):hover/, 'table hover must not target empty placeholder rows');
 assert.match(workspaceStyles, /tbody tr\.table-empty-row,[\s\S]*?tbody tr\.table-empty-row:hover[\s\S]*?background:\s*transparent;/, 'empty placeholder rows must not paint a hover surface');
@@ -90,12 +99,23 @@ assert.match(users, /AdminUserEditorModal/, 'user management must keep the extra
 assert.match(marketplace, /AppSidePanelShell/, 'marketplace CRUD form must use the shared right side panel shell');
 assert.match(marketplace, /<AdminSearchToolbar[\s\S]*v-model="queryDraft"[\s\S]*@submit="applySearchNow"/, 'marketplace must use the shared admin search toolbar');
 assert.match(marketplace, /useAdminListController\(\{[\s\S]*\/api\/admin\/marketplace\/apps/, 'marketplace must use the shared admin list controller');
+assert.match(marketplace, /useAdminSidePanelForm\(\)/, 'marketplace must use the shared side panel form composable');
+assert.doesNotMatch(marketplace, /const dialogOpen = ref\(false\)|const formSaving = ref\(false\)|const formError = ref\(''\)/, 'marketplace must not keep duplicated side panel form refs');
 assert.doesNotMatch(marketplace, /let loadToken|let searchTimer|watch\(queryDraft/, 'marketplace must not keep duplicated list controller state');
 assert.doesNotMatch(marketplace, /marketplace-modal/, 'marketplace CRUD form must not keep the old centered modal markup');
 for (const [name, file] of [
   ['GovernanceCrudModal', governanceModal],
+  ['AdminMarketplaceView', marketplace],
+  ['UserEditorModal', userEditorModal],
+]) {
+  assert.match(file, /AdminSidePanelSubmitFooter/, `${name} must use the shared side panel submit footer`);
+  assert.doesNotMatch(file, /<button[\s\S]*class="btn btn-cyan"[\s\S]*form="(?:governanceCrudForm|userEditorForm)"/, `${name} must not keep a duplicated side panel submit button`);
+}
+for (const [name, file] of [
+  ['GovernanceCrudModal', governanceModal],
   ['CrudRelationStack', relationStack],
   ['AdminMarketplaceView', marketplace],
+  ['UserEditorModal', userEditorModal],
   ['WorkspaceThemeSettings', themeSettings],
   ['WorkspaceThemeEditorSidebar', themeEditorSidebar],
 ]) {
@@ -121,6 +141,7 @@ assert.match(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*0;[\
 assert.doesNotMatch(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:\s*1px solid/, 'right side panels must not render top, right, and bottom borders');
 assert.doesNotMatch(sidePanelShell, /border-radius:\s*10px 0 0 10px/, 'right side panels must not keep the old rounded drawer corners');
 assert.doesNotMatch(sidePanelShell, /toggleMaximized|maximizeIcon|restoreIcon|update:maximized/, 'right side panels must not expose resize or maximize controls');
+assert.match(sidePanelShell, /\.app-side-panel-footer\s*\{[\s\S]*?display:\s*flex;[\s\S]*?justify-content:\s*flex-end;/, 'right side panel footer must remain a bottom-right action rail');
 assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'users search field must not add extra auto spacing inside the standard toolbar');
 assert.doesNotMatch(marketplaceStyles, /\.search-field|marketplace-toolbar-search-btn/, 'marketplace must not duplicate shared search toolbar CSS');
 

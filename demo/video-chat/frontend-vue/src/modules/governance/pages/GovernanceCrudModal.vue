@@ -59,9 +59,13 @@
     </template>
 
     <template #footer v-if="!relationActive">
-      <button class="btn btn-cyan" type="submit" form="governanceCrudForm" :disabled="saving">
-        {{ saving ? t('settings.saving') : submitLabel }}
-      </button>
+      <AdminSidePanelSubmitFooter
+        form="governanceCrudForm"
+        type="submit"
+        :saving="saving"
+        :label="submitLabel"
+        :saving-label="t('settings.saving')"
+      />
     </template>
   </AppSidePanelShell>
 </template>
@@ -70,6 +74,7 @@
 import { computed } from 'vue';
 import AppSidePanelShell from '../../../components/AppSidePanelShell.vue';
 import AppSelect from '../../../components/AppSelect.vue';
+import AdminSidePanelSubmitFooter from '../../../components/admin/AdminSidePanelSubmitFooter.vue';
 import { t } from '../../localization/i18nRuntime.js';
 
 const props = defineProps({

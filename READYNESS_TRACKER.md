@@ -17,6 +17,15 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Right-sidebar form footer extraction: added
+  `AdminSidePanelSubmitFooter.vue` and `useAdminSidePanelForm.js` so admin
+  side panels share a bottom-right submit action, save-state handling, and
+  error reset behavior instead of duplicating footer buttons. Governance CRUD,
+  Marketplace, and the User editor now use the shared submit footer, while
+  Marketplace also consumes the shared side-panel form composable. Proof:
+  `node tests/contract/shared-admin-components-contract.mjs` and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 CRUD scaffold first extraction: added shared admin list/search
   primitives and migrated Marketplace as the first non-call CRUD surface.
   `AdminSearchToolbar.vue` owns the standard search input plus send-icon submit
