@@ -120,15 +120,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, width);
   canvas.height = Math.max(1, height);
-  const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
-  if (!ctx) {
-    video.pause();
-    video.srcObject = null;
-    return {
-      stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
-      }
-    };
-  }
   const captureStream = canvas.captureStream;
   if (typeof captureStream !== "function") {
     video.pause();
@@ -173,14 +164,32 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     width: canvas.width,
     height: canvas.height,
   });
-  const compositorStage = createBackgroundCompositorStage({
-    canvas,
-    ctx,
-    getBackgroundColor: () => runtimeConfig.backgroundColor,
-    getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
-    getBlurPx: () => runtimeConfig.blurPx,
-    video,
-  });
+  let compositorStage = null;
+  try {
+    compositorStage = createBackgroundCompositorStage({
+      canvas,
+      getBackgroundColor: () => runtimeConfig.backgroundColor,
+      getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
+      getBlurPx: () => runtimeConfig.blurPx,
+      // default to true for now. Must use runtime capability when available
+      //  if not supported (for the 3% of users that can't use WebGL), compositor using canvas 2d ctx is still in place
+      preferWebGl: true,
+      video,
+    });
+  } catch {
+    video.pause();
+    video.srcObject = null;
+    for (const track of filteredVideoStream.getTracks()) {
+      try {
+        track.stop();
+      } catch {
+      }
+    }
+    return {
+      stream: sourceStream, active: false, reason: "setup_failed", backend: "none", dispose: () => {
+      }
+    };
+  }
 
   function syncCanvasToSourceFrame(nextSourceWidth, nextSourceHeight) {
     const nextWidth = Math.max(1, Math.round(toNumber(nextSourceWidth, sourceWidth)));
