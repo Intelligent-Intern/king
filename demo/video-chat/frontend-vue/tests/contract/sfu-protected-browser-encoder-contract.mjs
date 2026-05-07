@@ -27,6 +27,7 @@ function readRepo(relativePath) {
 try {
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
   const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.ts');
   const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.ts');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
@@ -67,7 +68,8 @@ try {
   requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
   requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
   requireContains(browserPublisher, 'mediaSecurity.protectFrame({', 'browser publisher keeps King protected media envelopes');
-  requireContains(browserPublisher, 'sendClient.sendEncodedFrame(outgoingFrame)', 'browser publisher still uses SFU binary frame sender');
+  requireContains(browserPublisher, 'dispatchProtectedBrowserPublisherFrame({', 'browser publisher dispatches through shared media-carrier frame sender');
+  requireContains(publisherFrameDispatch, 'sendClient.sendEncodedFrame(frame)', 'shared publisher dispatch still uses SFU binary frame sender');
   requireContains(browserPublisher, 'publisher_browser_encoder_codec', 'browser publisher emits backend telemetry for encoder path');
   requireContains(browserPublisher, 'publisher_browser_encoder_layer', 'browser publisher emits backend telemetry for encoder layer');
   requireContains(browserPublisher, 'publisher_browser_encoder_thumbnail_enabled: true', 'browser publisher reports dual encoder activation');

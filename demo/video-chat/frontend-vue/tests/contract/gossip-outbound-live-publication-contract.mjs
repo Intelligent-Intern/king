@@ -8,6 +8,7 @@ const callWorkspacePath = path.join(frontendRoot, 'src/domain/realtime/CallWorks
 const gossipDataLanePath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
 const mediaStackPath = path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/mediaStack.ts')
 const publisherPipelinePath = path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts')
+const publisherFrameDispatchPath = path.join(frontendRoot, 'src/domain/realtime/local/publisherFrameDispatch.ts')
 const packagePath = path.join(frontendRoot, 'package.json')
 
 const callWorkspace = fs.readFileSync(callWorkspacePath, 'utf8')
@@ -15,6 +16,7 @@ const gossipDataLane = fs.readFileSync(gossipDataLanePath, 'utf8')
 const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
 const mediaStack = fs.readFileSync(mediaStackPath, 'utf8')
 const publisherPipeline = fs.readFileSync(publisherPipelinePath, 'utf8')
+const publisherFrameDispatch = fs.readFileSync(publisherFrameDispatchPath, 'utf8')
 const packageJson = fs.readFileSync(packagePath, 'utf8')
 
 function assert(condition, message) {
@@ -54,15 +56,14 @@ assert(
   'publisher pipeline must default the gossip hook to a no-op for non-gossip callers',
 )
 
-const sfuSendIndex = publisherPipeline.indexOf('const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);')
-const sendFailureIndex = publisherPipeline.indexOf('if (frameSent === false)', sfuSendIndex)
-const gossipPublishIndex = publisherPipeline.indexOf('publishLocalEncodedFrameToGossip(outgoingFrame);', sendFailureIndex)
+const sfuSendIndex = publisherFrameDispatch.indexOf('sendClient.sendEncodedFrame(frame)')
+const mirrorGossipIndex = publisherFrameDispatch.indexOf('if (!gossipFirst)', sfuSendIndex)
 assert(
-  sfuSendIndex >= 0 && sendFailureIndex > sfuSendIndex && gossipPublishIndex > sendFailureIndex,
-  'publisher pipeline must keep sendClient.sendEncodedFrame(outgoingFrame) as the conservative path before gossip publish',
+  sfuSendIndex >= 0 && mirrorGossipIndex > sfuSendIndex,
+  'publisher frame dispatch must keep SFU-first modes conservative before mirrored Gossip publish',
 )
 assert(
-  /captureClientDiagnosticError\('gossip_data_lane_publish_failed'/.test(publisherPipeline),
+  /captureClientDiagnosticError\)\('gossip_data_lane_publish_failed'/.test(publisherFrameDispatch),
   'gossip publication failures must be diagnosed without breaking the SFU send path',
 )
 assert(

@@ -60,12 +60,22 @@ Tickets:
   - Expose a typed runtime config that states whether Gossip may publish without
     SFU readiness and whether SFU send is optional.
   - Add contract coverage for defaults and mode semantics.
-- [ ] GSP-02 Publisher pipeline decoupling
+- [x] GSP-02 Publisher pipeline decoupling
   - In `gossip_primary`, change encode flow to publish Gossip before optional
     SFU send.
   - SFU unavailable, send pressure, or send failure must not prevent Gossip
     publish in this mode.
   - Keep conservative `sfu_first` behavior intact.
+  - Proof:
+    - Added `publisherFrameDispatch.ts` as the shared dispatch boundary for WLVC
+      and protected browser encoder publisher frames.
+    - `gossip_primary` publishes Gossip before attempting optional SFU send and
+      reports SFU unavailable/send-failed/pressure states as diagnostics instead
+      of treating them as Gossip blockers.
+    - `sfu_first` still requires the SFU client before encode and still routes
+      required SFU unavailable/send-failed cases through the existing failure
+      handlers.
+    - Added `gossip-publisher-pipeline-decoupling-contract.mjs`.
 - [ ] GSP-03 Join/snapshot/churn topology hints
   - Promote topology hints to normal join and room-state payloads.
   - Include admitted peers, capabilities, room/call identity, transport
