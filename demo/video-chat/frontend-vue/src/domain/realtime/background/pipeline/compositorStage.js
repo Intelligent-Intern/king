@@ -308,8 +308,18 @@ export function createBackgroundCompositorStage({
             ctx.save();
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.globalCompositeOperation = 'source-over';
-            ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;
-            drawCoverImage(ctx, video, canvas.width, canvas.height);
+            if (backgroundColor) {
+                ctx.filter = 'none';
+                ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            } else if (mode === 'replace' && backgroundImageCanvas) {
+                ctx.filter = 'none';
+                drawCoverImage(ctx, backgroundImageCanvas, canvas.width, canvas.height);
+            } else {
+                ctx.filter = 'none';
+                ctx.fillStyle = '#061a4a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
             ctx.restore();
             return;
         }

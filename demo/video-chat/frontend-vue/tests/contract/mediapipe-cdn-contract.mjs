@@ -23,6 +23,7 @@ try {
 
   const stream = readUtf8('src/domain/realtime/background/stream.ts');
   const selector = readUtf8('src/domain/realtime/background/backendSelector.ts');
+  const featureFlags = readUtf8('src/domain/realtime/background/pipeline/featureFlags.js');
   const packageJson = readUtf8('package.json');
 
   assert.ok(stream.includes('createSinetWasmSegmentationBackend'), 'background stream must use SINet WASM');
@@ -30,6 +31,9 @@ try {
   assert.ok(!stream.includes('MediaPipe'), 'production background stream must not reference MediaPipe');
   assert.ok(!stream.includes('TensorFlow'), 'production background stream must not reference TensorFlow');
   assert.ok(!stream.includes('tfjs'), 'production background stream must not reference TFJS');
+  assert.ok(!featureFlags.includes('VITE_VIDEOCHAT_WORKER_SEGMENTER'), 'production background feature flags must not expose legacy worker segmenter toggles');
+  assert.ok(!featureFlags.includes('WORKER_SEGMENTER'), 'production background feature flags must not retain dead worker segmenter exports');
+  assert.ok(!featureFlags.includes('shouldUseWorkerSegmenter'), 'production background feature flags must not expose a dead worker segmenter selector');
   assert.ok(!packageJson.includes('@mediapipe/tasks-vision'), 'frontend package must not depend on MediaPipe Tasks');
   assert.ok(packageJson.includes('mediapipe-cdn-contract.mjs'), 'legacy CDN contract name must remain executable in CI');
 
