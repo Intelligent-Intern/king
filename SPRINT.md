@@ -230,12 +230,29 @@ Tickets:
         `test:contract:call-apps`; the SQLite runtime proof passes in the
         pinned `php:8.5-cli-trixie` container.
 
-- [ ] WCA-07 Marketplace and host UX polish
+- [x] WCA-07 Marketplace and host UX polish
   - Make the Call Apps sidebar list use the standard search/pagination spacing.
   - Show installed/enabled/healthy app state clearly.
   - Make attach flow choose default participant access without modal stacking.
   - Keep iframe host size stable under mini participant videos.
   - Add clear no-access/read-only state for revoked participants.
+  - Proof:
+    - Call Apps sidebar search and pagination use right-aligned action controls
+      with fixed 20px spacing.
+    - Sidebar app rows and details show Installed, Enabled, and Healthy state
+      explicitly.
+    - Attach flow remains inline in the sidebar and sends the selected
+      `default_app_policy` to the backend session endpoint.
+    - Call App workspace reserves fixed mini-strip height above the iframe on
+      desktop and mobile, keeping iframe sizing stable.
+    - Launch grant capabilities now drive visible no-access/read-only notices
+      in the Call App workspace host.
+    - Exact commands:
+      - `npm run test:contract:call-apps`
+      - `npm run build`
+    - Result:
+      - Both commands passed. Host-PHP PDO-SQLite contracts still skip in
+        `test:contract:call-apps` when the local driver is unavailable.
 
 - [ ] WCA-08 Observability and acceptance form
   - Add diagnostics for launch-token failures, grant changes, CRDT append/replay

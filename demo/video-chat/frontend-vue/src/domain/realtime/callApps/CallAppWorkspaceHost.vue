@@ -46,12 +46,12 @@
         @load="handleIframeLoad"
       ></iframe>
       <section
-        v-if="hasActiveSession && launchState.status !== 'ready'"
+        v-if="hasActiveSession && (launchState.status !== 'ready' || accessNoticeState !== '')"
         class="call-app-workspace-launch-status"
-        :class="`state-${launchState.status}`"
+        :class="`state-${accessNoticeState || launchState.status}`"
         aria-live="polite"
       >
-        <span>{{ launchStatusLabel }}</span>
+        <span>{{ accessNoticeLabel || launchStatusLabel }}</span>
       </section>
       <section v-if="!hasActiveSession" class="call-app-workspace-empty" aria-live="polite">
         <span class="call-app-workspace-empty-title">{{ t('calls.workspace.no_call_app_active') }}</span>
@@ -134,6 +134,21 @@ const launchStatusLabel = computed(() => {
   if (launchState.value.status === 'token_ready') return 'Preparing Call App...';
   return 'Requesting Call App access...';
 });
+const accessNoticeState = computed(() => {
+  if (!hasActiveSession.value || !['ready', 'launch_sent', 'token_ready'].includes(launchState.value.status)) return '';
+  const grantState = String(launchState.value.grant_state || '').trim().toLowerCase();
+  const capabilities = Array.isArray(launchState.value.capabilities) ? launchState.value.capabilities : [];
+  if (grantState === 'denied') return 'no-access';
+  if (grantState === 'allowed' && capabilities.includes('call_apps.crdt.read') && !capabilities.includes('call_apps.crdt.append')) {
+    return 'read-only';
+  }
+  return '';
+});
+const accessNoticeLabel = computed(() => {
+  if (accessNoticeState.value === 'no-access') return 'No Call App access. Ask the call owner or moderator to allow this app.';
+  if (accessNoticeState.value === 'read-only') return 'Read-only Call App access. You can view this app but cannot edit it.';
+  return '';
+});
 </script>
 
 <style scoped>
@@ -142,7 +157,7 @@ const launchStatusLabel = computed(() => {
   height: 100%;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(104px, auto) minmax(0, 1fr);
+  grid-template-rows: 112px minmax(0, 1fr);
   background: var(--color-surface-navy);
   color: var(--color-text-primary);
   overflow: hidden;
@@ -150,7 +165,8 @@ const launchStatusLabel = computed(() => {
 
 .call-app-workspace-mini-strip {
   min-width: 0;
-  min-height: 104px;
+  height: 112px;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(5, minmax(92px, 1fr));
   gap: 8px;
@@ -286,6 +302,16 @@ const launchStatusLabel = computed(() => {
   border-color: var(--color-error);
 }
 
+.call-app-workspace-launch-status.state-no-access {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+.call-app-workspace-launch-status.state-read-only {
+  border-color: var(--color-warning);
+  color: var(--color-warning);
+}
+
 .call-app-workspace-empty {
   display: grid;
   place-items: center;
@@ -301,12 +327,12 @@ const launchStatusLabel = computed(() => {
 
 @media (max-width: 720px) {
   .call-app-workspace-host {
-    grid-template-rows: minmax(92px, auto) minmax(0, 1fr);
+    grid-template-rows: 96px minmax(0, 1fr);
   }
 
   .call-app-workspace-mini-strip {
     grid-template-columns: repeat(5, minmax(120px, 120px));
-    min-height: 92px;
+    height: 96px;
     padding: 6px;
   }
 
