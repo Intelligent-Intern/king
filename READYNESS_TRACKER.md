@@ -17,6 +17,19 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 App Configuration email texts extraction: split the
+  administration email texts CRUD into `AppConfigurationEmailTextsTab.vue`,
+  `AppConfigurationEmailTextsTable.vue`,
+  `AppConfigurationEmailTextEditor.vue`, and
+  `useAppConfigurationEmailTexts.js`. The tab now owns only the search bar,
+  pagination, and component wiring; the table owns list rendering and
+  localized update formatting; the editor owns the right-sidebar form; and the
+  composable owns load/search/page/edit/save/delete state plus payload shaping
+  without adding a create-email-text path. Proof:
+  `node tests/contract/app-configuration-refactor-contract.mjs`,
+  `node tests/contract/shared-admin-components-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Settings localization panel extraction: moved the personal
   language/date/time settings UI out of `WorkspaceShell.vue` into
   `WorkspaceLocalizationSettings.vue`. The shell still owns session-backed
