@@ -106,6 +106,10 @@ async function main() {
     wlvc_js_asset_version: SFU_WLVC_JS_ASSET_VERSION,
     wlvc_wasm_abi_version: 1,
   }), false, 'new JS/stale WASM metadata must be rejected');
+  assert.equal(isSfuWlvcAbiMetadataCompatible('webcodecs_vp8', 'wlvc_sfu', {
+    wlvc_js_asset_version: SFU_WLVC_JS_ASSET_VERSION,
+    wlvc_wasm_abi_version: SFU_WLVC_WASM_ABI_VERSION,
+  }), true, 'protected browser VP8 frames use wlvc_sfu security but must not be WLVC ABI-gated');
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -119,6 +123,7 @@ async function main() {
   requireContains(metadataSource, 'assertLiveWlvcFrameMetadata(metadata);', 'descriptor ABI assertion');
   requireContains(metadataSource, 'throw new Error(WLVC_ABI_MISMATCH_ERROR);', 'fail-closed ABI throw');
   requireContains(framePayloadSource, 'if (!isSfuWlvcAbiMetadataCompatible(codecId, runtimeId, transportMetrics)) return null', 'binary envelope receive ABI gate');
+  requireContains(framePayloadSource, "if (normalizedCodecId === 'webcodecs_vp8') return true", 'browser VP8 bypasses WLVC ABI gate');
   requireContains(framePayloadSource, "export const SFU_WLVC_JS_ASSET_VERSION = 'wlvc-js-abi-v2'", 'SFU JS asset version diagnostic');
   requireContains(framePayloadSource, 'export const SFU_WLVC_WASM_ABI_VERSION = 2', 'SFU WASM ABI diagnostic');
   requireContains(framePayloadSource, 'return abiVersion === SFU_WLVC_WASM_ABI_VERSION && jsAssetVersion === SFU_WLVC_JS_ASSET_VERSION', 'stale JS/new WASM and new JS/stale WASM metadata gate');

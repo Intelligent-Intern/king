@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../call_apps/call_app_sessions.php';
+require_once __DIR__ . '/realtime_activity_layout.php';
+require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
+require_once __DIR__ . '/realtime_presence.php';
+
 function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
 {
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
@@ -96,7 +101,7 @@ function videochat_realtime_db_room_has_joined_user(
     string $roomId,
     int $targetUserId
 ): bool {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_external_room_id_from_key($roomId, '');
     $callId = videochat_realtime_normalize_call_id(
         (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
         ''
@@ -180,8 +185,9 @@ function videochat_realtime_room_snapshot_payload(
         (string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')),
         ''
     );
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : 0;
     $participants = videochat_realtime_merge_room_participants(
-        videochat_presence_room_participants($presenceState, $roomId),
+        videochat_presence_room_participants($presenceState, $roomId, $tenantId > 0 ? $tenantId : null),
         videochat_realtime_db_room_participants($openDatabase, $connection)
     );
     $activityLayout = [
@@ -197,6 +203,24 @@ function videochat_realtime_room_snapshot_payload(
                 'activity' => [],
             ];
         }
+    }
+    $callApps = ['active_sessions' => [], 'active_session_count' => 0, 'has_active_session' => false];
+    if ($callId !== '' && $tenantId > 0) {
+        try {
+            $callApps = videochat_call_app_room_snapshot($openDatabase(), $tenantId, $callId);
+        } catch (Throwable) {
+            $callApps = ['active_sessions' => [], 'active_session_count' => 0, 'has_active_session' => false];
+        }
+    }
+    $gossipTopology = [];
+    if ($callId !== '' && $roomId !== '') {
+        $gossipTopology = videochat_gossipmesh_room_state_payload(
+            $callId,
+            $roomId,
+            $participants,
+            (string) ((int) ($connection['user_id'] ?? 0)),
+            trim($reason) === '' ? 'snapshot' : trim($reason)
+        );
     }
 
     return [
@@ -217,6 +241,8 @@ function videochat_realtime_room_snapshot_payload(
             'can_moderate' => (bool) ($connection['can_moderate_call'] ?? false),
             'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
         ],
+        'call_apps' => $callApps,
+        'gossip_topology' => $gossipTopology,
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
         'time' => gmdate('c'),
     ];
@@ -229,6 +255,8 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'participants' => $payload['participants'] ?? [],
         'layout' => $payload['layout'] ?? [],
         'activity' => $payload['activity'] ?? [],
+        'call_apps' => $payload['call_apps'] ?? [],
+        'gossip_topology' => $payload['gossip_topology'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
@@ -340,14 +368,15 @@ function videochat_realtime_broadcast_room_snapshot(
     callable $openDatabase,
     string $reason,
     string $excludeConnectionId = '',
-    ?callable $sender = null
+    ?callable $sender = null,
+    ?int $tenantId = null
 ): int {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
     if ($normalizedRoomId === '') {
         return 0;
     }
 
-    $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
+    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return 0;
     }

@@ -391,8 +391,9 @@ function videochat_chat_publish(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $roomKey = videochat_presence_room_key_for_connection($connection, $roomId);
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
-    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $roomConnections = $presenceState['rooms'][$roomKey] ?? null;
     if (
         $connectionId === ''
         || !is_array($roomConnections)

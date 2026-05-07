@@ -11,19 +11,46 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, '../..');
 const srcRoot = path.join(root, 'src');
-const visualTokenFiles = new Set([
-  'src/App.vue',
-  'src/layouts/WorkspaceShell.vue',
-  'src/styles/base.css',
-]);
 const colorTokenFile = path.join(srcRoot, 'styles/base.css');
 const workspaceStageFile = path.join(srcRoot, 'domain/realtime/CallWorkspaceStage.css');
+const appPageHeaderFile = path.join(srcRoot, 'components/AppPageHeader.vue');
+const workspaceShellFile = path.join(srcRoot, 'layouts/WorkspaceShell.vue');
+const workspaceSharedFile = path.join(srcRoot, 'styles/workspace-shared.css');
+const callsViewTemplateFile = path.join(srcRoot, 'domain/calls/admin/CallsView.template.html');
+const callsViewStylesFile = path.join(srcRoot, 'domain/calls/admin/CallsView.css');
 const rawColorPattern = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)|hsla?\([^)]*\)/g;
+const allowedRawHexColors = new Set([
+  '#000010',
+  '#00052d',
+  '#1582bf',
+  '#59c7f2',
+  '#efefe7',
+  '#ffffff',
+  '#03275a',
+  '#00652f',
+  '#f47221',
+  '#ef4423',
+]);
+const allowedColorTokens = new Set([
+  '--color-primary-navy',
+  '--color-surface-navy',
+  '--color-cyan-primary',
+  '--color-cyan-hover',
+  '--color-heading',
+  '--color-text-primary',
+  '--color-text-link',
+  '--color-text-link-hover',
+  '--color-border',
+  '--color-success',
+  '--color-warning',
+  '--color-error',
+]);
 const modalRootAllowList = new Set([
   'call-access-join-modal',
   'call-owner-edit-modal',
   'calls-modal',
   'chat-archive-modal',
+  'background-upload-modal',
   'marketplace-modal',
   'settings-modal',
   'users-modal',
@@ -37,7 +64,7 @@ function listSourceFiles(dir) {
       files.push(...listSourceFiles(fullPath));
       continue;
     }
-    if (/\.(css|vue)$/.test(entry.name)) {
+    if (/\.(css|vue|js|ts)$/.test(entry.name)) {
       files.push(fullPath);
     }
   }
@@ -75,10 +102,18 @@ try {
 
   for (const file of files) {
     const source = fs.readFileSync(file, 'utf8');
-    if (!visualTokenFiles.has(relative(file))) {
-      const matches = source.match(rawColorPattern) || [];
-      for (const match of matches) {
-        rawColorViolations.push(`${relative(file)} uses raw color ${match}`);
+    const matches = source.match(rawColorPattern) || [];
+    for (const match of matches) {
+      const normalized = match.toLowerCase();
+      if (!normalized.startsWith('#') || !allowedRawHexColors.has(normalized)) {
+        rawColorViolations.push(`${relative(file)} uses non-styleguide color ${match}`);
+      }
+    }
+
+    const colorTokens = source.match(/--color-[A-Za-z0-9_-]+/g) || [];
+    for (const token of colorTokens) {
+      if (!allowedColorTokens.has(token)) {
+        rawColorViolations.push(`${relative(file)} uses non-styleguide token ${token}`);
       }
     }
 
@@ -102,21 +137,54 @@ try {
   );
 
   const tokenSource = fs.readFileSync(colorTokenFile, 'utf8');
-  assert.match(
-    tokenSource,
-    /--color-rgba-0-0-0-0-75:\s*rgba\(0,\s*0,\s*0,\s*0\.75\);/,
-    'workspace media text shadows must use an explicit color token',
-  );
+  const colorDefinitions = [...tokenSource.matchAll(/(--color-[\w-]+):\s*(#[0-9a-f]{6});/gi)];
+  assert.equal(colorDefinitions.length, 12, 'base CSS must define exactly 12 KingRT styleguide color slots');
+  assert.doesNotMatch(tokenSource, /--color-rgba-|rgba?\(|hsla?\(/, 'base CSS must not define arbitrary rgba or hsl color tokens');
   const workspaceStageSource = fs.readFileSync(workspaceStageFile, 'utf8');
+  const appPageHeaderSource = fs.readFileSync(appPageHeaderFile, 'utf8');
+  const workspaceShellSource = fs.readFileSync(workspaceShellFile, 'utf8');
+  const workspaceSharedSource = fs.readFileSync(workspaceSharedFile, 'utf8');
+  const callsViewTemplateSource = fs.readFileSync(callsViewTemplateFile, 'utf8');
+  const callsViewStylesSource = fs.readFileSync(callsViewStylesFile, 'utf8');
   assert.doesNotMatch(
     workspaceStageSource,
     /rgba?\(/,
     'workspace stage CSS must not introduce raw rgba values',
   );
-  assert.match(
+  assert.doesNotMatch(
     workspaceStageSource,
-    /var\(--color-rgba-0-0-0-0-75\)/,
-    'workspace stage CSS must consume the shared media text shadow token',
+    /--color-rgba-/,
+    'workspace stage CSS must not consume rgba color tokens',
+  );
+  assert.match(
+    appPageHeaderSource,
+    /<h1>\{\{\s*title\s*\}\}<\/h1>/,
+    'admin module page headers must render navigation page titles as h1',
+  );
+  assert.match(
+    appPageHeaderSource,
+    /\.app-page-header h1\s*\{[\s\S]*?font-size:\s*14px;/,
+    'admin module page h1 titles must stay at 14px',
+  );
+  assert.match(
+    workspaceShellSource,
+    /<h1 class="title">\{\{\s*pageTitle\s*\}\}<\/h1>/,
+    'workspace navigation page titles must render as h1',
+  );
+  assert.match(
+    workspaceSharedSource,
+    /\.title\s*\{[\s\S]*?font-size:\s*14px;/,
+    'workspace navigation page h1 titles must stay at 14px',
+  );
+  assert.match(
+    callsViewTemplateSource,
+    /<h1>\{\{\s*t\('calls\.admin\.title'\)\s*\}\}<\/h1>/,
+    'video call management navigation title must render as h1',
+  );
+  assert.match(
+    callsViewStylesSource,
+    /\.calls-header h1\s*\{[\s\S]*?font-size:\s*14px;/,
+    'video call management h1 title must stay at 14px',
   );
 
   process.stdout.write('[visual-standards-contract] PASS\n');

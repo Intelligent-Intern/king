@@ -21,11 +21,29 @@
 #include "background_segmenter.h"
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
-#include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <vector>
 
 using namespace emscripten;
 using namespace wlvc;
+
+static size_t checked_rgba_output_size(int w, int h) {
+    if (w <= 0 || h <= 0) {
+        throw std::invalid_argument("rgba output dimensions");
+    }
+
+    const size_t width = static_cast<size_t>(w);
+    const size_t height = static_cast<size_t>(h);
+    if (width > std::numeric_limits<size_t>::max() / height) {
+        throw std::overflow_error("rgba output pixel count");
+    }
+    const size_t pixels = width * height;
+    if (pixels > std::numeric_limits<size_t>::max() / 4u) {
+        throw std::overflow_error("rgba output byte count");
+    }
+    return pixels * 4u;
+}
 
 // ---------------------------------------------------------------------------
 // Helper: create codec configs from JS constructor args
@@ -122,7 +140,7 @@ public:
         : dec_(make_decoder_config(
             w, h, quality, levels, wavelet_type, color_space, entropy_coding
         ))
-        , rgba_out_(w * h * 4)
+        , rgba_out_(checked_rgba_output_size(w, h))
     {}
 
     /**

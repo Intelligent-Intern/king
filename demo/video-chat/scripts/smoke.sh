@@ -546,7 +546,7 @@ compose_smoke() {
     VIDEOCHAT_V1_BACKEND_ORIGIN="http://127.0.0.1:${compose_backend_port}" \
     VIDEOCHAT_V1_BACKEND_PHP_IMAGE="${compose_backend_php_image}" \
     "${compose_cmd[@]}" exec -T videochat-frontend-v1 sh -lc "\
-      cd /workspace && \
+      cd \"\${VIDEOCHAT_SMOKE_FRONTEND_WORKDIR:-/app}\" && \
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
       PLAYWRIGHT_FRONTEND_PORT=4174 \
       VITE_VIDEOCHAT_BACKEND_ORIGIN='http://127.0.0.1:${compose_backend_port}' \

@@ -203,6 +203,17 @@ export function createCallWorkspaceMediaSecurityRuntime({
     state.mediaSecurityResyncForceRekey = state.mediaSecurityResyncForceRekey || Boolean(forceRekey);
     if (state.mediaSecurityResyncTimer !== null) return;
 
+    const settleMs = Math.max(0, Number(mediaSecuritySfuTargetSettleMs || 0));
+    const normalizedReason = String(reason || '').trim().toLowerCase();
+    const shouldSettleParticipantChurn = [
+      'context_changed',
+      'hello_',
+      'sender_key_',
+      'signal_failed_',
+      'sync_participant_',
+    ].some((prefix) => normalizedReason.startsWith(prefix));
+    const resyncDelayMs = shouldSettleParticipantChurn ? settleMs : 0;
+
     state.mediaSecurityResyncTimer = setTimeout(() => {
       state.mediaSecurityResyncTimer = null;
       const shouldForceRekey = state.mediaSecurityResyncForceRekey;
@@ -211,7 +222,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
       if (remoteMediaSecurityEligibleTargetIds().length <= 0) return;
       mediaDebugLog('[MediaSecurity] scheduled participant sync', { reason, forceRekey: shouldForceRekey });
       void syncMediaSecurityWithParticipants(shouldForceRekey);
-    }, 0);
+    }, resyncDelayMs);
   }
 
   function ensureMediaSecuritySession() {
@@ -435,13 +446,6 @@ export function createCallWorkspaceMediaSecurityRuntime({
     return Array.isArray(delta?.removed) && delta.removed.length > 0;
   }
 
-  function shouldForceRekeyAfterSenderKeyMiss(targetUserId) {
-    const normalizedTargetId = Number(targetUserId || 0);
-    const remainingSignaledTargetIds = currentSfuSenderKeySignaledTargetIds()
-      .filter((signaledTargetId) => signaledTargetId !== normalizedTargetId);
-    return remainingSignaledTargetIds.length <= 0;
-  }
-
   function incomingMediaSecurityHelloResponseKey(senderUserId, payloadBody, session) {
     const payload = payloadBody && typeof payloadBody === 'object' ? payloadBody : {};
     return [
@@ -574,7 +578,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         startMediaSecurityHandshakeWatchdog();
         scheduleMediaSecurityParticipantSync(
           'sender_key_participant_mismatch',
-          shouldForceRekeyAfterSenderKeyMiss(normalizedTargetId),
+          false,
         );
         await sendMediaSecurityHello(normalizedTargetId, true);
         captureClientDiagnostic({
@@ -595,6 +599,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       throw error;
     }
     if (!signal) {
+      const peer = session.peers instanceof Map ? session.peers.get(normalizedTargetId) : null;
+      const helloSentAt = Number(state.mediaSecurityHelloSentAtByUserId.get(normalizedTargetId) || 0);
+      const shouldRefreshHello = helloSentAt <= 0 || (Date.now() - helloSentAt) >= 750;
+      if (shouldRefreshHello) {
+        await sendMediaSecurityHello(normalizedTargetId, true);
+      }
       if (
         Number.isInteger(normalizedTargetId)
         && normalizedTargetId > 0
@@ -611,6 +621,9 @@ export function createCallWorkspaceMediaSecurityRuntime({
         message: 'Media security sender key could not be built for the remote participant.',
         payload: {
           target_user_id: normalizedTargetId,
+          peer_state: String(peer?.state || ''),
+          peer_has_wrapping_key: Boolean(peer?.wrappingKey),
+          refreshed_hello: shouldRefreshHello,
           media_runtime_path: mediaRuntimePath.value,
           security: session.telemetrySnapshot(currentMediaSecurityRuntimePath()),
         },
@@ -1035,8 +1048,7 @@ export function createCallWorkspaceMediaSecurityRuntime({
         (errorCode === 'participant_set_mismatch' || errorCode === 'downgrade_attempt')
         && remoteMediaSecurityTargetIds().includes(normalizedSenderUserId)
       ) {
-        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt'
-          || shouldForceRekeyAfterSenderKeyMiss(normalizedSenderUserId);
+        const shouldForceRekeyAfterSignalFailure = errorCode === 'downgrade_attempt';
         if (errorCode === 'downgrade_attempt') {
           session.markPeerRemoved?.(normalizedSenderUserId);
         }

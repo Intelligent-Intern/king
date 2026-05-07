@@ -1,7 +1,14 @@
 <?php
-
 declare(strict_types=1);
-
+require_once __DIR__ . '/tenant_migrations.php';
+require_once __DIR__ . '/localization.php';
+require_once __DIR__ . '/workspace_theme_migrations.php';
+require_once __DIR__ . '/workspace_app_configuration_migrations.php';
+require_once __DIR__ . '/workspace_calendar_migrations.php';
+require_once __DIR__ . '/call_app_marketplace_migrations.php';
+require_once __DIR__ . '/call_app_session_migrations.php';
+require_once __DIR__ . '/call_layout_migrations.php';
+require_once __DIR__ . '/user_profile_migrations.php';
 function videochat_sqlite_migrations(): array
 {
     return [
@@ -449,7 +456,7 @@ SQL,
 CREATE TABLE IF NOT EXISTS call_layout_state (
     call_id TEXT PRIMARY KEY REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
     room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only')),
+    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only', 'call_app_workspace')),
     strategy TEXT NOT NULL DEFAULT 'manual_pinned' CHECK (strategy IN ('manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active')),
     automation_paused INTEGER NOT NULL DEFAULT 0 CHECK (automation_paused IN (0, 1)),
     pinned_user_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -601,28 +608,188 @@ SQL,
                 "ALTER TABLE sessions ADD COLUMN post_logout_landing_url TEXT NOT NULL DEFAULT ''",
             ],
         ],
-        30 => [
-            'name' => '0030_call_activity_sample_history',
+        22 => [
+            'name' => '0022_appointment_calendar',
             'statements' => [
-                "ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_blocks (
+    id TEXT PRIMARY KEY,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT NOT NULL,
+    timezone TEXT NOT NULL DEFAULT 'UTC',
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'disabled')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_appointment_blocks_owner_window ON appointment_blocks(owner_user_id, starts_at, ends_at)",
+                "CREATE INDEX IF NOT EXISTS idx_appointment_blocks_status_start ON appointment_blocks(status, starts_at)",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_bookings (
+    id TEXT PRIMARY KEY,
+    block_id TEXT NOT NULL REFERENCES appointment_blocks(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    call_id TEXT REFERENCES calls(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    access_id TEXT REFERENCES call_access_links(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    owner_user_id INTEGER NOT NULL REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    salutation TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    first_name TEXT NOT NULL,
+    last_name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    message TEXT NOT NULL DEFAULT '',
+    privacy_accepted INTEGER NOT NULL DEFAULT 1 CHECK (privacy_accepted IN (0, 1)),
+    privacy_accepted_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'booked' CHECK (status IN ('booked', 'cancelled', 'failed')),
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_appointment_bookings_owner_time ON appointment_bookings(owner_user_id, created_at DESC)",
+                "CREATE INDEX IF NOT EXISTS idx_appointment_bookings_call ON appointment_bookings(call_id)",
+                <<<'SQL'
+CREATE UNIQUE INDEX IF NOT EXISTS idx_appointment_bookings_block_booked
+ON appointment_bookings(block_id)
+WHERE status = 'booked'
+SQL,
             ],
         ],
-    ];
-}
+        23 => [
+            'name' => '0023_appointment_calendar_public_settings',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS appointment_calendar_settings (
+    owner_user_id INTEGER PRIMARY KEY REFERENCES users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,
+    slot_minutes INTEGER NOT NULL DEFAULT 15 CHECK (slot_minutes IN (5, 10, 15, 20, 30, 45, 60)),
+    invitation_text TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_appointment_calendar_settings_public_id ON appointment_calendar_settings(public_id)",
+            ],
+        ],
+        24 => [
+            'name' => '0024_appointment_calendar_mail_settings',
+            'statements' => [
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_from_email TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_from_name TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_host TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_port INTEGER NOT NULL DEFAULT 587",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_encryption TEXT NOT NULL DEFAULT 'starttls'",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_username TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_smtp_password TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN mail_subject_template TEXT NOT NULL DEFAULT 'Video call scheduled: {call_title}'",
+                <<<'SQL'
+ALTER TABLE appointment_calendar_settings ADD COLUMN mail_body_template TEXT NOT NULL DEFAULT 'Hello {recipient_name},
 
-/**
- * @return array{
- *   path: string,
- *   schema_version: int,
- *   migrations_total: int,
- *   migrations_applied: int,
- *   migrations_newly_applied: int,
- *   migrations_pending: int,
- *   applied_versions: array<int, int>,
- *   table_count: int,
- *   table_names: array<int, string>,
- *   journal_mode: string,
- *   demo_users: array<int, array{email: string, display_name: string, role: string}>,
- *   demo_calls: array<int, array{id: string, room_id: string, title: string, status: string, owner_email: string, starts_at: string, ends_at: string}>
- * }
- */
+your video call is scheduled for {starts_at}.
+
+Call link:
+{join_link}
+
+Google Calendar:
+{google_calendar_url}
+
+Participant: {guest_name} ({guest_email})
+Owner: {owner_name} ({owner_email})
+'
+SQL,
+            ],
+        ],
+        25 => [
+            'name' => '0025_workspace_administration_settings',
+            'statements' => [
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS workspace_administration_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    mail_from_email TEXT NOT NULL DEFAULT '',
+    mail_from_name TEXT NOT NULL DEFAULT '',
+    mail_smtp_host TEXT NOT NULL DEFAULT '',
+    mail_smtp_port INTEGER NOT NULL DEFAULT 587,
+    mail_smtp_encryption TEXT NOT NULL DEFAULT 'starttls',
+    mail_smtp_username TEXT NOT NULL DEFAULT '',
+    mail_smtp_password TEXT NOT NULL DEFAULT '',
+    lead_recipients TEXT NOT NULL DEFAULT '[]',
+    lead_subject_template TEXT NOT NULL DEFAULT 'New website lead: {name}',
+    lead_body_template TEXT NOT NULL DEFAULT 'A new website lead was submitted.
+
+Name: {name}
+Email: {email}
+Company: {company}
+Participants: {participants}
+Role: {role}
+Use case: {use_case}
+Timing: {timing}
+
+Notes:
+{notes}
+',
+    sidebar_logo_path TEXT NOT NULL DEFAULT '/assets/orgas/kingrt/logo.svg',
+    modal_logo_path TEXT NOT NULL DEFAULT '/assets/orgas/kingrt/logo.svg',
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                <<<'SQL'
+INSERT OR IGNORE INTO workspace_administration_settings(id, created_at, updated_at)
+VALUES(1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+SQL,
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS workspace_theme_presets (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    colors_json TEXT NOT NULL,
+    is_system INTEGER NOT NULL DEFAULT 0 CHECK (is_system IN (0, 1)),
+    created_by_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_workspace_theme_presets_label ON workspace_theme_presets(label)",
+                <<<'SQL'
+CREATE TABLE IF NOT EXISTS website_leads (
+    id TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    company TEXT NOT NULL,
+    participants INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT '',
+    use_case TEXT NOT NULL DEFAULT '',
+    timing TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    remote_addr TEXT NOT NULL DEFAULT ''
+)
+SQL,
+                "CREATE INDEX IF NOT EXISTS idx_website_leads_created_at ON website_leads(created_at DESC)",
+                ...videochat_workspace_theme_seed_statements(),
+            ],
+        ],
+        26 => [
+            'name' => '0026_user_theme_editor_permission',
+            'statements' => [
+                "ALTER TABLE users ADD COLUMN theme_editor_enabled INTEGER NOT NULL DEFAULT 0 CHECK (theme_editor_enabled IN (0, 1))",
+            ],
+        ],
+        27 => [
+            'name' => '0027_appointment_slot_mode',
+            'statements' => [
+                "ALTER TABLE appointment_calendar_settings ADD COLUMN slot_mode TEXT NOT NULL DEFAULT 'selected_dates' CHECK (slot_mode IN ('selected_dates', 'recurring_weekly'))",
+            ],
+        ],
+        30 => ['name' => '0030_localization_foundation', 'statements' => videochat_localization_migration_statements()],
+        31 => ['name' => '0031_translation_import_history', 'statements' => videochat_translation_import_history_migration_statements()],
+        44 => ['name' => '0044_call_activity_sample_history', 'statements' => ["ALTER TABLE call_participant_activity ADD COLUMN sample_history_json TEXT NOT NULL DEFAULT '[]'"]],
+        45 => ['name' => '0045_workspace_app_configuration_assets', 'statements' => videochat_workspace_app_configuration_migration_statements()],
+        46 => ['name' => '0046_workspace_calendars', 'statements' => videochat_workspace_calendar_migration_statements()],
+        47 => ['name' => '0047_translation_resources_drop_source', 'statements' => videochat_translation_resource_drop_source_migration_statements()],
+        48 => ['name' => '0048_call_app_marketplace_entitlements', 'statements' => videochat_call_app_marketplace_entitlement_migration_statements()],
+        49 => ['name' => '0049_call_app_sessions', 'statements' => videochat_call_app_session_migration_statements()],
+        50 => ['name' => '0050_call_app_workspace_layout_mode', 'statements' => videochat_call_layout_call_app_workspace_migration_statements()],
+        51 => ['name' => '0051_call_app_grant_audit', 'statements' => videochat_call_app_grant_audit_migration_statements()],
+        52 => ['name' => '0052_call_app_crdt_envelope', 'statements' => videochat_call_app_crdt_migration_statements()],
+    ] + videochat_user_profile_migration_entries() + videochat_sqlite_tenant_migrations();
+}

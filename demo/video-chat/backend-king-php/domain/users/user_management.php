@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/user_management_contract.php';
 
-function videochat_admin_create_user(PDO $pdo, array $payload): array
+function videochat_admin_create_user(PDO $pdo, array $payload, ?int $tenantId = null): array
 {
     $validation = videochat_admin_validate_create_user_payload($payload);
     if (!(bool) $validation['ok']) {
@@ -52,8 +52,8 @@ function videochat_admin_create_user(PDO $pdo, array $payload): array
     try {
         $insert = $pdo->prepare(
             <<<'SQL'
-INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, avatar_path, updated_at)
-VALUES(:email, :display_name, :password_hash, :role_id, :status, :time_format, :theme, :avatar_path, :updated_at)
+INSERT INTO users(email, display_name, password_hash, role_id, status, time_format, theme, theme_editor_enabled, avatar_path, updated_at)
+VALUES(:email, :display_name, :password_hash, :role_id, :status, :time_format, :theme, :theme_editor_enabled, :avatar_path, :updated_at)
 SQL
         );
         $insert->execute([
@@ -64,10 +64,14 @@ SQL
             ':status' => (string) $data['status'],
             ':time_format' => (string) $data['time_format'],
             ':theme' => (string) $data['theme'],
+            ':theme_editor_enabled' => (bool) ($data['theme_editor_enabled'] ?? false) ? 1 : 0,
             ':avatar_path' => $data['avatar_path'],
             ':updated_at' => gmdate('c'),
         ]);
         $createdUserId = (int) $pdo->lastInsertId();
+        if (is_int($tenantId) && $tenantId > 0) {
+            videochat_tenant_attach_user($pdo, $createdUserId, $tenantId);
+        }
     } catch (PDOException $error) {
         $message = strtolower($error->getMessage());
         if (str_contains($message, 'unique') && str_contains($message, 'users.email')) {
@@ -87,7 +91,7 @@ SQL
         ];
     }
 
-    $created = videochat_admin_fetch_user_by_id($pdo, $createdUserId);
+    $created = videochat_admin_fetch_user_by_id($pdo, $createdUserId, $tenantId);
     if ($created === null) {
         return [
             'ok' => false,
@@ -121,7 +125,7 @@ SQL
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_admin_update_user(PDO $pdo, int $userId, array $payload): array
+function videochat_admin_update_user(PDO $pdo, int $userId, array $payload, ?int $tenantId = null): array
 {
     if ($userId <= 0) {
         return [
@@ -132,7 +136,7 @@ function videochat_admin_update_user(PDO $pdo, int $userId, array $payload): arr
         ];
     }
 
-    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($existing === null) {
         return [
             'ok' => false,
@@ -186,6 +190,7 @@ SET display_name = :display_name,
     status = :status,
     time_format = :time_format,
     theme = :theme,
+    theme_editor_enabled = :theme_editor_enabled,
     avatar_path = :avatar_path,
     password_hash = COALESCE(:password_hash, password_hash),
     updated_at = :updated_at
@@ -198,13 +203,16 @@ SQL
         ':status' => array_key_exists('status', $data) ? (string) $data['status'] : (string) $existing['status'],
         ':time_format' => array_key_exists('time_format', $data) ? (string) $data['time_format'] : (string) $existing['time_format'],
         ':theme' => array_key_exists('theme', $data) ? (string) $data['theme'] : (string) $existing['theme'],
+        ':theme_editor_enabled' => array_key_exists('theme_editor_enabled', $data)
+            ? ((bool) $data['theme_editor_enabled'] ? 1 : 0)
+            : (((bool) ($existing['theme_editor_enabled'] ?? false)) ? 1 : 0),
         ':avatar_path' => array_key_exists('avatar_path', $data) ? $data['avatar_path'] : $existing['avatar_path'],
         ':password_hash' => $passwordHash,
         ':updated_at' => gmdate('c'),
         ':id' => $userId,
     ]);
 
-    $updated = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $updated = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($updated === null) {
         return [
             'ok' => false,
@@ -231,7 +239,7 @@ SQL
  *   revoked_sessions: int
  * }
  */
-function videochat_admin_deactivate_user(PDO $pdo, int $userId): array
+function videochat_admin_deactivate_user(PDO $pdo, int $userId, ?int $tenantId = null): array
 {
     if ($userId <= 0) {
         return [
@@ -243,7 +251,7 @@ function videochat_admin_deactivate_user(PDO $pdo, int $userId): array
         ];
     }
 
-    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($existing === null) {
         return [
             'ok' => false,
@@ -273,7 +281,7 @@ function videochat_admin_deactivate_user(PDO $pdo, int $userId): array
         $revokedSessions = $revokeSessions->rowCount();
     }
 
-    $updated = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $updated = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($updated === null) {
         return [
             'ok' => false,
@@ -301,7 +309,7 @@ function videochat_admin_deactivate_user(PDO $pdo, int $userId): array
  *   user: ?array<string, mixed>
  * }
  */
-function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
+function videochat_admin_reactivate_user(PDO $pdo, int $userId, ?int $tenantId = null): array
 {
     if ($userId <= 0) {
         return [
@@ -312,7 +320,7 @@ function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
         ];
     }
 
-    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($existing === null) {
         return [
             'ok' => false,
@@ -331,7 +339,7 @@ function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
         ]);
     }
 
-    $updated = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $updated = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($updated === null) {
         return [
             'ok' => false,
@@ -359,7 +367,7 @@ function videochat_admin_reactivate_user(PDO $pdo, int $userId): array
  *   deleted_invite_codes: int
  * }
  */
-function videochat_admin_delete_user(PDO $pdo, int $userId): array
+function videochat_admin_delete_user(PDO $pdo, int $userId, ?int $tenantId = null): array
 {
     if ($userId <= 0) {
         return [
@@ -372,7 +380,7 @@ function videochat_admin_delete_user(PDO $pdo, int $userId): array
         ];
     }
 
-    $existing = videochat_admin_fetch_user_by_id($pdo, $userId);
+    $existing = videochat_admin_fetch_user_by_id($pdo, $userId, $tenantId);
     if ($existing === null) {
         return [
             'ok' => false,
@@ -393,22 +401,51 @@ function videochat_admin_delete_user(PDO $pdo, int $userId): array
     }
 
     try {
-        $deleteCalls = $pdo->prepare('DELETE FROM calls WHERE owner_user_id = :owner_user_id');
-        $deleteCalls->execute([
-            ':owner_user_id' => $userId,
-        ]);
+        $callTenantPredicate = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+            ? ' AND tenant_id = :tenant_id'
+            : '';
+        $deleteCalls = $pdo->prepare('DELETE FROM calls WHERE owner_user_id = :owner_user_id' . $callTenantPredicate);
+        $callParams = [':owner_user_id' => $userId];
+        if ($callTenantPredicate !== '') {
+            $callParams[':tenant_id'] = $tenantId;
+        }
+        $deleteCalls->execute($callParams);
         $deletedCalls = $deleteCalls->rowCount();
 
-        $deleteInviteCodes = $pdo->prepare('DELETE FROM invite_codes WHERE issued_by_user_id = :issued_by_user_id');
-        $deleteInviteCodes->execute([
-            ':issued_by_user_id' => $userId,
-        ]);
+        $inviteTenantPredicate = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'invite_codes', 'tenant_id')
+            ? ' AND tenant_id = :tenant_id'
+            : '';
+        $deleteInviteCodes = $pdo->prepare('DELETE FROM invite_codes WHERE issued_by_user_id = :issued_by_user_id' . $inviteTenantPredicate);
+        $inviteParams = [':issued_by_user_id' => $userId];
+        if ($inviteTenantPredicate !== '') {
+            $inviteParams[':tenant_id'] = $tenantId;
+        }
+        $deleteInviteCodes->execute($inviteParams);
         $deletedInviteCodes = $deleteInviteCodes->rowCount();
 
+        if (is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'tenant_memberships', 'tenant_id')) {
+            $deleteMembership = $pdo->prepare('DELETE FROM tenant_memberships WHERE user_id = :user_id AND tenant_id = :tenant_id');
+            $deleteMembership->execute([':user_id' => $userId, ':tenant_id' => $tenantId]);
+            $remainingMemberships = $pdo->prepare('SELECT COUNT(*) FROM tenant_memberships WHERE user_id = :user_id');
+            $remainingMemberships->execute([':user_id' => $userId]);
+            if ((int) $remainingMemberships->fetchColumn() > 0) {
+                if ($startedTransaction && $pdo->inTransaction()) {
+                    $pdo->commit();
+                }
+
+                return [
+                    'ok' => true,
+                    'reason' => 'removed_from_tenant',
+                    'errors' => [],
+                    'user' => $existing,
+                    'deleted_calls' => $deletedCalls,
+                    'deleted_invite_codes' => $deletedInviteCodes,
+                ];
+            }
+        }
+
         $deleteUser = $pdo->prepare('DELETE FROM users WHERE id = :id');
-        $deleteUser->execute([
-            ':id' => $userId,
-        ]);
+        $deleteUser->execute([':id' => $userId]);
 
         if ($deleteUser->rowCount() !== 1) {
             throw new RuntimeException('delete_user_row_count_mismatch');

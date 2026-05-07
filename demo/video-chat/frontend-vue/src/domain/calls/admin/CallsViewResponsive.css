@@ -102,12 +102,37 @@
     padding: 0 14px;
   }
 
-  .calls-calendar-full {
-    min-height: 0;
+  .calls-calendar-shell,
+  .calls-personal-calendar-wrap :deep(.appointment-config-panel) {
+    min-height: 700px;
   }
 }
 
 @media (max-width: 760px) {
+  .calls-toolbar-left,
+  .calls-view-tabs {
+    width: 100%;
+  }
+
+  .calls-view-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .calls-view-tabs .tab {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .calls-calendar-wrap,
+  .calls-personal-calendar-wrap {
+    padding: 6px;
+  }
+
+  .calls-calendar-shell,
+  .calls-personal-calendar-wrap :deep(.appointment-config-panel) {
+    min-height: 640px;
+  }
+
   .calls-list-table {
     width: 100%;
     table-layout: auto;

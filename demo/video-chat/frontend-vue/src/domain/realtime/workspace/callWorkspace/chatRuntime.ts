@@ -1,3 +1,5 @@
+import { t } from '../../../../modules/localization/i18nRuntime.js';
+
 export function createCallWorkspaceChatRuntimeHelpers(context) {
   const {
     activeCallId,
@@ -20,6 +22,8 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     connectionState,
     currentUserId,
     ensureRoomBuckets,
+    extractErrorMessage,
+    fetchBackend,
     isChatTextInlineAllowed,
     isSocketOnline,
     markParticipantActivity,
@@ -28,6 +32,7 @@ export function createCallWorkspaceChatRuntimeHelpers(context) {
     normalizeRole,
     normalizeRoomId,
     reconnectAttempt,
+    requestHeaders,
     sanitizeChatAttachmentName,
     sendSocketFrame,
     sessionState,
@@ -90,12 +95,25 @@ function setChatAttachmentError(message) {
   chatAttachmentError.value = String(message || '').trim();
 }
 
+function chatAttachmentValidationMessage(validation) {
+  const code = String(validation?.code || '').trim();
+  if (code === 'attachment_type_not_allowed') return t('calls.workspace.attachment_type_not_allowed');
+  if (code === 'attachment_empty') return t('calls.workspace.attachment_empty');
+  if (code === 'attachment_too_large') return t('calls.workspace.attachment_too_large');
+  if (code === 'attachment_count_exceeded') {
+    return /images/i.test(String(validation?.message || ''))
+      ? t('calls.workspace.attachment_image_count_limit')
+      : t('calls.workspace.attachment_count_limit');
+  }
+  return t('calls.workspace.attachment_not_allowed');
+}
+
 function addChatAttachmentDraft(rawDraft) {
   setChatAttachmentError('');
   const currentDrafts = chatAttachmentDrafts.value;
   const validation = validateChatAttachmentDraft(rawDraft, currentDrafts);
   if (!validation.ok) {
-    setChatAttachmentError(validation.message || 'Attachment is not allowed.');
+    setChatAttachmentError(chatAttachmentValidationMessage(validation));
     return false;
   }
 
@@ -144,7 +162,7 @@ async function addChatAttachmentFiles(files) {
   const incoming = Array.from(files || []).filter(Boolean);
   if (incoming.length === 0) return;
   if (chatAttachmentDrafts.value.length + incoming.length > CHAT_ATTACHMENT_MAX_COUNT) {
-    setChatAttachmentError('Only 10 attachments are allowed per chat message.');
+    setChatAttachmentError(t('calls.workspace.attachment_count_limit'));
     return;
   }
 
@@ -187,7 +205,7 @@ function handleChatPaste(event) {
 
   event.preventDefault();
   if (addChatAttachmentDraft(buildTextAttachmentDraft(text))) {
-    setNotice('Large pasted text was converted to a chat attachment.');
+    setNotice(t('calls.workspace.large_paste_attachment'));
   }
 }
 
@@ -210,15 +228,26 @@ function isUploadTimeoutError(error) {
   return message.includes('timed out') || message.includes('aborted without reason');
 }
 
+function localizedAttachmentReadError(error) {
+  const message = error instanceof Error ? String(error.message || '').trim() : '';
+  if (message === 'Attachment draft has no file payload.') {
+    return new Error(t('calls.workspace.attachment_missing_payload'));
+  }
+  if (message === 'Could not read attachment file.') {
+    return new Error(t('calls.workspace.attachment_read_failed'));
+  }
+  return error;
+}
+
 async function uploadChatAttachmentDraft(draft) {
   const callId = String(activeCallId.value || '').trim();
   if (callId === '') {
-    throw new Error('Cannot upload chat attachment before the call context is loaded.');
+    throw new Error(t('calls.workspace.attachment_context_not_loaded'));
   }
 
   const validation = validateChatAttachmentDraft(draft, []);
   if (!validation.ok) {
-    throw new Error(validation.message || 'Attachment is not allowed.');
+    throw new Error(chatAttachmentValidationMessage(validation));
   }
 
   const timeoutMs = chatAttachmentUploadTimeoutMs(draft);
@@ -227,6 +256,7 @@ async function uploadChatAttachmentDraft(draft) {
     payload = await apiRequest(`/api/calls/${encodeURIComponent(callId)}/chat/attachments`, {
       method: 'POST',
       timeoutMs,
+      serialize: false,
       body: {
         file_name: sanitizeChatAttachmentName(draft.name, validation.extension || 'txt'),
         content_type: validation.contentType,
@@ -239,16 +269,72 @@ async function uploadChatAttachmentDraft(draft) {
   } catch (error) {
     if (isUploadTimeoutError(error)) {
       const timeoutSeconds = Math.round(timeoutMs / 1000);
-      throw new Error(`Chat attachment upload timed out after ${timeoutSeconds}s. Try again or use a smaller file / faster connection.`);
+      throw new Error(t('calls.workspace.attachment_upload_timeout', { seconds: timeoutSeconds }));
     }
-    throw error;
+    throw localizedAttachmentReadError(error);
   }
 
   const attachment = payload?.result?.attachment;
   if (!attachment || typeof attachment !== 'object' || String(attachment.id || '').trim() === '') {
-    throw new Error('Backend returned an invalid attachment payload.');
+    throw new Error(t('calls.workspace.invalid_attachment_payload'));
   }
   return attachment;
+}
+
+function chatAttachmentDownloadTimeoutMs(attachment) {
+  const sizeBytes = Math.max(0, Number(attachment?.size_bytes || attachment?.sizeBytes || 0));
+  const sizeMiB = Math.max(1, Math.ceil(sizeBytes / (1024 * 1024)));
+  const timeoutMs = CHAT_ATTACHMENT_UPLOAD_TIMEOUT_BASE_MS + (sizeMiB * CHAT_ATTACHMENT_UPLOAD_TIMEOUT_PER_MIB_MS);
+  return Math.max(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MIN_MS, Math.min(CHAT_ATTACHMENT_UPLOAD_TIMEOUT_MAX_MS, timeoutMs));
+}
+
+function browserDownloadBlob(blob, filename) {
+  if (!(blob instanceof Blob)) return;
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = sanitizeChatAttachmentName(filename || t('calls.workspace.attachment_fallback_name'), 'bin');
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 15_000);
+}
+
+async function downloadChatAttachment(attachment) {
+  const downloadUrl = String(attachment?.download_url || '').trim();
+  if (downloadUrl === '') return;
+
+  setChatAttachmentError('');
+  try {
+    const result = await fetchBackend(downloadUrl, {
+      method: 'GET',
+      headers: requestHeaders(false),
+      serialize: false,
+      timeoutMs: chatAttachmentDownloadTimeoutMs(attachment),
+    });
+    const response = result?.response;
+    if (!(response instanceof Response)) {
+      throw new Error(t('calls.workspace.attachment_download_failed'));
+    }
+
+    const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+    if (!response.ok) {
+      let message = '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json().catch(() => null);
+        message = extractErrorMessage(payload, '');
+      }
+      throw new Error(message || t('calls.workspace.attachment_download_failed'));
+    }
+    if (contentType.includes('application/json')) {
+      throw new Error(t('calls.workspace.attachment_download_failed'));
+    }
+
+    browserDownloadBlob(await response.blob(), String(attachment?.name || '').trim());
+  } catch (error) {
+    setChatAttachmentError(error instanceof Error ? error.message : t('calls.workspace.attachment_download_failed'));
+  }
 }
 
 async function uploadChatAttachmentDrafts() {
@@ -353,7 +439,7 @@ async function sendChatMessage() {
       reconnectAttempt.value = 0;
       void connectSocket();
     }
-    setNotice('Realtime chat is reconnecting. The message is still in the composer.', 'error');
+    setNotice(t('calls.workspace.chat_reconnecting'), 'error');
     return;
   }
   markParticipantActivity(currentUserId.value, 'chat');
@@ -364,7 +450,7 @@ async function sendChatMessage() {
   try {
     attachments = hasAttachments ? await uploadChatAttachmentDrafts() : [];
   } catch (error) {
-    setChatAttachmentError(error instanceof Error ? error.message : 'Could not upload chat attachment.');
+    setChatAttachmentError(error instanceof Error ? error.message : t('calls.workspace.attachment_upload_failed'));
     chatSending.value = false;
     return;
   }
@@ -378,7 +464,7 @@ async function sendChatMessage() {
 
   if (!sent) {
     await cancelUploadedChatAttachments(attachments);
-    setNotice('Could not send chat message while websocket is offline.', 'error');
+    setNotice(t('calls.workspace.chat_send_offline'), 'error');
     chatSending.value = false;
     return;
   }
@@ -393,7 +479,7 @@ async function sendChatMessage() {
       attachments,
       sender: {
         user_id: currentUserId.value,
-        display_name: String(sessionState.displayName || sessionState.email || '').trim() || 'You',
+        display_name: String(sessionState.displayName || sessionState.email || '').trim() || t('calls.workspace.you'),
         role: normalizeRole(sessionState.role),
       },
       server_time: new Date().toISOString(),
@@ -418,10 +504,10 @@ function normalizeChatMessage(payload) {
       const row = attachment && typeof attachment === 'object' ? attachment : {};
       return {
         id: String(row.id || '').trim(),
-        name: String(row.name || 'attachment').trim() || 'attachment',
+        name: String(row.name || t('calls.workspace.attachment_fallback_name')).trim() || t('calls.workspace.attachment_fallback_name'),
         content_type: String(row.content_type || 'application/octet-stream').trim() || 'application/octet-stream',
         size_bytes: Number(row.size_bytes || 0) || 0,
-        kind: String(row.kind || 'document').trim() || 'document',
+        kind: String(row.kind || t('calls.workspace.attachment_kind_document')).trim() || t('calls.workspace.attachment_kind_document'),
         download_url: String(row.download_url || '').trim(),
       };
     }).filter((attachment) => attachment.id !== '' && attachment.download_url !== '')
@@ -436,7 +522,7 @@ function normalizeChatMessage(payload) {
     text: String(message.text || '').trim(),
     sender: {
       user_id: Number(sender.user_id || 0) || 0,
-      display_name: String(sender.display_name || 'Unknown user').trim() || 'Unknown user',
+      display_name: String(sender.display_name || t('calls.workspace.unknown_user')).trim() || t('calls.workspace.unknown_user'),
       role: normalizeRole(sender.role),
     },
     server_time: String(message.server_time || payload?.time || new Date().toISOString()),
@@ -495,7 +581,7 @@ function applyTypingEvent(payload) {
   const expiresInMs = Number(payload?.expires_in_ms || 3000);
   roomMap[userId] = {
     userId,
-    displayName: String(participant.display_name || `User ${userId}`).trim() || `User ${userId}`,
+    displayName: String(participant.display_name || t('calls.workspace.user_fallback', { id: userId })).trim() || t('calls.workspace.user_fallback', { id: userId }),
     expiresAtMs: Date.now() + (Number.isFinite(expiresInMs) && expiresInMs > 0 ? expiresInMs : 3000),
   };
 }
@@ -504,7 +590,7 @@ function normalizeLobbyEntry(entry) {
   const userId = Number(entry?.user_id || 0);
   return {
     user_id: Number.isInteger(userId) && userId > 0 ? userId : 0,
-    display_name: String(entry?.display_name || '').trim() || `User ${userId || 'unknown'}`,
+    display_name: String(entry?.display_name || '').trim() || t('calls.workspace.user_fallback', { id: userId || t('calls.workspace.status_unknown') }),
     role: normalizeRole(entry?.role),
     requested_unix_ms: Number(entry?.requested_unix_ms || 0),
     admitted_unix_ms: Number(entry?.admitted_unix_ms || 0),
@@ -517,6 +603,7 @@ function normalizeLobbyEntry(entry) {
     appendChatMessage,
     applyTypingEvent,
     clearTypingStopTimer,
+    downloadChatAttachment,
     focusChatInput,
     formatBytes,
     handleChatAttachmentDrop,

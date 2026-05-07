@@ -60,6 +60,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     callMediaPrefs,
     canModerate,
     chatListRef,
+    connectedParticipantUsers,
     connectionReason,
     connectionState,
     desiredRoomId,
@@ -113,6 +114,7 @@ export function registerCallWorkspaceLifecycleHelpers({
   const sfuBackgroundTabPolicy = createSfuBackgroundTabPolicy({
     callbacks: {
       captureClientDiagnostic,
+      getConnectedParticipantCount: () => connectedParticipantUsers?.value?.length || 0,
       getRemotePeerCount: () => remotePeersRef?.value?.size || 0,
       publishLocalTracks,
       requestWlvcFullFrameKeyframe,
@@ -192,6 +194,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
       callMediaPrefs.backgroundApplyOutgoing,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],
@@ -206,6 +209,7 @@ export function registerCallWorkspaceLifecycleHelpers({
         && nextValue[6] === previousValue[6]
         && nextValue[7] === previousValue[7]
         && nextValue[8] === previousValue[8]
+        && nextValue[9] === previousValue[9]
       ) {
         return;
       }
@@ -335,14 +339,14 @@ export function registerCallWorkspaceLifecycleHelpers({
       },
     }));
 
-    setDetachMediaDeviceWatcher(attachCallMediaDeviceWatcher({ requestPermissions: true }));
+    setDetachMediaDeviceWatcher(attachCallMediaDeviceWatcher());
     const canEnterWorkspace = await resolveRouteCallRef(routeCallRef.value);
     if (!canEnterWorkspace) {
       return;
     }
     ensureRoomBuckets(desiredRoomId.value);
     serverRoomId.value = desiredRoomId.value;
-    await refreshCallMediaDevices({ requestPermissions: true });
+    await refreshCallMediaDevices();
     await loadDynamicIceServers();
     void connectSocket();
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { deriveGossipRolloutGateState } from '../../src/lib/gossipmesh/rolloutGate.ts'
+import { transformWithOxc } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const frontendRoot = path.resolve(__dirname, '../..')
@@ -10,6 +10,10 @@ const rolloutGateSource = fs.readFileSync(path.join(frontendRoot, 'src/lib/gossi
 const workspaceGossip = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts'), 'utf8')
 const socketLifecycle = fs.readFileSync(path.join(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts'), 'utf8')
 const packageJson = fs.readFileSync(path.join(frontendRoot, 'package.json'), 'utf8')
+const transformedRolloutGate = await transformWithOxc(rolloutGateSource, 'rolloutGate.ts')
+const { deriveGossipRolloutGateState } = await import(
+  `data:text/javascript;base64,${Buffer.from(transformedRolloutGate.code).toString('base64')}`
+)
 
 function assert(condition, message) {
   if (!condition) {

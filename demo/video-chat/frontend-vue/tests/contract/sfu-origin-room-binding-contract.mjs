@@ -23,9 +23,12 @@ function read(relativePath) {
 }
 
 const sfuClient = read('../../src/lib/sfu/sfuClient.ts');
+const sfuSessionProtocol = read('../../src/lib/sfu/sessionProtocol.ts');
 const sfuMessageHandler = read('../../src/lib/sfu/sfuMessageHandler.ts');
 const outboundFrameBudget = read('../../src/lib/sfu/outboundFrameBudget.ts');
 const framePayload = read('../../src/lib/sfu/framePayload.ts');
+const frameDecode = read('../../src/domain/realtime/sfu/frameDecode.ts');
+const joinVisibilitySlo = read('../../src/domain/realtime/sfu/joinVisibilitySlo.ts');
 const outboundFrameQueue = read('../../src/lib/sfu/outboundFrameQueue.ts');
 const inboundFrameAssembler = read('../../src/lib/sfu/inboundFrameAssembler.ts');
 const backendOrigin = read('../../src/support/backendOrigin.ts');
@@ -57,9 +60,24 @@ try {
   requireContains(sfuClient, 'room_id: roomId,', 'snake_case room query binding');
   requireContains(sfuClient, "if (/^[A-Za-z0-9._-]{1,200}$/.test(normalizedCallId)) {", 'call_id validation');
   requireContains(sfuClient, "query.set('call_id', normalizedCallId)", 'call_id query binding');
+  requireContains(sfuClient, 'buildSfuSessionHelloPayload({', 'SFU client sends explicit session capability hello before join');
+  requireContains(sfuClient, "this.cb.onJoinLatencySample?.(buildSfuJoinLatencySample('sfu_socket_open'", 'SFU client records socket-open join latency');
   requireContains(sfuClient, "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })", 'snake_case join room binding');
 
-  requireContains(sfuClient, "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })", 'snake_case publish command');
+  requireContains(sfuClient, 'this.send(buildSfuTrackPublishPayload(t, this.sessionAccepted))', 'snake_case publish command with capability metadata');
+  requireContains(sfuClient, 'handleSfuSessionProtocolMessage(msg as Record<string, unknown>', 'SFU client routes session protocol messages through helper');
+  requireContains(sfuSessionProtocol, "msgType === 'sfu/session-accepted'", 'SFU client accepts server-selected capability profile');
+  requireContains(sfuSessionProtocol, "msgType === 'sfu/track-accepted'", 'SFU client accepts server track capability acknowledgement');
+  requireContains(sfuSessionProtocol, "export const SFU_SESSION_PROTOCOL = 'king_sfu_session_v1'", 'SFU session protocol name');
+  requireContains(sfuSessionProtocol, 'export const SFU_JOIN_VISIBLE_SLO_MS = 1000', 'SFU fast visible join SLO');
+  requireContains(sfuSessionProtocol, "type: 'sfu/session-hello'", 'SFU session hello wire type');
+  requireContains(sfuSessionProtocol, "type: 'sfu/publish'", 'SFU publish helper preserves snake_case wire type');
+  requireContains(sfuSessionProtocol, "first_frame_policy: 'keyframe_or_full_frame'", 'SFU track publish declares fast first-frame policy');
+  requireContains(sfuClient, 'publisher_join_started_at_ms: this.joinStartedAtMs', 'SFU frames carry publisher join start for visible-frame SLO measurement');
+  requireContains(framePayload, "'publisher_join_started_at_ms'", 'SFU frame payload preserves publisher join start timestamp');
+  requireContains(sfuMessageHandler, 'publisherJoinStartedAtMs: Math.max(0, integerField(0, msg.publisherJoinStartedAtMs, msg.publisher_join_started_at_ms))', 'SFU inbound frames expose publisher join start timestamp');
+  requireContains(frameDecode, 'maybeReportFirstRemoteFrameVisible({', 'SFU receiver reports first visible remote frame');
+  requireContains(joinVisibilitySlo, "eventType: 'sfu_first_remote_frame_visible'", 'SFU visible-frame SLO diagnostic');
   requireContains(sfuClient, 'isOpen(): boolean {', 'SFU client exposes socket open state without leaking private ws access');
   requireContains(sfuClient, 'getBufferedAmount(): number {', 'SFU client exposes websocket send-buffer size for encoder backpressure');
   requireContains(sfuClient, 'const normalizedPublisherId = stringField(publisherId)', 'subscribe command normalizes publisher id');
@@ -82,7 +100,7 @@ try {
   requireContains(outboundFrameBudget, 'const SFU_FRAME_CHUNK_BACKPRESSURE_LOW_WATER_BYTES = 192 * 1024', 'binary send resumes only at low-water');
   requireContains(sfuClient, 'private async waitForSendBufferDrain(targetBufferedBytes: number', 'chunk sender waits for budgeted websocket drain');
   requireContains(sfuClient, 'private outboundFrameSequenceByTrack = new Map<string, number>()', 'per-track outgoing frame sequence');
-  requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string): number', 'outgoing frame sequence allocator');
+  requireContains(sfuClient, 'private nextOutboundFrameSequence(trackId: string, videoLayer: unknown = \'\'): number', 'outgoing frame sequence allocator');
   requireContains(sfuClient, 'this.outboundFrameQueue.enqueue(prepared)', 'bounded outbound frame queue');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_FRAMES = 3', 'bounded queue frame cap');
   requireContains(outboundFrameQueue, 'const SFU_FRAME_SEND_QUEUE_MAX_PAYLOAD_CHARS = 12 * 1024 * 1024', 'bounded queue byte cap');
@@ -100,6 +118,7 @@ try {
   requireContains(sfuMessageHandler, "eventType: 'sfu_legacy_frame_chunk_rejected'", 'legacy inbound media chunks are diagnostically rejected');
   requireContains(sfuClient, "ws.binaryType = 'arraybuffer'", 'SFU websocket receives binary media envelopes');
   requireContains(sfuClient, 'decodeSfuBinaryFrameEnvelope(ev.data)', 'inbound media uses binary envelope decode');
+  assert.ok(!sfuClient.includes('this.reportClientDiagnostic('), 'SFU client diagnostics must call the imported reporter, not a missing instance method');
   requireContains(framePayload, "export const SFU_BINARY_FRAME_MAGIC = 'KSFB'", 'binary frame magic');
   requireContains(framePayload, 'export const SFU_BINARY_FRAME_LAYOUT_ENVELOPE_VERSION = 2', 'binary frame layout envelope version');
   requireContains(framePayload, 'encodeSfuBinaryFrameEnvelope(prepared: PreparedSfuOutboundFramePayload)', 'binary frame envelope encoder');

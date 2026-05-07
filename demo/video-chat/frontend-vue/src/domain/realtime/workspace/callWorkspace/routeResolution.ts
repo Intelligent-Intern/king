@@ -1,3 +1,5 @@
+import { t } from '../../../../modules/localization/i18nRuntime.js';
+
 export function createCallWorkspaceRouteResolutionHelpers({
   callbacks,
   refs,
@@ -104,7 +106,7 @@ export function createCallWorkspaceRouteResolutionHelpers({
       joinPath = await createSelfJoinPathForCall(callResolution?.callId || call?.id || '');
     }
     if (joinPath === '') {
-      refs.workspaceError.value = 'Could not open the join modal for this invited call.';
+      refs.workspaceError.value = t('calls.workspace.join_modal_open_failed');
       refs.workspaceNotice.value = '';
       return true;
     }

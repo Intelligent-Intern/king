@@ -1,0 +1,35 @@
+{
+  "schema_version": "king.call_app.health_descriptor.v1",
+  "app_key": "whiteboard",
+  "checks": [
+    {
+      "name": "manifest",
+      "type": "static_file",
+      "path": "call-app.manifest.json",
+      "required": true
+    },
+    {
+      "name": "mcp_descriptor",
+      "type": "static_file",
+      "path": "mcp.descriptor.json",
+      "required": true
+    },
+    {
+      "name": "crdt_schema",
+      "type": "static_file",
+      "path": "crdt.schema.json",
+      "required": true
+    },
+    {
+      "name": "iframe_entrypoint",
+      "type": "static_file",
+      "path": "public/index.html",
+      "required": true
+    }
+  ],
+  "status_mapping": {
+    "healthy": "all_required_checks_pass",
+    "degraded": "optional_checks_failed",
+    "unhealthy": "required_check_failed"
+  }
+}

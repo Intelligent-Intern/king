@@ -10,6 +10,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../../support/foregroundReconnect';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
   attachCallMediaDeviceWatcher,
   callMediaPrefs,
@@ -18,7 +19,6 @@ import {
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 
-const ENTER_ADMISSION_WAIT_MESSAGE = 'Call owner has been notified.';
 const ENTER_ADMISSION_RECONNECT_DELAYS_MS = [500, 1000, 2000, 3000, 5000];
 const ENTER_ADMISSION_FOREGROUND_RECONNECT_DEBOUNCE_MS = 1500;
 
@@ -153,7 +153,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     const delay = ENTER_ADMISSION_RECONNECT_DELAYS_MS[
       Math.min(enterAdmissionReconnectAttempt - 1, ENTER_ADMISSION_RECONNECT_DELAYS_MS.length - 1)
     ];
-    enterCallState.admissionMessage = 'Reconnecting lobby connection...';
+    enterCallState.admissionMessage = t('public.join.reconnecting_lobby');
     enterAdmissionReconnectTimer = window.setTimeout(() => {
       enterAdmissionReconnectTimer = 0;
       connectEnterAdmissionSocket();
@@ -177,7 +177,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     enterAdmissionLastForegroundReconnectAt = now;
     enterAdmissionReconnectAttempt = 0;
     clearEnterAdmissionReconnectTimer();
-    enterCallState.admissionMessage = 'Reconnecting lobby connection...';
+    enterCallState.admissionMessage = t('public.join.reconnecting_lobby');
     connectEnterAdmissionSocket();
   }
 
@@ -187,7 +187,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       enterCallState.loading = false;
       enterCallState.waitingForAdmission = false;
       enterCallState.admissionMessage = '';
-      enterCallState.error = 'Could not open the call because the call ID is missing.';
+      enterCallState.error = t('calls.enter.missing_call_id');
       return;
     }
 
@@ -236,14 +236,14 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       enterCallState.loading = false;
       enterCallState.waitingForAdmission = false;
       enterCallState.admissionMessage = '';
-      enterCallState.error = 'Could not notify call owner because the lobby connection is offline.';
+      enterCallState.error = t('public.join.notify_owner_offline');
       return;
     }
 
     enterCallState.loading = false;
     enterCallState.waitingForAdmission = true;
     enterCallState.error = '';
-    enterCallState.admissionMessage = ENTER_ADMISSION_WAIT_MESSAGE;
+    enterCallState.admissionMessage = t('public.join.admission_wait');
   }
 
   function handleEnterAdmissionSocketMessage(event) {
@@ -270,7 +270,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     if (type === 'system/error') {
       const code = String(payload.code || '').trim().toLowerCase();
       if (code === 'lobby_command_failed') {
-        enterCallState.error = 'Could not notify call owner.';
+        enterCallState.error = t('public.join.notify_owner_failed');
         enterCallState.admissionMessage = '';
         enterCallState.waitingForAdmission = false;
         enterCallState.loading = false;
@@ -288,7 +288,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
         enterCallState.loading = false;
         enterCallState.waitingForAdmission = false;
         enterCallState.admissionMessage = '';
-        enterCallState.error = 'Could not connect to call lobby.';
+        enterCallState.error = t('public.join.lobby_connect_failed');
       }
       return;
     }
@@ -344,7 +344,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
         failOverToNextOrigin();
         return;
       }
-      enterCallState.admissionMessage = 'Reconnecting lobby connection...';
+      enterCallState.admissionMessage = t('public.join.reconnecting_lobby');
     });
 
     socket.addEventListener('close', (event) => {
@@ -371,7 +371,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
   function startEnterAdmissionWait(target = null) {
     if (typeof WebSocket === 'undefined') {
       enterCallState.loading = false;
-      enterCallState.error = 'Realtime lobby is not supported in this browser.';
+      enterCallState.error = t('public.join.realtime_lobby_unsupported');
       return false;
     }
 
@@ -381,7 +381,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     enterCallState.error = '';
     enterCallState.loading = true;
     enterCallState.waitingForAdmission = true;
-    enterCallState.admissionMessage = 'Connecting lobby connection...';
+    enterCallState.admissionMessage = t('public.join.connecting_lobby');
 
     closeEnterAdmissionSocket({ cancel: false });
     enterAdmissionAccepted = false;
@@ -398,11 +398,14 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     };
-    const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
-      ? 'blur'
-      : 'off';
+    const requestedMode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+    const mode = requestedMode === 'replace'
+      ? 'replace'
+      : requestedMode === 'blur'
+        ? 'blur'
+        : 'off';
     const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-    if (!applyOutgoing || mode !== 'blur') return { mode: 'off' };
+    if (!applyOutgoing || (mode !== 'blur' && mode !== 'replace')) return { mode: 'off' };
 
     const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
     const isExclusionBackdrop = backdrop === 'exclusion';
@@ -413,9 +416,9 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
     if (backdrop === 'blur9') blurPx = Math.round(blurPx * 1.55);
     blurPx = Math.max(1, Math.min(64, blurPx));
 
-    let detectIntervalMs = 150;
-    if (qualityProfile === 'quality') detectIntervalMs = 110;
-    else if (qualityProfile === 'realtime') detectIntervalMs = 190;
+    let detectIntervalMs = 66;
+    if (qualityProfile === 'quality') detectIntervalMs = 50;
+    else if (qualityProfile === 'realtime') detectIntervalMs = 80;
 
     let temporalSmoothingAlpha = 0.28;
     if (qualityProfile === 'quality') temporalSmoothingAlpha = 0.22;
@@ -434,11 +437,17 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       processWidthCap = 640;
       processFpsCap = 12;
     }
+    const backgroundColor = isExclusionBackdrop
+      ? '#061a4a'
+      : (mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '');
 
     return {
       mode,
+      backgroundColor,
+      backgroundImageUrl: mode === 'replace' && !backgroundColor
+        ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim()
+        : '',
       blurPx,
-      backgroundColor: isExclusionBackdrop ? '#061a4a' : '',
       mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),
       detectIntervalMs,
       temporalSmoothingAlpha,
@@ -503,7 +512,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
 
       let previewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
-      if (backgroundOptions.mode === 'blur') {
+      if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
           if (result?.stream instanceof MediaStream) previewStream = result.stream;
@@ -522,8 +531,8 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       await previewNode.play().catch(() => {});
       enterCallState.previewReady = true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start camera preview.';
-      enterCallState.previewError = message || 'Could not start camera preview.';
+      const message = error instanceof Error ? error.message : t('calls.enter.preview_failed');
+      enterCallState.previewError = message || t('calls.enter.preview_failed');
     }
   }
 
@@ -692,6 +701,7 @@ export function createDashboardEnterCallController({ clearNotice, isInvitable, r
       callMediaPrefs.backgroundApplyOutgoing,
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],

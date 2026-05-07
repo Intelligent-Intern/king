@@ -1,4 +1,5 @@
 import { computed, reactive, ref } from 'vue';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import { createParticipantDirectoryStore } from './viewState';
 
 export function createDashboardComposeController({
@@ -33,15 +34,15 @@ export function createDashboardComposeController({
   let composeExternalRowId = 0;
 
   const composeHeadline = computed(() => {
-    if (composeState.mode === 'edit') return 'Edit video call';
-    if (composeState.mode === 'schedule') return 'Schedule video call';
-    return 'New video call';
+    if (composeState.mode === 'edit') return t('calls.compose.headline_edit');
+    if (composeState.mode === 'schedule') return t('calls.compose.headline_schedule');
+    return t('calls.compose.headline_new');
   });
 
   const composeSubmitLabel = computed(() => {
-    if (composeState.mode === 'edit') return 'Save changes';
-    if (composeState.mode === 'schedule') return 'Schedule call';
-    return 'Create call';
+    if (composeState.mode === 'edit') return t('common.save_changes');
+    if (composeState.mode === 'schedule') return t('calls.compose.submit_schedule');
+    return t('calls.compose.submit_create');
   });
 
   const shouldSendParticipants = computed(
@@ -189,7 +190,7 @@ export function createDashboardComposeController({
       const loaded = await loadEditableCallParticipants(composeState.callId);
       if (!loaded) {
         composeState.replaceParticipants = false;
-        composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+        composeState.error = t('calls.compose.load_existing_participants_failed');
         return;
       }
     }
@@ -229,7 +230,7 @@ export function createDashboardComposeController({
         composeSelectedUserIds.value = composeSelectedUserIds.value.filter((id) => Number(id) !== ownUserId);
       }
     } catch (error) {
-      composeParticipantStore.fail(error instanceof Error ? error.message : 'Could not load users.');
+      composeParticipantStore.fail(error instanceof Error ? error.message : t('calls.compose.load_users_failed'));
     } finally {
       composeParticipants.loading = false;
     }
@@ -291,7 +292,7 @@ export function createDashboardComposeController({
       if (displayName === '' || email === '') {
         return {
           ok: false,
-          error: `External participant row ${index + 1} requires both display name and email.`,
+          error: t('calls.compose.external_row_required', { number: index + 1 }),
           rows: [],
         };
       }
@@ -299,7 +300,7 @@ export function createDashboardComposeController({
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
         return {
           ok: false,
-          error: `External participant row ${index + 1} has an invalid email.`,
+          error: t('calls.compose.external_row_email_invalid', { number: index + 1 }),
           rows: [],
         };
       }
@@ -323,19 +324,19 @@ export function createDashboardComposeController({
 
     const title = composeState.title.trim();
     if (title === '') {
-      composeState.error = 'Title is required.';
+      composeState.error = t('calls.compose.title_required');
       return;
     }
 
     const startsAt = localInputToIso(composeState.startsLocal);
     const endsAt = localInputToIso(composeState.endsLocal);
     if (startsAt === '' || endsAt === '') {
-      composeState.error = 'Start and end timestamps are required.';
+      composeState.error = t('calls.compose.start_end_required');
       return;
     }
 
     if (new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-      composeState.error = 'End timestamp must be after start timestamp.';
+      composeState.error = t('calls.compose.end_after_start');
       return;
     }
 
@@ -348,7 +349,7 @@ export function createDashboardComposeController({
 
     if (shouldSendParticipants.value) {
       if (composeState.mode === 'edit' && !composeState.participantsReady) {
-        composeState.error = 'Could not load existing participants. Try again before replacing the list.';
+        composeState.error = t('calls.compose.load_existing_participants_failed');
         return;
       }
 
@@ -371,19 +372,19 @@ export function createDashboardComposeController({
           method: 'PATCH',
           body: payload,
         });
-        setNotice('ok', 'Call updated.');
+        setNotice('ok', t('calls.compose.updated_notice'));
       } else {
         await apiRequest('/api/calls', {
           method: 'POST',
           body: payload,
         });
-        setNotice('ok', 'Call created.');
+        setNotice('ok', t('calls.compose.created_notice'));
       }
 
       closeCompose();
       await Promise.all([loadCalls(), loadCalendar()]);
     } catch (error) {
-      composeState.error = error instanceof Error ? error.message : 'Could not save call.';
+      composeState.error = error instanceof Error ? error.message : t('calls.compose.save_failed');
     } finally {
       composeState.submitting = false;
     }

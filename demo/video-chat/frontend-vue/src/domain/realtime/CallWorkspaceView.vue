@@ -25,9 +25,7 @@ import {
   handleAssetVersionSocketPayload,
 } from '../../support/assetVersion';
 import { attachForegroundReconnectHandlers } from '../../support/foregroundReconnect';
-import {
-  reportClientDiagnostic,
-} from '../../support/clientDiagnostics';
+import { reportClientDiagnostic } from '../../support/clientDiagnostics';
 import { BackgroundFilterController } from './background/controller';
 import { BackgroundFilterBaselineCollector } from './background/baseline';
 import { evaluateBackgroundFilterGates } from './background/gates';
@@ -48,13 +46,16 @@ import { createCallWorkspaceRuntimeSwitchingHelpers } from './workspace/callWork
 import { createCallWorkspaceParticipantUiHelpers } from './workspace/callWorkspace/participantUi';
 import { createCallWorkspaceChatRuntimeHelpers } from './workspace/callWorkspace/chatRuntime';
 import { createCallWorkspaceRoomStateHelpers } from './workspace/callWorkspace/roomState';
+import { createCallWorkspaceCompactChrome } from './workspace/callWorkspace/compactChrome';
 import { createCallWorkspaceMediaSecurityRuntime } from './workspace/callWorkspace/mediaSecurityRuntime';
 import { createCallWorkspaceOrchestrationHelpers } from './workspace/callWorkspace/orchestration';
 import { registerCallWorkspaceLifecycleHelpers } from './workspace/callWorkspace/lifecycle';
 import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaStack';
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
-import { createCallWorkspaceShellViewport } from './workspace/callWorkspace/shellViewport';
+import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
+import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
+import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
 import {
   createNativePeerAudioElement,
   createNativePeerVideoElement,
@@ -229,9 +230,9 @@ import {
   defaultNativeAudioBridgeFailureMessage,
 } from './workspace/callWorkspace/mediaSecurityTargets';
 import { createSfuTransportState } from './workspace/callWorkspace/sfuTransport';
+import { t } from '../../modules/localization/i18nRuntime.js';
 
-const route = useRoute();
-const router = useRouter();
+const route = useRoute(); const router = useRouter();
 const workspaceSidebarState = inject('workspaceSidebarState', null);
 
 const activeTab = ref('users');
@@ -272,7 +273,6 @@ const socketLifecycleState = {
   set reconnectTimer(value) { reconnectTimer = value; },
 };
 const connectedParticipantUsersRef = ref(computed(() => []));
-
 const participantsRaw = ref([]);
 let participantsRawSignature = '';
 const currentUserConnectedAt = new Date().toISOString();
@@ -562,12 +562,12 @@ const shouldConnectSfu = computed(() => (
 ));
 const {
   isCompactHeaderVisible,
-  isCompactLayoutViewport,
   isCompactMiniStripAbove,
+  isCompactLayoutViewport,
   isShellMobileViewport,
   isShellTabletViewport,
   showLeftSidebarRestoreButton,
-} = createCallWorkspaceShellViewport({
+} = createCallWorkspaceCompactChrome({
   compactMiniStripPlacement,
   isCompactViewport,
   workspaceSidebarState,
@@ -617,8 +617,7 @@ let synchronizeNativePeerMediaElements = () => {};
 let ensureNativePeerConnection = () => null;
 let shouldSuppressExpectedSignalingError, syncControlStateToPeers, syncModerationStateToPeers, tryDirectJoinWithModeratorBypass;
 let applyCallOutputPreferences = () => {};
-let currentSfuVideoProfile = computed(() => 'quality');
-let downgradeSfuVideoQualityAfterEncodePressure = () => false;
+let currentSfuVideoProfile = computed(() => 'quality'); let downgradeSfuVideoQualityAfterEncodePressure = () => false;
 let initSFU = () => {};
 let maybeFallbackToNativeRuntime = async () => false;
 let removeSfuRemotePeersForUserId;
@@ -627,8 +626,7 @@ let stopSfuTrackAnnounceTimer = () => {};
 let switchMediaRuntimePath = async () => false;
 let teardownRemotePeer = () => {};
 let currentLayoutMode = computed(() => 'main_mini');
-let gridVideoParticipants = computed(() => []);
-let miniVideoParticipants = computed(() => []);
+let gridVideoParticipants = computed(() => []); let miniVideoParticipants = computed(() => []);
 let normalizedCallLayout = computed(() => normalizeCallLayoutState(callLayoutState));
 let primaryVideoUserId = computed(() => currentUserId.value);
 const liveCurrentLayoutMode = computed(() => currentLayoutMode.value);
@@ -650,9 +648,7 @@ function sendSocketFrame(payload) {
 const {
   applyGossipTelemetryAck,
   applyGossipTopologyHint,
-  bindGossipDataChannelForNativePeer,
-  closeGossipDataChannelForNativePeer,
-  handleGossipSignalingEvent,
+  handleGossipNeighborSignal,
   pruneGossipNeighborForUserId,
   publishLocalEncodedFrameToGossip,
   teardownGossipDataLane,
@@ -661,16 +657,13 @@ const {
     activeCallId: () => activeCallId.value, activeRoomId: () => activeRoomId.value,
     activeSocketCallId: () => activeSocketCallId.value, captureClientDiagnostic,
     currentUserId: () => currentUserId.value, handleSFUEncodedFrame: (...args) => handleSFUEncodedFrame(...args),
+    defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS, dynamicIceServers,
     sendSocketFrame,
   },
-  constants: {
-    defaultNativeIceServers: DEFAULT_NATIVE_ICE_SERVERS,
-  },
-  refs: { dynamicIceServers },
 });
 function requestRoomSnapshotLocal() {
   if (!sendSocketFrame({ type: 'room/snapshot/request' })) {
-    setNotice('Could not request room snapshot while websocket is offline.', 'error');
+    setNotice(t('calls.workspace.snapshot_request_offline'), 'error');
   }
 }
 
@@ -791,6 +784,7 @@ const {
   callbacks: {
     apiRequest,
     applyActivitySnapshot: (...args) => applyActivitySnapshot(...args),
+    applyCallAppsRoomState: (...args) => applyCallAppsRoomState(...args),
     applyCallLayoutPayload: (...args) => applyCallLayoutPayload(...args),
     clearAdmissionGate: (...args) => clearAdmissionGate(...args),
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),
@@ -845,6 +839,7 @@ const {
     setParticipantsRawSignature: (value) => { participantsRawSignature = value; },
   },
 });
+const { activeCallAppSession, callAppWorkspaceMiniParticipants, applyCallAppsRoomState } = createCallAppWorkspaceState({ connectedParticipantUsers, miniVideoParticipants: liveMiniVideoParticipants, nextTick, renderCallVideoLayout: () => renderCallVideoLayout() });
 
 const mediaSecurityRuntimeState = {
   mediaSecuritySyncInFlight,
@@ -1048,6 +1043,14 @@ const mediaStack = createCallWorkspaceMediaStack({
     maybeFallbackToNativeRuntime: (...args) => maybeFallbackToNativeRuntime(...args),
     mediaDebugLog,
     normalizeRoomId,
+    onLocalScreenShareStateChanged: (active, reason = '') => {
+      refreshUsersDirectoryPresentation();
+      void syncControlStateToPeers();
+      publishLocalActivitySample(true);
+      if (!active && reason === 'ended') {
+        setNotice(t('calls.workspace.screen_sharing_ended'), 'ok');
+      }
+    },
     clearMediaSecuritySfuPublisherSeen,
     onRestartSfu: (getShouldReconnect, reconnectDelayMs) => {
       if (sfuClientRef.value) {
@@ -1144,6 +1147,7 @@ const mediaStack = createCallWorkspaceMediaStack({
   refs: {
     activeRoomId,
     activeSocketCallId,
+    SFUClient,
     backgroundBaselineCollector,
     backgroundFilterController,
     callMediaPrefs,
@@ -1244,6 +1248,7 @@ const {
   resetWlvcBackpressureCounters,
   resetWlvcFrameSendFailureCounters,
   restartSfuAfterVideoStall: restartSfuAfterVideoStallHelper,
+  setLocalScreenShareEnabled,
   setSfuRemotePeer,
   sfuTrackListHasVideo,
   sfuTrackRows,
@@ -1340,9 +1345,7 @@ const nativeStack = createCallWorkspaceNativeStack({
       trackKind: String(track.kind || 'video'),
       trackId: String(track.id || ''),
     }),
-    bindGossipDataChannelForNativePeer,
     bumpMediaRenderVersion,
-    closeGossipDataChannelForNativePeer,
     clearRemoteVideoContainer,
     createNativePeerAudioElement,
     createNativePeerVideoElement,
@@ -1517,7 +1520,7 @@ const {
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
-    handleGossipSignalingEvent,
+    handleGossipNeighborSignal,
     handleMediaSecuritySignal: (...args) => handleMediaSecuritySignal(...args),
     handleNativeSignalingEvent,
     hideLobbyJoinToast: (...args) => hideLobbyJoinToast(...args),
@@ -1719,6 +1722,7 @@ const participantUiHelpers = createCallWorkspaceParticipantUiHelpers({
   rightSidebarCollapsed,
   sendSocketFrame,
   selectCallLayoutParticipants,
+  setLocalScreenShareEnabled,
   showLobbyTab,
   typingByRoom,
   usersDirectoryLoading,
@@ -1886,6 +1890,7 @@ const {
   togglePinned,
   toggleScreenShare,
   toggleVideoFullscreen,
+  toggleVideoFullscreenForEvent,
   toggleUserMuted,
   typingUsers,
   updatePeerControlState,
@@ -1922,6 +1927,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   currentUserId,
   ensureRoomBuckets,
   extractErrorMessage,
+  fetchBackend,
   isChatTextInlineAllowed,
   isSocketOnline,
   markParticipantActivity,
@@ -1930,6 +1936,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
   normalizeRole,
   normalizeRoomId,
   reconnectAttempt,
+  requestHeaders,
   rightSidebarCollapsed,
   sanitizeChatAttachmentName,
   sendSocketFrame,
@@ -1952,6 +1959,7 @@ const chatRuntimeHelpers = createCallWorkspaceChatRuntimeHelpers({
 const {
   addChatAttachmentDraft,
   clearTypingStopTimer,
+  downloadChatAttachment,
   focusChatInput,
   formatBytes,
   handleChatAttachmentDrop,
@@ -2156,6 +2164,7 @@ registerCallWorkspaceLifecycleHelpers({
     typingSweepMs: TYPING_SWEEP_MS,
   },
 });
+
 </script>
 
 <style scoped src="./CallWorkspaceStage.css"></style>

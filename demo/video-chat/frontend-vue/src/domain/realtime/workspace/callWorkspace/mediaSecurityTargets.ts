@@ -1,3 +1,5 @@
+import { isScreenShareUserId } from '../../screenShareIdentity.js';
+
 export function defaultNativeAudioBridgeFailureMessage() {
   return 'Audio is unavailable because protected audio transform setup failed on this device.';
 }
@@ -16,7 +18,12 @@ export function createMediaSecurityTargetHelpers({
   function mediaSecurityTargetIds() {
     return connectedParticipantUsers.value
       .map((row) => Number(row?.userId || 0))
-      .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+      .filter((userId) => (
+        Number.isInteger(userId)
+        && userId > 0
+        && userId !== currentUserId.value
+        && !isScreenShareUserId(userId)
+      ));
   }
 
   function noteMediaSecuritySfuPublisherSeen(userId) {

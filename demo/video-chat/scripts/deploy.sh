@@ -499,6 +499,9 @@ sync_checkout() {
     --exclude '.codex/' \
     --exclude '.env.local' \
     --exclude '*.env.local' \
+    --exclude 'dist/' \
+    --exclude 'compat-artifacts/' \
+    --exclude '.cache/' \
     --exclude 'demo/video-chat/docker-compose.deploy.local.yml' \
     --exclude 'demo/video-chat/frontend-vue/node_modules/' \
     --exclude 'demo/video-chat/frontend-vue/.vite/' \
@@ -515,6 +518,9 @@ sync_checkout() {
     --exclude '.mypy_cache/' \
     "${REPO_ROOT}/" \
     "${SSH_DEST}:${DEPLOY_PATH}/"
+
+  log "Removing release artifacts from remote checkout"
+  remote "rm -rf $(shell_quote "${DEPLOY_PATH}/dist") $(shell_quote "${DEPLOY_PATH}/compat-artifacts") $(shell_quote "${DEPLOY_PATH}/.cache")"
 }
 
 certbot_standalone() {
@@ -1135,17 +1141,17 @@ wait_for_allowed_code wss-route /tmp/king-videochat-ws-probe.out \\
   --resolve "\${WS_DOMAIN}:443:127.0.0.1" \\
   "https://\${WS_DOMAIN}/ws"
 
-wait_for_allowed_code api-wss-route /tmp/king-videochat-api-ws-probe.out \\
-  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
-  "https://\${API_DOMAIN}/ws"
+wait_for_allowed_code app-wss-route /tmp/king-videochat-app-ws-probe.out \\
+  --resolve "\${DOMAIN}:443:127.0.0.1" \\
+  "https://\${DOMAIN}/ws"
 
 wait_for_allowed_code sfu-route /tmp/king-videochat-sfu-probe.out \\
   --resolve "\${SFU_DOMAIN}:443:127.0.0.1" \\
   "https://\${SFU_DOMAIN}/sfu"
 
-wait_for_allowed_code api-sfu-route /tmp/king-videochat-api-sfu-probe.out \\
-  --resolve "\${API_DOMAIN}:443:127.0.0.1" \\
-  "https://\${API_DOMAIN}/sfu"
+wait_for_allowed_code app-sfu-route /tmp/king-videochat-app-sfu-probe.out \\
+  --resolve "\${DOMAIN}:443:127.0.0.1" \\
+  "https://\${DOMAIN}/sfu"
 
 wait_for_tcp() {
   local label="\$1"

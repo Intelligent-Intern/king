@@ -37,7 +37,10 @@ function videochat_realtime_reset_waiting_connection_invite(
             $lobbyState,
             $presenceState,
             $pendingRoomId,
-            trim($reason) === '' ? 'presence_left' : trim($reason)
+            trim($reason) === '' ? 'presence_left' : trim($reason),
+            null,
+            null,
+            is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null
         );
     }
 
@@ -218,7 +221,9 @@ function videochat_handle_realtime_websocket_route(
                 $disconnectedRoomId,
                 $openDatabase,
                 'participant_disconnected',
-                $connectionId
+                $connectionId,
+                null,
+                is_numeric($disconnectedConnection['tenant_id'] ?? null) ? (int) $disconnectedConnection['tenant_id'] : null
             );
         };
 
@@ -302,6 +307,7 @@ function videochat_handle_realtime_websocket_route(
                         'moderation_state' => 'call/moderation-state',
                         'media_security_hello' => 'media-security/hello',
                         'media_security_sender_key' => 'media-security/sender-key',
+                        'media_security_sync_request' => 'call/media-security-sync-request',
                         'ack' => 'call/ack',
                     ],
                     'admin_sync' => [
@@ -345,7 +351,7 @@ function videochat_handle_realtime_websocket_route(
         $nextChatBrokerPollMs = videochat_chat_broker_now_ms() + 100;
         $nextChatBrokerCleanupMs = videochat_chat_broker_now_ms() + 5000;
         $signalingBrokerDatabase = null;
-        $lastSignalingBrokerRoomId = videochat_presence_normalize_room_id((string) ($presenceConnection['room_id'] ?? 'lobby'));
+        $lastSignalingBrokerRoomId = videochat_signaling_room_key_for_connection($presenceConnection);
         $lastSignalingBrokerUserId = (int) ($presenceConnection['user_id'] ?? 0);
         $lastSignalingBrokerEventId = 0;
         $nextSignalingBrokerPollMs = videochat_signaling_broker_now_ms() + 100;
@@ -389,17 +395,23 @@ function videochat_handle_realtime_websocket_route(
                     $wsPath
                 );
                 if (!(bool) ($sessionLiveness['ok'] ?? false)) {
+                    $sessionLivenessReason = (string) ($sessionLiveness['reason'] ?? 'invalid_session');
                     $sessionCloseDescriptor = videochat_realtime_close_descriptor_for_reason(
-                        (string) ($sessionLiveness['reason'] ?? 'invalid_session')
+                        $sessionLivenessReason
                     );
+                    $transientAuthBackendError = strtolower(trim($sessionLivenessReason)) === 'auth_backend_error';
                     videochat_presence_send_frame(
                         $websocket,
                         [
                             'type' => 'system/error',
-                            'code' => 'websocket_session_invalidated',
-                            'message' => 'Session is no longer valid for realtime commands.',
+                            'code' => $transientAuthBackendError
+                                ? 'websocket_auth_temporarily_unavailable'
+                                : 'websocket_session_invalidated',
+                            'message' => $transientAuthBackendError
+                                ? 'Session validation is temporarily unavailable for realtime commands.'
+                                : 'Session is no longer valid for realtime commands.',
                             'details' => [
-                                'reason' => (string) ($sessionLiveness['reason'] ?? 'invalid_session'),
+                                'reason' => $sessionLivenessReason,
                                 'close' => $sessionCloseDescriptor,
                             ],
                             'time' => gmdate('c'),
@@ -609,7 +621,9 @@ function videochat_handle_realtime_websocket_route(
                         $leavingRoomId,
                         $openDatabase,
                         'participant_left',
-                        $connectionId
+                        $connectionId,
+                        null,
+                        is_numeric($leavingConnection['tenant_id'] ?? null) ? (int) $leavingConnection['tenant_id'] : null
                     );
                     continue;
                 }
@@ -761,7 +775,10 @@ function videochat_handle_realtime_websocket_route(
                                 $lobbyState,
                                 $presenceState,
                                 $targetRoomId,
-                                'admission_consumed'
+                                'admission_consumed',
+                                null,
+                                null,
+                                is_numeric($presenceConnection['tenant_id'] ?? null) ? (int) $presenceConnection['tenant_id'] : null
                             );
                         }
                     }

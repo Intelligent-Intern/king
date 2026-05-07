@@ -7,9 +7,16 @@ require_once __DIR__ . '/module_auth_session.php';
 require_once __DIR__ . '/module_infrastructure.php';
 require_once __DIR__ . '/module_operations.php';
 require_once __DIR__ . '/module_marketplace.php';
+require_once __DIR__ . '/module_tenancy.php';
+require_once __DIR__ . '/module_backend_modules.php';
+require_once __DIR__ . '/module_localization.php';
 require_once __DIR__ . '/module_users.php';
+require_once __DIR__ . '/module_workspace_calendars.php';
+require_once __DIR__ . '/module_workspace_administration.php';
 require_once __DIR__ . '/module_invites.php';
+require_once __DIR__ . '/module_call_apps.php';
 require_once __DIR__ . '/module_calls.php';
+require_once __DIR__ . '/module_appointment_calendar.php';
 require_once __DIR__ . '/module_realtime.php';
 
 /**
@@ -23,9 +30,16 @@ function videochat_dispatch_route_module_order(): array
         'infrastructure',
         'operations',
         'marketplace',
+        'tenancy',
+        'backend_modules',
+        'localization',
         'users',
+        'workspace_calendars',
+        'workspace_administration',
         'invites',
+        'call_apps',
         'calls',
+        'appointment_calendar',
         'realtime',
     ];
 }
@@ -58,7 +72,7 @@ function videochat_dispatch_request(
     $path = $pathFromRequest($request);
     $method = $methodFromRequest($request);
     $corsHeaders = [
-        'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
+        'access-control-allow-methods' => 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
         'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
         'access-control-max-age' => '600',
     ];
@@ -84,7 +98,31 @@ function videochat_dispatch_request(
             return true;
         }
 
+        if ($requestPath === '/api/workspace/appearance' || $requestPath === '/api/public-leads') {
+            return true;
+        }
+
+        if ($requestPath === '/api/localization/resources') {
+            return true;
+        }
+
+        if (preg_match('#^/api/workspace/branding-files/[^/]+$#', $requestPath) === 1) {
+            return true;
+        }
+
+        if ($requestPath === '/api/workspace/background-images' || preg_match('#^/api/workspace/background-images/[^/]+$#', $requestPath) === 1) {
+            return true;
+        }
+
         if (preg_match('#^/api/call-access/[A-Fa-f0-9-]{36}/(join|session)$#', $requestPath) === 1) {
+            return true;
+        }
+
+        if (preg_match('#^/api/call-app-sessions/[A-Za-z0-9._:-]+/launch-token/validate$#', $requestPath) === 1) {
+            return true;
+        }
+
+        if (preg_match('#^/api/appointment-calendar/public/[A-Fa-f0-9-]{36}(?:/book)?$#', $requestPath) === 1) {
             return true;
         }
 
@@ -93,9 +131,21 @@ function videochat_dispatch_request(
 
     $authenticateRequest = static function (array $authRequest, string $transport) use ($openDatabase): array {
         try {
-            $pdo = $openDatabase();
-            return videochat_authenticate_request($pdo, $authRequest, $transport);
-        } catch (Throwable) {
+            $authResult = videochat_authenticate_request_with_retry($openDatabase, $authRequest, $transport);
+            if ((string) ($authResult['backend_reason'] ?? '') === 'sqlite_busy') {
+                error_log(sprintf(
+                    '[video-chat][auth] authentication backend busy transport=%s reason=sqlite_busy retryable=1',
+                    $transport
+                ));
+            }
+            return $authResult;
+        } catch (Throwable $exception) {
+            error_log(sprintf(
+                '[video-chat][auth] authentication backend error transport=%s exception=%s message=%s',
+                $transport,
+                $exception::class,
+                $exception->getMessage()
+            ));
             return [
                 'ok' => false,
                 'reason' => 'auth_backend_error',
@@ -196,6 +246,38 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase
             );
+        } elseif ($moduleName === 'tenancy') {
+            $response = videochat_handle_tenancy_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'backend_modules') {
+            $response = videochat_handle_backend_module_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody
+            );
+        } elseif ($moduleName === 'localization') {
+            $response = videochat_handle_localization_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
         } elseif ($moduleName === 'users') {
             $response = videochat_handle_user_routes(
                 $path,
@@ -203,6 +285,30 @@ function videochat_dispatch_request(
                 $request,
                 $apiAuthContext,
                 $corsHeaders,
+                $avatarStorageRoot,
+                $avatarMaxBytes,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'workspace_calendars') {
+            $response = videochat_handle_workspace_calendar_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
+            );
+        } elseif ($moduleName === 'workspace_administration') {
+            $response = videochat_handle_workspace_administration_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
                 $avatarStorageRoot,
                 $avatarMaxBytes,
                 $jsonResponse,
@@ -221,6 +327,17 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase
             );
+        } elseif ($moduleName === 'call_apps') {
+            $response = videochat_handle_call_app_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $openDatabase,
+                $decodeJsonBody
+            );
         } elseif ($moduleName === 'calls') {
             $response = videochat_handle_call_routes(
                 $path,
@@ -232,6 +349,17 @@ function videochat_dispatch_request(
                 $decodeJsonBody,
                 $openDatabase,
                 $issueSessionId
+            );
+        } elseif ($moduleName === 'appointment_calendar') {
+            $response = videochat_handle_appointment_calendar_routes(
+                $path,
+                $method,
+                $request,
+                $apiAuthContext,
+                $jsonResponse,
+                $errorResponse,
+                $decodeJsonBody,
+                $openDatabase
             );
         } elseif ($moduleName === 'realtime') {
             $response = videochat_handle_realtime_routes(

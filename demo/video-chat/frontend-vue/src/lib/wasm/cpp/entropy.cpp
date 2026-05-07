@@ -72,7 +72,8 @@ size_t rle_encode(const int16_t* in, int n_values, uint8_t* out) {
     write_u32(out,     static_cast<uint32_t>(n_values));
     write_u32(out + 4, pair_count);
 
-    return static_cast<size_t>(RLE_HEADER_BYTES + pair_count * RLE_PAIR_BYTES);
+    return static_cast<size_t>(RLE_HEADER_BYTES)
+         + static_cast<size_t>(pair_count) * static_cast<size_t>(RLE_PAIR_BYTES);
 }
 
 // ---------------------------------------------------------------------------

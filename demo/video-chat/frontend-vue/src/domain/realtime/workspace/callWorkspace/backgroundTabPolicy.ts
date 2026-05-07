@@ -13,6 +13,11 @@ function normalizedRemotePeerCount(value) {
   return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
 }
 
+function normalizedConnectedParticipantCount(value) {
+  const count = Number(value || 0);
+  return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
+}
+
 function shouldPauseSfuVideoForBackground(context = {}, documentRef = null) {
   const reason = String(context?.reason || '').trim().toLowerCase();
   if (context?.hidden === true || documentIsHidden(documentRef)) return true;
@@ -30,6 +35,7 @@ export function createSfuBackgroundTabPolicy({
 
   const {
     captureClientDiagnostic = () => {},
+    getConnectedParticipantCount = () => 0,
     getRemotePeerCount = () => 0,
     publishLocalTracks = async () => false,
     requestWlvcFullFrameKeyframe = () => false,
@@ -50,15 +56,18 @@ export function createSfuBackgroundTabPolicy({
 
   function diagnosticPayload(reason, track) {
     const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
+    const connectedParticipantCount = normalizedConnectedParticipantCount(getConnectedParticipantCount());
+    const shouldPreservePublisher = remotePeerCount > 0 || connectedParticipantCount > 1;
     return {
       reason: String(reason || ''),
-      background_video_policy: remotePeerCount > 0
+      background_video_policy: shouldPreservePublisher
         ? 'preserve_remote_publisher_with_keyframe_marker'
         : 'pause_local_preview_video_keep_audio_status',
       browser_visibility_state: String(documentRef?.visibilityState || ''),
-      background_pause_intentional: remotePeerCount <= 0,
-      active_publisher_layer: remotePeerCount > 0 ? 'primary_keyframe_marker' : 'none',
+      background_pause_intentional: !shouldPreservePublisher,
+      active_publisher_layer: shouldPreservePublisher ? 'primary_keyframe_marker' : 'none',
       remote_peer_count: remotePeerCount,
+      connected_participant_count: connectedParticipantCount,
       track_id: String(track?.id || ''),
       outgoing_video_quality_profile: String(callMediaPrefs.outgoingVideoQualityProfile || ''),
       media_runtime_path: String(mediaRuntimePath.value || ''),
@@ -67,7 +76,8 @@ export function createSfuBackgroundTabPolicy({
 
   function preserveRemotePublisherObligationForBackground(context = {}, videoTrack = null) {
     const remotePeerCount = normalizedRemotePeerCount(getRemotePeerCount());
-    if (remotePeerCount <= 0) return false;
+    const connectedParticipantCount = normalizedConnectedParticipantCount(getConnectedParticipantCount());
+    if (remotePeerCount <= 0 && connectedParticipantCount <= 1) return false;
 
     const requested = requestWlvcFullFrameKeyframe('sfu_background_tab_publisher_marker', {
       requested_action: 'force_full_keyframe',
@@ -75,6 +85,7 @@ export function createSfuBackgroundTabPolicy({
       background_pause_intentional: false,
       browser_visibility_state: String(documentRef?.visibilityState || ''),
       remote_peer_count: remotePeerCount,
+      connected_participant_count: connectedParticipantCount,
       track_id: String(videoTrack?.id || ''),
     });
 

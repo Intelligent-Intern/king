@@ -31,9 +31,11 @@ try {
   requireContains(relay, 'function videochat_sfu_live_frame_relay_max_room_bytes(): int', 'live relay has a room byte budget');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_cleanup_interval_ms(): int', 'live relay cleanup cadence is bounded');
   requireContains(relay, 'function videochat_sfu_live_frame_relay_should_cleanup(string $roomId, int $nowMs): bool', 'live relay cleanup is rate-limited per room');
-  requireContains(relay, 'strlen($encoded) > videochat_sfu_live_frame_relay_max_record_bytes($frame)', 'oversized relay records are rejected before synchronous file write');
-  requireContains(relay, '$keptBytes > videochat_sfu_live_frame_relay_max_room_bytes()', 'cleanup enforces aggregate room bytes');
-  requireContains(relay, '$keptBytes -= max(0, (int) ($oldest[\'bytes\'] ?? 0));', 'cleanup drains aggregate byte accounting');
+  requireContains(relay, 'strlen($encoded) > videochat_sfu_live_frame_relay_max_record_bytes($frame)', 'oversized relay records are rejected before RAM insertion');
+  requireContains(relay, "$state['rooms'][$roomKey]['bytes'] > videochat_sfu_live_frame_relay_max_room_bytes()", 'cleanup enforces aggregate room bytes');
+  requireContains(relay, '$state[\'rooms\'][$roomKey][\'bytes\'] -= max(0, (int) ($records[$oldestRelayId][\'bytes\'] ?? 0));', 'cleanup drains aggregate byte accounting');
+  requireContains(relay, "return 'ram://king-videochat-sfu-live-relay';", 'live relay uses process RAM instead of tmpfs files');
+  requireContains(relay, "function &videochat_sfu_live_frame_relay_state(): array", 'live relay has a process-local RAM state');
   requireContains(relay, 'videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)', 'publish path uses bounded cleanup cadence');
   requireContains(gateway, '$relayFrame = videochat_sfu_frame_json_safe_for_live_relay($outboundFrame);', 'hot path sends JSON-safe relay copy');
   requireContains(gateway, "'payload_bytes' => $payloadBytes", 'SFU broker frames preserve measured protected payload bytes');

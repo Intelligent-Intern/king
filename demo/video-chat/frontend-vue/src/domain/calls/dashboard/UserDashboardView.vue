@@ -7,6 +7,7 @@ import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import ChatArchiveModal from '../components/ChatArchiveModal.vue';
 import CallsListTable from '../components/ListTable.vue';
+import CallBackgroundControls from '../../realtime/background/CallBackgroundControls.vue';
 import {
   createCallListStore,
   createChatArchiveStore,
@@ -15,16 +16,16 @@ import {
 import { sessionState } from '../../auth/session';
 import { currentBackendOrigin, fetchBackend } from '../../../support/backendFetch';
 import { createAdminSyncSocket } from '../../../support/adminSyncSocket';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 import {
+  compareDateTimeStrings,
   formatDateDisplay,
   formatDateRangeDisplay,
   formatDateTimeDisplay,
   formatWeekdayShort,
 } from '../../../support/dateTimeFormat';
 import {
-  applyCallBackgroundPreset,
   callMediaPrefs,
-  isCallBackgroundPresetActive,
   setCallCameraDevice,
   setCallMicrophoneDevice,
   setCallMicrophoneVolume,
@@ -37,8 +38,6 @@ import { createJoinInviteController } from './joinInvite';
 
 const router = useRouter();
 const USER_CALL_CREATE_EVENT = 'king:user-calls:create';
-const applyBackgroundPreset = applyCallBackgroundPreset;
-const isBackgroundPresetActive = isCallBackgroundPresetActive;
 
 function requestHeaders(withBody = false) {
   const headers = { accept: 'application/json' };
@@ -131,6 +130,7 @@ function formatDateTime(isoValue) {
 
 function formatRange(startsAt, endsAt) {
   return formatDateRangeDisplay(startsAt, endsAt, {
+    locale: sessionState.locale,
     dateFormat: sessionState.dateFormat,
     timeFormat: sessionState.timeFormat,
     separator: ' -> ',
@@ -357,20 +357,18 @@ const calendarBuckets = computed(() => {
     buckets.get(key).push(call);
   }
 
-  const keys = Array.from(buckets.keys()).sort((a, b) => a.localeCompare(b));
+  const keys = Array.from(buckets.keys()).sort(compareDateTimeStrings);
 
   return keys.map((key) => {
     const rows = buckets.get(key).slice().sort((left, right) => {
-      const leftStart = String(left?.starts_at || '');
-      const rightStart = String(right?.starts_at || '');
-      return leftStart.localeCompare(rightStart);
+      return compareDateTimeStrings(left?.starts_at, right?.starts_at);
     });
 
     let label = 'Unscheduled';
     if (key !== 'unscheduled') {
       const keyDate = new Date(`${key}T00:00:00`);
       if (!Number.isNaN(keyDate.getTime())) {
-        const weekday = formatWeekdayShort(keyDate, { fallback: '' });
+        const weekday = formatWeekdayShort(keyDate, { locale: sessionState.locale, fallback: '' });
         const dateLabel = formatDateDisplay(keyDate, {
           dateFormat: sessionState.dateFormat,
           fallback: key,

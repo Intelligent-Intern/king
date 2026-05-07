@@ -53,9 +53,11 @@ try {
   requireContains(runtimeHealth, "type: 'call/media-quality-pressure'", 'remote freeze quality pressure uses targeted call signal');
   requireContains(runtimeHealth, 'const socketRecoverySent = typeof sendSocketFrame ===', 'remote freeze recovery sends user-socket fallback alongside SFU publisher-id recovery');
   requireContains(runtimeHealth, 'const sent = Boolean(sfuRecoverySent || socketRecoverySent);', 'remote freeze recovery does not short-circuit stale publisher-id routes');
+  requireContains(runtimeHealth, 'remoteSfuQualityPressureLastByKey', 'remote recovery pressure is throttled outside transient peer objects');
+  requireContains(runtimeHealth, 'remoteSfuQualityPressureThrottleKey(targetUserId, normalizedReason)', 'remote recovery pressure throttle is keyed by stable target user and reason');
   requireContains(runtimeHealth, 'peer.freezeRecoveryCount >= 2', 'remote freeze quality pressure waits for two recovery hits');
-  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
-  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payload?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payloadBody?.requested_action)', 'fresh receive/keyframe-wait preserves explicit quality-pressure action');
+  requireContains(runtimeHealth, 'resolveSfuRecoveryRequestedAction(normalizedReason, payloadBody?.requested_action)', 'fresh receive/keyframe-wait defaults to full-frame keyframe action');
   requireContains(recoveryReasons, "'sfu_receiver_sequence_gap'", 'sequence gaps force full keyframe recovery');
   requireContains(recoveryReasons, "'sfu_remote_video_never_started'", 'never-started video forces full keyframe recovery');
   requireContains(recoveryReasons, "'sfu_browser_decode_frame_failed'", 'browser decoder failures force full keyframe recovery');
@@ -73,6 +75,9 @@ try {
   requireContains(runtimeHealth, 'stalledAgeMs >= remoteVideoStallThresholdMs * 2', 'never-started video reconnect timing');
   requireContains(socketLifecycle, "type === 'call/media-quality-pressure'", 'socket lifecycle consumes remote quality-pressure signal');
   requireContains(socketLifecycle, "downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_quality_pressure')", 'remote quality pressure lowers sender outgoing quality');
+  requireContains(socketLifecycle, 'const keyframeOnlyRequest = fullKeyframeRequested', 'full-keyframe recovery is not treated as generic quality pressure');
+  requireContains(socketLifecycle, '} else if (keyframeOnlyRequest) {', 'full-keyframe recovery avoids an additional profile downshift');
+  requireContains(socketLifecycle, 'keyframe_only_request: keyframeOnlyRequest', 'keyframe-only recovery diagnostics are exposed');
   requireContains(socketLifecycle, 'requestWlvcFullFrameKeyframe', 'remote keyframe wait is routed into publisher full-frame keyframe recovery');
   requireContains(socketLifecycle, 'full_keyframe_requested', 'remote pressure diagnostics record full-keyframe recovery');
   requireContains(receiverFeedback, 'function receiverFeedbackTargetUserId(peer, payload = {})', 'receiver feedback can target frame publisher before peer hydration');

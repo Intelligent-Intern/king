@@ -76,21 +76,29 @@ function videochat_sfu_live_frame_relay_should_cleanup(string $roomId, int $nowM
 
 function videochat_sfu_live_frame_relay_root(): string
 {
-    $configured = trim((string) (getenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH') ?: ''));
-    if ($configured !== '') {
-        return rtrim($configured, '/');
+    return 'ram://king-videochat-sfu-live-relay';
+}
+
+/**
+ * @return array{rooms?: array<string, array{records?: array<string, array<string, mixed>>, bytes?: int}>}
+ */
+function &videochat_sfu_live_frame_relay_state(): array
+{
+    if (!isset($GLOBALS['videochat_sfu_live_frame_relay_ram']) || !is_array($GLOBALS['videochat_sfu_live_frame_relay_ram'])) {
+        $GLOBALS['videochat_sfu_live_frame_relay_ram'] = ['rooms' => []];
     }
 
-    if (is_dir('/dev/shm') && is_writable('/dev/shm')) {
-        return '/dev/shm/king-videochat-sfu-live-relay';
-    }
+    return $GLOBALS['videochat_sfu_live_frame_relay_ram'];
+}
 
-    return rtrim(sys_get_temp_dir(), '/') . '/king-videochat-sfu-live-relay';
+function videochat_sfu_live_frame_relay_room_key(string $roomId): string
+{
+    return videochat_presence_normalize_room_storage_key($roomId, '');
 }
 
 function videochat_sfu_live_frame_relay_room_dir(string $roomId): string
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_sfu_live_frame_relay_room_key($roomId);
     if ($normalizedRoomId === '') {
         return '';
     }
@@ -100,16 +108,24 @@ function videochat_sfu_live_frame_relay_room_dir(string $roomId): string
 
 function videochat_sfu_live_frame_relay_ensure_room_dir(string $roomId): string
 {
-    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
-    if ($roomDir === '') {
+    $roomKey = videochat_sfu_live_frame_relay_room_key($roomId);
+    if ($roomKey === '') {
         return '';
     }
 
-    if (!is_dir($roomDir)) {
-        @mkdir($roomDir, 0770, true);
+    $state = &videochat_sfu_live_frame_relay_state();
+    if (!isset($state['rooms']) || !is_array($state['rooms'])) {
+        $state['rooms'] = [];
     }
+    if (!isset($state['rooms'][$roomKey]) || !is_array($state['rooms'][$roomKey])) {
+        $state['rooms'][$roomKey] = ['records' => [], 'bytes' => 0];
+    }
+    if (!isset($state['rooms'][$roomKey]['records']) || !is_array($state['rooms'][$roomKey]['records'])) {
+        $state['rooms'][$roomKey]['records'] = [];
+    }
+    $state['rooms'][$roomKey]['bytes'] = max(0, (int) ($state['rooms'][$roomKey]['bytes'] ?? 0));
 
-    return is_dir($roomDir) && is_writable($roomDir) ? $roomDir : '';
+    return $roomKey;
 }
 
 function videochat_sfu_live_frame_relay_filename(int $nowMs): string
@@ -127,68 +143,82 @@ function videochat_sfu_live_frame_relay_filename(int $nowMs): string
 
 function videochat_sfu_live_frame_relay_cleanup_room(string $roomId, ?int $nowMs = null): void
 {
-    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
-    if ($roomDir === '' || !is_dir($roomDir)) {
+    $roomKey = videochat_sfu_live_frame_relay_room_key($roomId);
+    if ($roomKey === '') {
+        return;
+    }
+
+    $state = &videochat_sfu_live_frame_relay_state();
+    if (!isset($state['rooms'][$roomKey]) || !is_array($state['rooms'][$roomKey])) {
+        return;
+    }
+    if (!isset($state['rooms'][$roomKey]['records']) || !is_array($state['rooms'][$roomKey]['records'])) {
+        unset($state['rooms'][$roomKey]);
         return;
     }
 
     $effectiveNowMs = $nowMs ?? videochat_sfu_now_ms();
-    $files = glob($roomDir . '/*.json') ?: [];
-    sort($files, SORT_STRING);
-    $keptFiles = [];
+    $records = &$state['rooms'][$roomKey]['records'];
+    ksort($records, SORT_STRING);
     $keptBytes = 0;
-    foreach ($files as $file) {
-        if (!is_string($file) || !is_file($file)) {
+    foreach ($records as $relayId => $record) {
+        if (!is_string($relayId) || !is_array($record)) {
+            unset($records[$relayId]);
             continue;
         }
-        $basename = basename($file);
-        $createdAtMs = (int) substr($basename, 0, 13);
+        $createdAtMs = (int) ($record['created_at_ms'] ?? 0);
         if ($createdAtMs <= 0 || ($effectiveNowMs - $createdAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
-            @unlink($file);
+            unset($records[$relayId]);
             continue;
         }
-        $fileBytes = max(0, (int) @filesize($file));
-        $keptBytes += $fileBytes;
-        $keptFiles[] = ['path' => $file, 'bytes' => $fileBytes];
+        $keptBytes += max(0, (int) ($record['bytes'] ?? 0));
     }
+    $state['rooms'][$roomKey]['bytes'] = $keptBytes;
 
     while (
-        $keptFiles !== []
+        $records !== []
         && (
-            count($keptFiles) > videochat_sfu_live_frame_relay_max_files_per_room()
-            || $keptBytes > videochat_sfu_live_frame_relay_max_room_bytes()
+            count($records) > videochat_sfu_live_frame_relay_max_files_per_room()
+            || $state['rooms'][$roomKey]['bytes'] > videochat_sfu_live_frame_relay_max_room_bytes()
         )
     ) {
-        $oldest = array_shift($keptFiles);
-        if (!is_array($oldest)) {
-            continue;
+        $oldestRelayId = array_key_first($records);
+        if (!is_string($oldestRelayId)) {
+            break;
         }
-        @unlink((string) ($oldest['path'] ?? ''));
-        $keptBytes -= max(0, (int) ($oldest['bytes'] ?? 0));
+        $state['rooms'][$roomKey]['bytes'] -= max(0, (int) ($records[$oldestRelayId]['bytes'] ?? 0));
+        unset($records[$oldestRelayId]);
     }
 
-    if ((glob($roomDir . '/*.json') ?: []) === []) {
-        @rmdir($roomDir);
+    if ($records === []) {
+        unset($records);
+        unset($state['rooms'][$roomKey]);
+        return;
     }
+
+    $state['rooms'][$roomKey]['bytes'] = max(0, (int) ($state['rooms'][$roomKey]['bytes'] ?? 0));
+    unset($records);
 }
 
 function videochat_sfu_live_frame_relay_publish(string $roomId, string $publisherId, array $frame): bool
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_sfu_live_frame_relay_room_key($roomId);
     $normalizedPublisherId = trim($publisherId);
     if ($normalizedRoomId === '' || $normalizedPublisherId === '') {
         return false;
     }
 
-    $roomDir = videochat_sfu_live_frame_relay_ensure_room_dir($normalizedRoomId);
-    if ($roomDir === '') {
+    $roomKey = videochat_sfu_live_frame_relay_ensure_room_dir($normalizedRoomId);
+    if ($roomKey === '') {
         return false;
     }
 
     $frame['type'] = 'sfu/frame';
     $frame['publisher_id'] = (string) ($frame['publisher_id'] ?? $normalizedPublisherId);
     $nowMs = videochat_sfu_now_ms();
+    $relayId = videochat_sfu_live_frame_relay_filename($nowMs);
     $record = [
+        'relay_id' => $relayId,
         'created_at_ms' => $nowMs,
         'room_id' => $normalizedRoomId,
         'publisher_id' => $normalizedPublisherId,
@@ -202,21 +232,20 @@ function videochat_sfu_live_frame_relay_publish(string $roomId, string $publishe
         return false;
     }
 
-    $filename = videochat_sfu_live_frame_relay_filename($nowMs);
-    $temporaryPath = $roomDir . '/.' . $filename . '.tmp';
-    $targetPath = $roomDir . '/' . $filename;
-    $written = @file_put_contents($temporaryPath, $encoded, LOCK_EX);
-    if (!is_int($written) || $written <= 0) {
-        @unlink($temporaryPath);
-        return false;
-    }
+    $state = &videochat_sfu_live_frame_relay_state();
+    $previousRecordBytes = max(0, (int) ($state['rooms'][$roomKey]['records'][$relayId]['bytes'] ?? 0));
+    $record['bytes'] = strlen($encoded);
+    $state['rooms'][$roomKey]['records'][$relayId] = $record;
+    $state['rooms'][$roomKey]['bytes'] = max(
+        0,
+        (int) ($state['rooms'][$roomKey]['bytes'] ?? 0) - $previousRecordBytes + (int) $record['bytes']
+    );
 
-    if (!@rename($temporaryPath, $targetPath)) {
-        @unlink($temporaryPath);
-        return false;
-    }
-
-    if (videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)) {
+    if (
+        videochat_sfu_live_frame_relay_should_cleanup($normalizedRoomId, $nowMs)
+        || count($state['rooms'][$roomKey]['records'] ?? []) > videochat_sfu_live_frame_relay_max_files_per_room()
+        || (int) ($state['rooms'][$roomKey]['bytes'] ?? 0) > videochat_sfu_live_frame_relay_max_room_bytes()
+    ) {
         videochat_sfu_live_frame_relay_cleanup_room($normalizedRoomId, $nowMs);
     }
 
@@ -225,7 +254,7 @@ function videochat_sfu_live_frame_relay_publish(string $roomId, string $publishe
 
 /**
  * @param array<int|string, string|bool> $localPublisherIds
- * @param array<string, int> $seenFrameFiles
+ * @param array<string, int> $seenRelayIds
  * @return array<int, array<string, mixed>>
  */
 function videochat_sfu_live_frame_relay_read(
@@ -233,11 +262,17 @@ function videochat_sfu_live_frame_relay_read(
     string $clientId,
     array $localPublisherIds,
     string &$cursor,
-    array &$seenFrameFiles,
+    array &$seenRelayIds,
     int $limit = 80
 ): array {
-    $roomDir = videochat_sfu_live_frame_relay_room_dir($roomId);
-    if ($roomDir === '' || !is_dir($roomDir)) {
+    $roomKey = videochat_sfu_live_frame_relay_room_key($roomId);
+    if ($roomKey === '') {
+        return [];
+    }
+
+    $state = &videochat_sfu_live_frame_relay_state();
+    $room = $state['rooms'][$roomKey] ?? null;
+    if (!is_array($room) || !isset($room['records']) || !is_array($room['records'])) {
         return [];
     }
 
@@ -252,50 +287,45 @@ function videochat_sfu_live_frame_relay_read(
     }
 
     $nowMs = videochat_sfu_now_ms();
-    foreach ($seenFrameFiles as $file => $seenAtMs) {
+    foreach ($seenRelayIds as $relayId => $seenAtMs) {
         if (($nowMs - (int) $seenAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
-            unset($seenFrameFiles[$file]);
+            unset($seenRelayIds[$relayId]);
         }
     }
 
-    $files = glob($roomDir . '/*.json') ?: [];
-    sort($files, SORT_STRING);
+    $records = $room['records'];
+    ksort($records, SORT_STRING);
     $frames = [];
-    foreach ($files as $file) {
+    foreach ($records as $relayId => $record) {
         if (count($frames) >= $limit) {
             break;
         }
-        if (!is_string($file) || !is_file($file)) {
+        if (!is_string($relayId) || !is_array($record)) {
             continue;
         }
-        $basename = basename($file);
-        // Every SFU subscriber is also usually a publisher. A single filename
+        // Every SFU subscriber is also usually a publisher. A single relay-id
         // watermark must not advance over self/local frames, otherwise a remote
         // frame that becomes visible slightly later can be skipped forever.
-        if (isset($seenFrameFiles[$basename])) {
+        if (isset($seenRelayIds[$relayId])) {
             continue;
         }
-        $seenFrameFiles[$basename] = $nowMs;
-        $createdAtMs = (int) substr($basename, 0, 13);
+        $seenRelayIds[$relayId] = $nowMs;
+        $createdAtMs = (int) ($record['created_at_ms'] ?? 0);
         if ($createdAtMs <= 0 || ($nowMs - $createdAtMs) > videochat_sfu_live_frame_relay_ttl_ms()) {
             continue;
         }
-        $decoded = json_decode((string) @file_get_contents($file), true);
-        if (!is_array($decoded)) {
-            continue;
-        }
-        $publisherId = trim((string) ($decoded['publisher_id'] ?? ''));
+        $publisherId = trim((string) ($record['publisher_id'] ?? ''));
         if ($publisherId === '' || $publisherId === $normalizedClientId || isset($localPublisherLookup[$publisherId])) {
             continue;
         }
-        $frame = $decoded['frame'] ?? null;
+        $frame = $record['frame'] ?? null;
         if (!is_array($frame) || strtolower(trim((string) ($frame['type'] ?? ''))) !== 'sfu/frame') {
             continue;
         }
         $frame['publisher_id'] = (string) ($frame['publisher_id'] ?? $publisherId);
         $frame['live_relay_age_ms'] = max(0, $nowMs - $createdAtMs);
-        if ($cursor === '' || strcmp($basename, $cursor) > 0) {
-            $cursor = $basename;
+        if ($cursor === '' || strcmp($relayId, $cursor) > 0) {
+            $cursor = $relayId;
         }
         $frames[] = $frame;
     }
@@ -305,7 +335,7 @@ function videochat_sfu_live_frame_relay_read(
 
 /**
  * @param array<int|string, string|bool> $localPublisherIds
- * @param array<string, int> $seenFrameFiles
+ * @param array<string, int> $seenRelayIds
  */
 function videochat_sfu_live_frame_relay_poll(
     mixed $websocket,
@@ -313,7 +343,7 @@ function videochat_sfu_live_frame_relay_poll(
     string $clientId,
     array $localPublisherIds,
     string &$cursor,
-    array &$seenFrameFiles,
+    array &$seenRelayIds,
     array &$slowSubscriberBlockedUntilMs,
     array $subscriber = []
 ): int {
@@ -322,7 +352,7 @@ function videochat_sfu_live_frame_relay_poll(
         $clientId,
         $localPublisherIds,
         $cursor,
-        $seenFrameFiles,
+        $seenRelayIds,
         videochat_sfu_live_frame_relay_poll_batch_limit()
     );
     foreach ($frames as &$frame) {

@@ -6,6 +6,7 @@ import {
 } from '../../realtime/media/preferences';
 import { buildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
 import { BackgroundFilterController } from '../../realtime/background/controller';
+import { t } from '../../../modules/localization/i18nRuntime.js';
 
 export function normalizeCallAccessMode(value) {
   const normalized = String(value || '').trim().toLowerCase();
@@ -59,11 +60,14 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : fallback;
     };
-    const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase() === 'blur'
-      ? 'blur'
-      : 'off';
+    const requestedMode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
+    const mode = requestedMode === 'replace'
+      ? 'replace'
+      : requestedMode === 'blur'
+        ? 'blur'
+        : 'off';
     const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
-    if (!applyOutgoing || mode !== 'blur') {
+    if (!applyOutgoing || (mode !== 'blur' && mode !== 'replace')) {
       return { mode: 'off' };
     }
 
@@ -78,11 +82,11 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
     }
     blurPx = Math.max(1, Math.min(64, blurPx));
 
-    let detectIntervalMs = 150;
+    let detectIntervalMs = 1;
     if (qualityProfile === 'quality') {
-      detectIntervalMs = 110;
+      detectIntervalMs = 1;
     } else if (qualityProfile === 'realtime') {
-      detectIntervalMs = 190;
+      detectIntervalMs = 1;
     }
 
     let temporalSmoothingAlpha = 0.28;
@@ -105,11 +109,17 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       processWidthCap = 640;
       processFpsCap = 12;
     }
+    const backgroundColor = isExclusionBackdrop
+      ? '#061a4a'
+      : (mode === 'replace' && backdrop === 'green' ? 'var(--color-success)' : '');
 
     return {
       mode,
+      backgroundColor,
+      backgroundImageUrl: mode === 'replace' && !backgroundColor
+        ? String(callMediaPrefs.backgroundReplacementImageUrl || '').trim()
+        : '',
       blurPx,
-      backgroundColor: isExclusionBackdrop ? '#061a4a' : '',
       mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur'),
       detectIntervalMs,
       temporalSmoothingAlpha,
@@ -237,7 +247,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
 
       let previewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
-      if (backgroundOptions.mode === 'blur') {
+      if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await enterCallPreviewBackgroundController.apply(rawStream, backgroundOptions);
           if (result?.stream instanceof MediaStream) {
@@ -258,8 +268,8 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       await previewNode.play().catch(() => {});
       enterCallState.previewReady = true;
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Could not start camera preview.';
-      enterCallState.previewError = message || 'Could not start camera preview.';
+      const message = error instanceof Error ? error.message : t('calls.enter.preview_failed');
+      enterCallState.previewError = message || t('calls.enter.preview_failed');
     }
   }
 
@@ -388,7 +398,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       const accessId = String(result?.access_link?.id || '').trim();
       const joinPathRaw = String(result?.join_path || '').trim();
       const joinPath = joinPathRaw !== '' ? joinPathRaw : (accessId !== '' ? `/join/${accessId}` : '');
-      if (joinPath === '') throw new Error('Invite link payload is invalid.');
+      if (joinPath === '') throw new Error(t('calls.enter.invalid_invite_payload'));
       const origin = typeof window !== 'undefined' ? String(window.location.origin || '').trim() : '';
       enterCallState.linkUrl = origin !== '' ? `${origin}${joinPath}` : joinPath;
       enterCallState.expiresAt = typeof result?.access_link?.expires_at === 'string' ? result.access_link.expires_at : '';
@@ -400,7 +410,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
         enterCallState.expiresAt = '';
         return;
       }
-      enterCallState.error = error instanceof Error ? error.message : 'Could not create invite link.';
+      enterCallState.error = error instanceof Error ? error.message : t('calls.enter.create_invite_failed');
     } finally {
       enterCallState.loading = false;
     }
@@ -446,7 +456,9 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
   }
 
   async function openCallWorkspace(target = null) {
+    console.log('Opening call workspace with target:', target);
     const routeSegment = await resolveWorkspaceRouteSegment(target);
+    console.log('Resolved workspace route segment:', routeSegment);
     closeEnterCallModal();
     await router.push(`/workspace/call/${encodeURIComponent(routeSegment)}`);
   }
@@ -489,6 +501,7 @@ export function createEnterCallController({ apiRequest, clearNotice, isInvitable
       callMediaPrefs.backgroundApplyOutgoing,
       callMediaPrefs.backgroundMaskVariant,
       callMediaPrefs.backgroundBlurTransition,
+      callMediaPrefs.backgroundReplacementImageUrl,
       callMediaPrefs.backgroundMaxProcessWidth,
       callMediaPrefs.backgroundMaxProcessFps,
     ],

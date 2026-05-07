@@ -51,6 +51,19 @@ function parseBooleanEnv(value, fallback = false) {
 
 const allowInsecureWebSockets = parseBooleanEnv(import.meta.env.VITE_VIDEOCHAT_ALLOW_INSECURE_WS, false);
 
+function resolveProductionBackendOriginForHost(hostname, protocol) {
+  const host = String(hostname || '').trim().toLowerCase();
+  const scheme = String(protocol || '').trim().toLowerCase() === 'https:' ? 'https' : '';
+  if (scheme !== 'https' || host === '') return '';
+  if (host === 'app.kingrt.com') {
+    return 'https://api.app.kingrt.com';
+  }
+  if (host.endsWith('.app.kingrt.com') && !host.startsWith('api.')) {
+    return `https://api.${host}`;
+  }
+  return '';
+}
+
 function hasExplicitBackendOriginConfig() {
   const explicitOrigin = String(import.meta.env.VITE_VIDEOCHAT_BACKEND_ORIGIN || '').trim();
   return explicitOrigin !== '';
@@ -72,6 +85,10 @@ function detectDefaultBackendOrigin() {
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'https' : 'http';
     const host = String(window.location.hostname || 'localhost').trim() || 'localhost';
+    const productionOrigin = resolveProductionBackendOriginForHost(host, window.location.protocol);
+    if (productionOrigin !== '') {
+      return productionOrigin;
+    }
     return `${protocol}://${host}:${port}`;
   }
 

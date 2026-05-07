@@ -273,6 +273,7 @@ export interface DecodedFrame {
 // ─── Encoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoEncoder {
+  public readonly sfuCodecId = 'wlvc_ts'
   private config: Required<WaveletCodecConfig>
   private frameCount = 0
   private previousY: Float32Array | null = null
@@ -478,6 +479,7 @@ export class WaveletVideoEncoder {
 // ─── Decoder ─────────────────────────────────────────────────────────────────
 
 export class WaveletVideoDecoder {
+  public readonly sfuCodecId = 'wlvc_ts'
   private config: Required<WaveletCodecConfig>
   private previousY: Float32Array | null = null
   private previousU: Float32Array | null = null

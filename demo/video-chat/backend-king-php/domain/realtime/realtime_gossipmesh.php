@@ -116,6 +116,9 @@ function videochat_gossipmesh_telemetry_counter_names(): array
         'rtc_datachannel_sends',
         'in_memory_harness_sends',
         'topology_repairs_requested',
+        'keyframe_requests',
+        'missing_frame_requests',
+        'retransmits_served',
     ];
 }
 

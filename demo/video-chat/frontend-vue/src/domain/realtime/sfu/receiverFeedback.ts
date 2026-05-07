@@ -25,6 +25,13 @@ function receiverFeedbackTargetUserId(peer, payload = {}) {
   );
 }
 
+function receiverFeedbackRequestedVideoLayer(frame, fallback = 'primary') {
+  const normalized = String(frame?.videoLayer || frame?.video_layer || '').trim().toLowerCase();
+  if (normalized === 'thumbnail' || normalized === 'thumb' || normalized === 'mini') return 'thumbnail';
+  if (normalized === 'primary' || normalized === 'main' || normalized === 'fullscreen') return 'primary';
+  return fallback;
+}
+
 export function createSfuReceiverFeedback({
   currentUserId,
   mediaRuntimePathRef,
@@ -79,6 +86,7 @@ export function createSfuReceiverFeedback({
       subscriber_send_latency_ms: normalizePositiveNumber(frame?.subscriberSendLatencyMs || 0),
       requested_action: 'force_full_keyframe',
       request_full_keyframe: true,
+      requested_video_layer: receiverFeedbackRequestedVideoLayer(frame),
       ...extraPayload,
     });
   }

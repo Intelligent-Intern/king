@@ -46,10 +46,19 @@ try {
     $storeSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_store.php');
     $moduleRealtimeSource = file_get_contents(__DIR__ . '/../http/module_realtime.php');
     $iibinSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_iibin.php');
+    $sessionProtocolSource = file_get_contents(__DIR__ . '/../domain/realtime/realtime_sfu_session_protocol.php');
     videochat_realtime_sfu_assert(is_string($gatewaySource), 'SFU gateway source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($storeSource), 'SFU store source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($moduleRealtimeSource), 'Realtime module source should be readable for static contract checks');
     videochat_realtime_sfu_assert(is_string($iibinSource), 'SFU IIBIN helper source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(is_string($sessionProtocolSource), 'SFU session protocol source should be readable for static contract checks');
+    videochat_realtime_sfu_assert(
+        str_contains($moduleRealtimeSource, 'realtime_sfu_session_protocol.php')
+        && str_contains($sessionProtocolSource, "function videochat_sfu_build_session_acceptance")
+        && str_contains($gatewaySource, "case 'sfu/session-hello':")
+        && str_contains($gatewaySource, "'join_visible_slo_ms' => videochat_sfu_join_visible_slo_ms()"),
+        'SFU fast-join session protocol must be wired into the active King PHP gateway'
+    );
     videochat_realtime_sfu_assert(
         str_contains($moduleRealtimeSource, "realtime_sfu_iibin.php")
         && str_contains($iibinSource, "king_proto_define_schema")
@@ -273,6 +282,29 @@ try {
         'room-alpha'
     );
     videochat_realtime_sfu_assert((bool) ($joinLegacy['ok'] ?? false), 'SFU join with legacy roomId should stay compatible');
+    $sessionHello = videochat_sfu_decode_client_frame(
+        json_encode(['type' => 'sfu/session-hello', 'room_id' => 'room-alpha', 'protocol_versions' => [1]], JSON_UNESCAPED_SLASHES),
+        'room-alpha'
+    );
+    videochat_realtime_sfu_assert((bool) ($sessionHello['ok'] ?? false), 'SFU session hello with matching room_id should pass');
+    $sessionAccepted = videochat_sfu_build_session_acceptance((array) ($sessionHello['payload'] ?? []), [
+        'room_id' => 'room-alpha',
+        'tenant_id' => 7,
+        'publisher_id' => 'sfu-test-pub',
+        'publisher_user_id' => '42',
+    ]);
+    videochat_realtime_sfu_assert((string) ($sessionAccepted['type'] ?? '') === 'sfu/session-accepted', 'SFU session hello must produce session-accepted');
+    videochat_realtime_sfu_assert((int) ($sessionAccepted['join_visible_slo_ms'] ?? 0) === 1000, 'SFU session protocol must expose the 1s visible-join SLO');
+    videochat_realtime_sfu_assert((bool) ((($sessionAccepted['selected'] ?? [])['fast_first_frame'] ?? false)) === true, 'SFU session protocol must select fast first-frame delivery');
+    $trackAccepted = videochat_sfu_build_track_acceptance([
+        'track_id' => 'camera-1',
+        'kind' => 'video',
+    ], [
+        'room_id' => 'room-alpha',
+        'publisher_id' => 'sfu-test-pub',
+        'publisher_user_id' => '42',
+    ]);
+    videochat_realtime_sfu_assert((string) ($trackAccepted['type'] ?? '') === 'sfu/track-accepted', 'SFU publish must have a fast first-frame track acceptance payload');
     $joinMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/join', 'room_id' => 'room-beta'], JSON_UNESCAPED_SLASHES),
         'room-alpha'
@@ -367,7 +399,7 @@ try {
         && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_publish')
         && str_contains($sfuGatewaySource, 'videochat_sfu_live_frame_relay_poll')
         && str_contains($sfuGatewaySource, 'videochat_sfu_sqlite_frame_buffer_poll'),
-        'SFU cross-worker media fanout must keep bounded live relay and SQLite frame-buffer replay'
+        'SFU media fanout must keep bounded RAM live relay and SQLite cross-worker frame-buffer replay'
     );
     $publishMismatch = videochat_sfu_decode_client_frame(
         json_encode(['type' => 'sfu/publish', 'room_id' => 'room-beta', 'track_id' => 'cam-1'], JSON_UNESCAPED_SLASHES),
@@ -394,9 +426,10 @@ try {
         'tag_length' => 16,
     ];
     $protectedFrame = videochat_realtime_sfu_protected_frame($protectedHeader, "\x0b\x0c\x0d");
-    $previousRelayPath = getenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH');
-    $relayRoot = sys_get_temp_dir() . '/videochat-sfu-live-relay-contract-' . bin2hex(random_bytes(6));
-    putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH=' . $relayRoot);
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_root() === 'ram://king-videochat-sfu-live-relay',
+        'SFU live frame relay should use the process RAM ring buffer, not tmpfs files'
+    );
     $relayPayload = [
         'type' => 'sfu/frame',
         'publisher_id' => 'publisher-a',
@@ -422,7 +455,7 @@ try {
     $relayCursor = '';
     $relaySeen = [];
     $relayedFrames = videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-b', [], $relayCursor, $relaySeen, 10);
-    videochat_realtime_sfu_assert(count($relayedFrames) === 1, 'SFU live frame relay should expose one cross-worker frame');
+    videochat_realtime_sfu_assert(count($relayedFrames) === 1, 'SFU live frame relay should expose one same-worker RAM frame');
     videochat_realtime_sfu_assert(
         (string) ($relayedFrames[0]['publisher_id'] ?? '') === 'publisher-a'
         && (string) ($relayedFrames[0]['protected_frame'] ?? '') === $protectedFrame
@@ -435,31 +468,45 @@ try {
         videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-b', [], $relayCursor, $relaySeen, 10) === [],
         'SFU live frame relay cursor should suppress duplicate frame delivery'
     );
+    $tenantRelayRoomKey = videochat_presence_room_key('room-tenant-alpha', 42);
+    $tenantRelayPayload = array_merge($relayPayload, [
+        'publisher_id' => 'publisher-tenant',
+        'publisher_user_id' => '420',
+        'frame_sequence' => 45,
+        'track_id' => 'camera-tenant',
+    ]);
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_publish($tenantRelayRoomKey, 'publisher-tenant', $tenantRelayPayload),
+        'SFU live frame relay should publish frames for tenant-scoped room keys'
+    );
+    $tenantRelayCursor = '';
+    $tenantRelaySeen = [];
+    $tenantRelayedFrames = videochat_sfu_live_frame_relay_read($tenantRelayRoomKey, 'subscriber-tenant', [], $tenantRelayCursor, $tenantRelaySeen, 10);
+    videochat_realtime_sfu_assert(
+        count($tenantRelayedFrames) === 1
+        && (string) ($tenantRelayedFrames[0]['publisher_id'] ?? '') === 'publisher-tenant'
+        && (int) ($tenantRelayedFrames[0]['frame_sequence'] ?? 0) === 45,
+        'SFU live frame relay should replay tenant-scoped room key frames'
+    );
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_read('room-tenant-alpha', 'subscriber-tenant', [], $tenantRelayCursor, $tenantRelaySeen, 10) === [],
+        'SFU live frame relay must not leak tenant-scoped frames through the plain room id'
+    );
     $localRelayCursor = '';
     $localRelaySeen = [];
     videochat_realtime_sfu_assert(
         videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-c', ['publisher-a'], $localRelayCursor, $localRelaySeen, 10) === [],
         'SFU live frame relay should skip publishers that are local to the subscriber worker'
     );
-    $relayRoomDir = videochat_sfu_live_frame_relay_room_dir('room-alpha');
-    $relayFilesAfterLocalSkip = glob($relayRoomDir . '/*.json') ?: [];
-    sort($relayFilesAfterLocalSkip, SORT_STRING);
-    $localRelayWatermark = basename((string) end($relayFilesAfterLocalSkip));
-    $lateRemoteCreatedAtMs = max(1, (int) substr($localRelayWatermark, 0, 13) - 1);
     $lateRemotePayload = array_merge($relayPayload, [
         'publisher_id' => 'publisher-b',
         'publisher_user_id' => '200',
         'track_id' => 'camera-b',
         'frame_sequence' => 43,
     ]);
-    file_put_contents(
-        $relayRoomDir . '/' . sprintf('%013d_99999_999999.json', $lateRemoteCreatedAtMs),
-        json_encode([
-            'created_at_ms' => videochat_sfu_now_ms(),
-            'room_id' => 'room-alpha',
-            'publisher_id' => 'publisher-b',
-            'frame' => $lateRemotePayload,
-        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+    videochat_realtime_sfu_assert(
+        videochat_sfu_live_frame_relay_publish('room-alpha', 'publisher-b', $lateRemotePayload),
+        'SFU live frame relay should accept remote RAM records after a local skip'
     );
     $lateRemoteFrames = videochat_sfu_live_frame_relay_read('room-alpha', 'subscriber-c', ['publisher-a'], $localRelayCursor, $localRelaySeen, 10);
     videochat_realtime_sfu_assert(
@@ -469,22 +516,7 @@ try {
         'SFU live frame relay must not let skipped local frames hide late-arriving remote frames'
     );
     videochat_sfu_live_frame_relay_cleanup_room('room-alpha', videochat_sfu_now_ms() + videochat_sfu_live_frame_relay_ttl_ms() + 1);
-    if (is_dir($relayRoot)) {
-        foreach ((glob($relayRoot . '/*') ?: []) as $relayRoomDir) {
-            if (is_dir($relayRoomDir)) {
-                foreach ((glob($relayRoomDir . '/*') ?: []) as $relayFile) {
-                    @unlink((string) $relayFile);
-                }
-                @rmdir((string) $relayRoomDir);
-            }
-        }
-        @rmdir($relayRoot);
-    }
-    if ($previousRelayPath === false) {
-        putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH');
-    } else {
-        putenv('VIDEOCHAT_KING_SFU_FRAME_RELAY_PATH=' . $previousRelayPath);
-    }
+    videochat_sfu_live_frame_relay_cleanup_room($tenantRelayRoomKey, videochat_sfu_now_ms() + videochat_sfu_live_frame_relay_ttl_ms() + 1);
     $jsonMediaCommand = videochat_sfu_decode_client_frame(
         json_encode([
             'type' => 'sfu/frame',
@@ -644,10 +676,12 @@ try {
     videochat_realtime_sfu_assert(
         (string) ($decodedBinaryPayload['codec_id'] ?? '') === 'wlvc_wasm'
         && (string) ($decodedBinaryPayload['runtime_id'] ?? '') === 'wlvc_sfu'
+        && (string) ($decodedBinaryPayload['wlvc_js_asset_version'] ?? '') === 'wlvc-js-abi-v2'
+        && (int) ($decodedBinaryPayload['wlvc_wasm_abi_version'] ?? 0) === 2
         && (string) ($decodedBinaryPayload['layout_mode'] ?? '') === 'background_snapshot'
         && (string) ($decodedBinaryPayload['layer_id'] ?? '') === 'background'
         && (int) ($decodedBinaryPayload['cache_epoch'] ?? 0) === 11,
-        'binary SFU frame envelope must preserve codec/runtime/layout metadata through decode'
+        'binary SFU frame envelope must preserve codec/runtime/WLVC ABI/layout metadata through decode'
     );
     videochat_realtime_sfu_assert(
         (int) ($decodedBinaryPayload['payload_bytes'] ?? 0) === strlen('ABC')
@@ -902,6 +936,33 @@ try {
     videochat_realtime_sfu_assert(
         videochat_sfu_fetch_buffered_frames($pdo, 'room-alpha', 'subscriber-x', [], $bufferCursor, 10) === [],
         'SFU bounded SQLite frame buffer cursor should suppress duplicate delivery'
+    );
+    $tenantBufferRoomKey = videochat_presence_room_key('room-tenant-buffer', 42);
+    $tenantBufferPayload = array_merge($bufferFramePayload, [
+        'publisher_id' => 'publisher-tenant-buffer',
+        'track_id' => 'camera-tenant-buffer',
+        'frame_sequence' => 46,
+    ]);
+    $tenantBufferInsertError = '';
+    videochat_realtime_sfu_assert(
+        videochat_sfu_insert_frame($pdo, $tenantBufferRoomKey, 'publisher-tenant-buffer', $tenantBufferPayload, $tenantBufferInsertError),
+        'SFU bounded SQLite frame buffer should accept tenant-scoped room keys'
+    );
+    $tenantBufferCursor = 0;
+    $tenantBufferedFrames = videochat_sfu_fetch_buffered_frames($pdo, $tenantBufferRoomKey, 'subscriber-tenant-buffer', [], $tenantBufferCursor, 10);
+    videochat_realtime_sfu_assert(
+        count($tenantBufferedFrames) === 1
+        && (string) ($tenantBufferedFrames[0]['publisher_id'] ?? '') === 'publisher-tenant-buffer'
+        && (string) ($tenantBufferedFrames[0]['room_id'] ?? '') === 'room-tenant-buffer'
+        && (int) ($tenantBufferedFrames[0]['frame_sequence'] ?? 0) === 46,
+        'SFU bounded SQLite frame buffer should replay tenant-scoped frames with public room ids in payloads'
+    );
+    $tenantBufferedRows = (int) $pdo->query("SELECT COUNT(*) FROM sfu_frames WHERE room_id = 'tenant:42:room:room-tenant-buffer'")->fetchColumn();
+    videochat_realtime_sfu_assert($tenantBufferedRows === 1, 'SFU bounded SQLite frame buffer should store tenant-scoped rows under tenant room key');
+    $plainTenantBufferedCursor = 0;
+    videochat_realtime_sfu_assert(
+        videochat_sfu_fetch_buffered_frames($pdo, 'room-tenant-buffer', 'subscriber-tenant-buffer', [], $plainTenantBufferedCursor, 10) === [],
+        'SFU bounded SQLite frame buffer must not leak tenant-scoped rows through the plain room id'
     );
     $localBufferCursor = 0;
     videochat_realtime_sfu_assert(

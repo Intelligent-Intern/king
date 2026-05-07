@@ -1,0 +1,52 @@
+{
+  "module_key": "backend_modules",
+  "version": "0.1.0",
+  "visibility_scope": "tenant",
+  "permissions": [
+    "admin.backend_modules.diagnostics"
+  ],
+  "routes": [
+    {
+      "route_key": "backend_modules.diagnostics.ping",
+      "method": "POST",
+      "path": "/api/admin/backend-modules/diagnostics/ping",
+      "event_name": "backend_modules.diagnostics.ping.requested",
+      "pipeline_key": "backend_modules.diagnostics.ping",
+      "auth": "admin"
+    }
+  ],
+  "events": [
+    {
+      "event_name": "backend_modules.diagnostics.ping.requested"
+    }
+  ],
+  "pipelines": [
+    {
+      "pipeline_key": "backend_modules.diagnostics.ping",
+      "steps": [
+        {
+          "tool": "backend-module-diagnostics-echo"
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "tool_name": "backend-module-diagnostics-echo",
+      "config": {
+        "module": "backend_modules",
+        "kind": "diagnostic_echo"
+      }
+    }
+  ],
+  "handlers": [
+    {
+      "tool_name": "backend-module-diagnostics-echo",
+      "handler": "videochat_backend_module_diagnostics_echo_handler"
+    }
+  ],
+  "i18n_namespaces": [
+    "backend_modules"
+  ],
+  "settings": {}
+}

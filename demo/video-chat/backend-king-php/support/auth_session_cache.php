@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/tenant_context.php';
+require_once __DIR__ . '/localization.php';
+
 function videochat_mark_session_revoked_locally(string $sessionId, string $revokedAt): void
 {
     $trimmedSessionId = trim($sessionId);
@@ -34,7 +37,8 @@ function videochat_mark_session_issued_locally(
     string $issuedAt,
     string $expiresAt,
     ?string $clientIp = null,
-    ?string $userAgent = null
+    ?string $userAgent = null,
+    ?int $activeTenantId = null
 ): void {
     $trimmedSessionId = trim($sessionId);
     if ($trimmedSessionId === '' || $userId <= 0) {
@@ -52,6 +56,7 @@ function videochat_mark_session_issued_locally(
         'expires_at' => $expiresAt,
         'client_ip' => $clientIp,
         'user_agent' => $userAgent,
+        'active_tenant_id' => $activeTenantId,
     ];
 }
 
@@ -97,6 +102,8 @@ SELECT
     users.time_format,
     users.date_format,
     users.theme,
+    users.locale,
+    users.theme_editor_enabled,
     users.avatar_path,
     users.post_logout_landing_url,
     roles.slug AS role_slug
@@ -131,12 +138,28 @@ SQL
         is_string($row['email'] ?? null) ? (string) $row['email'] : '',
         $row['password_hash'] ?? null
     );
+    $tenant = videochat_tenant_context_for_user(
+        $pdo,
+        (int) $row['user_id'],
+        isset($localSession['active_tenant_id']) ? (int) $localSession['active_tenant_id'] : null
+    );
+    if ($tenant === null) {
+        return [
+            'ok' => false,
+            'reason' => 'tenant_membership_inactive',
+            'session' => null,
+            'user' => null,
+        ];
+    }
+    $tenantPayload = videochat_tenant_auth_payload($tenant);
+    $localization = videochat_localization_payload($pdo, $row['locale'] ?? null);
 
     return [
         'ok' => true,
         'reason' => 'ok',
         'session' => [
             'id' => $trimmedSessionId,
+            'active_tenant_id' => (int) ($tenantPayload['id'] ?? 0),
             'issued_at' => is_string($localSession['issued_at'] ?? null) ? (string) $localSession['issued_at'] : '',
             'expires_at' => $expiresAt,
             'revoked_at' => null,
@@ -152,12 +175,20 @@ SQL
             'time_format' => is_string($row['time_format'] ?? null) ? (string) $row['time_format'] : '24h',
             'date_format' => is_string($row['date_format'] ?? null) ? (string) $row['date_format'] : 'dmy_dot',
             'theme' => is_string($row['theme'] ?? null) ? (string) $row['theme'] : 'dark',
+            'locale' => (string) ($localization['locale'] ?? 'en'),
+            'direction' => (string) ($localization['direction'] ?? 'ltr'),
+            'supported_locales' => is_array($localization['supported_locales'] ?? null) ? $localization['supported_locales'] : [],
+            'can_edit_themes' => (string) ($row['role_slug'] ?? 'user') === 'admin'
+                || ((int) ($row['theme_editor_enabled'] ?? 0)) === 1
+                || (bool) (($tenantPayload['permissions']['edit_themes'] ?? false)),
             'avatar_path' => is_string($row['avatar_path'] ?? null) ? (string) $row['avatar_path'] : null,
             'post_logout_landing_url' => is_string($row['post_logout_landing_url'] ?? null)
                 ? trim((string) $row['post_logout_landing_url'])
                 : '',
             'account_type' => $accountType,
             'is_guest' => $accountType === 'guest',
+            'tenant' => $tenantPayload,
         ],
+        'tenant' => $tenantPayload,
     ];
 }

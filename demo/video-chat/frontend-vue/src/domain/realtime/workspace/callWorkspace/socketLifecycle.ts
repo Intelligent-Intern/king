@@ -2,6 +2,7 @@ import {
   shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
+import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE = 'call/media-security-sync-request';
@@ -45,7 +46,7 @@ export function createCallWorkspaceSocketHelpers({
     handleAssetVersionConnectionFailure,
     handleAssetVersionSocketClose,
     handleAssetVersionSocketPayload,
-    handleGossipSignalingEvent = () => false,
+    handleGossipNeighborSignal = () => false,
     handleMediaSecuritySignal,
     handleNativeSignalingEvent,
     hideLobbyJoinToast,
@@ -194,8 +195,13 @@ export function createCallWorkspaceSocketHelpers({
     const fullKeyframeRequested = Boolean(payloadBody?.request_full_keyframe)
       || requestedAction === 'force_full_keyframe'
       || compatibilityCodecRequested
-      || primaryLayerRequested
       || shouldRequestSfuFullKeyframeForReason(sourceReason);
+    const keyframeOnlyRequest = fullKeyframeRequested
+      && requestedAction === 'force_full_keyframe'
+      && !compatibilityCodecRequested
+      && !primaryLayerRequested
+      && !thumbnailLayerRequested
+      && requestedVideoQualityProfile === '';
     const forcedFullKeyframe = fullKeyframeRequested && typeof requestWlvcFullFrameKeyframe === 'function'
       ? requestWlvcFullFrameKeyframe(sourceReason || 'sfu_remote_quality_pressure', {
         ...payloadBody,
@@ -210,6 +216,9 @@ export function createCallWorkspaceSocketHelpers({
       if (compatibilityCodecRequested) {
         // Codec compatibility is handled by the publisher pipeline switching
         // away from WebCodecs; quality profile changes are a separate signal.
+      } else if (keyframeOnlyRequest) {
+        // Full-frame recovery already resets the encoder; avoid profile churn
+        // that can hide the next keyframe behind another layer rollover.
       } else if (primaryLayerRequested) {
         upgraded = downgradeSfuVideoQualityAfterEncodePressure('sfu_remote_primary_layer_requested', {
           direction: 'up',
@@ -243,6 +252,7 @@ export function createCallWorkspaceSocketHelpers({
         source_reason: sourceReason,
         source_publisher_id: String(payloadBody?.publisher_id || '').trim(),
         full_keyframe_requested: forcedFullKeyframe,
+        keyframe_only_request: keyframeOnlyRequest,
         compatibility_codec_requested: compatibilityCodecRequested,
         compatibility_disabled_until_ms: Number(sfuTransportState.sfuBrowserEncoderCompatibilityDisabledUntilMs || 0),
         primary_layer_active: primaryLayerActive,
@@ -257,7 +267,7 @@ export function createCallWorkspaceSocketHelpers({
 
   function handleSignalingEvent(payload) {
     const type = String(payload?.type || '').trim().toLowerCase();
-    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
+    if (!['call/offer', 'call/answer', 'call/ice', 'call/hangup', 'call/gossip-topology', 'call/gossip-recovery', 'gossip/recovery/request', ...callStateSignalTypes, ...mediaSecuritySignalTypes].includes(type)) return;
 
     const sender = typeof payload.sender === 'object' ? payload.sender : {};
     const senderUserId = Number(sender.user_id || 0);
@@ -269,15 +279,9 @@ export function createCallWorkspaceSocketHelpers({
       void handleMediaSecuritySignal(type, senderUserId, payloadBody || {});
       return;
     }
+    if (handleGossipNeighborSignal(type, senderUserId, payloadBody || {})) return;
 
     const payloadKind = String(payloadBody?.kind || '').trim().toLowerCase();
-    if (
-      ['call/offer', 'call/answer', 'call/ice'].includes(type)
-      && payloadKind.startsWith('gossip_webrtc_')
-    ) {
-      handleGossipSignalingEvent(type, senderUserId, payloadBody || {});
-      return;
-    }
 
     const hasSdpPayload = Boolean(payloadBody && typeof payloadBody.sdp === 'object');
     const hasCandidatePayload = Boolean(payloadBody && typeof payloadBody.candidate === 'object');
@@ -395,16 +399,22 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'room/snapshot') {
       applyRoomSnapshot(payload);
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
       return;
     }
 
     if (type === 'room/left') {
       const leftUserId = Number(payload?.participant?.user?.id || 0);
       if (Number.isInteger(leftUserId) && leftUserId > 0) removeParticipantLocallyAfterHangup(leftUserId);
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
       requestRoomSnapshot();
       return;
     }
-    if (type === 'room/joined') { requestRoomSnapshot(); return; }
+    if (type === 'room/joined') {
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
+      requestRoomSnapshot();
+      return;
+    }
 
     if (type === 'lobby/snapshot') {
       applyLobbySnapshot(payload);
@@ -510,12 +520,24 @@ export function createCallWorkspaceSocketHelpers({
           clearLobbyActionText(failedTargetUserId, 'remove');
         }
       }
+      const transientAuthBackendError = code === 'websocket_auth_temporarily_unavailable'
+        || closeReason === 'auth_backend_error';
+      if (transientAuthBackendError) {
+        state.manualSocketClose = false;
+        refs.workspaceError.value = '';
+        refs.workspaceNotice.value = '';
+        refs.connectionReason.value = 'auth_backend_error';
+        refs.connectionState.value = 'retrying';
+        closeSocketLocal();
+        scheduleReconnect();
+        return;
+      }
       if (code === 'websocket_session_invalidated' || closeReason === 'session_invalidated') {
         state.manualSocketClose = true;
         refs.connectionReason.value = closeReason || 'session_invalidated';
         refs.connectionState.value = 'expired';
         closeSocketLocal();
-      } else if (code === 'websocket_auth_failed' || code === 'websocket_forbidden' || closeReason === 'auth_backend_error' || closeReason === 'role_not_allowed') {
+      } else if (code === 'websocket_auth_failed' || code === 'websocket_forbidden' || closeReason === 'role_not_allowed') {
         state.manualSocketClose = true;
         refs.connectionReason.value = closeReason || code || 'blocked';
         refs.connectionState.value = 'blocked';
@@ -687,6 +709,9 @@ export function createCallWorkspaceSocketHelpers({
       const code = String(payload?.error?.code || '').trim().toLowerCase();
       const detailReason = String(payload?.error?.details?.reason || '').trim().toLowerCase();
       const failureReason = detailReason || code || 'invalid_session';
+      if (failureReason === 'auth_backend_error' || code === 'auth_session_probe_failed') {
+        return { ok: false, state: 'retrying', reason: 'auth_backend_error', message: extractErrorMessage(payload, 'Session validation is temporarily unavailable.') };
+      }
       if (response.status === 403 || failureReason === 'role_not_allowed') {
         return { ok: false, state: 'blocked', reason: failureReason, message: extractErrorMessage(payload, 'Session is blocked by policy.') };
       }
@@ -965,9 +990,16 @@ export function createCallWorkspaceSocketHelpers({
           finishConnectInFlight();
           return;
         }
-        if (closeReason === 'auth_backend_error' || (event?.code === 1008 && closeReason !== '')) {
+        if (closeReason === 'auth_backend_error' || event?.code === 1011) {
+          refs.connectionState.value = 'retrying';
+          refs.connectionReason.value = closeReason || 'socket_internal_error';
+          finishConnectInFlight();
+          scheduleReconnect();
+          return;
+        }
+        if (event?.code === 1008 && closeReason !== '') {
           refs.connectionState.value = 'blocked';
-          refs.connectionReason.value = closeReason || 'blocked';
+          refs.connectionReason.value = closeReason;
           state.manualSocketClose = true;
           finishConnectInFlight();
           return;

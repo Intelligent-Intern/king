@@ -27,6 +27,7 @@ function readRepo(relativePath) {
 try {
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
   const browserPublisher = read('src/domain/realtime/local/protectedBrowserVideoEncoder.ts');
+  const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
   const browserEncoderConfig = read('src/domain/realtime/local/browserVideoEncoderConfig.ts');
   const browserFrameScaler = read('src/domain/realtime/local/browserVideoFrameScaler.ts');
   const frameDecode = read('src/domain/realtime/sfu/frameDecode.ts');
@@ -38,6 +39,7 @@ try {
   const mediaSecurityRuntime = read('src/domain/realtime/workspace/callWorkspace/mediaSecurityRuntime.ts');
   const lifecycle = read('src/domain/realtime/sfu/lifecycle.ts');
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
+  const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
   const recoveryReasons = read('src/domain/realtime/sfu/recoveryReasons.ts');
   const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
@@ -66,7 +68,8 @@ try {
   requireContains(browserPublisher, 'stages: []', 'browser publisher initializes publisher trace stage list');
   requireContains(browserPublisher, 'stageMetrics: {}', 'browser publisher initializes publisher trace metrics');
   requireContains(browserPublisher, 'mediaSecurity.protectFrame({', 'browser publisher keeps King protected media envelopes');
-  requireContains(browserPublisher, 'sendClient.sendEncodedFrame(outgoingFrame)', 'browser publisher still uses SFU binary frame sender');
+  requireContains(browserPublisher, 'dispatchProtectedBrowserPublisherFrame({', 'browser publisher dispatches through shared media-carrier frame sender');
+  requireContains(publisherFrameDispatch, 'sendClient.sendEncodedFrame(frame)', 'shared publisher dispatch still uses SFU binary frame sender');
   requireContains(browserPublisher, 'publisher_browser_encoder_codec', 'browser publisher emits backend telemetry for encoder path');
   requireContains(browserPublisher, 'publisher_browser_encoder_layer', 'browser publisher emits backend telemetry for encoder layer');
   requireContains(browserPublisher, 'publisher_browser_encoder_thumbnail_enabled: true', 'browser publisher reports dual encoder activation');
@@ -113,11 +116,18 @@ try {
   requireContains(browserPublisher, "eventType: 'sfu_browser_keyframe_required_delta_dropped'", 'browser publisher must not send a delta when a reconnect/recovery keyframe is required');
   requireContains(browserPublisher, "const encodedFrameType = actualEncodedFrameType", 'browser publisher must not relabel browser delta chunks as keyframes');
   requireContains(browserPublisher, "new Error('sfu_browser_encoder_keyframe_unavailable')", 'browser publisher must fall back when WebCodecs cannot produce recovery keyframes');
-  requireContains(browserPublisher, 'refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0', 'browser publisher must clear receiver keyframe recovery once a primary keyframe was sent');
-  requireContains(browserPublisher, "hintMediaSecuritySync('sfu_publish_security_gate_transport_only'", 'browser publisher must resync keys while continuing transport-only publishing');
-  requireContains(browserPublisher, "protect_browser_encoded_frame_unavailable_waiting_for_security", 'browser publisher must resync keys when protectFrame becomes unavailable mid-frame');
-  requireContains(browserPublisher, "protected_media_fallback: 'transport_only_until_sender_key_ready'", 'browser publisher must keep sending frames while sender keys settle');
-  requireContains(browserPublisher, "protected_media_fallback: 'transport_only_after_protect_unavailable'", 'browser publisher must keep sending frames after preferred media-security protection is temporarily unavailable');
+  assert.equal(
+    browserPublisher.includes('refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0'),
+    false,
+    'browser publisher must keep receiver keyframe recovery active for the full recovery window',
+  );
+  requireContains(browserPublisher, "hintMediaSecuritySync('sfu_publish_security_gate_waiting'", 'browser publisher must resync keys while the publish security gate is closed');
+  requireContains(browserPublisher, "protect_browser_encoded_frame_unavailable_waiting_for_security", 'browser publisher must drop, not leak, frames when protectFrame becomes unavailable mid-frame');
+  assert.equal(
+    browserPublisher.includes("hintMediaSecuritySync('protect_browser_encoded_frame_unavailable',"),
+    false,
+    'browser publisher must not continue a transport-only fallback when protected media is enabled',
+  );
 
   requireContains(publisherPipeline, "from './protectedBrowserVideoEncoder'", 'publisher pipeline imports browser encoder path');
   assert.ok(
@@ -160,6 +170,14 @@ try {
   requireContains(mediaStack, 'shouldRequestSfuCompatibilityCodecFallback(feedbackAction, payload || {})', 'receiver feedback uses websocket signaling for codec compatibility fallback instead of SFU-only recovery rows');
   requireContains(mediaStack, 'payload?.publisher_user_id', 'receiver feedback can target the publisher user id before remote peer hydration');
   requireContains(mediaStack, 'const socketRecoverySent = Number.isInteger(targetUserId)', 'receiver recovery must send user-socket fallback even when SFU publisher-id routing accepts the request');
+  requireContains(runtimeHealth, 'requestPublisherCompatibilityCodecFallback(peer, publisherId', 'runtime health escalates silent remote video stalls to publisher-side WLVC compatibility fallback');
+  requireContains(runtimeHealth, 'requested_action: SFU_COMPATIBILITY_CODEC_RECOVERY_ACTION', 'runtime health sends explicit compatibility codec action after silent decoder stalls');
+  requireContains(runtimeHealth, "requested_codec_id: 'wlvc_sfu'", 'runtime health names the interoperable WLVC codec target after silent decoder stalls');
+  requireContains(runtimeHealth, "eventType: 'sfu_remote_video_compatibility_fallback_requested'", 'runtime health persists compatibility fallback requests to backend diagnostics');
+  requireContains(runtimeHealth, "fallback_trigger: 'remote_video_never_started'", 'runtime health escalates never-started remote video to compatibility fallback');
+  requireContains(runtimeHealth, "fallback_trigger: 'remote_video_frozen_receiving_frames'", 'runtime health escalates frozen-but-receiving remote video to compatibility fallback');
+  requireContains(runtimeHealth, 'bypass_recovery_throttle: true', 'runtime health lets compatibility fallback bypass the earlier keyframe pressure throttle');
+  requireContains(runtimeHealth, 'const sfuRecoverySent = !compatibilityCodecRequested', 'runtime health avoids SFU-only recovery rows for compatibility codec switching');
   assert.ok(
     mediaStack.indexOf('requestPublisherMediaRecovery') < mediaStack.indexOf('const targetUserId = Number('),
     'SFU publisher recovery by publisher id must run before socket fallback requires a hydrated peer user id',

@@ -1,0 +1,90 @@
+{
+  "schema_version": "king.call_app.manifest.v1",
+  "app_key": "whiteboard",
+  "name": "Whiteboard",
+  "version": "0.1.0",
+  "status": "runtime_ready",
+  "category": "whiteboard",
+  "manufacturer": "KINGRT",
+  "description": "Collaborative call whiteboard with CRDT-backed strokes, shapes, notes, text labels, and participant cursors.",
+  "entrypoints": {
+    "iframe": "public/index.html",
+    "mcp_descriptor": "mcp.descriptor.json",
+    "crdt_schema": "crdt.schema.json",
+    "health": "health.descriptor.json"
+  },
+  "semantic_dns": {
+    "service_type": "call_app",
+    "service_name": "call_app.whiteboard",
+    "mother_node_registration": {
+      "required": true,
+      "service_tags": [
+        "whiteboard",
+        "crdt",
+        "collaboration",
+        "marketplace"
+      ],
+      "discoverable_by": [
+        "app_key",
+        "category",
+        "capability",
+        "version",
+        "health",
+        "organization_availability"
+      ]
+    }
+  },
+  "marketplace": {
+    "order_scope": "organization",
+    "requires_installation": true,
+    "categories": [
+      "whiteboard",
+      "collaboration"
+    ],
+    "default_license": "organization"
+  },
+  "permissions": [
+    "call_apps.discover",
+    "call_apps.marketplace.order",
+    "call_apps.marketplace.install",
+    "call_apps.call.attach",
+    "call_apps.call.view",
+    "call_apps.permissions.manage",
+    "call_apps.permissions.use",
+    "call_apps.launch",
+    "call_apps.crdt.read",
+    "call_apps.crdt.append",
+    "call_apps.crdt.replay",
+    "call_apps.presence.publish",
+    "call_apps.export.request",
+    "call_apps.export.download"
+  ],
+  "default_participant_access": "blocked_by_default",
+  "iframe": {
+    "sandbox": [
+      "allow-scripts",
+      "allow-downloads"
+    ],
+    "entrypoint": "public/index.html",
+    "bridge_protocol": "king.call_app.iframe.v1",
+    "launch_token_transport": "post_message",
+    "receives_primary_session_token": false
+  },
+  "crdt": {
+    "schema": "crdt.schema.json",
+    "protocol": "king.call_app.crdt.v1",
+    "document_kinds": [
+      "whiteboard_document"
+    ]
+  },
+  "exports": [
+    {
+      "format": "png",
+      "mime_type": "image/png"
+    },
+    {
+      "format": "pdf",
+      "mime_type": "application/pdf"
+    }
+  ]
+}

@@ -29,6 +29,8 @@ export function roundedStageMs(value) {
 }
 
 export function currentSfuCodecId(encoder) {
+  const explicitCodecId = String(encoder?.sfuCodecId || encoder?.codecId || encoder?.wlvcCodecId || '').trim().toLowerCase();
+  if (explicitCodecId === 'wlvc_wasm' || explicitCodecId === 'wlvc_ts') return explicitCodecId;
   const constructorName = String(encoder?.constructor?.name || '').trim();
   if (constructorName === 'WasmWaveletVideoEncoder') return 'wlvc_wasm';
   if (constructorName === 'WaveletVideoEncoder') return 'wlvc_ts';

@@ -1,6 +1,6 @@
 .call-access-join-page {
   min-height: 100vh;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
 }
 
 .call-access-join-shell {
@@ -17,7 +17,7 @@
 .calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-09111e);
+  background: var(--color-surface-navy);
 }
 
 .calls-modal-dialog {
@@ -29,7 +29,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 16px 32px var(--color-000000);
+  box-shadow: 0 16px 32px var(--color-primary-navy);
   padding: 12px;
   display: grid;
   gap: 12px;
@@ -102,7 +102,18 @@
 .calls-enter-preview {
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  align-content: start;
+}
+
+.call-access-join-guest-name {
+  width: min(100%, 560px);
+  margin: 0;
+}
+
+.call-access-join-guest-name .input {
+  width: 100%;
 }
 
 .calls-enter-preview-frame {
@@ -112,7 +123,7 @@
   min-height: 0;
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  background: var(--color-0b1324);
+  background: var(--color-surface-navy);
   overflow: hidden;
 }
 
@@ -142,8 +153,8 @@
   gap: 2px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: var(--color-rgba-11-19-36-0-78);
-  color: var(--color-f7f7f7);
+  background: color-mix(in srgb, var(--color-surface-navy) 78%, transparent);
+  color: var(--color-text-primary);
   font-size: 12px;
 }
 
@@ -156,7 +167,7 @@
 }
 
 .call-access-join-call-badge span {
-  color: var(--color-c9d5ea);
+  color: var(--color-heading);
   font-size: 11px;
 }
 
@@ -198,8 +209,8 @@
   margin: 0 auto 0 0;
   border: 1px solid var(--brand-cyan);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--brand-cyan) 18%, var(--color-182c4d) 82%);
-  color: var(--color-f7f7f7);
+  background: color-mix(in srgb, var(--brand-cyan) 18%, var(--color-border) 82%);
+  color: var(--color-text-primary);
   padding: 8px 10px;
   font-size: 12px;
   font-weight: 700;
@@ -221,7 +232,7 @@
 
 .calls-inline-error,
 .call-access-join-status.error {
-  color: var(--color-ff0000);
+  color: var(--color-error);
 }
 
 .call-access-join-context-body {
@@ -235,19 +246,39 @@
     width: calc(100vw - 14px);
     height: calc(100dvh - 14px);
     max-height: calc(100dvh - 14px);
+    grid-template-rows: auto auto auto;
+    overflow-y: auto;
     padding: var(--calls-enter-dialog-padding);
     gap: 8px;
   }
 
+  .calls-enter-body {
+    min-height: auto;
+    overflow: visible;
+  }
+
   .calls-enter-layout {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    grid-template-columns: none;
+    grid-template-rows: none;
     gap: 8px;
+  }
+
+  .calls-enter-preview {
+    min-height: auto;
+    grid-template-rows: auto auto;
+  }
+
+  .call-access-join-guest-name {
+    width: 100%;
   }
 
   .calls-enter-preview-frame {
     width: 100%;
-    height: 100%;
+    height: min(50dvh, 420px);
+    min-height: 280px;
     aspect-ratio: auto;
     max-height: none;
   }
@@ -259,12 +290,14 @@
     box-shadow: none;
     background: transparent;
     padding: 0;
+    overflow: visible;
   }
 
   .calls-enter-right-settings .call-left-settings {
     padding: 8px;
     gap: 6px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
@@ -303,6 +336,14 @@
     height: 34px;
     padding: 0 14px;
   }
+
+  .calls-modal-footer-enter {
+    flex-wrap: wrap;
+  }
+
+  .calls-modal-footer-enter .btn-cyan {
+    flex: 1 1 180px;
+  }
 }
 
 @media (max-width: 760px) {
@@ -327,8 +368,9 @@
     height: 20px;
   }
 
-  .calls-enter-layout {
-    grid-template-rows: minmax(112px, 34%) minmax(0, 1fr);
+  .calls-enter-preview-frame {
+    height: 50dvh;
+    min-height: 240px;
   }
 
   .calls-enter-right-settings .call-left-settings {
