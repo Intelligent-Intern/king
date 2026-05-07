@@ -33,6 +33,7 @@ async function main() {
   const dashboardEnterCall = read('src/domain/calls/dashboard/enterCall.ts');
   const adminEnterCall = read('src/domain/calls/admin/enterCall.ts');
   const workspaceShell = read('src/layouts/WorkspaceShell.vue');
+  const workspaceMicLevelMonitor = read('src/layouts/useWorkspaceMicLevelMonitor.js');
   const mediaPreferences = read('src/domain/realtime/media/preferences.ts');
   const publisherTelemetry = `${publisherPipeline}\n${publisherFrameTrace}`;
   const lifecycle = read('src/domain/realtime/workspace/callWorkspace/lifecycle.ts');
@@ -62,11 +63,12 @@ async function main() {
   requireContains(audioCaptureConstraints, 'noiseSuppression: true', 'call audio capture requests noise suppression');
   requireContains(audioCaptureConstraints, 'autoGainControl: true', 'call audio capture requests automatic gain control');
   requireContains(audioCaptureConstraints, 'channelCount: { ideal: 1 }', 'call audio capture requests mono voice input');
+  requireContains(workspaceShell, 'useWorkspaceMicLevelMonitor', 'workspace shell delegates mic monitoring to the shared monitor composable');
   for (const [label, source] of Object.entries({
     accessJoinView,
     dashboardEnterCall,
     adminEnterCall,
-    workspaceShell,
+    workspaceMicLevelMonitor,
     mediaPreferences,
   })) {
     requireContains(source, 'buildOptionalCallAudioCaptureConstraints', `${label} uses shared call audio capture constraints`);
