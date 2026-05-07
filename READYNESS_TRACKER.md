@@ -17,6 +17,16 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Standard workspace sidebar extraction: moved the non-call left
+  sidebar internals out of `WorkspaceShell.vue` and into
+  `WorkspaceStandardSidebar.vue`. The extracted component owns the fixed brand
+  strip, primary navigation, avatar settings trigger, and logout action while
+  keeping navigation/profile/logout inside the scroll body and the brand strip
+  outside it. Proof: `npm run test:contract:shared-ui-primitives`,
+  `node tests/contract/call-app-sidebar-contract.mjs`,
+  `node tests/contract/call-layout-sidebar-controls-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Theme editor sidebar extraction: closed the completed extraction
   portion of the parked Theme Editor refactor without changing the iframe
   preview contract. `WorkspaceThemeSettings.vue` now delegates chat/color/image

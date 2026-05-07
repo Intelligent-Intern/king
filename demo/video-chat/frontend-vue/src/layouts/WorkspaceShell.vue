@@ -32,43 +32,20 @@
           @call-app-session-created="handleCallAppSessionCreated"
         />
 
-        <div v-else class="sidebar-content left">
-          <div class="brand-strip">
-            <img data-brand-logo :src="sidebarLogoSrc" alt="KingRT" />
-            <button
-              class="sidebar-toggle-btn"
-              type="button"
-              :title="leftSidebarToggleLabel"
-              :aria-label="leftSidebarToggleLabel"
-              @click="handleLeftSidebarToggle"
-            >
-              <span v-if="isMobileViewport" class="sidebar-close-mark" aria-hidden="true">x</span>
-              <img v-else class="arrow-icon-image" :src="leftSidebarToggleIcon" alt="" />
-            </button>
-          </div>
-
-          <div class="sidebar-scroll-body">
-            <WorkspaceNavigation
-              :role="sessionState.role || ''"
-              :current-path="route.path"
-              @navigate="handleNavItemClick"
-            />
-
-            <section class="sidebar-profile avatar-only">
-              <button class="sidebar-avatar-trigger" type="button" :aria-label="t('common.open_settings')" @click="openSettingsModal()">
-                <img
-                  class="sidebar-avatar-image"
-                  :src="profileAvatarSrc"
-                  :alt="t('common.profile_avatar')"
-                />
-              </button>
-            </section>
-
-            <div class="logout-wrap">
-              <button class="btn full" type="button" @click="handleSignOut">{{ t('common.log_out') }}</button>
-            </div>
-          </div>
-        </div>
+        <WorkspaceStandardSidebar
+          v-else
+          :sidebar-logo-src="sidebarLogoSrc"
+          :left-sidebar-toggle-label="leftSidebarToggleLabel"
+          :left-sidebar-toggle-icon="leftSidebarToggleIcon"
+          :is-mobile-viewport="isMobileViewport"
+          :role="sessionState.role || ''"
+          :current-path="route.path"
+          :profile-avatar-src="profileAvatarSrc"
+          @toggle-sidebar="handleLeftSidebarToggle"
+          @navigate="handleNavItemClick"
+          @open-settings="openSettingsModal()"
+          @sign-out="handleSignOut"
+        />
       </aside>
 
       <section class="main" @click="handleMainClick">
@@ -425,7 +402,7 @@
 import { computed, onBeforeUnmount, onMounted, provide, reactive, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import AppSelect from '../components/AppSelect.vue';
-import WorkspaceNavigation from './WorkspaceNavigation.vue';
+import WorkspaceStandardSidebar from './WorkspaceStandardSidebar.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
 import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
