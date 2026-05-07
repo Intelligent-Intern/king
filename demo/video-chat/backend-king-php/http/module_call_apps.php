@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../domain/call_apps/call_app_launch_tokens.php';
+require_once __DIR__ . '/../domain/call_apps/call_app_crdt.php';
 require_once __DIR__ . '/../support/tenant_context.php';
 
 function videochat_call_app_module_json_body(array $request, ?callable $decodeJsonBody): array
@@ -272,6 +272,130 @@ function videochat_handle_call_app_routes(
                 'reason' => $reason,
                 'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
             ]);
+        }
+
+        return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
+    }
+
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/crdt/bootstrap$#', $path, $crdtBootstrapMatch) === 1) {
+        if ($method !== 'GET') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/call-app-sessions/{session_id}/crdt/bootstrap.', [
+                'allowed_methods' => ['GET'],
+            ]);
+        }
+        if ($authenticatedUserId <= 0 || $tenantId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token and tenant context are required.', [
+                'reason' => 'invalid_user_or_tenant_context',
+            ]);
+        }
+
+        $query = videochat_request_query_params($request);
+        $sessionId = rawurldecode((string) ($crdtBootstrapMatch[1] ?? ''));
+        try {
+            $pdo = $openDatabase();
+            $result = videochat_call_app_crdt_bootstrap(
+                $pdo,
+                $tenantId,
+                $sessionId,
+                $authenticatedUserId,
+                videochat_call_app_crdt_positive_int($query['after_clock'] ?? 0, 0, 0, 1_000_000_000)
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_crdt_bootstrap_failed', 'Could not bootstrap Call App CRDT state.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'session_not_found' ? 404 : ($reason === 'participant_not_in_call' ? 403 : 409);
+            return $errorResponse($status, 'call_app_crdt_bootstrap_failed', 'Could not bootstrap Call App CRDT state.', ['reason' => $reason]);
+        }
+
+        return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
+    }
+
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/crdt/ops$#', $path, $crdtOpsMatch) === 1) {
+        if (!in_array($method, ['GET', 'POST'], true)) {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/call-app-sessions/{session_id}/crdt/ops.', [
+                'allowed_methods' => ['GET', 'POST'],
+            ]);
+        }
+        if ($authenticatedUserId <= 0 || $tenantId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token and tenant context are required.', [
+                'reason' => 'invalid_user_or_tenant_context',
+            ]);
+        }
+
+        $sessionId = rawurldecode((string) ($crdtOpsMatch[1] ?? ''));
+        try {
+            $pdo = $openDatabase();
+            if ($method === 'GET') {
+                $query = videochat_request_query_params($request);
+                $result = videochat_call_app_crdt_list_ops(
+                    $pdo,
+                    $tenantId,
+                    $sessionId,
+                    $authenticatedUserId,
+                    videochat_call_app_crdt_positive_int($query['after_clock'] ?? 0, 0, 0, 1_000_000_000),
+                    videochat_call_app_crdt_positive_int($query['limit'] ?? 250, 250, 1, 500)
+                );
+            } else {
+                [$payload, $decodeError] = videochat_call_app_module_json_body($request, $decodeJsonBody);
+                if (!is_array($payload)) {
+                    return $errorResponse(400, 'call_app_crdt_invalid_request_body', 'Call App CRDT operation payload must be a JSON object.', [
+                        'reason' => $decodeError,
+                    ]);
+                }
+                $result = videochat_call_app_crdt_append_op($pdo, $tenantId, $sessionId, $authenticatedUserId, $payload);
+            }
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_crdt_ops_failed', 'Could not process Call App CRDT operations.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'session_not_found' ? 404 : ($reason === 'validation_failed' ? 422 : ($reason === 'participant_grant_denied' ? 403 : 409));
+            return $errorResponse($status, 'call_app_crdt_ops_failed', 'Could not process Call App CRDT operations.', [
+                'reason' => $reason,
+                'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
+            ]);
+        }
+
+        return $jsonResponse($method === 'POST' && (string) ($result['state'] ?? '') === 'admitted' ? 201 : 200, [
+            'status' => 'ok',
+            'result' => $result,
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/crdt/snapshots$#', $path, $crdtSnapshotMatch) === 1) {
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST for /api/call-app-sessions/{session_id}/crdt/snapshots.', [
+                'allowed_methods' => ['POST'],
+            ]);
+        }
+        if ($authenticatedUserId <= 0 || $tenantId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token and tenant context are required.', [
+                'reason' => 'invalid_user_or_tenant_context',
+            ]);
+        }
+
+        $sessionId = rawurldecode((string) ($crdtSnapshotMatch[1] ?? ''));
+        try {
+            $pdo = $openDatabase();
+            $result = videochat_call_app_crdt_compact_snapshot($pdo, $tenantId, $sessionId, $authenticatedUserId);
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_crdt_snapshot_failed', 'Could not compact Call App CRDT snapshot.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'session_not_found' ? 404 : 409;
+            return $errorResponse($status, 'call_app_crdt_snapshot_failed', 'Could not compact Call App CRDT snapshot.', ['reason' => $reason]);
         }
 
         return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);

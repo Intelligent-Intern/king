@@ -42,12 +42,14 @@
   <body>
     <main>
       <h1>Whiteboard</h1>
-      <p>This iframe entrypoint is a metadata stub for the CRDT Call App host.</p>
+      <p id="status">Waiting for Call App launch.</p>
     </main>
     <script>
       (() => {
         const bridgeProtocol = 'king.call_app.iframe.v1';
         let parentOrigin = '';
+        let appSessionId = '';
+        const status = document.getElementById('status');
 
         function emit(type, payload = {}) {
           if (!parentOrigin || !window.parent) return;
@@ -64,8 +66,9 @@
           if (!message || message.bridge_protocol !== bridgeProtocol) return;
           if (message.type === 'call_app.launch') {
             parentOrigin = event.origin;
+            appSessionId = String(message.app_session_id || '');
             emit('call_app.ready', {
-              app_session_id: String(message.app_session_id || ''),
+              app_session_id: appSessionId,
               launch_token_received: Boolean(message.launch_token),
               primary_session_token_received: false,
               capabilities: [
@@ -74,6 +77,16 @@
                 'call_apps.presence.publish',
               ],
             });
+            emit('call_app.crdt.bootstrap.request', {
+              app_session_id: appSessionId,
+              request_id: 'whiteboard_bootstrap_initial',
+              after_clock: 0,
+            });
+          } else if (message.type === 'call_app.crdt.bootstrap.response') {
+            const opCount = Number(message.result?.document?.op_count || 0);
+            status.textContent = `CRDT bootstrap ready. Operations: ${opCount}.`;
+          } else if (message.type === 'call_app.crdt.error') {
+            status.textContent = String(message.message || 'CRDT bridge error.');
           }
         });
       })();

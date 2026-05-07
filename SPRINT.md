@@ -877,11 +877,19 @@ Tickets:
     - Added `useCallAppIframeBridge.js` and wired `CallAppWorkspaceHost.vue`
       to mint tokens, enforce sandbox/CSP, and strict opaque-origin message
       validation.
-- [ ] CAP-12 CRDT envelope and synchronization
+- [x] CAP-12 CRDT envelope and synchronization
   - Implement King Call App CRDT envelope.
   - Add snapshot bootstrap, op append, op replay, duplicate suppression,
     reconnect backfill, and snapshot compaction.
   - Keep app semantic CRDT engine behind an adapter boundary.
+  - Proof:
+    - Added `call_app_crdt_documents` and `call_app_crdt_ops` migration
+      `0052_call_app_crdt_envelope`.
+    - Added backend CRDT domain with server admission stamps, replay cursors,
+      duplicate operation suppression, append authorization, and checkpoint
+      compaction.
+    - Added iframe parent CRDT bridge for bootstrap, replay, append, and
+      snapshot requests without exposing primary auth material.
 - [ ] CAP-13 Whiteboard Call App first implementation
   - Implement iframe whiteboard shell, tools, CRDT state, cursors, and export.
   - Support simultaneous drawing by multiple permitted participants.

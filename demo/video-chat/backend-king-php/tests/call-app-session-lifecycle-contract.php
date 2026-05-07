@@ -295,6 +295,55 @@ SQL
     ]);
     videochat_call_app_session_lifecycle_assert((int) ($invalidLaunch['status'] ?? 0) === 401, 'invalid launch token should fail closed');
 
+    $bootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
+    $bootstrapPayload = videochat_call_app_session_lifecycle_decode($bootstrap);
+    videochat_call_app_session_lifecycle_assert((int) ($bootstrap['status'] ?? 0) === 200, 'CRDT bootstrap should return 200');
+    videochat_call_app_session_lifecycle_assert((string) (((($bootstrapPayload['result'] ?? [])['document'] ?? [])['document_id'] ?? '')) === (string) ($session['document_id'] ?? ''), 'CRDT bootstrap document id mismatch');
+
+    $deniedAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $userAuth, [
+        'operation' => [
+            'operation_id' => 'op_denied_user',
+            'payload_type' => 'stroke.add',
+            'payload' => ['points' => [[1, 1], [2, 2]]],
+        ],
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($deniedAppend['status'] ?? 0) === 403, 'denied participant must not append CRDT ops');
+
+    $append = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
+        'operation' => [
+            'operation_id' => 'op_admin_stroke_1',
+            'payload_type' => 'stroke.add',
+            'payload' => ['points' => [[10, 10], [20, 20]], 'color' => '#1582BF'],
+            'causal_dependencies' => [],
+        ],
+    ]);
+    $appendPayload = videochat_call_app_session_lifecycle_decode($append);
+    videochat_call_app_session_lifecycle_assert((int) ($append['status'] ?? 0) === 201, 'allowed participant append should admit CRDT op');
+    videochat_call_app_session_lifecycle_assert((string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['server_admission_stamp'] ?? [])['duplicate_policy'] ?? '') === 'ignore_after_first_admission', 'CRDT op must carry server admission stamp');
+
+    $duplicateAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
+        'operation' => [
+            'operation_id' => 'op_admin_stroke_1',
+            'payload_type' => 'stroke.add',
+            'payload' => ['points' => [[10, 10], [20, 20]], 'color' => '#1582BF'],
+        ],
+    ]);
+    $duplicatePayload = videochat_call_app_session_lifecycle_decode($duplicateAppend);
+    videochat_call_app_session_lifecycle_assert((int) ($duplicateAppend['status'] ?? 0) === 200, 'duplicate CRDT op should return 200');
+    videochat_call_app_session_lifecycle_assert((string) (($duplicatePayload['result'] ?? [])['state'] ?? '') === 'duplicate', 'duplicate CRDT op must be suppressed');
+
+    $ops = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $adminAuth);
+    $opsPayload = videochat_call_app_session_lifecycle_decode($ops);
+    videochat_call_app_session_lifecycle_assert(count((array) (($opsPayload['result'] ?? [])['ops'] ?? [])) === 1, 'CRDT replay should return admitted op');
+
+    $snapshot = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/snapshots', $adminAuth);
+    $snapshotPayload = videochat_call_app_session_lifecycle_decode($snapshot);
+    videochat_call_app_session_lifecycle_assert((int) (((($snapshotPayload['result'] ?? [])['snapshot'] ?? [])['compacted_through_clock'] ?? 0)) === 1, 'CRDT snapshot must compact through admitted clock');
+
+    $compactedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
+    $compactedPayload = videochat_call_app_session_lifecycle_decode($compactedBootstrap);
+    videochat_call_app_session_lifecycle_assert((int) (((($compactedPayload['result'] ?? [])['document'] ?? [])['snapshot_clock'] ?? 0)) === 1, 'CRDT bootstrap should expose snapshot clock after compaction');
+
     $inactive = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth, ['status' => 'inactive']);
     videochat_call_app_session_lifecycle_assert((int) ($inactive['status'] ?? 0) === 200, 'inactive update should return 200');
     $inactiveSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);

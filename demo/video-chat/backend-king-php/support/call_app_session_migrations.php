@@ -97,3 +97,50 @@ SQL,
         'CREATE INDEX IF NOT EXISTS idx_call_app_audit_events_call ON call_app_audit_events(tenant_id, call_id, created_at DESC)',
     ];
 }
+
+function videochat_call_app_crdt_migration_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_app_crdt_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    document_id TEXT NOT NULL UNIQUE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    app_session_id INTEGER NOT NULL REFERENCES call_app_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    app_key TEXT NOT NULL,
+    app_version TEXT NOT NULL,
+    schema_version TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL DEFAULT '{}',
+    snapshot_clock INTEGER NOT NULL DEFAULT 0,
+    compacted_through_clock INTEGER NOT NULL DEFAULT 0,
+    op_count INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_call_app_crdt_documents_session ON call_app_crdt_documents(tenant_id, app_session_id)',
+        'CREATE INDEX IF NOT EXISTS idx_call_app_crdt_documents_app ON call_app_crdt_documents(tenant_id, app_key, app_version)',
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_app_crdt_ops (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_id TEXT NOT NULL UNIQUE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    document_row_id INTEGER NOT NULL REFERENCES call_app_crdt_documents(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    app_session_id INTEGER NOT NULL REFERENCES call_app_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    operation_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    logical_clock INTEGER NOT NULL,
+    causal_dependencies_json TEXT NOT NULL DEFAULT '[]',
+    payload_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    server_admission_stamp_json TEXT NOT NULL,
+    admitted_at TEXT NOT NULL,
+    UNIQUE(document_row_id, operation_id)
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_call_app_crdt_ops_replay ON call_app_crdt_ops(tenant_id, document_row_id, logical_clock, id)',
+        'CREATE INDEX IF NOT EXISTS idx_call_app_crdt_ops_session ON call_app_crdt_ops(tenant_id, app_session_id, logical_clock)',
+        'CREATE INDEX IF NOT EXISTS idx_call_app_crdt_ops_actor ON call_app_crdt_ops(tenant_id, actor_id, logical_clock)',
+    ];
+}
