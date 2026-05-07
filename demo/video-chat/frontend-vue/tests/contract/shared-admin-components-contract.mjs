@@ -25,6 +25,7 @@ const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView
 const governanceModal = await source('src/modules/governance/pages/GovernanceCrudModal.vue');
 const relationStack = await source('src/modules/governance/components/CrudRelationStack.vue');
 const themeSettings = await source('src/layouts/settings/WorkspaceThemeSettings.vue');
+const themeEditorSidebar = await source('src/layouts/settings/WorkspaceThemeEditorSidebar.vue');
 const modalShell = await source('src/components/AppModalShell.vue');
 const sidePanelShell = await source('src/components/AppSidePanelShell.vue');
 const responsiveStyles = await source('src/styles/responsive.css');
@@ -84,6 +85,7 @@ for (const [name, file] of [
   ['CrudRelationStack', relationStack],
   ['AdminMarketplaceView', marketplace],
   ['WorkspaceThemeSettings', themeSettings],
+  ['WorkspaceThemeEditorSidebar', themeEditorSidebar],
 ]) {
   assert.doesNotMatch(file, /common\.cancel/, `${name} must not render generic Cancel buttons in admin workflows`);
   assert.doesNotMatch(file, />\s*Cancel\s*</, `${name} must not render visible Cancel text in admin workflows`);
@@ -95,7 +97,7 @@ assert.match(relationStack, /\.crud-relation-toolbar\s*\{[\s\S]*?justify-content
 assert.match(relationStack, /\.crud-relation-search-field \.input\s*\{[\s\S]*?background-color:\s*var\(--bg-input\);/, 'relation picker sidebar search input must use the standard input background');
 assert.match(relationStack, /\.crud-relation-footer\s*\{[\s\S]*?justify-content:\s*flex-end;[\s\S]*?padding:\s*0 4px 4px 0;/, 'relation picker footer must pin the select action to the bottom right with 20px panel spacing');
 assert.match(relationStack, /\.crud-relation-footer \.btn-cyan\s*\{[\s\S]*?margin-inline-start:\s*auto;/, 'relation picker select action must stay rightmost when back is visible');
-assert.match(themeSettings, /theme_settings\.close_editor/, 'theme editor must use a neutral close editor label instead of generic cancel');
+assert.match(themeEditorSidebar, /theme_settings\.close_editor/, 'theme editor must use a neutral close editor label instead of generic cancel');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*width:\s*100vw/, 'maximized shared modals must use fullscreen width');
 assert.match(modalShell, /\.app-modal-dialog\.is-maximized[\s\S]*height:\s*100vh/, 'maximized shared modals must use fullscreen height');
 assert.match(backgroundUploadModal, /AppModalShell/, 'background image upload cropper must use the shared modal shell');
