@@ -22,7 +22,38 @@ function videochat_allowed_user_settings_patch_fields(): array
         'linkedin_url',
         'x_url',
         'youtube_url',
+        'web_app_notifications_enabled',
+        'web_app_notification_sound_enabled',
+        'web_app_notification_call_invites_enabled',
+        'web_app_notification_call_reminders_enabled',
+        'web_app_notification_chat_mentions_enabled',
     ];
+}
+
+function videochat_normalize_user_settings_bool(mixed $value): ?bool
+{
+    if (is_bool($value)) {
+        return $value;
+    }
+    if (is_int($value) || is_float($value)) {
+        if ((int) $value === 0) {
+            return false;
+        }
+        if ((int) $value === 1) {
+            return true;
+        }
+        return null;
+    }
+
+    $normalized = strtolower(trim((string) $value));
+    if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+        return true;
+    }
+    if (in_array($normalized, ['0', 'false', 'no', 'off'], true)) {
+        return false;
+    }
+
+    return null;
 }
 
 function videochat_normalize_post_logout_landing_url(mixed $value): string
@@ -169,6 +200,11 @@ function videochat_supported_user_date_formats(): array
  *   linkedin_url: string,
  *   x_url: string,
  *   youtube_url: string,
+ *   web_app_notifications_enabled: bool,
+ *   web_app_notification_sound_enabled: bool,
+ *   web_app_notification_call_invites_enabled: bool,
+ *   web_app_notification_call_reminders_enabled: bool,
+ *   web_app_notification_chat_mentions_enabled: bool,
  *   onboarding_completed_tours: array<int, string>,
  * }|null
  */
@@ -195,6 +231,11 @@ SELECT
     users.linkedin_url,
     users.x_url,
     users.youtube_url,
+    users.web_app_notifications_enabled,
+    users.web_app_notification_sound_enabled,
+    users.web_app_notification_call_invites_enabled,
+    users.web_app_notification_call_reminders_enabled,
+    users.web_app_notification_chat_mentions_enabled,
     roles.slug AS role_slug
 FROM users
 INNER JOIN roles ON roles.id = users.role_id
@@ -231,6 +272,11 @@ SQL
         'linkedin_url' => is_string($row['linkedin_url'] ?? null) ? (string) $row['linkedin_url'] : '',
         'x_url' => is_string($row['x_url'] ?? null) ? (string) $row['x_url'] : '',
         'youtube_url' => is_string($row['youtube_url'] ?? null) ? (string) $row['youtube_url'] : '',
+        'web_app_notifications_enabled' => ((int) ($row['web_app_notifications_enabled'] ?? 0)) === 1,
+        'web_app_notification_sound_enabled' => ((int) ($row['web_app_notification_sound_enabled'] ?? 1)) === 1,
+        'web_app_notification_call_invites_enabled' => ((int) ($row['web_app_notification_call_invites_enabled'] ?? 1)) === 1,
+        'web_app_notification_call_reminders_enabled' => ((int) ($row['web_app_notification_call_reminders_enabled'] ?? 1)) === 1,
+        'web_app_notification_chat_mentions_enabled' => ((int) ($row['web_app_notification_chat_mentions_enabled'] ?? 1)) === 1,
         'onboarding_completed_tours' => $onboarding['completed_tours'],
     ];
 }
@@ -372,6 +418,24 @@ function videochat_validate_user_settings_patch(array $payload, ?PDO $pdo = null
         }
     }
 
+    foreach ([
+        'web_app_notifications_enabled',
+        'web_app_notification_sound_enabled',
+        'web_app_notification_call_invites_enabled',
+        'web_app_notification_call_reminders_enabled',
+        'web_app_notification_chat_mentions_enabled',
+    ] as $booleanField) {
+        if (!array_key_exists($booleanField, $payload)) {
+            continue;
+        }
+        $normalizedBool = videochat_normalize_user_settings_bool($payload[$booleanField]);
+        if ($normalizedBool === null) {
+            $errors[$booleanField] = 'must_be_boolean';
+        } else {
+            $data[$booleanField] = $normalizedBool;
+        }
+    }
+
     if ($data === []) {
         $errors['payload'] = 'at_least_one_supported_field_required';
     }
@@ -437,6 +501,11 @@ SET display_name = :display_name,
     linkedin_url = :linkedin_url,
     x_url = :x_url,
     youtube_url = :youtube_url,
+    web_app_notifications_enabled = :web_app_notifications_enabled,
+    web_app_notification_sound_enabled = :web_app_notification_sound_enabled,
+    web_app_notification_call_invites_enabled = :web_app_notification_call_invites_enabled,
+    web_app_notification_call_reminders_enabled = :web_app_notification_call_reminders_enabled,
+    web_app_notification_chat_mentions_enabled = :web_app_notification_chat_mentions_enabled,
     updated_at = :updated_at
 WHERE id = :id
 SQL
@@ -455,6 +524,21 @@ SQL
         ':linkedin_url' => array_key_exists('linkedin_url', $data) ? (string) $data['linkedin_url'] : (string) ($existing['linkedin_url'] ?? ''),
         ':x_url' => array_key_exists('x_url', $data) ? (string) $data['x_url'] : (string) ($existing['x_url'] ?? ''),
         ':youtube_url' => array_key_exists('youtube_url', $data) ? (string) $data['youtube_url'] : (string) ($existing['youtube_url'] ?? ''),
+        ':web_app_notifications_enabled' => array_key_exists('web_app_notifications_enabled', $data)
+            ? ((bool) $data['web_app_notifications_enabled'] ? 1 : 0)
+            : (((bool) ($existing['web_app_notifications_enabled'] ?? false)) ? 1 : 0),
+        ':web_app_notification_sound_enabled' => array_key_exists('web_app_notification_sound_enabled', $data)
+            ? ((bool) $data['web_app_notification_sound_enabled'] ? 1 : 0)
+            : (((bool) ($existing['web_app_notification_sound_enabled'] ?? true)) ? 1 : 0),
+        ':web_app_notification_call_invites_enabled' => array_key_exists('web_app_notification_call_invites_enabled', $data)
+            ? ((bool) $data['web_app_notification_call_invites_enabled'] ? 1 : 0)
+            : (((bool) ($existing['web_app_notification_call_invites_enabled'] ?? true)) ? 1 : 0),
+        ':web_app_notification_call_reminders_enabled' => array_key_exists('web_app_notification_call_reminders_enabled', $data)
+            ? ((bool) $data['web_app_notification_call_reminders_enabled'] ? 1 : 0)
+            : (((bool) ($existing['web_app_notification_call_reminders_enabled'] ?? true)) ? 1 : 0),
+        ':web_app_notification_chat_mentions_enabled' => array_key_exists('web_app_notification_chat_mentions_enabled', $data)
+            ? ((bool) $data['web_app_notification_chat_mentions_enabled'] ? 1 : 0)
+            : (((bool) ($existing['web_app_notification_chat_mentions_enabled'] ?? true)) ? 1 : 0),
         ':updated_at' => gmdate('c'),
         ':id' => $userId,
     ]);
@@ -644,6 +728,11 @@ function videochat_user_settings_payload(array $userSettings): array
         'linkedin_url' => (string) ($userSettings['linkedin_url'] ?? ''),
         'x_url' => (string) ($userSettings['x_url'] ?? ''),
         'youtube_url' => (string) ($userSettings['youtube_url'] ?? ''),
+        'web_app_notifications_enabled' => (bool) ($userSettings['web_app_notifications_enabled'] ?? false),
+        'web_app_notification_sound_enabled' => (bool) ($userSettings['web_app_notification_sound_enabled'] ?? true),
+        'web_app_notification_call_invites_enabled' => (bool) ($userSettings['web_app_notification_call_invites_enabled'] ?? true),
+        'web_app_notification_call_reminders_enabled' => (bool) ($userSettings['web_app_notification_call_reminders_enabled'] ?? true),
+        'web_app_notification_chat_mentions_enabled' => (bool) ($userSettings['web_app_notification_chat_mentions_enabled'] ?? true),
         'onboarding_completed_tours' => is_array($userSettings['onboarding_completed_tours'] ?? null)
             ? $userSettings['onboarding_completed_tours']
             : [],

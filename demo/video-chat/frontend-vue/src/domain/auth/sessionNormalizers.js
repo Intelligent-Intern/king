@@ -82,6 +82,19 @@ export function normalizeOnboardingCompletedTours(value) {
   return [...new Set(value.map((tourKey) => normalizeString(tourKey).toLowerCase()).filter(Boolean))].sort();
 }
 
+export function normalizeBooleanPreference(value, fallback = false) {
+  if (value === true || value === false) return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+    return fallback;
+  }
+  const normalized = normalizeString(value).toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
+
 export {
   localizationLanguageDirection,
   normalizeDateFormat,

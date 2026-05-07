@@ -398,6 +398,11 @@
 
       <WorkspaceCredentialsSettings v-else-if="activeSettingsTile === 'personal.credentials'" />
 
+      <WorkspaceNotificationSettings
+        v-else-if="activeSettingsTile === 'personal.notifications'"
+        :draft="settingsDraft"
+      />
+
       <section v-else-if="activeSettingsTile === 'personal.theme'" class="settings-panel">
         <WorkspaceThemeSettings
           v-model="settingsDraft.theme"
@@ -642,6 +647,7 @@ import AppSelect from '../components/AppSelect.vue';
 import WorkspaceNavigation from './WorkspaceNavigation.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
+import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
 import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
@@ -797,6 +803,11 @@ const settingsDraft = reactive({
   linkedinUrl: '',
   xUrl: '',
   youtubeUrl: '',
+  webAppNotificationsEnabled: false,
+  webAppNotificationSoundEnabled: true,
+  webAppNotificationCallInvitesEnabled: true,
+  webAppNotificationCallRemindersEnabled: true,
+  webAppNotificationChatMentionsEnabled: true,
 });
 
 const settingsState = reactive({
@@ -1723,6 +1734,11 @@ function resetSettingsDraft() {
   settingsDraft.linkedinUrl = sessionState.linkedinUrl || '';
   settingsDraft.xUrl = sessionState.xUrl || '';
   settingsDraft.youtubeUrl = sessionState.youtubeUrl || '';
+  settingsDraft.webAppNotificationsEnabled = sessionState.webAppNotificationsEnabled === true;
+  settingsDraft.webAppNotificationSoundEnabled = sessionState.webAppNotificationSoundEnabled !== false;
+  settingsDraft.webAppNotificationCallInvitesEnabled = sessionState.webAppNotificationCallInvitesEnabled !== false;
+  settingsDraft.webAppNotificationCallRemindersEnabled = sessionState.webAppNotificationCallRemindersEnabled !== false;
+  settingsDraft.webAppNotificationChatMentionsEnabled = sessionState.webAppNotificationChatMentionsEnabled !== false;
 }
 
 function setAvatarStatus(message = '') {
@@ -1878,6 +1894,11 @@ async function saveSettings() {
       linkedin_url: settingsDraft.linkedinUrl,
       x_url: settingsDraft.xUrl,
       youtube_url: settingsDraft.youtubeUrl,
+      web_app_notifications_enabled: settingsDraft.webAppNotificationsEnabled === true,
+      web_app_notification_sound_enabled: settingsDraft.webAppNotificationSoundEnabled === true,
+      web_app_notification_call_invites_enabled: settingsDraft.webAppNotificationCallInvitesEnabled === true,
+      web_app_notification_call_reminders_enabled: settingsDraft.webAppNotificationCallRemindersEnabled === true,
+      web_app_notification_chat_mentions_enabled: settingsDraft.webAppNotificationChatMentionsEnabled === true,
     });
 
     if (!saveResult.ok) {
