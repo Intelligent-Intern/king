@@ -72,3 +72,28 @@ SQL,
         'CREATE INDEX IF NOT EXISTS idx_call_app_launch_tokens_hash ON call_app_launch_tokens(token_hash)',
     ];
 }
+
+function videochat_call_app_grant_audit_migration_statements(): array
+{
+    return [
+        <<<'SQL'
+CREATE TABLE IF NOT EXISTS call_app_audit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    public_id TEXT NOT NULL UNIQUE,
+    tenant_id INTEGER NOT NULL REFERENCES tenants(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    app_session_id INTEGER NOT NULL REFERENCES call_app_sessions(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    call_id TEXT NOT NULL REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    subject_type TEXT NOT NULL CHECK (subject_type IN ('user', 'guest')),
+    user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    guest_id TEXT NOT NULL DEFAULT '',
+    grant_state TEXT NOT NULL DEFAULT '',
+    actor_user_id INTEGER REFERENCES users(id) ON UPDATE CASCADE ON DELETE SET NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+)
+SQL,
+        'CREATE INDEX IF NOT EXISTS idx_call_app_audit_events_session ON call_app_audit_events(tenant_id, app_session_id, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_call_app_audit_events_call ON call_app_audit_events(tenant_id, call_id, created_at DESC)',
+    ];
+}

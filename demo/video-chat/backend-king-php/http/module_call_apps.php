@@ -202,6 +202,81 @@ function videochat_handle_call_app_routes(
         ]);
     }
 
+    if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)/participant-grants$#', $path, $grantMatch) === 1) {
+        if (!in_array($method, ['GET', 'PATCH'], true)) {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or PATCH for /api/call-app-sessions/{session_id}/participant-grants.', [
+                'allowed_methods' => ['GET', 'PATCH'],
+            ]);
+        }
+        if ($authenticatedUserId <= 0 || $tenantId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token and tenant context are required.', [
+                'reason' => 'invalid_user_or_tenant_context',
+            ]);
+        }
+
+        $sessionId = rawurldecode((string) ($grantMatch[1] ?? ''));
+        try {
+            $pdo = $openDatabase();
+            $sessionRecord = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+            if (!is_array($sessionRecord)) {
+                return $errorResponse(404, 'call_app_session_not_found', 'The requested Call App session does not exist.', [
+                    'session_id' => $sessionId,
+                ]);
+            }
+
+            $callId = (string) ($sessionRecord['call_id'] ?? '');
+            $callResolution = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $tenantId);
+            $callError = videochat_call_app_module_call_response_error($callResolution, $callId, $errorResponse);
+            if ($callError !== null) {
+                return $callError;
+            }
+
+            $sessionRowId = (int) ($sessionRecord['id'] ?? 0);
+            if ($method === 'GET') {
+                return $jsonResponse(200, [
+                    'status' => 'ok',
+                    'result' => [
+                        'session_id' => $sessionId,
+                        'call_id' => $callId,
+                        'default_app_policy' => (string) ($sessionRecord['default_app_policy'] ?? 'blocked_by_default'),
+                        'grants' => videochat_call_app_fetch_session_grants($pdo, $tenantId, $sessionRowId),
+                        'audit_events' => videochat_call_app_fetch_audit_events($pdo, $tenantId, $sessionRowId),
+                    ],
+                    'time' => gmdate('c'),
+                ]);
+            }
+
+            $call = is_array($callResolution['call'] ?? null) ? $callResolution['call'] : [];
+            if (!videochat_call_app_module_can_manage_call($call, $authenticatedUserId, $authenticatedUserRole)) {
+                return $errorResponse(403, 'call_app_grants_forbidden', 'Only the call owner or an administrator can update Call App grants.', [
+                    'session_id' => $sessionId,
+                ]);
+            }
+            [$payload, $decodeError] = videochat_call_app_module_json_body($request, $decodeJsonBody);
+            if (!is_array($payload)) {
+                return $errorResponse(400, 'call_app_grants_invalid_request_body', 'Call App grant payload must be a JSON object.', [
+                    'reason' => $decodeError,
+                ]);
+            }
+            $result = videochat_call_app_update_participant_grants($pdo, $tenantId, $sessionId, $authenticatedUserId, $payload);
+        } catch (Throwable) {
+            return $errorResponse(500, 'call_app_grants_failed', 'Could not process Call App grants.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($result['ok'] ?? false)) {
+            $reason = (string) ($result['reason'] ?? 'internal_error');
+            $status = $reason === 'session_not_found' ? 404 : ($reason === 'validation_failed' ? 422 : 409);
+            return $errorResponse($status, 'call_app_grants_failed', 'Could not update Call App grants.', [
+                'reason' => $reason,
+                'fields' => is_array($result['errors'] ?? null) ? $result['errors'] : [],
+            ]);
+        }
+
+        return $jsonResponse(200, ['status' => 'ok', 'result' => $result, 'time' => gmdate('c')]);
+    }
+
     if (preg_match('#^/api/call-app-sessions/([A-Za-z0-9._:-]+)$#', $path, $sessionMatch) === 1) {
         if (!in_array($method, ['PATCH', 'DELETE'], true)) {
             return $errorResponse(405, 'method_not_allowed', 'Use PATCH or DELETE for /api/call-app-sessions/{session_id}.', [

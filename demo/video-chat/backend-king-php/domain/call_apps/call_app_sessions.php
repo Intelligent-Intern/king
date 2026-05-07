@@ -144,6 +144,274 @@ SQL
     return $grants;
 }
 
+function videochat_call_app_fetch_audit_events(PDO $pdo, int $tenantId, int $sessionRowId, int $limit = 25): array
+{
+    $boundedLimit = max(1, min(100, $limit));
+    $statement = $pdo->prepare(
+        <<<SQL
+SELECT *
+FROM call_app_audit_events
+WHERE tenant_id = :tenant_id
+  AND app_session_id = :app_session_id
+ORDER BY created_at DESC, id DESC
+LIMIT {$boundedLimit}
+SQL
+    );
+    $statement->execute([':tenant_id' => $tenantId, ':app_session_id' => $sessionRowId]);
+    $events = [];
+    foreach ($statement->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $events[] = [
+            'id' => (string) ($row['public_id'] ?? ''),
+            'event_type' => (string) ($row['event_type'] ?? ''),
+            'subject_type' => (string) ($row['subject_type'] ?? ''),
+            'user_id' => is_numeric($row['user_id'] ?? null) ? (int) $row['user_id'] : null,
+            'guest_id' => (string) ($row['guest_id'] ?? ''),
+            'grant_state' => (string) ($row['grant_state'] ?? ''),
+            'actor_user_id' => is_numeric($row['actor_user_id'] ?? null) ? (int) $row['actor_user_id'] : null,
+            'created_at' => (string) ($row['created_at'] ?? ''),
+        ];
+    }
+    return $events;
+}
+
+function videochat_call_app_grant_subject_in_call(PDO $pdo, string $callId, string $subjectType, ?int $userId, string $guestId): bool
+{
+    if ($subjectType === 'user') {
+        $normalizedUserId = (int) ($userId ?? 0);
+        if ($normalizedUserId <= 0) {
+            return false;
+        }
+        $statement = $pdo->prepare(
+            <<<'SQL'
+SELECT 1
+FROM calls
+WHERE id = :call_id AND owner_user_id = :user_id
+UNION
+SELECT 1
+FROM call_participants
+WHERE call_id = :call_id AND user_id = :user_id
+LIMIT 1
+SQL
+        );
+        $statement->execute([':call_id' => trim($callId), ':user_id' => $normalizedUserId]);
+        return (bool) $statement->fetchColumn();
+    }
+
+    if ($subjectType !== 'guest' || trim($guestId) === '') {
+        return false;
+    }
+    $statement = $pdo->prepare('SELECT email FROM call_participants WHERE call_id = :call_id AND user_id IS NULL');
+    $statement->execute([':call_id' => trim($callId)]);
+    foreach ($statement->fetchAll(PDO::FETCH_COLUMN) ?: [] as $email) {
+        if (videochat_call_app_session_guest_id((string) $email) === trim($guestId)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function videochat_call_app_normalize_grant_patch(array $payload): array
+{
+    $rawGrants = is_array($payload['grants'] ?? null) ? $payload['grants'] : [];
+    if ($rawGrants === []) {
+        return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['grants' => 'must_not_be_empty'], 'grants' => []];
+    }
+
+    $grants = [];
+    $errors = [];
+    foreach ($rawGrants as $index => $row) {
+        $grant = is_array($row) ? $row : [];
+        $subjectType = strtolower(trim((string) ($grant['subject_type'] ?? 'user')));
+        $grantState = strtolower(trim((string) ($grant['grant_state'] ?? '')));
+        $userId = is_numeric($grant['user_id'] ?? null) ? (int) $grant['user_id'] : null;
+        $guestId = trim((string) ($grant['guest_id'] ?? ''));
+        $field = 'grants.' . $index;
+
+        if (!in_array($subjectType, ['user', 'guest'], true)) {
+            $errors[$field . '.subject_type'] = 'must_be_user_or_guest';
+            continue;
+        }
+        if (!in_array($grantState, ['allowed', 'denied'], true)) {
+            $errors[$field . '.grant_state'] = 'must_be_allowed_or_denied';
+            continue;
+        }
+        if ($subjectType === 'user' && (($userId ?? 0) <= 0 || $guestId !== '')) {
+            $errors[$field . '.user_id'] = 'must_be_positive_user_id';
+            continue;
+        }
+        if ($subjectType === 'guest' && (($userId ?? 0) > 0 || $guestId === '')) {
+            $errors[$field . '.guest_id'] = 'must_be_known_guest_id';
+            continue;
+        }
+
+        $key = $subjectType === 'user' ? 'user:' . $userId : 'guest:' . $guestId;
+        $grants[$key] = [
+            'subject_type' => $subjectType,
+            'user_id' => $subjectType === 'user' ? $userId : null,
+            'guest_id' => $subjectType === 'guest' ? $guestId : '',
+            'grant_state' => $grantState,
+        ];
+    }
+
+    if ($errors !== []) {
+        return ['ok' => false, 'reason' => 'validation_failed', 'errors' => $errors, 'grants' => []];
+    }
+    return ['ok' => true, 'reason' => '', 'errors' => [], 'grants' => array_values($grants)];
+}
+
+function videochat_call_app_write_grant_audit_event(PDO $pdo, int $tenantId, array $sessionRecord, int $actorUserId, array $grant): array
+{
+    $publicId = videochat_call_app_session_public_id('caa');
+    $now = gmdate('c');
+    $payload = [
+        'app_session_id' => (string) ($sessionRecord['public_id'] ?? ''),
+        'call_id' => (string) ($sessionRecord['call_id'] ?? ''),
+        'app_key' => (string) ($sessionRecord['app_key'] ?? ''),
+        'subject_type' => (string) ($grant['subject_type'] ?? ''),
+        'user_id' => $grant['user_id'] ?? null,
+        'guest_id' => (string) ($grant['guest_id'] ?? ''),
+        'grant_state' => (string) ($grant['grant_state'] ?? ''),
+    ];
+    $statement = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_app_audit_events(
+    public_id, tenant_id, app_session_id, call_id, event_type, subject_type,
+    user_id, guest_id, grant_state, actor_user_id, payload_json, created_at
+) VALUES(
+    :public_id, :tenant_id, :app_session_id, :call_id, 'participant_grant_changed', :subject_type,
+    :user_id, :guest_id, :grant_state, :actor_user_id, :payload_json, :created_at
+)
+SQL
+    );
+    $statement->execute([
+        ':public_id' => $publicId,
+        ':tenant_id' => $tenantId,
+        ':app_session_id' => (int) ($sessionRecord['id'] ?? 0),
+        ':call_id' => (string) ($sessionRecord['call_id'] ?? ''),
+        ':subject_type' => (string) ($grant['subject_type'] ?? ''),
+        ':user_id' => $grant['user_id'] ?? null,
+        ':guest_id' => (string) ($grant['guest_id'] ?? ''),
+        ':grant_state' => (string) ($grant['grant_state'] ?? ''),
+        ':actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        ':payload_json' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ':created_at' => $now,
+    ]);
+    return [
+        'id' => $publicId,
+        'event_type' => 'participant_grant_changed',
+        'subject_type' => (string) ($grant['subject_type'] ?? ''),
+        'user_id' => $grant['user_id'] ?? null,
+        'guest_id' => (string) ($grant['guest_id'] ?? ''),
+        'grant_state' => (string) ($grant['grant_state'] ?? ''),
+        'actor_user_id' => $actorUserId > 0 ? $actorUserId : null,
+        'created_at' => $now,
+    ];
+}
+
+function videochat_call_app_update_participant_grants(PDO $pdo, int $tenantId, string $sessionId, int $actorUserId, array $payload): array
+{
+    $record = videochat_call_app_fetch_session_record($pdo, $tenantId, $sessionId);
+    if (!is_array($record)) {
+        return ['ok' => false, 'reason' => 'session_not_found'];
+    }
+    if ((string) ($record['status'] ?? '') === 'removed') {
+        return ['ok' => false, 'reason' => 'session_removed'];
+    }
+
+    $normalized = videochat_call_app_normalize_grant_patch($payload);
+    if (!(bool) ($normalized['ok'] ?? false)) {
+        return $normalized;
+    }
+
+    $sessionRowId = (int) ($record['id'] ?? 0);
+    $callId = (string) ($record['call_id'] ?? '');
+    $now = gmdate('c');
+    $changed = [];
+    $auditEvents = [];
+    foreach ((array) ($normalized['grants'] ?? []) as $grant) {
+        if (!videochat_call_app_grant_subject_in_call($pdo, $callId, (string) $grant['subject_type'], $grant['user_id'], (string) $grant['guest_id'])) {
+            return ['ok' => false, 'reason' => 'validation_failed', 'errors' => ['grants' => 'contains_unknown_call_participant']];
+        }
+    }
+
+    $select = $pdo->prepare(
+        <<<'SQL'
+SELECT id
+FROM call_app_participant_grants
+WHERE tenant_id = :tenant_id
+  AND app_session_id = :app_session_id
+  AND subject_type = :subject_type
+  AND ((:subject_type = 'user' AND user_id = :user_id) OR (:subject_type = 'guest' AND guest_id = :guest_id))
+LIMIT 1
+SQL
+    );
+    $update = $pdo->prepare(
+        <<<'SQL'
+UPDATE call_app_participant_grants
+SET grant_state = :grant_state,
+    source = 'explicit',
+    changed_by_user_id = :changed_by_user_id,
+    changed_at = :changed_at,
+    updated_at = :updated_at
+WHERE tenant_id = :tenant_id
+  AND id = :id
+SQL
+    );
+    $insert = $pdo->prepare(
+        <<<'SQL'
+INSERT INTO call_app_participant_grants(
+    tenant_id, app_session_id, subject_type, user_id, guest_id, grant_state,
+    source, changed_by_user_id, changed_at, created_at, updated_at
+) VALUES(
+    :tenant_id, :app_session_id, :subject_type, :user_id, :guest_id, :grant_state,
+    'explicit', :changed_by_user_id, :changed_at, :created_at, :updated_at
+)
+SQL
+    );
+
+    foreach ((array) ($normalized['grants'] ?? []) as $grant) {
+        $select->execute([
+            ':tenant_id' => $tenantId,
+            ':app_session_id' => $sessionRowId,
+            ':subject_type' => (string) $grant['subject_type'],
+            ':user_id' => $grant['user_id'],
+            ':guest_id' => (string) $grant['guest_id'],
+        ]);
+        $existingId = (int) $select->fetchColumn();
+        $params = [
+            ':grant_state' => (string) $grant['grant_state'],
+            ':changed_by_user_id' => $actorUserId > 0 ? $actorUserId : null,
+            ':changed_at' => $now,
+            ':updated_at' => $now,
+            ':tenant_id' => $tenantId,
+        ];
+        if ($existingId > 0) {
+            $update->execute($params + [':id' => $existingId]);
+        } else {
+            $insert->execute($params + [
+                ':app_session_id' => $sessionRowId,
+                ':subject_type' => (string) $grant['subject_type'],
+                ':user_id' => $grant['user_id'],
+                ':guest_id' => (string) $grant['guest_id'],
+                ':created_at' => $now,
+            ]);
+        }
+        $changed[] = $grant;
+        $auditEvents[] = videochat_call_app_write_grant_audit_event($pdo, $tenantId, $record, $actorUserId, $grant);
+    }
+
+    return [
+        'ok' => true,
+        'state' => 'updated',
+        'changed_grants' => $changed,
+        'audit_events' => $auditEvents,
+        'session' => videochat_call_app_fetch_session($pdo, $tenantId, $sessionId),
+    ];
+}
+
 function videochat_call_app_fetch_session(PDO $pdo, int $tenantId, string $sessionId, bool $includeGrants = true): ?array
 {
     $statement = $pdo->prepare(

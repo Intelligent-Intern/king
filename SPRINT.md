@@ -853,10 +853,17 @@ Tickets:
       settings and Call Apps without adding Call App logic to
       `CallWorkspaceView.vue`.
     - Added `call-app-sidebar-contract.mjs`.
-- [ ] CAP-10 Right sidebar participant app grants
+- [x] CAP-10 Right sidebar participant app grants
   - Add app-permission icon when an app is active.
   - Implement default allow/deny and per-participant overrides.
   - Emit realtime grant updates and audit events.
+  - Proof:
+    - Added `CallAppParticipantGrantButton.vue` in the right participant list
+      with backend-backed allow/deny toggles.
+    - Added GET/PATCH `/api/call-app-sessions/{session_id}/participant-grants`
+      plus persistent `call_app_audit_events`.
+    - Routed `call-app/grants-updated` over the existing realtime signaling
+      lane and added `call-app-participant-grants-contract.mjs`.
 - [ ] CAP-11 Iframe launch and parent bridge
   - Mint short-lived launch tokens.
   - Enforce iframe sandbox/origin/CSP.
