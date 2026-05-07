@@ -178,7 +178,7 @@ export function resolveFramedFrameSizeFromDimensions(sourceWidth, sourceHeight, 
   return resolveContainFrameSizeFromDimensions(sourceWidth, sourceHeight, maxWidth, maxHeight);
 }
 
-export function resolvePublisherFrameSize(video, videoProfile = {}, videoTrack = null) {
+export function resolvePublisherFrameSize(video, videoProfile = {}, videoTrack = null, framingTargetOverride = null) {
   const trackSettings = videoTrack && typeof videoTrack.getSettings === 'function'
     ? videoTrack.getSettings() || {}
     : {};
@@ -189,7 +189,9 @@ export function resolvePublisherFrameSize(video, videoProfile = {}, videoTrack =
   });
   const maxWidth = positiveFiniteNumber(videoProfile?.frameWidth);
   const maxHeight = positiveFiniteNumber(videoProfile?.frameHeight);
-  const framingTarget = resolvePublisherFramingTarget(video);
+  const framingTarget = framingTargetOverride && typeof framingTargetOverride === 'object'
+    ? normalizePublisherFramingTarget(framingTargetOverride)
+    : resolvePublisherFramingTarget(video);
 
   return {
     ...resolveFramedFrameSizeFromDimensions(

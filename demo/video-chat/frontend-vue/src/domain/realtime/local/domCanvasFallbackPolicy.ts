@@ -45,8 +45,8 @@ export function resolveDomCanvasCompatibilityProfile(videoProfile = {}) {
   };
 }
 
-export function resolveDomCanvasCompatibilityFrameSize(video, videoProfile = {}, videoTrack = null) {
-  return resolvePublisherFrameSize(video, resolveDomCanvasCompatibilityProfile(videoProfile), videoTrack);
+export function resolveDomCanvasCompatibilityFrameSize(video, videoProfile = {}, videoTrack = null, framingTarget = null) {
+  return resolvePublisherFrameSize(video, resolveDomCanvasCompatibilityProfile(videoProfile), videoTrack, framingTarget);
 }
 
 export function resolveDomCanvasCompatibilityVideoFrameSize(frame, videoProfile = {}, framingTarget = {}) {
