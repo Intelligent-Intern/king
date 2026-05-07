@@ -918,13 +918,22 @@ Tickets:
       capability is present.
     - Added guest grant reconnect coverage and
       `call-app-permission-revocation-contract.mjs`.
-- [ ] CAP-15 Marketplace-to-call end-to-end journey
+- [x] CAP-15 Marketplace-to-call end-to-end journey
   - Order app for organization.
   - Install/enable app.
   - Attach app to call.
   - Grant participant access.
   - Collaborate in whiteboard.
   - Remove app from call.
+  - Proof:
+    - Backend lifecycle now exercises the full Semantic-DNS/MCP marketplace
+      journey: organization order, installation, availability listing, owner
+      attach, non-owner denial, grant deny/reallow, multi-actor whiteboard CRDT
+      collaboration, replay, snapshot, remove, and removed-session history.
+    - Frontend contract pins the sidebar availability/session-create path and
+      the iframe CRDT append bridge so the UI remains backend-backed instead of
+      fixture-driven.
+    - Added `call-app-marketplace-to-call-journey-contract.mjs`.
 - [ ] CAP-16 Test protocol and readiness record
   - Document contract, backend, frontend, e2e, security, and observability test
     results.
