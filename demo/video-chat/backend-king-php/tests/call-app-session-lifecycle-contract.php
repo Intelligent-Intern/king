@@ -223,6 +223,48 @@ SQL
     videochat_call_app_session_lifecycle_assert((int) (($snapshot['call_apps'] ?? [])['active_session_count'] ?? 0) === 1, 'room snapshot must include active Call App session');
     videochat_call_app_session_lifecycle_assert((string) (((($snapshot['call_apps'] ?? [])['active_sessions'] ?? [])[0] ?? [])['id'] ?? '') === $sessionId, 'room snapshot session id mismatch');
 
+    $sessionRowId = (int) $pdo->query("SELECT id FROM call_app_sessions WHERE public_id = " . $pdo->quote($sessionId) . " LIMIT 1")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($sessionRowId > 0, 'created session database id missing');
+
+    $forbiddenGrantPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $userAuth, [
+        'grants' => [[
+            'subject_type' => 'user',
+            'user_id' => $regularUserId,
+            'grant_state' => 'denied',
+        ]],
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($forbiddenGrantPatch['status'] ?? 0) === 403, 'non-owner participant must not update app grants');
+
+    $grantPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
+        'grants' => [[
+            'subject_type' => 'user',
+            'user_id' => $regularUserId,
+            'grant_state' => 'denied',
+        ]],
+    ]);
+    $grantPatchPayload = videochat_call_app_session_lifecycle_decode($grantPatch);
+    videochat_call_app_session_lifecycle_assert((int) ($grantPatch['status'] ?? 0) === 200, 'owner grant patch should return 200');
+    videochat_call_app_session_lifecycle_assert(count((array) (($grantPatchPayload['result'] ?? [])['audit_events'] ?? [])) === 1, 'grant patch should create one audit event');
+    $patchedSession = is_array(($grantPatchPayload['result'] ?? [])['session'] ?? null) ? ($grantPatchPayload['result'] ?? [])['session'] : [];
+    $regularGrant = array_values(array_filter((array) ($patchedSession['grants'] ?? []), static fn (array $grant): bool => (int) ($grant['user_id'] ?? 0) === $regularUserId))[0] ?? [];
+    videochat_call_app_session_lifecycle_assert((string) ($regularGrant['grant_state'] ?? '') === 'denied', 'regular user grant should be denied after patch');
+
+    $grantList = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth);
+    $grantListPayload = videochat_call_app_session_lifecycle_decode($grantList);
+    videochat_call_app_session_lifecycle_assert((int) ($grantList['status'] ?? 0) === 200, 'grant list should return 200');
+    videochat_call_app_session_lifecycle_assert(count((array) (($grantListPayload['result'] ?? [])['audit_events'] ?? [])) >= 1, 'grant list should include audit events');
+    $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM call_app_audit_events WHERE app_session_id = {$sessionRowId} AND event_type = 'participant_grant_changed'")->fetchColumn();
+    videochat_call_app_session_lifecycle_assert($auditCount === 1, 'grant patch should persist exactly one audit event');
+
+    $unknownGrant = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
+        'grants' => [[
+            'subject_type' => 'user',
+            'user_id' => 999999,
+            'grant_state' => 'allowed',
+        ]],
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($unknownGrant['status'] ?? 0) === 422, 'unknown user grant patch should fail closed');
+
     $inactive = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth, ['status' => 'inactive']);
     videochat_call_app_session_lifecycle_assert((int) ($inactive['status'] ?? 0) === 200, 'inactive update should return 200');
     $inactiveSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
@@ -233,7 +275,6 @@ SQL
     $activeSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($activeSnapshot['active_session_count'] ?? 0) === 1, 'reactivated session must return to active room snapshot');
 
-    $sessionRowId = (int) $pdo->query("SELECT id FROM call_app_sessions WHERE public_id = " . $pdo->quote($sessionId) . " LIMIT 1")->fetchColumn();
     $pdo->prepare(
         <<<'SQL'
 INSERT INTO call_app_launch_tokens(

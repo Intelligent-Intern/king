@@ -484,6 +484,14 @@
                     alt=""
                   />
                 </button>
+              <CallAppParticipantGrantButton
+                :session="activeCallAppSession"
+                :row="row"
+                :can-manage="canModerate"
+                :api-request="apiRequest"
+                :send-socket-frame="sendSocketFrame"
+                :request-room-snapshot="requestRoomSnapshot"
+              />
               <button
                 class="icon-mini-btn"
                 type="button"

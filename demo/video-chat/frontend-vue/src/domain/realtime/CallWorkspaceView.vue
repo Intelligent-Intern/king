@@ -54,6 +54,7 @@ import { createCallWorkspaceMediaStack } from './workspace/callWorkspace/mediaSt
 import { createCallWorkspaceNativeStack } from './workspace/callWorkspace/nativeStack';
 import { createCallWorkspaceGossipDataLane } from './workspace/callWorkspace/gossipDataLane';
 import CallAppWorkspaceHost from './callApps/CallAppWorkspaceHost.vue';
+import CallAppParticipantGrantButton from './callApps/CallAppParticipantGrantButton.vue';
 import { createCallAppWorkspaceState } from './callApps/callAppWorkspaceState.js';
 import {
   createNativePeerAudioElement,
@@ -616,8 +617,7 @@ let synchronizeNativePeerMediaElements = () => {};
 let ensureNativePeerConnection = () => null;
 let shouldSuppressExpectedSignalingError, syncControlStateToPeers, syncModerationStateToPeers, tryDirectJoinWithModeratorBypass;
 let applyCallOutputPreferences = () => {};
-let currentSfuVideoProfile = computed(() => 'quality');
-let downgradeSfuVideoQualityAfterEncodePressure = () => false;
+let currentSfuVideoProfile = computed(() => 'quality'); let downgradeSfuVideoQualityAfterEncodePressure = () => false;
 let initSFU = () => {};
 let maybeFallbackToNativeRuntime = async () => false;
 let removeSfuRemotePeersForUserId;
