@@ -11,6 +11,8 @@ async function source(relativePath) {
 const pageFrame = await source('src/components/admin/AdminPageFrame.vue');
 const pageHeader = await source('src/components/AppPageHeader.vue');
 const tableFrame = await source('src/components/admin/AdminTableFrame.vue');
+const searchToolbar = await source('src/components/admin/AdminSearchToolbar.vue');
+const listController = await source('src/components/admin/useAdminListController.js');
 const governance = await source('src/modules/governance/pages/GovernanceCrudView.vue');
 const localization = await source('src/modules/localization/pages/AdministrationLocalizationView.vue');
 const users = await source('src/modules/users/pages/admin/UsersView.vue');
@@ -46,6 +48,13 @@ assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field-main\)
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.search-field\)[\s\S]*?flex:\s*0 1 360px;/, 'admin toolbar search fields must keep a stable desktop width');
 assert.match(pageFrame, /\.admin-page-frame-toolbar :deep\(\.ii-select\)[\s\S]*?flex:\s*0 0 180px;/, 'admin toolbar selects must align beside the search submit control');
 assert.match(tableFrame, /admin-table-frame/, 'shared admin table frame must own table wrapper layout');
+assert.match(searchToolbar, /AppIconButton[\s\S]*icons\/send\.png/, 'shared admin search toolbar must own the standard submit icon');
+assert.match(searchToolbar, /defineEmits\(\['update:modelValue', 'submit'\]\)/, 'shared admin search toolbar must expose v-model and submit events');
+assert.match(searchToolbar, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'shared admin search toolbar must own stable search field sizing');
+assert.match(listController, /export function useAdminListController\(options\)/, 'shared admin list controller must expose the list composable');
+assert.match(listController, /const queryDraft = ref\(''\);[\s\S]*const queryApplied = ref\(''\);[\s\S]*const pagination = reactive/, 'shared admin list controller must own query and pagination state');
+assert.match(listController, /let loadToken = 0;[\s\S]*if \(token !== loadToken\) return;/, 'shared admin list controller must guard stale loads');
+assert.match(listController, /watch\(queryDraft[\s\S]*globalThis\.setTimeout[\s\S]*debounceMs/, 'shared admin list controller must debounce search changes');
 assert.match(workspaceStyles, /\.table-wrap\s*\{[\s\S]*?overflow:\s*auto;/, 'shared table wrapper must stay the scroll owner for overflowing rows');
 assert.match(workspaceStyles, /tbody tr:not\(\.table-empty-row\):hover/, 'table hover must not target empty placeholder rows');
 assert.match(workspaceStyles, /tbody tr\.table-empty-row,[\s\S]*?tbody tr\.table-empty-row:hover[\s\S]*?background:\s*transparent;/, 'empty placeholder rows must not paint a hover surface');
@@ -79,6 +88,9 @@ assert.doesNotMatch(governanceModal, /\bmaximizable\b/, 'governance CRUD side pa
 assert.doesNotMatch(governanceModal, /Maximize modal/, 'feature panel must not hardcode maximize controls');
 assert.match(users, /AdminUserEditorModal/, 'user management must keep the extracted user editor component');
 assert.match(marketplace, /AppSidePanelShell/, 'marketplace CRUD form must use the shared right side panel shell');
+assert.match(marketplace, /<AdminSearchToolbar[\s\S]*v-model="queryDraft"[\s\S]*@submit="applySearchNow"/, 'marketplace must use the shared admin search toolbar');
+assert.match(marketplace, /useAdminListController\(\{[\s\S]*\/api\/admin\/marketplace\/apps/, 'marketplace must use the shared admin list controller');
+assert.doesNotMatch(marketplace, /let loadToken|let searchTimer|watch\(queryDraft/, 'marketplace must not keep duplicated list controller state');
 assert.doesNotMatch(marketplace, /marketplace-modal/, 'marketplace CRUD form must not keep the old centered modal markup');
 for (const [name, file] of [
   ['GovernanceCrudModal', governanceModal],
@@ -110,6 +122,6 @@ assert.doesNotMatch(sidePanelShell, /\.app-side-panel-dialog\s*\{[\s\S]*?border:
 assert.doesNotMatch(sidePanelShell, /border-radius:\s*10px 0 0 10px/, 'right side panels must not keep the old rounded drawer corners');
 assert.doesNotMatch(sidePanelShell, /toggleMaximized|maximizeIcon|restoreIcon|update:maximized/, 'right side panels must not expose resize or maximize controls');
 assert.match(usersStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'users search field must not add extra auto spacing inside the standard toolbar');
-assert.match(marketplaceStyles, /\.search-field\s*\{[\s\S]*?flex:\s*0 1 360px;[\s\S]*?margin-inline-start:\s*0;/, 'marketplace search field must not add extra auto spacing inside the standard toolbar');
+assert.doesNotMatch(marketplaceStyles, /\.search-field|marketplace-toolbar-search-btn/, 'marketplace must not duplicate shared search toolbar CSS');
 
 console.log('[shared-admin-components-contract] PASS');

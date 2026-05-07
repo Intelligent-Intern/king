@@ -17,6 +17,16 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 CRUD scaffold first extraction: added shared admin list/search
+  primitives and migrated Marketplace as the first non-call CRUD surface.
+  `AdminSearchToolbar.vue` owns the standard search input plus send-icon submit
+  control, and `useAdminListController.js` owns query draft/applied state,
+  debounced reloads, stale-load token guards, pagination normalization, and
+  page changes. Marketplace now uses both primitives and no longer duplicates
+  local `loadToken`/`searchTimer` state or toolbar CSS. Proof:
+  `node tests/contract/shared-admin-components-contract.mjs` and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Workspace shell viewport extraction: completed the remaining
   Shell/sidebar refactor item by moving responsive breakpoint state,
   left-sidebar collapse/open state, mobile scroll locking, route-close behavior,
