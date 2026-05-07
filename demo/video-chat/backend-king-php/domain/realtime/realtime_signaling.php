@@ -59,6 +59,7 @@ function videochat_signaling_decode_client_frame(string $frame): array
         'call-app/grants-updated',
         'call/media-quality-pressure',
         'call/moderation-state',
+        'call/media-security-sync-request',
         'media-security/hello',
         'media-security/sender-key',
     ], true)) {

@@ -37,7 +37,7 @@ function createHybridProvider(label) {
 }
 
 try {
-  assert.deepEqual(MEDIA_SECURITY_SIGNAL_TYPES, ['media-security/hello', 'media-security/sender-key']);
+  assert.deepEqual(MEDIA_SECURITY_SIGNAL_TYPES, ['call/media-security-sync-request', 'media-security/hello', 'media-security/sender-key']);
   assert.equal(mediaSecurityInternalsForTests.KEX_SUITE, 'x25519_hkdf_sha256_v1');
   assert.equal(mediaSecurityInternalsForTests.CLASSICAL_KEX_SUITE, 'x25519_hkdf_sha256_v1');
   assert.equal(mediaSecurityInternalsForTests.HYBRID_KEX_SUITE, 'hybrid_x25519_mlkem768_hkdf_sha256_v1');
@@ -441,6 +441,7 @@ try {
   assert.match(mediaSecurityRuntimeSource, /async function sendMediaSecurityHello\(targetUserId, force = false\)[\s\S]*const normalizedTargetId = normalizeRemoteMediaSecurityUserId\(targetUserId\);[\s\S]*if \(normalizedTargetId <= 0\) return false;/m, 'media-security hello sender must not emit self-targeted handshake signals');
   assert.match(mediaSecurityRuntimeSource, /async function sendMediaSecuritySenderKey\(targetUserId, force = false\)[\s\S]*const normalizedTargetId = normalizeRemoteMediaSecurityUserId\(targetUserId\);[\s\S]*if \(normalizedTargetId <= 0\) return false;/m, 'media-security sender-key sender must not emit self-targeted key signals');
   assert.match(mediaSecurityRuntimeSource, /async function handleMediaSecuritySignal\(type, senderUserId, payloadBody\)[\s\S]*const normalizedSenderUserId = normalizeRemoteMediaSecurityUserId\(senderUserId\);[\s\S]*if \(normalizedSenderUserId <= 0\) return;/m, 'media-security signal receiver must ignore self-origin signals before mutating participant state');
+  assert.match(mediaSecurityRuntimeSource, /if \(type === 'call\/media-security-sync-request'\) \{[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, true\);[\s\S]*scheduleMediaSecurityParticipantSync\('remote_sync_request'\);/m, 'media-security sync requests must force the targeted publisher to refresh hello and sender-key without relying on SFU reconnect success');
   assert.match(mediaSecurityRuntimeSource, /function shouldForceReplyToIncomingMediaSecurityHello\(senderUserId, payloadBody, session\)[\s\S]*incomingMediaSecurityHelloResponseKey\(senderUserId, payloadBody, session\)[\s\S]*state\.mediaSecurityHelloSignalsSent\.add\(key\);/m, 'accepted remote hello responses must be deduped by incoming hello identity to avoid broker replay echo loops');
   assert.match(mediaSecurityRuntimeSource, /const forceReply = shouldForceReplyToIncomingMediaSecurityHello\([\s\S]*normalizedSenderUserId,[\s\S]*payloadBody \|\| \{\},[\s\S]*session,[\s\S]*\);[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, forceReply\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, forceReply\);/m, 'accepted remote hello must force exactly one fresh response per unique hello so reconnecting peers can unwrap sender keys without flooding the broker');
   assert.doesNotMatch(mediaSecurityRuntimeSource, /if \(accepted\) \{[\s\S]*await sendMediaSecurityHello\(normalizedSenderUserId, true\);[\s\S]*await sendMediaSecuritySenderKey\(normalizedSenderUserId, true\);/m, 'accepted remote hello must not force-answer every broker replay');

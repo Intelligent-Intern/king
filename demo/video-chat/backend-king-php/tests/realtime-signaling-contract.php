@@ -273,6 +273,30 @@ try {
     videochat_realtime_signaling_assert((string) ($mediaSecurityTargetFrame['type'] ?? '') === 'media-security/hello', 'target should receive media-security hello');
     videochat_realtime_signaling_assert((string) (($mediaSecurityTargetFrame['payload'] ?? [])['kind'] ?? '') === 'media_security_hello', 'media-security payload kind mismatch');
 
+    $frames = [];
+    $decodedMediaSecuritySyncRequest = videochat_signaling_decode_client_frame(json_encode([
+        'type' => 'call/media-security-sync-request',
+        'target_user_id' => 100,
+        'payload' => [
+            'kind' => 'sfu-publisher-stall-security-resync',
+            'publisher_id' => 'publisher-100',
+            'reason' => 'sfu_publisher_stall_security_resync',
+            'requester_user_id' => 200,
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_signaling_assert((bool) ($decodedMediaSecuritySyncRequest['ok'] ?? false), 'media-security sync request should decode');
+    $mediaSecuritySyncRequestPublish = videochat_signaling_publish(
+        $presenceState,
+        $targetPrimary,
+        $decodedMediaSecuritySyncRequest,
+        $sender,
+        1_780_300_124_600
+    );
+    videochat_realtime_signaling_assert((bool) ($mediaSecuritySyncRequestPublish['ok'] ?? false), 'media-security sync request publish should succeed');
+    $mediaSecuritySyncTargetFrame = videochat_realtime_signaling_last_frame($frames, 'socket-sender');
+    videochat_realtime_signaling_assert((string) ($mediaSecuritySyncTargetFrame['type'] ?? '') === 'call/media-security-sync-request', 'target should receive media-security sync request');
+    videochat_realtime_signaling_assert((string) (($mediaSecuritySyncTargetFrame['payload'] ?? [])['kind'] ?? '') === 'sfu-publisher-stall-security-resync', 'media-security sync request payload kind mismatch');
+
     $decodedControlState = videochat_signaling_decode_client_frame(json_encode([
         'type' => 'call/control-state',
         'target_user_id' => 200,
