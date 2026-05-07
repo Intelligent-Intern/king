@@ -40,7 +40,9 @@ function videochat_handle_invite_routes(
                 $pdo,
                 $authenticatedUserId,
                 $authenticatedUserRole,
-                $payload
+                $payload,
+                null,
+                videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } catch (Throwable) {
             return $errorResponse(500, 'invite_codes_create_failed', 'Could not create invite code.', [
@@ -117,7 +119,9 @@ function videochat_handle_invite_routes(
                 $pdo,
                 (string) ($copyMatch[1] ?? ''),
                 $authenticatedUserId,
-                $authenticatedUserRole
+                $authenticatedUserRole,
+                null,
+                videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } catch (Throwable) {
             return $errorResponse(500, 'invite_codes_copy_failed', 'Could not prepare invite code for copy.', [
@@ -187,7 +191,9 @@ function videochat_handle_invite_routes(
                 $pdo,
                 $authenticatedUserId,
                 $authenticatedUserRole,
-                $payload
+                $payload,
+                null,
+                videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } catch (Throwable) {
             return $errorResponse(500, 'invite_codes_redeem_failed', 'Could not redeem invite code.', [

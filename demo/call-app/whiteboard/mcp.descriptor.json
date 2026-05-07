@@ -1,0 +1,62 @@
+{
+  "schema_version": "king.call_app.mcp_descriptor.v1",
+  "app_key": "whiteboard",
+  "service_name": "call_app.whiteboard.mcp",
+  "protocol": "king.mcp.v1",
+  "methods": [
+    {
+      "name": "call_app.describe",
+      "response_schema": "king.call_app.describe.v1"
+    },
+    {
+      "name": "call_app.capabilities",
+      "response_schema": "king.call_app.capabilities.v1"
+    },
+    {
+      "name": "call_app.crdt_schema",
+      "response_schema": "king.call_app.crdt_schema.v1"
+    },
+    {
+      "name": "call_app.launch_contract",
+      "response_schema": "king.call_app.launch_contract.v1"
+    },
+    {
+      "name": "call_app.health",
+      "response_schema": "king.call_app.health.v1"
+    },
+    {
+      "name": "call_app.export_formats",
+      "response_schema": "king.call_app.export_formats.v1"
+    },
+    {
+      "name": "call_app.marketplace_listing",
+      "response_schema": "king.call_app.marketplace_listing.v1"
+    }
+  ],
+  "capabilities": [
+    "call_apps.discover",
+    "call_apps.call.attach",
+    "call_apps.call.view",
+    "call_apps.permissions.manage",
+    "call_apps.permissions.use",
+    "call_apps.launch",
+    "call_apps.crdt.read",
+    "call_apps.crdt.append",
+    "call_apps.crdt.replay",
+    "call_apps.presence.publish",
+    "call_apps.export.request",
+    "call_apps.export.download"
+  ],
+  "launch_contract": {
+    "iframe_entrypoint": "public/index.html",
+    "bridge_protocol": "king.call_app.iframe.v1",
+    "launch_token_required": true,
+    "primary_session_token_allowed": false
+  },
+  "marketplace_listing": {
+    "name": "Whiteboard",
+    "category": "whiteboard",
+    "order_scope": "organization",
+    "summary": "Shared whiteboard for collaborative calls."
+  }
+}

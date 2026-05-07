@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 function videochat_generate_call_id(): string
 {
     try {
@@ -417,10 +419,13 @@ SQL
  * @param array<int, int> $userIds
  * @return array<int, array{id: int, email: string, display_name: string}>
  */
-function videochat_active_internal_users(PDO $pdo, array $userIds): array
+function videochat_active_internal_users(PDO $pdo, array $userIds, ?int $tenantId = null): array
 {
     $result = [];
     foreach ($userIds as $userId) {
+        if (is_int($tenantId) && $tenantId > 0 && !videochat_tenant_user_is_member($pdo, (int) $userId, $tenantId)) {
+            continue;
+        }
         $identity = videochat_active_user_identity($pdo, (int) $userId);
         if ($identity === null) {
             continue;

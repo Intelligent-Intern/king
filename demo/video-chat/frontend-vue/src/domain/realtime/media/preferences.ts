@@ -7,6 +7,8 @@ import { buildOptionalCallAudioCaptureConstraints } from './audioCaptureConstrai
 
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
+const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
+export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
 
 function clampVolume(value) {
   const numeric = Number(value);
@@ -31,10 +33,25 @@ function toFacingMode(value) {
 }
 
 function toBackgroundFilterMode(value) {
+  if (value === 'replace') return 'replace';
   return value === 'blur' ? 'blur' : 'off';
 }
 
+function isLegacyBackgroundReplacementImageUrl(value) {
+  const path = String(value || '').split(/[?#]/)[0];
+  return path === `/assets/images/${'bookshelf.png'}`;
+}
+
+function toBackgroundReplacementImageUrl(value) {
+  const url = typeof value === 'string' ? value.trim() : '';
+  if (isLegacyBackgroundReplacementImageUrl(url)) {
+    return DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL;
+  }
+  return url;
+}
+
 function toBackgroundBackdropMode(value) {
+  if (value === 'image') return 'image';
   if (value === 'green') return 'green';
   if (value === 'blur9') return 'blur9';
   if (value === 'exclusion') return 'exclusion';
@@ -91,6 +108,7 @@ function readPersistedCallMediaPrefs() {
       backgroundMaskVariant: clampInteger(parsed.background_mask_variant, 4, 1, 10),
       backgroundBlurTransition: clampInteger(parsed.background_blur_transition, 10, 1, 10),
       backgroundApplyOutgoing: toApplyOutgoing(parsed.background_apply_outgoing),
+      backgroundReplacementImageUrl: toBackgroundReplacementImageUrl(parsed.background_replacement_image_url),
       backgroundMaxProcessWidth: clampInteger(parsed.background_max_process_width, 960, 320, 1920),
       backgroundMaxProcessFps: clampInteger(parsed.background_max_process_fps, 24, 8, 30),
     };
@@ -117,6 +135,7 @@ function serializeCallMediaPrefs() {
     background_mask_variant: clampInteger(callMediaPrefs.backgroundMaskVariant, 4, 1, 10),
     background_blur_transition: clampInteger(callMediaPrefs.backgroundBlurTransition, 10, 1, 10),
     background_apply_outgoing: toApplyOutgoing(callMediaPrefs.backgroundApplyOutgoing),
+    background_replacement_image_url: toBackgroundReplacementImageUrl(callMediaPrefs.backgroundReplacementImageUrl),
     background_max_process_width: clampInteger(callMediaPrefs.backgroundMaxProcessWidth, 960, 320, 1920),
     background_max_process_fps: clampInteger(callMediaPrefs.backgroundMaxProcessFps, 24, 8, 30),
   });
@@ -176,6 +195,7 @@ export const callMediaPrefs = reactive({
   backgroundMaskVariant: persistedPrefs?.backgroundMaskVariant ?? 4,
   backgroundBlurTransition: persistedPrefs?.backgroundBlurTransition ?? 10,
   backgroundApplyOutgoing: persistedPrefs?.backgroundApplyOutgoing ?? true,
+  backgroundReplacementImageUrl: persistedPrefs?.backgroundReplacementImageUrl || '',
   backgroundMaxProcessWidth: persistedPrefs?.backgroundMaxProcessWidth ?? 960,
   backgroundMaxProcessFps: persistedPrefs?.backgroundMaxProcessFps ?? 24,
   backgroundFilterActive: false,
@@ -208,6 +228,8 @@ export const callMediaPrefs = reactive({
 let refreshPromise = null;
 let watcherRefCount = 0;
 let deviceChangeListenerAttached = false;
+let lastDeviceRefreshAt = 0;
+let lastDeviceRefreshHadPermissions = false;
 
 async function maybeRequestDeviceLabels() {
   if (
@@ -247,10 +269,12 @@ function applyEnumeratedDevices(devices) {
   callMediaPrefs.selectedSpeakerId = resolveSelectedDevice(callMediaPrefs.selectedSpeakerId, nextSpeakers);
   callMediaPrefs.ready = true;
   callMediaPrefs.error = '';
+  lastDeviceRefreshAt = Date.now();
+  lastDeviceRefreshHadPermissions = rows.some((device) => String(device?.label || '').trim() !== '');
   persistCallMediaPrefs();
 }
 
-export async function refreshCallMediaDevices({ requestPermissions = false } = {}) {
+export async function refreshCallMediaDevices({ force = false, requestPermissions = false } = {}) {
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices
@@ -265,8 +289,15 @@ export async function refreshCallMediaDevices({ requestPermissions = false } = {
     return refreshPromise;
   }
 
+  const now = Date.now();
+  const cacheFresh = callMediaPrefs.ready && now - lastDeviceRefreshAt < CALL_MEDIA_DEVICE_REFRESH_CACHE_MS;
+  const cacheSatisfiesPermission = !requestPermissions || lastDeviceRefreshHadPermissions;
+  if (!force && cacheFresh && cacheSatisfiesPermission) {
+    return true;
+  }
+
   refreshPromise = (async () => {
-    if (requestPermissions) {
+    if (requestPermissions && (!lastDeviceRefreshHadPermissions || force)) {
       try {
         await maybeRequestDeviceLabels();
       } catch {
@@ -343,13 +374,25 @@ export function setCallBackgroundApplyOutgoing(value) {
   persistCallMediaPrefs();
 }
 
+export function setCallBackgroundReplacementImageUrl(value) {
+  callMediaPrefs.backgroundReplacementImageUrl = toBackgroundReplacementImageUrl(value);
+  persistCallMediaPrefs();
+}
+
 export function isCallBackgroundPresetActive(preset) {
   const mode = String(callMediaPrefs.backgroundFilterMode || 'off').trim().toLowerCase();
   const applyOutgoing = Boolean(callMediaPrefs.backgroundApplyOutgoing);
   const backdrop = String(callMediaPrefs.backgroundBackdropMode || 'blur7').trim().toLowerCase();
 
   if (preset === 'off') {
-    return mode !== 'blur' || !applyOutgoing;
+    return mode === 'off' || !applyOutgoing;
+  }
+  if (preset === 'green') {
+    return mode === 'replace' && applyOutgoing && backdrop === 'green';
+  }
+  if (preset === 'image') {
+    return mode === 'replace' && applyOutgoing && backdrop === 'image'
+      && String(callMediaPrefs.backgroundReplacementImageUrl || '').trim() !== '';
   }
   if (preset === 'light') {
     return mode === 'blur' && applyOutgoing && backdrop === 'blur7';
@@ -364,7 +407,21 @@ export function isCallBackgroundPresetActive(preset) {
 }
 
 export function applyCallBackgroundPreset(preset) {
-  if (preset !== 'light' && preset !== 'strong' && preset !== 'exclusion') {
+  if (preset === 'image') {
+    setCallBackgroundReplacementImageUrl(DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL);
+    setCallBackgroundBackdropMode('image');
+    setCallBackgroundFilterMode('replace');
+    setCallBackgroundApplyOutgoing(true);
+    return;
+  }
+  if (preset === 'green') {
+    setCallBackgroundReplacementImageUrl('');
+    setCallBackgroundBackdropMode('green');
+    setCallBackgroundFilterMode('replace');
+    setCallBackgroundApplyOutgoing(true);
+    return;
+  }
+  if (preset !== 'light' && preset !== 'strong') {
     setCallBackgroundFilterMode('off');
     setCallBackgroundApplyOutgoing(false);
     return;
@@ -435,7 +492,7 @@ export function resetCallBackgroundRuntimeState() {
 }
 
 function handleDeviceChange() {
-  void refreshCallMediaDevices();
+  void refreshCallMediaDevices({ force: true });
 }
 
 export function attachCallMediaDeviceWatcher({ requestPermissions = false } = {}) {

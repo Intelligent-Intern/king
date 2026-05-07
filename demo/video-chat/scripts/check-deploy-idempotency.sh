@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEPLOY_SCRIPT="${ROOT_DIR}/scripts/deploy.sh"
 HETZNER_HELPER="${ROOT_DIR}/scripts/lib/deploy-hetzner.sh"
 DOC="${ROOT_DIR}/../../documentation/dev/video-chat.md"
+DOCKERIGNORE="${ROOT_DIR}/../../.dockerignore"
 
 fail() {
   printf '[deploy-idempotency] FAIL: %s\n' "$*" >&2
@@ -25,6 +26,7 @@ require_text() {
 require_file "${DEPLOY_SCRIPT}"
 require_file "${HETZNER_HELPER}"
 require_file "${DOC}"
+require_file "${DOCKERIGNORE}"
 
 for marker in \
   'persist_current_deploy_config' \
@@ -39,9 +41,22 @@ for marker in \
   'restore_certbot_stopped_services' \
   'trap restore_certbot_stopped_services EXIT' \
   '--keep-until-expiring' \
+  "--exclude 'dist/'" \
+  "--exclude 'compat-artifacts/'" \
+  "--exclude '.cache/'" \
+  'Removing release artifacts from remote checkout' \
   '--remove-orphans'
 do
   require_text "${DEPLOY_SCRIPT}" "${marker}"
+done
+
+for marker in \
+  'dist/' \
+  'compat-artifacts/' \
+  '.cache/' \
+  'extension/modules/king.so'
+do
+  require_text "${DOCKERIGNORE}" "${marker}"
 done
 
 for marker in \

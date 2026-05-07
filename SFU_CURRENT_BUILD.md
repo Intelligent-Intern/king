@@ -40,7 +40,7 @@ Key active files, mostly under `demo/video-chat/`:
 - The backend stamps receive timing, validates room binding, and rejects cross-room frame commands.
 - The backend has three delivery/recovery paths:
   - direct in-process fanout to subscribers on the same worker
-  - live relay files under tmpfs or temp directory
+  - process-local RAM live relay ring buffer
   - SQLite-backed frame buffer/replay and recovery request broker
 - Slow subscriber isolation exists on the backend.
 - Publisher backpressure exists on the frontend and can pause encode, drop frames, request keyframes, downshift profile, or restart the SFU socket.

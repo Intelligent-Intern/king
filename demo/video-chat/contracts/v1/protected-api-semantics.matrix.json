@@ -59,6 +59,7 @@
       "protected_by": "router_rbac_guard",
       "source_paths": [
         "backend-king-php/http/module_users.php",
+        "backend-king-php/http/module_users_admin_accounts.php",
         "backend-king-php/domain/users/user_management.php"
       ],
       "contract_paths": [
@@ -193,6 +194,7 @@
       "protected_by": "router_rbac_guard",
       "source_paths": [
         "backend-king-php/http/module_users.php",
+        "backend-king-php/http/module_users_admin_accounts.php",
         "backend-king-php/domain/users/user_management.php"
       ],
       "contract_paths": [
@@ -303,7 +305,8 @@
         "backend-king-php/http/router.php",
         "backend-king-php/support/auth.php",
         "backend-king-php/http/module_calls.php",
-        "backend-king-php/domain/calls/call_management.php"
+        "backend-king-php/domain/calls/call_management.php",
+        "backend-king-php/domain/calls/call_management_update.php"
       ],
       "contract_paths": [
         "backend-king-php/tests/call-update-endpoint-contract.sh",
@@ -347,7 +350,8 @@
         "backend-king-php/http/router.php",
         "backend-king-php/support/auth.php",
         "backend-king-php/http/module_calls.php",
-        "backend-king-php/domain/calls/call_management.php"
+        "backend-king-php/domain/calls/call_management.php",
+        "backend-king-php/domain/calls/call_management_cancel.php"
       ],
       "contract_paths": [
         "backend-king-php/tests/call-cancel-endpoint-contract.sh",
@@ -443,7 +447,9 @@
         "backend-king-php/http/router.php",
         "backend-king-php/support/auth.php",
         "backend-king-php/http/module_calls.php",
-        "backend-king-php/domain/calls/call_access.php"
+        "backend-king-php/http/module_calls_access.php",
+        "backend-king-php/domain/calls/call_access.php",
+        "backend-king-php/domain/calls/call_access_links.php"
       ],
       "contract_paths": [
         "backend-king-php/tests/call-access-session-contract.sh"
@@ -553,8 +559,10 @@
         "backend-king-php/http/router.php",
         "backend-king-php/support/auth.php",
         "backend-king-php/http/module_calls.php",
+        "backend-king-php/http/module_realtime_attachments.php",
         "backend-king-php/domain/realtime/chat_archive.php",
-        "backend-king-php/domain/realtime/chat_attachments.php"
+        "backend-king-php/domain/realtime/chat_attachments.php",
+        "backend-king-php/domain/realtime/chat_attachment_contract.php"
       ],
       "contract_paths": [
         "backend-king-php/tests/chat-archive-contract.sh",

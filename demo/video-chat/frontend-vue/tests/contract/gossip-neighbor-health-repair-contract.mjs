@@ -17,7 +17,8 @@ function assert(condition, message) {
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const gossipNeighborLifecycle = read('src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts')
+const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}\n${gossipNeighborLifecycle}`
 const controller = read('src/lib/gossipmesh/gossipController.ts')
 const packageJson = read('package.json')
 
@@ -65,7 +66,9 @@ assert(
   'lost assigned RTCDataChannel carriers must request topology repair',
 )
 assert(
-  /function handleDedicatedGossipPeerState\(entry,\s*eventType\)[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'connected'[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'lost'[\s\S]*requestGossipTopologyRepair\(peerId,\s*`gossip_peer_\$\{eventType\}`\)/.test(workspaceGossipSurface),
+  /onPeerConnectionState = \(\) => false/.test(gossipNeighborLifecycle)
+    && /onPeerConnectionState\(normalizedPeerId,\s*state,\s*'connectionstatechange'\)/.test(gossipNeighborLifecycle)
+    && /function handleGossipNeighborPeerConnectionState\(peerId,\s*state,\s*eventType\)[\s\S]*controller\?\.setCarrierState\?\.\(normalizedPeerId,\s*carrierState[\s\S]*requestGossipTopologyRepair\(normalizedPeerId,\s*`gossip_peer_\$\{normalizedState \|\| 'lost'\}`\)/.test(gossipDataLane),
   'dedicated gossip RTCPeerConnection health must feed carrier state and topology repair independently of native peers',
 )
 assert(

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 function videochat_activity_layout_modes(): array
 {
-    return ['grid', 'main_mini', 'main_only'];
+    return ['grid', 'main_mini', 'main_only', 'call_app_workspace'];
 }
 
 function videochat_activity_layout_strategies(): array
@@ -46,7 +46,7 @@ function videochat_activity_layout_bootstrap(PDO $pdo): void
 CREATE TABLE IF NOT EXISTS call_layout_state (
     call_id TEXT PRIMARY KEY REFERENCES calls(id) ON UPDATE CASCADE ON DELETE CASCADE,
     room_id TEXT NOT NULL REFERENCES rooms(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only')),
+    mode TEXT NOT NULL DEFAULT 'main_mini' CHECK (mode IN ('grid', 'main_mini', 'main_only', 'call_app_workspace')),
     strategy TEXT NOT NULL DEFAULT 'manual_pinned' CHECK (strategy IN ('manual_pinned', 'most_active_window', 'active_speaker_main', 'round_robin_active')),
     automation_paused INTEGER NOT NULL DEFAULT 0 CHECK (automation_paused IN (0, 1)),
     pinned_user_ids_json TEXT NOT NULL DEFAULT '[]',
@@ -712,7 +712,9 @@ function videochat_activity_select_layout(array $participants, array $activityRo
         'automation_paused' => (bool) ($layout['automation_paused'] ?? false),
         'main_user_id' => $mainUserId,
         'visible_user_ids' => $visible,
-        'mini_user_ids' => array_values(array_filter($visible, static fn (int $id): bool => $id !== $mainUserId)),
+        'mini_user_ids' => $mode === 'call_app_workspace'
+            ? $visible
+            : array_values(array_filter($visible, static fn (int $id): bool => $id !== $mainUserId)),
         'pinned_user_ids' => $pinned,
         'updated_at' => (string) ($layout['updated_at'] ?? ''),
     ];

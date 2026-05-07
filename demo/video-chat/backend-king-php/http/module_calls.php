@@ -51,12 +51,7 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
-            $callResolution = videochat_get_call_for_user(
-                $pdo,
-                $callRef,
-                $authenticatedUserId,
-                $authenticatedUserRole
-            );
+            $callResolution = videochat_get_call_for_user($pdo, $callRef, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
             if ((bool) ($callResolution['ok'] ?? false)) {
                 return $jsonResponse(200, [
@@ -92,12 +87,7 @@ function videochat_handle_call_routes(
             }
 
             if ($isUuidRef) {
-                $accessResolution = videochat_resolve_call_access_for_user(
-                    $pdo,
-                    strtolower($callRef),
-                    $authenticatedUserId,
-                    $authenticatedUserRole
-                );
+                $accessResolution = videochat_resolve_call_access_for_user($pdo, strtolower($callRef), $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
                 if ((bool) ($accessResolution['ok'] ?? false)) {
                     return $jsonResponse(200, [
@@ -184,7 +174,7 @@ function videochat_handle_call_routes(
 
             try {
                 $pdo = $openDatabase();
-                $listing = videochat_list_calls($pdo, $authenticatedUserId, $filters);
+                $listing = videochat_list_calls($pdo, $authenticatedUserId, $filters, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'calls_list_failed', 'Could not load calls list.', [
                     'reason' => 'internal_error',
@@ -234,12 +224,7 @@ function videochat_handle_call_routes(
 
             try {
                 $pdo = $openDatabase();
-                $deleteResult = videochat_delete_all_calls(
-                    $pdo,
-                    $authenticatedUserId,
-                    $authenticatedUserRole,
-                    $payload
-                );
+                $deleteResult = videochat_delete_all_calls($pdo, $authenticatedUserId, $authenticatedUserRole, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'calls_delete_all_failed', 'Could not delete all calls.', [
                     'reason' => 'internal_error',
@@ -289,7 +274,7 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
-            $createResult = videochat_create_call($pdo, $authenticatedUserId, $payload);
+            $createResult = videochat_create_call($pdo, $authenticatedUserId, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'calls_create_failed', 'Could not create call.', [
                 'reason' => 'internal_error',
@@ -426,13 +411,7 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
-            $accessResult = videochat_create_call_access_link_for_user(
-                $pdo,
-                $callId,
-                $authenticatedUserId,
-                $authenticatedUserRole,
-                $options
-            );
+            $accessResult = videochat_create_call_access_link_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $options, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'call_access_create_failed', 'Could not create call access link.', [
                 'reason' => 'internal_error',
@@ -502,13 +481,7 @@ function videochat_handle_call_routes(
         $callId = (string) ($callCancelMatch[1] ?? '');
         try {
             $pdo = $openDatabase();
-            $cancelResult = videochat_cancel_call(
-                $pdo,
-                $callId,
-                $authenticatedUserId,
-                $authenticatedUserRole,
-                $payload
-            );
+            $cancelResult = videochat_cancel_call($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'calls_cancel_failed', 'Could not cancel call.', [
                 'reason' => 'internal_error',
@@ -585,14 +558,7 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
-            $roleUpdateResult = videochat_update_call_participant_role(
-                $pdo,
-                $callId,
-                $targetUserId,
-                $targetRole,
-                $authenticatedUserId,
-                $authenticatedUserRole
-            );
+            $roleUpdateResult = videochat_update_call_participant_role($pdo, $callId, $targetUserId, $targetRole, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'calls_role_update_failed', 'Could not update call participant role.', [
                 'reason' => 'internal_error',
@@ -645,12 +611,7 @@ function videochat_handle_call_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $fetchResult = videochat_get_call_for_user(
-                    $pdo,
-                    $callId,
-                    $authenticatedUserId,
-                    $authenticatedUserRole
-                );
+                $fetchResult = videochat_get_call_for_user($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'calls_fetch_failed', 'Could not load call.', [
                     'reason' => 'internal_error',
@@ -685,12 +646,7 @@ function videochat_handle_call_routes(
         if ($method === 'DELETE') {
             try {
                 $pdo = $openDatabase();
-                $deleteResult = videochat_delete_call(
-                    $pdo,
-                    $callId,
-                    $authenticatedUserId,
-                    $authenticatedUserRole
-                );
+                $deleteResult = videochat_delete_call($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
             } catch (Throwable) {
                 return $errorResponse(500, 'calls_delete_failed', 'Could not delete call.', [
                     'reason' => 'internal_error',
@@ -740,13 +696,7 @@ function videochat_handle_call_routes(
 
         try {
             $pdo = $openDatabase();
-            $updateResult = videochat_update_call(
-                $pdo,
-                $callId,
-                $authenticatedUserId,
-                $authenticatedUserRole,
-                $payload
-            );
+            $updateResult = videochat_update_call($pdo, $callId, $authenticatedUserId, $authenticatedUserRole, $payload, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'calls_update_failed', 'Could not update call.', [
                 'reason' => 'internal_error',

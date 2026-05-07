@@ -19,8 +19,6 @@ export const SFU_ADAPTIVE_LAYER_QUALITY_PROFILE = Object.freeze({
   [SFU_ADAPTIVE_LAYER_PREFERENCES.THUMBNAIL]: 'realtime',
 });
 
-export const SFU_LAYER_PREFERENCE_MIN_INTERVAL_MS = 3000;
-
 function normalizePositiveInteger(value, fallback = 0) {
   const normalized = Number(value || 0);
   return Number.isFinite(normalized) && normalized > 0 ? Math.floor(normalized) : fallback;
@@ -79,7 +77,7 @@ export function shouldSendSfuLayerPreference(peer, publisherId, frame, layerPref
   const key = sfuLayerPreferenceTrackKey(publisherId, frame);
   const previous = state[key] || null;
   if (!previous || previous.layerPreference !== normalizedLayerPreference) return true;
-  return (Math.max(0, Number(nowMs || 0)) - Math.max(0, Number(previous.sentAtMs || 0))) >= SFU_LAYER_PREFERENCE_MIN_INTERVAL_MS;
+  return false;
 }
 
 export function markSfuLayerPreferenceSent(peer, publisherId, frame, layerPreference, nowMs = Date.now()) {

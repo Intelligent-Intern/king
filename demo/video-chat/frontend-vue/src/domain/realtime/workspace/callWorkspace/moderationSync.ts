@@ -1,10 +1,11 @@
+import { isScreenShareUserId } from '../../screenShareIdentity.js';
+
 export function createCallWorkspaceModerationSync({
   activeRoomId,
   connectedParticipantUsers,
   currentUserId,
   isSocketOnline,
   mutedUsers,
-  pinnedUsers,
   sendSocketFrame,
   rowActionKey,
   MODERATION_SYNC_FLUSH_INTERVAL_MS,
@@ -33,14 +34,13 @@ export function createCallWorkspaceModerationSync({
       const action = String(entry?.action || '').trim().toLowerCase();
       const userId = Number(entry?.userId || 0);
       if (!Number.isInteger(userId) || userId <= 0) continue;
-      if (action !== 'mute' && action !== 'pin') continue;
+      if (action !== 'mute') continue;
 
       const key = rowActionKey(action, userId);
       moderatedState[key] = {
         updatedAt: Number(entry?.updatedAt || Date.now()),
         pending: false,
-        muted: action === 'mute' ? Boolean(entry?.state) : undefined,
-        pinned: action === 'pin' ? Boolean(entry?.state) : undefined,
+        muted: Boolean(entry?.state),
       };
     }
     return moderatedState;
@@ -60,17 +60,6 @@ export function createCallWorkspaceModerationSync({
       };
     }
 
-    for (const [rawUserId, pinned] of Object.entries(pinnedUsers)) {
-      const userId = Number(rawUserId);
-      if (!Number.isInteger(userId) || userId <= 0) continue;
-      if (pinned !== true) continue;
-      moderatedState[rowActionKey('pin', userId)] = {
-        updatedAt: Date.now(),
-        pending: false,
-        pinned: true,
-      };
-    }
-
     return moderatedState;
   }
 
@@ -85,7 +74,12 @@ export function createCallWorkspaceModerationSync({
 
     const peerIds = connectedParticipantUsers.value
       .map((row) => row.userId)
-      .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+      .filter((userId) => (
+        Number.isInteger(userId)
+        && userId > 0
+        && userId !== currentUserId.value
+        && !isScreenShareUserId(userId)
+      ));
     if (peerIds.length <= 0) return 0;
 
     let sentCount = 0;
@@ -122,11 +116,9 @@ export function createCallWorkspaceModerationSync({
     const normalizedAction = String(action || '').trim().toLowerCase();
     const normalizedUserId = Number(userId);
     if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
-    if (normalizedAction !== 'mute' && normalizedAction !== 'pin') return;
+    if (normalizedAction !== 'mute') return;
 
-    const nextState = normalizedAction === 'mute'
-      ? (mutedUsers[normalizedUserId] === true)
-      : (pinnedUsers[normalizedUserId] === true);
+    const nextState = mutedUsers[normalizedUserId] === true;
 
     const key = rowActionKey(normalizedAction, normalizedUserId);
     moderationSyncQueue[key] = {

@@ -14,6 +14,16 @@ $rawServerMode = strtolower(trim((string) (getenv('VIDEOCHAT_KING_SERVER_MODE') 
 $serverMode = in_array($rawServerMode, ['all', 'http', 'ws'], true) ? $rawServerMode : 'all';
 $workerIndex = (int) (getenv('VIDEOCHAT_KING_WORKER_INDEX') ?: '0');
 $workerCount = (int) (getenv('VIDEOCHAT_KING_WORKER_COUNT') ?: '0');
+$bootstrapOnly = in_array(
+    strtolower(trim((string) (getenv('VIDEOCHAT_KING_BOOTSTRAP_ONLY') ?: '0'))),
+    ['1', 'true', 'yes', 'on'],
+    true
+);
+$skipBootstrap = in_array(
+    strtolower(trim((string) (getenv('VIDEOCHAT_KING_SKIP_BOOTSTRAP') ?: '0'))),
+    ['1', 'true', 'yes', 'on'],
+    true
+);
 $debugRequests = in_array(
     strtolower(trim((string) (getenv('VIDEOCHAT_DEBUG_REQUESTS') ?: '0'))),
     ['1', 'true', 'yes', 'on'],
@@ -73,7 +83,9 @@ $databaseRuntime = null;
 $maxBootstrapAttempts = 40;
 for ($attempt = 1; $attempt <= $maxBootstrapAttempts; $attempt += 1) {
     try {
-        $databaseRuntime = videochat_bootstrap_sqlite($dbPath);
+        $databaseRuntime = $skipBootstrap
+            ? videochat_sqlite_runtime_snapshot($dbPath)
+            : videochat_bootstrap_sqlite($dbPath);
         break;
     } catch (Throwable $error) {
         $message = $error->getMessage();
@@ -101,6 +113,17 @@ if (!videochat_chat_object_store_init($chatObjectStoreRoot, $chatObjectStoreMaxB
     exit(1);
 }
 
+if ($bootstrapOnly) {
+    $log(sprintf(
+        'bootstrap-only complete: schema v%d (%d/%d migrations) at %s',
+        (int) ($databaseRuntime['schema_version'] ?? 0),
+        (int) ($databaseRuntime['migrations_applied'] ?? 0),
+        (int) ($databaseRuntime['migrations_total'] ?? 0),
+        (string) ($databaseRuntime['path'] ?? $dbPath)
+    ));
+    exit(0);
+}
+
 $activeWebsocketsBySession = [];
 $presenceState = videochat_presence_state_init();
 $lobbyState = videochat_lobby_state_init();
@@ -125,7 +148,7 @@ register_shutdown_function(static function () use ($log): void {
 $jsonResponse = static function (int $status, array $payload): array {
     $corsHeaders = [
         'access-control-allow-methods' => 'GET,POST,PATCH,DELETE,OPTIONS',
-        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id',
+        'access-control-allow-headers' => 'Authorization, Content-Type, X-Session-Id, X-Upload-Trace-Id, X-Upload-Batch-Index, X-Upload-Batch-Count',
         'access-control-max-age' => '600',
     ];
 
@@ -318,7 +341,8 @@ $pathFromRequest = static function (array $request): string {
 
 $log('king_version=' . (function_exists('king_version') ? (string) king_version() : 'n/a'));
 $log(sprintf(
-    'sqlite bootstrap: schema v%d (%d/%d migrations) at %s',
+    'sqlite %s: schema v%d (%d/%d migrations) at %s',
+    $skipBootstrap ? 'runtime snapshot' : 'bootstrap',
     (int) ($databaseRuntime['schema_version'] ?? 0),
     (int) ($databaseRuntime['migrations_applied'] ?? 0),
     (int) ($databaseRuntime['migrations_total'] ?? 0),

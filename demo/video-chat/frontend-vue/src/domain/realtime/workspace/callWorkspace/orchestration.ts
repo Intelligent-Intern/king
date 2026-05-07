@@ -1,3 +1,5 @@
+import { isScreenShareUserId } from '../../screenShareIdentity.js';
+
 export function createCallWorkspaceOrchestrationHelpers({
   vue,
   callbacks,
@@ -85,7 +87,12 @@ export function createCallWorkspaceOrchestrationHelpers({
 
     const peerIds = connectedParticipantUsers.value
       .map((participant) => participant.userId)
-      .filter((userId) => Number.isInteger(userId) && userId > 0 && userId !== currentUserId.value);
+      .filter((userId) => (
+        Number.isInteger(userId)
+        && userId > 0
+        && userId !== currentUserId.value
+        && !isScreenShareUserId(userId)
+      ));
 
     for (const targetUserId of peerIds) {
       refs.sendSocketFrame({

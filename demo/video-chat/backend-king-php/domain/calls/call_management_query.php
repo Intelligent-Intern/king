@@ -2,17 +2,23 @@
 
 declare(strict_types=1);
 
-function videochat_fetch_call_for_update(PDO $pdo, string $callId): ?array
+require_once __DIR__ . '/../../support/tenant_migrations.php';
+
+function videochat_fetch_call_for_update(PDO $pdo, string $callId, ?int $tenantId = null): ?array
 {
     $trimmedCallId = trim($callId);
     if ($trimmedCallId === '') {
         return null;
     }
+    $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
+    $tenantSelect = $hasTenantColumn ? 'calls.tenant_id,' : 'NULL AS tenant_id,';
+    $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND calls.tenant_id = :tenant_id' : '';
 
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     calls.id,
+    {$tenantSelect}
     calls.room_id,
     calls.title,
     calls.access_mode,
@@ -34,10 +40,15 @@ SELECT
 FROM calls
 INNER JOIN users owners ON owners.id = calls.owner_user_id
 WHERE calls.id = :id
+  {$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':id' => $trimmedCallId]);
+    $params = [':id' => $trimmedCallId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;
@@ -45,6 +56,7 @@ SQL
 
     return [
         'id' => (string) ($row['id'] ?? ''),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
         'room_id' => (string) ($row['room_id'] ?? ''),
         'title' => (string) ($row['title'] ?? ''),
         'access_mode' => videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only'),
@@ -273,6 +285,7 @@ function videochat_build_call_payload(PDO $pdo, array $callRecord, int $authUser
 
     return [
         'id' => (string) ($callRecord['id'] ?? ''),
+        'tenant_id' => is_numeric($callRecord['tenant_id'] ?? null) ? (int) $callRecord['tenant_id'] : null,
         'room_id' => (string) ($callRecord['room_id'] ?? ''),
         'title' => (string) ($callRecord['title'] ?? ''),
         'access_mode' => videochat_normalize_call_access_mode((string) ($callRecord['access_mode'] ?? 'invite_only')),
@@ -317,9 +330,10 @@ function videochat_update_call_participant_role(
     int $targetUserId,
     string $targetRole,
     int $authUserId,
-    string $authRole
+    string $authRole,
+    ?int $tenantId = null
 ): array {
-    $existingCall = videochat_fetch_call_for_update($pdo, $callId);
+    $existingCall = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
     if ($existingCall === null) {
         return [
             'ok' => false,
@@ -493,7 +507,7 @@ SQL
         ];
     }
 
-    $updatedCall = videochat_fetch_call_for_update($pdo, (string) ($existingCall['id'] ?? ''));
+    $updatedCall = videochat_fetch_call_for_update($pdo, (string) ($existingCall['id'] ?? ''), $tenantId);
     if ($updatedCall === null) {
         return [
             'ok' => false,
@@ -608,9 +622,9 @@ SQL
  *   call: ?array<string, mixed>
  * }
  */
-function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, string $authRole): array
+function videochat_get_call_for_user(PDO $pdo, string $callId, int $authUserId, string $authRole, ?int $tenantId = null): array
 {
-    $call = videochat_fetch_call_for_update($pdo, $callId);
+    $call = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
     if ($call === null) {
         return [
             'ok' => false,

@@ -28,26 +28,10 @@ assert(
   'feature flag must be driven by a Vite environment key',
 )
 assert(
-  /export type VideochatMediaCarrierMode = 'gossip_primary' \| 'sfu_first' \| 'sfu_mirror'/.test(featureFlags),
-  'media carrier flag must expose gossip_primary, sfu_first, and sfu_mirror modes',
-)
-assert(
-  /VITE_VIDEOCHAT_MEDIA_CARRIER/.test(featureFlags),
-  'media carrier mode must be driven by an explicit Vite environment key',
-)
-assert(
-  /return 'sfu_mirror'/.test(featureFlags),
-  'media carrier must default to conservative SFU mirror behavior',
-)
-assert(
-  /gossipPrimary:\s*mode === 'gossip_primary'/.test(featureFlags)
-    && /sfuFirst:\s*mode === 'sfu_first'/.test(featureFlags)
-    && /sfuMirror:\s*mode === 'sfu_mirror'/.test(featureFlags),
-  'media carrier config must expose explicit carrier policy booleans',
-)
-assert(
-  /sfuSendRequiredForGossip:\s*mode === 'sfu_mirror'/.test(featureFlags),
-  'only SFU mirror mode may require SFU send success before gossip publication',
+  /VIDEOCHAT_MEDIA_CARRIER_CONFIG/.test(featureFlags)
+    && /VideochatMediaCarrierConfig/.test(featureFlags)
+    && /VideochatMediaCarrierMode/.test(featureFlags),
+  'feature flag module must re-export the authoritative media carrier runtime config',
 )
 assert(
   /return 'off'/.test(featureFlags),

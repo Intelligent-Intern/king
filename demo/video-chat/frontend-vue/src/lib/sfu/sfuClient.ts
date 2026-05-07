@@ -31,6 +31,7 @@ import {
 import {
   decodeSfuBinaryFrameEnvelope,
   encodeSfuBinaryFrameEnvelope,
+  normalizeVideoLayer,
   prepareSfuOutboundFramePayload,
   SFU_BINARY_CONTINUATION_THRESHOLD_BYTES,
   type PreparedSfuOutboundFramePayload,
@@ -52,6 +53,13 @@ import {
   highResolutionNowMs,
   roundedTransportStageMs,
 } from './sfuClientTransportSample'
+import {
+  buildSfuJoinLatencySample,
+  buildSfuSessionHelloPayload,
+  buildSfuTrackPublishPayload,
+  handleSfuSessionProtocolMessage,
+  type SfuSessionAcceptedDetails,
+} from './sessionProtocol'
 import type {
   SFUClientCallbacks,
   SFUEncodedFrame,
@@ -87,6 +95,7 @@ const SFU_FRAME_SEND_PRESSURE_DIAGNOSTIC_COOLDOWN_MS = 3000
 const SFU_FRAME_CHUNK_DIAGNOSTIC_MIN_CHUNKS = 16
 const SFU_FRAME_SEND_QUEUE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_FRAME_TRANSPORT_SAMPLE_COOLDOWN_MS = 2000
+const SFU_INVALID_BINARY_ENVELOPE_DIAGNOSTIC_COOLDOWN_MS = 1500
 const SFU_PUBLISHER_FRAME_STALL_CHECK_INTERVAL_MS = 1000
 const SFU_PUBLISHER_FRAME_STALL_RESUBSCRIBE_AFTER_MS = 6000
 const SFU_PUBLISHER_FRAME_STALL_RECOVERY_COOLDOWN_MS = 5000
@@ -107,6 +116,10 @@ interface PublisherFrameHealth {
   recoveryCount: number
 }
 
+interface SFUClientOptions {
+  autoSubscribe?: boolean
+}
+
 export class SFUClient {
   private ws: WebSocket | null = null
   private cb: SFUClientCallbacks
@@ -124,24 +137,31 @@ export class SFUClient {
   private lastFrameSendPressureDiagnosticAtMs = 0
   private lastFrameQueueDiagnosticAtMs = 0
   private lastFrameTransportSampleAtMs = 0
+  private lastInvalidBinaryEnvelopeDiagnosticAtMs = 0
   private lastSendFailure: SfuSendFailureDetails | null = null
   private lastFrameTransportSample: SfuFrameTransportSample | null = null
   private publisherFrameHealthById = new Map<string, PublisherFrameHealth>()
   private publisherFrameStallTimer: ReturnType<typeof setInterval> | null = null
   private connectAttemptInFlight = false
   private mediaTransport: SfuWebSocketFallbackMediaTransport
+  private autoSubscribe: boolean
+  private joinStartedAtMs = 0
+  private sessionAccepted: SfuSessionAcceptedDetails | null = null
 
-  constructor(cb: SFUClientCallbacks) {
+  constructor(cb: SFUClientCallbacks, options: SFUClientOptions = {}) {
     this.cb = cb
+    this.autoSubscribe = options.autoSubscribe !== false
     this.carrierState = new SfuCarrierState()
     this.carrierState.onChange((change: CarrierStateChange) => {
-      this.reportClientDiagnostic({
+      reportClientDiagnostic({
         category: 'media',
         level: change.current === 'lost' ? 'error' : (change.current === 'degraded' ? 'warning' : 'info'),
         eventType: 'sfu_carrier_state_changed',
         code: 'sfu_carrier_state_changed',
         message: `SFU carrier state changed from ${change.previous} to ${change.current}.`,
+        roomId: this.roomId,
         payload: {
+          room_id: this.roomId,
           lane: 'ops',
           carrier_state: change.current,
           previous_carrier_state: change.previous,
@@ -297,7 +317,18 @@ export class SFUClient {
       this.disconnectNotified = false
       this.carrierState.reset()
       setBackendSfuOrigin(candidates[index] || '')
+      this.send(buildSfuSessionHelloPayload({
+        roomId,
+        callId: String(query.get('call_id') || ''),
+        userId: String(query.get('userId') || ''),
+        name: String(query.get('name') || ''),
+        startedAtMs: this.joinStartedAtMs,
+      }))
       this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })
+      this.cb.onJoinLatencySample?.(buildSfuJoinLatencySample('sfu_socket_open', this.joinStartedAtMs, {
+        room_id: roomId,
+        candidate_origin: String(candidates[index] || ''),
+      }))
       this.startPublisherFrameStallTimer()
       if (this.cb.onConnected) {
         this.cb.onConnected()
@@ -307,7 +338,10 @@ export class SFUClient {
     ws.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer) {
         const decoded = decodeSfuBinaryFrameEnvelope(ev.data)
-        if (!decoded) return
+        if (!decoded) {
+          this.reportInvalidBinaryEnvelope(ev.data)
+          return
+        }
         this.handleMessage({
           ...decoded.payload,
           data: decoded.payloadBytes,
@@ -404,6 +438,31 @@ export class SFUClient {
     }, SFU_WEBSOCKET_NEGOTIATION_TIMEOUT_MS)
   }
 
+  private reportInvalidBinaryEnvelope(data: ArrayBuffer): void {
+    const nowMs = Date.now()
+    if ((nowMs - this.lastInvalidBinaryEnvelopeDiagnosticAtMs) < SFU_INVALID_BINARY_ENVELOPE_DIAGNOSTIC_COOLDOWN_MS) {
+      return
+    }
+    this.lastInvalidBinaryEnvelopeDiagnosticAtMs = nowMs
+    const bytes = new Uint8Array(data || new ArrayBuffer(0))
+    const prefix = Array.from(bytes.subarray(0, 8)).map((value) => value.toString(16).padStart(2, '0')).join('')
+    reportClientDiagnostic({
+      category: 'media',
+      level: 'warning',
+      eventType: 'sfu_binary_frame_rejected',
+      code: 'sfu_binary_frame_rejected',
+      message: 'SFU binary media frame could not be decoded and was dropped.',
+      roomId: this.roomId,
+      payload: {
+        room_id: this.roomId,
+        lane: 'data',
+        byte_length: bytes.byteLength,
+        prefix_hex: prefix,
+      },
+      immediate: true,
+    })
+  }
+
   connect(session: { userId: string; token: string; name: string }, roomId: string, callId = ''): void {
     if (this.connectAttemptInFlight) return
     this.connectGeneration += 1
@@ -412,6 +471,8 @@ export class SFUClient {
     this.opsSignalSequence = 0
     this.connectAttemptInFlight = true
     this.disconnectNotified = false
+    this.joinStartedAtMs = Date.now()
+    this.sessionAccepted = null
     this.inboundFrameAssembler.clear()
     this.outboundFrameSequenceByTrack.clear()
     this.publisherFrameHealthById.clear()
@@ -444,7 +505,7 @@ export class SFUClient {
 
   publishTracks(tracks: SFUTrack[]): void {
     for (const t of tracks) {
-      this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })
+      this.send(buildSfuTrackPublishPayload(t, this.sessionAccepted))
     }
   }
 
@@ -515,12 +576,16 @@ export class SFUClient {
 
   async sendEncodedFrame(frame: SFUEncodedFrame): Promise<boolean> {
     this.lastSendFailure = null
-    const frameSequence = this.nextOutboundFrameSequence(frame.trackId)
+    const frameSequence = this.nextOutboundFrameSequence(
+      frame.trackId,
+      frame.videoLayer ?? frame.transportMetrics?.video_layer ?? frame.transportMetrics?.videoLayer,
+    )
     return this.enqueueEncodedFrame(prepareSfuOutboundFramePayload({
       ...frame,
       transportMetrics: {
         ...(frame.transportMetrics || {}),
         outbound_media_generation: this.outboundMediaGeneration,
+        publisher_join_started_at_ms: this.joinStartedAtMs,
       },
       frameSequence,
       senderSentAtMs: Date.now(),
@@ -714,8 +779,10 @@ export class SFUClient {
     return Math.max(0, Number(this.ws?.bufferedAmount || 0))
   }
 
-  private nextOutboundFrameSequence(trackId: string): number {
-    const key = String(trackId || '').trim() || 'default'
+  private nextOutboundFrameSequence(trackId: string, videoLayer: unknown = ''): number {
+    const trackKey = String(trackId || '').trim() || 'default'
+    const normalizedVideoLayer = normalizeVideoLayer(videoLayer)
+    const key = normalizedVideoLayer !== '' ? `${trackKey}:${normalizedVideoLayer}` : trackKey
     const next = Math.max(1, Number(this.outboundFrameSequenceByTrack.get(key) || 0) + 1)
     this.outboundFrameSequenceByTrack.set(key, next)
     return next
@@ -866,29 +933,38 @@ export class SFUClient {
     metrics.send_drain_target_buffered_bytes = drain.targetBufferedBytes
     metrics.send_drain_max_wait_ms = drain.maxWaitMs
     if (!drain.ok) {
-      this.reportFrameSendDiagnostic(
-        'sfu_frame_send_aborted',
-        'error',
-        'SFU frame send aborted while waiting for websocket backpressure to drain.',
-        {
-          ...metrics,
-          buffered_amount: drain.bufferedAmount,
-          send_wait_ms: drain.waitedMs,
-          send_drain_target_buffered_bytes: drain.targetBufferedBytes,
-          send_drain_max_wait_ms: drain.maxWaitMs,
-          abort_reason: 'send_buffer_drain_timeout',
-        },
-        true,
-      )
-      this.recordSendFailure(prepared, {
-        reason: 'send_buffer_drain_timeout',
-        stage: 'wait_for_send_buffer_drain',
-        source: 'binary_envelope',
-        message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
-        transportPath: 'binary_envelope',
-        bufferedAmount: drain.bufferedAmount,
-      })
-      return false
+      const projectedBufferedAfterDrainTimeoutBytes = Math.max(0, drain.bufferedAmount) + projectedWirePayloadBytes
+      const mayContinueWithinProfileBufferBudget = bufferedBudgetBytes <= 0
+        || projectedBufferedAfterDrainTimeoutBytes <= bufferedBudgetBytes
+      if (mayContinueWithinProfileBufferBudget) {
+        metrics.send_drain_timeout_continued = true
+        metrics.send_drain_buffered_amount = drain.bufferedAmount
+        metrics.projected_buffered_after_send_bytes = projectedBufferedAfterDrainTimeoutBytes
+      } else {
+        this.reportFrameSendDiagnostic(
+          'sfu_frame_send_aborted',
+          'error',
+          'SFU frame send aborted while waiting for websocket backpressure to drain.',
+          {
+            ...metrics,
+            buffered_amount: drain.bufferedAmount,
+            send_wait_ms: drain.waitedMs,
+            send_drain_target_buffered_bytes: drain.targetBufferedBytes,
+            send_drain_max_wait_ms: drain.maxWaitMs,
+            abort_reason: 'send_buffer_drain_timeout',
+          },
+          true,
+        )
+        this.recordSendFailure(prepared, {
+          reason: 'send_buffer_drain_timeout',
+          stage: 'wait_for_send_buffer_drain',
+          source: 'binary_envelope',
+          message: 'Binary envelope send timed out while waiting for websocket bufferedAmount to drain.',
+          transportPath: 'binary_envelope',
+          bufferedAmount: drain.bufferedAmount,
+        })
+        return false
+      }
     }
     if (this.isPreparedFrameStaleForOutboundMediaGeneration(prepared)) {
       this.recordSendFailure(prepared, {
@@ -1246,15 +1322,28 @@ export class SFUClient {
   }
 
   private handleMessage(msg: SfuClientMessage): void {
+    const sessionProtocol = handleSfuSessionProtocolMessage(msg as Record<string, unknown>, {
+      roomId: this.roomId,
+      startedAtMs: this.joinStartedAtMs,
+      callbacks: this.cb,
+    })
+    if (sessionProtocol.accepted) this.sessionAccepted = sessionProtocol.accepted
+    if (sessionProtocol.handled) {
+      return
+    }
+
+    const msgType = stringField(msg?.type)
     this.markPublisherFrameReceived(msg)
-    if (stringField(msg?.type) === 'sfu/publisher_left') {
+    if (msgType === 'sfu/publisher_left') {
       this.untrackPublisher(stringField(msg?.publisherId, msg?.publisher_id))
     }
     handleSfuClientMessage({
       callbacks: this.cb,
       inboundFrameAssembler: this.inboundFrameAssembler,
       roomId: this.roomId,
-      subscribe: (publisherId) => this.subscribe(publisherId),
+      subscribe: (publisherId) => {
+        if (this.autoSubscribe) this.subscribe(publisherId)
+      },
     }, msg)
   }
 }

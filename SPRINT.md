@@ -1,404 +1,2976 @@
 # King Active Issues
 
-Purpose:
-- This file contains the active sprint issues for the current branch only.
-- Detailed history, parked ideas, and overflow items belong in `BACKLOG.md`.
-- Completion evidence belongs in `READYNESS_TRACKER.md`.
+## Sprint: Gossip-Primary Video Media Carrier Control Plane
 
-Sprint rule:
-- This sprint must close the architecture gap between the current protected SFU
-  app-frame relay and a smooth video-call media path.
-- Do not weaken media-security, room/admission, binary envelope, diagnostics, or
-  automatic quality contracts to get temporary throughput.
-- Do not grow `CallWorkspaceView.vue`; new call-runtime behavior belongs in
-  focused helpers/modules.
-- Video quality stays automatic. No user-facing quality selector.
-- Debugging must be backend-routed and structured enough to identify the first
-  over-budget stage without browser-console screenshots.
+Branch:
+- `develop/1.0.8-beta`
 
-## Sprint: Video Call Real Media Path Architecture
+Status:
+- Active sprint as of 2026-05-06.
+- Execute one checkbox at a time. A checkbox is only closed after
+  implementation and proof.
+- The final checkbox is the test protocol. After each closed checkbox, wait for
+  the next `w` before continuing.
+- [x] `[real-media-plane-contract]` remains closed by
+  `documentation/dev/video-chat/real-media-plane-architecture.md` while this
+  sprint moves the carrier from SFU-first fallback toward Gossip-primary media.
+- [x] `[sfu-control-data-plane-split]` remains closed by the SFU control/data
+  split contracts and documentation.
+- 4. [x] `[packet-layer-sfu-forwarder]` remains closed by the recovery-control
+  routing and packet/layer forwarding contracts.
+- 5. [x] `[native-render-and-jitter-buffer]` remains closed by the receiver
+  jitter-buffer contracts.
+- 6. [x] `[end-to-end-media-pressure-observability]` remains closed by the
+  end-to-end media pressure diagnostics contracts.
 
-Sprint branch:
-- `sprint/video-call-real-media-path-architecture`
+Sprint goal:
+- Move the video-call media architecture so the Head Server is the authoritative
+  Control Plane while bounded Gossip peer links can become the primary media
+  carrier.
+- Keep the server responsible for join/admission, identity, topology hints,
+  neighbor assignment, repair, telemetry, and SFU fallback.
+- Keep SFU available for fallback, relay, and recording, but never let SFU
+  failure block Gossip media publication in `gossip_primary`.
+- Prevent normal server media fanout so the scale advantage of peer fanout is
+  preserved.
 
-PR target:
-- `development/1.0.7-beta`
+Execution boundary:
+- Preserve backend-authoritative admission, identity, topology, repair, and
+  revocation. Do not let browsers invent unbounded random media topology.
+- Do not replace protected media/SFU fallback with weaker plaintext or local-only
+  shortcuts.
+- Do not grow `CallWorkspaceView.vue`; add focused helpers, contracts, and
+  backend modules.
+- The server may coordinate topology, repair, telemetry, fallback, relay, and
+  recording. It must not become the normal frame fanout path.
+- Treat `8865edfa`, `23e4fc80`, `8802b610`, and current `origin/main` Gossip
+  foundations as the compatibility baseline.
 
-Production symptom:
-- Video quality and smoothness regress under protected SFU load: repeated hard
-  reconnects, blocky frames, and slow frame turnover even after local profile
-  and thumbnail fixes.
-- The current hot path still behaves like application message relay:
-  browser-encoded frames enter WebSocket/TCP, pass through King PHP relay,
-  bounded SQLite/live relay replay, browser-side decode, and canvas render.
+Acceptance criteria:
+- In `gossip_primary`, a call can transport media over Gossip even when SFU send
+  is not successful or not ready.
+- SFU remains an optional fallback, relay, and recording path.
+- Join and room-state snapshots provide usable topology information: admitted
+  peers, capabilities, room identity, call identity, transport candidates, and
+  assigned Gossip neighbors.
+- Clients create dedicated bounded Gossip neighbor DataChannels from server
+  assignment rather than binding media Gossip only to random existing native
+  peer connections.
+- Neighbor failures are reported by clients, reassigned by the server, and
+  repaired through clean edge retirement and new edge setup.
+- Rollout and gating for `gossip_primary` are based on Gossip topology health,
+  not SFU baseline health.
+- Gossip-native recovery exists for publisher keyframe requests, recent
+  keyframe cache, missing frame retransmit, duplicate suppression, TTL/fanout
+  limits, and server ops-lane recovery messages.
+- The server does not perform normal media fanout.
 
-Technical target:
-- Make the sprint explicit: the correct target is a real media plane shape,
-  not another round of queue-threshold tuning.
-- Until the dedicated media plane lands, make every remaining WebSocket/SFU
-  fallback buffer bounded, age-biased, observable, and incapable of runaway
-  memory/disk growth.
-- Add a deployment-quality diagnostics surface that tells us whether pressure
-  starts at capture, encode, browser send, King receive, broker/fanout, receiver
-  decode, or render.
+Tickets:
+- [x] GSP-01 Runtime media carrier mode
+  - Add `VITE_VIDEOCHAT_MEDIA_CARRIER=gossip_primary|sfu_first|sfu_mirror`.
+  - Expose a typed runtime config that states whether Gossip may publish without
+    SFU readiness and whether SFU send is optional.
+  - Add contract coverage for defaults and mode semantics.
+- [x] GSP-02 Publisher pipeline decoupling
+  - In `gossip_primary`, change encode flow to publish Gossip before optional
+    SFU send.
+  - SFU unavailable, send pressure, or send failure must not prevent Gossip
+    publish in this mode.
+  - Keep conservative `sfu_first` behavior intact.
+  - Proof:
+    - Added `publisherFrameDispatch.ts` as the shared dispatch boundary for WLVC
+      and protected browser encoder publisher frames.
+    - `gossip_primary` publishes Gossip before attempting optional SFU send and
+      reports SFU unavailable/send-failed/pressure states as diagnostics instead
+      of treating them as Gossip blockers.
+    - `sfu_first` still requires the SFU client before encode and still routes
+      required SFU unavailable/send-failed cases through the existing failure
+      handlers.
+    - Added `gossip-publisher-pipeline-decoupling-contract.mjs`.
+- [x] GSP-03 Join/snapshot/churn topology hints
+  - Promote topology hints to normal join and room-state payloads.
+  - Include admitted peers, capabilities, room/call identity, transport
+    candidates, and assigned bounded neighbors.
+  - Add frontend/backend contracts that topology is not diagnostic-only.
+  - Proof:
+    - Added `videochat_gossipmesh_room_state_payload()` as the server room-state
+      topology contract with admitted peers, per-peer capabilities, room/call
+      identity, transport candidates, and assigned bounded neighbors.
+    - `room/snapshot` now carries viewer-scoped `gossip_topology` and includes
+      it in snapshot signatures so topology churn is not invisible.
+    - `room/joined` and `room/left` now carry `gossip_topology_by_peer_id`
+      reassignment maps for participant churn.
+    - The frontend consumes snapshot and churn topology payloads through the
+      existing Gossip topology application path before snapshot backfill.
+    - Added `gossip-room-state-topology-contract.mjs` and
+      `realtime-gossipmesh-room-state-topology-contract.php`.
+- [x] GSP-04 Dedicated bounded neighbor lifecycle
+  - Add client lifecycle for assigned neighbor links:
+    `assigned -> create/renegotiate DataChannel -> media gossip -> retired`.
+  - Do not attach Gossip media to arbitrary existing peer connections.
+  - Enforce bounded active links from server assignment.
+  - Proof:
+    - Added `gossipNeighborLifecycle.ts` to own dedicated Gossip neighbor
+      `RTCPeerConnection` instances and `gossip_neighbor_*` offer/answer/ice
+      signaling.
+    - `gossipDataLane.ts` now syncs server-assigned `rtc_datachannel`
+      neighbors into that lifecycle and retires edges removed by topology.
+    - Socket handling consumes `gossip_neighbor_*` signaling before Native
+      WebRTC media signaling sees SDP/ICE payloads.
+    - Removed workspace wiring that bound Gossip media to arbitrary Native
+      media peer connections.
+    - Added `gossip-dedicated-neighbor-lifecycle-contract.mjs`.
+- [x] GSP-05 Authoritative topology repair
+  - Make `gossip/topology-repair/request` operational: client failure report,
+    server replacement assignment, client edge setup, old edge retirement.
+  - Add contracts for reassignment and cleanup.
+  - Proof:
+    - `gossip/topology-repair/request` now records the failed edge, computes a
+      fresh server-authoritative room topology with failed pairs excluded, and
+      sends peer-scoped `topology_hint` reassignment payloads to active room
+      connections.
+    - Repair payloads include authoritative metadata with retired edges,
+      per-peer `retired_peer_ids`, and replacement neighbor ids so both ends of
+      the failed edge cleanly close the old dedicated DataChannel.
+    - The frontend consumes authoritative repair metadata before applying the
+      new topology and retires old dedicated neighbor links with
+      `repair_retired_edge`.
+    - Added `gossip-authoritative-topology-repair-contract.mjs` and extended the
+      backend runtime contract to prove peer-scoped reassignment, cleanup, and
+      no media-frame fanout.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
+- [x] GSP-06 Gossip health rollout gates
+  - In `gossip_primary`, gate media Gossip on Gossip topology health.
+  - SFU health may influence fallback/relay usage, not whether Gossip is active.
+  - Proof:
+    - `deriveGossipRolloutGateState()` now evaluates the media-carrier mode and
+      separates Gossip topology health, media-security recovery health, and SFU
+      fallback health.
+    - In `gossip_primary`, active Gossip media requires healthy bounded
+      topology and clean Gossip telemetry, but no longer requires
+      `sfu_baseline_healthy`; SFU fallback buckets remain reported separately.
+    - `sfu_first` keeps the conservative SFU-baseline requirement.
+    - The workspace data lane passes `VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode` into
+      the gate and only applies the SFU baseline requirement for non
+      `gossip_primary` modes.
+    - Added `gossip-primary-health-gate-contract.mjs`.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
+- [x] GSP-07 Gossip-native recovery
+  - Add per-publisher keyframe requests, recent keyframe cache, missing-frame
+    retransmit, duplicate suppression, TTL/fanout limits, and recovery messages
+    over the server ops lane.
+  - Recovery must not assume SFU is source of truth.
+  - Proof:
+    - Receivers now detect Gossip sequence gaps and initial delta frames without
+      a keyframe, coalesce per-publisher recovery requests, and send
+      sanitized `gossip/recovery/request` commands over the server ops lane.
+    - Publishers keep a bounded recent-frame/keyframe cache and serve missing
+      frames or cached keyframes back through bounded Gossip peer links.
+    - The server validates recovery ops payloads, rejects media/signaling/token
+      fields, routes only control messages to the publisher, and triggers a
+      publisher keyframe request without becoming a media fanout path.
+    - Added `gossip-native-recovery-contract.mjs` and extended the backend
+      Gossip runtime contract for recovery routing, unsafe-field rejection, and
+      no media fanout.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
+- [x] GSP-08 Server no-normal-media-fanout guard
+  - Audit backend realtime Gossip/SFU paths and add tests ensuring the server
+    does not distribute every normal media frame to all peers.
+  - Keep fallback/relay/recording explicitly separate.
+  - Proof:
+    - Added a normal Realtime websocket media-fanout guard before chat,
+      signaling, Gossip, and layout command dispatch.
+    - The guard rejects `sfu/frame`, `sfu/frame-chunk`, and Gossip media
+      commands, plus media-bearing fields such as `protected_frame` and
+      `data_base64`, and only answers the offending websocket with a
+      `normal_media_fanout_forbidden` error.
+    - SFU direct fanout, live relay publish, and SQLite frame buffer insert
+      remain explicitly isolated in the SFU gateway/subscriber-budget paths as
+      fallback/relay/recording behavior.
+    - Added `gossip-server-no-media-fanout-contract.mjs` and extended the
+      backend Gossip runtime contract for forbidden media commands, media-field
+      rejection, and control-plane recovery pass-through.
+    - Validation: `npm run test:contract:gossip`, `git diff --check`.
+- [x] GSP-09 Integration contracts and smoke checks
+  - Cover `gossip_primary`, `sfu_first`, and `sfu_mirror` behavior at contract
+    level.
+  - Exercise join, churn, neighbor repair, and SFU failure tolerance.
+  - Proof:
+    - Added `gossip-media-carrier-integration-smoke-contract.mjs` as a
+      cross-cutting contract that executes the publisher dispatch helper in
+      `gossip_primary`, `sfu_first`, and `sfu_mirror`.
+    - The smoke proves `gossip_primary` publishes Gossip when SFU is unavailable,
+      `sfu_first` remains blocked by required SFU availability, and `sfu_mirror`
+      mirrors Gossip after SFU success or post-encode SFU send failure.
+    - The same smoke exercises mode-sensitive rollout gates, direct snapshot
+      topology, churn topology maps, dedicated neighbor lifecycle wiring,
+      authoritative repair cleanup, backend recovery ops, and the no-normal
+      media-fanout guard.
+    - Validation: `npm run test:contract:gossip`, `git diff --check`.
+- [x] GSP-10 Acceptance form
+  - Produce `GOSSIP_CHECK.md` as an empty acceptance form for the final Gossip
+    review.
+  - Do not perform the acceptance, fill observed results, or claim production
+    readiness in this ticket.
+  - Proof:
+    - Added `GOSSIP_CHECK.md` with metadata, scope, required checks,
+      recommended commands, manual call checks, telemetry/log fields, residual
+      risk fields, and sign-off fields.
+    - All result, evidence, risk, and approval fields intentionally remain
+      `Auszufuellen`.
+    - Validation: `git diff --check`.
+
+## Sprint: Call Apps Marketplace And CRDT Collaboration Surface
+
+Branch:
+- `develop/1.0.8-beta`
+
+Status:
+- Planned as of 2026-05-06.
+- This sprint is additional to the Gossip-Primary media sprint above. It must
+  not replace or weaken the Gossip control-plane/media-carrier work.
+- Execute one checkbox at a time after the currently selected Gossip checkbox
+  has been handled, or when explicitly requested.
+- This sprint is a planning sprint until the first implementation checkbox is
+  selected. No deployment is part of this sprint unless a later request says so.
+
+Sprint goal:
+- Add a second video-call workspace view that can host organization-owned
+  collaborative Call Apps next to the participant video strip.
+- Make Call Apps marketplace-orderable for an organization, discoverable through
+  Semantic DNS, self-describing through MCP metadata, and launchable inside a
+  call as sandboxed collaborative iframe apps.
+- Start with a collaborative whiteboard Call App and define the same contract for
+  future text processing and presentation apps.
+- Support per-call and per-participant access control so the call owner can
+  decide which participants may use the active app.
+- Use CRDT-based collaboration so multiple participants can edit the same app
+  state concurrently without forcing the Head Server to become an app-specific
+  editor.
+
+Relationship to the Gossip sprint:
+- Gossip remains the primary media carrier target for video/audio frames.
+- Call Apps use the call control plane for admission, participant identity,
+  app-session grants, presence, CRDT bootstrap, and persistence checkpoints.
+- High-rate app presence such as cursors and drawing preview events may later use
+  bounded Gossip data lanes, but CRDT correctness must not depend on lossy media
+  transport.
+- SFU fallback remains a media concern only. It must not gate whether an already
+  authorized Call App can load or synchronize.
+
+Core product concepts:
+- `Call App`: an installable app package that exposes metadata, permissions,
+  launch URL, CRDT schema, and health via MCP.
+- `Call App Catalog`: Marketplace-facing list of discoverable app packages.
+- `Organization Entitlement`: proof that an organization has ordered/enabled a
+  Call App. Entitlements are organization-scoped, not personal-only.
+- `Call App Installation`: app configuration for one organization, including
+  allowed versions, default permissions, storage policy, and launch constraints.
+- `Call App Session`: a concrete app instance attached to one video call.
+- `Call App Participant Grant`: per-call participant access decision with
+  default allow/deny plus explicit participant overrides.
+- `Call App Host`: the video-call workspace area that renders the participant
+  strip and the sandboxed iframe.
+- `CRDT Document`: app-specific shared document state with versioned schema,
+  operation log, snapshots, and participant presence.
+- `Mother Node Registration`: Semantic-DNS registration that makes an app
+  discoverable through the King mother-node topology.
+
+Initial app catalog:
+- Whiteboard
+  - First implementation target.
+  - Collaborative drawing, shapes, selection, move/resize, erase, text labels,
+    sticky notes, images later, participant cursors, and export.
+  - Multiple participants may draw at the same time when permitted.
+- Text Processing
+  - Collaborative document editing, comments, formatting, export to document
+    formats, and app-owned CRDT document schema.
+- Presentation
+  - Collaborative slide editor similar to PowerPoint.
+  - Must support export to `.pptx` as a hard product contract.
+- Additional Marketplace Apps
+  - Must be discoverable and installable through the same Semantic-DNS/MCP
+    contract before appearing in a call.
+
+Target call workspace layout:
+- Add a new call view mode, for example `call_app_workspace`.
+- Top/content region:
+  - A grouped mini participant video strip above the app area.
+  - Default target: show 5 mini participant videos.
+  - The active speaker/main video rules remain separate from app permissions.
+  - The strip must not block or resize the iframe unpredictably.
+- Main app region:
+  - Sandboxed iframe loads the active Call App.
+  - The iframe fills the remaining app workspace height.
+  - App resize must be stable on desktop, tablet, and mobile.
+- Empty state:
+  - If no Call App is active, show the normal call workspace or an app-selection
+    prompt only when the owner has permission to add apps.
+- Left sidebar:
+  - Add a `Call Apps` button.
+  - Clicking it replaces the normal sidebar content with searchable, paginated
+    organization-available Call Apps.
+  - List entries show app icon, name, category, installed/available state,
+    version, required permissions, and health.
+  - Selecting an app opens its add-to-call flow in the sidebar.
+  - The add flow asks for default usage permission:
+    `allowed_by_default` or `blocked_by_default`.
+- Right sidebar:
+  - When a Call App is active, add an app-permissions icon.
+  - The icon opens participant grants for the active app session.
+  - The owner can allow/deny individual users and change the default.
+  - Non-owners can only see their access state and app status.
+
+Discovery and Marketplace architecture:
+- Call Apps live under `demo/call-app/<app-key>/`.
+- Every app package exposes:
+  - static package metadata for local/dev builds,
+  - an MCP metadata endpoint for runtime discovery,
+  - a launch endpoint for iframe hosting,
+  - a health endpoint,
+  - a CRDT schema descriptor,
+  - required King capabilities and permissions.
+- Semantic DNS service type:
+  - `call_app`
+  - queryable by app key, category, capability, version, health, region, and
+    organization availability.
+- Mother Node registration:
+  - App service registers with the mother-node topology via Semantic DNS.
+  - Registration includes MCP endpoint, iframe origin, app version, health,
+    supported CRDT protocol, and marketplace metadata hash.
+  - The backend periodically refreshes and validates registrations.
+- MCP metadata contract:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Marketplace flow:
+  - Discover available Call Apps through Semantic DNS/MCP.
+  - Show catalog entries in Marketplace.
+  - User with organization purchase/admin permission orders the app for their
+    organization.
+  - Backend creates organization entitlement and installation record.
+  - Installed app appears in the call's `Call Apps` sidebar list for users in
+    that organization who have permission to attach apps.
+  - Call owner attaches an installed app to a call.
+  - Backend creates a Call App Session and participant grants.
+
+Backend architecture:
+- Add a `call_apps` backend domain, separate from raw video-call media code.
+- Keep app-control endpoints under the existing authenticated backend routing
+  pattern.
+- Required resources:
+  - app catalog records discovered from Semantic DNS/MCP,
+  - organization entitlements,
+  - organization installations,
+  - call app sessions,
+  - call app participant grants,
+  - CRDT documents,
+  - CRDT operation log/checkpoints,
+  - app launch tokens,
+  - app audit events.
+- Required route groups:
+  - catalog/discovery,
+  - marketplace order/enable/disable,
+  - organization installation configuration,
+  - call app session create/list/activate/remove,
+  - participant grant update,
+  - iframe launch token mint/validate,
+  - CRDT bootstrap/snapshot/op append,
+  - export job request/status/download.
+- All mutable routes must enforce tenant/organization permission grants, not
+  browser-only UI flags.
+- Call ownership and organization entitlement both matter:
+  - A user may own a call but still cannot attach an app that the organization
+    has not ordered.
+  - A user may be in the organization but still cannot change participant grants
+    without call-owner or delegated moderator permission.
+
+Frontend architecture:
+- Do not add Call App logic to `CallWorkspaceView.vue`.
+- Add focused modules under the call workspace domain, for example:
+  - `callApps/appCatalog.ts`
+  - `callApps/appSessionStore.ts`
+  - `callApps/appPermissions.ts`
+  - `callApps/callAppHost.ts`
+  - `callApps/crdtBridge.ts`
+  - `callApps/iframeBridge.ts`
+  - `callApps/sidebarCallApps.ts`
+- Add a reusable `CallAppHost` component:
+  - participant strip,
+  - iframe container,
+  - loading/error states,
+  - active app header/status,
+  - fullscreen/app-focus behavior.
+- Add left sidebar content mode:
+  - normal call controls,
+  - background controls,
+  - Call Apps list/search/pagination,
+  - selected app add flow.
+- Add right sidebar app-permission panel:
+  - app status,
+  - default allow/deny,
+  - participant rows,
+  - allow/deny toggles,
+  - pending/invited/guest state,
+  - audit feedback after save.
+- App list pagination and search must follow existing CRUD/search spacing
+  standards and not introduce special layout hacks.
+
+Iframe and security model:
+- Iframes must be sandboxed and origin-restricted.
+- The parent passes only a short-lived launch token and app-session id.
+- The app must not receive the user's normal session token.
+- The app cannot read parent local storage, cookies, or unrelated room state.
+- Parent/app communication uses `postMessage` with:
+  - strict origin checking,
+  - app session id,
+  - protocol version,
+  - participant identity pseudonym where needed,
+  - capability-scoped commands only.
+- App frame capabilities are explicit:
+  - read CRDT state,
+  - append CRDT op,
+  - publish cursor/presence,
+  - request export,
+  - request media references only when later allowed.
+- The parent can suspend or detach an app if health, origin, token, or
+  permission checks fail.
+
+CRDT architecture:
+- Define a King Call App CRDT envelope:
+  - app id,
+  - app version,
+  - call id,
+  - app session id,
+  - document id,
+  - schema version,
+  - actor id,
+  - operation id,
+  - lamport/logical clock,
+  - causal dependencies/vector summary,
+  - payload type,
+  - payload bytes/json,
+  - server admission stamp.
+- App owns domain semantics; King owns admission, persistence, transport,
+  snapshots, audit, and replay safety.
+- Support adapter-based CRDT engines:
+  - first app may use one concrete CRDT implementation,
+  - app manifest declares the CRDT protocol,
+  - parent bridge treats operations through the King envelope.
+- Required channels:
+  - bootstrap snapshot on app load,
+  - operation append from iframe to parent/backend,
+  - operation broadcast to other participants,
+  - checkpoint/snapshot compaction,
+  - presence/cursor updates,
+  - export job coordination.
+- Presence/cursors are not persisted like authoritative document ops.
+- Document ops are idempotent and duplicate-safe.
+- Offline/reconnect behavior:
+  - app reload requests current snapshot and missing ops after last known clock,
+  - parent replays only authorized app sessions,
+  - revoked users stop receiving new ops immediately.
+
+Permissions and owner controls:
+- Owner chooses default app usage when adding the app:
+  - allow all current and future participants,
+  - deny by default and explicitly allow participants.
+- Owner/moderator can change participant grants during the call.
+- Grant changes are realtime room-state events.
+- Grant revocation:
+  - disables iframe input for that participant,
+  - stops sending new CRDT ops to that participant,
+  - keeps already committed document ops in the shared document history.
+- Guests:
+  - can be granted app usage if the call owner allows it,
+  - never receive organization marketplace/admin permissions,
+  - use call-scoped identities only.
+- Audit events:
+  - app attached,
+  - app removed,
+  - default changed,
+  - participant allowed/denied,
+  - export requested,
+  - app health failure,
+  - launch token rejected.
+
+Whiteboard first-slice scope:
+- Create `demo/call-app/whiteboard`.
+- Package metadata and MCP descriptor.
+- Semantic-DNS local registration entry.
+- Iframe app shell.
+- CRDT document for strokes/shapes/text labels.
+- Multi-user cursors and drawing ownership.
+- Tools:
+  - pointer/select,
+  - pen,
+  - line,
+  - rectangle,
+  - ellipse,
+  - text,
+  - sticky note,
+  - eraser,
+  - undo/redo per actor where CRDT-safe.
+- Export:
+  - PNG/PDF first,
+  - later package can add richer export if needed.
+- Permission behavior:
+  - viewer-only when not granted,
+  - editor when granted,
+  - owner/moderator can switch participants live.
+
+Future app requirements:
+- Text processing:
+  - collaborative rich text,
+  - comments,
+  - export to common document formats,
+  - deterministic CRDT merge for text ranges/formatting.
+- Presentation:
+  - slide list,
+  - slide canvas,
+  - collaborative editing,
+  - speaker notes later,
+  - export to `.pptx` required before it is considered complete.
+- Marketplace apps:
+  - cannot appear in a call until they expose valid metadata, MCP contract,
+    health, launch URL, and CRDT schema.
+
+Data model planning:
+- `call_app_catalog_entries`
+  - app key, version, name, description, category, icon, listing metadata,
+    semantic DNS service id, MCP endpoint, health, verified_at.
+- `organization_call_app_entitlements`
+  - organization id, app key, plan/license, status, ordered_by, ordered_at,
+    expires_at, marketplace order reference.
+- `organization_call_app_installations`
+  - organization id, app key, pinned version/range, config, default app policy,
+    storage/export settings.
+- `call_app_sessions`
+  - call id, organization id, app key, app version, document id, active state,
+    created_by, created_at, removed_at.
+- `call_app_participant_grants`
+  - app session id, participant id/user id/guest id, grant state, source
+    default/explicit, changed_by, changed_at.
+- `call_app_crdt_documents`
+  - document id, app key, schema version, snapshot pointer, clock summary,
+    created_at, updated_at.
+- `call_app_crdt_ops`
+  - operation id, document id, actor id, causal metadata, payload pointer,
+    received_at, admitted_by.
+- `call_app_audit_events`
+  - organization id, call id, app session id, actor, event type, payload,
+    created_at.
+
+Observability and operations:
+- App launch latency.
+- Discovery refresh success/failure.
+- Semantic-DNS registration freshness.
+- MCP metadata validation failures.
+- iframe origin/token rejection count.
+- CRDT op append rate, replay lag, snapshot compaction time.
+- Participant grant changes.
+- App health by organization/app version.
+- Export job latency/failure.
+
+CAP-01 Architecture Inventory, 2026-05-07:
+- Existing Extension anchors:
+  - `extension/include/semantic_dns/semantic_dns.h`
+    - current service types include `KING_SERVICE_TYPE_MCP_AGENT` and
+      `KING_SERVICE_TYPE_MOTHER_NODE`.
+    - current public functions include `king_semantic_dns_register_service`,
+      `king_semantic_dns_discover_service`, and
+      `king_semantic_dns_register_mother_node`.
+  - `extension/src/core/introspection/semantic_dns/service_registry/register.inc`
+    owns Semantic-DNS service registration behavior.
+  - `extension/src/core/introspection/semantic_dns/discovery.inc` owns
+    Semantic-DNS service discovery behavior.
+  - `extension/src/core/introspection/semantic_dns/mother_nodes.inc` owns
+    mother-node registration behavior.
+  - `extension/include/mcp/mcp.h` and `extension/src/php_king/mcp.inc` own the
+    native MCP request/upload/download surface used by Call Apps metadata
+    discovery.
+- Existing backend anchors:
+  - `demo/video-chat/backend-king-php/domain/marketplace/call_app_marketplace.php`
+    owns the current legacy admin Call App catalog CRUD.
+  - `demo/video-chat/backend-king-php/http/module_marketplace.php` exposes the
+    current `/api/admin/marketplace/apps` route boundary.
+  - `demo/video-chat/backend-king-php/support/database_migrations.php` migration
+    `0019_call_app_marketplace` owns the current legacy `call_apps` table.
+  - `demo/video-chat/backend-king-php/domain/realtime/realtime_room_snapshot.php`
+    owns room snapshots that must later include active Call App session state.
+  - `demo/video-chat/backend-king-php/http/module_realtime_websocket_commands.php`
+    owns websocket command routing that must later include Call App session,
+    grant, presence, and CRDT events.
+  - `demo/video-chat/backend-king-php/domain/tenancy/permission_grants.php` owns
+    resource grant evaluation for organization/app/call-session permissions.
+- Existing frontend anchors:
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/descriptor.js` owns
+    the Administration Marketplace navigation and action metadata.
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/pages/AdminMarketplaceView.vue`
+    owns the current admin marketplace catalog surface.
+  - `demo/video-chat/frontend-vue/src/modules/marketplace/pages/adminMarketplaceApi.ts`
+    owns current marketplace API calls.
+  - `demo/video-chat/frontend-vue/src/modules/calls/descriptor.js` owns
+    video-call module permissions.
+  - `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/**`
+    must receive new focused Call App helpers. `CallWorkspaceView.vue` must not
+    grow with Call App logic.
+- New source ownership to create in later tickets:
+  - `demo/call-app/<app-key>/` owns installable demo Call App packages.
+  - `demo/call-app/whiteboard/` owns the first iframe app, its manifest, MCP
+    descriptor, CRDT schema, health descriptor, and launch entrypoint.
+  - `demo/video-chat/backend-king-php/domain/call_apps/**` owns catalog
+    discovery, organization entitlements/installations, call app sessions,
+    participant grants, iframe launch tokens, CRDT persistence/replay, and
+    export jobs.
+  - `demo/video-chat/backend-king-php/http/module_call_apps.php` owns new
+    user/organization/call-scoped Call App APIs.
+  - `demo/video-chat/frontend-vue/src/domain/realtime/workspace/callWorkspace/callApps/**`
+    owns the video-call Call App host, sidebar browser, permission panel, iframe
+    bridge, and CRDT bridge.
+
+CAP-01 Capability Contract:
+- Marketplace and discovery:
+  - `call_apps.discover`
+  - `call_apps.marketplace.order`
+  - `call_apps.marketplace.install`
+  - `call_apps.marketplace.disable`
+- Call session lifecycle:
+  - `call_apps.call.attach`
+  - `call_apps.call.remove`
+  - `call_apps.call.view`
+- Participant permissions:
+  - `call_apps.permissions.manage`
+  - `call_apps.permissions.use`
+  - `call_apps.permissions.revoke`
+- Iframe launch:
+  - `call_apps.launch`
+  - `call_apps.launch.validate`
+- CRDT and presence:
+  - `call_apps.crdt.read`
+  - `call_apps.crdt.append`
+  - `call_apps.crdt.replay`
+  - `call_apps.presence.publish`
+- Export:
+  - `call_apps.export.request`
+  - `call_apps.export.download`
+
+CAP-01 Route Boundary Contract:
+- Existing legacy admin catalog:
+  - `GET /api/admin/marketplace/apps`
+  - `POST /api/admin/marketplace/apps`
+  - `GET /api/admin/marketplace/apps/{app_id}`
+  - `PATCH /api/admin/marketplace/apps/{app_id}`
+  - `DELETE /api/admin/marketplace/apps/{app_id}`
+- New organization-facing marketplace/discovery APIs:
+  - `GET /api/marketplace/call-apps`
+  - `GET /api/marketplace/call-apps/{app_key}`
+  - `POST /api/marketplace/call-apps/{app_key}/orders`
+  - `POST /api/marketplace/call-apps/{app_key}/installations`
+  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
+- New call-scoped app APIs:
+  - `GET /api/calls/{call_id}/call-apps/available`
+  - `GET /api/calls/{call_id}/call-app-sessions`
+  - `POST /api/calls/{call_id}/call-app-sessions`
+  - `PATCH /api/call-app-sessions/{session_id}`
+  - `DELETE /api/call-app-sessions/{session_id}`
+- New app participant permission APIs:
+  - `GET /api/call-app-sessions/{session_id}/participant-grants`
+  - `PATCH /api/call-app-sessions/{session_id}/participant-grants`
+- New iframe launch APIs:
+  - `POST /api/call-app-sessions/{session_id}/launch-token`
+  - `POST /api/call-app-sessions/{session_id}/launch-token/validate`
+- New CRDT APIs:
+  - `GET /api/call-app-sessions/{session_id}/crdt/bootstrap`
+  - `GET /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/ops`
+  - `POST /api/call-app-sessions/{session_id}/crdt/snapshots`
+- New export APIs:
+  - `POST /api/call-app-sessions/{session_id}/exports`
+  - `GET /api/call-app-exports/{job_id}`
+  - `GET /api/call-app-exports/{job_id}/download`
+
+CAP-02 Package Layout, 2026-05-07:
+- Package root:
+  - `demo/call-app/<app-key>/`
+- Required package files:
+  - `call-app.manifest.json`
+  - `mcp.descriptor.json`
+  - `crdt.schema.json`
+  - `health.descriptor.json`
+  - `public/index.html`
+- First package:
+  - `demo/call-app/whiteboard`
+  - status is `runtime_ready` after CAP-13 added runtime whiteboard tools.
+- Whiteboard metadata pins:
+  - Semantic-DNS service type: `call_app`
+  - service name: `call_app.whiteboard`
+  - mother-node registration required
+  - Marketplace order scope: `organization`
+  - default participant access: `blocked_by_default`
+  - iframe bridge protocol: `king.call_app.iframe.v1`
+  - iframe receives primary session token: `false`
+  - CRDT protocol: `king.call_app.crdt.v1`
+  - document kind: `whiteboard_document`
+  - exports: `png`, `pdf`
+- Whiteboard MCP metadata methods:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Whiteboard CRDT operation stubs:
+  - `stroke.add`
+  - `shape.add`
+  - `shape.update`
+  - `shape.delete`
+  - `text.add`
+  - `text.update`
+  - `sticky_note.add`
+  - `sticky_note.update`
+  - `selection.update`
+  - `cursor.move`
+
+CAP-03 Semantic-DNS Registration Layer, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_semantic_dns.php`
+- Local package discovery:
+  - scans `demo/call-app`
+  - reads `call-app.manifest.json`, `mcp.descriptor.json`,
+    `crdt.schema.json`, and `health.descriptor.json`
+  - validates whiteboard metadata consistency before exposing it
+- Semantic-DNS service payload:
+  - `service_type`: `call_app`
+  - `service_name`: `call_app.whiteboard`
+  - `status`: derived from descriptor validation health
+  - `attributes.app_key`
+  - `attributes.app_version`
+  - `attributes.category`
+  - `attributes.mcp_endpoint`
+  - `attributes.mcp_service_name`
+  - `attributes.iframe_entrypoint`
+  - `attributes.crdt_protocol`
+  - `attributes.marketplace_order_scope`
+  - `attributes.marketplace_metadata_hash`
+  - `attributes.mother_node_registration_required`
+  - `attributes.capabilities_csv`
+  - `attributes.mcp_methods_csv`
+  - `attributes.export_formats_csv`
+- Registration behavior:
+  - validates payloads against the native `king_semantic_dns_register_service`
+    shape: `service_id`, `service_name`, `service_type`, `hostname`, `port`,
+    `status`, and scalar `attributes`.
+  - calls a provided registration callable in tests and calls
+    `king_semantic_dns_register_service` when the King extension is loaded.
+  - reports `registration_available` honestly instead of pretending native
+    registration ran when the extension function is unavailable.
+- Discovery/refresh behavior:
+  - `videochat_call_app_refresh_semantic_dns_catalog(...)` returns validated
+    packages, Semantic-DNS payloads, invalid package diagnostics, and optional
+    registration results.
+
+CAP-04 MCP Metadata Provider, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_mcp_metadata.php`
+- Provider request shape:
+  - accepts a decoded MCP request array or a JSON MCP payload
+  - requires `method`
+  - requires `params.app_key`
+  - returns a strict response envelope with `ok`, `method`, `response_schema`,
+    `app_key`, `result`, and `metadata_hash`
+- Implemented methods:
+  - `call_app.describe`
+  - `call_app.capabilities`
+  - `call_app.crdt_schema`
+  - `call_app.launch_contract`
+  - `call_app.health`
+  - `call_app.export_formats`
+  - `call_app.marketplace_listing`
+- Metadata validation before response:
+  - descriptor schema must be `king.call_app.mcp_descriptor.v1`
+  - descriptor protocol must be `king.mcp.v1`
+  - MCP service name must match the Semantic-DNS service name plus `.mcp`
+  - all required MCP methods and response schemas must be present
+  - MCP capabilities must be backed by manifest permissions
+  - launch contract must match the iframe manifest and reject primary session
+    tokens
+  - CRDT schema must match the manifest protocol and include documents
+  - manifest and CRDT export formats must match
+  - health descriptor must expose required checks
+  - marketplace listing must be organization-scoped
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-mcp-metadata-contract.php`
+  - verifies every provider method for `whiteboard`
+  - verifies JSON MCP request handling
+  - mutates a temporary descriptor and proves incomplete metadata is rejected
+
+CAP-05 Marketplace Organization Entitlement Flow, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_marketplace_entitlements.php`
+  - `demo/video-chat/backend-king-php/support/call_app_marketplace_migrations.php`
+- Schema:
+  - `call_app_catalog_entries`
+  - `organization_call_app_entitlements`
+  - `organization_call_app_installations`
+- Catalog discovery:
+  - refreshes local Call App packages through the CAP-03 Semantic-DNS payload
+    builder and CAP-04 MCP metadata provider
+  - persists verified catalog entries with MCP endpoint, service id,
+    iframe entrypoint, CRDT protocol, health, capabilities, export formats, and
+    metadata hash
+- Organization flow:
+  - `POST /api/marketplace/call-apps/{app_key}/orders` creates or reactivates
+    an entitlement for the authenticated active tenant only
+  - `POST /api/marketplace/call-apps/{app_key}/installations` creates or
+    re-enables an installation only when the tenant has an active entitlement
+  - `PATCH /api/marketplace/call-apps/{app_key}/installations/{installation_id}`
+    enables or disables the active tenant's installation
+  - client-supplied `tenant_id`, `organization_id`, `user_id`, and
+    `owner_user_id` are rejected so callers cannot order for another
+    organization or only for a personal account
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-marketplace-entitlement-contract.php`
+  - verifies catalog discovery, tenant-admin ordering, tenant override
+    rejection, installation create, disable/enable, and duplicate-order
+    idempotency
+
+CAP-06 Organization Installation And App Availability, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_availability.php`
+  - `demo/video-chat/backend-king-php/http/module_call_apps.php`
+- Route:
+  - `GET /api/calls/{call_id}/call-apps/available`
+  - requires authenticated call visibility for the active tenant
+  - refreshes Semantic-DNS/MCP catalog metadata before listing
+- Availability contract:
+  - returns only organization-installed Call Apps
+  - hides disabled installations
+  - hides inactive or expired entitlements
+  - hides unhealthy catalog entries
+  - returns pagination and filters for the future sidebar browser
+- Frontend contract:
+  - `demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js`
+  - `demo/video-chat/frontend-vue/src/domain/realtime/callApps/useCallAppsCatalog.js`
+  - Pinia store/composable load the call availability endpoint and expose only
+    installed, enabled, healthy apps
+  - no implementation weight was added to `CallWorkspaceView.vue`
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-availability-contract.php`
+  - `demo/video-chat/frontend-vue/tests/contract/call-app-availability-frontend-contract.mjs`
+  - verifies empty-before-install, healthy installed app visibility, unhealthy
+    app hiding, disabled installation hiding, missing-call 404, and frontend
+    no-hard-coded-app catalog behavior
+
+CAP-07 Call App Session Lifecycle, 2026-05-07:
+- Backend implementation:
+  - `demo/video-chat/backend-king-php/support/call_app_session_migrations.php`
+  - `demo/video-chat/backend-king-php/domain/call_apps/call_app_sessions.php`
+  - extends `demo/video-chat/backend-king-php/http/module_call_apps.php`
+- Schema:
+  - `call_app_sessions`
+  - `call_app_participant_grants`
+  - `call_app_launch_tokens`
+- Routes:
+  - `GET /api/calls/{call_id}/call-app-sessions`
+  - `POST /api/calls/{call_id}/call-app-sessions`
+  - `PATCH /api/call-app-sessions/{session_id}`
+  - `DELETE /api/call-app-sessions/{session_id}`
+- Lifecycle contract:
+  - call owner/admin can attach installed healthy organization apps
+  - non-owner participants cannot attach apps
+  - sessions can be activated and inactivated without deletion
+  - removal marks the session removed and retires open iframe launch tokens
+  - removed sessions are hidden by default but available through explicit
+    history listing
+- Room-state contract:
+  - `room/snapshot` now includes `call_apps.active_sessions`
+  - snapshot signatures include active Call App session state so websocket room
+    updates can detect app-session changes
+- Contract proof:
+  - `demo/video-chat/backend-king-php/tests/call-app-session-lifecycle-contract.php`
+  - verifies owner-only attach, default participant grants, room snapshot
+    visibility, active/inactive transitions, remove behavior, launch-token
+    retirement, and removed-session history
+
+Acceptance criteria:
+- The call has an additional Call App workspace view with mini participant
+  videos above a sandboxed app iframe.
+- The left sidebar can switch to a searchable, paginated Call Apps catalog for
+  organization-installed apps.
+- A call owner can attach an installed app to the current call and choose default
+  participant access.
+- The right sidebar exposes app participant grants while an app is active.
+- Whiteboard app can be discovered, attached, loaded, and edited by multiple
+  permitted participants.
+- Revoked participants cannot submit new app operations.
+- Call Apps are discovered through Semantic DNS/MCP metadata rather than a
+  hard-coded frontend list.
+- Marketplace order is organization-scoped.
+- The app iframe never receives the user's primary session token.
+- CRDT document ops are persisted/replayed through a King envelope.
+
+Tickets:
+- [x] CAP-01 Architecture inventory and contracts
+  - Audit existing Semantic DNS, MCP, Marketplace, module descriptors, video-call
+    room-state, and permission-grant surfaces.
+  - Produce exact source ownership for backend, frontend, extension, and
+    `demo/call-app`.
+  - Add contract tests that pin the planned Call App capability names and route
+    boundaries before implementation starts.
+- [x] CAP-02 `demo/call-app` package layout
+  - Create the directory structure for installable Call Apps.
+  - Define package manifest, MCP descriptor, CRDT schema descriptor, health
+    descriptor, and iframe entrypoint conventions.
+  - Add whiteboard as the first package stub with real metadata.
+- [x] CAP-03 Semantic-DNS and Mother Node registration
+  - Register Call Apps as `call_app` services.
+  - Include MCP endpoint, iframe origin, app key/version, health, category,
+    supported CRDT protocol, and marketplace metadata hash.
+  - Add backend refresh/validation of discovered app services.
+- [x] CAP-04 MCP metadata provider
+  - Implement MCP metadata methods for Call Apps:
+    describe, capabilities, CRDT schema, launch contract, health, export formats,
+    and marketplace listing.
+  - Reject incomplete or inconsistent metadata.
+- [x] CAP-05 Marketplace organization entitlement flow
+  - Add catalog discovery from Semantic DNS/MCP.
+  - Add organization-scoped order/enable/disable records.
+  - Ensure users order apps for their own organization, not globally and not only
+    for their personal account.
+- [x] CAP-06 Organization installation and app availability
+  - Add backend APIs for installed Call Apps per organization.
+  - Add frontend store/composable for the call sidebar app catalog.
+  - Only installed and healthy apps appear in the Call Apps sidebar.
+- [x] CAP-07 Call App session lifecycle
+  - Create/list/activate/remove Call App Sessions for a call.
+  - Room-state snapshots and websocket events include active app session state.
+  - Removing an app retires iframe tokens and stops app synchronization.
+- [x] CAP-08 Call App workspace view
+  - Add `call_app_workspace` layout mode.
+  - Render 5 mini participant videos above the iframe.
+  - Keep iframe sizing stable and responsive.
+  - Do not add implementation weight to `CallWorkspaceView.vue`.
+  - Proof:
+    - Added dedicated `CallAppWorkspaceHost.vue` and `callAppWorkspaceState.js`
+      instead of embedding iframe logic in `CallWorkspaceView.vue`.
+    - Added frontend/backend `call_app_workspace` layout mode support and SQLite
+      migration `0050_call_app_workspace_layout_mode`.
+    - Added `call-app-workspace-view-contract.mjs`.
+- [x] CAP-09 Left sidebar Call Apps browser
+  - Add `Call Apps` button.
+  - Replace sidebar content with searchable, paginated app list.
+  - Add app detail/add flow with default participant permission choice.
+  - Proof:
+    - Added dedicated `CallAppsSidebarPanel.vue` with catalog search,
+      pagination, detail selection, and default participant policy submit.
+    - Wired `WorkspaceShell.vue` to switch the call left sidebar between
+      settings and Call Apps without adding Call App logic to
+      `CallWorkspaceView.vue`.
+    - Added `call-app-sidebar-contract.mjs`.
+- [x] CAP-10 Right sidebar participant app grants
+  - Add app-permission icon when an app is active.
+  - Implement default allow/deny and per-participant overrides.
+  - Emit realtime grant updates and audit events.
+  - Proof:
+    - Added `CallAppParticipantGrantButton.vue` in the right participant list
+      with backend-backed allow/deny toggles.
+    - Added GET/PATCH `/api/call-app-sessions/{session_id}/participant-grants`
+      plus persistent `call_app_audit_events`.
+    - Routed `call-app/grants-updated` over the existing realtime signaling
+      lane and added `call-app-participant-grants-contract.mjs`.
+- [x] CAP-11 Iframe launch and parent bridge
+  - Mint short-lived launch tokens.
+  - Enforce iframe sandbox/origin/CSP.
+  - Implement strict `postMessage` protocol between parent and app.
+  - Do not expose primary user session token to the iframe.
+  - Proof:
+    - Added backend launch-token mint/validate domain and
+      POST `/api/call-app-sessions/{session_id}/launch-token`.
+    - Added public token-scoped validate route for sandboxed iframe launch
+      checks without primary session exposure.
+    - Added `useCallAppIframeBridge.js` and wired `CallAppWorkspaceHost.vue`
+      to mint tokens, enforce sandbox/CSP, and strict opaque-origin message
+      validation.
+- [x] CAP-12 CRDT envelope and synchronization
+  - Implement King Call App CRDT envelope.
+  - Add snapshot bootstrap, op append, op replay, duplicate suppression,
+    reconnect backfill, and snapshot compaction.
+  - Keep app semantic CRDT engine behind an adapter boundary.
+  - Proof:
+    - Added `call_app_crdt_documents` and `call_app_crdt_ops` migration
+      `0052_call_app_crdt_envelope`.
+    - Added backend CRDT domain with server admission stamps, replay cursors,
+      duplicate operation suppression, append authorization, and checkpoint
+      compaction.
+    - Added iframe parent CRDT bridge for bootstrap, replay, append, and
+      snapshot requests without exposing primary auth material.
+- [x] CAP-13 Whiteboard Call App first implementation
+  - Implement iframe whiteboard shell, tools, CRDT state, cursors, and export.
+  - Support simultaneous drawing by multiple permitted participants.
+  - Enforce viewer/editor mode based on grants.
+  - Proof:
+    - Replaced the whiteboard iframe stub with a real canvas runtime, tool
+      controls, CRDT replay polling, operation application, cursor publishing,
+      and PNG/PDF export.
+    - The iframe derives editor/viewer mode from the launch grant and disables
+      drawing controls when the participant only has read access.
+    - Added `call-app-whiteboard-runtime-contract.mjs` and moved the manifest
+      status to `runtime_ready`.
+- [x] CAP-14 App permissions and revocation hardening
+  - Verify revoked participants cannot append ops or receive new private app
+    state.
+  - Ensure grant changes apply across reconnects and guest sessions.
+  - Add audit trail coverage.
+  - Proof:
+    - CRDT bootstrap, replay, append, and snapshot compaction now require an
+      allowed current grant before returning document state.
+    - Denying a user grant retires active Call App launch tokens, records
+      revocation metadata in the grant audit payload, and forces reconnect token
+      validation to fail closed.
+    - Launch contexts for denied participants expose only app status capability,
+      and the whiteboard iframe avoids CRDT bootstrap/replay unless read
+      capability is present.
+    - Added guest grant reconnect coverage and
+      `call-app-permission-revocation-contract.mjs`.
+- [x] CAP-15 Marketplace-to-call end-to-end journey
+  - Order app for organization.
+  - Install/enable app.
+  - Attach app to call.
+  - Grant participant access.
+  - Collaborate in whiteboard.
+  - Remove app from call.
+  - Proof:
+    - Backend lifecycle now exercises the full Semantic-DNS/MCP marketplace
+      journey: organization order, installation, availability listing, owner
+      attach, non-owner denial, grant deny/reallow, multi-actor whiteboard CRDT
+      collaboration, replay, snapshot, remove, and removed-session history.
+    - Frontend contract pins the sidebar availability/session-create path and
+      the iframe CRDT append bridge so the UI remains backend-backed instead of
+      fixture-driven.
+    - Added `call-app-marketplace-to-call-journey-contract.mjs`.
+- [x] CAP-16 Test protocol and readiness record
+  - Document contract, backend, frontend, e2e, security, and observability test
+    results.
+  - List residual risks before any deployment request.
+  - Test protocol, 2026-05-07:
+    - Contract: `cd demo/video-chat/frontend-vue && npm run
+      test:contract:call-apps` passed for frontend Call App architecture,
+      package layout, availability, workspace, sidebar, participant grants,
+      iframe launch, CRDT sync, whiteboard runtime, permission revocation,
+      marketplace-to-call journey, Semantic-DNS, and MCP metadata.
+    - Backend: local PHP syntax passed for
+      `backend-king-php/tests/call-app-session-lifecycle-contract.php`.
+      The shell-wrapped backend PDO contracts were present in the suite but
+      skipped locally because this PHP runtime lacks `pdo_sqlite`.
+    - Frontend: `cd demo/video-chat/frontend-vue && npm run build` passed after
+      CAP-15.
+    - E2E: no browser-level Call Apps Playwright journey exists yet, so CAP
+      readiness is contract/build-ready, not production-e2e-ready.
+    - Security: contracts cover sandboxed iframe launch, short-lived launch
+      tokens, no primary session-token exposure, grant denial, token revocation,
+      CRDT read/append gating, and removed-session token retirement.
+    - Observability: contracts cover persistent grant audit events, room snapshot
+      app-session state, `call-app/grants-updated` signaling, and CRDT server
+      admission stamps. There is no production OpenTelemetry/dashboard proof
+      for Call Apps yet.
+  - Residual risks before deployment:
+    - Run the PDO-backed backend contracts in a SQLite-enabled PHP runtime.
+    - Add a browser E2E test that orders/installs a Call App, attaches it to a
+      call, draws/sticks from two participants, revokes one participant, and
+      verifies iframe state after reconnect.
+    - Validate iframe CSP/sandbox behavior in real browsers, including blocked
+      primary auth access and allowed postMessage traffic only.
+    - Add production telemetry dashboards/alerts for Call App session creation,
+      launch-token validation failures, grant updates, CRDT append/replay
+      latency, duplicate suppression, and snapshot compaction.
+    - Test concurrent CRDT edits under reconnect/churn with more than two
+      participants before enabling this beyond controlled beta use.
+
+## Sprint: Governance UX, Recursive CRUD, Permissions, And Onboarding
+
+Branch:
+- `feature/videochat-localization-sprint`
+
+Status:
+- Active sprint as of 2026-05-05.
+- The completed localization/module-foundation work remains archived below as
+  baseline evidence. New work should use this sprint as the active issue list.
+- Video-call runtime stays out of scope for this sprint unless a later issue
+  explicitly says otherwise.
+
+Execution boundary:
+- Do not touch video-call runtime code for this governance/admin refactor.
+- Keep `demo/video-chat/frontend-vue/src/domain/calls/**`,
+  `demo/video-chat/frontend-vue/src/domain/realtime/**`, SFU, WASM, and
+  wavelet code outside this sprint.
+- `WorkspaceShell.vue` is already too large. New settings/profile/tour behavior
+  must be extracted into focused components/composables instead of adding more
+  logic there.
+- CRUD and permission work must preserve the stronger tenant/resource-grant
+  direction already present in the backend. Do not replace it with local-only
+  UI flags or weaker role-only shortcuts.
+
+Sprint goal:
+- Make the Administration and Governance workspace areas coherent,
+  permission-aware, i18n-ready, testable, and based on reusable admin/CRUD
+  primitives.
+- Replace ad-hoc entity selects with a recursive linked `+1` flow: open the
+  related CRUD picker, search/select/create there, optionally recurse into its
+  related records, then return with a chosen value.
+- Add a clean route/action/resource permission contract from module descriptor
+  through navigation, action bars, backend routes, and tests.
+- Plan and start onboarding tours with a `?` help icon, per-area tours, and
+  completion badges shown in personal settings/profile.
+- Extend the personal profile surface with about/social/contact fields.
+
+## Assessment, 2026-05-05
+
+1. Navigation and menu structure
+- Present: frontend module descriptors live under
+  `demo/video-chat/frontend-vue/src/modules`, the router consumes generated
+  module records, and the left navigation uses the Pinia-backed module store.
+- Present: grouped first-level items already exist for `Administration` and
+  `Governance`, and the menu can expand/collapse submenus.
+- Gap: module descriptors expose route/nav labels and module-level
+  permissions, but they do not yet describe page action bars, create semantics,
+  relation fields, entity ownership, or per-action permissions.
+- Gap: `Governance` has placeholder CRUD routes for groups, organizations,
+  modules, permissions, roles, grants, policies, audit log, data portability,
+  and compliance. Only users has a real backend-backed view. Modules and
+  permissions are readonly descriptor catalog rows, but the page still shows a
+  generic create button that is wrong for system rows.
+- Gap: `Administration` is the correct first-level bucket for Marketplace,
+  Localization, App Configuration, and Theme Editor. The current descriptors
+  match that direction, but action semantics are still page-local.
+
+2. I18n readiness
+- Present: descriptors carry `label_key` and `pageTitle_key`; the navigation,
+  route metadata, governance CRUD labels, user admin labels, theme editor, and
+  localization admin surfaces use `t(...)` in most visible places.
+- Present: frontend localization contracts already cover a broad set of public,
+  admin, settings, and call surfaces.
+- Gap: fallback `label`/`pageTitle` strings in descriptors are still visible
+  escape hatches. The contract should treat keys as the source of truth for
+  visible labels and use raw labels only as diagnostics.
+- Gap: `governanceCatalog.js` builds English descriptions such as route counts,
+  permissions, grant targets, and time-limited grants. Those descriptions need
+  structured fields plus localized rendering, not concatenated English text.
+- Gap: `WorkspaceShell.vue` still contains hard-coded call sidebar strings.
+  They are outside this sprint boundary, but they remain a known global i18n
+  debt from the archived localization sprint.
+
+3. Permission coverage
+- Present: `navigationBuilder.js` computes `required_permissions`, filters
+  navigation by role/module/permission context, and route records carry
+  permission metadata.
+- Present: `routeAccess.js` maps tenant session permissions to module
+  permission keys and the router checks route/session access.
+- Present: backend tenant tables include tenants, tenant memberships,
+  organizations, groups, group memberships, `permission_grants`,
+  time-limited grants, export jobs, and import jobs. The grant evaluator already
+  checks direct user, group, organization, validity window, revocation, tenant,
+  resource type, resource id, and action.
+- Gap: action buttons are not described or filtered by descriptor permissions.
+  Create/edit/delete/import/export/save buttons are page-local and must become
+  action-model driven.
+- Gap: backend HTTP route authorization is still mostly role/path based. The
+  tenant grant engine is not yet wired into every governance/admin resource
+  action.
+- Gap: UI-only permissions such as `theme_editor_enabled` exist separately from
+  module permission/action grants. That needs a compatibility bridge, not a
+  second permanent permission model.
+
+4. CRUD and action-bar correctness
+- Present: shared primitives exist: `AppPageHeader`, `AdminPageFrame`,
+  `AdminTableFrame`, `AppPagination`, `AppModalShell`, `AppIconButton`, and
+  `AppSelect`.
+- Present: governance CRUD already uses the shared admin page/table/modal
+  primitives and maximizable modal behavior.
+- Gap: `GovernanceCrudView.vue` is generic in a way that hides product logic.
+  Groups, organizations, roles, grants, policies, export/import, and compliance
+  need entity-specific fields, validation, relation handling, and action names.
+- Gap: "Create new" is not always valid. Examples:
+  - Modules: system/descriptor rows should be readonly; action should be
+    "register module" only when backend module upload/registration exists.
+  - Permissions: descriptor permission rows should be readonly; action should
+    be "import permission manifest" or none until mutable permission resources
+    exist.
+  - Audit log: create/delete do not make sense; actions should be inspect,
+    filter, export.
+  - Data portability: action should be export/import job, not generic create.
+  - Grants: action should be add grant with subject/resource/time fields.
+- Gap: user creation still uses direct role/theme selects. Role/group/theme
+  assignment must use relation/link pickers when the target is an entity rather
+  than a tiny local enum.
+
+5. Relation flow and N+1 data
+- Decision: entity references must not be normal selects. Use a linked `+1`
+  relation control that opens the target CRUD picker. The picker supports
+  search, pagination, mass selection where allowed, create-in-place, nested
+  relation creation, select, and return.
+- Required user story: create user -> add group -> if group does not exist,
+  create group -> add modules/permissions to group -> mass-select permissions
+  with pagination -> return to group -> return to user -> save user.
+- Required behavior: the relation flow is recursive and stack-based. Each level
+  keeps unsaved draft state, selected records, validation errors, and a safe
+  back/cancel path.
+- Required backend shape: list endpoints must return normalized rows plus
+  included relation summaries or batch relation summaries. The frontend must not
+  fetch relation labels row-by-row.
+- Required frontend shape: entity stores/cache by `{ entity, id }` with batch
+  hydration; tables render summaries from the cache and request missing summary
+  sets in one call per page.
+
+6. Frontend test gaps
+- Covered now: module registry, navigation builder, route access, governance
+  catalog rows, shared admin primitives, localization runtime/import/settings,
+  RTL foundation, and several e2e admin/shared UI smoke paths.
+- Missing: descriptor action-bar contract; per-action permission visibility;
+  create/edit/delete/import/export semantics per entity; recursive relation
+  picker unit tests; relation stack e2e journey; batch summary/N+1 contract;
+  governance backend API contracts; settings profile fields; onboarding tour
+  and badge persistence; scroll/full-height regression for admin content;
+  mobile/tablet responsive checks for nested CRUD modals.
+
+7. Design and scroll audit
+- Present: shared page/header/table/footer components reduce some duplication.
+- Gap: pages still vary between `AppPageHeader` directly and
+  `AdminPageFrame`. New admin/governance pages should use the same frame unless
+  they have a concrete reason not to.
+- Gap: the standard action bar should be semantic and sparse: primary create
+  only where create is meaningful, secondary import/export/config actions only
+  where they match the entity, and icon buttons with tooltips for repeated row
+  actions.
+- Gap: no standard help/tour action exists in the page header. The required
+  pattern is a `?` icon with hover/title text "Take the tour"; it opens the
+  relevant guided tour without adding visible explanatory blocks to the page.
+- Gap: scroll ownership must be explicit. Desktop left navigation must stay
+  fixed while the main admin content scrolls; modal bodies must scroll without
+  hiding footers; nested relation flows must remain usable on mobile.
+
+8. Backend/data-model readiness
+- Present: tenant foundation and time-limited permission grants exist.
+- Gap: governance CRUD endpoints are not complete for organizations, groups,
+  roles, grants, policies, modules, permissions, audit log, data export/import,
+  and compliance.
+- Gap: user/profile storage does not yet include about/social/contact fields or
+  onboarding badge progress.
+- Gap: export/import job tables exist, but the user-facing API and admin UI are
+  not wired to round-trip users/organizations and their related grants/groups.
+
+9. Profile and onboarding
+- Present: settings descriptors provide About Me, Credentials + E-Mail, Theme,
+  Localization, and Regional Time panels.
+- Gap: About Me currently does not cover the requested profile fields:
+  `about_me`, LinkedIn, X.com, YouTube, and messenger contacts.
+- Gap: no onboarding/tour model exists. We need tour definitions per area,
+  completion events, persisted badges, and badge display in personal settings.
+
+## Architecture Decisions For This Sprint
+
+1. Descriptor action model
+- Extend frontend module descriptors with action metadata instead of letting
+  every page invent action bars locally:
+  - `actions[].key`
+  - `actions[].label_key`
+  - `actions[].icon`
+  - `actions[].kind` (`create`, `edit`, `delete`, `import`, `export`,
+    `configure`, `inspect`, `tour`, `custom`)
+  - `actions[].required_permissions`
+  - `actions[].resource_type`
+  - `actions[].enabled_when`
+- Route/nav/module permissions remain; action permissions are additional and
+  narrower.
+
+2. CRUD descriptor model
+- Add a reusable CRUD contract per entity:
+  - `entity_key`
+  - `resource_type`
+  - `endpoint`
+  - `fields`
+  - `relationships`
+  - `table_columns`
+  - `selection_mode`
+  - `allowed_actions`
+- CRUD descriptors drive the standard page header, toolbar, table, pagination,
+  modal, validation, relation picker, and permission-gated actions.
+
+3. Recursive relation picker
+- Build a `CrudRelationStack` / `useCrudRelationNavigator(options)` primitive.
+- Entity relation fields render as `+1` linked controls, not selects.
+- The relation stack supports nested create/select/back/cancel and preserves
+  unsaved parent drafts.
+- Many-to-many relations support mass selection with pagination and search.
+
+4. N+1-safe entity loading
+- CRUD list responses must include summary data needed for the current page, or
+  provide one batch summary endpoint per entity type.
+- The frontend stores summaries in a normalized cache and never does row-level
+  relation fetch loops.
+- Contract tests must fail when a table implementation fetches relation labels
+  inside row rendering.
+
+5. Permission enforcement
+- The backend route layer must resolve tenant, actor, resource, action, and
+  time window before mutating data.
+- Frontend visibility is convenience only. Backend permissions are the source
+  of truth.
+- Existing legacy role/admin checks remain only as compatibility aliases until
+  equivalent resource/action grants are wired.
+
+6. Onboarding
+- Tour definitions are descriptor-addressable by area and step key.
+- A `?` page-header action opens the current area's tour.
+- Completion writes a user-scoped badge/progress record.
+- Personal settings/profile shows completed badges and pending suggested tours.
 
 ## Active Issues
 
-1. [x] `[sfu-bounded-age-biased-frame-buffer]` Make the SFU broker buffer bounded by age, rows, and bytes.
-
-   Scope:
-   - Extract frame-buffer ownership out of the oversized SFU store into a
-     focused helper.
-   - Keep the short-lived SQLite broker buffer, but enforce row and room-byte
-     bounds on every insert.
-   - Evict age-biased: stale frames first, then oldest frames before newer
-     frames, with a small freshness grace so the newest live frame is protected
-     whenever possible.
-   - Emit backend diagnostics with evicted rows, bytes, before/after pressure,
-     oldest age, and max bounds.
+1. [x] [descriptor-action-contract] Add action metadata to module descriptors
+   and a passing contract test that every admin/governance route has
+   permission-bound action definitions or an explicit readonly/no-action state.
 
    Done when:
-   - `sfu_frames` cannot grow beyond the per-room row or byte budget between
-     cleanup intervals.
-   - Eviction is deterministic and age-biased, not random and not only
-     opportunistic cleanup.
-   - Contracts prove the helper, byte cap, eviction policy, and diagnostics.
+   - Administration and Governance descriptors expose action metadata.
+   - Modules, permissions, audit log, and readonly catalog pages no longer get
+     a generic create action.
+   - Tests prove action labels use i18n keys and actions carry permissions or
+     explicit readonly reasons.
 
-   Report:
-   - Implemented in this WIP branch.
+   Completed 2026-05-05:
+   - Route metadata now carries normalized descriptor actions.
+   - Administration and Governance descriptors expose create/import/export/
+     configure/inspect/tour action intent.
+   - Modules, permissions, audit log, and data portability no longer advertise
+     generic create intent at descriptor level.
+   - `module-action-metadata-contract.mjs` covers action keys, i18n labels,
+     permission metadata, readonly catalog reasons, and route-meta exposure.
 
-2. [x] `[real-media-plane-contract]` Define the target media plane that replaces WebSocket whole-frame transport.
+   Follow-up:
+   - Visible page action bars still need to consume descriptor actions through
+     Issues 2 and 3.
 
-   Scope:
-   - Add a contract/doc for the production media path:
-     `MediaStreamTrack -> encoder -> packet/datagram media transport -> SFU
-     packet/layer forwarder -> jitter buffer/keyframe/layer recovery -> native
-     renderer`.
-   - Keep app-level protected media metadata and room/admission controls.
-   - Make WebSocket an SFU control/signaling path, not the long-term video data
-     plane.
-   - Decide the implementation route: King RTP/SRTP/RTCP, WebTransport/QUIC
-     datagrams, or a King-native media datagram primitive, with fallback rules.
-
-   Done when:
-   - Contracts fail if the active sprint tries to bless WebSocket/TCP
-     `bufferedAmount` as the final video congestion-control layer.
-   - The doc names required media-plane features: packet pacing, jitter buffer,
-     keyframe request, NACK/PLI or equivalent, layer routing, receiver feedback,
-     and per-subscriber quality choice.
-
-   Report:
-   - Added `documentation/dev/video-chat/real-media-plane-architecture.md` as
-     the target media-plane contract.
-   - Pinned WebSocket/TCP whole-frame relay as fallback/control-compatible only,
-     not the final video data plane.
-   - Added contract coverage so the sprint must keep packet/datagram pacing,
-     jitter buffering, keyframe/NACK/PLI recovery, per-subscriber layer routing,
-     backend diagnostics, and SQLite/live-relay fallback boundaries explicit.
-
-3. [x] `[sfu-control-data-plane-split]` Split SFU control messages from media payload transport.
-
-   Scope:
-   - Keep `/sfu` WebSocket for auth, join, publish, subscribe, layer preference,
-     diagnostics, and recovery controls.
-   - Introduce an explicit media payload interface behind the client and backend
-     so the data plane can move off WebSocket without touching UI/runtime code.
-   - Preserve current binary envelope compatibility while making it a fallback
-     transport, not the architecture target.
+2. [x] [standard-admin-frame] Create a standard admin/governance page contract
+   for h1/title, action bar, search, table, pagination, scroll ownership, and
+   help/tour icon.
 
    Done when:
-   - Client code has a media transport abstraction with WebSocket fallback and a
-     real-media-plane implementation seam.
-   - Backend route code separates control handling from payload fanout.
-   - Diagnostics identify `control_transport` and `media_transport` separately.
+   - Existing admin/governance pages render through shared primitives or have a
+     documented exception.
+   - Desktop left navigation does not scroll with page content.
+   - Main admin content and modal bodies scroll predictably on desktop, tablet,
+     and mobile.
+   - The `?` tour action is available through the shared header action model.
 
-   Report:
-   - Added a frontend `SfuWebSocketFallbackMediaTransport` abstraction so binary
-     frame send no longer calls the socket directly from the SFU client hot path.
-   - Added explicit `websocket_sfu_control` and
-     `websocket_binary_media_fallback` identifiers in client and backend
-     diagnostics.
-   - Backend welcome/frame metadata now marks WebSocket binary media as
-     `fallback_until_real_media_plane`, preserving room/admission control while
-     separating it from the future media data plane.
+   Progress 2026-05-05:
+   - Governance CRUD now derives create-button visibility and label from route
+     action metadata instead of rendering the legacy generic create button on
+     every Governance page.
+   - Readonly/no-create routes such as modules, permissions, audit log, and
+     data portability no longer expose the wrong visible create button through
+     `GovernanceCrudView.vue`.
+   - Route actions are filtered through a shared helper and the current session
+     permission context before Governance renders create actions.
+   - Existing tenant permission aliases now map to granular action keys for
+     user CRUD and Governance groups, organizations, grants, audit log,
+     compliance, roles, policies, and data portability.
+   - User Management now renders through `AdminPageFrame` and its table through
+     `AdminTableFrame`, removing its local duplicate header/toolbar/footer
+     frame CSS while preserving the shared `?` tour/header behavior.
+   - Administration Marketplace, App Configuration, and Theme Editor now use
+     the shared `AdminPageFrame`; Marketplace tables use `AdminTableFrame`
+     instead of local table wrappers.
+   - `AdminPageFrame` is now height-constrained and overflow-hidden so
+     `AdminTableFrame` owns overflowing table scroll instead of clipping rows
+     behind the shell.
+   - Non-call tablet/mobile shells now keep the workspace viewport-constrained,
+     so admin table overflow stays inside the table frame without moving the
+     document, left navigation, header, or footer chrome.
+   - Playwright covers Governance admin scroll ownership on desktop, tablet,
+     and mobile.
 
-4. [x] `[packet-layer-sfu-forwarder]` Replace whole-frame fanout with packet/layer forwarding semantics.
+   Completed 2026-05-05.
 
-   Scope:
-   - Model primary/thumbnail/fullscreen layers as independently routable media
-     streams.
-   - Forward per-subscriber layers without forcing publisher global downshift.
-   - Add keyframe request and layer-switch control messages that do not hard
-     restart the SFU socket.
-   - Keep slow-subscriber isolation and room/admission security.
-
-   Done when:
-   - A frozen receiver requests keyframe/layer recovery before any hard
-     reconnect.
-   - Fullscreen subscriber quality is isolated from mini/grid subscribers.
-   - Backend diagnostics show per-subscriber media layer and recovery actions.
-
-   Report:
-   - Added `sfu/media-recovery-request` on the SFU control plane so a receiver
-     can request publisher-side keyframe/layer recovery without restarting the
-     media socket.
-   - King routes recovery control directly when publisher and receiver are in
-     the same worker, and falls back to a bounded SQLite broker table for
-     cross-worker publisher delivery.
-   - Publisher clients consume `sfu/publisher-recovery-request` and route
-     `force_full_keyframe` into the existing WLVC full-frame keyframe path, so
-     normal freezes now have a targeted recovery path before reconnect.
-
-5. [x] `[native-render-and-jitter-buffer]` Stop treating canvas repaint as the primary receiver media runtime.
-
-   Scope:
-   - Move receiver recovery toward jitter-buffered frame ordering and native
-     playback/render where available.
-   - Keep canvas only for effects/compositing or fallback rendering.
-   - Make render diagnostics report decode delay, dropped stale frames, frame
-     ordering gaps, and final displayed frame cadence.
+3. [x] [governance-crud-descriptors] Replace the placeholder governance CRUD
+   logic with entity-specific CRUD descriptors for users, groups,
+   organizations, roles, grants, policies, export/import jobs, compliance,
+   modules, permissions, and audit log.
 
    Done when:
-   - Reconnect is no longer the primary response to normal media jitter.
-   - Receiver can smooth short gaps without resetting publisher/subscriber state.
-   - Online probes verify moving video cadence, not just non-black pixels.
+   - Each entity has fields, table columns, allowed actions, and relation
+     descriptors.
+   - Readonly entities cannot be created through the UI.
+   - Row actions are icon-based, permission-gated, and localized.
 
-   Report:
-   - Added a bounded receiver jitter buffer for small sequence gaps: up to 8
-     frames, 90 ms hold window, and a maximum reorder gap of 3 frames.
-   - The decoder now holds slightly future deltas before continuity drop,
-     drains them once missing frames arrive, and only releases to normal
-     keyframe recovery after the hold window expires.
-   - Diagnostics now report `sfu_receiver_jitter_buffer_hold`,
-     `sfu_receiver_jitter_buffer_drain`, and
-     `sfu_receiver_jitter_buffer_release` so receiver jitter can be separated
-     from encoder/network pressure.
+   Completed 2026-05-05:
+   - Added `governance/crudDescriptors.js` for users, groups, organizations,
+     modules, permissions, roles, grants, policies, audit log, data
+     portability, and compliance.
+   - Each descriptor now carries fields, table columns, allowed actions,
+     recursive relation metadata, endpoints, resource types, selection mode,
+     and row actions where mutation is valid.
+   - `GovernanceCrudView.vue` resolves its entity descriptor from the active
+     route, renders descriptor table columns and modal fields, and gates row
+     edit/delete icons through the current permission context.
+   - Modules, permissions, and audit log are readonly at CRUD-descriptor level,
+     so the generic create path stays unavailable for system catalog rows.
 
-6. [x] `[end-to-end-media-pressure-observability]` Add full-path performance logging and gates.
-
-   Scope:
-   - Preserve correlation by `frame_sequence`, publisher, track, layer, profile,
-     and transport generation.
-   - Emit backend-routed samples for capture, encode, queue, send, King receive,
-     broker/fanout, subscriber send, receiver decode, and render.
-   - Keep console clean: browser warnings become structured diagnostics where
-     the app can catch them.
+4. [x] [recursive-relation-picker] Implement the linked `+1` relation workflow
+   for entity references and remove entity selects from governance/user CRUD.
 
    Done when:
-   - Production smoke can report where pressure starts.
-   - Critical pressure logs include the first over-budget stage, not only the
-     final symptom.
-   - The report per issue has enough evidence to compare quality/performance
-     before and after deploy.
+   - User -> group -> group permissions/modules can be completed in one nested
+     flow and returns to the unsaved user draft.
+   - Mass selection supports search and pagination.
+   - The flow is recursive and has tested back/cancel behavior.
 
-   Report:
-   - Added `sfu_end_to_end_v1` performance payloads to sampled publisher-send
-     diagnostics with capture, encode, payload, queue, browser buffer, King
-     latency, fanout, and subscriber-send fields.
-   - Added `first_over_budget_stage` resolution for source readback, encoded
-     payload, outbound queue age, browser send buffer, and subscriber send
-     pressure.
-   - Receiver render samples now use the same report schema and mark
-     `receiver_render` as the first pressure stage when render latency crosses
-     the existing receiver lag threshold.
+   Progress 2026-05-05:
+   - Added `useCrudRelationNavigator(options)` as the reusable stack state for
+     recursive relation navigation, search, pagination, single selection, and
+     mass selection.
+   - Added `CrudRelationStack.vue` and wired Governance CRUD modals to show
+     descriptor relationships as `+1` controls instead of raw entity selects.
+   - Governance draft rows now retain relation selections in draft state and
+     can hydrate those selections when reopening a local row.
+   - Relation stack now supports create-in-place for local Governance draft
+     entities while blocking backend-backed users from fake local creation.
+   - Backend-backed user editor now uses the shared relation stack for legacy
+     role and theme assignments while still writing the existing `role` and
+     `theme` payload fields for current APIs.
+   - Governance group member assignment now uses the same linked relation
+     picker, hydrates selectable users from `/api/governance/users`, and
+     persists selected members into tenant-scoped `group_memberships`.
+   - Governance organization user assignment now persists the same `+1`
+     relation flow into tenant-scoped `organization_memberships`.
+   - Relation stack now applies nested selections back into the selected parent
+     row draft, so user -> group -> permissions/modules can return with child
+     relations preserved in the unsaved parent payload.
+   - User Management now exposes Governance groups through the same `+1`
+     relation picker and submits selected groups alongside direct Governance
+     roles during user create/update.
+   - User Management group selection now opens the real Governance group
+     descriptor target, so selected groups can recurse into permission/module
+     mass selection and return those child relations to the unsaved user draft.
+   - User Management can now create a missing Governance group directly from
+     the relation stack through the shared backend descriptor endpoint and
+     select the persisted UUID row in the same unsaved user draft.
+   - User Management filters the nested group relation stack to the supported
+     permission/module hops so unsupported organization/member/role links are
+     not shown from the user editor.
+   - Playwright now covers the User Management nested relation path on desktop
+     and mobile: create a missing group, select a nested permission, return to
+     the unsaved user draft, and submit the resulting user payload.
+   - Playwright now also covers Governance group CRUD modal stacks outside User
+     Management on desktop and mobile, including nested permission/module
+     catalog selection and the persisted nested relationship payload.
+   - Relation pagination now resets to the first filtered page on search and
+     clamps out-of-range pages when result counts shrink, so filtered matches
+     are not hidden behind stale page state.
+   - Contract and Playwright coverage now prove paged mass selection, nested
+     back/apply, cancel/reopen, and submitted nested relationship payloads.
 
-## Execution Order
-
-1. Close `[sfu-bounded-age-biased-frame-buffer]` first because it prevents
-   fallback buffer runaway while the media plane is rebuilt.
-2. Close `[real-media-plane-contract]` before further tuning so the sprint cannot
-   drift into threshold-only fixes.
-3. Implement the control/data split and packet/layer forwarder.
-4. Replace receiver recovery/render assumptions.
-5. Deploy only when the branch is complete enough to prove smooth video cadence
-   and clean backend diagnostics.
-
-## Sprint: Free-for-all Invite Lobby and Logout Landing
-
-Sprint branch:
-- `sprint/free-for-all-invite-lobby-logout-landing`
-
-PR target:
-- `development/1.0.7-beta`
-
-Current finding:
-- The backend already has the correct public invite shape for free-for-all
-  calls: `POST /api/calls/{call_id}/access-link` creates an `open` access link
-  and returns `join_path` as `/join/{access_id}`.
-- `/join/:accessId` is already a public frontend route. It resolves
-  `/api/call-access/{access_id}/join`, creates a call-access guest session via
-  `/api/call-access/{access_id}/session`, then waits in the lobby/admission
-  flow instead of showing the normal login screen.
-- The practical gap is UI and settings: the admin enter-call controller can
-  generate/copy this link, but the in-call owner sidebar did not expose it where
-  the owner already manages live call settings.
-- Logout always drops the local session and routes to `/login` or the fixed
-  `/call-goodbye` page. No configurable post-logout landing URL exists in user
-  settings yet.
-
-Technical target:
-- Make the free-for-all invite URL visible and copyable where the call owner
-  naturally manages a live call: the left call sidebar between Background Blur
-  and Call settings.
-- Keep invite-only personal links separate from free-for-all open links.
-- Ensure guests entering through `/join/{access_id}` never hit the login mask
-  before the lobby/admission step.
-- Add a validated, configurable post-logout landing page in settings and use it
-  after guest/call logout without introducing an open-redirect issue.
-
-## Active Issues: Free-for-all Invite Lobby and Logout Landing
-
-1. [x] `[free-for-all-public-link-surface]` Surface the open invite link in call management.
-
-   Scope:
-   - Add a visible invite-link field plus copy action to the in-call left
-     sidebar for call owners when `access_mode=free_for_all`.
-   - Reuse `POST /api/calls/{call_id}/access-link` with `link_kind=open`.
-   - Show the resulting `/join/{access_id}` URL, and keep the copy action
-     separate from the normal "Join call" action.
-   - Keep the layout stable on narrow/mobile sidebars with a single input plus
-     icon button row.
+5. [x] [n-plus-one-summary-loading] Add normalized entity summary loading for
+   CRUD tables and relation pickers.
 
    Done when:
-   - A free-for-all call owner/admin can copy a public `/join/{access_id}` link
-     without opening DevTools or manually calling the API.
-   - Invite-only calls do not expose an open-link copy action.
+   - List pages receive included summaries or batch summaries.
+   - Frontend code has no per-row relation label request loops.
+   - A contract test covers the batch summary requirement.
 
-   Report:
-   - Added the owner-only free-for-all invite block in the call left sidebar
-     between Background Blur and Call settings.
-   - The block generates/reuses the backend open access link, renders a readonly
-     URL input, and provides clipboard copy with a textarea fallback.
-   - Invite-only calls and non-owners do not render the open invite surface.
+   Progress 2026-05-05:
+   - Added `entitySummaryCache.js` with normalized `{ entity, id }` summaries,
+     included-summary hydration, missing-id detection, and one-call batch
+     summary loading.
+   - Governance CRUD now hydrates current page/catalog rows into the summary
+     cache and relation providers return cached summaries instead of preparing
+     row-render fetch paths.
+   - Persisted Governance group/organization lists now hydrate the same summary
+     cache from backend list responses, and deleted rows are removed from the
+     cache to avoid stale relation picker entries.
+   - Governance group list/read/create/update responses now include
+     organization and member summaries in backend enrichment passes so the
+     group editor can reopen selected relations without row-by-row lookups.
+   - Governance organization responses now include parent-organization and
+     user summaries for the same reopen-without-N+1 contract.
+   - Added `/api/governance/summaries` as a permission-checked batch summary
+     endpoint for users, groups, organizations, roles, grants, policies, and
+     data portability jobs; frontend persistence exposes the same one-call
+     batch loader for relation-summary hydration.
+   - Summary cache now hydrates nested relationship summaries into their real
+     target entity cache and can collapse multi-entity missing ids into one
+     `/api/governance/summaries` request payload.
+   - Governance module/permission catalog rows now carry explicit
+     `entity_key` values so relation payloads keep type information through
+     recursive User Management selections.
+   - Closed 2026-05-05: the summary-cache contract now covers the remaining
+     Administration row surfaces (Users, Marketplace, Localization, Theme
+     Management, Administration lead recipients) and proves their row templates
+     do not issue per-row request calls. The User editor relation provider is
+     pinned to preloaded role/group/theme rows and local module/permission
+     catalogs, and the backend summary route is contract-pinned for users,
+     groups, organizations, roles, grants, policies, and data portability jobs.
 
-2. [x] `[call-access-open-link-contracts]` Harden backend contracts for open links.
-
-   Scope:
-   - Prove `free_for_all` creates or reuses exactly one open link per call.
-   - Prove `invite_only` rejects `link_kind=open`.
-   - Prove `free_for_all` rejects personal link generation.
-   - Prove public `GET /api/call-access/{access_id}/join` returns enough context
-     for the lobby without authenticated session headers.
-
-   Done when:
-   - Backend contracts fail if the public link flow regresses into a login-only
-     or personal-invite-only flow.
-
-   Report:
-   - Extended the call-access session contract so open guest sessions inherit
-     the owner configured logout landing URL while still authenticating as
-     `account_type=guest`.
-   - Existing call-update contracts continue to pin open-link requirements:
-     free-for-all defaults to `open`, rejects personal links, and invite-only
-     rejects `open`.
-   - Public `/api/call-access/{access_id}/session` remains the no-login guest
-     session issuer for `/join/{access_id}`.
-
-3. [x] `[guest-lobby-direct-entry]` Keep `/join/{access_id}` as the canonical no-login lobby entry.
-
-   Scope:
-   - Ensure router guards keep `/join/:accessId` public.
-   - Ensure open-link guest sessions are issued with `account_type=guest` and
-     cannot inherit a stale logged-in account session.
-   - Ensure the guest is queued in the room/call lobby and can be admitted or
-     removed by owner, moderator, or admin.
-   - Ensure admission state survives refresh without bouncing to `/login`.
+6. [x] [governance-backend-apis] Wire backend CRUD APIs for governance entities
+   onto tenant-scoped resource/action permissions.
 
    Done when:
-   - A fresh browser profile can open the copied link, enter a guest name, wait
-     in the lobby, and enter the call after approval.
+   - Groups, organizations, memberships, grants, export/import jobs, and policy
+     endpoints are tenant-scoped.
+   - Mutations call the backend permission evaluator with resource/action/time.
+   - Tests cover allowed, denied, expired, revoked, and wrong-tenant cases.
 
-   Report:
-   - Preserved the existing public `/join/:accessId` route and public
-     call-access session endpoint.
-   - Open-link guest sessions still create a guest user, bind the call-access
-     session, and enter the waiting-room/admission path before the call room.
-   - The copied sidebar URL points at the frontend `/join/{access_id}` route,
-     not at the login-only workspace.
+   Progress 2026-05-05:
+   - Added tenant-scoped `/api/governance/groups` and
+     `/api/governance/organizations` list/read/create/update/delete route
+     handling on the King PHP backend.
+   - Group and organization mutations now resolve the active tenant and actor,
+     expose public UUID row ids without internal database ids, reject
+     wrong-tenant identifiers, and call the existing time-windowed
+     `permission_grants` evaluator after checking compatibility tenant
+     permission aliases.
+   - Added route-level RBAC for `/api/governance/` so authenticated users reach
+     resource/action permission checks instead of broad admin-only path checks.
+   - Governance CRUD now loads, creates, updates, and deletes groups and
+     organizations through the persisted backend endpoints instead of local
+     draft rows; relation pickers hydrate these backend-backed rows before
+     selection.
+   - Added `/api/governance/users` as a tenant-scoped user summary endpoint for
+     recursive relation pickers without exposing admin account mutation fields.
+   - Added group-member validation and sync so `relationships.members` creates,
+     preserves, and clears active `group_memberships` instead of staying in
+     frontend draft state.
+   - Group organization relations now round-trip as
+     `relationships.organization` summaries, matching the existing
+     `organization_id` persistence path.
+   - Organization user relations now create, preserve, and clear active
+     `organization_memberships` through `relationships.users`.
+   - Added `/api/governance/grants` CRUD on top of tenant-scoped
+     `permission_grants`, with public UUIDs, label/description metadata,
+     subject/permission/resource relation summaries, and valid-from/until
+     windows that feed the existing permission evaluator.
+   - Group `relationships.permissions` now syncs selected permissions into
+     `permission_grants` with `source = group_permissions`, while preserving
+     manually created grants from the Grants CRUD.
+   - Group `relationships.modules` now syncs selected modules into
+     module-read `permission_grants` with `source = group_modules`, giving the
+     evaluator a concrete `module/<key>/read` contract.
+   - Added `/api/governance/data-portability-jobs` to list/read export and
+     import jobs, create tenant-scoped export jobs from the existing bundle
+     generator, and reject import dry-runs without a submitted bundle before a
+     failed job row is persisted.
+   - Added tenant-scoped `/api/governance/policies` CRUD with public UUIDs,
+     persisted organization/group/permission relations, and policy-sourced
+     `permission_grants` so policies feed the existing evaluator instead of
+     staying as frontend-only rows.
+   - Added tenant-scoped `/api/governance/roles` CRUD with public UUIDs plus
+     persisted role permission/module relations, so role editors mutate real
+     backend data instead of local draft rows.
+   - Group `relationships.roles` now persists role assignments and expands
+     active role permission/module relations into `permission_grants` with
+     `source = group_roles`; role update/delete resyncs assigned groups so
+     stale role-sourced grants are removed.
+   - Organization `relationships.roles` now persists role assignments and
+     expands active role permission/module relations into organization-scoped
+     evaluator grants with `source = organization_roles`; role update/delete
+     resyncs assigned organizations.
+   - Admin user create/update now accepts `relationships.roles`, persists
+     tenant-scoped user role assignments, and expands active role
+     permission/module relations into direct user grants with
+     `source = user_roles`; role update/delete resyncs assigned users.
+   - User Management now loads Governance roles and exposes a separate
+     multi-select relation control for direct user role assignment, sending
+     `relationships.roles` to the admin user API.
+   - Admin user create/update now also accepts `relationships.groups`,
+     persists tenant-scoped user group memberships through `group_memberships`,
+     and returns selected group summaries in user relationship payloads.
+   - Nested `relationships.groups[].relationships.permissions/modules` from
+     admin user create/update now sync into group-sourced evaluator grants
+     instead of being dropped at the user membership boundary.
+   - Closed 2026-05-05: backend scope is complete for the sprint contract.
+     Governance groups, organizations, memberships, grants, policies, roles,
+     role assignments, user/group assignment expansion, and data portability
+     jobs are routed through tenant-scoped King PHP handlers and the
+     permission evaluator. Any future non-admin delegation/profile role
+     affordance is UI scope, not a blocker for the backend API Done-When.
 
-4. [x] `[settings-post-logout-landing-url]` Add a configurable logout landing URL setting.
-
-   Scope:
-   - Add a persisted setting for the post-logout landing page.
-   - Expose it through `GET/PATCH /api/user/settings`.
-   - Validate it as a safe same-origin path or explicitly allowlisted absolute
-     HTTPS URL; reject protocol-relative URLs and arbitrary external redirects.
-   - Define a default fallback that preserves the current behavior when unset.
-
-   Done when:
-   - Settings API contracts cover save, fetch, reset/default, and invalid URL
-     rejection.
-
-   Report:
-   - Added `post_logout_landing_url` to user settings and sessions with a
-     dedicated migration.
-   - Exposed the field through `GET/PATCH /api/user/settings`, login/session
-     snapshots, cached auth snapshots, and logout payloads.
-   - Validation only accepts an empty default or a safe same-origin path; full
-     external and protocol-relative redirects are rejected.
-
-5. [x] `[settings-ui-logout-landing]` Add the setting to the frontend settings modal.
-
-   Scope:
-   - Add a focused settings field for the logout landing page.
-   - Show validation errors returned by `/api/user/settings`.
-   - Provide a reset-to-default control.
-   - Keep existing profile/theme/regional settings behavior unchanged.
-
-   Done when:
-   - A user can configure the landing page without editing environment variables
-     or backend config.
-
-   Report:
-   - Added a Session tab in the settings modal with a landing-page path input
-     and reset-to-default action.
-   - Frontend validation mirrors the backend same-origin path rule before
-     sending the settings PATCH.
-   - Mobile settings layout collapses the field/action row to avoid sidebar or
-     modal overflow.
-
-6. [x] `[call-logout-redirect-runtime]` Route call logout to the configured landing page.
-
-   Scope:
-   - Make `logoutSession` or the caller return/resolve the configured landing
-     target before local session state is cleared.
-   - Apply the redirect after guest call exit and normal sidebar logout.
-   - Keep `/call-goodbye` as a safe default/fallback for guest call exits until
-     a custom target is configured.
-   - Do not redirect authenticated non-guest users into guest-only routes.
-
-   Done when:
-   - Leaving a call as a free-for-all guest lands on the configured page.
-   - Normal logout still clears backend and frontend session state fail-closed.
-
-   Report:
-   - `logoutSession()` now captures the configured landing target before local
-     session state is cleared and also honors the backend logout payload.
-   - Sidebar logout and the guest goodbye flow redirect to the configured safe
-     path, falling back to `/login` when unset.
-   - Free-for-all open guest sessions store the owner landing URL on the session
-     so the guest can leave to the owner-selected page without using an external
-     redirect.
-
-7. [ ] `[free-for-all-lobby-e2e]` Add end-to-end coverage for the full flow.
-
-   Scope:
-   - Cover call creation/update with `access_mode=free_for_all`.
-   - Copy the open link from UI.
-   - Open `/join/{access_id}` in a fresh unauthenticated context.
-   - Queue in lobby, admit from owner/admin UI, enter call, leave call, and land
-     on the configured logout page.
+7. [x] [profile-social-fields] Extend personal profile/settings with about and
+   social/contact fields.
 
    Done when:
-   - Playwright or focused contract tests prove the complete user-visible flow.
+   - User storage supports `about_me`, LinkedIn, X.com, YouTube, and messenger
+     contacts.
+   - Settings UI edits these fields without bloating `WorkspaceShell.vue`.
+   - Frontend and backend validation/tests cover URL/contact formats.
 
-## Execution Order: Free-for-all Invite Lobby and Logout Landing
+   Progress 2026-05-05:
+   - Backend migration `0032_user_profile_social_fields` adds `about_me`,
+     LinkedIn, X.com, YouTube, and messenger contact storage.
+   - User settings validation now normalizes profile text, requires HTTPS
+     social URLs on the expected host families, and validates messenger contact
+     channel/handle rows.
+   - User settings payloads expose the new profile fields.
+   - Existing user-settings contracts were extended for valid and invalid
+     profile payloads.
+   - Frontend session state now carries the profile fields.
+   - `WorkspaceAboutSettings.vue` owns the About Me settings panel so the
+     oversized shell does not grow while the UI gains profile fields.
+   - `settings-profile-contract.mjs` covers the extracted panel, translations,
+     session hydration, and save payload fields.
 
-1. Close `[call-access-open-link-contracts]` first so the existing backend
-   behavior is pinned before UI changes.
-2. Implement `[free-for-all-public-link-surface]` and
-   `[guest-lobby-direct-entry]` together because the copied URL must be proven
-   against the real lobby path.
-3. Add the settings persistence/API before frontend settings UI.
-4. Wire logout redirect runtime after the setting exists.
-5. Finish with full-flow E2E coverage.
+   Completed 2026-05-05.
+
+8. [x] [onboarding-tours-and-badges] Add descriptor-based onboarding tours with
+   persisted completion badges.
+
+   Done when:
+   - Page headers can open a current-area tour via `?`.
+   - Tour completion persists per user/tenant.
+   - Badges are visible in personal settings/profile.
+   - Tests cover tour definition loading and badge persistence.
+
+   Completed 2026-05-05:
+   - Route action metadata now feeds normalized tour metadata into page
+     headers, and the shared header renders a `?` tour action when permitted.
+   - Completing a tour posts to `/api/user/onboarding/tours/complete` and
+     stores idempotent user plus active-tenant scoped progress in SQLite.
+   - Personal About settings shows completed onboarding badges from session
+     state without growing `WorkspaceShell.vue`.
+   - Backend `onboarding-progress-contract` covers persistence/endpoint
+     behavior; frontend `onboarding-tour-contract` covers tour loading, header
+     wiring, session state, and badge display.
+
+9. [x] [admin-i18n-hardening] Close remaining admin/governance i18n escape
+   hatches.
+
+   Done when:
+   - Descriptor raw labels are not rendered as visible UI when a key is
+     available.
+   - Governance catalog descriptions render from structured localized fields.
+   - Admin/governance action labels, empty states, errors, and readonly reasons
+     are all keyed.
+
+   Completed 2026-05-05:
+   - Governance module and permission catalog descriptions now carry
+     `description_key` plus params instead of concatenated English strings.
+   - `GovernanceCrudView.vue` resolves description keys and nested `*_key`
+     params through `t(...)`.
+   - `admin-i18n-hardening-contract.mjs` pins the catalog localization
+     contract alongside the existing translation-key coverage guard.
+
+10. [x] [frontend-governance-test-matrix] Add frontend tests for the new admin
+    logic.
+
+    Done when:
+    - Unit/contract tests cover descriptor actions, permission filtering,
+      CRUD descriptors, relation stack, and N+1 summary loading.
+    - E2E covers create user with nested group/permission assignment and
+      readonly catalog behavior.
+    - Responsive e2e covers scroll ownership and nested modal usability.
+
+    Progress 2026-05-05:
+    - Added `governance-frontend-matrix-contract.mjs` for descriptor action
+      exposure, tenant permission aliases, readonly module/permission catalogs,
+      keyed CRUD modal labels, and no per-row fetch calls in governance row
+      rendering.
+    - Added `governance-crud-descriptors-contract.mjs` for entity descriptor
+      coverage, localized descriptor keys, readonly semantics, permission-bound
+      row actions, and CRUD view/modal descriptor consumption.
+    - Added `governance-relation-stack-contract.mjs` for relation stack state,
+      recursive push/back behavior, mass selection, modal `+1` links, and
+      Governance CRUD draft selection wiring.
+    - Extended `governance-relation-stack-contract.mjs` for nested selection
+      payloads that attach child permissions/modules to selected parent row
+      drafts.
+    - Added `governance-summary-cache-contract.mjs` for normalized summary
+      hydration, missing-id batch requests, and no row-render fetch loops.
+    - Added `user-editor-relation-controls-contract.mjs` for backend-backed
+      user editor Role/Theme `+1` relation controls and legacy payload
+      compatibility.
+    - Added `governance-crud-api-contract.php` for groups/organizations API
+      RBAC, tenant isolation, allowed/denied mutation checks, expired grants,
+      revoked grants, wrong-tenant identifiers, and UUID row ids.
+    - Added `governance-crud-persistence-contract.mjs` for backend-backed
+      group/organization persistence, UUID row normalization, internal id
+      stripping, descriptor endpoint ownership, and local draft blocking for
+      persisted relation targets.
+    - Extended Governance CRUD API and persistence contracts for
+      `/api/governance/users`, user summary normalization, persisted group
+      members, invalid member validation, and clearing member relations.
+    - Extended Governance CRUD contracts for persisted grants, public grant
+      UUIDs, group-subject grants that allow member actions, and aggregate
+      subject/resource relation hydration.
+    - Extended Governance CRUD API and persistence contracts for backend-backed
+      data portability jobs, export job creation, and import validation without
+      fake failed job rows.
+    - Extended Governance CRUD API and persistence contracts for backend-backed
+      policies, relation summaries, policy-sourced evaluator grants, and grant
+      cleanup on policy deletion.
+   - Extended Governance CRUD API and persistence contracts for backend-backed
+     roles, persisted permission/module relations, and relation clearing on
+     role update.
+   - Extended Governance CRUD API and descriptors for group role assignment,
+     role-sourced evaluator grants, and cleanup when role permissions or roles
+     are removed.
+   - Extended Governance CRUD API and descriptors for organization role
+     assignment, organization-sourced evaluator grants, and cleanup when role
+     permissions or roles are removed.
+   - Extended admin user create contract for direct governance role assignment,
+     user-sourced evaluator grants, and cleanup when role permissions or roles
+     are removed.
+   - Extended user editor relation contract so direct Governance role
+     assignment is covered by the shared `CrudRelationStack` and persisted
+     through `relationships.roles`.
+   - Extended admin-user and user-editor contracts for direct Governance group
+     assignment through `relationships.groups`.
+   - Extended the same contracts for user -> group -> permission/module nested
+     payloads; frontend build and relation contracts pass, while the PHP
+     contract remains blocked locally by missing `pdo_sqlite`.
+   - Extended relation-stack and user-editor contracts for persisted async
+     inline group creation from User Management instead of fake local drafts.
+   - Extended summary-cache contracts for nested relationship hydration and
+     multi-entity missing summary request collapse.
+   - Extended relation-stack contracts for caller-filtered nested relation
+     hops, including the User Management group -> modules/permissions limit.
+   - Added Playwright e2e proof for desktop/mobile User Management relation
+     stack create/select/back/submit, and extended catalog/user contracts so
+     nested permission payloads retain `entity_key`.
+   - Extended Playwright e2e proof to Governance group CRUD modal stacks on
+     desktop/mobile, covering nested permission/module catalog selection,
+     visible modal viewport constraints, and submitted relationship payloads.
+   - Extended relation-stack contracts and Playwright e2e for paged permission
+     mass selection, search pagination reset, cancel/reopen behavior, and the
+     resulting two-permission group relationship payload.
+   - Added desktop/tablet/mobile readonly catalog e2e coverage for Governance
+     modules and permissions, proving descriptor catalog rows render through
+     search while create/new/edit/delete controls and the actions column stay
+     absent.
+   - Expanded the Governance Playwright matrix to desktop, tablet, and mobile;
+     it now covers nested relation creation, Governance group CRUD relation
+     payloads, readonly catalogs, modal viewport constraints, and admin
+     scroll ownership.
+
+   Completed 2026-05-05.
+
+11. [x] [data-portability-ui] Implement user and organization export/import
+    UI on top of tenant export/import jobs.
+
+    Done when:
+    - Users can export their own data where permitted.
+    - Organization admins can export/import organization data where permitted.
+    - Import validates schema, tenant isolation, references, and dry-run output
+      before mutation.
+
+    Progress 2026-05-05:
+    - Added explicit Data Portability route-action buttons for export/import
+      instead of generic create, with scoped export payloads and import bundle
+      JSON validation before POST.
+    - Governance job rows now expose sanitized export/dry-run result payloads
+      without internal tenant/user/organization database ids, and user-scoped
+      jobs without a selected user resolve to the authenticated user.
+    - Existing export/import job rows expose a result-download row action so
+      users can retrieve a completed job payload after leaving the create flow.
+    - Frontend contracts and build pass; backend CRUD contract still skips in
+      this local runtime because `pdo_sqlite` is not installed.
+    - Completed 2026-05-05: the UI scope is backed by explicit route actions,
+      backend-backed governance job persistence, import JSON validation before
+      POST, export result download, and the backend dry-run contract for schema,
+      tenant, and reference validation.
+
+12. [x] [verification-proof] Keep verification evidence current for the
+    governance/admin sprint.
+
+    Done when:
+    - Contract and build output are recorded after each implementation slice.
+    - Build artifact directories remain excluded from source and sync checks.
+    - Any known skipped tests are documented with reason and next action.
+
+    Progress 2026-05-05:
+    - Governance backend slice syntax checks passed for tenant administration,
+      tenancy routes, RBAC, and the new governance CRUD contract.
+    - `governance-crud-api-contract.sh` currently skips in this local PHP
+      runtime because `pdo_sqlite` is not installed; the contract is present
+      and will execute in a SQLite-enabled backend test runtime.
+    - Governance frontend persistence contracts, summary-cache contract,
+      relation-stack contract, translation-key coverage, and `npm run build`
+      pass. Build still reports the known large `CallWorkspaceView` chunk
+      warning.
+    - Admin user group relation PHP syntax checks pass, frontend user-editor
+      relation contract passes, and `npm run build` passes; the admin-user PHP
+      contract still cannot execute locally because this PHP runtime lacks
+      `pdo_sqlite`.
+    - Persisted inline group creation from User Management passes
+      user-editor, relation-stack, and governance persistence contracts plus
+      `npm run build`. Build still only reports the known large
+      `CallWorkspaceView` chunk warning.
+    - Summary-cache contract passes for nested relationship hydration and
+      multi-entity batch requests; frontend build remains green with the known
+      `CallWorkspaceView` chunk warning.
+    - Relation-stack and user-editor contracts pass for caller-filtered nested
+      relation hops; frontend build remains green with the known chunk warning.
+    - `npm run test:e2e:governance-relations` passes on desktop and mobile;
+      user-editor, relation-stack, and module-governance catalog contracts
+      pass after preserving catalog `entity_key` in nested relation payloads.
+    - `npm run test:e2e:governance-relations` now covers four desktop/mobile
+      cases across User Management and Governance group CRUD relation stacks;
+      user-editor, relation-stack, module-governance catalog contracts, and
+      `npm run build` pass with the same known `CallWorkspaceView` chunk warning.
+    - Relation pagination/search/cancel hardening passes
+      `npm run test:contract:governance-relation-stack`,
+      `npm run test:e2e:governance-relations`,
+      `npm run test:contract:user-editor-relations`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
+    - Readonly catalog e2e hardening brings
+      `npm run test:e2e:governance-relations` to six desktop/mobile cases and
+      passes alongside `npm run test:contract:governance-relation-stack`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
+    - Admin scroll ownership hardening brings
+      `npm run test:e2e:governance-relations` to twelve desktop/tablet/mobile
+      cases and passes alongside `node tests/contract/shared-admin-components-contract.mjs`,
+      `node tests/contract/rtl-layout-foundation-contract.mjs`,
+      `npm run test:contract:governance-relation-stack`,
+      `node tests/contract/module-governance-catalog-contract.mjs`, and
+      `npm run build`; build still reports only the known chunk warning.
+    - Administration summary-loading proof closes the N+1 summary issue:
+      `npm run test:contract:governance-summary-cache` passes and now covers
+      Users, Marketplace, Localization, Theme Management, Administration lead
+      recipients, User editor relation providers, and governance backend
+      summary entity support. `npm run build` passes with the known
+      `CallWorkspaceView` chunk warning.
+    - Governance backend API closeout: `php -l` passes for the tenancy router,
+      Governance group/organization membership handlers, permission grants,
+      policies, data portability jobs, roles, role assignments, summaries, and
+      the CRUD API contract. `node tests/contract/governance-crud-persistence-contract.mjs`
+      passes. `governance-crud-api-contract.sh` still skips locally because
+      `pdo_sqlite` is not installed for `php`.
+    - Data portability UI closeout: `npm run test:contract:governance-crud-persistence`
+      and `npm run test:contract:module-actions` pass, proving explicit
+      export/import route actions, no generic create affordance, import bundle
+      validation before POST, backend-backed job persistence, and result
+      download wiring. `npm run build` passes with the known
+      `CallWorkspaceView` chunk warning. `governance-crud-api-contract.sh`
+      still skips locally because `pdo_sqlite` is not installed for `php`.
+    - Final closeout 2026-05-05: release artifact exclusions such as `dist/`,
+      `frontend-vue/dist/`, `compat-artifacts/`, and cache directories are
+      recorded as source/sync exclusions. The completion log in
+      `READYNESS_TRACKER.md` records the same proof, skip reason, and release
+      impact.
+
+## Audit Backlog Added 2026-05-05
+
+Source:
+- `ADMIN_UX_ROUTE_AUDIT.md`
+
+Scope:
+- 180 findings across 18 review perspectives for Administration, Governance,
+  Settings/Profile, Theme Management, Localization, Marketplace, shared admin
+  shell, route descriptors, CRUD descriptors, relation stack, text semantics,
+  and expected route behavior.
+- The findings are analysis/backlog input. They are not release execution
+  instructions.
+
+Fix lanes:
+1. Design system consistency.
+2. Layout and responsive behavior.
+3. Text, copy, and i18n semantics.
+4. Navigation and information architecture.
+5. Route and action logic.
+6. CRUD field and entity semantics.
+7. Recursive relation workflow.
+8. Permission and security behavior.
+9. Tenancy and data boundaries.
+10. Data integrity and validation.
+11. Accessibility.
+12. Keyboard and focus.
+13. Error/loading/empty states.
+14. Frontend performance.
+15. Backend/API contracts.
+16. State, sync, and cache behavior.
+17. Test and observability coverage.
+18. Product workflow and onboarding.
+
+## Archived Baseline: Video Chat Localization, RTL, And Modular Workspace Foundation
+
+Branch:
+- `feature/videochat-localization-sprint`
+
+Base context:
+- Builds on the current video-chat tenant/workspace branch.
+- Target application: `demo/video-chat`.
+- Reference source for first supported locales:
+  - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/*.json`
+  - `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n/index.ts`
+- Reference source for the module architecture:
+  - `/home/jochen/projects/academy/intelligent-intern/services/app/src/modules/*/manifest.ts`
+  - `/home/jochen/projects/academy/intelligent-intern/services/api/src/modules/README.md`
+  - `/home/jochen/projects/academy/intelligent-intern/services/api/src/modules/_template/manifest.json`
+- Intelligent Intern modules are descriptor-based. King should follow that
+  descriptor contract instead of treating imported route files as the module
+  source of truth.
+
+Current execution boundary:
+- The module/refactor track in this sprint must not touch video-call runtime
+  code yet.
+- Excluded paths for the module/refactor track:
+  - `demo/video-chat/frontend-vue/src/domain/calls/**`
+  - `demo/video-chat/frontend-vue/src/domain/realtime/**`
+  - `demo/video-chat/frontend-vue/src/lib/sfu/**`
+  - `demo/video-chat/frontend-vue/src/lib/wasm/**`
+  - `demo/video-chat/frontend-vue/src/lib/wavelet/**`
+- Calendar booking, public call join, SFU, screen sharing, call management,
+  call dashboard, and call workspace stay outside the first module extraction.
+- Existing localization stories that mention call surfaces remain planned, but
+  they must not be used as permission to move or refactor call code in this
+  module wave.
+
+Initial supported languages:
+- Source inventory found these locale files:
+  - `am`, `ar`, `bn`, `de`, `en`, `es`, `fa`, `fr`, `ha`, `hi`,
+    `it`, `ja`, `jv`, `ko`, `my`, `pa`, `ps`, `pt`, `ru`, `sgd`,
+    `so`, `th`, `tl`, `tr`, `uk`, `uz`, `vi`, `zh`
+- `en` remains the canonical fallback.
+- RTL locales found in the website source metadata:
+  - `ar`, `fa`, `ps`, `sgd`
+
+Important mismatch to fix:
+- Video chat currently has only a local settings language stub with
+  `en/de/fr/es` in `WorkspaceShell.vue`.
+- That stub only writes `document.documentElement.lang` and local storage.
+- It does not persist to the backend, does not load translation resources, does
+  not translate the application, and does not apply RTL layout.
+- The Intelligent Intern website source already ships 28 locale JSON files.
+  Those languages are the first required locale set for this sprint.
+
+Sprint goal:
+- Make the whole video-chat app multilingual across authenticated workspace,
+  public booking/join pages, admin screens, realtime call UI, settings,
+  emails, validation errors, diagnostics visible to users, and release
+  smoke paths.
+- Add a durable localization contract with user language selection under
+  Settings.
+- Let the primary superadmin, `user_id = 1`, upload and manage translation CSV
+  files.
+- Make RTL languages switch the complete app to RTL, not just translated
+  labels.
+- Keep tenant isolation: localization resources may be platform-provided or
+  tenant-overridden, but tenants must not read or mutate each other's language
+  resources.
+- Add a modular workspace foundation so localization is not hard-wired into one
+  shell. Non-call workspace areas should move toward dynamically loaded modules
+  with reusable admin/settings/CRUD components.
+- Create a `modules` directory for the video-chat frontend, following the
+  Intelligent Intern descriptor pattern, and split existing non-call areas into
+  modules where they can be registered, loaded, and permission-gated
+  independently.
+- Add the King pipeline-orchestrator OO surface first. Backend module routes
+  will call normal HTTP routes, the route handler will publish a backend event
+  to the orchestrator, and the orchestrator will start the module pipeline.
+  We are not making every frontend action event-based.
+
+Non-goals for this sprint:
+- Machine translation generation.
+- Translation marketplace or translator workflow approvals.
+- Per-call live speech translation.
+- Physical database-per-locale sharding.
+- Adding new business languages beyond the locale files found in the existing
+  Intelligent Intern website source.
+- Moving or refactoring video-call runtime code during the first module wave.
+- Turning the module system into a plugin marketplace in this sprint.
+
+## Architecture Decisions
+
+1. Locale model
+- Store each user's selected locale persistently in user settings.
+- Normalize locale tags to a strict allow-list seeded from the Intelligent
+  Intern website locale files.
+- Allow future regional variants such as `de-DE` or `en-US`, but resolve them
+  through base fallbacks until regional overrides exist.
+- Derive text direction from locale metadata. The initial RTL set from the
+  website source is `ar`, `fa`, `ps`, and `sgd`; all other discovered locale
+  files default to LTR unless metadata says otherwise.
+
+2. Translation resource model
+- Use stable message keys, not raw UI text, as the source of truth.
+- English is the canonical fallback and must be complete.
+- Non-English locales may fall back to English per key only when explicitly
+  allowed and reported by coverage tooling.
+- Store translation bundles in backend persistence with:
+  - locale
+  - namespace
+  - key
+  - value
+  - status
+  - source
+  - updated_by_user_id
+  - updated_at
+- Use tenant scope for tenant override bundles only after platform defaults are
+  resolved.
+
+3. CSV contract
+- Superadmin `user_id = 1` can upload CSV language files.
+- CSV upload must support preview, validation, and import.
+- CSV encoding is UTF-8.
+- Required columns:
+  - `locale`
+  - `namespace`
+  - `key`
+  - `value`
+- Optional columns:
+  - `description`
+  - `context`
+  - `status`
+  - `updated_at`
+- Invalid CSV must fail closed with row-level errors and no partial import
+  unless an explicit `dry_run=false` import has passed validation.
+- CSV import must reject unsupported locales, duplicate key rows in the same
+  file, empty keys, empty English canonical values, malformed UTF-8, and cells
+  exceeding configured limits.
+
+4. Runtime delivery
+- Login/session responses expose the selected locale and direction.
+- Frontend loads the active locale bundle before rendering protected views.
+- Public pages resolve language from URL/query/cookie/browser `Accept-Language`
+  and then fall back to platform default.
+- API error envelopes expose stable error codes; frontend maps codes to
+  localized strings instead of localizing server-generated free text.
+- Email templates can be localized by locale and must preserve placeholders.
+
+5. RTL/LTR contract
+- Apply `lang` and `dir` at the app root and document root.
+- Use CSS logical properties where possible: inline/block start/end, margin,
+  padding, border, inset.
+- Sidebar/navigation must flip for RTL without breaking desktop, tablet, and
+  mobile layouts.
+- Icons that imply direction, such as back/forward, chevrons, and timeline
+  arrows, must mirror or swap under RTL.
+- Canvas/video content must not be mirrored accidentally. Screen sharing and
+  camera video remain visually correct; only UI chrome mirrors.
+
+6. King pipeline orchestrator OO contract
+- The procedural orchestrator API already carries the native runtime:
+  `king_pipeline_orchestrator_run`, `dispatch`, `register_tool`,
+  `register_handler`, `worker_run_next`, `resume_run`, `get_run`, and
+  `cancel_run`.
+- Add an OO facade over the same native kernel before descriptor-driven backend
+  modules depend on it:
+  - `King\PipelineOrchestrator::run()`
+  - `King\PipelineOrchestrator::dispatch()`
+  - `King\PipelineOrchestrator::registerTool()`
+  - `King\PipelineOrchestrator::registerHandler()`
+  - `King\PipelineOrchestrator::configureLogging()`
+  - `King\PipelineOrchestrator::workerRunNext()`
+  - `King\PipelineOrchestrator::resumeRun()`
+  - `King\PipelineOrchestrator::getRun()`
+  - `King\PipelineOrchestrator::cancelRun()`
+- The OO surface is not a weaker userland wrapper. It must bind to the same
+  native orchestrator functions and preserve durable tool definitions,
+  process-local handler registration, file-worker, remote-peer, recovery, and
+  run-snapshot semantics.
+
+7. Descriptor-based backend module contract
+- Backend modules are descriptor-based.
+- A backend module descriptor defines:
+  - `module_key`
+  - `version`
+  - `permissions`
+  - `routes`
+  - `events`
+  - `pipelines`
+  - `tools`
+  - `handlers`
+  - `i18n_namespaces`
+  - optional `settings`
+- Routes remain the external ingress contract. A route is called over HTTP,
+  validates/authenticates normally, creates a normalized backend module event,
+  and submits the event to `King\PipelineOrchestrator`.
+- The backend event includes module key, route key, event name, actor/session
+  context, tenant context, request payload, query/path params, correlation ID,
+  and idempotency key when available.
+- The orchestrator starts the descriptor-selected pipeline as a backend module
+  run. Tool handlers are still registered per process and must fail closed when
+  a worker or remote peer cannot satisfy handler readiness.
+- We do not turn every frontend click/action into an event stream. The route is
+  the boundary; the backend emits one event for the accepted route command.
+
+8. Frontend module contract
+- Add `demo/video-chat/frontend-vue/src/modules`.
+- Each module lives under `src/modules/<module_key>` and exposes a descriptor.
+- The frontend descriptor follows the Intelligent Intern shape:
+  - `module_key`
+  - `version`
+  - `permissions`
+  - `routes` or `pages`
+  - `navigation`
+  - `settings_panels` when needed
+  - `i18n_namespaces`
+  - async component loaders
+- Module views/widgets must be loaded through descriptor-driven dynamic imports
+  such as `defineAsyncComponent` or route-level dynamic `import()`.
+- The core router/navigation/settings shell may read module descriptors, but it
+  must not directly import module view implementations.
+- Modules may import shared components and support helpers. Shared components
+  must not import feature modules.
+- Module keys are stable contracts and are used by permissions, localization
+  namespaces, navigation, and future marketplace/module administration.
+
+9. Non-call module split
+- First module extraction targets only non-call workspace areas:
+  - `administration`
+  - `governance`
+  - `users`
+  - `marketplace`
+  - `workspace_settings`
+  - `localization`
+  - `theme_editor`
+- The existing `domain/calls` and `domain/realtime` trees remain in place until
+  a separate call-specific module sprint is approved.
+- Moving a feature into a module must preserve route paths, permissions,
+  persisted settings, and public contracts.
+
+10. Reusable component contract
+- Build reusable UI components before copying screen-specific layouts:
+  - admin page frame
+  - CRUD table frame
+  - searchable toolbar
+  - pagination footer
+  - maximizable modal shell
+  - settings panel frame
+  - file upload/import preview frame
+- Feature modules consume these shared components instead of duplicating
+  header/table/modal/pagination code.
+- Shared components stay feature-neutral and below the 800-line target.
+
+## Active Issues
+
+1. [x] `[localization-inventory]` Inventory every user-visible string and locale assumption.
+
+   Scope:
+   - Scan Vue templates, JS modules, PHP response messages, email templates,
+     public pages, validation errors, empty states, button labels, tooltips,
+     aria labels, placeholders, page titles, route labels, realtime call UI,
+     calendar UI, tenant administration, user management, marketplace, and
+  release-visible messages.
+   - Identify hard-coded locale sorting such as `localeCompare(..., 'en')`.
+   - Identify CSS and layout rules using physical left/right assumptions.
+   - Compare with Intelligent Intern website locale files and language
+     metadata from the correct website source path.
+
+   Done when:
+   - [x] Inventory document lists all frontend, backend, public, and email
+     translation surfaces.
+   - [x] Initial namespace plan exists for `common`, `auth`, `settings`,
+     `calls`, `call_workspace`, `calendar`, `users`, `tenancy`, `marketplace`,
+     `public_booking`, `emails`, `errors`, and `diagnostics`.
+   - [x] All discovered Intelligent Intern website locale files are confirmed
+     as the first supported locale set.
+   - [x] RTL risk map lists every screen with physical left/right layout.
+
+   Proof:
+   - `documentation/video-chat-localization-inventory.md`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-inventory-contract.mjs`
+
+2. [x] `[localization-schema-and-settings]` Add backend locale schema and persistent user preference.
+
+   Scope:
+   - Add migrations for supported locales and translation resources.
+   - Add `users.locale` or equivalent user-settings storage.
+   - Return locale and direction in login/session/refresh/settings responses.
+   - Accept locale updates through `/api/user/settings`.
+   - Preserve existing users by defaulting to `en`.
+   - Keep tenant-aware resource lookup for future tenant overrides.
+
+   Done when:
+   - [x] Fresh DB seeds all discovered website locales with direction
+     metadata.
+   - [x] Existing DB migration backfills user locale without data loss.
+   - [x] User settings validates locale values and rejects unsupported ones.
+   - [x] Session payload includes `locale`, `direction`, and supported locale
+     metadata.
+   - [x] Backend contracts cover valid locale update, invalid locale rejection,
+     and session persistence.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/support/localization.php`
+   - `demo/video-chat/backend-king-php/tests/localization-schema-contract.sh`
+   - `demo/video-chat/backend-king-php/tests/user-settings-contract.sh`
+   - `demo/video-chat/backend-king-php/tests/user-settings-endpoint-contract.sh`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
+
+3. [x] `[translation-csv-admin]` Build superadmin CSV upload and import.
+
+   Scope:
+   - Add backend CSV parser and validator.
+   - Add preview endpoint for superadmin `user_id = 1`.
+   - Add commit endpoint for validated imports.
+   - Add list/detail endpoints for translation bundles and import history.
+   - Add Settings / Administration UI for upload, preview, errors, and commit.
+   - Restrict upload/import to primary superadmin only.
+
+   Done when:
+   - [x] Non-admins and admins with IDs other than `1` cannot upload language
+     CSV files.
+   - [x] CSV preview returns row-level errors without mutating data.
+   - [x] Import is atomic and audited.
+   - [x] Duplicate keys and unsupported locales fail validation.
+   - [x] Imported translations are visible after session refresh without a
+     release refresh.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/http/module_localization.php`
+   - `demo/video-chat/backend-king-php/domain/localization/translation_imports.php`
+   - `demo/video-chat/backend-king-php/tests/localization-import-contract.sh`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-import-ui-contract.mjs`
+
+4. [x] `[frontend-i18n-runtime]` Add frontend translation runtime.
+
+   Scope:
+   - Create a video-chat i18n module with locale state, direction state,
+     fallback merge, async bundle loading, and `t(key, params)` interpolation.
+   - Load translation resources before protected views render.
+   - Integrate with session state and settings save.
+   - Apply `document.documentElement.lang` and `document.documentElement.dir`.
+   - Replace the local-only language storage stub in `WorkspaceShell.vue`.
+
+   Done when:
+   - [x] User language selection persists and survives reload/login refresh.
+   - [x] Locale switch updates visible UI without requiring logout.
+   - [x] Missing keys are detectable in dev/test and fall back to English in
+     production.
+   - [x] Interpolation supports named placeholders and escapes values.
+   - [x] Frontend unit contracts cover fallback, missing keys, params, and RTL
+     direction.
+
+   Proof:
+   - `demo/video-chat/backend-king-php/http/module_localization.php`
+   - `demo/video-chat/backend-king-php/tests/localization-resources-contract.sh`
+   - `demo/video-chat/frontend-vue/src/modules/localization/i18nRuntime.js`
+   - `node demo/video-chat/frontend-vue/tests/contract/frontend-i18n-runtime-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
+   - `npm run build` in `demo/video-chat/frontend-vue`
+
+5. [x] `[settings-language-ui]` Replace the current Regional stub with full language settings.
+
+   Scope:
+   - Add a clear Language/Localization area under Settings.
+   - Keep Regional Time for date/time format but split language from date/time.
+   - Show supported languages from backend metadata, not a hard-coded stale
+     list.
+   - Apply RTL immediately after saving an RTL language.
+   - Make settings modal itself work in RTL and on mobile/tablet.
+
+   Done when:
+   - [x] Settings lets each user select any supported website-source locale.
+   - [x] The old `en/de/fr/es` local-storage-only list is gone.
+   - [x] Language save calls backend settings and updates session/i18n state.
+   - [x] Settings modal can be maximized/restored in both LTR and RTL.
+   - [x] Mobile/tablet settings remain full-screen and scroll correctly.
+
+   Proof:
+   - `demo/video-chat/frontend-vue/src/layouts/WorkspaceShell.vue`
+   - `demo/video-chat/frontend-vue/src/modules/workspace_settings/descriptor.js`
+   - `node demo/video-chat/frontend-vue/tests/contract/localization-settings-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/module-registry-contract.mjs`
+   - `node demo/video-chat/frontend-vue/tests/contract/module-navigation-builder-contract.mjs`
+   - `npm run build` in `demo/video-chat/frontend-vue`
+
+6. [x] `[frontend-string-coverage]` Convert app UI to translation keys.
+
+   Scope:
+   - Convert navigation, page titles, settings, tenant administration, user
+     management, marketplace, call management, user dashboard, public booking,
+     join flow, appointment configuration, call workspace, modals, toasts,
+     form labels, placeholders, aria labels, and tooltips.
+   - Do not grow `CallWorkspaceView.vue`; add keys through extracted helpers or
+     child modules where needed.
+   - Preserve existing behavior while changing display text.
+
+   Progress:
+   - [x] Theme settings/editor strings are keyed and the editor state/actions
+     moved into an options-based `useWorkspaceThemeSettings` composable.
+   - [x] User editor modal labels, placeholders, status text, and avatar text
+     are keyed; modal computed state moved into `useUserEditorModal`.
+   - [x] User management page, table, validation, notices, and destructive
+     confirmations use localization keys.
+   - [x] Tenant context/admin labels and Governance CRUD status/not-available
+     text use localization keys.
+   - [x] Login form labels, aria labels, submit state, and local validation
+     errors use localization keys.
+   - [x] Theme preview labels, sample navigation, sample calls, statuses, and
+     pagination text use localization keys.
+   - [x] Governance route metadata now carries translation keys for page
+     titles and singular/plural entity labels.
+   - [x] Administration settings labels, email/server/template controls,
+     branding controls, and local status/error text use localization keys.
+   - [x] Translation-key coverage contract now scans all non-call Vue/JS
+     sources and metadata key forms for missing English fallback keys.
+   - [x] `npm run test:contract:localization` runs the localization inventory,
+     runtime, settings, import UI, and translation-key coverage contracts.
+   - [x] Shared modal shell default close/maximize/restore labels use
+     localization keys.
+   - [x] Shared navigation and pagination default labels/aria labels use
+     localization keys.
+   - [x] Remaining Login, Administration mail, and Marketplace non-call
+     placeholders/options use localization keys.
+   - [x] Translation-key coverage contract now rejects static English
+     template text and static label/placeholder/title attributes in the
+     localized non-call Vue surfaces.
+   - [x] Workspace shell non-call chrome strings and page titles now use
+     localization keys, including settings/logout/sidebar actions and
+     descriptor `pageTitle_key` metadata for module routes.
+   - [x] Translation-key coverage contract now includes the public goodbye
+     page, appointment settings modal, and shared call list table. Those
+     surfaces no longer carry static English labels, aria labels, titles, or
+     action text.
+   - [x] Appointment slot configuration panel and form rows are now keyed and
+     included in the translation-key coverage contract, including FullCalendar
+     slot labels, copy/insert actions, save/load notices, and validation text.
+   - [x] Chat archive modal, file filters, file group labels, archive notices,
+     and archive load errors now use localization keys and are covered by the
+     translation-key coverage contract.
+   - [x] Public join flow labels, media controls, admission status messages,
+     and join/access fallback errors now use localization keys and are covered
+     by public-page and translation-key contracts.
+   - [x] Admin cancel/delete controller notices, validation errors, and default
+     cancel templates now use localization keys and are covered by the
+     translation-key coverage contract.
+   - [x] Public booking modal labels, privacy copy, slot status, success
+     actions, validation messages, and calendar export text now use
+     localization keys and are covered by the translation-key coverage
+     contract.
+   - [x] Admin call management template text, filters, enter-call controls,
+     compose modal labels, cancel/delete modal labels, and compose controller
+     validation/notices now use localization keys.
+   - [x] User call dashboard template text, enter-call controls, invite modal,
+     compose modal labels, and dashboard compose/invite/admission messages now
+     use localization keys. The translation-key coverage contract now also
+     scans explicitly included `.template.html` files.
+   - [x] Admin overview dashboard, inventory/telemetry tables, scheduling
+     modal labels, and FullCalendar button text now use localization keys. The
+     dashboard metric derivations moved into `useOverviewDashboardMetrics` so
+     `OverviewView.vue` is back below the file-size target.
+   - [x] Call workspace template chrome, controls, roster/lobby pagination,
+     empty states, chat composer labels, and attachment controls now use
+     localization keys. The compact sidebar computed state moved into
+     `compactChrome.js`, so `CallWorkspaceView.vue` keeps shrinking while the
+     template joins translation-key coverage.
+   - [x] Call workspace chat runtime upload errors, reconnect/offline notices,
+     paste-to-attachment notices, participant fallbacks, route join-modal
+     errors, room snapshot errors, and screen-share-ended notices now use
+     localization keys and are covered by the translation-key contract.
+   - [x] Non-English fallback gaps are now explicit in a machine-readable
+     fallback policy. The localization contract verifies every supported
+     non-English locale and every English message namespace is either covered
+     by CSV import or consciously allowed to use English fallback until import.
+   - [x] Closed 2026-05-05: the fallback policy now includes the onboarding
+     namespace added by the tour/badge work, so the machine-readable
+     non-English fallback contract covers every English message namespace.
+
+   Done when:
+   - [x] No hard-coded user-visible English text remains in the targeted Vue
+     surfaces except explicit test fixtures and non-user debug identifiers.
+   - [x] All strings have stable namespaced keys.
+   - [x] English fallback covers 100 percent of used keys.
+   - [x] Non-English seed/import files cover the key set or explicitly mark
+     allowed fallback gaps.
+   - [x] Contract test fails on missing English keys.
+
+   Proof:
+   - `node tests/contract/frontend-translation-key-coverage-contract.mjs`
+   - `node tests/contract/localization-fallback-gap-contract.mjs`
+   - `node tests/contract/onboarding-tour-contract.mjs`
+   - `npm run test:contract:localization` in `demo/video-chat/frontend-vue`
+     passes frontend/static checks; backend SQLite contracts skip locally
+     because this PHP runtime does not include `pdo_sqlite`.
+
+7. [x] `[rtl-layout-foundation]` Make shell, settings, admin, calendar, and call UI RTL-capable.
+
+   Scope:
+   - Add direction-aware shell classes and CSS logical-property cleanup.
+   - Flip sidebar/nav placement in RTL.
+   - Swap or mirror directional icons.
+   - Ensure calendar week/day views render correctly under RTL.
+   - Ensure call workspace controls, participant lists, chat, reactions,
+     screen share drag UI, and mini videos do not overlap under RTL.
+   - Ensure video/canvas content is not mirrored unless explicitly desired for
+     self-preview behavior.
+
+   Progress:
+   - [x] Shared admin frames, Users/Marketplace table wrappers, and
+     Localization error lists use logical inline padding/radius properties for
+     RTL-safe layout.
+   - [x] Localization contract now includes an RTL layout foundation guard for
+     those non-call admin/module surfaces and document direction sync.
+   - [x] Shared pagination directional icons mirror under `html[dir="rtl"]`
+     without applying RTL transforms to canvas or video content.
+   - [x] Auth split layout, settings theme preview, and reusable theme preview
+     use logical inline borders/padding for RTL-safe separators and lists.
+   - [x] Shared workspace table alignment, section spacing, collapsed-sidebar
+     spacing, and list indentation use logical inline properties.
+   - [x] Shell sidebar overlay positions and navigation submenu indentation
+     use logical inline properties with RTL contract coverage.
+   - [x] Physical left/right CSS audit is documented with resolved non-call
+     surfaces, remaining geometric coordinates, and call-specific follow-up
+     scope.
+   - [x] Browser smoke now captures RTL public booking/join, authenticated
+     admin/settings, and call-workspace shell screenshots across responsive
+     viewports and verifies no horizontal overflow.
+   - [x] RTL contract now proves video/canvas content is not mirrored by RTL
+     rules; only the intentional local self-preview mirror is allowed.
+
+   Done when:
+   - [x] RTL locales set app `dir="rtl"` and UI direction changes across all
+     major screens.
+   - [x] Left/right physical CSS audit is resolved or documented with a reason.
+   - [x] Navigation, modal headers, pagination, wizard steps, and form rows are
+     coherent in RTL.
+   - [x] Canvas/video rendering remains visually correct.
+   - [x] Playwright screenshots prove desktop, tablet, and mobile RTL layouts.
+
+8. [x] `[backend-errors-and-email-localization]` Localize server-driven user text and email templates.
+
+   Scope:
+   - Keep machine contracts as error codes.
+   - Add localized frontend mapping for API errors.
+   - Add locale-aware appointment booking and lead email templates.
+   - Preserve placeholders for booking mails and lead notifications.
+   - Resolve recipient locale for owner and guest independently where possible.
+
+   Progress:
+   - [x] Appointment booking mail templates reject configured subject/body
+     text that removes critical placeholders such as `{call_title}`,
+     `{recipient_name}`, `{starts_at}`, and `{join_link}`.
+   - [x] Public lead notification templates reject configured subject/body
+     text that removes critical `{name}` and `{email}` placeholders.
+   - [x] Mail template placeholder contract covers defaults, invalid
+     configured templates, valid configured templates, and reset-to-default
+     behavior.
+   - [x] Translation CSV preview/commit rejects non-English rows that remove
+     placeholders from the English canonical value, whether that canonical
+     value already exists in `translation_resources` or appears in the same
+     CSV file.
+   - [x] Appointment booking and public lead notifications resolve localized
+     templates from `translation_resources` with fallback to English and then
+     to the configured template.
+   - [x] Appointment booking sends guest and owner mails with independently
+     resolved template locales, using the public/guest locale and owner user
+     locale where available.
+   - [x] Email localization contract covers valid localized templates, invalid
+     localized templates falling back to English, outbox rendering, and public
+     lead template locale selection.
+   - [x] Localization, Marketplace, Admin Users, and Workspace Administration
+     API clients resolve frontend text from stable backend error codes instead
+     of displaying backend English messages directly. The contract now covers
+     localization, marketplace, users, user-account admin, and
+     workspace-administration endpoint codes.
+
+   Done when:
+   - [x] API error payloads still expose stable codes and do not depend on
+     translated text for logic.
+   - [x] Public booking confirmation email can be sent in the selected/public
+     locale.
+   - [x] Owner notification email can use owner locale.
+   - [x] CSV import rejects translations that remove required placeholders.
+   - [x] Email contract tests cover placeholder preservation and locale
+     fallback.
+
+9. [x] `[public-pages-localization]` Localize public booking and join routes.
+
+   Scope:
+   - Public calendar booking route.
+   - Booking confirmation page.
+   - Join/access-link route.
+   - Waiting-room/lobby admission messages.
+   - Public error states for expired or invalid tokens.
+   - Language resolution without requiring authentication.
+
+   Progress:
+   - [x] Public routes resolve locale deterministically from explicit
+     `locale` / `lang` / `language` query, then public locale cookie, then
+     browser language, then English fallback.
+   - [x] Public booking and join routes load i18n resources without requiring
+     an authenticated session and apply document `lang` / `dir`, including RTL
+     locales.
+   - [x] Public booking slot labels, FullCalendar locale/direction, and
+     booking submit payload use the active public locale.
+   - [x] Public join/access and appointment booking API errors resolve safe
+     frontend text from stable backend error codes, including invalid,
+     expired, missing, and unavailable public paths.
+   - [x] Playwright public-localization smoke covers public booking in `en`,
+     `de`, `ar`, and `fa`, plus localized invalid join-link text in RTL.
+
+   Done when:
+   - [x] Public pages choose language from explicit route/query/cookie/browser
+     fallback in a deterministic order.
+   - [x] Public pages support RTL locales.
+   - [x] Public booking slots and date/time formatting use the active locale.
+   - [x] Invalid/expired access paths show localized safe error text.
+   - [x] Browser smoke covers public booking in `en`, `de`, `ar`, and one
+     additional RTL locale from the website source.
+
+10. [x] `[locale-aware-formatting]` Centralize date, time, number, list, and sorting behavior.
+
+    Scope:
+    - Add frontend formatting helpers for date/time/number/list display.
+    - Stop hard-coded English collation for user-facing sorts.
+    - Keep persisted date/time formats compatible with existing user settings.
+    - Ensure calendar slot labels and call times respect locale and time format.
+
+    Progress:
+    - [x] Governance, Marketplace, and Users table timestamps use the shared
+      locale-aware date-time formatter instead of hard-coded `en-GB`/`de-DE`.
+    - [x] Localization contract now covers date-time formatting examples for
+      `en`, `de`, `ar`, `fa`, and `ps`, and guards those tables against
+      pinned English/German Intl formatters.
+    - [x] Module navigation/settings panel ordering uses a shared
+      locale-aware collation helper, with the active session locale passed
+      through the module access context.
+    - [x] Shared localized number and list display helpers cover LTR/RTL
+      examples and fallback behavior in the localization contract.
+    - [x] Shared weekday-short formatting uses the requested locale with LTR
+      and RTL contract examples.
+    - [x] Shared localized date-time display now combines active locale,
+      localized numerals/time display, and the saved user `date_format` /
+      `time_format` preferences.
+    - [x] Governance, Marketplace, and Users tables pass active user
+      `dateFormat` and `timeFormat` preferences into the shared localized
+      date-time formatter.
+    - [x] Shared date-range display now uses localized date-time formatting,
+      including browser document locale fallback for existing call/calendar
+      surfaces.
+    - [x] User dashboard calendar buckets and appointment form rows use a
+      deterministic date-time comparator instead of string `localeCompare`.
+    - [x] Realtime participant, lobby, typing, and layout fallback ordering now
+      use the shared locale-aware collation helper with document locale
+      fallback instead of pinning user-facing sorts to English.
+    - [x] Call workspace timestamp display now uses the shared localized
+      timestamp formatter instead of hard-coded `en-GB`.
+
+    Done when:
+    - [x] User-facing `localeCompare(..., 'en')` calls are replaced with active
+      locale-aware helpers.
+    - [x] Date/time formatting uses user locale plus existing time/date
+      preferences.
+    - [x] Calendar and dashboard sort order remains deterministic.
+    - [x] Contract tests cover representative LTR and RTL formatting examples,
+      including `en`, `de`, `ar`, `fa`, and `ps`.
+
+11. [x] `[localization-contract-tests]` Add backend and frontend contracts.
+
+    Scope:
+    - Backend tests for migrations, user locale settings, CSV validation,
+      translation lookup, superadmin authorization, email placeholders.
+    - Frontend tests for fallback merge, missing keys, interpolation, language
+      switch, RTL state, settings UI, and route-level loading.
+    - Static key coverage test against source usage.
+
+    Progress:
+    - [x] `npm run test:contract:localization` now runs the backend
+      localization schema, user settings, resource lookup, and CSV import
+      contracts before the frontend localization contracts.
+    - [x] Backend CSV import contract proves preview does not mutate
+      `translation_resources`, failed commits stay atomic, duplicate keys and
+      unsupported locales fail, and only primary superadmin `user_id = 1` can
+      import translations.
+    - [x] Mail template placeholder contract runs in the localization suite
+      without requiring SQLite and fails if appointment or lead notification
+      templates lose required placeholders.
+
+    Done when:
+    - [x] Tests fail if a used key is missing from English fallback.
+    - [x] Tests fail if CSV upload mutates data during preview.
+    - [x] Tests fail if non-`user_id=1` can import translations.
+    - [x] Tests fail if a configured RTL locale does not set RTL.
+    - [x] Tests fail if required email placeholders are missing.
+
+12. [x] `[localization-browser-smoke]` Add browser proof.
+
+    Scope:
+    - Desktop, tablet, mobile.
+    - Representative LTR and RTL locales from the website source, with full
+      matrix metadata coverage for all discovered locales.
+    - Settings language switch.
+    - Admin screens.
+    - Public booking.
+    - Join flow.
+    - Live call workspace at least as a UI shell smoke without requiring real
+      camera permission for every scenario.
+
+    Progress:
+    - [x] Public-localization Playwright smoke covers public booking across
+      desktop, tablet, and mobile viewports for `en`, `de`, `ar`, and `fa`,
+      including document direction and horizontal overflow checks.
+    - [x] `test:e2e:localization-smoke` now combines public booking/join proof
+      with authenticated Settings/Admin localization proof. It switches the
+      Settings language from `en` to `ar`, verifies the modal flips to RTL
+      before saving, verifies the workspace flips to RTL immediately after
+      saving, and verifies the choice persists after reload.
+    - [x] Authenticated Admin localization smoke captures LTR/RTL screenshots
+      and checks desktop, tablet, and mobile viewport overflow without external
+      translation services.
+    - [x] Missing translation diagnostics no longer mutate reactive render
+      state, so incomplete locale bundles do not trigger Vue recursive update
+      loops while still preserving missing-key counters for tests/dev.
+    - [x] Live call workspace shell smoke now runs in RTL with fake
+      WebSocket/media devices across desktop and mobile without requiring real
+      camera permission.
+
+    Done when:
+    - [x] Screenshots show no overlapping text in representative LTR and RTL
+      locales.
+    - [x] RTL screenshots show sidebar/nav/modal direction flipped correctly.
+    - [x] Settings switch persists after reload.
+    - [x] Public booking and join pages render localized text.
+    - [x] Smoke can run in CI/local without external translation services.
+    - [x] Live call workspace UI shell smoke runs without requiring real camera
+      permission.
+
+13. [x] `[king-pipeline-orchestrator-oo-surface]` Add the King OO orchestrator facade.
+
+    Scope:
+    - Add `King\PipelineOrchestrator` as a native OO facade over the existing
+      pipeline-orchestrator kernel.
+    - Mirror the current procedural surface with static methods:
+      `run`, `dispatch`, `registerTool`, `registerHandler`,
+      `configureLogging`, `workerRunNext`, `resumeRun`, `getRun`, and
+      `cancelRun`.
+    - Keep all current durability semantics: tool definitions are durable,
+      executable handlers are process-local, file-worker and remote-peer
+      execution must re-register handlers, and missing handler readiness fails
+      closed.
+    - Update stubs, docs, and PHPT proof.
+
+    Done when:
+    - [x] `class_exists(King\PipelineOrchestrator::class)` is true.
+    - [x] The OO methods map to the same native functions as the procedural
+      API.
+    - [x] OO `registerTool` + `registerHandler` + `run` can execute a local
+      userland-backed pipeline.
+    - [x] OO `getRun` reads the persisted run snapshot.
+    - [x] Procedural and OO signatures stay documented in `stubs/king.php`.
+
+15. [x] `[backend-module-descriptor-runtime]` Add descriptor-based backend module routing to orchestrator.
+
+    Scope:
+    - Add backend module descriptors for non-call modules.
+    - Define descriptor fields for routes, events, pipelines, tools, handlers,
+      permissions, localization namespaces, and settings.
+    - Keep HTTP routes as the external contract.
+    - Route handler normalizes an accepted request into one backend module
+      event and submits the descriptor-selected pipeline through
+      `King\PipelineOrchestrator`.
+    - Do not make every frontend action event-based; events are emitted at the
+      backend route boundary.
+
+    Done when:
+    - [x] A descriptor can define one route-to-event-to-pipeline mapping.
+    - [x] The backend can resolve a route descriptor without direct hard-coded
+      module handler imports.
+    - [x] Submitted orchestrator run snapshots include module key, route key,
+      event name, actor/session context, and correlation ID.
+    - [x] Missing descriptor, unauthorized module, unknown tool, and missing
+      handler readiness fail closed with stable error codes.
+    - [x] No call-related excluded paths are edited.
+
+16. [x] `[module-inventory-and-boundaries]` Inventory non-call modules and shared component candidates.
+
+    Scope:
+    - Inventory artifact:
+      `documentation/video-chat-module-boundaries.md`.
+    - Map current non-call frontend areas to target modules:
+      `administration`, `governance`, `users`, `marketplace`,
+      `workspace_settings`, `localization`, and `theme_editor`.
+    - Identify all current direct imports from router, navigation, shell, and
+      settings modal into non-call feature views.
+    - Identify repeated page patterns: header, create button, search, table,
+      pagination, modal, maximized modal, upload/import, settings panel.
+    - Confirm excluded call-related paths remain untouched for this module
+      wave.
+
+    Done when:
+    - [x] Inventory lists every non-call feature area and its target module.
+    - [x] Shared component candidate list exists with current source owners.
+    - [x] Route and navigation compatibility map exists.
+    - [x] Explicit no-touch list for call-related paths is included in the
+      execution checklist.
+
+17. [x] `[frontend-module-runtime]` Add module registry and dynamic loading.
+
+    Scope:
+    - Add `src/modules` and a small module registry.
+    - Initial registry scaffold:
+      `demo/video-chat/frontend-vue/src/modules`.
+    - Define a frontend module descriptor contract based on the Intelligent
+      Intern descriptor pattern.
+    - Add Pinia as the frontend module/runtime store foundation.
+    - Support dynamic page/widget loading through descriptor loaders.
+    - Let router/navigation/settings consume registered module metadata.
+    - Keep existing routes stable while changing where route components are
+      loaded from.
+
+    Done when:
+    - [x] Module descriptors can register routes, navigation entries,
+      permissions, settings panels, and i18n namespaces.
+    - [x] Router can consume module routes without direct feature imports.
+    - [x] Navigation can consume module navigation metadata.
+    - [x] Settings can consume module settings-panel metadata.
+    - [x] Build proves module dynamic imports are valid.
+
+18. [x] `[shared-admin-components]` Extract reusable non-call UI building blocks.
+
+    Scope:
+    - Add shared components for admin page frame, searchable toolbar,
+      table/pagination frame, CRUD modal, maximizable modal shell, and settings
+      panel frame.
+    - Keep components feature-neutral and usable by governance, marketplace,
+      user management, localization administration, and theme administration.
+    - Move repeated CSS into shared admin/workspace CSS only where it is not
+      call-specific.
+
+    Done when:
+    - [x] Governance CRUD and localization administration use the shared page
+      and table frames.
+    - [x] Maximizable modal behavior is centralized.
+    - [x] Header/search/table/pagination duplication is reduced.
+    - [x] No call CSS or call components are modified.
+
+19. [x] `[non-call-module-extraction]` Move existing non-call features into modules.
+
+    Scope:
+    - Move Administration shell pages into `src/modules/administration`.
+    - Move Governance CRUD scaffolding into `src/modules/governance`.
+    - Move User Management into `src/modules/users` after shared components
+      exist.
+    - Move Marketplace administration into `src/modules/marketplace`.
+    - Move Theme Editor and Localization Administration into module-owned
+      entries.
+    - Move personal Settings panels into `src/modules/workspace_settings` or a
+      clearly named shared workspace module.
+
+    Done when:
+    - [x] All listed non-call feature areas expose module descriptors.
+    - [x] Existing route URLs still resolve.
+    - [x] Existing role checks still apply.
+    - [x] Navigation is generated from module metadata for these areas.
+    - [x] No files under excluded call-related paths are edited.
+
+20. [x] `[module-permissions-and-governance-link]` Wire modules to permissions and Governance.
+
+    Scope:
+    - Define module keys for the new non-call modules.
+    - Add module metadata suitable for future group rights and time-limited
+      rights.
+    - Connect module availability to Governance module/permission concepts
+      without implementing the full tenancy permission engine in this story.
+    - Keep the contract ready for organization and group assignment.
+
+    Done when:
+    - [x] Each non-call module has a stable key and permission namespace.
+    - [x] Module metadata can be listed in Governance.
+    - [x] Disabled modules do not appear in navigation.
+    - [x] Unauthorized users cannot resolve module routes.
+    - [x] Time-limited rights have an explicit metadata slot, even if full
+      enforcement is finished in the tenancy sprint.
+
+21. [x] `[module-contract-tests-and-smoke]` Prove dynamic modules and non-call refactor.
+
+    Scope:
+    - Add tests or smoke checks for module descriptor registration.
+    - Add browser smoke for Administration, Governance, User Management,
+      Marketplace, Settings, Localization, and Theme Editor.
+    - Add a guard that module-refactor changes do not touch excluded call
+      paths.
+    - Keep localization and RTL proof compatible with module loading.
+
+    Done when:
+    - [x] Build passes with dynamic module imports.
+    - [x] Browser smoke proves non-call navigation and settings pages still
+      render.
+    - [x] Route compatibility smoke covers old and new module-backed paths.
+    - [x] Diff/path guard reports no edits to call-related excluded paths for
+      this module wave.
+
+## Subagent Execution Plan
+
+Rules for all agents:
+- Work on `feature/videochat-localization-sprint`.
+- Do not push.
+- Keep write ownership disjoint.
+- Do not grow `CallWorkspaceView.vue`. For this module/refactor wave, do not
+  edit it at all.
+- Later call-localization work must extract into focused modules instead of
+  adding code to `CallWorkspaceView.vue`, but that is outside the first
+  non-call module wave.
+- Keep source files below 800 lines where possible; if touching an oversized
+  file, move code downward into helpers.
+- Use stable translation keys; do not use raw visible text as identifiers.
+- Preserve existing behavior and tenant isolation.
+- For the module/refactor track, do not edit video-call-related paths:
+  `src/domain/calls/**`, `src/domain/realtime/**`, `src/lib/sfu/**`,
+  `src/lib/wasm/**`, or `src/lib/wavelet/**`.
+
+Agent A: Backend schema, settings, and lookup
+- Owns:
+  - `demo/video-chat/backend-king-php/support/database_migrations.php`
+  - new `support/localization*.php`
+  - new `domain/localization/*.php`
+  - locale seed inventory generated from
+    `/home/jochen/projects/academy/intelligent-intern/services/websites/intelligent-intern.com/src/i18n`
+  - user settings locale validation
+  - session/auth locale payload
+- Must not edit frontend view files.
+- Delivers migrations, locale lookup API, user locale persistence, and backend
+  contracts.
+
+Agent B: CSV admin backend and API
+- Owns:
+  - new CSV parser/import domain files
+  - new or extended HTTP module for localization administration
+  - CSV import tests
+- Depends on Agent A schema names only.
+- Must enforce `user_id = 1` for CSV import.
+
+Agent C: Frontend i18n runtime and settings language UI
+- Owns:
+  - new `demo/video-chat/frontend-vue/src/domain/localization/*`
+  - session/i18n integration in auth state
+  - settings language UI extraction
+  - `WorkspaceShell.vue` only for wiring/removal of the local language stub
+- Must not translate all application surfaces; it only provides runtime and
+  settings plumbing.
+
+Agent D: Frontend string key conversion
+- Owns:
+  - admin/user/tenant/settings child components and templates during the
+    non-call module wave
+  - translation fallback seed files
+- Must not edit backend CSV/schema.
+- Must coordinate with Agent C key loader but can add keys.
+- Calls/calendar string conversion remains deferred until the call-related
+  paths are explicitly unblocked.
+
+Agent E: RTL layout and visual proof
+- Owns:
+  - non-call CSS/layout files during the first module wave
+  - direction-aware icon helpers
+  - Playwright screenshots/smoke specs
+- Must not change translation storage.
+- Must prove RTL layout across desktop/tablet/mobile using at least `ar` and
+  one of `fa`, `ps`, or `sgd`.
+- Must not edit call CSS/layout files in this wave.
+
+Agent F: Public pages, emails, and error mapping
+- Owns:
+  - localized non-call email template handling first
+  - API error-code to UI-message mapping
+  - placeholder validation tests
+- Must coordinate with Agent A for locale lookup and with Agent D for keys.
+- Public booking/join localization is deferred until call-related paths are
+  explicitly unblocked.
+
+Agent G: Frontend module runtime and registry
+- Owns:
+  - new `demo/video-chat/frontend-vue/src/modules/registry*`
+  - new module descriptor contract helpers
+  - router/navigation/settings metadata integration
+- Must not edit non-registry feature pages except for import wiring.
+- Must not edit call-related excluded paths.
+
+Agent H: Shared non-call admin components
+- Owns:
+  - new shared admin/workspace components under
+    `demo/video-chat/frontend-vue/src/components`
+  - shared non-call admin CSS
+  - reusable modal/table/pagination/settings panel frames
+- Must not edit call CSS or call components.
+
+Agent I: Administration, localization, theme, and marketplace modules
+- Owns:
+  - `src/modules/administration`
+  - `src/modules/localization`
+  - `src/modules/theme_editor`
+  - `src/modules/marketplace`
+  - migration of existing non-call administration pages into module descriptors
+- Must preserve existing route URLs and admin-only access.
+
+Agent J: Governance and users modules
+- Owns:
+  - `src/modules/governance`
+  - `src/modules/users`
+  - migration of Governance CRUD and User Management into module descriptors
+  - module metadata for Governance module/permission listing
+- Must use shared admin components from Agent H where available.
+
+Agent K: Workspace settings module extraction
+- Owns:
+  - `src/modules/workspace_settings`
+  - personal settings panels: About Me, Credentials + E-Mail, Theme selection,
+    Localization selection
+  - settings-panel registration through module metadata
+- May touch `WorkspaceShell.vue` only for wiring/removal of direct panel
+  imports.
+- Must not change call workspace behavior.
+
+Agent L: King orchestrator OO and backend descriptor bridge
+- Owns:
+  - `extension/**` changes for `King\PipelineOrchestrator`
+  - `stubs/king.php` orchestrator OO declarations
+  - `documentation/11-pipeline-orchestrator-tools/README.md`
+  - new PHPT proof for the OO facade
+  - backend descriptor-to-orchestrator bridge scaffolding after the OO facade
+    is proven
+- Must not weaken procedural orchestrator semantics.
+- Must not edit call-related excluded paths in the module bridge work.
+
+Recommended order:
+1. Agent L adds and proves `King\PipelineOrchestrator`.
+2. Agent A defines schema/contracts and locale/session payload.
+3. Agent C builds frontend runtime against stub/fallback resources.
+4. Agent B adds CSV admin upload/import.
+5. Agent L adds backend descriptor-to-orchestrator bridge scaffolding.
+6. Agent G adds module registry and dynamic loading contract.
+7. Agent H extracts reusable non-call admin/settings components.
+8. Agents I, J, and K move non-call features into modules with disjoint write
+   scopes.
+9. Agent D converts strings by namespace, starting with module-backed non-call
+   surfaces.
+10. Agent F localizes public pages/emails/errors.
+11. Agent E runs RTL sweep and browser proof in parallel after C has direction
+   plumbing.
+12. Integration owner runs full lint/build/contracts/browser smoke and resolves
+   merge conflicts only after green checks.
+
+## Acceptance Bar
+
+- A user can choose language under Settings and the choice persists.
+- Superadmin `user_id = 1` can upload translation CSV with preview and atomic
+  import.
+- The first supported locale set matches the Intelligent Intern website source
+  inventory.
+- Configured RTL locales switch the complete application to RTL.
+- Public booking and join flows are localized.
+- Emails and error text use locale-aware templates/messages.
+- Missing English keys fail tests.
+- Non-superadmin CSV upload is impossible.
+- Existing single-language behavior remains usable while localization rolls out.
+- `King\PipelineOrchestrator` exists as an OO facade over the native
+  orchestrator kernel.
+- Backend module descriptors can map an accepted HTTP route to one orchestrator
+  event and pipeline run.
+- Non-call workspace areas are moving behind module descriptors in
+  `src/modules`.
+- Module-backed routes/navigation/settings load dynamically and keep existing
+  route URLs stable.
+- Reusable admin/settings/CRUD components replace duplicated non-call page
+  scaffolding.
+- The first module-refactor wave does not modify video-call-related excluded
+  paths.

@@ -122,7 +122,7 @@ function videochat_calls_list_filters(array $queryParams, string $authRole): arr
  *   page_count: int
  * }
  */
-function videochat_list_calls(PDO $pdo, int $authUserId, array $filters): array
+function videochat_list_calls(PDO $pdo, int $authUserId, array $filters, ?int $tenantId = null): array
 {
     $effectiveStatusSql = <<<'SQL'
 CASE
@@ -143,6 +143,12 @@ SQL;
 
     $whereClauses = [];
     $whereParams = [];
+    $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id');
+    $tenantSelect = $hasTenantColumn ? 'calls.tenant_id,' : 'NULL AS tenant_id,';
+    if (is_int($tenantId) && $tenantId > 0 && $hasTenantColumn) {
+        $whereClauses[] = 'calls.tenant_id = :tenant_id';
+        $whereParams[':tenant_id'] = $tenantId;
+    }
 
     if ((string) ($filters['effective_scope'] ?? 'my') === 'my') {
         $whereParams[':auth_user_id'] = $authUserId;
@@ -200,6 +206,7 @@ SQL;
     $listSql = <<<SQL
 SELECT
     calls.id,
+    {$tenantSelect}
     calls.room_id,
     calls.title,
     calls.access_mode,
@@ -272,6 +279,7 @@ SQL;
 
         $rows[] = [
             'id' => (string) ($row['id'] ?? ''),
+            'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
             'room_id' => (string) ($row['room_id'] ?? ''),
             'title' => (string) ($row['title'] ?? ''),
             'access_mode' => videochat_normalize_call_access_mode($row['access_mode'] ?? 'invite_only'),

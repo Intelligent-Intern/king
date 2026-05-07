@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../support/tenant_context.php';
+
 /**
  * @return array{
  *   call_id: string,
@@ -19,14 +21,18 @@ function videochat_realtime_call_role_context_for_room_user(
     string $roomId,
     int $userId,
     string $preferredCallId = '',
-    string $authRole = 'user'
+    string $authRole = 'user',
+    ?int $tenantId = null
 ): array {
     $normalizedPreferredCallId = videochat_realtime_normalize_call_id($preferredCallId, '');
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
     $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
     if ($normalizedPreferredCallId !== '' && $normalizedRoomId !== '' && $userId > 0) {
+        $tenantWhere = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'calls', 'tenant_id')
+            ? '  AND calls.tenant_id = :tenant_id'
+            : '';
         $preferredQuery = $pdo->prepare(
-            <<<'SQL'
+            <<<SQL
 SELECT
     calls.id,
     calls.owner_user_id,
@@ -41,6 +47,7 @@ LEFT JOIN call_participants cp
    AND cp.source = 'internal'
 WHERE calls.id = :call_id
   AND calls.room_id = :room_id
+{$tenantWhere}
   AND calls.status IN ('active', 'scheduled')
   AND (
       CAST(:is_admin AS INTEGER) = 1
@@ -51,12 +58,16 @@ WHERE calls.id = :call_id
 LIMIT 1
 SQL
         );
-        $preferredQuery->execute([
+        $params = [
             ':call_id' => $normalizedPreferredCallId,
             ':room_id' => $normalizedRoomId,
             ':user_id' => $userId,
             ':is_admin' => $isAdmin ? 1 : 0,
-        ]);
+        ];
+        if ($tenantWhere !== '') {
+            $params[':tenant_id'] = $tenantId;
+        }
+        $preferredQuery->execute($params);
         $preferredRow = $preferredQuery->fetch();
         if (is_array($preferredRow)) {
             $callRole = videochat_normalize_call_participant_role((string) ($preferredRow['call_role'] ?? 'participant'));
@@ -485,7 +496,8 @@ function videochat_realtime_user_has_sfu_room_admission(
     int $userId,
     string $role,
     string $roomId,
-    string $requestedCallId = ''
+    string $requestedCallId = '',
+    ?int $tenantId = null
 ): bool {
     if ($userId <= 0) {
         return false;
@@ -501,7 +513,9 @@ function videochat_realtime_user_has_sfu_room_admission(
             $pdo,
             $roomId,
             $userId,
-            videochat_realtime_normalize_call_id($requestedCallId, '')
+            videochat_realtime_normalize_call_id($requestedCallId, ''),
+            $role,
+            $tenantId
         );
     } catch (Throwable) {
         return false;

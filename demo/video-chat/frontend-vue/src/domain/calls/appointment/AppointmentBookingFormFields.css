@@ -1,0 +1,104 @@
+.appointment-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.appointment-form-row.compact {
+  grid-template-columns: minmax(120px, 0.5fr) minmax(0, 1fr);
+}
+
+.appointment-selected-slot {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-border);
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.appointment-selected-slot.invalid,
+.input.invalid,
+.appointment-consent-row.invalid {
+  border-color: var(--color-error);
+}
+
+.appointment-field-error {
+  color: var(--color-heading);
+  font-size: 11px;
+}
+
+.appointment-message {
+  min-height: 110px;
+}
+
+.calls-textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--color-surface-navy);
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.appointment-consent-row {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  color: var(--text-main);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.appointment-link-button {
+  border: 0;
+  background: transparent;
+  color: var(--color-cyan-hover);
+  padding: 0;
+  text-decoration: underline;
+}
+
+.appointment-privacy-overlay {
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-surface-navy);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.appointment-privacy-overlay header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.appointment-privacy-overlay h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.appointment-privacy-copy {
+  max-height: 220px;
+  overflow: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.appointment-privacy-copy p {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 900px) {
+  .appointment-form-row,
+  .appointment-form-row.compact {
+    grid-template-columns: 1fr;
+  }
+}

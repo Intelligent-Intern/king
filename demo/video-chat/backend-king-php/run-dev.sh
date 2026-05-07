@@ -126,6 +126,7 @@ start_backend() {
   local worker_index=1
   while (( worker_index <= worker_count )); do
     KING_HTTP1_ENABLE_REUSEPORT="${reuseport_value}" \
+    VIDEOCHAT_KING_SKIP_BOOTSTRAP=1 \
     VIDEOCHAT_KING_PORT="${bind_port}" \
     VIDEOCHAT_KING_SERVER_MODE="${mode}" \
     VIDEOCHAT_KING_WORKER_INDEX="${worker_index}" \
@@ -141,7 +142,28 @@ start_backend() {
   fi
 }
 
+run_parent_bootstrap() {
+  local mode="$1"
+  if [[ "${VIDEOCHAT_KING_SKIP_PARENT_BOOTSTRAP:-0}" =~ ^(1|true|TRUE|yes|YES|on|ON)$ ]]; then
+    echo "[video-chat][king-php-backend] parent sqlite bootstrap skipped by VIDEOCHAT_KING_SKIP_PARENT_BOOTSTRAP"
+    return
+  fi
+
+  echo "[video-chat][king-php-backend] running parent sqlite bootstrap before workers"
+  VIDEOCHAT_KING_BOOTSTRAP_ONLY=1 \
+  VIDEOCHAT_KING_SKIP_BOOTSTRAP=0 \
+  VIDEOCHAT_KING_SERVER_MODE="${mode}" \
+  VIDEOCHAT_KING_WORKER_INDEX=0 \
+  VIDEOCHAT_KING_WORKER_COUNT=0 \
+  "${PHP_BIN}" "${php_args[@]}" "${SCRIPT_DIR}/server.php"
+}
+
 normalized_mode_override="$(echo "${SERVER_MODE_OVERRIDE}" | tr '[:upper:]' '[:lower:]' | xargs || true)"
+bootstrap_mode="${normalized_mode_override}"
+if [[ "${bootstrap_mode}" != "all" && "${bootstrap_mode}" != "http" && "${bootstrap_mode}" != "ws" ]]; then
+  bootstrap_mode="all"
+fi
+run_parent_bootstrap "${bootstrap_mode}"
 if [[ "${normalized_mode_override}" == "all" || "${normalized_mode_override}" == "http" || "${normalized_mode_override}" == "ws" ]]; then
   echo "[video-chat][king-php-backend] server mode override: ${normalized_mode_override}"
   start_backend "${normalized_mode_override}" "${PORT}"

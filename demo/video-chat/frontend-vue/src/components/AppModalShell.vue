@@ -9,11 +9,11 @@
     :aria-label="!titleId ? ariaLabel || title : undefined"
   >
     <div :class="backdropClass" @click="$emit('close')"></div>
-    <div :class="['app-modal-dialog', dialogClass]">
+    <div :class="modalDialogClass">
       <header :class="headerClass">
         <div :class="headerLeftClass">
           <slot name="header-prefix">
-            <img v-if="showLogo" :class="logoClass" :src="logoSrc" alt="" />
+            <img v-if="showLogo" :class="logoClass" :src="effectiveLogoSrc" alt="" />
           </slot>
           <div class="app-modal-title-block">
             <slot name="title">
@@ -23,11 +23,20 @@
           </div>
         </div>
         <slot name="close">
-          <AppIconButton
-            :icon="closeIcon"
-            :aria-label="closeLabel"
-            @click="$emit('close')"
-          />
+          <div class="app-modal-header-actions">
+            <AppIconButton
+              v-if="maximizable"
+              :icon="maximized ? restoreIcon : maximizeIcon"
+              :aria-label="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
+              :title="maximized ? effectiveRestoreLabel : effectiveMaximizeLabel"
+              @click="toggleMaximized"
+            />
+            <AppIconButton
+              :icon="closeIcon"
+              :aria-label="effectiveCloseLabel"
+              @click="$emit('close')"
+            />
+          </div>
         </slot>
       </header>
 
@@ -45,6 +54,8 @@
 <script setup>
 import { computed, useAttrs } from 'vue';
 import AppIconButton from './AppIconButton.vue';
+import { appearanceState } from '../domain/workspace/appearance';
+import { t } from '../modules/localization/i18nRuntime.js';
 
 defineOptions({ inheritAttrs: false });
 
@@ -111,7 +122,7 @@ const props = defineProps({
   },
   logoSrc: {
     type: String,
-    default: '/assets/orgas/kingrt/logo.svg',
+    default: '',
   },
   closeIcon: {
     type: String,
@@ -119,52 +130,86 @@ const props = defineProps({
   },
   closeLabel: {
     type: String,
-    default: 'Close modal',
+    default: '',
   },
   showLogo: {
     type: Boolean,
     default: true,
   },
+  maximizable: {
+    type: Boolean,
+    default: false,
+  },
+  maximized: {
+    type: Boolean,
+    default: false,
+  },
+  maximizeIcon: {
+    type: String,
+    default: '/assets/orgas/kingrt/icons/forward.png',
+  },
+  restoreIcon: {
+    type: String,
+    default: '/assets/orgas/kingrt/icons/backward.png',
+  },
+  maximizeLabel: {
+    type: String,
+    default: '',
+  },
+  restoreLabel: {
+    type: String,
+    default: '',
+  },
 });
 
-defineEmits(['close']);
+const emit = defineEmits(['close', 'update:maximized']);
 
 const attrs = useAttrs();
+const effectiveLogoSrc = computed(() => {
+  const configured = String(props.logoSrc || '').trim();
+  return configured !== '' ? configured : appearanceState.modalLogoPath;
+});
 const rootAttrs = computed(() => {
   const { class: _class, ...rest } = attrs;
   return rest;
 });
-const rootClass = computed(() => [props.rootClassName, attrs.class]);
+const rootClass = computed(() => [props.rootClassName, attrs.class, { 'is-modal-maximized': props.maximized }]);
+const modalDialogClass = computed(() => [
+  'app-modal-dialog',
+  props.dialogClass,
+  { 'is-maximized': props.maximized },
+]);
+const effectiveCloseLabel = computed(() => props.closeLabel || t('common.close_modal'));
+const effectiveMaximizeLabel = computed(() => props.maximizeLabel || t('common.maximize_modal'));
+const effectiveRestoreLabel = computed(() => props.restoreLabel || t('common.restore_modal_size'));
+
+function toggleMaximized() {
+  emit('update:maximized', !props.maximized);
+}
 </script>
 
 <style scoped>
-.calls-modal,
-.users-modal {
+.calls-modal {
   position: fixed;
   inset: 0;
   display: grid;
   place-items: center;
-}
-
-.calls-modal {
   z-index: 70;
   padding: 12px;
 }
 
-.users-modal {
-  z-index: 30;
+.calls-modal.is-modal-maximized {
+  padding: 0;
 }
 
-.calls-modal[hidden],
-.users-modal[hidden] {
+.calls-modal[hidden] {
   display: none;
 }
 
-.calls-modal-backdrop,
-.users-modal-backdrop {
+.calls-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: var(--color-rgba-5-12-23-0-72);
+  background: color-mix(in srgb, var(--color-primary-navy) 72%, transparent);
 }
 
 .app-modal-dialog {
@@ -173,50 +218,41 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   display: grid;
 }
 
+.app-modal-dialog.is-maximized {
+  width: 100vw;
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.app-modal-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 .calls-modal-dialog {
   --calls-enter-dialog-padding: 12px;
   gap: 12px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   background: var(--bg-surface-strong);
-  box-shadow: 0 6px 14px var(--color-rgba-0-0-0-0-28);
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--color-primary-navy) 28%, transparent);
   padding: var(--calls-enter-dialog-padding);
 }
 
-.users-modal-dialog {
-  --users-modal-padding: 16px;
-  width: min(980px, calc(100vw - 24px));
-  max-height: min(94vh, 980px);
-  overflow: auto;
-  gap: 14px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--color-10203b);
-  padding: var(--users-modal-padding);
-}
-
-.calls-modal-header,
-.users-modal-head {
+.calls-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   min-width: 0;
-}
-
-.calls-modal-header {
   gap: 10px;
 }
 
-.users-modal-head {
-  gap: 12px;
-}
-
-.calls-modal-header h4,
-.users-modal-head h4 {
-  margin: 5px 0 0;
-}
-
 .calls-modal-header h4 {
+  margin: 5px 0 0;
   font-size: 17px;
 }
 
@@ -233,14 +269,7 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   background: var(--brand-bg);
 }
 
-.users-modal-head-brand {
-  margin: calc(var(--users-modal-padding) * -1) calc(var(--users-modal-padding) * -1) 0;
-  padding: 10px;
-  background: var(--brand-bg);
-}
-
-.calls-modal-header-enter-left,
-.users-modal-head-left {
+.calls-modal-header-enter-left {
   min-width: 0;
   display: inline-flex;
   align-items: center;
@@ -252,35 +281,19 @@ const rootClass = computed(() => [props.rootClassName, attrs.class]);
   min-width: 0;
 }
 
-.calls-modal-header-enter-logo,
-.users-modal-head-logo {
+.calls-modal-header-enter-logo {
   width: auto;
   height: 24px;
   display: block;
   flex: 0 0 auto;
 }
 
-.calls-modal-body,
-.users-modal-body,
-.users-avatar-modal-body {
-  display: grid;
-}
-
 .calls-modal-body {
+  display: grid;
   gap: 10px;
 }
 
-.users-modal-body {
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.users-avatar-modal-body {
-  gap: 12px;
-}
-
-.calls-modal-footer,
-.users-modal-footer {
+.calls-modal-footer {
   display: flex;
   justify-content: flex-end;
   gap: 8px;

@@ -71,9 +71,12 @@ function videochat_sfu_normalize_media_recovery_request(
         $requestedVideoQualityProfile = '';
     }
 
-    $requestFullKeyframe = (bool) ($msg['request_full_keyframe'] ?? ($msg['requestFullKeyframe'] ?? false))
-        || $requestedAction === 'force_full_keyframe'
-        || $requestedVideoLayer === 'primary';
+    $primaryLayerPreferenceRequested = $requestedAction === 'prefer_primary_video_layer'
+        || $reason === 'sfu_receiver_primary_layer_preference';
+    $requestFullKeyframe = (
+        (bool) ($msg['request_full_keyframe'] ?? ($msg['requestFullKeyframe'] ?? false))
+        && !$primaryLayerPreferenceRequested
+    ) || $requestedAction === 'force_full_keyframe';
 
     return [
         'type' => 'sfu/publisher-recovery-request',

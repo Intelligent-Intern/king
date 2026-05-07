@@ -80,6 +80,52 @@ export function createSfuLifecycleHelpers({
         startSfuTrackAnnounceTimer();
         scheduleLocalTrackPublish();
       },
+      onSessionAccepted: (details) => {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'sfu_session_capabilities_accepted',
+          code: 'sfu_session_capabilities_accepted',
+          message: 'SFU session capabilities were negotiated for the fast-join path.',
+          payload: {
+            lane: 'ops',
+            selected_runtime_path: details?.selectedRuntimePath,
+            selected_codec_id: details?.selectedCodecId,
+            join_visible_slo_ms: details?.joinVisibleSloMs,
+            fast_first_frame: details?.fastFirstFrame,
+          },
+        });
+      },
+      onTrackAccepted: (details) => {
+        captureClientDiagnostic({
+          category: 'media',
+          level: 'info',
+          eventType: 'sfu_track_fast_first_frame_accepted',
+          code: 'sfu_track_fast_first_frame_accepted',
+          message: 'SFU accepted a publisher track for fast first-frame delivery.',
+          payload: {
+            lane: 'ops',
+            track_id: details?.track_id,
+            kind: details?.kind,
+            selected: details?.selected,
+          },
+        });
+      },
+      onJoinLatencySample: (details) => {
+        const elapsedMs = Number(details?.elapsed_ms || 0);
+        captureClientDiagnostic({
+          category: 'media',
+          level: elapsedMs > 1000 ? 'warning' : 'info',
+          eventType: 'sfu_join_latency_sample',
+          code: elapsedMs > 1000 ? 'sfu_join_latency_slo_exceeded' : 'sfu_join_latency_sample',
+          message: 'SFU join latency sample was recorded.',
+          payload: {
+            lane: 'ops',
+            ...details,
+          },
+          immediate: elapsedMs > 1000,
+        });
+      },
       onDisconnect: () => {
         const hadActiveConnection = refs.sfuConnected.value;
         refs.sfuConnected.value = false;

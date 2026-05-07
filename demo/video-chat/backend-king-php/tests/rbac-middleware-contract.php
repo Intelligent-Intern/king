@@ -254,6 +254,19 @@ try {
 
     $matrix = videochat_rbac_permission_matrix('/socket');
     $websocketRule = null;
+    $workspaceAdministrationRule = null;
+    $workspaceAdministrationRuleIndex = -1;
+    $adminScopeRuleIndex = -1;
+    foreach ($matrix as $index => $rule) {
+        $ruleId = (string) ($rule['id'] ?? '');
+        if ($ruleId === 'rest_workspace_administration') {
+            $workspaceAdministrationRule = $rule;
+            $workspaceAdministrationRuleIndex = $index;
+        }
+        if ($ruleId === 'rest_admin_scope') {
+            $adminScopeRuleIndex = $index;
+        }
+    }
     foreach ($matrix as $rule) {
         if ((string) ($rule['id'] ?? '') === 'websocket_gateway') {
             $websocketRule = $rule;
@@ -262,6 +275,21 @@ try {
     }
     videochat_rbac_middleware_assert(is_array($websocketRule), 'websocket gateway rule missing from RBAC matrix');
     videochat_rbac_middleware_assert((string) ($websocketRule['path'] ?? '') === '/socket', 'RBAC websocket rule should respect configured websocket path');
+    videochat_rbac_middleware_assert(is_array($workspaceAdministrationRule), 'workspace administration rule missing from RBAC matrix');
+    videochat_rbac_middleware_assert(
+        (string) ($workspaceAdministrationRule['path'] ?? '') === '/api/admin/workspace-administration',
+        'workspace administration rule path mismatch'
+    );
+    videochat_rbac_middleware_assert(
+        (array) ($workspaceAdministrationRule['allowed_roles'] ?? []) === ['admin', 'user'],
+        'workspace administration rule should pass authenticated users to route-level permission checks'
+    );
+    videochat_rbac_middleware_assert(
+        $workspaceAdministrationRuleIndex >= 0
+            && $adminScopeRuleIndex >= 0
+            && $workspaceAdministrationRuleIndex < $adminScopeRuleIndex,
+        'workspace administration exception must be evaluated before admin scope'
+    );
 
     $userAdminDenied = $dispatch('GET', '/api/admin/ping', 'sess_rbac_user');
     $userAdminDeniedBody = videochat_rbac_middleware_decode_body($userAdminDenied);
@@ -275,6 +303,28 @@ try {
     $adminAllowedBody = videochat_rbac_middleware_decode_body($adminAllowed);
     videochat_rbac_middleware_assert((int) ($adminAllowed['status'] ?? 0) === 200, 'admin should access admin scope');
     videochat_rbac_middleware_assert((string) ($adminAllowedBody['scope'] ?? '') === 'admin', 'admin scope payload mismatch');
+
+    $userWorkspaceAdministrationDenied = $dispatch('GET', '/api/admin/workspace-administration', 'sess_rbac_user');
+    $userWorkspaceAdministrationDeniedBody = videochat_rbac_middleware_decode_body($userWorkspaceAdministrationDenied);
+    videochat_rbac_middleware_assert(
+        (int) ($userWorkspaceAdministrationDenied['status'] ?? 0) === 403,
+        'user without theme editor access should reach route-level denial for workspace administration'
+    );
+    videochat_rbac_middleware_assert(
+        (string) (($userWorkspaceAdministrationDeniedBody['error'] ?? [])['code'] ?? '') === 'theme_editor_access_required',
+        'workspace administration user deny should come from theme editor permission check'
+    );
+
+    $adminWorkspaceAdministrationAllowed = $dispatch('GET', '/api/admin/workspace-administration', 'sess_rbac_admin');
+    $adminWorkspaceAdministrationAllowedBody = videochat_rbac_middleware_decode_body($adminWorkspaceAdministrationAllowed);
+    videochat_rbac_middleware_assert(
+        (int) ($adminWorkspaceAdministrationAllowed['status'] ?? 0) === 200,
+        'admin should access workspace administration'
+    );
+    videochat_rbac_middleware_assert(
+        (($adminWorkspaceAdministrationAllowedBody['result'] ?? [])['permissions']['can_edit_themes'] ?? null) === true,
+        'workspace administration admin permissions should include theme editor access'
+    );
 
     $moderatorDenied = $dispatch('GET', '/api/admin/ping', 'sess_rbac_moderator');
     $moderatorDeniedBody = videochat_rbac_middleware_decode_body($moderatorDenied);

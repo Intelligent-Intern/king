@@ -75,9 +75,7 @@ function videochat_realtime_poll_websocket_brokers(
 
     if ($signalingBrokerDatabase instanceof PDO && $pollNowMs >= $nextSignalingBrokerPollMs) {
         try {
-            $currentSignalingRoomId = videochat_presence_normalize_room_id(
-                (string) ($presenceConnection['room_id'] ?? 'lobby')
-            );
+            $currentSignalingRoomId = videochat_signaling_room_key_for_connection($presenceConnection);
             $currentSignalingUserId = (int) ($presenceConnection['user_id'] ?? 0);
             if (
                 $currentSignalingRoomId !== $lastSignalingBrokerRoomId

@@ -17,7 +17,8 @@ function assert(condition, message) {
 
 const callWorkspace = read('src/domain/realtime/CallWorkspaceView.vue')
 const gossipDataLane = read('src/domain/realtime/workspace/callWorkspace/gossipDataLane.ts')
-const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}`
+const gossipNeighborLifecycle = read('src/domain/realtime/workspace/callWorkspace/gossipNeighborLifecycle.ts')
+const workspaceGossipSurface = `${callWorkspace}\n${gossipDataLane}\n${gossipNeighborLifecycle}`
 const controller = read('src/lib/gossipmesh/gossipController.ts')
 const transport = read('src/lib/gossipmesh/rtcDataChannelTransport.ts')
 
@@ -58,7 +59,7 @@ assert(
 )
 assert(
   /function requestGossipTopologyRepair\(peerId,\s*reason[\s\S]*if \(!assignedGossipNeighborIds\.has\(String\(peerId \|\| ''\)\)\) return false;/.test(workspaceGossipSurface),
-  'topology repair requests must only fire for currently assigned gossip neighbors',
+  'topology repair requests must only fire for currently assigned dedicated gossip neighbors',
 )
 assert(
   /sendSocketFrame\(\{[\s\S]*type:\s*'gossip\/topology-repair\/request'[\s\S]*lane:\s*'ops'[\s\S]*lost_peer_id:\s*String\(peerId \|\| ''\)[\s\S]*reason:\s*String\(reason \|\| ''\)/.test(workspaceGossipSurface),
@@ -69,7 +70,9 @@ assert(
   'RTCDataChannel close/error for an assigned neighbor must trigger a topology repair request',
 )
 assert(
-  /function handleDedicatedGossipPeerState\(entry,\s*eventType\)[\s\S]*controller\.setCarrierState\?\.\(peerId,\s*'lost'[\s\S]*closeDedicatedGossipPeerConnection\(peerId,\s*`gossip_peer_\$\{eventType\}`,\s*true\)/.test(workspaceGossipSurface),
+  /onPeerConnectionState = \(\) => false/.test(gossipNeighborLifecycle)
+    && /onPeerConnectionState\(normalizedPeerId,\s*state,\s*'connectionstatechange'\)/.test(gossipNeighborLifecycle)
+    && /function handleGossipNeighborPeerConnectionState\(peerId,\s*state,\s*eventType\)[\s\S]*carrierState = normalizedState === 'connected'[\s\S]*'lost'[\s\S]*controller\?\.setCarrierState\?\.\(normalizedPeerId,\s*carrierState[\s\S]*requestGossipTopologyRepair\(normalizedPeerId,\s*`gossip_peer_\$\{normalizedState \|\| 'lost'\}`\)/.test(gossipDataLane),
   'dedicated gossip RTCPeerConnection failed/closed states must mark carrier lost and request topology repair',
 )
 assert(

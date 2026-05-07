@@ -48,6 +48,8 @@ try {
   requireContains(sfuClient, 'this.outboundWireBudget.reset()', 'client clears wire budget on reconnect/profile reset');
   requireContains(sfuClient, 'send_drain_target_buffered_bytes', 'client records low-water drain target');
   requireContains(sfuClient, 'send_drain_max_wait_ms', 'client records bounded drain wait budget');
+  requireContains(sfuClient, 'mayContinueWithinProfileBufferBudget', 'client may continue after a low-water drain timeout when the profile buffer budget still has room');
+  requireContains(sfuClient, 'send_drain_timeout_continued', 'client records tolerated low-water drain misses instead of aborting the frame');
   requireContains(sfuClient, 'sfu_queue_age_budget_exceeded_after_drain', 'client drops frames that age out while waiting for websocket drain');
   requireContains(sfuClient, 'post_drain_outbound_frame_queue_budget', 'client reports the exact post-drain stale-frame stage');
   requireContains(sfuClient, 'private send(msg: object): boolean', 'control messages keep a direct send path');

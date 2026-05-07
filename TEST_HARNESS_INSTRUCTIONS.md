@@ -161,4 +161,3 @@ Expected output:
 ```
 
 This test verifies that each visible fault mode has an actual execution path in the harness and that reconnect is tied to ops-lane carrier loss.
-

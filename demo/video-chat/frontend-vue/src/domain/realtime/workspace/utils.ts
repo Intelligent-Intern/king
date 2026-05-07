@@ -1,3 +1,5 @@
+import { formatLocalizedTimestampDisplay } from '../../../support/dateTimeFormat.js';
+
 const DIRECTORY_USERS_ORDER_VALUES = ['role_then_name_asc', 'role_then_name_desc'];
 const DIRECTORY_USERS_STATUS_VALUES = ['all', 'active', 'disabled'];
 
@@ -111,14 +113,7 @@ export function formatTimestamp(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
 
-  return new Intl.DateTimeFormat('en-GB', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(date);
+  return formatLocalizedTimestampDisplay(date, { fallback: '--' });
 }
 
 export function initials(name) {

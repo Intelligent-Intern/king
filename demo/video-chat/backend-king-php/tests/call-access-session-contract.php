@@ -314,7 +314,7 @@ SQL
     $guestParticipantRow = $guestParticipant->fetch();
     videochat_call_access_session_assert(is_array($guestParticipantRow), 'open guest should be inserted as call participant');
     videochat_call_access_session_assert((string) ($guestParticipantRow['source'] ?? '') === 'internal', 'open guest participant source mismatch');
-    videochat_call_access_session_assert((string) ($guestParticipantRow['invite_state'] ?? '') === 'invited', 'open guest participant invite state mismatch');
+    videochat_call_access_session_assert((string) ($guestParticipantRow['invite_state'] ?? '') === 'allowed', 'open guest participant invite state mismatch');
 
     $openAuth = videochat_authenticate_request(
         $pdo,
@@ -331,8 +331,9 @@ SQL
         'authenticated open guest should keep owner logout landing url'
     );
     $openPendingResolution = videochat_realtime_resolve_connection_rooms($openAuth, $openCallId, $openDatabase, $openCallId);
-    videochat_call_access_session_assert((string) ($openPendingResolution['initial_room_id'] ?? '') === videochat_realtime_waiting_room_id(), 'open guest should start in waiting room before admission');
-    videochat_call_access_session_assert((string) ($openPendingResolution['pending_room_id'] ?? '') === $openCallId, 'open guest should wait for bound room admission');
+    videochat_call_access_session_assert((string) ($openPendingResolution['initial_room_id'] ?? '') === $openCallId, 'open guest should enter the FFA room directly');
+    videochat_call_access_session_assert((string) ($openPendingResolution['requested_room_id'] ?? '') === $openCallId, 'open guest should keep the bound requested room');
+    videochat_call_access_session_assert((string) ($openPendingResolution['pending_room_id'] ?? '') === '', 'open guest should not wait for admission');
 
     @unlink($databasePath);
     fwrite(STDOUT, "[call-access-session-contract] PASS\n");

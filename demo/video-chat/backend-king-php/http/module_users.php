@@ -10,6 +10,7 @@ require_once __DIR__ . '/../domain/users/user_emails.php';
 require_once __DIR__ . '/../domain/realtime/client_diagnostics.php';
 require_once __DIR__ . '/../domain/realtime/turn_ice.php';
 require_once __DIR__ . '/module_users_admin_accounts.php';
+require_once __DIR__ . '/module_user_onboarding.php';
 
 /**
  * @param array<string, mixed> $userRow
@@ -23,12 +24,14 @@ function videochat_admin_user_permissions_snapshot(array $userRow, int $actorUse
 
     $canChangeRole = !$isSelf && !$isPrimaryAdmin;
     $canChangeStatus = !$isSelf && !$isPrimaryAdmin;
+    $canChangeThemeEditor = !$isSelf;
 
     return [
         'is_self' => $isSelf,
         'is_primary_admin' => $isPrimaryAdmin,
         'can_change_role' => $canChangeRole,
         'can_change_status' => $canChangeStatus,
+        'can_change_theme_editor' => $canChangeThemeEditor,
         'can_toggle_status' => $canChangeStatus,
         'can_delete' => !$isSelf && !$isPrimaryAdmin,
     ];
@@ -112,6 +115,20 @@ function videochat_handle_user_routes(
     callable $decodeJsonBody,
     callable $openDatabase
 ): ?array {
+    $onboardingRouteResponse = videochat_handle_user_onboarding_routes(
+        $path,
+        $method,
+        $request,
+        $apiAuthContext,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    if ($onboardingRouteResponse !== null) {
+        return $onboardingRouteResponse;
+    }
+
     if ($path === '/api/user/media/ice-servers') {
         if ($method !== 'GET') {
             return $errorResponse(405, 'method_not_allowed', 'Use GET for /api/user/media/ice-servers.', [
@@ -150,7 +167,8 @@ function videochat_handle_user_routes(
                 (int) ($filters['page'] ?? 1),
                 (int) ($filters['page_size'] ?? 10),
                 (string) ($filters['order'] ?? 'name_asc'),
-                $authenticatedUserId
+                $authenticatedUserId,
+                videochat_tenant_id_from_auth_context($apiAuthContext)
             );
         } catch (Throwable) {
             return $errorResponse(500, 'user_directory_failed', 'Could not load user directory.', [
@@ -465,7 +483,7 @@ function videochat_handle_user_routes(
                     ],
                 ]);
             }
-            $deactivateResult = videochat_admin_deactivate_user($pdo, $userId);
+            $deactivateResult = videochat_admin_deactivate_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_deactivate_failed', 'Could not deactivate user.', [
                 'reason' => 'internal_error',
@@ -506,7 +524,7 @@ function videochat_handle_user_routes(
 
         try {
             $pdo = $openDatabase();
-            $reactivateResult = videochat_admin_reactivate_user($pdo, $userId);
+            $reactivateResult = videochat_admin_reactivate_user($pdo, $userId, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'admin_user_reactivate_failed', 'Could not reactivate user.', [
                 'reason' => 'internal_error',
@@ -562,6 +580,231 @@ function videochat_handle_user_routes(
             'status' => 'ok',
             'scope' => 'user',
             'user' => $apiAuthContext['user'] ?? null,
+            'time' => gmdate('c'),
+        ]);
+    }
+
+    if ($path === '/api/user/emails') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method === 'GET') {
+            try {
+                $pdo = $openDatabase();
+                $emails = videochat_list_user_emails($pdo, $authenticatedUserId);
+            } catch (Throwable) {
+                return $errorResponse(500, 'user_emails_list_failed', 'Could not load email addresses.', [
+                    'reason' => 'internal_error',
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'user_id' => $authenticatedUserId,
+                    'emails' => array_values($emails),
+                ],
+                'time' => gmdate('c'),
+            ]);
+        }
+
+        if ($method !== 'POST') {
+            return $errorResponse(405, 'method_not_allowed', 'Use GET or POST for /api/user/emails.', [
+                'allowed_methods' => ['GET', 'POST'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'user_emails_invalid_request_body', 'Email payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $targetUser = videochat_fetch_user_auth_snapshot($pdo, $authenticatedUserId);
+            if ($targetUser === null) {
+                return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                    'user_id' => $authenticatedUserId,
+                ]);
+            }
+
+            $createPendingResult = videochat_create_pending_user_email(
+                $pdo,
+                $authenticatedUserId,
+                trim((string) ($payload['email'] ?? '')),
+                $authenticatedUserId
+            );
+            if (!(bool) ($createPendingResult['ok'] ?? false)) {
+                $reason = (string) ($createPendingResult['reason'] ?? 'internal_error');
+                $fields = is_array($createPendingResult['errors'] ?? null) ? $createPendingResult['errors'] : [];
+                if ($reason === 'validation_failed') {
+                    return $errorResponse(422, 'user_emails_validation_failed', 'Email payload failed validation.', [
+                        'fields' => $fields,
+                    ]);
+                }
+                if ($reason === 'email_conflict') {
+                    return $errorResponse(409, 'user_email_conflict', 'Email is already in use.', [
+                        'fields' => $fields,
+                    ]);
+                }
+                if ($reason === 'not_found') {
+                    return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                        'user_id' => $authenticatedUserId,
+                    ]);
+                }
+
+                return $errorResponse(500, 'user_emails_create_failed', 'Could not create email confirmation request.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            $emailRow = is_array($createPendingResult['email_row'] ?? null) ? $createPendingResult['email_row'] : null;
+            $pendingToken = (string) ($createPendingResult['token'] ?? '');
+            $confirmationUrl = videochat_build_email_change_confirmation_url($pendingToken);
+            $delivery = videochat_send_email_change_confirmation_mail(
+                is_array($emailRow) ? (string) ($emailRow['email'] ?? '') : '',
+                (string) ($targetUser['display_name'] ?? ''),
+                $confirmationUrl
+            );
+
+            $appEnv = strtolower(trim((string) (getenv('VIDEOCHAT_KING_ENV') ?: 'development')));
+            return $jsonResponse(201, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'pending_confirmation',
+                    'user_id' => $authenticatedUserId,
+                    'email' => $emailRow,
+                    'expires_at' => (string) ($createPendingResult['expires_at'] ?? ''),
+                    'delivery' => $delivery,
+                    'debug_confirmation_url' => $appEnv !== 'production' ? $confirmationUrl : null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'user_emails_create_failed', 'Could not create email confirmation request.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
+    if (preg_match('#^/api/user/emails/(\d+)$#', $path, $matches) === 1) {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $userEmailId = (int) ($matches[1] ?? 0);
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if ($method !== 'DELETE') {
+            return $errorResponse(405, 'method_not_allowed', 'Use DELETE for /api/user/emails/{emailId}.', [
+                'allowed_methods' => ['DELETE'],
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $deleteResult = videochat_delete_unverified_user_email($pdo, $authenticatedUserId, $userEmailId);
+            if (!(bool) ($deleteResult['ok'] ?? false)) {
+                $reason = (string) ($deleteResult['reason'] ?? 'internal_error');
+                $fields = is_array($deleteResult['errors'] ?? null) ? $deleteResult['errors'] : [];
+                if ($reason === 'not_found') {
+                    return $errorResponse(404, 'user_email_not_found', 'The requested email address does not exist.', [
+                        'email_id' => $userEmailId,
+                    ]);
+                }
+                if ($reason === 'validation_failed') {
+                    return $errorResponse(409, 'user_email_conflict', 'Only unconfirmed emails can be deleted.', [
+                        'fields' => $fields,
+                    ]);
+                }
+
+                return $errorResponse(500, 'user_email_delete_failed', 'Could not delete email address.', [
+                    'reason' => $reason,
+                ]);
+            }
+
+            return $jsonResponse(200, [
+                'status' => 'ok',
+                'result' => [
+                    'state' => 'deleted',
+                    'user_id' => $authenticatedUserId,
+                    'email' => $deleteResult['email_row'] ?? null,
+                ],
+                'time' => gmdate('c'),
+            ]);
+        } catch (Throwable) {
+            return $errorResponse(500, 'user_email_delete_failed', 'Could not delete email address.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+    }
+
+    if ($path === '/api/user/password') {
+        $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        if ($authenticatedUserId <= 0) {
+            return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
+                'reason' => 'invalid_user_context',
+            ]);
+        }
+
+        if (!in_array($method, ['POST', 'PATCH'], true)) {
+            return $errorResponse(405, 'method_not_allowed', 'Use POST or PATCH for /api/user/password.', [
+                'allowed_methods' => ['POST', 'PATCH'],
+            ]);
+        }
+
+        [$payload, $decodeError] = $decodeJsonBody($request);
+        if (!is_array($payload)) {
+            return $errorResponse(400, 'user_password_invalid_request_body', 'Password payload must be a JSON object.', [
+                'reason' => $decodeError,
+            ]);
+        }
+
+        try {
+            $pdo = $openDatabase();
+            $changeResult = videochat_change_user_password(
+                $pdo,
+                $authenticatedUserId,
+                $payload,
+                (string) ($apiAuthContext['session']['id'] ?? '')
+            );
+        } catch (Throwable) {
+            return $errorResponse(500, 'user_password_change_failed', 'Could not change password.', [
+                'reason' => 'internal_error',
+            ]);
+        }
+
+        if (!(bool) ($changeResult['ok'] ?? false)) {
+            $reason = (string) ($changeResult['reason'] ?? 'internal_error');
+            if ($reason === 'validation_failed') {
+                return $errorResponse(422, 'user_password_validation_failed', 'Password payload failed validation.', [
+                    'fields' => is_array($changeResult['errors'] ?? null) ? $changeResult['errors'] : [],
+                ]);
+            }
+            if ($reason === 'not_found') {
+                return $errorResponse(404, 'user_not_found', 'Authenticated user could not be resolved.', [
+                    'user_id' => $authenticatedUserId,
+                ]);
+            }
+
+            return $errorResponse(500, 'user_password_change_failed', 'Could not change password.', [
+                'reason' => $reason,
+            ]);
+        }
+
+        return $jsonResponse(200, [
+            'status' => 'ok',
+            'result' => [
+                'state' => 'changed',
+                'revoked_sessions' => (int) ($changeResult['revoked_sessions'] ?? 0),
+            ],
             'time' => gmdate('c'),
         ]);
     }
@@ -669,6 +912,7 @@ function videochat_handle_user_routes(
 
     if ($path === '/api/user/settings') {
         $authenticatedUserId = (int) (($apiAuthContext['user']['id'] ?? 0));
+        $activeTenantId = (int) (($apiAuthContext['tenant']['id'] ?? ($apiAuthContext['session']['active_tenant_id'] ?? 0)));
         if ($authenticatedUserId <= 0) {
             return $errorResponse(401, 'auth_failed', 'A valid session token is required.', [
                 'reason' => 'invalid_user_context',
@@ -678,7 +922,7 @@ function videochat_handle_user_routes(
         if ($method === 'GET') {
             try {
                 $pdo = $openDatabase();
-                $userSettings = videochat_fetch_user_settings($pdo, $authenticatedUserId);
+                $userSettings = videochat_fetch_user_settings($pdo, $authenticatedUserId, $activeTenantId);
             } catch (Throwable) {
                 return $errorResponse(500, 'user_settings_fetch_failed', 'Could not load user settings.', [
                     'reason' => 'internal_error',
@@ -693,13 +937,11 @@ function videochat_handle_user_routes(
 
             return $jsonResponse(200, [
                 'status' => 'ok',
-                'settings' => [
-                    'display_name' => (string) ($userSettings['display_name'] ?? ''),
-                    'time_format' => (string) ($userSettings['time_format'] ?? '24h'),
-                    'date_format' => (string) ($userSettings['date_format'] ?? 'dmy_dot'),
-                    'theme' => (string) ($userSettings['theme'] ?? 'dark'),
-                    'avatar_path' => $userSettings['avatar_path'] ?? null,
-                    'post_logout_landing_url' => (string) ($userSettings['post_logout_landing_url'] ?? ''),
+                'settings' => videochat_user_settings_payload($userSettings),
+                'localization' => [
+                    'locale' => (string) ($userSettings['locale'] ?? 'en'),
+                    'direction' => (string) ($userSettings['direction'] ?? 'ltr'),
+                    'supported_locales' => is_array($userSettings['supported_locales'] ?? null) ? $userSettings['supported_locales'] : [],
                 ],
                 'user' => $userSettings,
                 'time' => gmdate('c'),
@@ -721,7 +963,7 @@ function videochat_handle_user_routes(
 
         try {
             $pdo = $openDatabase();
-            $updateResult = videochat_update_user_settings($pdo, $authenticatedUserId, $payload);
+            $updateResult = videochat_update_user_settings($pdo, $authenticatedUserId, $payload, $activeTenantId);
         } catch (Throwable) {
             return $errorResponse(500, 'user_settings_update_failed', 'Could not update user settings.', [
                 'reason' => 'internal_error',
@@ -751,13 +993,11 @@ function videochat_handle_user_routes(
             'status' => 'ok',
             'result' => [
                 'state' => 'updated',
-                'settings' => [
-                    'display_name' => (string) ($updatedUser['display_name'] ?? ''),
-                    'time_format' => (string) ($updatedUser['time_format'] ?? '24h'),
-                    'date_format' => (string) ($updatedUser['date_format'] ?? 'dmy_dot'),
-                    'theme' => (string) ($updatedUser['theme'] ?? 'dark'),
-                    'avatar_path' => $updatedUser['avatar_path'] ?? null,
-                    'post_logout_landing_url' => (string) ($updatedUser['post_logout_landing_url'] ?? ''),
+                'settings' => $updatedUser !== null ? videochat_user_settings_payload($updatedUser) : [],
+                'localization' => [
+                    'locale' => (string) ($updatedUser['locale'] ?? 'en'),
+                    'direction' => (string) ($updatedUser['direction'] ?? 'ltr'),
+                    'supported_locales' => is_array($updatedUser['supported_locales'] ?? null) ? $updatedUser['supported_locales'] : [],
                 ],
                 'user' => $updatedUser,
             ],

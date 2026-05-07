@@ -1,6 +1,6 @@
 import { markRaw } from 'vue';
 import { createHybridEncoder } from '../../../lib/wasm/wasm-codec';
-import { MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
+import { VIDEOCHAT_MEDIA_CARRIER_CONFIG } from '../../../lib/gossipmesh/featureFlags';
 import { planBackgroundSnapshotPatch, planSelectiveTilePatch } from '../../../lib/sfu/selectiveTileTransport';
 import { measureProtectedSfuFrameBudget } from '../media/protectedFrameBudget';
 import { sfuFrameTypeFromWlvcData } from '../sfu/wlvcFrameMetadata';
@@ -21,7 +21,11 @@ import {
   roundedStageMs,
 } from './publisherFrameTrace';
 import { createPublisherSourceReadbackController } from './publisherSourceReadback';
-import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
+import {
+  diagnoseOptionalSfuPressureAfterGossip,
+  dispatchWlvcPublisherFrame,
+  publisherRequiresSfuBeforeEncode,
+} from './publisherFrameDispatch';
 import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
@@ -66,6 +70,10 @@ export function createLocalPublisherPipelineHelpers({
     stopActivityMonitor,
     stopSfuTrackAnnounceTimer,
   } = callbacks;
+  const additionalPublisherFrameMetrics = typeof callbacks.additionalPublisherFrameMetrics === 'function'
+    ? callbacks.additionalPublisherFrameMetrics
+    : () => ({});
+  const mountLocalPreview = callbacks.mountLocalPreview !== false;
 
   function unpublishSfuTracks(tracks) {
     unpublishSfuTracksForClient(refs.sfuClientRef.value, tracks);
@@ -270,11 +278,17 @@ export function createLocalPublisherPipelineHelpers({
       video.autoplay = true;
       refs.localVideoElement.value = video;
     }
-    video.dataset.callLocalPreview = '1';
+    if (mountLocalPreview) {
+      video.dataset.callLocalPreview = '1';
+    } else {
+      video.dataset.callScreenSharePreview = '1';
+    }
     video.srcObject = new MediaStream([videoTrack]);
-    const container = document.getElementById('local-video-container');
-    if (container && video.parentElement !== container) {
-      container.replaceChildren(video);
+    if (mountLocalPreview) {
+      const container = document.getElementById('local-video-container');
+      if (container && video.parentElement !== container) {
+        container.replaceChildren(video);
+      }
     }
     try {
       await video.play();
@@ -292,7 +306,7 @@ export function createLocalPublisherPipelineHelpers({
     const pipelineProfileId = String(videoProfile.id || '').trim() || 'balanced';
     const hasPipelineProfileChanged = () => String(currentSfuVideoProfile()?.id || '').trim() !== pipelineProfileId;
     const stopIfPipelineProfileChanged = () => hasPipelineProfileChanged() && (stopLocalEncodingPipeline(), true);
-    const protectedBrowserPublisher = MEDIA_CARRIER_CONFIG.gossipPrimary
+    const protectedBrowserPublisher = VIDEOCHAT_MEDIA_CARRIER_CONFIG.gossipPrimary
       ? null
       : await maybeStartProtectedBrowserVideoEncoderPublisher({
         videoTrack,
@@ -328,6 +342,7 @@ export function createLocalPublisherPipelineHelpers({
     let keyframeRetryBlockedUntilMs = 0;
     let securityGateWasClosed = false;
     let lastSecurityGateDiagnosticAtMs = 0;
+    let lastRemoteRecoveryEncoderResetAtMs = 0;
     let fullFrameEncoderWidth = 0;
     let fullFrameEncoderHeight = 0;
     let fullFrameEncoderQuality = 0;
@@ -341,6 +356,7 @@ export function createLocalPublisherPipelineHelpers({
       forcedKeyframeRecoveryPending = false;
       keyframeRetryBlockedUntilMs = 0;
       securityGateWasClosed = false;
+      lastRemoteRecoveryEncoderResetAtMs = 0;
       if (refs.videoPatchEncoderRef.value) {
         try {
           refs.videoPatchEncoderRef.value.destroy?.();
@@ -492,7 +508,7 @@ export function createLocalPublisherPipelineHelpers({
         if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
         if (!refs.videoEncoderRef.value) return;
-        if (!MEDIA_CARRIER_CONFIG.gossipPrimary && !currentOpenSfuClient()) return;
+        if (publisherRequiresSfuBeforeEncode() && !currentOpenSfuClient()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
@@ -528,6 +544,11 @@ export function createLocalPublisherPipelineHelpers({
             });
           }
           hintMediaSecuritySync('sfu_publish_security_gate_transport_only', {
+            track_id: videoTrack.id,
+            media_runtime_path: refs.mediaRuntimePathRef.value,
+            codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
+          });
+          hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
             track_id: videoTrack.id,
             media_runtime_path: refs.mediaRuntimePathRef.value,
             codec_id: currentSfuCodecId(refs.videoEncoderRef.value),
@@ -580,6 +601,22 @@ export function createLocalPublisherPipelineHelpers({
         if (!fullFrameEncoder) {
           mediaDebugLog('[SFU] WLVC encoder unavailable during source aspect sizing');
           return;
+        }
+        if (!remoteKeyframeRequestPending) {
+          lastRemoteRecoveryEncoderResetAtMs = 0;
+        } else {
+          const recoveryKeyframeResetCadenceMs = Math.max(500, Math.min(1200, keyframeRetryDelayMs));
+          if (
+            lastRemoteRecoveryEncoderResetAtMs <= 0
+            || (timestamp - lastRemoteRecoveryEncoderResetAtMs) >= recoveryKeyframeResetCadenceMs
+          ) {
+            try {
+              fullFrameEncoder.reset?.();
+              lastRemoteRecoveryEncoderResetAtMs = timestamp;
+            } catch {
+              // The next normal full-frame encode still runs; recovery feedback can request another burst.
+            }
+          }
         }
         let tilePatchMetadata = null;
         let tilePatchTransportMetrics = null;
@@ -737,6 +774,12 @@ export function createLocalPublisherPipelineHelpers({
           keyframeRetryDelayMs,
         });
 
+        const extraTransportMetrics = additionalPublisherFrameMetrics({
+          videoTrack,
+          videoProfile,
+          frameType: encodedFrameType,
+          trackId: videoTrack.id,
+        });
         const outgoingFrame = {
           publisherId: String(refs.currentUserId()),
           publisherUserId: String(refs.currentUserId()),
@@ -744,6 +787,7 @@ export function createLocalPublisherPipelineHelpers({
           timestamp: encoded.timestamp,
           transportMetrics: {
             ...transportStageMetrics,
+            ...(extraTransportMetrics && typeof extraTransportMetrics === 'object' ? extraTransportMetrics : {}),
             ...(tilePatchTransportMetrics || {}),
           },
           data: encoded.data,
@@ -845,87 +889,42 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (stopIfPipelineProfileChanged()) return;
-        let gossipFramePublished = false;
-        const tryPublishFrameToGossip = (stage) => {
-          try {
-            const published = publishLocalEncodedFrameToGossip(outgoingFrame);
-            gossipFramePublished = gossipFramePublished || Boolean(published);
-            if (published) {
-              outgoingFrame.transportMetrics = {
-                ...outgoingFrame.transportMetrics,
-                media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
-                gossip_publish_stage: String(stage || ''),
-              };
-            }
-            return Boolean(published);
-          } catch (gossipError) {
-            captureClientDiagnosticError('gossip_data_lane_publish_failed', gossipError, {
-              media_runtime_path: refs.mediaRuntimePathRef.value,
-              track_id: videoTrack.id,
-              media_carrier_mode: MEDIA_CARRIER_CONFIG.mode,
-              stage: String(stage || ''),
-            }, {
-              code: 'gossip_data_lane_publish_failed',
+        const dispatchResult = await dispatchWlvcPublisherFrame({
+          frame: outgoingFrame,
+          trackId: videoTrack.id,
+          mediaRuntimePath: refs.mediaRuntimePathRef.value,
+          currentOpenSfuClient,
+          getSfuClientBufferedAmount,
+          handleWlvcFrameSendFailure,
+          publishLocalEncodedFrameToGossip,
+          captureClientDiagnostic,
+          captureClientDiagnosticError,
+          trace,
+          timestamp,
+          paceForcedKeyframeRecovery,
+        });
+        if (!dispatchResult.ok) return;
+        const sfuFrameSent = Boolean(dispatchResult.sfuSent);
+        const gossipFramePublished = Boolean(dispatchResult.gossipPublished);
+        const postSendBufferedAmount = Number(dispatchResult.postSendBufferedAmount || 0);
+        const postSendPressureBytes = Math.max(
+          2 * 1024 * 1024,
+          Math.floor(Math.max(
+            Number(videoProfile.maxBufferedBytes || 0),
+            Number(constants.sendBufferHighWaterBytes || 0),
+          ) * 0.5),
+        );
+        if (postSendBufferedAmount >= postSendPressureBytes) {
+          if (dispatchResult.sfuSendOptional && dispatchResult.gossipPublished) {
+            diagnoseOptionalSfuPressureAfterGossip({
+              captureClientDiagnostic,
+              mediaRuntimePath: refs.mediaRuntimePathRef.value,
+              trackId: videoTrack.id,
+              bufferedAmount: postSendBufferedAmount,
+              pressureBudgetBytes: postSendPressureBytes,
             });
-            return false;
-          }
-        };
-
-        if (MEDIA_CARRIER_CONFIG.gossipPrimary) {
-          tryPublishFrameToGossip('gossip_primary_after_encode');
-        }
-
-        const sendClient = currentOpenSfuClient();
-        let frameSent = false;
-        let sfuSendAttempted = false;
-        if (!sendClient) {
-          reportSfuClientUnavailableAfterEncode({
-            getSfuClientBufferedAmount,
-            handleWlvcFrameSendFailure,
-            trackId: videoTrack.id,
-            trace,
-            timestamp,
-          });
-          if (MEDIA_CARRIER_CONFIG.sfuFirst) {
-            tryPublishFrameToGossip('sfu_first_fallback_no_sfu_client');
-          }
-          if (!gossipFramePublished) return;
-        } else {
-          sfuSendAttempted = true;
-          frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
-        }
-        if (sfuSendAttempted && frameSent === false) {
-          if (!MEDIA_CARRIER_CONFIG.gossipPrimary) {
+          } else {
             paceForcedKeyframeRecovery();
-          }
-          const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
-          handleWlvcFrameSendFailure(
-            getSfuClientBufferedAmount(),
-            videoTrack.id,
-            String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
-            sfuSendFailureDetails,
-          );
-          if (MEDIA_CARRIER_CONFIG.sfuFirst) {
-            tryPublishFrameToGossip('sfu_first_fallback_after_sfu_failure');
-          }
-          if (!gossipFramePublished) return;
-        }
-        if (frameSent && MEDIA_CARRIER_CONFIG.sfuMirror) {
-          tryPublishFrameToGossip('sfu_mirror_after_sfu_send');
-        }
-        if (frameSent) {
-          const postSendBufferedAmount = getSfuClientBufferedAmount();
-          const postSendPressureBytes = Math.max(
-            2 * 1024 * 1024,
-            Math.floor(Math.max(
-              Number(videoProfile.maxBufferedBytes || 0),
-              Number(constants.sendBufferHighWaterBytes || 0),
-            ) * 0.5),
-          );
-          if (postSendBufferedAmount >= postSendPressureBytes) {
-            if (!MEDIA_CARRIER_CONFIG.gossipPrimary) {
-              paceForcedKeyframeRecovery();
-            }
             handleWlvcFrameSendFailure(
               postSendBufferedAmount,
               videoTrack.id,
@@ -947,16 +946,10 @@ export function createLocalPublisherPipelineHelpers({
                 readbackMs,
               },
             );
-            if (!MEDIA_CARRIER_CONFIG.gossipPrimary || !gossipFramePublished) {
-              return;
-            }
+            return;
           }
-          if (postSendBufferedAmount < constants.sendBufferHighWaterBytes) {
-            resetWlvcBackpressureCounters();
-          }
-          resetWlvcFrameSendFailureCounters();
         }
-        if (!frameSent && !gossipFramePublished) return;
+        if (!sfuFrameSent && !gossipFramePublished) return;
         state.wlvcEncodeFailureCount = 0;
         state.wlvcEncodeFirstFailureAtMs = 0;
         previousFullFrameImageData = imageData;
@@ -966,7 +959,6 @@ export function createLocalPublisherPipelineHelpers({
             forcedKeyframeRecoveryPending = false;
             keyframeRetryBlockedUntilMs = 0;
             securityGateWasClosed = false;
-            refs.sfuTransportState.wlvcRemoteKeyframeRequestUntilMs = 0;
           }
           lastFullFrameSentAtMs = timestamp;
         } else if (tilePatchMetadata.layoutMode === 'background_snapshot') {

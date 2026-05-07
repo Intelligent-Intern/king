@@ -1,0 +1,62 @@
+{
+  "schema_version": "king.call_app.crdt_schema.v1",
+  "app_key": "whiteboard",
+  "protocol": "king.call_app.crdt.v1",
+  "engine": "adapter",
+  "documents": [
+    {
+      "kind": "whiteboard_document",
+      "schema_version": "whiteboard.document.v1",
+      "operation_types": [
+        "stroke.add",
+        "shape.add",
+        "shape.update",
+        "shape.delete",
+        "text.add",
+        "text.update",
+        "sticky_note.add",
+        "sticky_note.update",
+        "selection.update",
+        "cursor.move"
+      ]
+    }
+  ],
+  "envelope": {
+    "required_fields": [
+      "app_id",
+      "app_version",
+      "call_id",
+      "app_session_id",
+      "document_id",
+      "schema_version",
+      "actor_id",
+      "operation_id",
+      "logical_clock",
+      "causal_dependencies",
+      "payload_type",
+      "payload",
+      "server_admission_stamp"
+    ],
+    "idempotency": {
+      "operation_id_required": true,
+      "duplicate_policy": "ignore_after_first_admission"
+    }
+  },
+  "snapshots": {
+    "strategy": "checkpoint",
+    "minimum_ops_before_checkpoint": 250,
+    "replay_after_snapshot": true
+  },
+  "presence": {
+    "persisted": false,
+    "types": [
+      "cursor.move",
+      "selection.update",
+      "tool.preview"
+    ]
+  },
+  "exports": [
+    "png",
+    "pdf"
+  ]
+}

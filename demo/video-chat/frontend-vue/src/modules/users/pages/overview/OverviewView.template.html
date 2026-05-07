@@ -1,0 +1,146 @@
+<section class="view-card admin-overview-view">
+  <section class="view-panel dashboard-panel active" data-panel="dashboard">
+    <section class="metrics">
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.live_calls') }}</div>
+        <div class="metric-value">{{ liveCallsMetric }}</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.concurrent_participants') }}</div>
+        <div class="metric-value">{{ participantsMetric }}</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.healthy_cluster_nodes') }}</div>
+        <div class="metric-value">{{ healthyNodesMetric }}</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.nodes_under_load') }}</div>
+        <div class="metric-value">{{ nodesUnderLoadMetric }}</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.cpu_usage') }}</div>
+        <div class="metric-value">{{ cpuUsageMetric }}</div>
+      </article>
+      <article class="metric">
+        <div class="metric-label">{{ t('users.overview.ram_usage') }}</div>
+        <div class="metric-value">{{ ramUsageMetric }}</div>
+      </article>
+    </section>
+
+    <section class="infra-overview-card">
+      <header class="infra-overview-head">
+        <div>
+          <h2>{{ t('users.overview.infrastructure_inventory') }}</h2>
+          <p>{{ infrastructureSubtitle }}</p>
+        </div>
+        <span class="tag" :class="infrastructureStatusTagClass">{{ infrastructureStatusLabel }}</span>
+      </header>
+      <p v-if="infrastructureState.loading" class="infra-inline-state">{{ t('users.overview.loading_infrastructure') }}</p>
+      <p v-else-if="infrastructureState.error" class="infra-inline-state error">{{ infrastructureState.error }}</p>
+      <section v-else-if="providerRows.length > 0" class="infra-provider-grid">
+        <article v-for="provider in providerRows" :key="provider.id" class="infra-provider-card">
+          <span class="infra-provider-label">{{ provider.label }}</span>
+          <strong>{{ provider.statusLabel }}</strong>
+          <span>{{ provider.capabilityLabel }}</span>
+        </article>
+      </section>
+    </section>
+
+    <section class="panel-grid grid-2">
+      <article class="card">
+        <h2 class="table-title">{{ t('users.overview.server_utilization') }}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('users.overview.node') }}</th>
+                <th>{{ t('users.overview.cpu_usage') }}</th>
+                <th>{{ t('users.overview.ram_usage') }}</th>
+                <th>{{ t('calls.table.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in serverResourceRows" :key="row.id">
+                <td>{{ row.node }}</td>
+                <td>{{ row.cpuUsage }}</td>
+                <td>{{ row.ramUsage }}</td>
+                <td><span class="tag" :class="row.statusTagClass">{{ row.status }}</span></td>
+              </tr>
+              <tr v-if="serverResourceRows.length === 0">
+                <td colspan="4">{{ t('users.overview.no_server_utilization') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2 class="table-title">{{ t('users.overview.running_calls') }}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('calls.table.call') }}</th>
+                <th>{{ t('users.overview.host') }}</th>
+                <th>{{ t('users.overview.live_users') }}</th>
+                <th>{{ t('users.overview.uptime') }}</th>
+                <th>{{ t('calls.table.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="operationsState.loading">
+                <td colspan="5">{{ t('users.overview.loading_live_calls') }}</td>
+              </tr>
+              <tr v-else-if="operationsState.error">
+                <td colspan="5">{{ operationsState.error }}</td>
+              </tr>
+              <tr v-else-if="runningCallsRows.length === 0">
+                <td colspan="5">{{ t('users.overview.no_live_calls') }}</td>
+              </tr>
+              <template v-else>
+                <tr v-for="row in runningCallsRows" :key="row.id">
+                  <td>{{ row.call }}</td>
+                  <td>{{ row.host }}</td>
+                  <td>{{ row.users }}</td>
+                  <td>{{ row.uptime }}</td>
+                  <td><span class="tag" :class="row.statusTagClass">{{ row.statusLabel }}</span></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="card grid-full">
+        <h2 class="table-title">{{ t('users.overview.infrastructure_nodes') }}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{{ t('users.overview.node') }}</th>
+                <th>{{ t('users.overview.provider') }}</th>
+                <th>{{ t('users.overview.region') }}</th>
+                <th>{{ t('users.overview.roles') }}</th>
+                <th>{{ t('users.overview.services') }}</th>
+                <th>{{ t('calls.table.status') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in clusterHealthRows" :key="row.id">
+                <td>{{ row.node }}</td>
+                <td>{{ row.provider }}</td>
+                <td>{{ row.region }}</td>
+                <td>{{ row.roles }}</td>
+                <td>{{ row.services }}</td>
+                <td><span class="tag" :class="row.statusTagClass">{{ row.status }}</span></td>
+              </tr>
+              <tr v-if="clusterHealthRows.length === 0">
+                <td colspan="6">{{ t('users.overview.no_infrastructure_nodes') }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+  </section>
+</section>

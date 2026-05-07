@@ -77,6 +77,9 @@ export interface GossipTelemetryCounters {
   rtc_datachannel_sends: number
   in_memory_harness_sends: number
   topology_repairs_requested: number
+  keyframe_requests: number
+  missing_frame_requests: number
+  retransmits_served: number
   would_publish_frames: number
 }
 
@@ -565,8 +568,11 @@ export class GossipController {
         peer_outbound_fanout: peer.telemetry.peer_outbound_fanout,
         rtc_datachannel_sends: peer.telemetry.rtc_datachannel_sends,
         in_memory_harness_sends: peer.telemetry.in_memory_harness_sends,
-        topology_repairs_requested: peer.telemetry.topology_repairs_requested,
-        telemetry: { ...peer.telemetry },
+      topology_repairs_requested: peer.telemetry.topology_repairs_requested,
+      keyframe_requests: peer.telemetry.keyframe_requests,
+      missing_frame_requests: peer.telemetry.missing_frame_requests,
+      retransmits_served: peer.telemetry.retransmits_served,
+      telemetry: { ...peer.telemetry },
         neighbor_count: peer.neighbor_set.length,
         seen_window_size: peer.seen_window.size,
         media_generation: peer.media_generation,
@@ -594,8 +600,8 @@ export class GossipController {
       transport_kind: this.dataTransport.kind || 'unknown',
       data_lane_mode: options.dataLaneMode || this.dataLaneConfig.mode,
       diagnostics_label: options.diagnosticsLabel || this.dataLaneConfig.diagnosticsLabel,
-      media_carrier_mode: options.mediaCarrierMode || 'sfu_mirror',
-      rollout_strategy: options.rolloutStrategy || options.mediaCarrierMode || 'sfu_mirror',
+      media_carrier_mode: options.mediaCarrierMode || 'sfu_first',
+      rollout_strategy: options.rolloutStrategy || options.mediaCarrierMode || 'sfu_first',
       neighbor_count: peer.neighbor_set.length,
       topology_epoch: peer.topology_epoch,
       counters: { ...peer.telemetry },
@@ -630,6 +636,32 @@ export class GossipController {
     for (let i = 0; i < fanoutCount; i++) {
       const neighborId = neighbors[i]
       if (!neighborId) continue
+
+      const neighbor = this.peers.get(neighborId)
+      if (!neighbor) continue
+
+      if (neighbor.seen_window.has(frameId)) {
+        neighbor.duplicates++
+        this.logEvent(neighborId, 'drop_duplicate', 'data', {
+          frame_id: frameId,
+          forwarded_from: fromPeerId,
+        })
+        continue
+      }
+
+      const now = Date.now()
+      this.addToSeenWindow(neighbor, frameId, now)
+      neighbor.received++
+
+      this.logEvent(neighborId, 'receive', 'data', {
+        frame_id: frameId,
+        publisher_id: msg.publisher_id,
+        track_id: msg.track_id,
+        frame_sequence: msg.frame_sequence,
+        media_generation: msg.media_generation,
+        ttl: ttl,
+        forwarded_from: fromPeerId,
+      })
 
       this.recordTelemetryCounter(fromPeerId, 'forwarded')
       this.logEvent(fromPeerId, 'forward', 'data', {
@@ -718,6 +750,9 @@ export class GossipController {
       rtc_datachannel_sends: 0,
       in_memory_harness_sends: 0,
       topology_repairs_requested: 0,
+      keyframe_requests: 0,
+      missing_frame_requests: 0,
+      retransmits_served: 0,
       would_publish_frames: 0,
     }
   }

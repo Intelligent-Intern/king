@@ -1,8 +1,8 @@
 .git
 .github
-dist/*
-!dist/docker-packages/
-!dist/docker-packages/**
+dist/
+compat-artifacts/
+.cache/
 benchmarks/results
 demo/video-chat/node_modules
 demo/video-chat/frontend-vue/node_modules
@@ -13,6 +13,7 @@ extension/autom4te.cache
 extension/build/profiles
 extension/modules
 !extension/modules/
+extension/modules/king.so
 extension/tests/*.diff
 extension/tests/*.exp
 extension/tests/*.log

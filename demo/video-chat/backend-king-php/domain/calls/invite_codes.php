@@ -9,7 +9,8 @@ function videochat_create_invite_code(
     int $authUserId,
     string $authRole,
     array $payload,
-    ?int $nowUnix = null
+    ?int $nowUnix = null,
+    ?int $tenantId = null
 ): array {
     $validation = videochat_validate_create_invite_code_payload($payload);
     if (!(bool) ($validation['ok'] ?? false)) {
@@ -37,7 +38,7 @@ function videochat_create_invite_code(
     $scopeContext = [];
 
     if ($scope === 'room') {
-        $room = videochat_fetch_active_room_context($pdo, (string) ($data['room_id'] ?? ''));
+        $room = videochat_fetch_active_room_context($pdo, (string) ($data['room_id'] ?? ''), $tenantId);
         if ($room === null) {
             return [
                 'ok' => false,
@@ -55,7 +56,7 @@ function videochat_create_invite_code(
             ],
         ];
     } elseif ($scope === 'call') {
-        $call = videochat_fetch_call_for_update($pdo, (string) ($data['call_id'] ?? ''));
+        $call = videochat_fetch_call_for_update($pdo, (string) ($data['call_id'] ?? ''), $tenantId);
         if (!is_array($call)) {
             return [
                 'ok' => false,
@@ -108,8 +109,10 @@ function videochat_create_invite_code(
     $expiresAt = gmdate('c', $effectiveNowUnix + $ttlSeconds);
     $maxRedemptions = 1;
 
+    $tenantColumn = is_int($tenantId) && $tenantId > 0 && videochat_tenant_table_has_column($pdo, 'invite_codes', 'tenant_id') ? ', tenant_id' : '';
+    $tenantValue = $tenantColumn !== '' ? ', :tenant_id' : '';
     $insert = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 INSERT INTO invite_codes(
     id,
     code,
@@ -122,7 +125,7 @@ INSERT INTO invite_codes(
     redeemed_by_user_id,
     max_redemptions,
     redemption_count,
-    created_at
+    created_at{$tenantColumn}
 ) VALUES(
     :id,
     :code,
@@ -135,7 +138,7 @@ INSERT INTO invite_codes(
     NULL,
     :max_redemptions,
     0,
-    :created_at
+    :created_at{$tenantValue}
 )
 SQL
     );
@@ -147,7 +150,7 @@ SQL
         $inviteId = videochat_generate_uuid_v4();
         $inviteCode = videochat_generate_uuid_v4();
         try {
-            $insert->execute([
+            $params = [
                 ':id' => $inviteId,
                 ':code' => $inviteCode,
                 ':scope' => $scope,
@@ -157,7 +160,11 @@ SQL
                 ':expires_at' => $expiresAt,
                 ':max_redemptions' => $maxRedemptions,
                 ':created_at' => $createdAt,
-            ]);
+            ];
+            if ($tenantColumn !== '') {
+                $params[':tenant_id'] = $tenantId;
+            }
+            $insert->execute($params);
             $created = true;
             break;
         } catch (Throwable $error) {
@@ -212,17 +219,21 @@ SQL
  * @return array<string, mixed>
  */
 
-function videochat_fetch_invite_code_by_code(PDO $pdo, string $code): ?array
+function videochat_fetch_invite_code_by_code(PDO $pdo, string $code, ?int $tenantId = null): ?array
 {
     $trimmedCode = strtolower(trim($code));
     if ($trimmedCode === '') {
         return null;
     }
 
+    $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'invite_codes', 'tenant_id');
+    $tenantSelect = $hasTenantColumn ? 'tenant_id,' : 'NULL AS tenant_id,';
+    $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND tenant_id = :tenant_id' : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     id,
+    {$tenantSelect}
     code,
     scope,
     room_id,
@@ -236,10 +247,15 @@ SELECT
     created_at
 FROM invite_codes
 WHERE lower(code) = :code
+  {$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':code' => $trimmedCode]);
+    $params = [':code' => $trimmedCode];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;
@@ -247,6 +263,7 @@ SQL
 
     return [
         'id' => (string) ($row['id'] ?? ''),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
         'code' => strtolower((string) ($row['code'] ?? '')),
         'scope' => (string) ($row['scope'] ?? ''),
         'room_id' => is_string($row['room_id'] ?? null) ? (string) $row['room_id'] : null,
@@ -279,17 +296,21 @@ SQL
  *   created_at: string
  * }|null
  */
-function videochat_fetch_invite_code_by_id(PDO $pdo, string $inviteId): ?array
+function videochat_fetch_invite_code_by_id(PDO $pdo, string $inviteId, ?int $tenantId = null): ?array
 {
     $trimmedInviteId = strtolower(trim($inviteId));
     if ($trimmedInviteId === '') {
         return null;
     }
 
+    $hasTenantColumn = videochat_tenant_table_has_column($pdo, 'invite_codes', 'tenant_id');
+    $tenantSelect = $hasTenantColumn ? 'tenant_id,' : 'NULL AS tenant_id,';
+    $tenantWhere = $hasTenantColumn && is_int($tenantId) && $tenantId > 0 ? 'AND tenant_id = :tenant_id' : '';
     $statement = $pdo->prepare(
-        <<<'SQL'
+        <<<SQL
 SELECT
     id,
+    {$tenantSelect}
     code,
     scope,
     room_id,
@@ -303,10 +324,15 @@ SELECT
     created_at
 FROM invite_codes
 WHERE lower(id) = :id
+  {$tenantWhere}
 LIMIT 1
 SQL
     );
-    $statement->execute([':id' => $trimmedInviteId]);
+    $params = [':id' => $trimmedInviteId];
+    if ($tenantWhere !== '') {
+        $params[':tenant_id'] = $tenantId;
+    }
+    $statement->execute($params);
     $row = $statement->fetch();
     if (!is_array($row)) {
         return null;
@@ -314,6 +340,7 @@ SQL
 
     return [
         'id' => strtolower((string) ($row['id'] ?? '')),
+        'tenant_id' => is_numeric($row['tenant_id'] ?? null) ? (int) $row['tenant_id'] : null,
         'code' => strtolower((string) ($row['code'] ?? '')),
         'scope' => (string) ($row['scope'] ?? ''),
         'room_id' => is_string($row['room_id'] ?? null) ? (string) $row['room_id'] : null,
@@ -330,7 +357,7 @@ SQL
     ];
 }
 
-function videochat_can_copy_invite_code(PDO $pdo, array $inviteCode, int $authUserId, string $authRole): bool
+function videochat_can_copy_invite_code(PDO $pdo, array $inviteCode, int $authUserId, string $authRole, ?int $tenantId = null): bool
 {
     if ($authUserId <= 0) {
         return false;
@@ -354,7 +381,7 @@ function videochat_can_copy_invite_code(PDO $pdo, array $inviteCode, int $authUs
         return false;
     }
 
-    $call = videochat_fetch_call_for_update($pdo, $callId);
+    $call = videochat_fetch_call_for_update($pdo, $callId, $tenantId);
     if (!is_array($call)) {
         return false;
     }
@@ -376,7 +403,8 @@ function videochat_prepare_invite_code_copy(
     string $inviteId,
     int $authUserId,
     string $authRole,
-    ?int $nowUnix = null
+    ?int $nowUnix = null,
+    ?int $tenantId = null
 ): array {
     $trimmedInviteId = strtolower(trim($inviteId));
     if ($trimmedInviteId === '') {
@@ -389,7 +417,7 @@ function videochat_prepare_invite_code_copy(
         ];
     }
 
-    $invite = videochat_fetch_invite_code_by_id($pdo, $trimmedInviteId);
+    $invite = videochat_fetch_invite_code_by_id($pdo, $trimmedInviteId, $tenantId);
     if (!is_array($invite)) {
         return [
             'ok' => false,
@@ -400,7 +428,7 @@ function videochat_prepare_invite_code_copy(
         ];
     }
 
-    if (!videochat_can_copy_invite_code($pdo, $invite, $authUserId, $authRole)) {
+    if (!videochat_can_copy_invite_code($pdo, $invite, $authUserId, $authRole, $tenantId)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
@@ -444,7 +472,8 @@ function videochat_redeem_invite_code(
     int $authUserId,
     string $authRole,
     array $payload,
-    ?int $nowUnix = null
+    ?int $nowUnix = null,
+    ?int $tenantId = null
 ): array {
     $validation = videochat_validate_redeem_invite_code_payload($payload);
     if (!(bool) ($validation['ok'] ?? false)) {
@@ -474,7 +503,7 @@ function videochat_redeem_invite_code(
     try {
         $pdo->beginTransaction();
 
-        $invite = videochat_fetch_invite_code_by_code($pdo, $code);
+        $invite = videochat_fetch_invite_code_by_code($pdo, $code, $tenantId);
         if (!is_array($invite)) {
             $pdo->rollBack();
             return [
@@ -510,7 +539,7 @@ function videochat_redeem_invite_code(
 
         $scope = (string) ($invite['scope'] ?? '');
         if ($scope === 'room') {
-            $room = videochat_fetch_active_room_context($pdo, (string) ($invite['room_id'] ?? ''));
+            $room = videochat_fetch_active_room_context($pdo, (string) ($invite['room_id'] ?? ''), $tenantId);
             if ($room === null) {
                 $pdo->rollBack();
                 return [
@@ -530,7 +559,7 @@ function videochat_redeem_invite_code(
                 'call' => null,
             ];
         } elseif ($scope === 'call') {
-            $call = videochat_fetch_call_for_update($pdo, (string) ($invite['call_id'] ?? ''));
+            $call = videochat_fetch_call_for_update($pdo, (string) ($invite['call_id'] ?? ''), $tenantId);
             if ($call === null) {
                 $pdo->rollBack();
                 return [
@@ -552,7 +581,7 @@ function videochat_redeem_invite_code(
                 ];
             }
 
-            $room = videochat_fetch_active_room_context($pdo, (string) ($call['room_id'] ?? ''));
+            $room = videochat_fetch_active_room_context($pdo, (string) ($call['room_id'] ?? ''), $tenantId);
             if ($room === null) {
                 $pdo->rollBack();
                 return [

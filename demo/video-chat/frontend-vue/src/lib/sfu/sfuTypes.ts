@@ -30,8 +30,10 @@ export interface SFUEncodedFrame {
   chunkCount?: number
   frameId?: string
   senderSentAtMs?: number
+  publisherJoinStartedAtMs?: number
   codecId?: string
   runtimeId?: string
+  publisherMediaSource?: string
   videoLayer?: 'primary' | 'thumbnail' | string | null
   outgoingVideoQualityProfile?: string
   kingReceiveLatencyMs?: number
@@ -127,4 +129,7 @@ export interface SFUClientCallbacks {
   onDisconnect:    () => void
   onEncodedFrame?: (frame: SFUEncodedFrame) => void
   onPublisherPressure?: (details: Record<string, unknown>) => void
+  onSessionAccepted?: (details: Record<string, unknown>) => void
+  onTrackAccepted?: (details: Record<string, unknown>) => void
+  onJoinLatencySample?: (details: Record<string, unknown>) => void
 }

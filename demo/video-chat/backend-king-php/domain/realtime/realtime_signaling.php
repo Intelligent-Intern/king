@@ -56,6 +56,7 @@ function videochat_signaling_decode_client_frame(string $frame): array
         'call/ice',
         'call/hangup',
         'call/control-state',
+        'call-app/grants-updated',
         'call/media-quality-pressure',
         'call/media-security-sync-request',
         'call/moderation-state',
@@ -131,12 +132,26 @@ function videochat_signaling_sender_payload(array $connection): array
     ];
 }
 
+function videochat_signaling_room_key_for_connection(array $connection): string
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
+    $connectionRoomKey = is_string($connection['room_key'] ?? null) && trim((string) $connection['room_key']) !== ''
+        ? videochat_presence_normalize_room_storage_key((string) $connection['room_key'], '')
+        : '';
+
+    return $connectionRoomKey !== ''
+        && videochat_presence_external_room_id_from_key($connectionRoomKey, '') === $roomId
+        ? $connectionRoomKey
+        : videochat_presence_room_key($roomId, $tenantId);
+}
+
 /**
  * @return array<int, array<string, mixed>>
  */
 function videochat_signaling_target_connections(array $presenceState, string $roomId, int $targetUserId): array
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId);
     $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return [];
@@ -213,8 +228,9 @@ function videochat_signaling_publish(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $roomKey = videochat_signaling_room_key_for_connection($connection);
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
-    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $roomConnections = $presenceState['rooms'][$roomKey] ?? null;
     if (
         $connectionId === ''
         || !is_array($roomConnections)
@@ -248,11 +264,11 @@ function videochat_signaling_publish(
         'time' => $effectiveNowIso,
     ];
 
-    $targetConnections = videochat_signaling_target_connections($presenceState, $roomId, $targetUserId);
+    $targetConnections = videochat_signaling_target_connections($presenceState, $roomKey, $targetUserId);
     if ($targetConnections === []) {
         if ($broker !== null) {
             try {
-                if ($broker($roomId, $targetUserId, $event) === true) {
+                if ($broker($roomKey, $targetUserId, $event) === true) {
                     return [
                         'ok' => true,
                         'error' => '',
@@ -338,7 +354,7 @@ function videochat_signaling_broker_event_key(array $event): string
 
 function videochat_signaling_broker_insert_event(PDO $pdo, string $roomId, int $targetUserId, array $event): bool
 {
-    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    $normalizedRoomId = videochat_presence_normalize_room_storage_key($roomId, '');
     if ($normalizedRoomId === '' || $targetUserId <= 0) {
         return false;
     }
@@ -377,7 +393,7 @@ WHERE room_id = :room_id
 SQL
     );
     $statement->execute([
-        ':room_id' => videochat_presence_normalize_room_id($roomId),
+        ':room_id' => videochat_presence_normalize_room_storage_key($roomId),
         ':target_user_id' => max(0, $targetUserId),
     ]);
     return (int) ($statement->fetchColumn() ?: 0);
@@ -399,7 +415,7 @@ WHERE room_id = :room_id
 SQL
     );
     $statement->execute([
-        ':room_id' => videochat_presence_normalize_room_id($roomId),
+        ':room_id' => videochat_presence_normalize_room_storage_key($roomId),
         ':target_user_id' => max(0, $targetUserId),
         ':before_created_at_ms' => max(0, $beforeCreatedAtMs),
     ]);
@@ -427,7 +443,7 @@ ORDER BY id ASC
 LIMIT :limit
 SQL
     );
-    $statement->bindValue(':room_id', videochat_presence_normalize_room_id($roomId), PDO::PARAM_STR);
+    $statement->bindValue(':room_id', videochat_presence_normalize_room_storage_key($roomId), PDO::PARAM_STR);
     $statement->bindValue(':target_user_id', max(0, $targetUserId), PDO::PARAM_INT);
     $statement->bindValue(':after_id', max(0, $afterId), PDO::PARAM_INT);
     $statement->bindValue(':limit', max(1, min(500, $limit)), PDO::PARAM_INT);

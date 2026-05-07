@@ -7,72 +7,86 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '../..');
 
-function readUtf8(file) {
-  return fs.readFileSync(file, 'utf8');
+function readUtf8(relativePath) {
+  return fs.readFileSync(path.join(frontendRoot, relativePath), 'utf8');
+}
+
+function requireContains(source, needle, label) {
+  assert.ok(source.includes(needle), `${label} missing: ${needle}`);
+}
+
+function requireMissing(source, needle, label) {
+  assert.equal(source.includes(needle), false, `${label} must not contain: ${needle}`);
 }
 
 try {
-  const source = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/stream.ts'));
-  const controller = readUtf8(path.join(frontendRoot, 'src/domain/realtime/background/controller.ts'));
-  const localOrchestration = readUtf8(path.join(frontendRoot, 'src/domain/realtime/local/mediaOrchestration.ts'));
-  const publisherPipeline = readUtf8(path.join(frontendRoot, 'src/domain/realtime/local/publisherPipeline.ts'));
-  const joinPreview = readUtf8(path.join(frontendRoot, 'src/domain/calls/access/joinPreview.ts'));
-  const dashboardEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/dashboard/enterCall.ts'));
-  const adminEnter = readUtf8(path.join(frontendRoot, 'src/domain/calls/admin/enterCall.ts'));
-  const harness = readUtf8(path.join(frontendRoot, 'tests/standalone/king-background-segmentation-harness.ts'));
-  assert.ok(source.includes('const DEFAULT_INNER_CONTRACT_PX = 16;'), 'background filter must contract the matte around 16px inward from the detected contour');
-  assert.ok(source.includes('const DEFAULT_INNER_FEATHER_PX = 24;'), 'background filter must keep the feathered edge half as wide for a faster blur falloff');
-  assert.ok(source.includes("{ progress: 0.0, alpha: 0.05 }"), 'background filter must start the inner feather ramp near 5 percent alpha');
-  assert.ok(source.includes("{ progress: 0.2, alpha: 0.15 }"), 'background filter must include the 15 percent inner feather stop');
-  assert.ok(source.includes("{ progress: 0.4, alpha: 0.4 }"), 'background filter must include the 40 percent inner feather stop');
-  assert.ok(source.includes("{ progress: 0.6, alpha: 0.7 }"), 'background filter must include the 70 percent inner feather stop');
-  assert.ok(source.includes("{ progress: 0.8, alpha: 0.9 }"), 'background filter must include the 90 percent inner feather stop');
-  assert.ok(source.includes("{ progress: 1.0, alpha: 1.0 }"), 'background filter must end the inner feather ramp at full opacity');
-  assert.ok(source.includes('function sampleInnerFeatherRamp(progress) {'), 'background filter must centralize the stepped inner feather ramp');
-  assert.ok(source.includes('function buildInnerDistanceFeatherAlpha(base, width, height, threshold = 110) {'), 'background filter must centralize contour shaping in a shared helper');
-  assert.ok(source.includes('const inside = sampleInnerFeatherRamp(t);'), 'background filter must use the stepped feather ramp when shaping contour alpha');
-  assert.ok(source.includes('const outFastAlpha = buildInnerDistanceFeatherAlpha(base, width, height);'), 'fast matte path must apply the shared contour shaping');
-  assert.ok(source.includes('const outAlpha = buildInnerDistanceFeatherAlpha(base, width, height);'), 'full matte path must apply the shared contour shaping');
-  assert.ok(source.includes('const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;'), 'background filter stream must bound blur handoff readiness waits');
-  assert.ok(source.includes('const ready = new Promise((resolve) => {'), 'background filter stream must expose a readiness promise');
-  assert.ok(source.includes('const readyTimer = setTimeout(markReady, Math.max(BACKGROUND_FILTER_READY_TIMEOUT_MS, detectIntervalMs + 100));'), 'background filter stream must time out readiness if segmentation is slow');
-  assert.ok(source.includes('function drawVideoToDownsampleBlurCache('), 'background filter stream must use a filter-independent downsample blur cache');
-  assert.ok(source.includes('function drawVideoWithDownsampleBlur('), 'background filter stream must use downsample blur while a fresh matte is still warming up');
-  assert.ok(source.includes('function createNoMatteSegmentationBackend('), 'background filter stream must keep a local compositor when SINet is unavailable');
-  assert.ok(source.includes('segmentationBackend = createNoMatteSegmentationBackend("sinet_unavailable");'), 'SINet setup failure must not return the raw camera stream');
-  assert.ok(source.includes('drawVideoToDownsampleBlurCache(backgroundLayerCanvas, backgroundLayer, video, canvas.width, canvas.height, blurPx);'), 'background blur must refresh through the downsample cache');
-  assert.ok(source.includes('drawVideoWithDownsampleBlur(ctx, video, backgroundLayerCanvas, backgroundLayer, canvas.width, canvas.height, blurPx);'), 'background filter stream must keep the frame visibly blurred while a fresh matte is still warming up');
-  assert.ok(!source.includes('ctx.filter = `blur(${blurPx}px)`;'), 'background blur must not rely on CanvasRenderingContext2D.filter support');
-  assert.ok(!source.includes('backgroundLayer.filter = `blur('), 'background blur cache must not rely on CanvasRenderingContext2D.filter support');
-  assert.ok(source.includes('if (!backgroundImage && !backgroundColor) {'), 'solid/image backgrounds must not draw raw or blurred camera frames while a fresh matte is still warming up');
-  assert.ok(source.includes('const canRunSegmentation = !overloadDisabled && now >= overloadCooldownUntil;'), 'background overload may pause SINet detection but must keep the active compositor running');
-  assert.ok(!source.includes('if (overloadDisabled) {\n      const vwFast = video.videoWidth || canvas.width;'), 'background overload must not install a raw-camera pass-through branch');
-  assert.ok(harness.includes("preset === 'weak_blur' ? 'blur(14px)' : 'blur(32px)'"), 'standalone harness must use stronger thin/thick blur previews');
-  for (const [label, file] of [
+  const stream = readUtf8('src/domain/realtime/background/stream.ts');
+  const controller = readUtf8('src/domain/realtime/background/controller.ts');
+  const compositor = readUtf8('src/domain/realtime/background/pipeline/compositorStage.js');
+  const segmenter = readUtf8('src/domain/realtime/background/pipeline/segmenterStage.js');
+  const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
+  const worker = readUtf8('src/domain/realtime/background/workers/imageSegmenterWorker.js');
+  const localOrchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
+  const publisherPipeline = readUtf8('src/domain/realtime/local/publisherPipeline.ts');
+  const joinPreview = readUtf8('src/domain/calls/access/joinPreview.ts');
+  const dashboardEnter = readUtf8('src/domain/calls/dashboard/enterCall.ts');
+  const adminEnter = readUtf8('src/domain/calls/admin/enterCall.ts');
+
+  requireContains(stream, "import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';", 'background stream worker segmenter lease');
+  requireContains(stream, "import { createBackgroundPipelineController } from './pipeline/controller';", 'background stream pipeline controller');
+  requireContains(stream, "import { createBackgroundCompositorStage } from './pipeline/compositorStage';", 'background stream compositor stage');
+  requireContains(stream, "import { createBackgroundSegmenterStage } from './pipeline/segmenterStage';", 'background stream segmenter stage');
+  requireContains(stream, 'const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;', 'background stream bounded ready handoff');
+  requireContains(stream, 'const ready = new Promise((resolve) => {', 'background stream readiness promise');
+  requireContains(stream, 'const readyTimer = setTimeout(', 'background stream readiness timeout');
+  requireContains(stream, "segmentationBackendLease = await acquireWorkerSegmenterBackendLease({", 'background stream lazy worker segmenter acquisition');
+  requireContains(stream, "requested: 'worker-segmenter'", 'background stream diagnostics name worker segmenter failures');
+  requireMissing(stream, 'backendMediapipe', 'background stream legacy MediaPipe backend import');
+  requireMissing(stream, 'backendTfjs', 'background stream legacy TFJS backend import');
+  requireMissing(stream, "return sourceStream, active: false, reason: 'sinet_unavailable'", 'background stream raw SINet failure fallback');
+
+  requireContains(compositor, 'function processMaskForAlpha(mask, width, height) {', 'compositor mask postprocess boundary');
+  requireContains(compositor, 'return blurMask(processed, width, height, blurRadius);', 'compositor blur after mask contrast shaping');
+  requireContains(compositor, "ctx.globalCompositeOperation = 'destination-in';", 'compositor foreground is cut by alpha mask');
+  requireContains(compositor, "ctx.globalCompositeOperation = 'destination-over';", 'compositor draws replacement background behind cut foreground');
+  requireContains(compositor, "ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');", 'compositor solid background replacement');
+  requireContains(compositor, 'ctx.fillRect(0, 0, canvas.width, canvas.height);', 'compositor solid background fills the full background');
+  requireContains(compositor, 'ctx.filter = `blur(${Math.max(blurPx, 6)}px)`;', 'compositor keeps a visibly blurred fallback while mask warms');
+  requireContains(compositor, 'return maskLayer?.getImageData?.(0, 0, maskCanvas.width, maskCanvas.height) || null;', 'compositor exposes matte snapshot');
+
+  requireContains(segmenter, 'latestMaskValues = hasValueMask ? segmentation.matteMaskValues : null;', 'segmenter keeps latest value mask');
+  requireContains(segmenter, 'latestMaskWidth = Math.max(1, Math.round(Number(segmentation?.matteMaskWidth) || width));', 'segmenter tracks mask width');
+  requireContains(workerBackend, 'VITE_VIDEOCHAT_CDN_ORIGIN', 'worker backend supports deploy-time CDN origin');
+  requireContains(workerBackend, 'matteMaskValues', 'worker backend returns value masks');
+  requireContains(worker, '/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs', 'worker loads vendored MediaPipe Tasks bundle');
+  requireContains(worker, '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite', 'worker loads vendored multiclass model');
+
+  for (const [label, source] of [
     ['local orchestration', localOrchestration],
     ['join preview', joinPreview],
     ['dashboard enter preview', dashboardEnter],
     ['admin enter preview', adminEnter],
   ]) {
-    assert.ok(file.includes('const blurStepPx = [8, 12, 18, 26, 34];'), `${label} must use stronger blur steps`);
-    assert.ok(file.includes('Math.round(blurPx * 1.55)'), `${label} must ramp thick blur above the thin blur levels`);
-    assert.ok(file.includes('Math.min(64, blurPx)'), `${label} must allow stronger blur cap`);
-    assert.ok(file.includes("const isExclusionBackdrop = backdrop === 'exclusion';"), `${label} must detect the solid blue exclusion backdrop`);
-    assert.ok(file.includes("backgroundColor: isExclusionBackdrop ? '#061a4a' : ''"), `${label} must pass the deep-blue replacement color`);
-    assert.ok(file.includes("mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur')"), `${label} must map exclusion to replace matte and keep blur presets`);
+    requireContains(source, 'const blurStepPx = [8, 12, 18, 26, 34];', `${label} stronger blur steps`);
+    requireContains(source, 'Math.round(blurPx * 1.55)', `${label} stronger thick blur`);
+    requireContains(source, 'Math.min(64, blurPx)', `${label} stronger blur cap`);
+    requireContains(source, "const isExclusionBackdrop = backdrop === 'exclusion';", `${label} exclusion selector`);
+    requireContains(source, "const backgroundColor = isExclusionBackdrop", `${label} background color consolidation`);
+    requireContains(source, "? '#061a4a'", `${label} deep-blue exclusion background`);
+    requireContains(source, "mattePreset: isExclusionBackdrop ? 'replace' : (backdrop === 'blur9' ? 'hard_blur' : 'weak_blur')", `${label} exclusion matte mapping`);
   }
-  assert.ok(localOrchestration.includes('refs.localFilteredStreamRef.value = stream;'), 'local media must store the processed background stream');
-  assert.ok(localOrchestration.includes('refs.localStreamRef.value = stream;'), 'local media must publish the processed background stream');
-  assert.ok(localOrchestration.includes('const videoTrack = stream.getVideoTracks()[0];'), 'initial local publisher must encode the processed stream video track');
-  assert.ok(localOrchestration.includes('const videoTrack = nextStream.getVideoTracks()[0] || null;'), 'background reconfigure must encode the replacement processed stream video track');
-  assert.ok(localOrchestration.includes("eventType: 'local_background_sinet_unavailable'"), 'local media must emit a diagnostic if SINet cannot initialize in the call path');
-  assert.ok(publisherPipeline.includes('videoTrack === activeRawVideoTrack'), 'publisher startup must detect accidental raw-track starts');
-  assert.ok(publisherPipeline.includes('videoTrack = activeOutputVideoTrack;'), 'publisher startup must force the active processed stream track over a stale raw track');
-  assert.ok(publisherPipeline.includes("eventType: 'local_background_stream_publisher_active'"), 'publisher startup must prove preview and SFU publishing use the processed background stream');
-  assert.ok(!source.includes('ctx.filter = "none";\n      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);\n      ctx.restore();'), 'background filter stream must not fall back to raw video while blur presets switch');
-  assert.ok(source.includes('ready,'), 'background filter stream handle must return the readiness promise');
-  assert.ok(controller.includes('const shouldAwaitReadyHandoff = Boolean(previousHandle?.active && handle?.active);'), 'background filter controller must gate blur-to-blur swaps on ready handoff');
-  assert.ok(controller.includes('await handle.ready;'), 'background filter controller must wait for the new blur stream before replacing the previous one');
+
+  requireContains(localOrchestration, 'refs.localFilteredStreamRef.value = stream;', 'local media stores processed background stream');
+  requireContains(localOrchestration, 'refs.localStreamRef.value = stream;', 'local media publishes processed background stream');
+  requireContains(localOrchestration, 'const videoTrack = stream.getVideoTracks()[0];', 'initial publisher encodes processed track');
+  requireContains(localOrchestration, 'const videoTrack = nextStream.getVideoTracks()[0] || null;', 'reconfigured publisher encodes processed track');
+  requireContains(publisherPipeline, 'videoTrack === activeRawVideoTrack', 'publisher detects accidental raw-track starts');
+  requireContains(publisherPipeline, 'videoTrack = activeOutputVideoTrack;', 'publisher forces active processed track');
+  requireContains(publisherPipeline, "eventType: 'local_background_stream_publisher_active'", 'publisher diagnostics prove processed stream is active');
+  requireContains(controller, 'previousHandle.sourceStream === sourceStream', 'controller updates same stream in place');
+  requireContains(controller, 'this.attachHandlePipelineListener(this.currentHandle);', 'controller forwards pipeline debug changes');
+  requireContains(controller, 'getCurrentMatteMaskSnapshot()', 'controller exposes current matte snapshot');
+
   console.log('[background-filter-mask-contract] PASS');
 } catch (error) {
   console.error(`[background-filter-mask-contract] FAIL: ${error.message}`);

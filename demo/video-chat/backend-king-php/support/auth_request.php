@@ -138,6 +138,7 @@ function videochat_user_is_guest_account(?string $email, mixed $passwordHash): b
  *     time_format: string,
  *     date_format: string,
  *     theme: string,
+ *     can_edit_themes: bool,
  *     avatar_path: ?string,
  *     account_type: string,
  *     is_guest: bool

@@ -28,6 +28,12 @@
     position: relative;
   }
 
+  .shell.tablet-mode:not(.call-workspace-mode) {
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
   .sidebar {
     position: relative;
     top: auto;
@@ -110,7 +116,20 @@
     gap: 0;
   }
 
+  .shell.tablet-mode:not(.tablet-left-open) .nav-parent-row {
+    grid-template-columns: 40px;
+    justify-items: center;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav-group-toggle {
+    display: none;
+  }
+
   .shell.tablet-mode:not(.tablet-left-open) .nav-link span {
+    display: none;
+  }
+
+  .shell.tablet-mode:not(.tablet-left-open) .nav-submenu {
     display: none;
   }
 
@@ -201,8 +220,20 @@
     gap: 9px;
   }
 
+  .shell.tablet-mode.tablet-left-open .nav-parent-row {
+    grid-template-columns: minmax(0, 1fr) 34px;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-group-toggle {
+    display: grid;
+  }
+
   .shell.tablet-mode.tablet-left-open .nav-link span {
     display: inline;
+  }
+
+  .shell.tablet-mode.tablet-left-open .nav-submenu {
+    display: grid;
   }
 
   .shell.tablet-mode.tablet-left-open .logout-wrap {
@@ -224,9 +255,19 @@
     min-height: 100vh;
   }
 
+  .shell.tablet-mode:not(.call-workspace-mode) .main {
+    height: 100vh;
+    min-height: 0;
+  }
+
   .workspace {
     min-height: 100vh;
     border-radius: 0;
+  }
+
+  .shell.tablet-mode:not(.call-workspace-mode) .workspace {
+    height: 100vh;
+    min-height: 0;
   }
 
   .grid-2 {
@@ -289,6 +330,12 @@
     grid-template-columns: 1fr;
   }
 
+  .shell.mobile-mode:not(.call-workspace-mode) {
+    height: 100vh;
+    min-height: 100vh;
+    overflow: hidden;
+  }
+
   .shell.mobile-mode .sidebar {
     position: fixed;
     inset: 0;
@@ -339,6 +386,11 @@
     grid-template-rows: auto minmax(0, 1fr);
   }
 
+  .shell.mobile-mode:not(.call-workspace-mode) .main {
+    height: 100vh;
+    min-height: 0;
+  }
+
   .shell.mobile-mode .mobile-brand-strip {
     height: 70px;
     display: flex;
@@ -375,6 +427,11 @@
   .shell.mobile-mode .workspace {
     min-height: calc(100vh - 70px);
     border-radius: 0;
+  }
+
+  .shell.mobile-mode:not(.call-workspace-mode) .workspace {
+    height: calc(100vh - 70px);
+    min-height: 0;
   }
 
   .shell.call-workspace-mode.mobile-mode .workspace {

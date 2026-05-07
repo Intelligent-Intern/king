@@ -198,12 +198,7 @@ function videochat_handle_call_access_routes(
         $accessId = (string) ($accessMatch[1] ?? '');
         try {
             $pdo = $openDatabase();
-            $resolveResult = videochat_resolve_call_access_for_user(
-                $pdo,
-                $accessId,
-                $authenticatedUserId,
-                $authenticatedUserRole
-            );
+            $resolveResult = videochat_resolve_call_access_for_user($pdo, $accessId, $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
         } catch (Throwable) {
             return $errorResponse(500, 'call_access_resolve_failed', 'Could not resolve call access.', [
                 'reason' => 'internal_error',
@@ -218,12 +213,7 @@ function videochat_handle_call_access_routes(
                 ]);
             }
             if ($reason === 'not_found') {
-                $callResolution = videochat_get_call_for_user(
-                    $pdo,
-                    strtolower(trim($accessId)),
-                    $authenticatedUserId,
-                    $authenticatedUserRole
-                );
+                $callResolution = videochat_get_call_for_user($pdo, strtolower(trim($accessId)), $authenticatedUserId, $authenticatedUserRole, videochat_tenant_id_from_auth_context($apiAuthContext));
 
                 if ((bool) ($callResolution['ok'] ?? false)) {
                     return $jsonResponse(200, [

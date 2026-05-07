@@ -2,6 +2,7 @@ const LAYOUT_MODE_OPTIONS = [
   { mode: 'grid', label: 'Grid', icon: 'G' },
   { mode: 'main_mini', label: 'Main + Mini', icon: 'M' },
   { mode: 'main_only', label: 'Main only', icon: '1' },
+  { mode: 'call_app_workspace', label: 'Call App', icon: 'A' },
 ];
 
 const LAYOUT_STRATEGY_LABELS = {

@@ -207,6 +207,7 @@ try {
                 'status' => 'disabled',
                 'time_format' => '12h',
                 'theme' => 'light',
+                'theme_editor_enabled' => true,
                 'avatar_path' => ' /avatars/patch-updated.png ',
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ],
@@ -254,8 +255,39 @@ try {
         'updated theme mismatch'
     );
     videochat_admin_user_update_assert(
+        ($updatedUser['theme_editor_enabled'] ?? null) === true,
+        'updated theme editor permission mismatch'
+    );
+    videochat_admin_user_update_assert(
         (string) ($updatedUser['avatar_path'] ?? '') === '/avatars/patch-updated.png',
         'updated avatar_path should be trimmed'
+    );
+
+    $selfThemeEditorResponse = videochat_handle_user_routes(
+        '/api/admin/users/1',
+        'PATCH',
+        [
+            'method' => 'PATCH',
+            'uri' => '/api/admin/users/1',
+            'body' => json_encode([
+                'theme_editor_enabled' => false,
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+        ],
+        $apiAuthContext,
+        [],
+        sys_get_temp_dir(),
+        512000,
+        $jsonResponse,
+        $errorResponse,
+        $decodeJsonBody,
+        $openDatabase
+    );
+    videochat_admin_user_update_assert(is_array($selfThemeEditorResponse), 'self theme-editor response must be an array');
+    videochat_admin_user_update_assert((int) ($selfThemeEditorResponse['status'] ?? 0) === 409, 'self theme-editor status should be 409');
+    $selfThemeEditorPayload = videochat_admin_user_update_decode_response($selfThemeEditorResponse);
+    videochat_admin_user_update_assert(
+        (string) (((($selfThemeEditorPayload['error'] ?? [])['details'] ?? [])['fields'] ?? [])['theme_editor_enabled'] ?? '') === 'cannot_change_own_theme_editor_access',
+        'self theme-editor conflict field mismatch'
     );
 
     $duplicateResponse = videochat_handle_user_routes(
