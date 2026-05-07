@@ -146,11 +146,25 @@ Tickets:
     - Added `gossip-primary-health-gate-contract.mjs`.
     - Validation: `npm run test:contract:gossip`, `npm run build`,
       `git diff --check`.
-- [ ] GSP-07 Gossip-native recovery
+- [x] GSP-07 Gossip-native recovery
   - Add per-publisher keyframe requests, recent keyframe cache, missing-frame
     retransmit, duplicate suppression, TTL/fanout limits, and recovery messages
     over the server ops lane.
   - Recovery must not assume SFU is source of truth.
+  - Proof:
+    - Receivers now detect Gossip sequence gaps and initial delta frames without
+      a keyframe, coalesce per-publisher recovery requests, and send
+      sanitized `gossip/recovery/request` commands over the server ops lane.
+    - Publishers keep a bounded recent-frame/keyframe cache and serve missing
+      frames or cached keyframes back through bounded Gossip peer links.
+    - The server validates recovery ops payloads, rejects media/signaling/token
+      fields, routes only control messages to the publisher, and triggers a
+      publisher keyframe request without becoming a media fanout path.
+    - Added `gossip-native-recovery-contract.mjs` and extended the backend
+      Gossip runtime contract for recovery routing, unsafe-field rejection, and
+      no media fanout.
+    - Validation: `npm run test:contract:gossip`, `npm run build`,
+      `git diff --check`.
 - [ ] GSP-08 Server no-normal-media-fanout guard
   - Audit backend realtime Gossip/SFU paths and add tests ensuring the server
     does not distribute every normal media frame to all peers.

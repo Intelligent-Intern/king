@@ -790,6 +790,78 @@ $websocketTelemetryJson = json_encode($presenceState['gossipmesh_telemetry']['ro
 videochat_gossipmesh_test_assert(strpos($websocketTelemetryJson, 'protected_frame') === false, 'websocket telemetry aggregate must not include protected media frames');
 videochat_gossipmesh_test_assert(strpos($websocketTelemetryJson, 'sdp') === false, 'websocket telemetry aggregate must not include SDP');
 
+$recoveryFrame = json_encode([
+    'type' => 'gossip/recovery/request',
+    'lane' => 'ops',
+    'payload' => [
+        'kind' => 'gossip_recovery_request',
+        'request_id' => 'ggr-contract-1',
+        'request_type' => 'missing_frame',
+        'room_id' => 'room-alpha',
+        'call_id' => 'call-alpha',
+        'requester_peer_id' => '10',
+        'publisher_id' => '20',
+        'publisher_user_id' => '20',
+        'track_id' => 'camera',
+        'media_generation' => 2,
+        'missing_from_sequence' => 7,
+        'missing_to_sequence' => 8,
+        'last_received_sequence' => 6,
+        'observed_frame_sequence' => 9,
+        'prefer_keyframe' => true,
+        'reason' => 'gossip_receiver_sequence_gap',
+    ],
+], JSON_UNESCAPED_SLASHES);
+$recoveryCommand = videochat_gossipmesh_decode_recovery_request((string) $recoveryFrame);
+videochat_gossipmesh_test_assert((bool) ($recoveryCommand['ok'] ?? false), 'gossip recovery request should decode on ops lane');
+videochat_gossipmesh_test_assert((string) ($recoveryCommand['request_type'] ?? '') === 'missing_frame', 'gossip recovery request type mismatch');
+videochat_gossipmesh_test_assert((int) ($recoveryCommand['missing_from_sequence'] ?? 0) === 7, 'gossip recovery missing frame start mismatch');
+
+foreach (['sdp', 'candidate', 'protected_frame', 'data_base64', 'token'] as $unsafeRecoveryField) {
+    $unsafeRecovery = videochat_gossipmesh_decode_recovery_request(json_encode([
+        'type' => 'gossip/recovery/request',
+        'lane' => 'ops',
+        'payload' => [
+            'room_id' => 'room-alpha',
+            'call_id' => 'call-alpha',
+            'requester_peer_id' => '10',
+            'publisher_id' => '20',
+            'track_id' => 'camera',
+            $unsafeRecoveryField => 'unsafe',
+        ],
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_gossipmesh_test_assert(!(bool) ($unsafeRecovery['ok'] ?? true), 'gossip recovery must reject unsafe field: ' . $unsafeRecoveryField);
+    videochat_gossipmesh_test_assert((string) ($unsafeRecovery['error'] ?? '') === 'forbidden_media_or_signaling_field', 'unsafe recovery error mismatch: ' . $unsafeRecoveryField);
+}
+
+$GLOBALS['gossipmesh_sent_frames'] = [];
+$recoveryResult = videochat_realtime_handle_gossipmesh_recovery_request_command(
+    $recoveryCommand,
+    $socketOwner,
+    $presenceState,
+    $ownerConnection,
+    $openEmptyDatabase,
+    $gossipmeshFrameSender
+);
+videochat_gossipmesh_test_assert((bool) ($recoveryResult['handled'] ?? false), 'websocket gossip recovery command should be handled');
+videochat_gossipmesh_test_assert(count($GLOBALS['gossipmesh_sent_frames']) === 3, 'websocket gossip recovery should emit recovery ops, keyframe request, and ack');
+$recoveryPayloadsByType = [];
+foreach ($GLOBALS['gossipmesh_sent_frames'] as $sentFrame) {
+    $payload = (array) ($sentFrame['payload'] ?? []);
+    $recoveryPayloadsByType[(string) ($payload['type'] ?? '')] = $payload;
+}
+$recoveryOps = (array) ($recoveryPayloadsByType['call/gossip-recovery'] ?? []);
+$recoveryKeyframe = (array) ($recoveryPayloadsByType['call/media-quality-pressure'] ?? []);
+$recoveryAck = (array) ($recoveryPayloadsByType['gossip/recovery/ack'] ?? []);
+videochat_gossipmesh_test_assert((string) ($recoveryOps['lane'] ?? '') === 'ops', 'gossip recovery routed frame must stay on ops lane');
+videochat_gossipmesh_test_assert((int) ($recoveryOps['target_user_id'] ?? 0) === 20, 'gossip recovery ops frame must target publisher user');
+videochat_gossipmesh_test_assert((string) (($recoveryOps['payload'] ?? [])['kind'] ?? '') === 'gossip_recovery_request', 'gossip recovery ops payload kind mismatch');
+videochat_gossipmesh_test_assert((string) (($recoveryKeyframe['payload'] ?? [])['requested_action'] ?? '') === 'force_full_keyframe', 'gossip recovery must also request a publisher keyframe');
+videochat_gossipmesh_test_assert((string) ($recoveryAck['request_id'] ?? '') === 'ggr-contract-1', 'gossip recovery ack request id mismatch');
+foreach (['protected_frame', 'data_base64', 'sdp', 'ice_candidate', 'raw_media_key'] as $unsafeRecoveryToken) {
+    videochat_gossipmesh_test_assert(strpos(json_encode($GLOBALS['gossipmesh_sent_frames'], JSON_UNESCAPED_SLASHES) ?: '', $unsafeRecoveryToken) === false, 'websocket recovery must not distribute unsafe token: ' . $unsafeRecoveryToken);
+}
+
 $GLOBALS['gossipmesh_sent_frames'] = [];
 $forgedPeerCommand = [
     ...$repairCommand,

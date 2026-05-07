@@ -77,6 +77,9 @@ export interface GossipTelemetryCounters {
   rtc_datachannel_sends: number
   in_memory_harness_sends: number
   topology_repairs_requested: number
+  keyframe_requests: number
+  missing_frame_requests: number
+  retransmits_served: number
   would_publish_frames: number
 }
 
@@ -565,8 +568,11 @@ export class GossipController {
         peer_outbound_fanout: peer.telemetry.peer_outbound_fanout,
         rtc_datachannel_sends: peer.telemetry.rtc_datachannel_sends,
         in_memory_harness_sends: peer.telemetry.in_memory_harness_sends,
-        topology_repairs_requested: peer.telemetry.topology_repairs_requested,
-        telemetry: { ...peer.telemetry },
+      topology_repairs_requested: peer.telemetry.topology_repairs_requested,
+      keyframe_requests: peer.telemetry.keyframe_requests,
+      missing_frame_requests: peer.telemetry.missing_frame_requests,
+      retransmits_served: peer.telemetry.retransmits_served,
+      telemetry: { ...peer.telemetry },
         neighbor_count: peer.neighbor_set.length,
         seen_window_size: peer.seen_window.size,
         media_generation: peer.media_generation,
@@ -742,6 +748,9 @@ export class GossipController {
       rtc_datachannel_sends: 0,
       in_memory_harness_sends: 0,
       topology_repairs_requested: 0,
+      keyframe_requests: 0,
+      missing_frame_requests: 0,
+      retransmits_served: 0,
       would_publish_frames: 0,
     }
   }
