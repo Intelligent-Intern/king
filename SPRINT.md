@@ -199,9 +199,18 @@ Tickets:
       authoritative repair cleanup, backend recovery ops, and the no-normal
       media-fanout guard.
     - Validation: `npm run test:contract:gossip`, `git diff --check`.
-- [ ] GSP-10 Test protocol and readiness record
-  - Produce the final test protocol with commands, observed results, residual
-    risks, and remaining rollout gates.
+- [x] GSP-10 Acceptance form
+  - Produce `GOSSIP_CHECK.md` as an empty acceptance form for the final Gossip
+    review.
+  - Do not perform the acceptance, fill observed results, or claim production
+    readiness in this ticket.
+  - Proof:
+    - Added `GOSSIP_CHECK.md` with metadata, scope, required checks,
+      recommended commands, manual call checks, telemetry/log fields, residual
+      risk fields, and sign-off fields.
+    - All result, evidence, risk, and approval fields intentionally remain
+      `Auszufuellen`.
+    - Validation: `git diff --check`.
 
 ## Sprint: Call Apps Marketplace And CRDT Collaboration Surface
 
