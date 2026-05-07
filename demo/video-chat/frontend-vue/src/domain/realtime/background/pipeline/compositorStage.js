@@ -104,48 +104,13 @@ export function createBackgroundCompositorStage({
         return false;
     }
 
-    // 1D Gaussian-like blur + threshold. fast enough for video yet
-    // WIP coming to do most if not all using webgl, which will do it in single pass or two
-    // for the ops done here, keeping data needed, when possible, in gpu mem
     function processMaskForAlpha(mask, width, height) {
         if (!(mask instanceof Float32Array)) return mask;
         const processed = new Float32Array(mask.length);
-        const threshold = 0.5;   // Tune this (0.1 ~ 0.25 works well)
-        const blurRadius = 2;     // 2–4 is sweet spot
-
-        // 1. Threshold + stretch
-        for (let i = 0; i < mask.length; i++) {
-            let v = mask[i];
-            if (v > threshold) {
-                v = Math.min(1.0, (v - threshold) / (1.0 - threshold));
-            } else {
-                v = 0.0;
-            }
-            processed[i] = v;
+        for (let i = 0; i < mask.length; i += 1) {
+            processed[i] = Math.max(0, Math.min(1, Number(mask[i]) || 0));
         }
-
-        // 2. Blur (feather edges)
-        return blurMask(processed, width, height, blurRadius);
-    }
-
-    // Simple box blur (fast)
-    function blurMask(mask, w, h, radius) {
-        const output = new Float32Array(mask.length);
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                let sum = 0, count = 0;
-                for (let ky = -radius; ky <= radius; ky++) {
-                    for (let kx = -radius; kx <= radius; kx++) {
-                        const nx = Math.max(0, Math.min(w - 1, x + kx));
-                        const ny = Math.max(0, Math.min(h - 1, y + ky));
-                        sum += mask[ny * w + nx];
-                        count++;
-                    }
-                }
-                output[y * w + x] = sum / count;
-            }
-        }
-        return output;
+        return processed;
     }
     function clearMask() {
         if (!maskLayer) return;
@@ -328,8 +293,6 @@ export function createBackgroundCompositorStage({
             ctx.restore();
             return;
         }
-
-        if (hasMatteMask && !maskUpdated) return;
 
         let hasRenderableMask = false;
         if (maskUpdated) {

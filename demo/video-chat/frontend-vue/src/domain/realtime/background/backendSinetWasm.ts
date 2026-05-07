@@ -54,6 +54,14 @@ function writeAlphaMaskToCanvas(ctx, alpha, width, height) {
   ctx.putImageData(image, 0, 0);
 }
 
+function alphaToMaskValues(alpha) {
+  const values = new Float32Array(alpha.length);
+  for (let i = 0; i < alpha.length; i += 1) {
+    values[i] = Math.max(0, Math.min(1, (alpha[i] ?? 0) / 255));
+  }
+  return values;
+}
+
 function toMattePreset(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'hard_blur' || normalized === 'hard' || normalized === 'strong') return 'hard_blur';
@@ -185,6 +193,7 @@ export async function createSinetWasmSegmentationBackend(opts = {}) {
 
   let faces = [];
   let matteMask = null;
+  let matteMaskValues = null;
   let lastDetectAt = 0;
   let detectPending = false;
   let pendingSampleMs = null;
@@ -214,6 +223,7 @@ export async function createSinetWasmSegmentationBackend(opts = {}) {
       );
       writeAlphaMaskToCanvas(maskCtx, alpha, SINET_MODEL_WIDTH, SINET_MODEL_HEIGHT);
       matteMask = maskCanvas;
+      matteMaskValues = alphaToMaskValues(alpha);
       const box = estimatePersonBoxFromAlpha(alpha, SINET_MODEL_WIDTH, SINET_MODEL_HEIGHT);
       if (box) {
         const scaleX = vw / SINET_MODEL_WIDTH;
@@ -236,7 +246,16 @@ export async function createSinetWasmSegmentationBackend(opts = {}) {
   return {
     kind: 'sinet_wasm',
     nextFaces(video, vw, vh, nowMs) {
-      if (disposed) return { faces: [], detectSampleMs: null, matteMask: null };
+      if (disposed) {
+        return {
+          faces: [],
+          detectSampleMs: null,
+          matteMask: null,
+          matteMaskHeight: 0,
+          matteMaskValues: null,
+          matteMaskWidth: 0,
+        };
+      }
       if (!detectPending && nowMs - lastDetectAt >= detectIntervalMs) {
         detectPending = true;
         lastDetectAt = nowMs;
@@ -244,12 +263,20 @@ export async function createSinetWasmSegmentationBackend(opts = {}) {
       }
       const sample = pendingSampleMs;
       pendingSampleMs = null;
-      return { faces, detectSampleMs: sample, matteMask };
+      return {
+        faces,
+        detectSampleMs: sample,
+        matteMask,
+        matteMaskHeight: SINET_MODEL_HEIGHT,
+        matteMaskValues,
+        matteMaskWidth: SINET_MODEL_WIDTH,
+      };
     },
     dispose() {
       disposed = true;
       faces = [];
       matteMask = null;
+      matteMaskValues = null;
       detectPending = false;
       pendingSampleMs = null;
       previousAlpha = null;

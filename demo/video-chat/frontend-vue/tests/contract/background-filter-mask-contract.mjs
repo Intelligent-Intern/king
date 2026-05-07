@@ -24,29 +24,37 @@ try {
   const controller = readUtf8('src/domain/realtime/background/controller.ts');
   const compositor = readUtf8('src/domain/realtime/background/pipeline/compositorStage.js');
   const segmenter = readUtf8('src/domain/realtime/background/pipeline/segmenterStage.js');
-  const workerBackend = readUtf8('src/domain/realtime/background/backendWorkerSegmenter.js');
-  const worker = readUtf8('src/domain/realtime/background/workers/imageSegmenterWorker.js');
+  const sinetBackend = readUtf8('src/domain/realtime/background/backendSinetWasm.ts');
   const localOrchestration = readUtf8('src/domain/realtime/local/mediaOrchestration.ts');
   const publisherPipeline = readUtf8('src/domain/realtime/local/publisherPipeline.ts');
   const joinPreview = readUtf8('src/domain/calls/access/joinPreview.ts');
   const dashboardEnter = readUtf8('src/domain/calls/dashboard/enterCall.ts');
   const adminEnter = readUtf8('src/domain/calls/admin/enterCall.ts');
 
-  requireContains(stream, "import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';", 'background stream worker segmenter lease');
+  requireContains(stream, "import { createSinetWasmSegmentationBackend } from './backendSinetWasm';", 'background stream SINet WASM backend');
   requireContains(stream, "import { createBackgroundPipelineController } from './pipeline/controller';", 'background stream pipeline controller');
   requireContains(stream, "import { createBackgroundCompositorStage } from './pipeline/compositorStage';", 'background stream compositor stage');
   requireContains(stream, "import { createBackgroundSegmenterStage } from './pipeline/segmenterStage';", 'background stream segmenter stage');
   requireContains(stream, 'const BACKGROUND_FILTER_READY_TIMEOUT_MS = 500;', 'background stream bounded ready handoff');
   requireContains(stream, 'const ready = new Promise((resolve) => {', 'background stream readiness promise');
   requireContains(stream, 'const readyTimer = setTimeout(', 'background stream readiness timeout');
-  requireContains(stream, "segmentationBackendLease = await acquireWorkerSegmenterBackendLease({", 'background stream lazy worker segmenter acquisition');
-  requireContains(stream, "requested: 'worker-segmenter'", 'background stream diagnostics name worker segmenter failures');
+  requireContains(stream, 'segmentationBackend = await createSinetWasmSegmentationBackend({', 'background stream lazy SINet acquisition');
+  requireContains(stream, "requested: 'sinet-wasm'", 'background stream diagnostics name SINet failures');
+  requireContains(stream, 'maskContrast: runtimeConfig.maskContrast,', 'background stream passes mask contrast controls');
+  requireContains(stream, 'averageRadius: runtimeConfig.averageRadius,', 'background stream passes Gaussian averaging controls');
+  requireContains(stream, 'temporalRise: runtimeConfig.temporalRise,', 'background stream passes temporal rise controls');
+  requireContains(stream, 'temporalFall: runtimeConfig.temporalFall,', 'background stream passes temporal fall controls');
+  requireMissing(stream, 'acquireWorkerSegmenterBackendLease', 'background stream MediaPipe worker lease');
+  requireMissing(stream, 'backendWorkerSegmenter', 'background stream MediaPipe worker backend');
   requireMissing(stream, 'backendMediapipe', 'background stream legacy MediaPipe backend import');
   requireMissing(stream, 'backendTfjs', 'background stream legacy TFJS backend import');
   requireMissing(stream, "return sourceStream, active: false, reason: 'sinet_unavailable'", 'background stream raw SINet failure fallback');
 
   requireContains(compositor, 'function processMaskForAlpha(mask, width, height) {', 'compositor mask postprocess boundary');
-  requireContains(compositor, 'return blurMask(processed, width, height, blurRadius);', 'compositor blur after mask contrast shaping');
+  requireContains(compositor, 'processed[i] = Math.max(0, Math.min(1, Number(mask[i]) || 0));', 'compositor preserves shaped SINet alpha values');
+  requireMissing(compositor, 'const threshold = 0.5', 'compositor hard threshold');
+  requireMissing(compositor, 'return blurMask(processed', 'compositor secondary blur after SINet shaping');
+  requireMissing(compositor, 'if (hasMatteMask && !maskUpdated) return;', 'compositor stale-mask frame freeze');
   requireContains(compositor, "ctx.globalCompositeOperation = 'destination-in';", 'compositor foreground is cut by alpha mask');
   requireContains(compositor, "ctx.globalCompositeOperation = 'destination-over';", 'compositor draws replacement background behind cut foreground');
   requireContains(compositor, "ctx.fillStyle = resolveCanvasColor(backgroundColor, '#000010');", 'compositor solid background replacement');
@@ -56,10 +64,10 @@ try {
 
   requireContains(segmenter, 'latestMaskValues = hasValueMask ? segmentation.matteMaskValues : null;', 'segmenter keeps latest value mask');
   requireContains(segmenter, 'latestMaskWidth = Math.max(1, Math.round(Number(segmentation?.matteMaskWidth) || width));', 'segmenter tracks mask width');
-  requireContains(workerBackend, 'VITE_VIDEOCHAT_CDN_ORIGIN', 'worker backend supports deploy-time CDN origin');
-  requireContains(workerBackend, 'matteMaskValues', 'worker backend returns value masks');
-  requireContains(worker, '/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs', 'worker loads vendored MediaPipe Tasks bundle');
-  requireContains(worker, '/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite', 'worker loads vendored multiclass model');
+  requireContains(sinetBackend, "executionProviders: ['wasm']", 'SINet backend uses local WASM execution');
+  requireContains(sinetBackend, 'matteMaskValues = alphaToMaskValues(alpha);', 'SINet backend returns pipeline value masks');
+  requireContains(sinetBackend, 'matteMaskWidth: SINET_MODEL_WIDTH', 'SINet backend reports mask width');
+  requireContains(sinetBackend, 'matteMaskHeight: SINET_MODEL_HEIGHT', 'SINet backend reports mask height');
 
   for (const [label, source] of [
     ['local orchestration', localOrchestration],
