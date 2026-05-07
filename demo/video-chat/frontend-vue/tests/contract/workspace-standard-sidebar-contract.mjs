@@ -10,6 +10,7 @@ async function source(relativePath) {
 
 const shell = await source('src/layouts/WorkspaceShell.vue');
 const standardSidebar = await source('src/layouts/WorkspaceStandardSidebar.vue');
+const shellViewport = await source('src/layouts/useWorkspaceShellViewport.js');
 const shellCss = await source('src/styles/shell.css');
 const responsiveCss = await source('src/styles/responsive.css');
 
@@ -25,10 +26,22 @@ assert.match(
   'workspace shell must delegate logo, navigation, profile, and logout wiring to the standard sidebar component',
 );
 
+assert.match(
+  shell,
+  /import \{ useWorkspaceShellViewport \} from ['"]\.\/useWorkspaceShellViewport\.js['"]/,
+  'workspace shell must import the focused viewport/sidebar state composable',
+);
+
+assert.match(
+  shell,
+  /useWorkspaceShellViewport\(\{ isCallWorkspace \}\)/,
+  'workspace shell must initialize responsive sidebar state through the composable',
+);
+
 assert.doesNotMatch(
   shell,
-  /<WorkspaceNavigation|class="sidebar-profile avatar-only"|class="logout-wrap"/,
-  'workspace shell must not keep standard sidebar internals inline',
+  /<WorkspaceNavigation|class="sidebar-profile avatar-only"|class="logout-wrap"|function syncViewportState|window\.matchMedia|syncMobileScrollLock/,
+  'workspace shell must not keep standard sidebar internals or viewport media-query lifecycle inline',
 );
 
 assert.match(
@@ -83,6 +96,36 @@ assert.match(
   responsiveCss,
   /\.shell\.tablet-mode:not\(\.tablet-left-open\) \.logout-wrap,[\s\S]*?\.sidebar-profile[\s\S]*?display:\s*none;/,
   'collapsed tablet sidebar must hide scroll-body dock controls through responsive CSS',
+);
+
+assert.match(
+  shellViewport,
+  /export function useWorkspaceShellViewport\(\{ isCallWorkspace \}\)/,
+  'viewport composable must expose the workspace shell viewport contract',
+);
+
+assert.match(
+  shellViewport,
+  /const LAPTOP_BREAKPOINT = 1440;[\s\S]*const TABLET_BREAKPOINT = 1180;[\s\S]*const MOBILE_BREAKPOINT = 760;/,
+  'viewport composable must own the shell breakpoints',
+);
+
+assert.match(
+  shellViewport,
+  /watch\(\[isMobileViewport, isMobileSidebarOpen\][\s\S]*syncMobileScrollLock\(\);[\s\S]*\{ immediate: true \}\);/,
+  'viewport composable must own mobile scroll lock synchronization',
+);
+
+assert.match(
+  shellViewport,
+  /onMounted\(\(\) => \{[\s\S]*window\.matchMedia[\s\S]*addEventListener\('change', handleViewportChange\)/,
+  'viewport composable must own media-query listener registration',
+);
+
+assert.match(
+  shellViewport,
+  /onBeforeUnmount\(\(\) => \{[\s\S]*removeEventListener\('change', handleViewportChange\)[\s\S]*syncMobileScrollLock\(true\);/,
+  'viewport composable must own media-query cleanup and forced scroll unlock',
 );
 
 console.log('[workspace-standard-sidebar-contract] PASS');

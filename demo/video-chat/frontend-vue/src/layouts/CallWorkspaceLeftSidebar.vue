@@ -14,7 +14,7 @@
       </button>
     </div>
 
-    <div v-if="showTabs" class="call-left-panel-switch" role="tablist" aria-label="Call sidebar">
+    <div v-if="showTabs" class="call-left-panel-switch" role="tablist" :aria-label="t('calls.workspace.call_sidebar')">
       <button
         class="call-left-panel-tab"
         :class="{ active: activePanel === 'settings' }"
@@ -23,7 +23,7 @@
         :aria-selected="activePanel === 'settings'"
         @click="activePanel = 'settings'"
       >
-        Settings
+        {{ t('settings.dialog_title') }}
       </button>
       <button
         class="call-left-panel-tab"
@@ -33,7 +33,7 @@
         :aria-selected="activePanel === 'call_apps'"
         @click="activePanel = 'call_apps'"
       >
-        Call Apps
+        {{ t('calls.workspace.call_apps') }}
       </button>
     </div>
 
@@ -46,16 +46,16 @@
     />
 
     <div v-if="showSettingsPanel" class="call-left-settings">
-      <section class="call-left-settings-block" aria-label="Camera">
-        <div class="call-left-settings-title">Camera</div>
+      <section class="call-left-settings-block" :aria-label="t('calls.enter.camera')">
+        <div class="call-left-settings-title">{{ t('calls.enter.camera') }}</div>
         <div class="call-left-settings-field">
           <AppSelect
             id="call-left-camera-select"
-            aria-label="Camera"
+            :aria-label="t('calls.enter.camera')"
             :model-value="callMediaPrefs.selectedCameraId"
             @update:model-value="$emit('set-camera-device', $event)"
           >
-            <option value="">{{ callMediaPrefs.cameras.length === 0 ? 'No camera detected' : 'Select camera' }}</option>
+            <option value="">{{ callMediaPrefs.cameras.length === 0 ? t('calls.enter.no_camera_detected') : t('calls.enter.select_camera') }}</option>
             <option
               v-for="camera in callMediaPrefs.cameras"
               :key="camera.id"
@@ -67,16 +67,16 @@
         </div>
       </section>
 
-      <section class="call-left-settings-block" aria-label="Mic">
-        <div class="call-left-settings-title">Mic</div>
+      <section class="call-left-settings-block" :aria-label="t('calls.enter.mic')">
+        <div class="call-left-settings-title">{{ t('calls.enter.mic') }}</div>
         <div class="call-left-settings-field">
           <AppSelect
             id="call-left-mic-select"
-            aria-label="Mic"
+            :aria-label="t('calls.enter.mic')"
             :model-value="callMediaPrefs.selectedMicrophoneId"
             @update:model-value="$emit('set-microphone-device', $event)"
           >
-            <option value="">{{ callMediaPrefs.microphones.length === 0 ? 'No microphone detected' : 'Select mic' }}</option>
+            <option value="">{{ callMediaPrefs.microphones.length === 0 ? t('calls.enter.no_microphone_detected') : t('calls.enter.select_microphone') }}</option>
             <option
               v-for="microphone in callMediaPrefs.microphones"
               :key="microphone.id"
@@ -87,7 +87,7 @@
           </AppSelect>
         </div>
         <div class="call-left-settings-field">
-          <label for="call-left-mic-volume">Volume</label>
+          <label for="call-left-mic-volume">{{ t('calls.enter.volume') }}</label>
           <div class="call-left-volume-row">
             <input
               id="call-left-mic-volume"
@@ -104,7 +104,7 @@
           <div
             class="call-left-meter"
             role="meter"
-            aria-label="Microphone level"
+            :aria-label="t('calls.enter.microphone_level')"
             aria-valuemin="0"
             aria-valuemax="100"
             :aria-valuenow="micLevelPercent"
@@ -114,16 +114,16 @@
         </div>
       </section>
 
-      <section class="call-left-settings-block" aria-label="Speaker">
-        <div class="call-left-settings-title">Speaker</div>
+      <section class="call-left-settings-block" :aria-label="t('calls.enter.speaker')">
+        <div class="call-left-settings-title">{{ t('calls.enter.speaker') }}</div>
         <div class="call-left-settings-field">
           <AppSelect
             id="call-left-speaker-select"
-            aria-label="Speaker"
+            :aria-label="t('calls.enter.speaker')"
             :model-value="callMediaPrefs.selectedSpeakerId"
             @update:model-value="$emit('set-speaker-device', $event)"
           >
-            <option value="">{{ callMediaPrefs.speakers.length === 0 ? 'No speaker detected' : 'Select speaker' }}</option>
+            <option value="">{{ callMediaPrefs.speakers.length === 0 ? t('calls.enter.no_speaker_detected') : t('calls.enter.select_speaker') }}</option>
             <option
               v-for="speaker in callMediaPrefs.speakers"
               :key="speaker.id"
@@ -134,7 +134,7 @@
           </AppSelect>
         </div>
         <div class="call-left-settings-field">
-          <label for="call-left-speaker-volume">Volume</label>
+          <label for="call-left-speaker-volume">{{ t('calls.enter.volume') }}</label>
           <div class="call-left-volume-row">
             <input
               id="call-left-speaker-volume"
@@ -151,7 +151,7 @@
         </div>
         <div class="call-left-settings-field">
           <button class="btn full call-left-test-btn" type="button" @click="$emit('play-speaker-test')">
-            Play test sound
+            {{ t('calls.enter.play_test_sound') }}
           </button>
         </div>
       </section>
@@ -161,23 +161,23 @@
       <section
         v-if="showCallOwnerInviteLink"
         class="call-left-settings-block call-left-invite-link-block"
-        aria-label="Free-for-all invite link"
+        :aria-label="t('calls.workspace.free_for_all_invite_link')"
       >
-        <div class="call-left-settings-title">Invite link</div>
+        <div class="call-left-settings-title">{{ t('calls.workspace.invite_link') }}</div>
         <div class="call-left-invite-link-row">
           <input
             class="input call-left-invite-link-input"
             type="text"
             readonly
             :value="callOwnerInviteLinkState.url"
-            :placeholder="callOwnerInviteLinkState.loading ? 'Generating invite link...' : 'Invite link unavailable'"
+            :placeholder="callOwnerInviteLinkState.loading ? t('calls.workspace.generating_invite_link') : t('calls.workspace.invite_link_unavailable')"
             @focus="$event.target.select()"
           />
           <button
             class="icon-mini-btn call-left-invite-link-copy"
             type="button"
-            title="Copy invite link"
-            aria-label="Copy invite link"
+            :title="t('calls.workspace.copy_invite_link')"
+            :aria-label="t('calls.workspace.copy_invite_link')"
             :disabled="callOwnerInviteLinkState.loading || callOwnerInviteLinkState.url === ''"
             @click="$emit('copy-invite-link')"
           >
@@ -195,16 +195,16 @@
       <section
         v-if="showInCallOwnerEditCard"
         class="call-left-settings-block call-left-owner-edit-block"
-        aria-label="Call settings"
+        :aria-label="t('calls.workspace.call_settings')"
       >
-        <div class="call-left-settings-title">Call settings</div>
+        <div class="call-left-settings-title">{{ t('calls.workspace.call_settings') }}</div>
         <button
           class="btn btn-cyan full call-left-owner-edit-btn"
           type="button"
           :disabled="callOwnerEditState.loadingContext || callOwnerEditState.submitting"
           @click="$emit('open-edit-modal')"
         >
-          {{ callOwnerEditState.loadingContext ? 'Loading…' : 'Edit call' }}
+          {{ callOwnerEditState.loadingContext ? t('common.loading') : t('calls.workspace.edit_call') }}
         </button>
         <p v-if="callOwnerEditState.contextError" class="call-left-settings-error">
           {{ callOwnerEditState.contextError }}
@@ -212,10 +212,10 @@
 
         <template v-if="callLayoutSidebarState.visible && callLayoutSidebarState.canModerate">
           <div class="call-left-settings-field">
-            <label for="call-left-layout-mode">Video layout</label>
+            <label for="call-left-layout-mode">{{ t('calls.workspace.video_layout') }}</label>
             <AppSelect
               id="call-left-layout-mode"
-              aria-label="Video layout mode"
+              :aria-label="t('calls.workspace.video_layout_mode')"
               :model-value="callLayoutSidebarState.currentMode"
               @update:model-value="$emit('apply-layout-mode', $event)"
             >
@@ -229,10 +229,10 @@
             </AppSelect>
           </div>
           <div class="call-left-settings-field">
-            <label for="call-left-layout-strategy">Activity strategy</label>
+            <label for="call-left-layout-strategy">{{ t('calls.workspace.activity_strategy') }}</label>
             <AppSelect
               id="call-left-layout-strategy"
-              aria-label="Activity strategy"
+              :aria-label="t('calls.workspace.activity_strategy')"
               :model-value="callLayoutSidebarState.currentStrategy"
               @update:model-value="$emit('apply-layout-strategy', $event)"
             >
@@ -258,6 +258,7 @@ import { computed } from 'vue';
 import AppSelect from '../components/AppSelect.vue';
 import CallAppsSidebarPanel from '../domain/realtime/callApps/CallAppsSidebarPanel.vue';
 import CallBackgroundControls from '../domain/realtime/background/CallBackgroundControls.vue';
+import { t } from '../modules/localization/i18nRuntime.js';
 import { useCallLeftSidebarTabs } from './useCallLeftSidebarTabs.js';
 
 const props = defineProps({

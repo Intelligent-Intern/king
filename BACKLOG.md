@@ -55,17 +55,16 @@ Rules:
 
 ### Clean Refactoring With Composables And Components
 
-1. [ ] Shell/sidebar: extract the remaining viewport/layout state composable; brand strip, primary navigation, user dock, and responsive scroll proof are now componentized and contract-pinned.
-2. [ ] CRUD scaffold: extract list controller, action bar, search toolbar, table frame, and migrate one reusable non-call CRUD surface.
-3. [ ] Right-sidebar/forms: extract sidebar form shell, form composable, sticky submit contract, remove duplicated close/cancel variants, and prove on multiple admin surfaces.
-4. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
-5. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
-6. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
-7. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-8. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
-9. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
-10. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
-11. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
+1. [ ] CRUD scaffold: extract list controller, action bar, search toolbar, table frame, and migrate one reusable non-call CRUD surface.
+2. [ ] Right-sidebar/forms: extract sidebar form shell, form composable, sticky submit contract, remove duplicated close/cancel variants, and prove on multiple admin surfaces.
+3. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
+4. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
+5. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
+6. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
+7. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
+8. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
+9. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
+10. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
 
 ### #Q-19 Video-Chat Admin Operations And Production Deploy Readiness
 
