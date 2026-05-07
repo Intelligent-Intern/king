@@ -17,6 +17,16 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Settings credentials extraction: split
+  `WorkspaceCredentialsSettings.vue` into a thin wrapper, extracted
+  `WorkspaceEmailAddressSettings.vue`, `WorkspacePasswordSettingsForm.vue`,
+  and `useWorkspaceCredentialsSettings.js`. Confirmed/unconfirmed email
+  loading, add/delete email flow, password mismatch handling, password change
+  submission, and status messaging now live in a focused composable while the
+  visual sections are independently contract-pinned. Proof:
+  `node tests/contract/settings-profile-contract.mjs` and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Governance relation picker extraction: moved the recursive
   relation table into `CrudRelationPickerTable.vue`, moved permission/module
   grouping into `relationPickerRows.js`, and extracted shared Governance
