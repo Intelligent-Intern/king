@@ -91,9 +91,13 @@
       </template>
 
       <template #footer>
-        <button class="btn btn-cyan" type="button" :disabled="formSaving" @click="submitForm">
-          {{ dialogSubmitLabel }}
-        </button>
+        <AdminSidePanelSubmitFooter
+          type="button"
+          :saving="formSaving"
+          :label="dialogSubmitLabel"
+          :saving-label="t('common.saving')"
+          @submit="submitForm"
+        />
       </template>
     </AppSidePanelShell>
   </AdminPageFrame>
@@ -107,8 +111,10 @@ import AppSelect from '../../../components/AppSelect.vue';
 import AppSidePanelShell from '../../../components/AppSidePanelShell.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
 import AdminSearchToolbar from '../../../components/admin/AdminSearchToolbar.vue';
+import AdminSidePanelSubmitFooter from '../../../components/admin/AdminSidePanelSubmitFooter.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
 import { useAdminListController } from '../../../components/admin/useAdminListController.js';
+import { useAdminSidePanelForm } from '../../../components/admin/useAdminSidePanelForm.js';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
 import { t } from '../../localization/i18nRuntime.js';
 
@@ -126,9 +132,10 @@ const apiRequest = createAdminMarketplaceApi({ router });
 const categoryFilter = ref('all');
 const notice = ref('');
 const mutatingAppId = ref(0);
-const dialogOpen = ref(false);
-const formSaving = ref(false);
-const formError = ref('');
+const sidePanelForm = useAdminSidePanelForm();
+const dialogOpen = sidePanelForm.open;
+const formSaving = sidePanelForm.saving;
+const formError = sidePanelForm.error;
 const form = reactive({
   mode: 'create',
   id: 0,
@@ -185,20 +192,15 @@ function openEditApp(app) {
   form.website = String(app?.website || '').trim();
   form.category = String(app?.category || 'whiteboard').trim() || 'whiteboard';
   form.description = String(app?.description || '').trim();
-  formError.value = '';
-  dialogOpen.value = true;
+  sidePanelForm.openPanel();
 }
 
 function closeDialog() {
-  if (formSaving.value) return;
-  dialogOpen.value = false;
+  sidePanelForm.closePanel();
 }
 
 async function submitForm() {
-  formSaving.value = true;
-  formError.value = '';
-
-  try {
+  await sidePanelForm.runSubmit(async () => {
     const body = {
       name: form.name,
       manufacturer: form.manufacturer,
@@ -223,11 +225,7 @@ async function submitForm() {
 
     dialogOpen.value = false;
     await loadRows();
-  } catch (err) {
-    formError.value = err instanceof Error ? err.message : t('marketplace.save_failed');
-  } finally {
-    formSaving.value = false;
-  }
+  }, t('marketplace.save_failed'));
 }
 
 async function deleteApp(app) {

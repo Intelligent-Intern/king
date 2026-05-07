@@ -215,15 +215,14 @@
     </template>
 
     <template #footer v-if="!relationStackOpen">
-      <button
-        class="btn btn-cyan"
+      <AdminSidePanelSubmitFooter
         :type="avatarEditorOpen ? 'button' : 'submit'"
-        :form="avatarEditorOpen ? undefined : 'userEditorForm'"
-        :disabled="formSaving"
-        @click="avatarEditorOpen && $emit('save-avatar-changes')"
-      >
-        {{ formSaving ? t('common.saving') : (avatarEditorOpen ? t('users.save_avatar') : dialogSubmitLabel) }}
-      </button>
+        :form="avatarEditorOpen ? '' : 'userEditorForm'"
+        :saving="formSaving"
+        :label="avatarEditorOpen ? t('users.save_avatar') : dialogSubmitLabel"
+        :saving-label="t('common.saving')"
+        @submit="avatarEditorOpen && $emit('save-avatar-changes')"
+      />
     </template>
   </AppSidePanelShell>
 </template>
@@ -233,6 +232,7 @@ import { computed, reactive, ref } from 'vue';
 import AppIconButton from '../../../../components/AppIconButton.vue';
 import AppSidePanelShell from '../../../../components/AppSidePanelShell.vue';
 import AppSelect from '../../../../components/AppSelect.vue';
+import AdminSidePanelSubmitFooter from '../../../../components/admin/AdminSidePanelSubmitFooter.vue';
 import { sessionState } from '../../../../domain/auth/session.js';
 import { moduleAccessContextFromSession } from '../../../../http/routeAccess.js';
 import CrudRelationStack from '../../../governance/components/CrudRelationStack.vue';
