@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../../support/error_envelope.php';
 require_once __DIR__ . '/../../support/tenant_context.php';
+require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
 
 function videochat_presence_state_init(): array
 {
@@ -264,6 +265,22 @@ function videochat_presence_send_frame(mixed $socket, array $payload, ?callable 
     }
 }
 
+/**
+ * @return array<string, array<string, mixed>>
+ */
+function videochat_presence_room_gossip_topology_by_peer(array $state, string $roomId, array $connection, string $reason): array
+{
+    $callId = videochat_gossipmesh_safe_id((string) (($connection['active_call_id'] ?? '') ?: ($connection['requested_call_id'] ?? '')));
+    $normalizedRoomId = videochat_presence_normalize_room_id($roomId, '');
+    if ($callId === '' || $normalizedRoomId === '') {
+        return [];
+    }
+
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
+    $participants = videochat_presence_room_participants($state, $normalizedRoomId, $tenantId);
+    return videochat_gossipmesh_room_state_payloads_by_peer($callId, $normalizedRoomId, $participants, $reason);
+}
+
 function videochat_presence_send_room_snapshot(
     array $state,
     array $connection,
@@ -389,6 +406,12 @@ function videochat_presence_join_room(
             'room_id' => $previousRoomId,
             'participant' => videochat_presence_public_connection($leavingConnection),
             'participant_count' => count(videochat_presence_room_participants($state, $previousRoomId, $tenantId)),
+            'gossip_topology_by_peer_id' => videochat_presence_room_gossip_topology_by_peer(
+                $state,
+                $previousRoomId,
+                $leavingConnection,
+                'participant_left'
+            ),
             'time' => gmdate('c'),
         ];
         videochat_presence_broadcast_room_event($state, $previousRoomId, $leavePayload, $connectionId, $sender, $tenantId);
@@ -404,6 +427,12 @@ function videochat_presence_join_room(
         'room_id' => $nextRoomId,
         'participant' => videochat_presence_public_connection($effectiveConnection),
         'participant_count' => count(videochat_presence_room_participants($state, $nextRoomId, $tenantId)),
+        'gossip_topology_by_peer_id' => videochat_presence_room_gossip_topology_by_peer(
+            $state,
+            $nextRoomId,
+            $effectiveConnection,
+            $previousRoomId === $nextRoomId ? 'participant_resync' : 'participant_joined'
+        ),
         'time' => gmdate('c'),
     ];
     videochat_presence_broadcast_room_event($state, $nextRoomId, $joinPayload, $connectionId, $sender, $tenantId);
@@ -457,6 +486,12 @@ function videochat_presence_remove_connection(
             'room_id' => $roomId,
             'participant' => videochat_presence_public_connection($existingConnection),
             'participant_count' => count(videochat_presence_room_participants($state, $roomId, $tenantId)),
+            'gossip_topology_by_peer_id' => videochat_presence_room_gossip_topology_by_peer(
+                $state,
+                $roomId,
+                $existingConnection,
+                'participant_left'
+            ),
             'time' => gmdate('c'),
         ];
         videochat_presence_broadcast_room_event($state, $roomId, $leavePayload, $trimmedConnectionId, $sender, $tenantId);

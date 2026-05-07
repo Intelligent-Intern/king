@@ -2,6 +2,7 @@ import {
   shouldRequestSfuCompatibilityCodecFallback,
   shouldRequestSfuFullKeyframeForReason,
 } from '../../sfu/recoveryReasons';
+import { applyGossipTopologyFromRoomStatePayload } from './roomStateTopology';
 
 const WEBSOCKET_NEGOTIATION_TIMEOUT_MS = 5 * 60 * 1000;
 const STALE_TARGET_PRUNING_SIGNAL_TYPES = Object.freeze([
@@ -365,16 +366,22 @@ export function createCallWorkspaceSocketHelpers({
 
     if (type === 'room/snapshot') {
       applyRoomSnapshot(payload);
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
       return;
     }
 
     if (type === 'room/left') {
       const leftUserId = Number(payload?.participant?.user?.id || 0);
       if (Number.isInteger(leftUserId) && leftUserId > 0) removeParticipantLocallyAfterHangup(leftUserId);
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
       requestRoomSnapshot();
       return;
     }
-    if (type === 'room/joined') { requestRoomSnapshot(); return; }
+    if (type === 'room/joined') {
+      applyGossipTopologyFromRoomStatePayload(payload, refs.sessionState?.userId, applyGossipTopologyHint);
+      requestRoomSnapshot();
+      return;
+    }
 
     if (type === 'lobby/snapshot') {
       applyLobbySnapshot(payload);

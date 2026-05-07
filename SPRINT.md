@@ -76,11 +76,23 @@ Tickets:
       required SFU unavailable/send-failed cases through the existing failure
       handlers.
     - Added `gossip-publisher-pipeline-decoupling-contract.mjs`.
-- [ ] GSP-03 Join/snapshot/churn topology hints
+- [x] GSP-03 Join/snapshot/churn topology hints
   - Promote topology hints to normal join and room-state payloads.
   - Include admitted peers, capabilities, room/call identity, transport
     candidates, and assigned bounded neighbors.
   - Add frontend/backend contracts that topology is not diagnostic-only.
+  - Proof:
+    - Added `videochat_gossipmesh_room_state_payload()` as the server room-state
+      topology contract with admitted peers, per-peer capabilities, room/call
+      identity, transport candidates, and assigned bounded neighbors.
+    - `room/snapshot` now carries viewer-scoped `gossip_topology` and includes
+      it in snapshot signatures so topology churn is not invisible.
+    - `room/joined` and `room/left` now carry `gossip_topology_by_peer_id`
+      reassignment maps for participant churn.
+    - The frontend consumes snapshot and churn topology payloads through the
+      existing Gossip topology application path before snapshot backfill.
+    - Added `gossip-room-state-topology-contract.mjs` and
+      `realtime-gossipmesh-room-state-topology-contract.php`.
 - [ ] GSP-04 Dedicated bounded neighbor lifecycle
   - Add client lifecycle for assigned neighbor links:
     `assigned -> create/renegotiate DataChannel -> media gossip -> retired`.
