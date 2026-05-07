@@ -55,7 +55,7 @@ Rules:
 
 ### Clean Refactoring With Composables And Components
 
-1. [ ] Shell/sidebar: extract layout composable, brand strip, primary navigation, user dock, and responsive scroll proof.
+1. [ ] Shell/sidebar: extract the remaining viewport/layout state composable; brand strip, primary navigation, user dock, and responsive scroll proof are now componentized and contract-pinned.
 2. [ ] CRUD scaffold: extract list controller, action bar, search toolbar, table frame, and migrate one reusable non-call CRUD surface.
 3. [ ] Right-sidebar/forms: extract sidebar form shell, form composable, sticky submit contract, remove duplicated close/cancel variants, and prove on multiple admin surfaces.
 4. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
