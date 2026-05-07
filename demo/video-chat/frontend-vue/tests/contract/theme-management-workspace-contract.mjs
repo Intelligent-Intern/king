@@ -10,6 +10,7 @@ async function source(relativePath) {
 
 const themeEditor = await source('src/modules/theme_editor/pages/ThemeEditorView.vue');
 const themeSettings = await source('src/layouts/settings/WorkspaceThemeSettings.vue');
+const themeEditorSidebar = await source('src/layouts/settings/WorkspaceThemeEditorSidebar.vue');
 const themeSettingsLogic = await source('src/layouts/settings/useWorkspaceThemeSettings.js');
 const themePreview = await source('src/layouts/settings/WorkspaceThemePreview.vue');
 const themePreviewApp = await source('src/layouts/settings/WorkspaceThemePreviewApp.vue');
@@ -26,10 +27,13 @@ assert.match(themeSettings, /settings-theme-card-actions[\s\S]*theme_settings\.e
 assert.doesNotMatch(themeSettings, /settings-theme-list|settings-theme-row/, 'theme management must not regress to a row list');
 assert.doesNotMatch(themeSettings, /settings-wizard|settings-theme-wizard|editor\.step/, 'theme editor must not use the removed wizard flow');
 
-assert.match(themeSettings, /settings-theme-editor-sidebar/, 'theme editor must provide a second left-side editor sidebar');
-assert.match(themeSettings, /setEditorPanel\('chat'\)/, 'theme editor must provide a chat tab');
-assert.match(themeSettings, /setEditorPanel\('colors'\)/, 'theme editor must provide a colors tab');
-assert.match(themeSettings, /setEditorPanel\('images'\)/, 'theme editor must provide an images tab');
+assert.match(themeSettings, /<WorkspaceThemeEditorSidebar[\s\S]*v-model:theme-prompt="themePrompt"/, 'theme editor must delegate sidebar panels to a focused component');
+assert.match(themeEditorSidebar, /settings-theme-editor-sidebar/, 'theme editor must provide a second left-side editor sidebar');
+assert.match(themeEditorSidebar, /\$emit\('set-editor-panel', 'chat'\)/, 'theme editor must provide a chat tab');
+assert.match(themeEditorSidebar, /\$emit\('set-editor-panel', 'colors'\)/, 'theme editor must provide a colors tab');
+assert.match(themeEditorSidebar, /\$emit\('set-editor-panel', 'images'\)/, 'theme editor must provide an images tab');
+assert.match(themeEditorSidebar, /settings-theme-color-list[\s\S]*themeColorFields/, 'theme editor sidebar must own the palette editor');
+assert.match(themeEditorSidebar, /settings-logo-grid[\s\S]*select-logo[\s\S]*sidebar[\s\S]*modal/s, 'theme editor sidebar must own the asset editor');
 assert.match(themeSettings, /settings-theme-editor-preview-pane[\s\S]*settings-theme-live-preview/, 'theme editor must keep the live preview beside the editor sidebar');
 assert.match(themeSettings, /settings-theme-live-preview[\s\S]*interactive/, 'theme editor live preview must use the iframe sandbox mode');
 

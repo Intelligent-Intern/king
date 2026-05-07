@@ -17,6 +17,17 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Theme editor sidebar extraction: closed the completed extraction
+  portion of the parked Theme Editor refactor without changing the iframe
+  preview contract. `WorkspaceThemeSettings.vue` now delegates chat/color/image
+  editing to `WorkspaceThemeEditorSidebar.vue`; the focused sidebar owns the
+  three editor tabs, the 12-token palette form, logo asset controls, and the
+  non-generic close/save actions while the parent keeps the live iframe preview
+  and compact preview-card flow. Proof: `node tests/contract/theme-management-workspace-contract.mjs`,
+  `node tests/contract/theme-palette-contract.mjs`,
+  `node tests/contract/shared-admin-components-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 In-call sidebar extraction: closed the parked refactor item for
   the video-call left sidebar without touching Pierre-owned MediaPipe/background
   pipeline internals. `WorkspaceShell.vue` now delegates the call sidebar to

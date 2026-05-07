@@ -41,7 +41,7 @@ Rules:
 4. [ ] Normalize inputs/selects to the 12 King styleguide color tokens and remove hard-coded non-token colors.
 5. [ ] Replace wrong generic create actions on readonly/system catalog pages with correct entity-specific actions or no action.
 6. [ ] Keep page headings as the standard `h1` size and avoid unreachable/overlapping content.
-7. [ ] Theme management still needs real mini-app/iframe preview cards, theme editor in main content, and screenshot previews after save.
+7. [ ] Theme management still needs persisted screenshot previews after save; iframe mini-app preview cards and the main-content editor are now contract-pinned.
 8. [ ] Localization admin still needs two-language side-by-side editing and removal of CSV/source/bundle/import-history UI from the active path.
 9. [ ] App Configuration still needs dropzone-based background image upload/crop/filter flow and metadata-free UI without search.
 
@@ -62,7 +62,7 @@ Rules:
 5. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
 6. [ ] Administration/App Configuration: extract email settings, email texts CRUD, background image dropzone, crop queue, and object-store diagnostics proof.
 7. [ ] Call Join/Lobby: extract preview layout, media setup composable, audio test panel, background options, and mobile overlap proof without touching Pierre-owned MediaPipe internals.
-8. [ ] Theme Editor: extract preview frame, preview navigation, palette editor for exactly 12 tokens, asset editor, and screenshot-card proof.
+8. [ ] Theme Editor: add persisted screenshot-card proof after save and keep future preview work under file-size guards; sidebar, palette, asset, preview-frame, and preview-navigation extraction is done.
 9. [ ] Localization/Admin text: extract two-locale matrix, locale pair selector, entry matrix, remove CSV UI from active path, and prove save through intended API.
 10. [ ] Calendar/Booking: extract mobile day strip, slot list, details step, booking flow composable, and confirmation proof.
 11. [ ] Refactor proof/cleanup: add file-size guard, options-object composable checks, Pierre-protected diff guard, Playwright smoke coverage, and per-checkbox proof notes.
