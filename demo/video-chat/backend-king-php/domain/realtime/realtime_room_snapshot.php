@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../call_apps/call_app_sessions.php';
 require_once __DIR__ . '/realtime_activity_layout.php';
+require_once __DIR__ . '/realtime_gossipmesh_room_state.php';
 require_once __DIR__ . '/realtime_presence.php';
 
 function videochat_realtime_db_room_participants(callable $openDatabase, array $connection): array
@@ -211,6 +212,16 @@ function videochat_realtime_room_snapshot_payload(
             $callApps = ['active_sessions' => [], 'active_session_count' => 0, 'has_active_session' => false];
         }
     }
+    $gossipTopology = [];
+    if ($callId !== '' && $roomId !== '') {
+        $gossipTopology = videochat_gossipmesh_room_state_payload(
+            $callId,
+            $roomId,
+            $participants,
+            (string) ((int) ($connection['user_id'] ?? 0)),
+            trim($reason) === '' ? 'snapshot' : trim($reason)
+        );
+    }
 
     return [
         'type' => 'room/snapshot',
@@ -231,6 +242,7 @@ function videochat_realtime_room_snapshot_payload(
             'can_manage_owner' => (bool) ($connection['can_manage_call_owner'] ?? false),
         ],
         'call_apps' => $callApps,
+        'gossip_topology' => $gossipTopology,
         'reason' => trim($reason) === '' ? 'snapshot' : trim($reason),
         'time' => gmdate('c'),
     ];
@@ -244,6 +256,7 @@ function videochat_realtime_room_snapshot_signature(array $payload): string
         'layout' => $payload['layout'] ?? [],
         'activity' => $payload['activity'] ?? [],
         'call_apps' => $payload['call_apps'] ?? [],
+        'gossip_topology' => $payload['gossip_topology'] ?? [],
         'viewer' => $payload['viewer'] ?? [],
     ], JSON_UNESCAPED_SLASHES) ?: '');
 }
