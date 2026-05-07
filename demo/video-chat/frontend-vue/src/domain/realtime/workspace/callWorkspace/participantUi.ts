@@ -825,6 +825,7 @@ function shouldSuppressCallAckNotice(signalType) {
   const normalizedType = normalizeSignalCommandType(signalType);
   if (MEDIA_SECURITY_SIGNAL_TYPES.includes(normalizedType)) return true;
   const normalized = normalizedType.replace('call/', '');
+  if (MEDIA_SECURITY_SIGNAL_TYPES.includes(`call/${normalized}`)) return true;
   return normalized === 'offer'
     || normalized === 'answer'
     || normalized === 'ice'
