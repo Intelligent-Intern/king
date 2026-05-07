@@ -1,5 +1,11 @@
 import { onBeforeUnmount } from 'vue';
 import { CALL_APP_IFRAME_BRIDGE_PROTOCOL, CALL_APP_IFRAME_OPAQUE_ORIGIN } from './useCallAppIframeBridge.js';
+import {
+  callAppDiagnosticElapsedMs,
+  callAppDiagnosticNow,
+  emitCallAppDiagnostic,
+  emitCallAppResponseDiagnostics,
+} from './callAppDiagnostics.js';
 
 function postToIframe(frameWindow, session, type, payload = {}) {
   if (!frameWindow || !session) return;
@@ -24,49 +30,106 @@ function safeClock(value) {
 
 export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest } = {}) {
   async function handleBootstrap(frameWindow, session, message) {
+    const startedAt = callAppDiagnosticNow();
     const params = new URLSearchParams();
     const afterClock = safeClock(message?.after_clock);
     if (afterClock > 0) params.set('after_clock', String(afterClock));
     const suffix = params.toString() ? `?${params.toString()}` : '';
     const payload = await apiRequest(`/api/call-app-sessions/${encodeURIComponent(session.id)}/crdt/bootstrap${suffix}`);
+    const result = payload?.result || {};
+    emitCallAppResponseDiagnostics(payload, { session_id: session.id, app_key: session.app_key });
+    emitCallAppDiagnostic('call_app_crdt_replay_latency', {
+      session_id: session.id,
+      app_key: session.app_key,
+      request_type: 'bootstrap',
+      operation_count: Array.isArray(result.ops) ? result.ops.length : 0,
+      after_clock: afterClock,
+      replay_cursor: result.replay_cursor || {},
+      latency_ms: callAppDiagnosticElapsedMs(startedAt),
+    });
     postToIframe(frameWindow, session, 'call_app.crdt.bootstrap.response', {
       request_id: requestId(message),
-      result: payload?.result || {},
+      result,
     });
   }
 
   async function handleOpsRequest(frameWindow, session, message) {
+    const startedAt = callAppDiagnosticNow();
     const params = new URLSearchParams();
-    params.set('after_clock', String(safeClock(message?.after_clock)));
+    const afterClock = safeClock(message?.after_clock);
+    params.set('after_clock', String(afterClock));
     if (Number.isFinite(Number(message?.limit))) params.set('limit', String(Math.floor(Number(message.limit))));
     const payload = await apiRequest(`/api/call-app-sessions/${encodeURIComponent(session.id)}/crdt/ops?${params.toString()}`);
+    const result = payload?.result || {};
+    emitCallAppResponseDiagnostics(payload, { session_id: session.id, app_key: session.app_key });
+    emitCallAppDiagnostic('call_app_crdt_replay_latency', {
+      session_id: session.id,
+      app_key: session.app_key,
+      request_type: 'ops',
+      operation_count: Array.isArray(result.ops) ? result.ops.length : 0,
+      after_clock: afterClock,
+      replay_cursor: result.replay_cursor || {},
+      latency_ms: callAppDiagnosticElapsedMs(startedAt),
+    });
     postToIframe(frameWindow, session, 'call_app.crdt.ops.response', {
       request_id: requestId(message),
-      result: payload?.result || {},
+      result,
     });
   }
 
   async function handleAppend(frameWindow, session, message) {
+    const startedAt = callAppDiagnosticNow();
+    const operation = message?.operation || {};
     const payload = await apiRequest(`/api/call-app-sessions/${encodeURIComponent(session.id)}/crdt/ops`, {
       method: 'POST',
       body: {
-        operation: message?.operation || {},
+        operation,
       },
     });
+    const result = payload?.result || {};
+    const state = String(result.state || '').trim().toLowerCase();
+    emitCallAppResponseDiagnostics(payload, { session_id: session.id, app_key: session.app_key });
+    emitCallAppDiagnostic('call_app_crdt_append_latency', {
+      session_id: session.id,
+      app_key: session.app_key,
+      state,
+      payload_type: String(operation.payload_type || result.operation?.payload_type || '').trim(),
+      logical_clock: Number(result.operation?.logical_clock || 0) || 0,
+      latency_ms: callAppDiagnosticElapsedMs(startedAt),
+    });
+    if (state === 'duplicate') {
+      emitCallAppDiagnostic('call_app_crdt_duplicate_suppressed', {
+        session_id: session.id,
+        app_key: session.app_key,
+        operation_id: String(operation.operation_id || result.operation?.operation_id || '').trim(),
+        payload_type: String(operation.payload_type || result.operation?.payload_type || '').trim(),
+      });
+    }
     postToIframe(frameWindow, session, 'call_app.crdt.op.appended', {
       request_id: requestId(message),
-      result: payload?.result || {},
+      result,
     });
   }
 
   async function handleSnapshot(frameWindow, session, message) {
+    const startedAt = callAppDiagnosticNow();
     const payload = await apiRequest(`/api/call-app-sessions/${encodeURIComponent(session.id)}/crdt/snapshots`, {
       method: 'POST',
       body: {},
     });
+    const result = payload?.result || {};
+    emitCallAppResponseDiagnostics(payload, { session_id: session.id, app_key: session.app_key });
+    emitCallAppDiagnostic('call_app_crdt_snapshot_compacted', {
+      session_id: session.id,
+      app_key: session.app_key,
+      snapshot_clock: Number(result.snapshot_clock || 0) || 0,
+      compacted_through_clock: Number(result.snapshot?.compacted_through_clock || 0) || 0,
+      operation_count: Number(result.snapshot?.operation_count || 0) || 0,
+      latency_ms: callAppDiagnosticElapsedMs(startedAt),
+    });
     postToIframe(frameWindow, session, 'call_app.crdt.snapshot.response', {
       request_id: requestId(message),
-      result: payload?.result || {},
+      result,
     });
   }
 
@@ -85,6 +148,14 @@ export function createCallAppCrdtBridge({ activeSession, iframeRef, apiRequest }
   function postError(frameWindow, session, message, error) {
     const reason = String(error?.responseReason || error?.responseDetails?.reason || '').trim().toLowerCase();
     const grantState = reason === 'participant_grant_denied' ? 'denied' : '';
+    emitCallAppDiagnostic('call_app_iframe_bridge_error', {
+      session_id: session?.id,
+      app_key: session?.app_key,
+      iframe_message_type: String(message?.type || '').trim(),
+      reason: reason || 'request_failed',
+      response_status: Number(error?.responseStatus || 0) || 0,
+      response_code: String(error?.responseCode || '').trim().toLowerCase(),
+    });
     postToIframe(frameWindow, session, 'call_app.crdt.error', {
       request_id: requestId(message),
       message: error instanceof Error ? error.message : 'Call App CRDT request failed.',

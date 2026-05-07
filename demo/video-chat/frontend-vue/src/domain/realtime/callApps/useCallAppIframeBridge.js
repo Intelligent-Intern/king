@@ -1,4 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { emitCallAppDiagnostic } from './callAppDiagnostics.js';
 
 export const CALL_APP_IFRAME_BRIDGE_PROTOCOL = 'king.call_app.iframe.v1';
 export const CALL_APP_IFRAME_OPAQUE_ORIGIN = 'null';
@@ -90,6 +91,11 @@ export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest
     if (typeof apiRequest !== 'function') {
       status.value = 'error';
       error.value = 'Call App launch API is not available.';
+      emitCallAppDiagnostic('call_app_launch_token_failed', {
+        session_id: currentSessionId,
+        app_key: appKey.value,
+        reason: 'api_request_unavailable',
+      });
       return;
     }
 
@@ -111,6 +117,13 @@ export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest
       if (currentGeneration !== generation) return;
       status.value = 'error';
       error.value = launchError instanceof Error ? launchError.message : 'Call App launch failed.';
+      emitCallAppDiagnostic('call_app_launch_token_failed', {
+        session_id: currentSessionId,
+        app_key: appKey.value,
+        reason: String(launchError?.responseReason || launchError?.responseDetails?.reason || 'request_failed').trim().toLowerCase(),
+        response_status: Number(launchError?.responseStatus || 0) || 0,
+        response_code: String(launchError?.responseCode || '').trim().toLowerCase(),
+      });
     }
   }
 
@@ -134,6 +147,13 @@ export function createCallAppIframeBridge({ activeSession, iframeRef, apiRequest
     } else if (message.type === 'call_app.error') {
       status.value = 'error';
       error.value = String(message.message || 'Call App reported an error.').trim();
+      emitCallAppDiagnostic('call_app_iframe_bridge_error', {
+        session_id: sessionId.value,
+        app_key: appKey.value,
+        iframe_message_type: String(message.type || '').trim(),
+        reason: 'iframe_reported_error',
+        message: error.value,
+      });
     }
   }
 
