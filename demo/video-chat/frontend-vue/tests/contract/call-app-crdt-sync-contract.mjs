@@ -117,7 +117,7 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /CRDT bootstrap should return 200[\s\S]*denied participant must not append CRDT ops[\s\S]*duplicate CRDT op must be suppressed[\s\S]*CRDT snapshot must compact through admitted clock/s,
+  /CRDT bootstrap should return 200[\s\S]*denied participant must not append CRDT ops[\s\S]*duplicate CRDT op must be suppressed[\s\S]*CRDT snapshot must compact through collaborative admitted clock/s,
   'backend lifecycle contract must cover bootstrap, denied append, duplicate suppression, replay, and snapshot compaction',
 );
 

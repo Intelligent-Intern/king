@@ -181,6 +181,15 @@ SQL
     videochat_call_app_create_organization_order($pdo, $tenantId, $adminUserId, 'whiteboard');
     videochat_call_app_create_organization_installation($pdo, $tenantId, $adminUserId, 'whiteboard');
 
+    $availableAfterInstall = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-apps/available?query=whiteboard&page=1&page_size=8', $adminAuth);
+    $availableAfterInstallPayload = videochat_call_app_session_lifecycle_decode($availableAfterInstall);
+    $availableApps = is_array(($availableAfterInstallPayload['result'] ?? [])['apps'] ?? null) ? ($availableAfterInstallPayload['result'] ?? [])['apps'] : [];
+    videochat_call_app_session_lifecycle_assert((int) ($availableAfterInstall['status'] ?? 0) === 200, 'installed whiteboard availability should return 200');
+    videochat_call_app_session_lifecycle_assert(count($availableApps) === 1 && (string) ($availableApps[0]['app_key'] ?? '') === 'whiteboard', 'installed whiteboard must appear in available Call Apps');
+    videochat_call_app_session_lifecycle_assert((($availableApps[0]['availability'] ?? [])['installed'] ?? false) === true, 'available Call App must be organization-installed');
+    videochat_call_app_session_lifecycle_assert((string) (($availableApps[0]['installation'] ?? [])['status'] ?? '') === 'enabled', 'available Call App installation must be enabled');
+    videochat_call_app_session_lifecycle_assert((string) ((($availableAfterInstallPayload['result'] ?? [])['discovery'] ?? [])['source'] ?? '') === 'semantic_dns_mcp', 'available Call Apps must come from Semantic-DNS/MCP discovery');
+
     $emptyList = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth);
     $emptyListPayload = videochat_call_app_session_lifecycle_decode($emptyList);
     videochat_call_app_session_lifecycle_assert(((array) (($emptyListPayload['result'] ?? [])['sessions'] ?? [])) === [], 'sessions must be empty before attach');
@@ -356,11 +365,41 @@ SQL
     $appendPayload = videochat_call_app_session_lifecycle_decode($append);
     videochat_call_app_session_lifecycle_assert((int) ($append['status'] ?? 0) === 201, 'allowed participant append should admit CRDT op');
     videochat_call_app_session_lifecycle_assert((string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['server_admission_stamp'] ?? [])['duplicate_policy'] ?? '') === 'ignore_after_first_admission', 'CRDT op must carry server admission stamp');
+    $adminActorId = (string) (((($appendPayload['result'] ?? [])['operation'] ?? [])['actor_id'] ?? ''));
 
     $deniedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $userAuth);
     videochat_call_app_session_lifecycle_assert((int) ($deniedBootstrap['status'] ?? 0) === 403, 'denied participant must not bootstrap private CRDT state');
     $deniedOps = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $userAuth);
     videochat_call_app_session_lifecycle_assert((int) ($deniedOps['status'] ?? 0) === 403, 'denied participant must not replay private CRDT state');
+
+    $reallowPatch = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/participant-grants', $adminAuth, [
+        'grants' => [[
+            'subject_type' => 'user',
+            'user_id' => $regularUserId,
+            'grant_state' => 'allowed',
+        ]],
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($reallowPatch['status'] ?? 0) === 200, 'owner should re-allow participant app access');
+    $regularCollabLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $userAuth);
+    $regularCollabLaunchPayload = videochat_call_app_session_lifecycle_decode($regularCollabLaunch);
+    $regularCollabCapabilities = (array) (((($regularCollabLaunchPayload['result'] ?? [])['context'] ?? [])['capabilities'] ?? []));
+    videochat_call_app_session_lifecycle_assert((int) ($regularCollabLaunch['status'] ?? 0) === 201, 're-allowed participant launch token should return 201');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.read', $regularCollabCapabilities, true), 're-allowed participant launch must allow CRDT read');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.append', $regularCollabCapabilities, true), 're-allowed participant launch must allow CRDT append');
+    $regularAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $userAuth, [
+        'operation' => [
+            'operation_id' => 'op_user_sticky_1',
+            'payload_type' => 'sticky_note.add',
+            'payload' => ['id' => 'note-user-1', 'text' => 'Second editor note', 'x' => 140, 'y' => 160],
+            'causal_dependencies' => [[
+                'logical_clock' => (int) (((($appendPayload['result'] ?? [])['operation'] ?? [])['logical_clock'] ?? 0)),
+            ]],
+        ],
+    ]);
+    $regularAppendPayload = videochat_call_app_session_lifecycle_decode($regularAppend);
+    $regularActorId = (string) (((($regularAppendPayload['result'] ?? [])['operation'] ?? [])['actor_id'] ?? ''));
+    videochat_call_app_session_lifecycle_assert((int) ($regularAppend['status'] ?? 0) === 201, 'second participant append should admit CRDT op');
+    videochat_call_app_session_lifecycle_assert($regularActorId !== '' && $regularActorId !== $adminActorId, 'collaborative CRDT op must carry the second participant actor id');
 
     $duplicateAppend = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops', $adminAuth, [
         'operation' => [
@@ -375,15 +414,17 @@ SQL
 
     $ops = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/ops?after_clock=0&limit=10', $adminAuth);
     $opsPayload = videochat_call_app_session_lifecycle_decode($ops);
-    videochat_call_app_session_lifecycle_assert(count((array) (($opsPayload['result'] ?? [])['ops'] ?? [])) === 1, 'CRDT replay should return admitted op');
+    $replayedOps = (array) (($opsPayload['result'] ?? [])['ops'] ?? []);
+    videochat_call_app_session_lifecycle_assert(count($replayedOps) === 2, 'CRDT replay should return both collaborative admitted ops');
+    videochat_call_app_session_lifecycle_assert((string) ($replayedOps[0]['payload_type'] ?? '') === 'stroke.add' && (string) ($replayedOps[1]['payload_type'] ?? '') === 'sticky_note.add', 'CRDT replay should preserve collaborative operation order');
 
     $snapshot = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/snapshots', $adminAuth);
     $snapshotPayload = videochat_call_app_session_lifecycle_decode($snapshot);
-    videochat_call_app_session_lifecycle_assert((int) (((($snapshotPayload['result'] ?? [])['snapshot'] ?? [])['compacted_through_clock'] ?? 0)) === 1, 'CRDT snapshot must compact through admitted clock');
+    videochat_call_app_session_lifecycle_assert((int) (((($snapshotPayload['result'] ?? [])['snapshot'] ?? [])['compacted_through_clock'] ?? 0)) === 2, 'CRDT snapshot must compact through collaborative admitted clock');
 
     $compactedBootstrap = $dispatch('GET', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/crdt/bootstrap', $adminAuth);
     $compactedPayload = videochat_call_app_session_lifecycle_decode($compactedBootstrap);
-    videochat_call_app_session_lifecycle_assert((int) (((($compactedPayload['result'] ?? [])['document'] ?? [])['snapshot_clock'] ?? 0)) === 1, 'CRDT bootstrap should expose snapshot clock after compaction');
+    videochat_call_app_session_lifecycle_assert((int) (((($compactedPayload['result'] ?? [])['document'] ?? [])['snapshot_clock'] ?? 0)) === 2, 'CRDT bootstrap should expose collaborative snapshot clock after compaction');
 
     $inactive = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth, ['status' => 'inactive']);
     videochat_call_app_session_lifecycle_assert((int) ($inactive['status'] ?? 0) === 200, 'inactive update should return 200');
@@ -398,7 +439,7 @@ SQL
     $removed = $dispatch('DELETE', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth);
     $removedPayload = videochat_call_app_session_lifecycle_decode($removed);
     videochat_call_app_session_lifecycle_assert((int) ($removed['status'] ?? 0) === 200, 'remove should return 200');
-    videochat_call_app_session_lifecycle_assert((int) (($removedPayload['result'] ?? [])['retired_launch_tokens'] ?? 0) === 2, 'remove must retire launch tokens');
+    videochat_call_app_session_lifecycle_assert((int) (($removedPayload['result'] ?? [])['retired_launch_tokens'] ?? 0) === 3, 'remove must retire active launch tokens for the collaborative journey');
     $removedSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($removedSnapshot['active_session_count'] ?? 0) === 0, 'removed session must leave active room snapshot');
     $revokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = " . $pdo->quote($launchTokenId) . " LIMIT 1")->fetchColumn();
