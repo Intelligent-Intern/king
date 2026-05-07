@@ -216,9 +216,11 @@ function videochat_chat_deliver_payload(
 ): int {
     if ($broker !== null) {
         try {
-            return $broker($roomId, $event) === true ? 1 : 0;
+            if ($broker($roomId, $event) === true) {
+                return 1;
+            }
         } catch (Throwable) {
-            return 0;
+            // Fall through to direct room fanout. Chat must keep working when the broker is transiently unavailable.
         }
     }
 

@@ -358,6 +358,29 @@ try {
     videochat_realtime_chat_assert((string) ($brokerMessage['text'] ?? '') === 'Broker fanout message', 'broker chat message text mismatch');
     videochat_realtime_chat_assert((string) ($brokerMessage['client_message_id'] ?? '') === 'broker-chat-001', 'broker chat client_message_id mismatch');
 
+    $brokerFrames = [];
+    $brokerFallbackCommand = videochat_chat_decode_client_frame(json_encode([
+        'type' => 'chat/send',
+        'message' => 'Broker unavailable fallback message',
+        'client_message_id' => 'broker-chat-fallback-001',
+    ], JSON_UNESCAPED_SLASHES));
+    videochat_realtime_chat_assert((bool) ($brokerFallbackCommand['ok'] ?? false), 'broker fallback command should decode');
+    $brokerFallbackPublish = videochat_chat_publish(
+        $brokerState,
+        $brokerUserConnection,
+        $brokerFallbackCommand,
+        $brokerSender,
+        1_780_100_223_000,
+        static function (): bool {
+            return false;
+        }
+    );
+    videochat_realtime_chat_assert((bool) ($brokerFallbackPublish['ok'] ?? false), 'chat publish should fall back to direct fanout when broker returns false');
+    videochat_realtime_chat_assert((int) ($brokerFallbackPublish['sent_count'] ?? 0) === 2, 'broker fallback should direct fanout to room peers');
+    $brokerFallbackAdminChat = videochat_realtime_chat_last_frame($brokerFrames, 'socket-broker-admin');
+    videochat_realtime_chat_assert((string) ($brokerFallbackAdminChat['type'] ?? '') === 'chat/message', 'admin should receive direct fallback chat/message');
+    videochat_realtime_chat_assert((string) (($brokerFallbackAdminChat['message'] ?? [])['text'] ?? '') === 'Broker unavailable fallback message', 'broker fallback chat text mismatch');
+
     videochat_presence_remove_connection($state, (string) ($adminConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($state, (string) ($userConnection['connection_id'] ?? ''), $sender);
     videochat_presence_remove_connection($state, (string) ($otherConnection['connection_id'] ?? ''), $sender);
