@@ -280,3 +280,39 @@ Tickets:
       - All commands passed. Host-PHP PDO-SQLite contracts still skip in
         `test:contract:call-apps` when the local driver is unavailable; the
         pinned `php:8.5-cli-trixie` SQLite proof passes in Docker.
+
+- [x] WCA-09 Production deployment, subdomain, and Mothernode registration
+  - Add deploy configuration for a dedicated Call App iframe host and a
+    Mothernode host without exposing deploy secrets.
+  - Let the backend start Semantic DNS/Mothernode only in one eligible HTTP
+    worker and register installed Call App package metadata there.
+  - Make the Whiteboard iframe launch from the configured Call App origin while
+    preserving sandboxed no-primary-session-token launch.
+  - Wire compose/deploy env so DNS, certs, edge static serving, catalog refresh,
+    and MCP/Semantic-DNS registration use the same host contract.
+  - Add contracts proving deploy env parsing, Mothernode registration payload,
+    Call App service registration payload, and iframe-origin handling.
+  - Proof:
+    - Backend startup now loads the Call App Semantic-DNS domain and starts the
+      Semantic-DNS/Mothernode runtime only from an eligible HTTP worker.
+    - `VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN` defaults to `apps.<domain>` and
+      `VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN` defaults to `mother.<domain>`.
+    - Deploy DNS targets, Hetzner A-record provisioning, certbot SANs, remote
+      env, compose runtime env, frontend build args, and iframe URL generation
+      now share the same Call App host contract.
+    - Exact commands:
+      - `php -l demo/video-chat/backend-king-php/domain/call_apps/call_app_semantic_dns.php`
+      - `php -l demo/video-chat/backend-king-php/server.php`
+      - `bash -n demo/video-chat/scripts/deploy.sh`
+      - `bash -n demo/video-chat/scripts/lib/deploy-hetzner.sh`
+      - `bash -n demo/video-chat/scripts/lib/deploy-remote-status.sh`
+      - `demo/video-chat/backend-king-php/tests/call-app-semantic-dns-contract.sh`
+      - `node tests/contract/call-app-production-deploy-contract.mjs`
+      - `npm run test:contract:call-apps`
+      - `npm run build`
+      - `docker compose -f demo/video-chat/docker-compose.v1.yml config`
+      - `npm run test:contract:call-apps:sqlite`
+    - Result:
+      - All commands passed. Host-PHP PDO-SQLite contracts still skip inside
+        `test:contract:call-apps`; the pinned `php:8.5-cli-trixie` SQLite
+        proof passes in Docker.

@@ -56,6 +56,10 @@ Optional environment:
   VIDEOCHAT_DEPLOY_SFU_DOMAIN  SFU websocket host, default: sfu.<domain>.
   VIDEOCHAT_DEPLOY_TURN_DOMAIN TURN host, default: turn.<domain>.
   VIDEOCHAT_DEPLOY_CDN_DOMAIN  Static/CDN asset host, default: cdn.<domain>.
+  VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN
+                              Call App iframe host, default: apps.<domain>.
+  VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN
+                              Call App Mothernode host, default: mother.<domain>.
   VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS
                               Optional comma-separated hostnames to route to an
                               external HTTP upstream through the King edge.
@@ -182,6 +186,8 @@ refresh_deploy_config() {
   DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-}"
   DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-}"
   DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-}"
+  DEPLOY_CALL_APP_DOMAIN="${VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN:-}"
+  DEPLOY_MOTHERNODE_DOMAIN="${VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN:-}"
   DEPLOY_EXTERNAL_DOMAINS="${VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS:-}"
   DEPLOY_EXTERNAL_UPSTREAM="${VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM:-}"
 
@@ -191,11 +197,13 @@ refresh_deploy_config() {
     DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}"
     DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}"
     DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}"
+    DEPLOY_CALL_APP_DOMAIN="${DEPLOY_CALL_APP_DOMAIN:-apps.${DEPLOY_DOMAIN}}"
+    DEPLOY_MOTHERNODE_DOMAIN="${DEPLOY_MOTHERNODE_DOMAIN:-mother.${DEPLOY_DOMAIN}}"
   fi
 
   DEPLOY_VUE_ALLOWED_HOSTS="${VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS:-}"
   if [[ -z "${DEPLOY_VUE_ALLOWED_HOSTS}" && -n "${DEPLOY_DOMAIN}" ]]; then
-    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN}"
+    DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_DOMAIN},${DEPLOY_API_DOMAIN},${DEPLOY_WS_DOMAIN},${DEPLOY_SFU_DOMAIN},${DEPLOY_TURN_DOMAIN},${DEPLOY_CDN_DOMAIN},${DEPLOY_CALL_APP_DOMAIN},${DEPLOY_MOTHERNODE_DOMAIN}"
   fi
   if [[ -n "${DEPLOY_EXTERNAL_DOMAINS}" ]]; then
     DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS:+${DEPLOY_VUE_ALLOWED_HOSTS},}${DEPLOY_EXTERNAL_DOMAINS}"
@@ -206,6 +214,8 @@ refresh_deploy_config() {
   export VIDEOCHAT_DEPLOY_SFU_DOMAIN="${DEPLOY_SFU_DOMAIN}"
   export VIDEOCHAT_DEPLOY_TURN_DOMAIN="${DEPLOY_TURN_DOMAIN}"
   export VIDEOCHAT_DEPLOY_CDN_DOMAIN="${DEPLOY_CDN_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN="${DEPLOY_CALL_APP_DOMAIN}"
+  export VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN="${DEPLOY_MOTHERNODE_DOMAIN}"
   export VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS="${DEPLOY_EXTERNAL_DOMAINS}"
   export VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM="${DEPLOY_EXTERNAL_UPSTREAM}"
   export VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS="${DEPLOY_VUE_ALLOWED_HOSTS}"
@@ -238,7 +248,7 @@ deploy_dns_targets() {
   local external_domains=()
   [[ -n "${DEPLOY_DOMAIN}" ]] && legacy_cdn_domain="cnd.${DEPLOY_DOMAIN}"
   IFS=',' read -r -a external_domains <<< "${DEPLOY_EXTERNAL_DOMAINS}"
-  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${legacy_cdn_domain}" "${external_domains[@]}"; do
+  for target in "${DEPLOY_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_MOTHERNODE_DOMAIN}" "${legacy_cdn_domain}" "${external_domains[@]}"; do
     target="${target//[[:space:]]/}"
     [[ -n "${target}" ]] || continue
     case " ${seen} " in
@@ -295,6 +305,8 @@ sudo_prefix() {
 
 # shellcheck source=demo/video-chat/scripts/lib/deploy-hetzner.sh
 source "${SCRIPT_DIR}/lib/deploy-hetzner.sh"
+# shellcheck source=demo/video-chat/scripts/lib/deploy-remote-status.sh
+source "${SCRIPT_DIR}/lib/deploy-remote-status.sh"
 
 persist_current_deploy_config() {
   case "${VIDEOCHAT_DEPLOY_PERSIST_LOCAL:-1}" in
@@ -319,6 +331,8 @@ persist_current_deploy_config() {
   local_env_upsert VIDEOCHAT_DEPLOY_SFU_DOMAIN "${DEPLOY_SFU_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_TURN_DOMAIN "${DEPLOY_TURN_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_CDN_DOMAIN "${DEPLOY_CDN_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN "${DEPLOY_CALL_APP_DOMAIN}"
+  local_env_upsert VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN "${DEPLOY_MOTHERNODE_DOMAIN}"
   local_env_upsert VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "${DEPLOY_EXTERNAL_DOMAINS}"
   local_env_upsert VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "${DEPLOY_EXTERNAL_UPSTREAM}"
   local_env_upsert VIDEOCHAT_DEPLOY_VUE_ALLOWED_HOSTS "${DEPLOY_VUE_ALLOWED_HOSTS}"
@@ -524,7 +538,7 @@ sync_checkout() {
 }
 
 certbot_standalone() {
-  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q legacy_cdn_domain_q external_domains_q
+  local deploy_path_q domain_q email_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q mothernode_domain_q legacy_cdn_domain_q external_domains_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   email_q="$(shell_quote "${DEPLOY_EMAIL}")"
@@ -533,6 +547,8 @@ certbot_standalone() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_domain_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  mothernode_domain_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
   legacy_cdn_domain_q="$(shell_quote "cnd.${DEPLOY_DOMAIN}")"
   external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
 
@@ -548,6 +564,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+CALL_APP_DOMAIN=${call_app_domain_q}
+MOTHERNODE_DOMAIN=${mothernode_domain_q}
 LEGACY_CDN_DOMAIN=${legacy_cdn_domain_q}
 EXTERNAL_DOMAINS=${external_domains_q}
 VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
@@ -618,6 +636,8 @@ CERTBOT_DOMAINS=(
   -d "\${SFU_DOMAIN}"
   -d "\${TURN_DOMAIN}"
   -d "\${CDN_DOMAIN}"
+  -d "\${CALL_APP_DOMAIN}"
+  -d "\${MOTHERNODE_DOMAIN}"
 )
 if [ -n "\${LEGACY_CDN_DOMAIN}" ] && [ "\${LEGACY_CDN_DOMAIN}" != "\${CDN_DOMAIN}" ]; then
   CERTBOT_DOMAINS+=(-d "\${LEGACY_CDN_DOMAIN}")
@@ -649,7 +669,7 @@ REMOTE
 }
 
 write_remote_runtime_files() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q admin_q user_q turn_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
@@ -660,6 +680,8 @@ write_remote_runtime_files() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_domain_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  mothernode_domain_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
   external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
   external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
@@ -690,6 +712,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+CALL_APP_DOMAIN=${call_app_domain_q}
+MOTHERNODE_DOMAIN=${mothernode_domain_q}
 EXTERNAL_DOMAINS=${external_domains_q}
 EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
@@ -758,6 +782,8 @@ VIDEOCHAT_DEPLOY_WS_DOMAIN=\${WS_DOMAIN}
 VIDEOCHAT_DEPLOY_SFU_DOMAIN=\${SFU_DOMAIN}
 VIDEOCHAT_DEPLOY_TURN_DOMAIN=\${TURN_DOMAIN}
 VIDEOCHAT_DEPLOY_CDN_DOMAIN=\${CDN_DOMAIN}
+VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN=\${CALL_APP_DOMAIN}
+VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN=\${MOTHERNODE_DOMAIN}
 VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS=\${EXTERNAL_DOMAINS}
 VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM=\${EXTERNAL_UPSTREAM}
 VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE=/run/secrets/videochat/turn-secret
@@ -775,6 +801,15 @@ VIDEOCHAT_V1_BACKEND_WS_ORIGIN=https://\${WS_DOMAIN}
 VIDEOCHAT_V1_BACKEND_SFU_ORIGIN=https://\${SFU_DOMAIN}
 VITE_VIDEOCHAT_ENABLE_SFU=true
 VITE_VIDEOCHAT_CDN_ORIGIN=https://\${CDN_DOMAIN}
+VITE_VIDEOCHAT_CALL_APP_ORIGIN=https://\${CALL_APP_DOMAIN}
+VIDEOCHAT_CALL_APP_PUBLIC_HOST=\${CALL_APP_DOMAIN}
+VIDEOCHAT_CALL_APP_PUBLIC_PORT=443
+VIDEOCHAT_CALL_APP_MOTHERNODE_HOST=\${MOTHERNODE_DOMAIN}
+VIDEOCHAT_CALL_APP_MOTHERNODE_PORT=9443
+VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_BIND=0.0.0.0
+VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT=55353
+VIDEOCHAT_CALL_APP_MCP_ENDPOINT=mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.mcp
+VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER=1
 VIDEOCHAT_ASSET_VERSION=\${ASSET_VERSION}
 VIDEOCHAT_PRODUCTION_SOURCEMAPS=hidden
 VIDEOCHAT_V1_FRONTEND_BACKEND_PORT_FALLBACK=
@@ -812,6 +847,14 @@ services:
       VIDEOCHAT_TURN_URIS: turn:\${TURN_DOMAIN}:3478?transport=udp,turn:\${TURN_DOMAIN}:3478?transport=tcp
       VIDEOCHAT_TURN_TTL_SECONDS: "3600"
       VIDEOCHAT_FRONTEND_ORIGIN: https://\${DOMAIN}
+      VIDEOCHAT_CALL_APP_PUBLIC_HOST: \${CALL_APP_DOMAIN}
+      VIDEOCHAT_CALL_APP_PUBLIC_PORT: "443"
+      VIDEOCHAT_CALL_APP_MOTHERNODE_HOST: \${MOTHERNODE_DOMAIN}
+      VIDEOCHAT_CALL_APP_MOTHERNODE_PORT: "9443"
+      VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_BIND: 0.0.0.0
+      VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT: "55353"
+      VIDEOCHAT_CALL_APP_MCP_ENDPOINT: mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.mcp
+      VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER: "1"
     volumes:
       - ./secrets:/run/secrets/videochat:ro
       - /etc/letsencrypt/live/\${DOMAIN}:/run/certs/live:ro
@@ -860,77 +903,8 @@ HOOKEOF
 REMOTE
 }
 
-remote_compose_status() {
-  local deploy_path_q
-  deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
-  remote_bash <<REMOTE
-set -euo pipefail
-DEPLOY_PATH=${deploy_path_q}
-VIDEOCHAT_DIR="\${DEPLOY_PATH}/demo/video-chat"
-if [ -d "\${VIDEOCHAT_DIR}" ]; then
-  cd "\${VIDEOCHAT_DIR}"
-  if [ -f docker-compose.deploy.local.yml ]; then
-    docker compose --env-file .env --env-file .env.local -f docker-compose.v1.yml -f docker-compose.deploy.local.yml --profile edge --profile turn ps || true
-  elif [ -x scripts/compose-v1.sh ]; then
-    ./scripts/compose-v1.sh ps || true
-  fi
-fi
-if command -v certbot >/dev/null 2>&1; then
-  certbot certificates -d $(shell_quote "${DEPLOY_DOMAIN}") || true
-fi
-REMOTE
-}
-
-sync_remote_secrets_to_local() {
-  case "${VIDEOCHAT_DEPLOY_SYNC_REMOTE_SECRETS:-1}" in
-    1|true|TRUE|yes|YES) ;;
-    *) return 0 ;;
-  esac
-
-  local deploy_path_q output name value synced=0
-  deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
-
-  output="$(remote_bash <<REMOTE
-set -euo pipefail
-SUDO="$(sudo_prefix)"
-DEPLOY_PATH=${deploy_path_q}
-SECRETS_DIR="\${DEPLOY_PATH}/demo/video-chat/secrets"
-
-emit_secret() {
-  local key="\$1"
-  local path="\$2"
-  if \${SUDO}test -s "\${path}"; then
-    printf '%s\t' "\${key}"
-    \${SUDO}cat "\${path}"
-    printf '\n'
-  fi
-}
-
-emit_secret VIDEOCHAT_DEPLOY_ADMIN_PASSWORD "\${SECRETS_DIR}/admin-password"
-emit_secret VIDEOCHAT_DEPLOY_USER_PASSWORD "\${SECRETS_DIR}/user-password"
-emit_secret VIDEOCHAT_DEPLOY_TURN_SECRET "\${SECRETS_DIR}/turn-secret"
-REMOTE
-)"
-
-  while IFS=$'\t' read -r name value; do
-    [[ -n "${name}" && -n "${value}" ]] || continue
-    case "${name}" in
-      VIDEOCHAT_DEPLOY_ADMIN_PASSWORD|VIDEOCHAT_DEPLOY_USER_PASSWORD|VIDEOCHAT_DEPLOY_TURN_SECRET)
-        local_env_upsert "${name}" "${value}"
-        printf -v "${name}" '%s' "${value}"
-        export "${name}"
-        synced=1
-        ;;
-    esac
-  done <<<"${output}"
-
-  if [[ "${synced}" == "1" ]]; then
-    log "Synced production credentials into ${LOCAL_ENV_FILE}"
-  fi
-}
-
 start_production_https() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   local infra_provider_q infra_cluster_q infra_node_roles_q infra_hcloud_token_q infra_hcloud_api_base_q
   local otel_enable_q otel_endpoint_q otel_protocol_q otel_metrics_q otel_logs_q
   local allow_insecure_ws_q
@@ -941,6 +915,8 @@ start_production_https() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_domain_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  mothernode_domain_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
   external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
   external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
@@ -967,6 +943,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+CALL_APP_DOMAIN=${call_app_domain_q}
+MOTHERNODE_DOMAIN=${mothernode_domain_q}
 EXTERNAL_DOMAINS=${external_domains_q}
 EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
@@ -1019,6 +997,8 @@ set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN "\${CALL_APP_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN "\${MOTHERNODE_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "\${EXTERNAL_DOMAINS}"
 set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "\${EXTERNAL_UPSTREAM}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
@@ -1038,6 +1018,15 @@ set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "https://\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "https://\${SFU_DOMAIN}"
 set_env_value VITE_VIDEOCHAT_ENABLE_SFU true
 set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "https://\${CDN_DOMAIN}"
+set_env_value VITE_VIDEOCHAT_CALL_APP_ORIGIN "https://\${CALL_APP_DOMAIN}"
+set_env_value VIDEOCHAT_CALL_APP_PUBLIC_HOST "\${CALL_APP_DOMAIN}"
+set_env_value VIDEOCHAT_CALL_APP_PUBLIC_PORT 443
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_HOST "\${MOTHERNODE_DOMAIN}"
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_PORT 9443
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_BIND 0.0.0.0
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT 55353
+set_env_value VIDEOCHAT_CALL_APP_MCP_ENDPOINT "mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.mcp"
+set_env_value VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER 1
 set_env_value VITE_VIDEOCHAT_ICE_SERVERS "stun:\${TURN_DOMAIN}:3478"
 set_env_value VIDEOCHAT_ASSET_VERSION "\$(date -u +%Y%m%d%H%M%S)"
 set_env_value VIDEOCHAT_PRODUCTION_SOURCEMAPS hidden
@@ -1251,7 +1240,7 @@ REMOTE
 }
 
 start_public_http() {
-  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
+  local deploy_path_q domain_q api_domain_q ws_domain_q sfu_domain_q turn_domain_q cdn_domain_q call_app_domain_q mothernode_domain_q external_domains_q external_upstream_q turn_external_ip_q vue_allowed_hosts_q
   deploy_path_q="$(shell_quote "${DEPLOY_PATH}")"
   domain_q="$(shell_quote "${DEPLOY_DOMAIN}")"
   api_domain_q="$(shell_quote "${DEPLOY_API_DOMAIN}")"
@@ -1259,6 +1248,8 @@ start_public_http() {
   sfu_domain_q="$(shell_quote "${DEPLOY_SFU_DOMAIN}")"
   turn_domain_q="$(shell_quote "${DEPLOY_TURN_DOMAIN}")"
   cdn_domain_q="$(shell_quote "${DEPLOY_CDN_DOMAIN}")"
+  call_app_domain_q="$(shell_quote "${DEPLOY_CALL_APP_DOMAIN}")"
+  mothernode_domain_q="$(shell_quote "${DEPLOY_MOTHERNODE_DOMAIN}")"
   external_domains_q="$(shell_quote "${DEPLOY_EXTERNAL_DOMAINS}")"
   external_upstream_q="$(shell_quote "${DEPLOY_EXTERNAL_UPSTREAM}")"
   turn_external_ip_q="$(shell_quote "$(turn_external_ip_value)")"
@@ -1274,6 +1265,8 @@ WS_DOMAIN=${ws_domain_q}
 SFU_DOMAIN=${sfu_domain_q}
 TURN_DOMAIN=${turn_domain_q}
 CDN_DOMAIN=${cdn_domain_q}
+CALL_APP_DOMAIN=${call_app_domain_q}
+MOTHERNODE_DOMAIN=${mothernode_domain_q}
 EXTERNAL_DOMAINS=${external_domains_q}
 EXTERNAL_UPSTREAM=${external_upstream_q}
 TURN_EXTERNAL_IP=${turn_external_ip_q}
@@ -1308,6 +1301,8 @@ set_env_value VIDEOCHAT_DEPLOY_WS_DOMAIN "\${WS_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_SFU_DOMAIN "\${SFU_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_TURN_DOMAIN "\${TURN_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_CDN_DOMAIN "\${CDN_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN "\${CALL_APP_DOMAIN}"
+set_env_value VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN "\${MOTHERNODE_DOMAIN}"
 set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_DOMAINS "\${EXTERNAL_DOMAINS}"
 set_env_value VIDEOCHAT_DEPLOY_EXTERNAL_UPSTREAM "\${EXTERNAL_UPSTREAM}"
 set_env_value VIDEOCHAT_TURN_STATIC_AUTH_SECRET_FILE /run/secrets/videochat/turn-secret
@@ -1326,6 +1321,15 @@ set_env_value VIDEOCHAT_V1_BACKEND_ORIGIN "http://\${API_DOMAIN}:18080"
 set_env_value VIDEOCHAT_V1_BACKEND_WS_ORIGIN "http://\${WS_DOMAIN}:18081"
 set_env_value VIDEOCHAT_V1_BACKEND_SFU_ORIGIN "http://\${SFU_DOMAIN}:18082"
 set_env_value VITE_VIDEOCHAT_CDN_ORIGIN "http://\${CDN_DOMAIN}:80"
+set_env_value VITE_VIDEOCHAT_CALL_APP_ORIGIN "http://\${CALL_APP_DOMAIN}:80"
+set_env_value VIDEOCHAT_CALL_APP_PUBLIC_HOST "\${CALL_APP_DOMAIN}"
+set_env_value VIDEOCHAT_CALL_APP_PUBLIC_PORT 80
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_HOST "\${MOTHERNODE_DOMAIN}"
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_PORT 9443
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_BIND 0.0.0.0
+set_env_value VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT 55353
+set_env_value VIDEOCHAT_CALL_APP_MCP_ENDPOINT "mcp://\${MOTHERNODE_DOMAIN}/call_app.whiteboard.mcp"
+set_env_value VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER 1
 set_env_value VITE_VIDEOCHAT_ICE_SERVERS "stun:\${TURN_DOMAIN}:3478"
 set_env_value VIDEOCHAT_ASSET_VERSION "\$(date -u +%Y%m%d%H%M%S)"
 set_env_value VIDEOCHAT_PRODUCTION_SOURCEMAPS hidden
