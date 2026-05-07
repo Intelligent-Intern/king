@@ -377,6 +377,7 @@ export async function nativeMediaSignalCount(page) {
       return type === 'call/offer'
         || type === 'call/answer'
         || type === 'call/ice'
+        || type === 'call/media-security-sync-request'
         || type === 'media-security/hello'
         || type === 'media-security/sender-key'
         || String(payload.kind || '').startsWith('webrtc_');

@@ -990,6 +990,16 @@ export function createCallWorkspaceMediaSecurityRuntime({
     const session = ensureMediaSecuritySession();
 
     try {
+      if (type === 'call/media-security-sync-request') {
+        state.mediaSecurityHelloSignalsSent.delete(mediaSecurityHelloSignalKey(normalizedSenderUserId, session));
+        state.mediaSecuritySenderKeySignalsSent.delete(mediaSecuritySenderKeySignalKey(normalizedSenderUserId, session));
+        requestRoomSnapshot();
+        await sendMediaSecurityHello(normalizedSenderUserId, true);
+        await sendMediaSecuritySenderKey(normalizedSenderUserId, true);
+        scheduleMediaSecurityParticipantSync('remote_sync_request');
+        return;
+      }
+
       if (type === 'media-security/hello') {
         const previousUserIds = mediaSecurityParticipantIdsFromSignature(session.participantSignature);
         const marked = session.markParticipantSet(mergeMediaSecurityParticipantIds(

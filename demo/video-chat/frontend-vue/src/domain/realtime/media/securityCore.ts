@@ -34,6 +34,7 @@ export const KEX_SUITES = Object.freeze({
 });
 
 export const MEDIA_SECURITY_SIGNAL_TYPES = Object.freeze([
+  'call/media-security-sync-request',
   'media-security/hello',
   'media-security/sender-key',
 ]);
