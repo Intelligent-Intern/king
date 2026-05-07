@@ -17,6 +17,8 @@ const emailTextsTable = await source('src/modules/administration/components/AppC
 const emailTextEditor = await source('src/modules/administration/components/AppConfigurationEmailTextEditor.vue');
 const emailTextsLogic = await source('src/modules/administration/components/useAppConfigurationEmailTexts.js');
 const backgroundImages = await source('src/modules/administration/components/AppConfigurationBackgroundImagesTab.vue');
+const backgroundImageGrid = await source('src/modules/administration/components/AppConfigurationBackgroundImageGrid.vue');
+const backgroundImagesLogic = await source('src/modules/administration/components/useAppConfigurationBackgroundImages.js');
 
 assert.match(appConfigurationView, /AppConfigurationEmailTab/, 'app configuration must keep the email tab');
 assert.match(appConfigurationView, /AppConfigurationEmailTextsTab/, 'app configuration must keep the email texts tab');
@@ -64,8 +66,22 @@ assert.match(emailTextsLogic, /updateWorkspaceEmailText\(form\.id, payloadFromFo
 assert.match(emailTextsLogic, /deleteWorkspaceEmailText\(row\.id\)/, 'email texts composable must delete through the workspace administration API');
 assert.match(emailTextsLogic, /function payloadFromForm\(\)/, 'email texts composable must own save payload shaping');
 assert.doesNotMatch(emailTextsLogic, /createWorkspaceEmailText/i, 'email texts composable must not expose create email text in the current path');
-assert.match(backgroundImages, /class="background-dropzone"/, 'background images tab must expose the dropzone upload surface');
+assert.match(backgroundImages, /useAppConfigurationBackgroundImages\(\{ t \}\)/, 'background images tab must delegate state and persistence to the background-image composable');
+assert.match(backgroundImages, /<AppConfigurationBackgroundImageGrid[\s\S]*@open-picker="openFilePicker"[\s\S]*@drop-files="handleDrop"[\s\S]*@edit-image="editImage"[\s\S]*@delete-image="deleteImage"/, 'background images tab must render the extracted dropzone grid with upload/edit/delete wiring');
 assert.match(backgroundImages, /<BackgroundImageUploadModal/, 'background images tab must crop uploads before sending them');
+assert.doesNotMatch(backgroundImages, /listWorkspaceBackgroundImages|uploadWorkspaceBackgroundImages|updateWorkspaceBackgroundImage|deleteWorkspaceBackgroundImage/, 'background images tab wrapper must not keep raw background image API calls');
 assert.doesNotMatch(backgroundImages, /type="search"|background_image_search/i, 'background images tab must stay metadata-free without search');
+
+assert.match(backgroundImageGrid, /class="background-dropzone"/, 'background image grid must expose the dropzone upload surface');
+assert.match(backgroundImageGrid, /\$emit\('drop-files', \$event\)/, 'background image grid must emit file drop events');
+assert.match(backgroundImageGrid, /\$emit\('edit-image', image\)/, 'background image grid must emit edit requests');
+assert.match(backgroundImageGrid, /\$emit\('delete-image', image\)/, 'background image grid must emit delete requests');
+assert.match(backgroundImageGrid, /function fileSizeLabel\(bytes\)/, 'background image grid must own file-size display formatting');
+
+assert.match(backgroundImagesLogic, /listWorkspaceBackgroundImages/, 'background image composable must load through the workspace administration API');
+assert.match(backgroundImagesLogic, /uploadWorkspaceBackgroundImages\(files\)/, 'background image composable must upload cropped image batches through the workspace administration API');
+assert.match(backgroundImagesLogic, /updateWorkspaceBackgroundImage\(cropModal\.editImage\.id/, 'background image composable must save edited crops through the workspace administration API');
+assert.match(backgroundImagesLogic, /deleteWorkspaceBackgroundImage\(image\.id\)/, 'background image composable must delete through the workspace administration API');
+assert.match(backgroundImagesLogic, /files\.length > 12/, 'background image composable must keep the twelve-image bulk upload limit');
 
 console.log('[app-configuration-refactor-contract] PASS');
