@@ -13,6 +13,9 @@ const emailTab = await source('src/modules/administration/components/AppConfigur
 const emailForm = await source('src/modules/administration/components/AppConfigurationEmailSettingsForm.vue');
 const emailLogic = await source('src/modules/administration/components/useAppConfigurationEmailSettings.js');
 const emailTexts = await source('src/modules/administration/components/AppConfigurationEmailTextsTab.vue');
+const emailTextsTable = await source('src/modules/administration/components/AppConfigurationEmailTextsTable.vue');
+const emailTextEditor = await source('src/modules/administration/components/AppConfigurationEmailTextEditor.vue');
+const emailTextsLogic = await source('src/modules/administration/components/useAppConfigurationEmailTexts.js');
 const backgroundImages = await source('src/modules/administration/components/AppConfigurationBackgroundImagesTab.vue');
 
 assert.match(appConfigurationView, /AppConfigurationEmailTab/, 'app configuration must keep the email tab');
@@ -39,8 +42,28 @@ assert.match(emailLogic, /mail_smtp_password_clear: draft\.mail_smtp_password_cl
 assert.match(emailLogic, /if \(String\(draft\.mail_smtp_password \|\| ''\)\.trim\(\) !== ''\)/, 'email settings payload must only send SMTP password when it is explicitly provided');
 assert.match(emailLogic, /draft\.mail_smtp_password = '';/, 'email settings load must never rehydrate the saved SMTP password into cleartext');
 
+assert.match(emailTexts, /useAppConfigurationEmailTexts\(\{ t \}\)/, 'email texts tab must delegate state and persistence to the CRUD composable');
+assert.match(emailTexts, /<AppConfigurationEmailTextsTable[\s\S]*@edit-row="openEdit"[\s\S]*@delete-row="deleteRow"/, 'email texts tab must render the extracted table with edit/delete wiring');
+assert.match(emailTexts, /<AppConfigurationEmailTextEditor[\s\S]*@close="closeEditor"[\s\S]*@save="saveEditor"/, 'email texts tab must render the extracted editor with close/save wiring');
 assert.match(emailTexts, /AppIconButton[\s\S]*icons\/send\.png/, 'email texts CRUD search must keep the standard submit icon');
-assert.doesNotMatch(emailTexts, /create email text|createWorkspaceEmailText/i, 'email texts tab must not expose create email text in the current path');
+assert.doesNotMatch(emailTexts, /listWorkspaceEmailTexts|updateWorkspaceEmailText|deleteWorkspaceEmailText|createWorkspaceEmailText/i, 'email texts tab wrapper must not keep raw CRUD API calls');
+
+assert.match(emailTextsTable, /AdminTableFrame/, 'email texts table must own the table frame');
+assert.match(emailTextsTable, /formatLocalizedDateTimeDisplay/, 'email texts table must own localized updated-at formatting');
+assert.match(emailTextsTable, /\$emit\('edit-row', row\)/, 'email texts table must emit edit requests');
+assert.match(emailTextsTable, /\$emit\('delete-row', row\)/, 'email texts table must emit delete requests');
+assert.match(emailTextsTable, /row\.is_system[\s\S]*email_text_system/, 'email texts table must show system templates and protect delete affordance');
+
+assert.match(emailTextEditor, /AppSelect[\s\S]*active[\s\S]*disabled/, 'email text editor must keep active/disabled status options');
+assert.match(emailTextEditor, /body_template[\s\S]*settings-textarea/, 'email text editor must keep the body template textarea');
+assert.match(emailTextEditor, /icons\/cancel\.png/, 'email text editor must keep the standard close icon');
+assert.match(emailTextEditor, /btn btn-cyan[\s\S]*common\.save/, 'email text editor must keep the bottom save action');
+
+assert.match(emailTextsLogic, /listWorkspaceEmailTexts/, 'email texts composable must load through the workspace administration API');
+assert.match(emailTextsLogic, /updateWorkspaceEmailText\(form\.id, payloadFromForm\(\)\)/, 'email texts composable must save through the workspace administration API');
+assert.match(emailTextsLogic, /deleteWorkspaceEmailText\(row\.id\)/, 'email texts composable must delete through the workspace administration API');
+assert.match(emailTextsLogic, /function payloadFromForm\(\)/, 'email texts composable must own save payload shaping');
+assert.doesNotMatch(emailTextsLogic, /createWorkspaceEmailText/i, 'email texts composable must not expose create email text in the current path');
 assert.match(backgroundImages, /class="background-dropzone"/, 'background images tab must expose the dropzone upload surface');
 assert.match(backgroundImages, /<BackgroundImageUploadModal/, 'background images tab must crop uploads before sending them');
 assert.doesNotMatch(backgroundImages, /type="search"|background_image_search/i, 'background images tab must stay metadata-free without search');
