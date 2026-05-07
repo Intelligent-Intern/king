@@ -9,7 +9,23 @@ function videochat_call_app_package_root(?string $root = null): string
         return rtrim($trimmed, DIRECTORY_SEPARATOR);
     }
 
-    return dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'call-app';
+    $envRoot = getenv('VIDEOCHAT_CALL_APP_PACKAGE_ROOT');
+    if (is_string($envRoot) && trim($envRoot) !== '') {
+        return rtrim(trim($envRoot), DIRECTORY_SEPARATOR);
+    }
+
+    $repoRoot = dirname(__DIR__, 4) . DIRECTORY_SEPARATOR . 'call-app';
+    if (is_dir($repoRoot)) {
+        return $repoRoot;
+    }
+
+    foreach (['/call-app', '/app/call-app'] as $candidate) {
+        if (is_dir($candidate)) {
+            return $candidate;
+        }
+    }
+
+    return $repoRoot;
 }
 
 /**

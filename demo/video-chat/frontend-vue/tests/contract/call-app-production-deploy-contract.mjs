@@ -15,7 +15,10 @@ const [
   semanticDnsTest,
   server,
   workspaceState,
+  backendDockerfile,
   compose,
+  edgeDockerfile,
+  edgePhp,
   deploy,
   deployHetzner,
 ] = await Promise.all([
@@ -24,7 +27,10 @@ const [
   read('demo/video-chat/backend-king-php/tests/call-app-semantic-dns-contract.php'),
   read('demo/video-chat/backend-king-php/server.php'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/callAppWorkspaceState.js'),
+  read('demo/video-chat/backend-king-php/Dockerfile'),
   read('demo/video-chat/docker-compose.v1.yml'),
+  read('demo/video-chat/edge/Dockerfile'),
+  read('demo/video-chat/edge/edge.php'),
   read('demo/video-chat/scripts/deploy.sh'),
   read('demo/video-chat/scripts/lib/deploy-hetzner.sh'),
 ]);
@@ -56,6 +62,7 @@ for (const envKey of [
   'VIDEOCHAT_CALL_APP_MOTHERNODE_HOST',
   'VIDEOCHAT_CALL_APP_MCP_ENDPOINT',
   'VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER',
+  'VIDEOCHAT_CALL_APP_PACKAGE_ROOT',
 ]) {
   assert.match(semanticDnsDomain, new RegExp(envKey), `semantic DNS domain must parse ${envKey}`);
   assert.match(compose + deploy, new RegExp(envKey), `compose/deploy must propagate ${envKey}`);
@@ -94,6 +101,24 @@ assert.match(
   compose,
   /videochat-backend-v1:[\s\S]*VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER[\s\S]*videochat-frontend-v1:[\s\S]*VITE_VIDEOCHAT_CALL_APP_ORIGIN[\s\S]*videochat-edge-v1:[\s\S]*VITE_VIDEOCHAT_CALL_APP_ORIGIN/s,
   'compose must pass Call App runtime env into backend and build-time iframe origin into frontend/edge',
+);
+
+assert.match(
+  backendDockerfile,
+  /COPY demo\/call-app\/ \/call-app\/[\s\S]*VIDEOCHAT_CALL_APP_PACKAGE_ROOT=\/call-app/s,
+  'backend image must carry Call App packages at the package-root used by Semantic-DNS registration',
+);
+
+assert.match(
+  edgeDockerfile,
+  /COPY demo\/call-app\/ \/app\/call-app\//,
+  'edge image must carry Call App iframe assets',
+);
+
+assert.match(
+  edgePhp,
+  /VIDEOCHAT_EDGE_CALL_APP_DOMAIN[\s\S]*call_app_static[\s\S]*videochat_edge_serve_call_app_static/s,
+  'edge must route the Call App subdomain/path to the packaged iframe assets',
 );
 
 assert.match(
