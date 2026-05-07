@@ -5,6 +5,7 @@ export function reportSfuClientUnavailableAfterEncode({
   trace,
   timestamp,
 }) {
+  if (typeof handleWlvcFrameSendFailure !== 'function') return false;
   handleWlvcFrameSendFailure(
     getSfuClientBufferedAmount(),
     trackId,
@@ -20,4 +21,5 @@ export function reportSfuClientUnavailableAfterEncode({
       timestamp,
     },
   );
+  return true;
 }

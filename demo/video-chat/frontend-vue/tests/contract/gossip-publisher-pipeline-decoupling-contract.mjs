@@ -57,8 +57,8 @@ assert(
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline)
-    && /dispatchWlvcPublisherFrame\(\{[\s\S]*publishLocalEncodedFrameToGossip/.test(publisherPipeline),
-  'WLVC publisher pipeline must stop requiring SFU before encode except in sfu_first and dispatch through the carrier helper',
+    && /dispatchWlvcPublisherFrame\(\{[\s\S]*handleWlvcFrameSendFailure,[\s\S]*publishLocalEncodedFrameToGossip/.test(publisherPipeline),
+  'WLVC publisher pipeline must stop requiring SFU before encode except in sfu_first and dispatch through the carrier helper with SFU failure handling wired',
 )
 assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(browserEncoder)
