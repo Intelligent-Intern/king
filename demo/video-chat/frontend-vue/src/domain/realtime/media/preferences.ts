@@ -13,6 +13,7 @@ import {
 const CALL_MEDIA_PREFS_KEY = 'ii.videocall.preview_prefs.v1';
 const CALL_MEDIA_PREFS_OUTGOING_VIDEO_PROFILE_VERSION = 5;
 const CALL_MEDIA_DEVICE_REFRESH_CACHE_MS = 30000;
+const MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS = 250;
 export const DEFAULT_BACKGROUND_REPLACEMENT_IMAGE_URL = '/assets/orgas/kingrt/social/invitation-preview.png';
 
 function clampVolume(value) {
@@ -242,6 +243,10 @@ let lastDeviceRefreshAt = 0;
 let lastDeviceRefreshHadPermissions = false;
 
 async function maybeRequestDeviceLabels() {
+  if (isLikelyMobileAudioDevice()) {
+    return;
+  }
+
   if (
     typeof navigator === 'undefined'
     || !navigator.mediaDevices
@@ -328,6 +333,22 @@ export async function refreshCallMediaDevices({ force = false, requestPermission
   });
 
   return refreshPromise;
+}
+
+export function callMediaDeviceReleaseDelayMs() {
+  return isLikelyMobileAudioDevice() ? MOBILE_MEDIA_DEVICE_RELEASE_DELAY_MS : 0;
+}
+
+export async function waitForCallMediaDeviceRelease() {
+  const delayMs = callMediaDeviceReleaseDelayMs();
+  await new Promise((resolve) => {
+    const finish = () => setTimeout(resolve, delayMs);
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(finish);
+      return;
+    }
+    finish();
+  });
 }
 
 export function setCallCameraDevice(deviceId) {

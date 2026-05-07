@@ -1,7 +1,11 @@
 import { nextTick } from 'vue';
 import { BackgroundFilterController } from '../../realtime/background/controller';
 import { buildOptionalCallAudioCaptureConstraints as defaultBuildOptionalCallAudioCaptureConstraints } from '../../realtime/media/audioCaptureConstraints';
-import { callMediaPrefs } from '../../realtime/media/preferences';
+import {
+  callMediaPrefs,
+  refreshCallMediaDevices,
+  waitForCallMediaDeviceRelease,
+} from '../../realtime/media/preferences';
 import { capturePreviewMediaWithCameraFallback } from '../../realtime/media/cameraCaptureConstraints';
 import { playCallSpeakerTestSound } from '../../realtime/media/speakerOutputRouting';
 
@@ -109,6 +113,7 @@ export function createJoinAccessPreviewController({
   let micLevelData = null;
   let micLevelFrame = 0;
   let micLevelMonitorToken = 0;
+  let previewStartToken = 0;
 
   function stopMicLevelMonitor() {
     micLevelMonitorToken += 1;
@@ -192,6 +197,7 @@ export function createJoinAccessPreviewController({
   }
 
   function stopPreview() {
+    previewStartToken += 1;
     backgroundController.dispose();
     stopMicLevelMonitor();
 
@@ -213,6 +219,8 @@ export function createJoinAccessPreviewController({
 
   async function startPreview() {
     stopPreview();
+    const token = previewStartToken + 1;
+    previewStartToken = token;
     state.previewReady = false;
     state.previewError = '';
 
@@ -226,27 +234,42 @@ export function createJoinAccessPreviewController({
     }
 
     try {
-      rawStream = await capturePreviewMediaWithCameraFallback({
+      const nextRawStream = await capturePreviewMediaWithCameraFallback({
         audio: buildPreviewAudioConstraints(buildOptionalCallAudioCaptureConstraints),
         cameraDeviceId: callMediaPrefs.selectedCameraId,
       });
+      if (token !== previewStartToken) {
+        stopStreams([nextRawStream]);
+        return;
+      }
+      rawStream = nextRawStream;
       applyVolumeToStreams([rawStream]);
       startMicLevelMonitor(rawStream);
+      void refreshCallMediaDevices({ force: true, requestPermissions: false });
 
-      previewStream = rawStream;
+      let nextPreviewStream = rawStream;
       const backgroundOptions = resolvePreviewBackgroundFilterOptions();
       if (backgroundOptions.mode === 'blur' || backgroundOptions.mode === 'replace') {
         try {
           const result = await backgroundController.apply(rawStream, backgroundOptions);
+          if (token !== previewStartToken) {
+            stopStreams([rawStream, result?.stream]);
+            return;
+          }
           if (result?.stream instanceof MediaStream) {
-            previewStream = result.stream;
+            nextPreviewStream = result.stream;
           }
         } catch {
-          previewStream = rawStream;
+          nextPreviewStream = rawStream;
         }
       }
+      previewStream = nextPreviewStream;
 
       await nextTick();
+      if (token !== previewStartToken) {
+        stopStreams([rawStream, previewStream]);
+        return;
+      }
       const node = previewVideoRef.value;
       if (!(node instanceof HTMLVideoElement)) return;
       node.muted = true;
@@ -254,8 +277,14 @@ export function createJoinAccessPreviewController({
       await node.play().catch(() => {});
       state.previewReady = true;
     } catch (error) {
+      if (token !== previewStartToken) return;
       state.previewError = error instanceof Error ? error.message : 'Could not start camera preview.';
     }
+  }
+
+  async function releasePreviewForCallEntry() {
+    stopPreview();
+    await waitForCallMediaDeviceRelease();
   }
 
   function applyPreviewAudioVolume() {
@@ -269,6 +298,7 @@ export function createJoinAccessPreviewController({
   return {
     applyPreviewAudioVolume,
     playSpeakerTestSound,
+    releasePreviewForCallEntry,
     startPreview,
     stopPreview,
   };
