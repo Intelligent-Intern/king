@@ -9,6 +9,7 @@ import { compareLocalizedStrings } from '../../../../support/localeCollation.js'
 export function createCallWorkspaceParticipantUiHelpers(context) {
   const {
     activeReactions,
+    activeCallId,
     activeRoomId,
     activeTab,
     admissionGateState,
@@ -16,6 +17,7 @@ export function createCallWorkspaceParticipantUiHelpers(context) {
     apiRequest,
     callLayoutState,
     callParticipantRoles,
+    canManageOwnerRole,
     canModerate,
     chatAttachmentDrafts,
     chatByRoom,
@@ -1287,6 +1289,74 @@ function togglePinned(userId) {
   nextTick(() => renderCallVideoLayout());
 }
 
+function callRoleUpdateEndpoint(userId) {
+  const callId = String(activeCallId.value || '').trim();
+  const normalizedUserId = Number(userId);
+  if (callId === '' || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) {
+    return '';
+  }
+
+  return `/api/calls/${encodeURIComponent(callId)}/participants/${encodeURIComponent(String(normalizedUserId))}/role`;
+}
+
+async function updateParticipantCallRole(row, nextRole, action) {
+  const normalizedUserId = Number(row?.userId || row?.user_id || 0);
+  const normalizedRole = normalizeCallRole(nextRole);
+  const normalizedAction = action === 'owner' ? 'owner' : 'role';
+  const endpoint = callRoleUpdateEndpoint(normalizedUserId);
+  if (endpoint === '' || !['owner', 'moderator', 'participant'].includes(normalizedRole)) {
+    return;
+  }
+
+  markUserActionText(
+    normalizedUserId,
+    normalizedAction,
+    normalizedRole === 'owner' ? 'Transferring ownership...' : 'Updating role...',
+    true
+  );
+
+  try {
+    await apiRequest(endpoint, {
+      method: 'PATCH',
+      body: { role: normalizedRole },
+    });
+    callParticipantRoles[normalizedUserId] = normalizedRole;
+    markUserActionText(
+      normalizedUserId,
+      normalizedAction,
+      normalizedRole === 'owner'
+        ? 'Owner transferred'
+        : (normalizedRole === 'moderator' ? 'Moderator role set' : 'Participant role set'),
+      false
+    );
+    refreshUsersDirectoryPresentation();
+    requestRoomSnapshot();
+  } catch (error) {
+    clearRowAction(moderationActionState, normalizedAction, normalizedUserId);
+    setNotice(error instanceof Error ? error.message : 'Could not update call role.', 'error');
+  }
+}
+
+function toggleModeratorRole(row) {
+  const normalizedUserId = Number(row?.userId || 0);
+  if (!canModerate.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  if (normalizedUserId === currentUserId.value) return;
+  if (normalizeCallRole(row?.callRole || 'participant') === 'owner') return;
+
+  const nextRole = normalizeCallRole(row?.callRole || 'participant') === 'moderator'
+    ? 'participant'
+    : 'moderator';
+  void updateParticipantCallRole(row, nextRole, 'role');
+}
+
+function transferOwnerRole(row) {
+  const normalizedUserId = Number(row?.userId || 0);
+  if (!canManageOwnerRole?.value || !Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return;
+  if (normalizeCallRole(row?.callRole || 'participant') === 'owner') return;
+
+  void updateParticipantCallRole(row, 'owner', 'owner');
+}
+
 function currentPinnedUserIds() {
   return Object.entries(pinnedUsers)
     .filter(([, pinned]) => pinned === true)
@@ -1845,9 +1915,11 @@ function openLeftSidebarOverlay(event) {
     toggleVideoFullscreenForEvent,
     toggleHandRaised,
     toggleMicrophone,
+    toggleModeratorRole,
     togglePinned,
     toggleScreenShare,
     toggleUserMuted,
+    transferOwnerRole,
     typingUsers,
     updatePeerControlState,
     userRowSnapshot,
