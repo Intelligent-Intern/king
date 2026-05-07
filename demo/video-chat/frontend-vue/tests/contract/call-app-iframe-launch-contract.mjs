@@ -123,7 +123,7 @@ assert.match(
 
 assert.match(
   lifecycleTestSource,
-  /launch-token[\s\S]*denied participant should receive a read-only launch token[\s\S]*must not allow CRDT append[\s\S]*launch payload must not expose the primary session token[\s\S]*must not expose raw user ids[\s\S]*launch token validation should return 200/s,
+  /launch-token[\s\S]*denied participant should receive only a status launch token[\s\S]*must not allow CRDT read[\s\S]*must not allow CRDT append[\s\S]*launch payload must not expose the primary session token[\s\S]*must not expose raw user ids[\s\S]*launch token validation should return 200/s,
   'backend lifecycle contract must cover launch authorization, token validation, and primary-session non-exposure',
 );
 

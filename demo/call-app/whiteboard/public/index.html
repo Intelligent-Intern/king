@@ -256,6 +256,7 @@
         let documentId = '';
         let actorId = '';
         let grantState = 'denied';
+        let capabilities = new Set();
         let activeTool = 'pen';
         let activeColor = colors[0];
         let latestClock = 0;
@@ -267,12 +268,16 @@
         let lastCursorSentAt = 0;
 
         function canAppend() {
-          return grantState === 'allowed';
+          return grantState === 'allowed' && capabilities.has('call_apps.crdt.append');
+        }
+
+        function canRead() {
+          return grantState === 'allowed' && capabilities.has('call_apps.crdt.read');
         }
 
         function setStatus(message) {
           status.textContent = message;
-          modeBadge.textContent = canAppend() ? 'Editor' : 'Viewer';
+          modeBadge.textContent = canAppend() ? 'Editor' : (canRead() ? 'Viewer' : 'No access');
           clock.textContent = `${latestClock} ops`;
           document.querySelectorAll('[data-tool], .swatch, #width').forEach((element) => {
             element.disabled = !canAppend();
@@ -291,6 +296,7 @@
         }
 
         function requestBootstrap(afterClock = 0) {
+          if (!canRead()) return;
           emit('call_app.crdt.bootstrap.request', {
             request_id: `wb_bootstrap_${Date.now()}`,
             after_clock: afterClock,
@@ -298,7 +304,7 @@
         }
 
         function requestOps() {
-          if (!appSessionId) return;
+          if (!appSessionId || !canRead()) return;
           emit('call_app.crdt.ops.request', {
             request_id: `wb_ops_${Date.now()}`,
             after_clock: latestClock,
@@ -706,6 +712,7 @@
             const context = message.launch_context || {};
             grantState = String(context.grant_state || 'denied');
             actorId = String(context.participant?.actor_id || '');
+            capabilities = new Set(Array.isArray(message.capabilities) ? message.capabilities : []);
             emit('call_app.ready', {
               app_session_id: appSessionId,
               call_id: callId,
@@ -714,10 +721,15 @@
               primary_session_token_received: false,
               capabilities: Array.isArray(message.capabilities) ? message.capabilities : [],
             });
-            requestBootstrap(0);
             clearInterval(pollTimer);
-            pollTimer = window.setInterval(requestOps, 1500);
-            setStatus('Loading whiteboard.');
+            if (canRead()) {
+              requestBootstrap(0);
+              pollTimer = window.setInterval(requestOps, 1500);
+              setStatus('Loading whiteboard.');
+            } else {
+              render();
+              setStatus('Access not granted for this whiteboard.');
+            }
           } else if (message.type === 'call_app.crdt.bootstrap.response') {
             handleCrdtResult(message.result || {});
           } else if (message.type === 'call_app.crdt.ops.response') {

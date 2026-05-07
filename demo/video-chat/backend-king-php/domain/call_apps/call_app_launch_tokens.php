@@ -26,9 +26,18 @@ function videochat_call_app_launch_token_hash(string $token): string
     return hash('sha256', trim($token));
 }
 
-function videochat_call_app_launch_user_grant_state(PDO $pdo, int $tenantId, array $sessionRecord, int $userId): string
+function videochat_call_app_launch_subject_grant_state(PDO $pdo, int $tenantId, array $sessionRecord, string $subjectType, ?int $userId, string $guestId): string
 {
-    if ($userId <= 0) {
+    $normalizedSubjectType = strtolower(trim($subjectType));
+    $normalizedUserId = (int) ($userId ?? 0);
+    $normalizedGuestId = trim($guestId);
+    if ($normalizedSubjectType === 'user' && $normalizedUserId <= 0) {
+        return 'denied';
+    }
+    if ($normalizedSubjectType === 'guest' && $normalizedGuestId === '') {
+        return 'denied';
+    }
+    if (!in_array($normalizedSubjectType, ['user', 'guest'], true)) {
         return 'denied';
     }
 
@@ -38,8 +47,11 @@ SELECT grant_state
 FROM call_app_participant_grants
 WHERE tenant_id = :tenant_id
   AND app_session_id = :app_session_id
-  AND subject_type = 'user'
-  AND user_id = :user_id
+  AND subject_type = :subject_type
+  AND (
+      (:subject_type = 'user' AND user_id = :user_id)
+      OR (:subject_type = 'guest' AND guest_id = :guest_id)
+  )
 ORDER BY CASE source WHEN 'explicit' THEN 0 ELSE 1 END ASC, updated_at DESC, id DESC
 LIMIT 1
 SQL
@@ -47,7 +59,9 @@ SQL
     $statement->execute([
         ':tenant_id' => $tenantId,
         ':app_session_id' => (int) ($sessionRecord['id'] ?? 0),
-        ':user_id' => $userId,
+        ':subject_type' => $normalizedSubjectType,
+        ':user_id' => $normalizedUserId > 0 ? $normalizedUserId : null,
+        ':guest_id' => $normalizedGuestId,
     ]);
     $state = strtolower(trim((string) $statement->fetchColumn()));
     if (in_array($state, ['allowed', 'denied'], true)) {
@@ -57,11 +71,21 @@ SQL
     return videochat_call_app_session_default_grant_state((string) ($sessionRecord['default_app_policy'] ?? 'blocked_by_default'));
 }
 
+function videochat_call_app_launch_user_grant_state(PDO $pdo, int $tenantId, array $sessionRecord, int $userId): string
+{
+    return videochat_call_app_launch_subject_grant_state($pdo, $tenantId, $sessionRecord, 'user', $userId, '');
+}
+
+function videochat_call_app_launch_guest_grant_state(PDO $pdo, int $tenantId, array $sessionRecord, string $guestId): string
+{
+    return videochat_call_app_launch_subject_grant_state($pdo, $tenantId, $sessionRecord, 'guest', null, $guestId);
+}
+
 function videochat_call_app_launch_capabilities(array $session, string $grantState): array
 {
     $app = is_array($session['app'] ?? null) ? $session['app'] : [];
     $declared = is_array($app['capabilities'] ?? null) ? $app['capabilities'] : [];
-    $base = ['call_apps.launch', 'call_apps.crdt.read'];
+    $base = ['call_apps.launch'];
     if ($grantState !== 'allowed') {
         return array_values(array_unique(array_intersect($base, array_merge($base, $declared))));
     }

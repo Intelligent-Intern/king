@@ -46,6 +46,18 @@ function videochat_call_app_crdt_session_for_actor(PDO $pdo, int $tenantId, stri
     return ['ok' => true, 'record' => $record, 'session' => $session, 'grant_state' => $grantState];
 }
 
+function videochat_call_app_crdt_requires_allowed_grant(array $resolved): ?array
+{
+    if ((string) ($resolved['grant_state'] ?? 'denied') === 'allowed') {
+        return null;
+    }
+    return [
+        'ok' => false,
+        'reason' => 'participant_grant_denied',
+        'grant_state' => (string) ($resolved['grant_state'] ?? 'denied'),
+    ];
+}
+
 function videochat_call_app_crdt_ensure_document(PDO $pdo, int $tenantId, array $record, array $session): array
 {
     $documentId = trim((string) ($record['document_id'] ?? ($session['document_id'] ?? '')));
@@ -146,6 +158,10 @@ function videochat_call_app_crdt_bootstrap(PDO $pdo, int $tenantId, string $sess
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
     }
+    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    if ($grantDenied !== null) {
+        return $grantDenied;
+    }
     $document = videochat_call_app_crdt_ensure_document($pdo, $tenantId, $resolved['record'], $resolved['session']);
     $snapshotClock = (int) ($document['snapshot_clock'] ?? 0);
     $replayAfter = max($snapshotClock, max(0, $afterClock));
@@ -171,6 +187,10 @@ function videochat_call_app_crdt_list_ops(PDO $pdo, int $tenantId, string $sessi
     $resolved = videochat_call_app_crdt_session_for_actor($pdo, $tenantId, $sessionId, $actorUserId);
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
+    }
+    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    if ($grantDenied !== null) {
+        return $grantDenied;
     }
     $document = videochat_call_app_crdt_ensure_document($pdo, $tenantId, $resolved['record'], $resolved['session']);
     return [
@@ -222,8 +242,9 @@ function videochat_call_app_crdt_append_op(PDO $pdo, int $tenantId, string $sess
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
     }
-    if ((string) ($resolved['grant_state'] ?? 'denied') !== 'allowed') {
-        return ['ok' => false, 'reason' => 'participant_grant_denied'];
+    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    if ($grantDenied !== null) {
+        return $grantDenied;
     }
 
     $actorId = videochat_call_app_crdt_actor_id($actorUserId);
@@ -294,6 +315,10 @@ function videochat_call_app_crdt_compact_snapshot(PDO $pdo, int $tenantId, strin
     $resolved = videochat_call_app_crdt_session_for_actor($pdo, $tenantId, $sessionId, $actorUserId);
     if (!(bool) ($resolved['ok'] ?? false)) {
         return $resolved;
+    }
+    $grantDenied = videochat_call_app_crdt_requires_allowed_grant($resolved);
+    if ($grantDenied !== null) {
+        return $grantDenied;
     }
     $document = videochat_call_app_crdt_ensure_document($pdo, $tenantId, $resolved['record'], $resolved['session']);
     $maxClock = (int) $pdo->query('SELECT COALESCE(MAX(logical_clock), 0) FROM call_app_crdt_ops WHERE document_row_id = ' . (int) ($document['id'] ?? 0))->fetchColumn();
