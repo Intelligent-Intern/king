@@ -1,30 +1,19 @@
 <template>
   <AdminPageFrame class="marketplace-view" :title="t('marketplace.title')">
     <template #toolbar>
-      <label class="search-field search-field-main" :aria-label="t('marketplace.search')">
-        <input
-          v-model.trim="queryDraft"
-          class="input"
-          type="search"
-          :placeholder="t('marketplace.search_placeholder')"
-          @keydown.enter.prevent="applySearchNow"
-        />
-      </label>
-
-      <AppSelect v-model="categoryFilter" :aria-label="t('marketplace.category_filter')" @change="applySearchNow">
-        <option value="all">{{ t('marketplace.all_categories') }}</option>
-        <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
-          {{ t(option.label_key) }}
-        </option>
-      </AppSelect>
-
-      <AppIconButton
-        class="marketplace-toolbar-search-btn"
-        icon="/assets/orgas/kingrt/icons/send.png"
-        :title="t('marketplace.search')"
-        :aria-label="t('marketplace.search')"
-        @click="applySearchNow"
-      />
+      <AdminSearchToolbar
+        v-model="queryDraft"
+        :search-label="t('marketplace.search')"
+        :search-placeholder="t('marketplace.search_placeholder')"
+        @submit="applySearchNow"
+      >
+        <AppSelect v-model="categoryFilter" :aria-label="t('marketplace.category_filter')" @change="applySearchNow">
+          <option value="all">{{ t('marketplace.all_categories') }}</option>
+          <option v-for="option in categoryOptions" :key="option.value" :value="option.value">
+            {{ t(option.label_key) }}
+          </option>
+        </AppSelect>
+      </AdminSearchToolbar>
     </template>
 
     <section v-if="notice" class="section marketplace-banner ok">{{ notice }}</section>
@@ -111,14 +100,15 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import AppIconButton from '../../../components/AppIconButton.vue';
 import AppPagination from '../../../components/AppPagination.vue';
 import AppSelect from '../../../components/AppSelect.vue';
 import AppSidePanelShell from '../../../components/AppSidePanelShell.vue';
 import AdminPageFrame from '../../../components/admin/AdminPageFrame.vue';
+import AdminSearchToolbar from '../../../components/admin/AdminSearchToolbar.vue';
 import AdminMarketplaceTable from './AdminMarketplaceTable.vue';
+import { useAdminListController } from '../../../components/admin/useAdminListController.js';
 import { createAdminMarketplaceApi } from './adminMarketplaceApi';
 import { t } from '../../localization/i18nRuntime.js';
 
@@ -133,13 +123,7 @@ const CATEGORY_OPTIONS = [
 
 const router = useRouter();
 const apiRequest = createAdminMarketplaceApi({ router });
-const queryDraft = ref('');
-const queryApplied = ref('');
 const categoryFilter = ref('all');
-const page = ref(1);
-const rows = ref([]);
-const loading = ref(false);
-const error = ref('');
 const notice = ref('');
 const mutatingAppId = ref(0);
 const dialogOpen = ref(false);
@@ -154,85 +138,34 @@ const form = reactive({
   category: 'whiteboard',
   description: '',
 });
-const pagination = reactive({
-  total: 0,
-  pageCount: 1,
-  hasPrev: false,
-  hasNext: false,
+const {
+  queryDraft,
+  page,
+  rows,
+  loading,
+  error,
+  pagination,
+  pageCount,
+  loadRows,
+  applySearchNow,
+  goToPage,
+} = useAdminListController({
+  pageSize: 10,
+  load: ({ query, page: currentPage, pageSize }) => apiRequest('/api/admin/marketplace/apps', {
+    query: {
+      query,
+      category: categoryFilter.value,
+      page: currentPage,
+      page_size: pageSize,
+    },
+  }),
+  rows: (payload) => (Array.isArray(payload.apps) ? payload.apps : []),
+  loadErrorMessage: () => t('marketplace.load_failed'),
 });
-
-let loadToken = 0;
-let searchTimer = 0;
 
 const categoryOptions = computed(() => CATEGORY_OPTIONS);
-const pageCount = computed(() => pagination.pageCount);
 const dialogTitle = computed(() => (form.mode === 'edit' ? t('marketplace.edit_app') : t('marketplace.add_app')));
 const dialogSubmitLabel = computed(() => (form.mode === 'edit' ? t('common.save_changes') : t('marketplace.add_app')));
-
-async function loadApps() {
-  const token = ++loadToken;
-  loading.value = true;
-  error.value = '';
-
-  try {
-    const payload = await apiRequest('/api/admin/marketplace/apps', {
-      query: {
-        query: queryApplied.value,
-        category: categoryFilter.value,
-        page: page.value,
-        page_size: 10,
-      },
-    });
-
-    if (token !== loadToken) return;
-
-    rows.value = Array.isArray(payload.apps) ? payload.apps : [];
-    const paging = payload.pagination || {};
-    const nextPageCount = Number.isInteger(paging.page_count) && paging.page_count > 0 ? paging.page_count : 1;
-    pagination.total = Number.isInteger(paging.total) ? paging.total : rows.value.length;
-    pagination.pageCount = nextPageCount;
-    pagination.hasPrev = Boolean(paging.has_prev);
-    pagination.hasNext = Boolean(paging.has_next);
-    if (page.value > pagination.pageCount) {
-      page.value = pagination.pageCount;
-      if (token === loadToken) {
-        await loadApps();
-      }
-      return;
-    }
-  } catch (err) {
-    if (token !== loadToken) return;
-    rows.value = [];
-    pagination.total = 0;
-    pagination.pageCount = 1;
-    pagination.hasPrev = false;
-    pagination.hasNext = false;
-    error.value = err instanceof Error ? err.message : t('marketplace.load_failed');
-  } finally {
-    if (token === loadToken) loading.value = false;
-  }
-}
-
-function applySearchNow() {
-  queryApplied.value = queryDraft.value.trim();
-  page.value = 1;
-  void loadApps();
-}
-
-watch(queryDraft, () => {
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(() => {
-    queryApplied.value = queryDraft.value.trim();
-    page.value = 1;
-    void loadApps();
-  }, 250);
-});
-
-function goToPage(nextPage) {
-  if (!Number.isInteger(nextPage) || nextPage < 1 || nextPage === page.value) return;
-  page.value = nextPage;
-  void loadApps();
-}
 
 function resetForm(mode = 'create') {
   form.mode = mode;
@@ -289,7 +222,7 @@ async function submitForm() {
     }
 
     dialogOpen.value = false;
-    await loadApps();
+    await loadRows();
   } catch (err) {
     formError.value = err instanceof Error ? err.message : t('marketplace.save_failed');
   } finally {
@@ -310,7 +243,7 @@ async function deleteApp(app) {
       method: 'DELETE',
     });
     notice.value = t('marketplace.app_deleted');
-    await loadApps();
+    await loadRows();
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('marketplace.delete_failed');
   } finally {
@@ -319,11 +252,7 @@ async function deleteApp(app) {
 }
 
 onMounted(() => {
-  void loadApps();
-});
-
-onBeforeUnmount(() => {
-  window.clearTimeout(searchTimer);
+  void loadRows();
 });
 </script>
 

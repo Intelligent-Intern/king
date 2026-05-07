@@ -55,7 +55,7 @@ Rules:
 
 ### Clean Refactoring With Composables And Components
 
-1. [ ] CRUD scaffold: extract list controller, action bar, search toolbar, table frame, and migrate one reusable non-call CRUD surface.
+1. [ ] CRUD scaffold: roll the shared list/search scaffold beyond Marketplace and extract remaining entity action-bar semantics; list controller, search toolbar, shared table frame, and one non-call CRUD migration are now contract-pinned.
 2. [ ] Right-sidebar/forms: extract sidebar form shell, form composable, sticky submit contract, remove duplicated close/cancel variants, and prove on multiple admin surfaces.
 3. [ ] Governance/User Management: extract relation navigator, breadcrumb, picker table, payload normalizer, and prove recursive User -> Group -> Module -> Permission flow.
 4. [ ] Settings/Profile: extract settings registry, section frame, verified emails composable, password form, and merged localization/date-format form.
