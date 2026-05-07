@@ -13,6 +13,9 @@ const sessionStore = await source('src/domain/auth/session.ts');
 const workspaceShell = await source('src/layouts/WorkspaceShell.vue');
 const aboutPanel = await source('src/layouts/settings/WorkspaceAboutSettings.vue');
 const credentialsPanel = await source('src/layouts/settings/WorkspaceCredentialsSettings.vue');
+const credentialsLogic = await source('src/layouts/settings/useWorkspaceCredentialsSettings.js');
+const emailSettingsPanel = await source('src/layouts/settings/WorkspaceEmailAddressSettings.vue');
+const passwordSettingsForm = await source('src/layouts/settings/WorkspacePasswordSettingsForm.vue');
 const notificationPanel = await source('src/layouts/settings/WorkspaceNotificationSettings.vue');
 
 for (const key of [
@@ -78,9 +81,19 @@ assert.match(aboutPanel, /settings\.youtube_url/, 'about settings panel must exp
 assert.doesNotMatch(aboutPanel, /settings\.email/, 'about settings panel must not expose email address');
 assert.doesNotMatch(aboutPanel, /messenger/i, 'about settings panel must not expose messenger contacts');
 assert.doesNotMatch(aboutPanel, /onboarding/i, 'about settings panel must not expose onboarding badges');
-assert.match(credentialsPanel, /settings\.confirmed_emails/, 'credentials panel must expose confirmed emails');
-assert.match(credentialsPanel, /settings\.unconfirmed_emails/, 'credentials panel must expose unconfirmed emails');
-assert.match(credentialsPanel, /type="password"/, 'credentials panel must use password fields inside forms');
+assert.match(credentialsPanel, /WorkspaceEmailAddressSettings/, 'credentials panel must delegate email address lists to the extracted email settings section');
+assert.match(credentialsPanel, /WorkspacePasswordSettingsForm/, 'credentials panel must delegate password changes to the extracted password form');
+assert.match(credentialsPanel, /useWorkspaceCredentialsSettings\(\{ t \}\)/, 'credentials panel must use the shared credentials composable');
+assert.match(credentialsLogic, /fetchSessionEmailAddresses/, 'credentials composable must load verified and pending email addresses');
+assert.match(credentialsLogic, /changeSessionPassword/, 'credentials composable must submit password changes');
+assert.match(credentialsLogic, /confirmedEmails = computed/, 'credentials composable must expose confirmed emails');
+assert.match(credentialsLogic, /unconfirmedEmails = computed/, 'credentials composable must expose unconfirmed emails');
+assert.match(emailSettingsPanel, /settings\.confirmed_emails/, 'email settings section must expose confirmed emails');
+assert.match(emailSettingsPanel, /settings\.unconfirmed_emails/, 'email settings section must expose unconfirmed emails');
+assert.match(emailSettingsPanel, /settings\.add_email_address/, 'email settings section must expose add email action');
+assert.match(passwordSettingsForm, /type="password"/, 'password settings form must use password fields inside forms');
+assert.match(passwordSettingsForm, /settings\.current_password/, 'password settings form must expose current password');
+assert.match(passwordSettingsForm, /settings\.change_password/, 'password settings form must expose the change password submit action');
 assert.match(notificationPanel, /Notification\.requestPermission/, 'notification panel must request browser notification permission');
 assert.match(notificationPanel, /draft\.webAppNotificationsEnabled/, 'notification panel must expose web app notification master switch');
 assert.match(notificationPanel, /draft\.webAppNotificationCallInvitesEnabled/, 'notification panel must expose call invite notification switch');
