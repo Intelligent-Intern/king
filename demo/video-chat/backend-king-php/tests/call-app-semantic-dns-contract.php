@@ -18,6 +18,10 @@ try {
     $root = videochat_call_app_package_root();
     videochat_call_app_semantic_dns_assert(is_dir($root), 'package root must exist');
     videochat_call_app_semantic_dns_assert(str_ends_with($root, 'demo/call-app'), 'package root must be demo/call-app');
+    $envRoot = $root . DIRECTORY_SEPARATOR . 'whiteboard' . DIRECTORY_SEPARATOR . '..';
+    putenv('VIDEOCHAT_CALL_APP_PACKAGE_ROOT=' . $envRoot);
+    videochat_call_app_semantic_dns_assert(realpath(videochat_call_app_package_root()) === realpath($root), 'package root must honor VIDEOCHAT_CALL_APP_PACKAGE_ROOT');
+    putenv('VIDEOCHAT_CALL_APP_PACKAGE_ROOT');
 
     $packages = videochat_call_app_scan_packages($root);
     videochat_call_app_semantic_dns_assert(count($packages) >= 1, 'at least one call app package must be discovered');

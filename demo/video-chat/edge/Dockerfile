@@ -50,13 +50,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY demo/video-chat/edge/edge.php /app/edge.php
+COPY demo/video-chat/edge/ /app/
+COPY demo/call-app/ /app/call-app/
 COPY --from=frontend-build /frontend/dist /app/frontend-dist
 
 ENV VIDEOCHAT_EDGE_HOST=0.0.0.0
 ENV VIDEOCHAT_EDGE_HTTP_PORT=8080
 ENV VIDEOCHAT_EDGE_HTTPS_PORT=8443
 ENV VIDEOCHAT_EDGE_STATIC_ROOT=/app/frontend-dist
+ENV VIDEOCHAT_EDGE_CALL_APP_ROOT=/app/call-app
 ENV VIDEOCHAT_ASSET_VERSION="${VIDEOCHAT_ASSET_VERSION}"
 
 EXPOSE 8080

@@ -44,8 +44,10 @@ RUN apt-get update \
 COPY --from=king-extension-build /opt/king/king.so /opt/king/king.so
 
 COPY demo/video-chat/backend-king-php/ /app/
+COPY demo/call-app/ /call-app/
 
 ENV KING_EXTENSION_PATH=/opt/king/king.so
+ENV VIDEOCHAT_CALL_APP_PACKAGE_ROOT=/call-app
 ENV VIDEOCHAT_KING_HOST=0.0.0.0
 ENV VIDEOCHAT_KING_PORT=18080
 ENV VIDEOCHAT_KING_WS_PORT=18080

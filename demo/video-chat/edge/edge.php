@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/call_app_static.php';
+
 $httpHost = getenv('VIDEOCHAT_EDGE_HOST') ?: '0.0.0.0';
 $httpPort = (int) (getenv('VIDEOCHAT_EDGE_HTTP_PORT') ?: '8080');
 $httpsPort = (int) (getenv('VIDEOCHAT_EDGE_HTTPS_PORT') ?: '8443');
@@ -11,6 +13,7 @@ $wsDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_WS_DOMAIN') ?: 'ws.
 $sfuDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_SFU_DOMAIN') ?: 'sfu.' . $domain)));
 $turnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_TURN_DOMAIN') ?: 'turn.' . $domain)));
 $cdnDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CDN_DOMAIN') ?: 'cdn.' . $domain)));
+$callAppDomain = strtolower(trim((string) (getenv('VIDEOCHAT_EDGE_CALL_APP_DOMAIN') ?: getenv('VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN') ?: 'apps.' . $domain)));
 $cdnAliasInput = trim((string) (getenv('VIDEOCHAT_EDGE_CDN_ALIASES') ?: 'cnd.' . $domain));
 $externalDomainInput = trim((string) getenv('VIDEOCHAT_EDGE_EXTERNAL_DOMAINS'));
 $externalDomains = [];
@@ -32,6 +35,7 @@ $cdnDomains = array_values(array_unique($cdnDomains));
 $certFile = getenv('VIDEOCHAT_EDGE_CERT_FILE') ?: '/run/certs/live/fullchain.pem';
 $keyFile = getenv('VIDEOCHAT_EDGE_KEY_FILE') ?: '/run/certs/live/privkey.pem';
 $staticRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_STATIC_ROOT') ?: '/app/frontend-dist'), '/');
+$callAppRoot = rtrim((string) (getenv('VIDEOCHAT_EDGE_CALL_APP_ROOT') ?: '/app/call-app'), '/');
 $apiUpstream = getenv('VIDEOCHAT_EDGE_API_UPSTREAM') ?: 'videochat-backend-v1:18080';
 $wsUpstream = getenv('VIDEOCHAT_EDGE_WS_UPSTREAM') ?: 'videochat-backend-ws-v1:18080';
 $sfuUpstream = getenv('VIDEOCHAT_EDGE_SFU_UPSTREAM') ?: 'videochat-backend-sfu-v1:18080';
@@ -957,7 +961,7 @@ $proxy = static function ($client, string $head, array $request, string $upstrea
     @fclose($upstreamStream);
 };
 
-$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream): ?string {
+$route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $sfuDomain, $turnDomain, $cdnDomains, $callAppDomain, $externalDomains, $apiUpstream, $wsUpstream, $sfuUpstream, $externalUpstream): ?string {
     $host = $request['host'];
     $path = $request['path'];
     if ($externalUpstream !== '' && in_array($host, $externalDomains, true)) {
@@ -965,6 +969,9 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     }
     if (in_array($host, $cdnDomains, true)) {
         return 'static';
+    }
+    if ($host === $callAppDomain || str_starts_with($path, '/call-app/')) {
+        return 'call_app_static';
     }
     if ($path === '/ws' || $host === $wsDomain) {
         return $wsUpstream;
@@ -984,7 +991,7 @@ $route = static function (array $request) use ($domain, $apiDomain, $wsDomain, $
     return 'static';
 };
 
-$handleClient = static function ($client, bool $tls) use ($domain, $readRequestHead, $parseRequest, $writeResponse, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
+$handleClient = static function ($client, bool $tls) use ($domain, $callAppRoot, $assetVersion, $readRequestHead, $parseRequest, $writeResponse, $contentType, $route, $serveStatic, $proxy, $proxyCorsHeaders, $isBackgroundUploadRequest, $uploadTraceIdFromRequest, $edgeUploadLog): void {
     stream_set_timeout($client, 10);
     if ($tls) {
         $crypto = @stream_socket_enable_crypto($client, true, STREAM_CRYPTO_METHOD_TLS_SERVER);
@@ -1055,6 +1062,11 @@ $handleClient = static function ($client, bool $tls) use ($domain, $readRequestH
     }
     if ($upstream === 'static') {
         $serveStatic($client, $request);
+        @fclose($client);
+        return;
+    }
+    if ($upstream === 'call_app_static') {
+        videochat_edge_serve_call_app_static($client, $request, $callAppRoot, $writeResponse, $contentType, $assetVersion);
         @fclose($client);
         return;
     }
