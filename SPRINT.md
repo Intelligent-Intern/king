@@ -183,10 +183,22 @@ Tickets:
       backend Gossip runtime contract for forbidden media commands, media-field
       rejection, and control-plane recovery pass-through.
     - Validation: `npm run test:contract:gossip`, `git diff --check`.
-- [ ] GSP-09 Integration contracts and smoke checks
+- [x] GSP-09 Integration contracts and smoke checks
   - Cover `gossip_primary`, `sfu_first`, and `sfu_mirror` behavior at contract
     level.
   - Exercise join, churn, neighbor repair, and SFU failure tolerance.
+  - Proof:
+    - Added `gossip-media-carrier-integration-smoke-contract.mjs` as a
+      cross-cutting contract that executes the publisher dispatch helper in
+      `gossip_primary`, `sfu_first`, and `sfu_mirror`.
+    - The smoke proves `gossip_primary` publishes Gossip when SFU is unavailable,
+      `sfu_first` remains blocked by required SFU availability, and `sfu_mirror`
+      mirrors Gossip after SFU success or post-encode SFU send failure.
+    - The same smoke exercises mode-sensitive rollout gates, direct snapshot
+      topology, churn topology maps, dedicated neighbor lifecycle wiring,
+      authoritative repair cleanup, backend recovery ops, and the no-normal
+      media-fanout guard.
+    - Validation: `npm run test:contract:gossip`, `git diff --check`.
 - [ ] GSP-10 Test protocol and readiness record
   - Produce the final test protocol with commands, observed results, residual
     risks, and remaining rollout gates.
