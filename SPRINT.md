@@ -864,11 +864,19 @@ Tickets:
       plus persistent `call_app_audit_events`.
     - Routed `call-app/grants-updated` over the existing realtime signaling
       lane and added `call-app-participant-grants-contract.mjs`.
-- [ ] CAP-11 Iframe launch and parent bridge
+- [x] CAP-11 Iframe launch and parent bridge
   - Mint short-lived launch tokens.
   - Enforce iframe sandbox/origin/CSP.
   - Implement strict `postMessage` protocol between parent and app.
   - Do not expose primary user session token to the iframe.
+  - Proof:
+    - Added backend launch-token mint/validate domain and
+      POST `/api/call-app-sessions/{session_id}/launch-token`.
+    - Added public token-scoped validate route for sandboxed iframe launch
+      checks without primary session exposure.
+    - Added `useCallAppIframeBridge.js` and wired `CallAppWorkspaceHost.vue`
+      to mint tokens, enforce sandbox/CSP, and strict opaque-origin message
+      validation.
 - [ ] CAP-12 CRDT envelope and synchronization
   - Implement King Call App CRDT envelope.
   - Add snapshot bootstrap, op append, op replay, duplicate suppression,

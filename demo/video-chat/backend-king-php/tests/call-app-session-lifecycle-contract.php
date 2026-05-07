@@ -265,6 +265,36 @@ SQL
     ]);
     videochat_call_app_session_lifecycle_assert((int) ($unknownGrant['status'] ?? 0) === 422, 'unknown user grant patch should fail closed');
 
+    $deniedLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $userAuth);
+    $deniedLaunchPayload = videochat_call_app_session_lifecycle_decode($deniedLaunch);
+    $deniedCapabilities = (array) (((($deniedLaunchPayload['result'] ?? [])['context'] ?? [])['capabilities'] ?? []));
+    videochat_call_app_session_lifecycle_assert((int) ($deniedLaunch['status'] ?? 0) === 201, 'denied participant should receive a read-only launch token');
+    videochat_call_app_session_lifecycle_assert(in_array('call_apps.crdt.read', $deniedCapabilities, true), 'denied participant launch must allow readonly CRDT bootstrap');
+    videochat_call_app_session_lifecycle_assert(!in_array('call_apps.crdt.append', $deniedCapabilities, true), 'denied participant launch must not allow CRDT append');
+
+    $launch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token', $adminAuth);
+    $launchPayload = videochat_call_app_session_lifecycle_decode($launch);
+    $launchResult = is_array($launchPayload['result'] ?? null) ? $launchPayload['result'] : [];
+    $launchToken = (string) ($launchResult['launch_token'] ?? '');
+    $launchTokenId = (string) ($launchResult['launch_token_id'] ?? '');
+    videochat_call_app_session_lifecycle_assert((int) ($launch['status'] ?? 0) === 201, 'allowed participant launch token should return 201');
+    videochat_call_app_session_lifecycle_assert(strlen($launchToken) >= 68 && $launchTokenId !== '', 'launch token and token id must be present');
+    videochat_call_app_session_lifecycle_assert(!str_contains(json_encode($launchPayload, JSON_UNESCAPED_SLASHES), (string) ($adminAuth['token'] ?? '')), 'launch payload must not expose the primary session token');
+    videochat_call_app_session_lifecycle_assert((string) (((($launchResult['context'] ?? [])['participant'] ?? [])['actor_id'] ?? '')) !== '', 'launch context must expose a pseudonymous actor id');
+    videochat_call_app_session_lifecycle_assert(!array_key_exists('user_id', (array) ((($launchResult['context'] ?? [])['participant'] ?? []))), 'launch context must not expose raw user ids to the iframe');
+
+    $validatedLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
+        'launch_token' => $launchToken,
+    ]);
+    $validatedPayload = videochat_call_app_session_lifecycle_decode($validatedLaunch);
+    videochat_call_app_session_lifecycle_assert((int) ($validatedLaunch['status'] ?? 0) === 200, 'launch token validation should return 200');
+    videochat_call_app_session_lifecycle_assert((string) (($validatedPayload['result'] ?? [])['state'] ?? '') === 'valid', 'validated launch token state mismatch');
+
+    $invalidLaunch = $dispatch('POST', '/api/call-app-sessions/' . rawurlencode($sessionId) . '/launch-token/validate', [], [
+        'launch_token' => 'not-a-real-launch-token',
+    ]);
+    videochat_call_app_session_lifecycle_assert((int) ($invalidLaunch['status'] ?? 0) === 401, 'invalid launch token should fail closed');
+
     $inactive = $dispatch('PATCH', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth, ['status' => 'inactive']);
     videochat_call_app_session_lifecycle_assert((int) ($inactive['status'] ?? 0) === 200, 'inactive update should return 200');
     $inactiveSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
@@ -275,35 +305,13 @@ SQL
     $activeSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($activeSnapshot['active_session_count'] ?? 0) === 1, 'reactivated session must return to active room snapshot');
 
-    $pdo->prepare(
-        <<<'SQL'
-INSERT INTO call_app_launch_tokens(
-    public_id, tenant_id, app_session_id, token_hash, issued_to_user_id,
-    issued_at, expires_at, created_at, updated_at
-) VALUES(
-    :public_id, :tenant_id, :app_session_id, :token_hash, :issued_to_user_id,
-    :issued_at, :expires_at, :created_at, :updated_at
-)
-SQL
-    )->execute([
-        ':public_id' => 'launch_contract_token',
-        ':tenant_id' => $tenantId,
-        ':app_session_id' => $sessionRowId,
-        ':token_hash' => hash('sha256', 'launch_contract_token'),
-        ':issued_to_user_id' => $adminUserId,
-        ':issued_at' => $now,
-        ':expires_at' => '2026-05-07T11:00:00Z',
-        ':created_at' => $now,
-        ':updated_at' => $now,
-    ]);
-
     $removed = $dispatch('DELETE', '/api/call-app-sessions/' . rawurlencode($sessionId), $adminAuth);
     $removedPayload = videochat_call_app_session_lifecycle_decode($removed);
     videochat_call_app_session_lifecycle_assert((int) ($removed['status'] ?? 0) === 200, 'remove should return 200');
-    videochat_call_app_session_lifecycle_assert((int) (($removedPayload['result'] ?? [])['retired_launch_tokens'] ?? 0) === 1, 'remove must retire launch tokens');
+    videochat_call_app_session_lifecycle_assert((int) (($removedPayload['result'] ?? [])['retired_launch_tokens'] ?? 0) === 2, 'remove must retire launch tokens');
     $removedSnapshot = videochat_call_app_room_snapshot($pdo, $tenantId, $callId);
     videochat_call_app_session_lifecycle_assert((int) ($removedSnapshot['active_session_count'] ?? 0) === 0, 'removed session must leave active room snapshot');
-    $revokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = 'launch_contract_token' LIMIT 1")->fetchColumn();
+    $revokedAt = (string) $pdo->query("SELECT revoked_at FROM call_app_launch_tokens WHERE public_id = " . $pdo->quote($launchTokenId) . " LIMIT 1")->fetchColumn();
     videochat_call_app_session_lifecycle_assert($revokedAt !== '', 'removed session must revoke launch token');
 
     $afterRemoveList = $dispatch('GET', '/api/calls/' . rawurlencode($callId) . '/call-app-sessions', $adminAuth);

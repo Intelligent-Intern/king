@@ -32,16 +32,28 @@
     <section class="call-app-workspace-frame-shell">
       <iframe
         v-if="hasActiveSession"
+        ref="iframeRef"
         class="call-app-workspace-frame"
         :src="iframeSrc"
         :title="iframeTitle"
         :data-call-app-key="appKey"
         :data-call-app-entrypoint="iframeEntrypoint"
+        :data-call-app-launch-state="launchState.status"
         sandbox="allow-scripts allow-forms allow-pointer-lock allow-downloads"
+        csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:"
         referrerpolicy="no-referrer"
         loading="eager"
+        @load="handleIframeLoad"
       ></iframe>
-      <section v-else class="call-app-workspace-empty" aria-live="polite">
+      <section
+        v-if="hasActiveSession && launchState.status !== 'ready'"
+        class="call-app-workspace-launch-status"
+        :class="`state-${launchState.status}`"
+        aria-live="polite"
+      >
+        <span>{{ launchStatusLabel }}</span>
+      </section>
+      <section v-if="!hasActiveSession" class="call-app-workspace-empty" aria-live="polite">
         <span class="call-app-workspace-empty-title">{{ t('calls.workspace.no_call_app_active') }}</span>
       </section>
     </section>
@@ -49,9 +61,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { t } from '../../../modules/localization/i18nRuntime.js';
 import { CALL_APP_WORKSPACE_MINI_LIMIT, callAppWorkspaceIframeUrl } from './callAppWorkspaceState.js';
+import { createCallAppIframeBridge } from './useCallAppIframeBridge.js';
 
 const props = defineProps({
   activeSession: {
@@ -86,18 +99,35 @@ const props = defineProps({
     type: Function,
     required: true,
   },
+  apiRequest: {
+    type: Function,
+    required: true,
+  },
 });
 
+const iframeRef = ref(null);
 const hasActiveSession = computed(() => props.activeSession !== null && String(props.activeSession?.id || '').trim() !== '');
 const sessionId = computed(() => String(props.activeSession?.id || '').trim());
 const appKey = computed(() => String(props.activeSession?.app_key || props.activeSession?.appKey || '').trim());
 const iframeEntrypoint = computed(() => String(props.activeSession?.app?.iframe_entrypoint || '').trim());
 const iframeSrc = computed(() => (hasActiveSession.value ? callAppWorkspaceIframeUrl(props.activeSession) : 'about:blank'));
+const activeSessionRef = computed(() => props.activeSession);
 const iframeTitle = computed(() => {
   const name = String(props.activeSession?.app?.name || appKey.value || 'Call App').trim();
   return `${name} workspace`;
 });
 const visibleMiniParticipants = computed(() => props.miniParticipants.slice(0, CALL_APP_WORKSPACE_MINI_LIMIT));
+const { launchState, handleIframeLoad } = createCallAppIframeBridge({
+  activeSession: activeSessionRef,
+  iframeRef,
+  apiRequest: props.apiRequest,
+});
+const launchStatusLabel = computed(() => {
+  if (launchState.value.status === 'error') return launchState.value.error || 'Call App launch failed.';
+  if (launchState.value.status === 'launch_sent') return 'Opening Call App...';
+  if (launchState.value.status === 'token_ready') return 'Preparing Call App...';
+  return 'Requesting Call App access...';
+});
 </script>
 
 <style scoped>
@@ -215,6 +245,7 @@ const visibleMiniParticipants = computed(() => props.miniParticipants.slice(0, C
 }
 
 .call-app-workspace-frame-shell {
+  position: relative;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -230,6 +261,23 @@ const visibleMiniParticipants = computed(() => props.miniParticipants.slice(0, C
   border: 0;
   display: block;
   background: var(--color-text-primary);
+}
+
+.call-app-workspace-launch-status {
+  position: absolute;
+  inset: auto 16px 16px auto;
+  z-index: 2;
+  max-width: min(360px, calc(100% - 32px));
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-navy);
+  color: var(--color-heading);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.call-app-workspace-launch-status.state-error {
+  border-color: var(--color-error);
 }
 
 .call-app-workspace-empty {
