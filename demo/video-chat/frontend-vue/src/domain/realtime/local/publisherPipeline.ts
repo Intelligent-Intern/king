@@ -20,7 +20,11 @@ import {
   roundedStageMs,
 } from './publisherFrameTrace';
 import { createPublisherSourceReadbackController } from './publisherSourceReadback';
-import { reportSfuClientUnavailableAfterEncode } from './publisherPipelineSendFailures';
+import {
+  diagnoseOptionalSfuPressureAfterGossip,
+  dispatchWlvcPublisherFrame,
+  publisherRequiresSfuBeforeEncode,
+} from './publisherFrameDispatch';
 import { resolveProfileReadbackIntervalMs, resolvePublisherFrameSize } from './videoFrameSizing';
 
 export function createLocalPublisherPipelineHelpers({
@@ -469,7 +473,8 @@ export function createLocalPublisherPipelineHelpers({
         if (!isWlvcRuntimePath()) return;
         if (stopIfPipelineProfileChanged()) return;
         if (state.wlvcEncodeInFlight) return;
-        if (!refs.videoEncoderRef.value || !currentOpenSfuClient()) return;
+        if (!refs.videoEncoderRef.value) return;
+        if (publisherRequiresSfuBeforeEncode() && !currentOpenSfuClient()) return;
         if (shouldThrottleWlvcEncodeLoop()) return;
         const bufferedAmount = getSfuClientBufferedAmount();
         if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {
@@ -839,40 +844,21 @@ export function createLocalPublisherPipelineHelpers({
         }
 
         if (stopIfPipelineProfileChanged()) return;
-        const sendClient = currentOpenSfuClient();
-        if (!sendClient) {
-          reportSfuClientUnavailableAfterEncode({
-            getSfuClientBufferedAmount,
-            handleWlvcFrameSendFailure,
-            trackId: videoTrack.id,
-            trace,
-            timestamp,
-          });
-          return;
-        }
-        const frameSent = await sendClient.sendEncodedFrame(outgoingFrame);
-        if (frameSent === false) {
-          paceForcedKeyframeRecovery();
-          const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
-          handleWlvcFrameSendFailure(
-            getSfuClientBufferedAmount(),
-            videoTrack.id,
-            String(sfuSendFailureDetails?.reason || 'sfu_frame_send_failed'),
-            sfuSendFailureDetails,
-          );
-          return;
-        }
-        try {
-          publishLocalEncodedFrameToGossip(outgoingFrame);
-        } catch (gossipError) {
-          captureClientDiagnosticError('gossip_data_lane_publish_failed', gossipError, {
-            media_runtime_path: refs.mediaRuntimePathRef.value,
-            track_id: videoTrack.id,
-          }, {
-            code: 'gossip_data_lane_publish_failed',
-          });
-        }
-        const postSendBufferedAmount = getSfuClientBufferedAmount();
+        const dispatchResult = await dispatchWlvcPublisherFrame({
+          frame: outgoingFrame,
+          trackId: videoTrack.id,
+          mediaRuntimePath: refs.mediaRuntimePathRef.value,
+          currentOpenSfuClient,
+          getSfuClientBufferedAmount,
+          publishLocalEncodedFrameToGossip,
+          captureClientDiagnostic,
+          captureClientDiagnosticError,
+          trace,
+          timestamp,
+          paceForcedKeyframeRecovery,
+        });
+        if (!dispatchResult.ok) return;
+        const postSendBufferedAmount = Number(dispatchResult.postSendBufferedAmount || 0);
         const postSendPressureBytes = Math.max(
           2 * 1024 * 1024,
           Math.floor(Math.max(
@@ -881,29 +867,39 @@ export function createLocalPublisherPipelineHelpers({
           ) * 0.5),
         );
         if (postSendBufferedAmount >= postSendPressureBytes) {
-          paceForcedKeyframeRecovery();
-          handleWlvcFrameSendFailure(
-            postSendBufferedAmount,
-            videoTrack.id,
-            'sfu_frame_send_pressure',
-            {
-              reason: 'sfu_frame_send_pressure',
-              stage: 'browser_websocket_post_send_pressure',
-              source: 'websocket_buffered_amount',
-              message: 'Encoded SFU frame was sent, but websocket buffering crossed the soft pressure budget.',
-              transportPath: 'binary_envelope',
+          if (dispatchResult.sfuSendOptional && dispatchResult.gossipPublished) {
+            diagnoseOptionalSfuPressureAfterGossip({
+              captureClientDiagnostic,
+              mediaRuntimePath: refs.mediaRuntimePathRef.value,
+              trackId: videoTrack.id,
               bufferedAmount: postSendBufferedAmount,
-              payloadBytes: encodedPayloadBytes,
-              wirePayloadBytes: Number(outgoingFrame.transportMetrics?.wire_payload_bytes || 0),
-              chunkCount: Number(outgoingFrame.transportMetrics?.chunk_count || 0),
-              publisherFrameTraceId: String(outgoingFrame.transportMetrics?.publisher_frame_trace_id || ''),
-              publisherPathTraceStages: String(outgoingFrame.transportMetrics?.publisher_path_trace_stages || ''),
-              encodeMs,
-              drawImageMs,
-              readbackMs,
-            },
-          );
-          return;
+              pressureBudgetBytes: postSendPressureBytes,
+            });
+          } else {
+            paceForcedKeyframeRecovery();
+            handleWlvcFrameSendFailure(
+              postSendBufferedAmount,
+              videoTrack.id,
+              'sfu_frame_send_pressure',
+              {
+                reason: 'sfu_frame_send_pressure',
+                stage: 'browser_websocket_post_send_pressure',
+                source: 'websocket_buffered_amount',
+                message: 'Encoded SFU frame was sent, but websocket buffering crossed the soft pressure budget.',
+                transportPath: 'binary_envelope',
+                bufferedAmount: postSendBufferedAmount,
+                payloadBytes: encodedPayloadBytes,
+                wirePayloadBytes: Number(outgoingFrame.transportMetrics?.wire_payload_bytes || 0),
+                chunkCount: Number(outgoingFrame.transportMetrics?.chunk_count || 0),
+                publisherFrameTraceId: String(outgoingFrame.transportMetrics?.publisher_frame_trace_id || ''),
+                publisherPathTraceStages: String(outgoingFrame.transportMetrics?.publisher_path_trace_stages || ''),
+                encodeMs,
+                drawImageMs,
+                readbackMs,
+              },
+            );
+            return;
+          }
         }
         if (postSendBufferedAmount < constants.sendBufferHighWaterBytes) {
           resetWlvcBackpressureCounters();

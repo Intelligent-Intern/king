@@ -24,8 +24,9 @@ async function main() {
   const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
   const publisherPipeline = read('src/domain/realtime/local/publisherPipeline.ts');
+  const publisherFrameDispatch = read('src/domain/realtime/local/publisherFrameDispatch.ts');
   const publisherPipelineSendFailures = read('src/domain/realtime/local/publisherPipelineSendFailures.ts');
-  const publisherSendPath = `${publisherPipeline}\n${publisherPipelineSendFailures}`;
+  const publisherSendPath = `${publisherPipeline}\n${publisherFrameDispatch}\n${publisherPipelineSendFailures}`;
   const mediaStack = read('src/domain/realtime/workspace/callWorkspace/mediaStack.ts');
 
   requireContains(publisherBackpressureController, 'export const PUBLISHER_BACKPRESSURE_ACTIONS', 'central publisher action vocabulary');
@@ -60,8 +61,8 @@ async function main() {
   requireContains(publisherPipeline, 'handleWlvcRuntimeEncodeError({', 'publisher pipeline delegates runtime encode failure downshift decisions');
   requireContains(publisherPipeline, 'const currentOpenSfuClient = () => {', 'publisher resolves an open SFU client before and after async encode stages');
   requireContains(publisherSendPath, "'sfu_client_unavailable_after_encode'", 'publisher reports SFU client loss after encode as send-path recovery, not encode failure');
-  requireContains(publisherPipeline, 'const sendClient = currentOpenSfuClient();', 'publisher rechecks SFU client immediately before sending an encoded frame');
-  requireContains(publisherPipeline, 'sendClient.sendEncodedFrame(outgoingFrame)', 'publisher sends through a stable local client reference');
+  requireContains(publisherFrameDispatch, 'const sendClient = safeFunction(currentOpenSfuClient, () => null)();', 'publisher rechecks SFU client immediately before sending an encoded frame');
+  requireContains(publisherFrameDispatch, 'sendClient.sendEncodedFrame(frame)', 'publisher sends through a stable local client reference');
   requireContains(publisherPipeline, "reason: 'sfu_frame_send_pressure'", 'publisher reacts to post-send websocket pressure before the hard high-water gate');
   requireContains(publisherBackpressureController, "'sfu_frame_send_pressure'", 'controller downshifts on soft post-send pressure');
   requireContains(publisherBackpressureController, 'function isSfuTransportUnavailableSendFailure', 'controller distinguishes lost SFU transport from ordinary data-lane backpressure');
@@ -69,7 +70,7 @@ async function main() {
   requireContains(publisherBackpressureController, 'forceReconnect: true', 'lost SFU transport reconnect is allowed even when carrier diagnostics lag behind the closed socket');
   requireContains(publisherBackpressureController, "normalizedReason === 'sfu_client_unavailable_after_encode'", 'post-encode SFU client loss is treated as transport loss');
   assert.equal(
-    publisherPipeline.includes('refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame)'),
+    publisherSendPath.includes('refs.sfuClientRef.value.sendEncodedFrame(outgoingFrame)'),
     false,
     'publisher pipeline must not dereference a possibly-null SFU client after async encode/security work',
   );

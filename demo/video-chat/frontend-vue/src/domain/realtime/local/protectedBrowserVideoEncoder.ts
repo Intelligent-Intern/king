@@ -23,6 +23,10 @@ import {
   resolveSupportedBrowserEncoderConfig,
   shouldScaleBrowserFrame,
 } from './browserVideoEncoderConfig.ts';
+import {
+  dispatchProtectedBrowserPublisherFrame,
+  publisherRequiresSfuBeforeEncode,
+} from './publisherFrameDispatch';
 
 export const PROTECTED_BROWSER_VIDEO_CODEC_ID = 'webcodecs_vp8';
 export const PROTECTED_BROWSER_VIDEO_RUNTIME_ID = 'wlvc_sfu';
@@ -198,6 +202,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     isSfuClientOpen,
     isWlvcRuntimePath,
     mediaDebugLog,
+    publishLocalEncodedFrameToGossip = () => false,
     resetWlvcBackpressureCounters,
     resetWlvcFrameSendFailureCounters,
     resolveWlvcEncodeIntervalMs,
@@ -778,38 +783,21 @@ export async function createProtectedBrowserVideoEncoderPublisher({
       outgoingFrame.transportMetrics = { ...outgoingFrame.transportMetrics, ...publisherFrameTraceMetrics(trace) };
     }
 
-    const sendClient = currentOpenSfuClient();
-    if (!sendClient) {
-      if (!critical) {
-        reportNonCriticalDrop('sfu_client_unavailable_after_browser_thumbnail_encode', {
-          bufferedAmount: getSfuClientBufferedAmount(),
-        });
-        return true;
-      }
-      handleWlvcFrameSendFailure(getSfuClientBufferedAmount(), videoTrack.id, 'sfu_client_unavailable_after_browser_encode', {
-        reason: 'sfu_client_unavailable_after_browser_encode',
-        codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
-        bufferedAmount: getSfuClientBufferedAmount(),
-      });
-      return false;
-    }
-    const sent = await sendClient.sendEncodedFrame(outgoingFrame);
-    if (sent === false) {
-      const sfuSendFailureDetails = sendClient.getLastSendFailure?.() || null;
-      if (!critical) {
-        reportNonCriticalDrop(String(sfuSendFailureDetails?.reason || 'sfu_browser_thumbnail_frame_send_failed'), {
-          ...(sfuSendFailureDetails || {}),
-        });
-        return true;
-      }
-      handleWlvcFrameSendFailure(
-        getSfuClientBufferedAmount(),
-        videoTrack.id,
-        String(sfuSendFailureDetails?.reason || 'sfu_browser_encoded_frame_send_failed'),
-        sfuSendFailureDetails,
-      );
-      return false;
-    }
+    const dispatchResult = await dispatchProtectedBrowserPublisherFrame({
+      frame: outgoingFrame,
+      trackId: videoTrack.id,
+      mediaRuntimePath: refs.mediaRuntimePathRef.value,
+      currentOpenSfuClient,
+      getSfuClientBufferedAmount,
+      publishLocalEncodedFrameToGossip,
+      captureClientDiagnostic,
+      captureClientDiagnosticError,
+      handleWlvcFrameSendFailure,
+      reportNonCriticalDrop,
+      critical,
+      codecId: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+    });
+    if (!dispatchResult.ok) return false;
     if (critical && encodedFrameType === 'keyframe') {
       primaryKeyframeMissCount = 0;
       primaryKeyframeMissDiagnosticAtMs = 0;
@@ -859,7 +847,8 @@ export async function createProtectedBrowserVideoEncoderPublisher({
         onProtectedBrowserEncoderFailure(error);
         return;
       }
-      if (encodeInFlight || !currentOpenSfuClient() || shouldThrottleWlvcEncodeLoop()) return;
+      if (encodeInFlight || shouldThrottleWlvcEncodeLoop()) return;
+      if (publisherRequiresSfuBeforeEncode() && !currentOpenSfuClient()) return;
       const timestamp = Date.now();
       if (constants.protectedMediaEnabled && !canProtectCurrentSfuTargets()) {
         forceNextSecurityKeyframe = true;
