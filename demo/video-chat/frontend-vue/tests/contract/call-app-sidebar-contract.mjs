@@ -57,7 +57,7 @@ assert.match(
 
 assert.match(
   leftSidebarSource,
-  /v-if="showTabs"[\s\S]*Call Apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="\$emit\('call-app-session-created', \$event\)"/,
+  /v-if="showTabs"[\s\S]*calls\.workspace\.call_apps[\s\S]*<CallAppsSidebarPanel[\s\S]*v-if="showCallAppsPanel"[\s\S]*:call-id="activeSidebarCallId"[\s\S]*@session-created="\$emit\('call-app-session-created', \$event\)"/,
   'CallWorkspaceLeftSidebar must expose Call Apps as a conditional left-sidebar tab and hand active call context to the panel',
 );
 

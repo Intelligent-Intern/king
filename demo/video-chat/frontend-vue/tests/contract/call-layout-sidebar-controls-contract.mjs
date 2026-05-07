@@ -58,8 +58,8 @@ try {
 
   assert.match(settingsCss, /\.shell\.call-workspace-mode \.sidebar-content\.left\.left-call-content \.call-left-settings-block\s*\{[\s\S]*?width:\s*100%;[\s\S]*?margin:\s*0;/, 'call workspace settings blocks must share one width rule');
   assert.doesNotMatch(settingsCss, /\.shell\.call-workspace-mode[^{]*\.call-left-owner-edit-block\s*\{/, 'call settings must not use owner-specific width rules');
-  assert.match(callSettingsMarkup, /<label for="call-left-layout-mode">Video layout<\/label>[\s\S]*<AppSelect[\s\S]*id="call-left-layout-mode"/, 'layout mode must use existing AppSelect styling');
-  assert.match(callSettingsMarkup, /<label for="call-left-layout-strategy">Activity strategy<\/label>[\s\S]*<AppSelect[\s\S]*id="call-left-layout-strategy"/, 'activity strategy must use existing AppSelect styling');
+  assert.match(callSettingsMarkup, /<label for="call-left-layout-mode">\{\{ t\('calls\.workspace\.video_layout'\) \}\}<\/label>[\s\S]*<AppSelect[\s\S]*id="call-left-layout-mode"/, 'layout mode must use existing AppSelect styling');
+  assert.match(callSettingsMarkup, /<label for="call-left-layout-strategy">\{\{ t\('calls\.workspace\.activity_strategy'\) \}\}<\/label>[\s\S]*<AppSelect[\s\S]*id="call-left-layout-strategy"/, 'activity strategy must use existing AppSelect styling');
   assert.match(callSettingsMarkup, /class="call-left-settings-field"[\s\S]*id="call-left-layout-mode"/, 'layout mode must use the existing call-left settings field wrapper');
   assert.match(callSettingsMarkup, /class="call-left-settings-field"[\s\S]*id="call-left-layout-strategy"/, 'activity strategy must use the existing call-left settings field wrapper');
   assert.doesNotMatch(callSettingsMarkup, /class="call-left-layout-controls"/, 'layout controls must not use a bespoke styling wrapper');

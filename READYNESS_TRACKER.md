@@ -17,6 +17,20 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Workspace shell viewport extraction: completed the remaining
+  Shell/sidebar refactor item by moving responsive breakpoint state,
+  left-sidebar collapse/open state, mobile scroll locking, route-close behavior,
+  and media-query listener cleanup into `useWorkspaceShellViewport.js`.
+  `WorkspaceShell.vue` now consumes the composable and no longer owns
+  `matchMedia` or scroll-lock lifecycle code. The Call sidebar labels touched
+  by the previous extraction now use i18n keys instead of static English text.
+  Proof: `npm run test:contract:shared-ui-primitives`,
+  `node tests/contract/call-app-sidebar-contract.mjs`,
+  `node tests/contract/call-layout-sidebar-controls-contract.mjs`,
+  `node tests/contract/frontend-translation-key-coverage-contract.mjs`,
+  `node tests/contract/localization-settings-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 Standard workspace sidebar extraction: moved the non-call left
   sidebar internals out of `WorkspaceShell.vue` and into
   `WorkspaceStandardSidebar.vue`. The extracted component owns the fixed brand
