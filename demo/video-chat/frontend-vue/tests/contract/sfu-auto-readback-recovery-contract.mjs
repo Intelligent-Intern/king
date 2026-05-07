@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 function fail(message) {
   throw new Error(`[sfu-auto-readback-recovery-contract] FAIL: ${message}`);
@@ -74,8 +75,6 @@ function createController(createPublisherBackpressureController, overrides = {})
 }
 
 async function main() {
-  const controllerPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
-  const runtimeConfigPath = path.resolve(frontendRoot, 'src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
   const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
   const runtimeSwitching = read('src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
@@ -92,44 +91,57 @@ async function main() {
   requireContains(runtimeSwitching, 'sfu_source_readback_profile_upshift', 'runtime switcher emits backend diagnostics for upward probes');
   requireContains(runtimeSwitching, "qualityDirection === 'up'", 'existing profile switch callback supports automatic recovery without extra CallWorkspace wiring');
 
-  const {
-    SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
-    SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
-  } = await import(pathToFileURL(runtimeConfigPath).href);
-  const { createPublisherBackpressureController } = await import(pathToFileURL(controllerPath).href);
+  const server = await createServer({
+    root: frontendRoot,
+    logLevel: 'error',
+    server: { middlewareMode: true, hmr: false },
+  });
 
-  const nowMs = Date.now();
-  const state = baseTransportState();
-  state.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
-  state.wlvcSourceReadbackStableSampleCount = 4;
-  const probes = [];
-  let restarts = 0;
-  const controller = createController(createPublisherBackpressureController, {
-    state,
-    probeSfuVideoQualityAfterStableReadback: (reason, details) => {
-      probes.push({ reason, details });
-      return true;
-    },
-    onRestartSfu: () => { restarts += 1; },
-  });
-  const probed = controller.noteWlvcSourceReadbackSuccess({
-    nowMs,
-    trackId: 'track-up',
-    drawImageMs: 4,
-    readbackMs: 5,
-    drawBudgetMs: 10,
-    readbackBudgetMs: 10,
-    readbackMethod: 'video_frame_copy_to_rgba',
-    sourceBackend: 'video_frame_processor',
-    frameWidth: 320,
-    frameHeight: 180,
-  });
-  assert.equal(probed, true, 'stable low-timing readback window must request one upward quality probe');
-  assert.equal(probes.length, 1, 'only one recovery probe is emitted');
-  assert.equal(probes[0].reason, 'sfu_source_readback_recovered', 'recovery probe reason is explicit');
-  assert.equal(probes[0].details.stable_window_ms, SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS, 'probe includes the stable-window threshold');
-  assert.equal(restarts, 0, 'quality recovery must not restart the SFU socket');
-  assert.equal(state.wlvcSourceReadbackStableStartedAtMs, 0, 'successful probe resets the stable window');
+  try {
+    const {
+      SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
+      SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
+      SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS,
+    } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+    const {
+      createPublisherBackpressureController,
+    } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
+    const {
+      createCallWorkspaceRuntimeSwitchingHelpers,
+    } = await server.ssrLoadModule('/src/domain/realtime/workspace/callWorkspace/runtimeSwitching.ts');
+
+    const nowMs = Date.now();
+    const state = baseTransportState();
+    state.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
+    state.wlvcSourceReadbackStableSampleCount = 4;
+    const probes = [];
+    let restarts = 0;
+    const controller = createController(createPublisherBackpressureController, {
+      state,
+      probeSfuVideoQualityAfterStableReadback: (reason, details) => {
+        probes.push({ reason, details });
+        return true;
+      },
+      onRestartSfu: () => { restarts += 1; },
+    });
+    const probed = controller.noteWlvcSourceReadbackSuccess({
+      nowMs,
+      trackId: 'track-up',
+      drawImageMs: 4,
+      readbackMs: 5,
+      drawBudgetMs: 10,
+      readbackBudgetMs: 10,
+      readbackMethod: 'video_frame_copy_to_rgba',
+      sourceBackend: 'video_frame_processor',
+      frameWidth: 320,
+      frameHeight: 180,
+    });
+    assert.equal(probed, true, 'stable low-timing readback window must request one upward quality probe');
+    assert.equal(probes.length, 1, 'only one recovery probe is emitted');
+    assert.equal(probes[0].reason, 'sfu_source_readback_recovered', 'recovery probe reason is explicit');
+    assert.equal(probes[0].details.stable_window_ms, SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS, 'probe includes the stable-window threshold');
+    assert.equal(restarts, 0, 'quality recovery must not restart the SFU socket');
+    assert.equal(state.wlvcSourceReadbackStableStartedAtMs, 0, 'successful probe resets the stable window');
 
   const highTimingState = baseTransportState();
   highTimingState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
@@ -165,23 +177,32 @@ async function main() {
     readbackBudgetMs: 10,
   }), false, 'recent downshift cooldown blocks upward recovery');
 
-  const balancedCeilingState = baseTransportState();
-  balancedCeilingState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
-  const balancedCeilingController = createController(createPublisherBackpressureController, {
+  assert.deepEqual(
+    SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
+    [5000, 10000, 30000, 120000, 300000],
+    'automatic quality recovery cadence must match the five requested probe points',
+  );
+
+  const balancedRecoveryState = baseTransportState();
+  balancedRecoveryState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
+  const balancedRecoveryProbes = [];
+  const balancedRecoveryController = createController(createPublisherBackpressureController, {
     callMediaPrefs: { outgoingVideoQualityProfile: 'balanced' },
-    state: balancedCeilingState,
-    probeSfuVideoQualityAfterStableReadback: () => {
-      throw new Error('balanced is the automatic stability ceiling and must not probe quality');
+    state: balancedRecoveryState,
+    probeSfuVideoQualityAfterStableReadback: (reason, details) => {
+      balancedRecoveryProbes.push({ reason, details });
+      return true;
     },
   });
-  assert.equal(balancedCeilingController.noteWlvcSourceReadbackSuccess({
+  assert.equal(balancedRecoveryController.noteWlvcSourceReadbackSuccess({
     nowMs,
     drawImageMs: 4,
     readbackMs: 5,
     drawBudgetMs: 10,
     readbackBudgetMs: 10,
-  }), false, 'automatic recovery stops at balanced instead of probing quality');
-  assert.equal(balancedCeilingState.wlvcSourceReadbackStableStartedAtMs, 0, 'balanced ceiling clears the recovery window');
+  }), true, 'automatic recovery may probe from balanced to quality');
+  assert.equal(balancedRecoveryProbes.length, 1, 'balanced-to-quality probe is emitted once');
+  assert.equal(balancedRecoveryState.wlvcSourceReadbackStableStartedAtMs, 0, 'balanced recovery clears the recovery window after probing');
 
   const fallbackState = baseTransportState();
   fallbackState.wlvcSourceReadbackStableStartedAtMs = nowMs - SFU_AUTO_QUALITY_RECOVERY_STABLE_WINDOW_MS - 250;
@@ -203,7 +224,75 @@ async function main() {
   assert.equal(fallbackCalls[0].reason, 'sfu_source_readback_recovered', 'fallback callback carries the recovery reason');
   assert.equal(fallbackCalls[0].details.direction, 'up', 'fallback callback marks the switch as an upward probe');
 
-  process.stdout.write('[sfu-auto-readback-recovery-contract] PASS\n');
+  const scheduledPrefs = { outgoingVideoQualityProfile: 'realtime' };
+  const scheduledTransitions = [];
+  const scheduledState = {
+    sfuAutomaticQualityTransitionCount: 0,
+    sfuAutomaticQualityTransitionLastAtMs: 0,
+    sfuAutoQualityDowngradeLastAtMs: 0,
+    sfuAutoQualityRecoveryLastAtMs: 0,
+  };
+  const scheduledHelpers = createCallWorkspaceRuntimeSwitchingHelpers({
+    callbacks: {
+      appendMediaRuntimeTransitionEvent: () => {},
+      captureClientDiagnostic: () => {},
+      mediaDebugLog: () => {},
+      publishLocalTracks: async () => {},
+      resetSfuOutboundMediaAfterProfileSwitch: () => {},
+      resolveSfuVideoQualityProfile: (profileId) => ({ id: String(profileId || 'realtime').trim().toLowerCase() }),
+      setCallOutgoingVideoQualityProfile: (profileId) => {
+        scheduledPrefs.outgoingVideoQualityProfile = profileId;
+        scheduledTransitions.push(profileId);
+      },
+      shouldSyncNativeLocalTracksBeforeOffer: () => false,
+      shouldUseNativeAudioBridge: () => false,
+      startEncodingPipeline: async () => {},
+      stopLocalEncodingPipeline: () => {},
+      syncNativePeerConnectionsWithRoster: () => {},
+      syncNativePeerLocalTracks: () => {},
+      synchronizeNativePeerMediaElements: () => {},
+      teardownNativePeerConnections: () => {},
+      teardownSfuRemotePeers: () => {},
+    },
+    constants: {
+      sfuAutoQualityDowngradeCooldownMs: 2500,
+      sfuAutoQualityDowngradeNext: { quality: 'balanced', balanced: 'realtime', realtime: 'rescue' },
+      sfuAutoQualityRecoveryProbeDelaysMs: [0, 1, 2],
+      sfuRuntimeEnabled: true,
+    },
+    refs: {
+      activeCallId: { value: 'call-scheduled' },
+      activeRoomId: { value: 'room-scheduled' },
+      callMediaPrefs: scheduledPrefs,
+      currentUserId: { value: 7 },
+      localStreamRef: { value: { getVideoTracks: () => [{ readyState: 'live' }] } },
+      mediaRuntimeCapabilities: { value: { stageA: true, stageB: true, preferredPath: 'wlvc_wasm', reasons: [] } },
+      mediaRuntimePath: { value: 'wlvc_wasm' },
+      mediaRuntimeReason: { value: '' },
+      nativePeerConnectionsRef: { value: new Map() },
+      sfuTransportState: scheduledState,
+    },
+    state: {
+      getRuntimeSwitchInFlight: () => false,
+      getWlvcEncodeFailureCount: () => 0,
+      resetWlvcEncodeCounters: () => {},
+      setRuntimeSwitchInFlight: () => {},
+    },
+  });
+  assert.equal(
+    scheduledHelpers.ensureSfuVideoQualityRecoveryProbeSeries('contract_scheduled_quality_probe'),
+    true,
+    'scheduled recovery probe series starts when a lower profile is active',
+  );
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  scheduledHelpers.clearSfuVideoQualityRecoveryProbeTimer();
+  assert.deepEqual(scheduledTransitions, ['balanced', 'quality'], 'scheduled recovery probes climb one tier at a time up to quality');
+  assert.equal(scheduledState.sfuAutomaticQualityTransitionCount, 2, 'scheduled quality probes count the automatic transitions');
+
+    process.stdout.write('[sfu-auto-readback-recovery-contract] PASS\n');
+  } finally {
+    await server.close();
+  }
 }
 
 main().catch((error) => {

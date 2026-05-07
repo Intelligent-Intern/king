@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/chat_attachment_storage.php';
+
 function videochat_chat_archive_bootstrap(PDO $pdo): void
 {
     $pdo->exec(
@@ -64,23 +66,24 @@ function videochat_chat_archive_store_put(string $objectKey, string $json): bool
     }
 
     if (!function_exists('king_object_store_put_from_stream')) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $json);
     }
 
     $stream = fopen('php://temp', 'r+');
     if ($stream === false) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $json);
     }
     fwrite($stream, $json);
     rewind($stream);
 
     try {
-        return king_object_store_put_from_stream($objectKey, $stream, [
+        $stored = king_object_store_put_from_stream($objectKey, $stream, [
             'content_type' => 'application/json',
             'cache_class' => 'private',
         ]) === true;
+        return $stored || videochat_chat_attachment_local_store_put($objectKey, $json);
     } catch (Throwable) {
-        return false;
+        return videochat_chat_attachment_local_store_put($objectKey, $json);
     } finally {
         fclose($stream);
     }
@@ -94,13 +97,14 @@ function videochat_chat_archive_store_get(string $objectKey): string|false
     }
 
     if (!function_exists('king_object_store_get')) {
-        return false;
+        return videochat_chat_attachment_local_store_get($objectKey);
     }
 
     try {
-        return king_object_store_get($objectKey);
+        $stored = king_object_store_get($objectKey);
+        return is_string($stored) ? $stored : videochat_chat_attachment_local_store_get($objectKey);
     } catch (Throwable) {
-        return false;
+        return videochat_chat_attachment_local_store_get($objectKey);
     }
 }
 

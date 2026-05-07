@@ -5,6 +5,19 @@ declare(strict_types=1);
 require_once __DIR__ . '/../domain/tenancy/governance_role_assignments.php';
 require_once __DIR__ . '/../domain/tenancy/governance_user_group_assignments.php';
 
+function videochat_admin_user_has_governance_relationship_payload(array $payload): bool
+{
+    return videochat_tenancy_governance_user_payload_has_roles($payload)
+        || videochat_tenancy_governance_user_payload_has_groups($payload);
+}
+
+function videochat_admin_user_core_update_payload(array $payload): array
+{
+    $corePayload = $payload;
+    unset($corePayload['relationships'], $corePayload['roles'], $corePayload['groups']);
+    return $corePayload;
+}
+
 function videochat_handle_admin_user_account_routes(
     string $path,
     string $method,
@@ -366,7 +379,24 @@ function videochat_handle_admin_user_account_routes(
                     ]);
                 }
 
-                $updateResult = videochat_admin_update_user($pdo, $userId, $payload, $tenantId);
+                $hasGovernanceRelationshipPayload = videochat_admin_user_has_governance_relationship_payload($payload);
+                $coreUpdatePayload = videochat_admin_user_core_update_payload($payload);
+                if ($coreUpdatePayload === [] && !$hasGovernanceRelationshipPayload) {
+                    return $errorResponse(422, 'admin_user_validation_failed', 'User update payload failed validation.', [
+                        'fields' => [
+                            'payload' => 'at_least_one_supported_field_required',
+                        ],
+                    ]);
+                }
+
+                $updateResult = $coreUpdatePayload !== []
+                    ? videochat_admin_update_user($pdo, $userId, $coreUpdatePayload, $tenantId)
+                    : [
+                        'ok' => true,
+                        'reason' => 'updated',
+                        'errors' => [],
+                        'user' => $existingUser,
+                    ];
                 if ((bool) ($updateResult['ok'] ?? false) && $tenantId > 0 && is_array($updateResult['user'] ?? null)) {
                     $roleSync = videochat_tenancy_governance_sync_user_roles($pdo, $tenantId, $userId, $actorUserId, $payload);
                     if (!(bool) ($roleSync['ok'] ?? false)) {

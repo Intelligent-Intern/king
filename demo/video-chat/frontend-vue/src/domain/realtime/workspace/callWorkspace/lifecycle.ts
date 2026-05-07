@@ -22,6 +22,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     clearReactionQueueTimer,
     clearReconnectTimer,
     clearRemoteVideoStallTimer,
+    clearSfuVideoQualityRecoveryProbeTimer,
     clearTypingStopTimer,
     closeSocket,
     connectSocket,
@@ -30,6 +31,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     flushQueuedReactions,
     hideAloneIdlePrompt,
     hideLobbyJoinToast,
+    ensureSfuVideoQualityRecoveryProbeSeries,
     initSFU,
     loadDynamicIceServers,
     markWorkspaceReconnectAfterForeground,
@@ -87,6 +89,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     usersRefreshTimer,
     typingByRoom,
     localTracksPublishedToSfuRef,
+    workspaceSidebarState,
   } = refs;
   const {
     getCompactMediaQuery,
@@ -169,6 +172,17 @@ export function registerCallWorkspaceLifecycleHelpers({
   );
 
   watch(
+    () => localStreamRef.value,
+    (stream) => {
+      const setMicLevelMonitorStream = workspaceSidebarState?.setMicLevelMonitorStream;
+      if (typeof setMicLevelMonitorStream !== 'function') return;
+      const mediaStream = typeof MediaStream !== 'undefined' && stream instanceof MediaStream ? stream : null;
+      setMicLevelMonitorStream(mediaStream);
+    },
+    { immediate: true }
+  );
+
+  watch(
     () => [callMediaPrefs.selectedCameraId, callMediaPrefs.selectedMicrophoneId],
     ([nextCameraId, nextMicId], [prevCameraId, prevMicId]) => {
       if (nextCameraId === prevCameraId && nextMicId === prevMicId) return;
@@ -182,6 +196,11 @@ export function registerCallWorkspaceLifecycleHelpers({
       if (nextValue === previousValue) return;
       resetSfuOutboundMediaForAutomaticProfileSwitch(nextValue, previousValue);
       void reconfigureLocalTracksFromSelectedDevices();
+      ensureSfuVideoQualityRecoveryProbeSeries?.('outgoing_video_profile_changed', {
+        trigger: 'profile_watch',
+        previous_video_quality_profile: previousValue,
+        outgoing_video_quality_profile: nextValue,
+      });
     }
   );
 
@@ -379,6 +398,9 @@ export function registerCallWorkspaceLifecycleHelpers({
     }
 
     await publishLocalTracks();
+    ensureSfuVideoQualityRecoveryProbeSeries?.('initial_outgoing_video_quality_probe', {
+      trigger: 'workspace_publish_local_tracks',
+    });
 
     if (shouldConnectSfu.value && sessionState.sessionToken && sessionState.userId) {
       initSFU();
@@ -466,6 +488,7 @@ export function registerCallWorkspaceLifecycleHelpers({
     clearLobbyToastTimer();
     clearReconnectTimer();
     clearPingTimer();
+    clearSfuVideoQualityRecoveryProbeTimer?.();
     clearMediaSecurityResyncTimer();
     clearMediaSecurityHandshakeWatchdog();
     clearLocalTrackRecoveryTimer();
@@ -480,6 +503,7 @@ export function registerCallWorkspaceLifecycleHelpers({
       setTypingSweepTimer(null);
     }
     closeSocket({ leaveRoom: true });
+    workspaceSidebarState?.setMicLevelMonitorStream?.(null);
     teardownLocalPublisher();
     callbacks.teardownGossipDataLane?.();
     teardownNativePeerConnections();

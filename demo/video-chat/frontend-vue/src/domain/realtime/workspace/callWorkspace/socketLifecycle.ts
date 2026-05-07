@@ -450,11 +450,12 @@ export function createCallWorkspaceSocketHelpers({
     }
 
     if (type === 'call/ack') {
-      const signalType = String(payload?.signal_type || '').replace('call/', '').trim() || 'signal';
+      const rawSignalType = String(payload?.signal_type || '').trim().toLowerCase();
+      const signalType = rawSignalType.replace('call/', '').trim() || 'signal';
       if (signalType === 'offer' && Number(payload?.sent_count ?? 0) === 0) {
         scheduleNativeOfferRetryForUserId(payload?.target_user_id, 'brokered_offer_unanswered');
       }
-      if (!refs.shouldSuppressCallAckNotice(signalType)) {
+      if (!refs.shouldSuppressCallAckNotice(rawSignalType || signalType)) {
         setNotice(`Sent ${signalType} to ${payload?.sent_count ?? 0} peer(s).`);
       }
       return;

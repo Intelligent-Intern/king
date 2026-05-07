@@ -18,6 +18,7 @@ const workspace = read('src/domain/realtime/CallWorkspaceView.vue');
 const workspaceClientDiagnostics = read('src/domain/realtime/workspace/callWorkspace/clientDiagnostics.ts');
 const runtimeHealth = read('src/domain/realtime/workspace/callWorkspace/runtimeHealth.ts');
 const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+const participantUi = read('src/domain/realtime/workspace/callWorkspace/participantUi.ts');
 const sfuTransport = read('src/domain/realtime/workspace/callWorkspace/sfuTransport.ts');
 const publisherBackpressureController = read('src/domain/realtime/workspace/callWorkspace/publisherBackpressureController.ts');
 const sfuPublisherControl = `${sfuTransport}\n${publisherBackpressureController}`;
@@ -57,6 +58,9 @@ requireContains(socketLifecycle, "requestWlvcFullFrameKeyframe('media_security_t
 requireContains(socketLifecycle, "const shouldForceMediaSecurityRekey = normalizedError !== 'target_not_in_room' || prunedTargetNotInRoom;", 'media-security target_not_in_room forces rekey when local pruning changed the participant set');
 requireContains(socketLifecycle, 'void sendMediaSecuritySync(shouldForceMediaSecurityRekey);', 'media-security publish failures retry through the normal sync path');
 requireContains(socketLifecycle, "eventType: 'realtime_signaling_stale_target_pruned'", 'expected stale-target pruning has a dedicated diagnostics hook');
+requireContains(socketLifecycle, "const rawSignalType = String(payload?.signal_type || '').trim().toLowerCase();", 'call ack preserves raw signaling type for suppression');
+requireContains(socketLifecycle, 'refs.shouldSuppressCallAckNotice(rawSignalType || signalType)', 'call ack suppression must inspect the raw signaling type');
+requireContains(participantUi, 'MEDIA_SECURITY_SIGNAL_TYPES.includes(`call/${normalized}`)', 'normalized media-security ack notices are suppressed');
 requireContains(socketLifecycle, "if (code === 'signaling_publish_failed' && !expectedStaleTargetPublishFailure)", 'broker failure diagnostics stay separate from expected stale-target pruning');
 requireContains(sfuClient, "eventType: 'sfu_socket_connect_failed'", 'sfu socket connect diagnostics hook');
 requireContains(sfuMessageHandler, "case 'sfu/error':", 'sfu command error diagnostics hook');

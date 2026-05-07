@@ -70,6 +70,11 @@ SQL
     videochat_user_settings_assert((string) ($initialSettings['direction'] ?? '') === 'ltr', 'initial locale direction should be ltr');
     videochat_user_settings_assert(count($initialSettings['supported_locales'] ?? []) >= 28, 'supported locale metadata missing');
     videochat_user_settings_assert((string) ($initialSettings['about_me'] ?? 'missing') === '', 'initial about_me should be empty');
+    videochat_user_settings_assert(($initialSettings['web_app_notifications_enabled'] ?? null) === false, 'initial web app notifications should be disabled');
+    videochat_user_settings_assert(($initialSettings['web_app_notification_sound_enabled'] ?? null) === true, 'initial web app notification sound should be enabled');
+    videochat_user_settings_assert(($initialSettings['web_app_notification_call_invites_enabled'] ?? null) === true, 'initial call invite notifications should be enabled');
+    videochat_user_settings_assert(($initialSettings['web_app_notification_call_reminders_enabled'] ?? null) === true, 'initial call reminder notifications should be enabled');
+    videochat_user_settings_assert(($initialSettings['web_app_notification_chat_mentions_enabled'] ?? null) === true, 'initial chat mention notifications should be enabled');
     videochat_user_settings_assert(!array_key_exists('messenger_contacts', $initialSettings), 'settings must not expose removed messenger contacts');
     videochat_user_settings_assert(!array_key_exists('onboarding_badges', $initialSettings), 'settings must not expose onboarding badges');
 
@@ -86,6 +91,7 @@ SQL
         'date_format' => 'unknown',
         'theme' => '',
         'locale' => 'xx',
+        'web_app_notifications_enabled' => 'sometimes',
     ]);
     videochat_user_settings_assert($invalidValues['ok'] === false, 'invalid settings update should fail');
     videochat_user_settings_assert($invalidValues['reason'] === 'validation_failed', 'invalid settings update reason mismatch');
@@ -104,6 +110,10 @@ SQL
     videochat_user_settings_assert(
         (string) ($invalidValues['errors']['locale'] ?? '') === 'must_be_supported_locale',
         'invalid locale error mismatch'
+    );
+    videochat_user_settings_assert(
+        (string) ($invalidValues['errors']['web_app_notifications_enabled'] ?? '') === 'must_be_boolean',
+        'invalid web app notification boolean error mismatch'
     );
 
     $invalidProfileValues = videochat_update_user_settings($pdo, $userId, [
@@ -152,6 +162,11 @@ SQL
         'linkedin_url' => ' https://www.linkedin.com/in/call-user ',
         'x_url' => 'https://x.com/calluser',
         'youtube_url' => 'https://www.youtube.com/@calluser',
+        'web_app_notifications_enabled' => true,
+        'web_app_notification_sound_enabled' => false,
+        'web_app_notification_call_invites_enabled' => true,
+        'web_app_notification_call_reminders_enabled' => false,
+        'web_app_notification_chat_mentions_enabled' => true,
     ]);
     videochat_user_settings_assert($validUpdate['ok'] === true, 'valid settings update should succeed');
     videochat_user_settings_assert($validUpdate['reason'] === 'updated', 'valid settings update reason mismatch');
@@ -199,6 +214,11 @@ SQL
         (string) (($validUpdate['user'] ?? [])['youtube_url'] ?? '') === 'https://www.youtube.com/@calluser',
         'updated youtube_url mismatch'
     );
+    videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true, 'updated web app notifications mismatch');
+    videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notification_sound_enabled'] ?? null) === false, 'updated web app notification sound mismatch');
+    videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notification_call_invites_enabled'] ?? null) === true, 'updated call invite notifications mismatch');
+    videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notification_call_reminders_enabled'] ?? null) === false, 'updated call reminder notifications mismatch');
+    videochat_user_settings_assert((($validUpdate['user'] ?? [])['web_app_notification_chat_mentions_enabled'] ?? null) === true, 'updated chat mention notifications mismatch');
     videochat_user_settings_assert(!array_key_exists('messenger_contacts', (array) ($validUpdate['user'] ?? [])), 'updated settings must not expose messenger contacts');
 
     $otherSessionId = 'sess_user_settings_contract_other';
@@ -270,6 +290,8 @@ SQL
         (string) (($reauth['user'] ?? [])['avatar_path'] ?? '') === '/avatars/call-user-updated.png',
         'reauth avatar_path should reflect persisted settings'
     );
+    videochat_user_settings_assert((($reauth['user'] ?? [])['web_app_notifications_enabled'] ?? null) === true, 'reauth should reflect persisted web app notifications');
+    videochat_user_settings_assert((($reauth['user'] ?? [])['web_app_notification_sound_enabled'] ?? null) === false, 'reauth should reflect persisted web app notification sound');
 
     $avatarClear = videochat_update_user_settings($pdo, $userId, [
         'avatar_path' => null,

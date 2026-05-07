@@ -1,4 +1,11 @@
 import { buildOptionalCallAudioCaptureConstraints } from '../media/audioCaptureConstraints';
+import {
+  buildCallCameraVideoConstraints,
+  buildFallbackCallCameraVideoConstraints,
+} from '../media/cameraCaptureConstraints';
+import {
+  applyCallSpeakerOutputToMediaElement,
+} from '../media/speakerOutputRouting';
 import { applySfuVideoProfileConstraintsToStream, reportSfuLocalCaptureSettings } from './sfuCaptureProfileConstraints';
 import { isLocalMediaPermissionDeniedError, LOCAL_MEDIA_PERMISSION_DENIED_RETRY_COOLDOWN_MS } from './localMediaPermissionPolicy';
 import { shouldUseReactiveBackgroundPipeline } from '../background/pipeline/featureFlags';
@@ -109,11 +116,7 @@ export function createLocalMediaOrchestrationHelpers({
 
     const video = !wantsVideo
       ? false
-      : cameraDeviceId !== ''
-        ? profileVideoConstraints({
-            deviceId: { exact: cameraDeviceId },
-          })
-        : profileVideoConstraints();
+      : buildCallCameraVideoConstraints(cameraDeviceId, profileVideoConstraints());
     const audio = buildOptionalCallAudioCaptureConstraints(wantsAudio, microphoneDeviceId);
 
     return { video, audio };
@@ -125,11 +128,11 @@ export function createLocalMediaOrchestrationHelpers({
     const videoProfile = currentSfuVideoProfile();
     return {
       video: wantsVideo
-        ? {
+        ? buildFallbackCallCameraVideoConstraints({
             width: { ideal: videoProfile.captureWidth, max: videoProfile.captureWidth },
             height: { ideal: videoProfile.captureHeight, max: videoProfile.captureHeight },
             frameRate: { ideal: videoProfile.captureFrameRate, max: videoProfile.captureFrameRate },
-          }
+          })
         : false,
       audio: buildOptionalCallAudioCaptureConstraints(wantsAudio),
     };
@@ -675,12 +678,7 @@ export function createLocalMediaOrchestrationHelpers({
     for (const node of mediaElements) {
       if (!(node instanceof HTMLMediaElement)) continue;
       if (node.closest('#local-video-container')) continue;
-      if (!node.muted) {
-        node.volume = volume;
-      }
-      if (speakerDeviceId !== '' && typeof node.setSinkId === 'function') {
-        node.setSinkId(speakerDeviceId).catch(() => {});
-      }
+      applyCallSpeakerOutputToMediaElement(node, { selectedSpeakerId: speakerDeviceId, volume });
     }
   }
 

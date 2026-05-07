@@ -1,6 +1,7 @@
 import {
   SFU_AUTO_QUALITY_RECOVERY_MIN_INTERVAL_MS,
   SFU_AUTO_QUALITY_RECOVERY_NEXT,
+  SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS,
 } from './runtimeConfig.ts';
 import { publisherQualityTransitionDiagnosticSurface } from './publisherDiagnosticsSurface.ts';
 
@@ -32,6 +33,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
   const {
     sfuAutoQualityDowngradeCooldownMs,
     sfuAutoQualityDowngradeNext,
+    sfuAutoQualityRecoveryProbeDelaysMs,
     sfuRuntimeEnabled,
   } = constants;
   const immediateQualityPressureReasons = Object.freeze([
@@ -58,6 +60,23 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     balanced: 2,
     quality: 3,
   });
+  const configuredQualityRecoveryProbeDelaysMs = Array.isArray(sfuAutoQualityRecoveryProbeDelaysMs)
+    && sfuAutoQualityRecoveryProbeDelaysMs.length > 0
+    ? sfuAutoQualityRecoveryProbeDelaysMs
+      .map((delayMs) => Math.max(0, Number(delayMs || 0)))
+      .filter((delayMs) => Number.isFinite(delayMs))
+    : [];
+  const qualityRecoveryProbeDelaysMs = configuredQualityRecoveryProbeDelaysMs.length > 0
+    ? configuredQualityRecoveryProbeDelaysMs
+    : SFU_AUTO_QUALITY_RECOVERY_PROBE_DELAYS_MS;
+  const qualityRecoveryProbeState = {
+    timer: null,
+    startedAtMs: 0,
+    nextAttemptIndex: 0,
+    reason: '',
+    details: {},
+  };
+  const qualityRecoveryProbePrerequisiteRetryMs = 1000;
 
   function setMediaRuntimePath(nextPath, reason) {
     const previousPath = refs.mediaRuntimePath.value;
@@ -175,6 +194,141 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
       : '';
   }
 
+  function nextAutomaticRecoveryProfile(currentProfile) {
+    const normalizedProfile = normalizeRequestedSfuVideoQualityProfile(currentProfile);
+    if (normalizedProfile === '') return '';
+    return normalizeRequestedSfuVideoQualityProfile(SFU_AUTO_QUALITY_RECOVERY_NEXT[normalizedProfile] || '');
+  }
+
+  function hasLiveLocalVideoTrackForQualityProbe() {
+    const stream = refs.localStreamRef?.value || null;
+    const tracks = typeof stream?.getVideoTracks === 'function' ? stream.getVideoTracks() : [];
+    const track = Array.isArray(tracks) ? tracks[0] : null;
+    if (!track || typeof track !== 'object') return false;
+    return String(track.readyState || 'live').trim().toLowerCase() !== 'ended';
+  }
+
+  function canRunScheduledQualityRecoveryProbe() {
+    if (String(refs.activeCallId?.value || '').trim() === '') return false;
+    if (String(refs.activeRoomId?.value || '').trim() === '') return false;
+    if (String(refs.mediaRuntimePath?.value || '').trim().toLowerCase() === 'unsupported') return false;
+    return hasLiveLocalVideoTrackForQualityProbe();
+  }
+
+  function clearSfuVideoQualityRecoveryProbeTimer() {
+    if (qualityRecoveryProbeState.timer !== null) {
+      clearTimeout(qualityRecoveryProbeState.timer);
+      qualityRecoveryProbeState.timer = null;
+    }
+  }
+
+  function resetSfuVideoQualityRecoveryProbeSeries() {
+    clearSfuVideoQualityRecoveryProbeTimer();
+    qualityRecoveryProbeState.startedAtMs = 0;
+    qualityRecoveryProbeState.nextAttemptIndex = 0;
+    qualityRecoveryProbeState.reason = '';
+    qualityRecoveryProbeState.details = {};
+  }
+
+  function scheduleNextSfuVideoQualityRecoveryProbe() {
+    clearSfuVideoQualityRecoveryProbeTimer();
+    const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+    if (nextAutomaticRecoveryProfile(currentProfile) === '') {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
+    if (qualityRecoveryProbeState.nextAttemptIndex >= qualityRecoveryProbeDelaysMs.length) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
+
+    const nowMs = Date.now();
+    if (qualityRecoveryProbeState.startedAtMs <= 0) {
+      qualityRecoveryProbeState.startedAtMs = nowMs;
+    }
+    const attemptIndex = qualityRecoveryProbeState.nextAttemptIndex;
+    const targetAtMs = qualityRecoveryProbeState.startedAtMs + Number(qualityRecoveryProbeDelaysMs[attemptIndex] || 0);
+    const delayMs = Math.max(0, targetAtMs - nowMs);
+    qualityRecoveryProbeState.timer = setTimeout(() => {
+      qualityRecoveryProbeState.timer = null;
+      runScheduledSfuVideoQualityRecoveryProbe();
+    }, delayMs);
+    return true;
+  }
+
+  function retrySfuVideoQualityRecoveryProbePrerequisites() {
+    clearSfuVideoQualityRecoveryProbeTimer();
+    qualityRecoveryProbeState.timer = setTimeout(() => {
+      qualityRecoveryProbeState.timer = null;
+      runScheduledSfuVideoQualityRecoveryProbe();
+    }, qualityRecoveryProbePrerequisiteRetryMs);
+    return true;
+  }
+
+  function ensureSfuVideoQualityRecoveryProbeSeries(reason = 'automatic_quality_recovery', details = {}) {
+    const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+    if (nextAutomaticRecoveryProfile(currentProfile) === '') {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
+    if (
+      qualityRecoveryProbeState.startedAtMs > 0
+      && qualityRecoveryProbeState.nextAttemptIndex < qualityRecoveryProbeDelaysMs.length
+    ) {
+      if (qualityRecoveryProbeState.timer === null) {
+        scheduleNextSfuVideoQualityRecoveryProbe();
+      }
+      return true;
+    }
+
+    qualityRecoveryProbeState.startedAtMs = Date.now();
+    qualityRecoveryProbeState.nextAttemptIndex = 0;
+    qualityRecoveryProbeState.reason = String(reason || 'automatic_quality_recovery').trim().toLowerCase();
+    qualityRecoveryProbeState.details = details && typeof details === 'object' ? { ...details } : {};
+    return scheduleNextSfuVideoQualityRecoveryProbe();
+  }
+
+  function runScheduledSfuVideoQualityRecoveryProbe() {
+    const currentProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+    const nextProfile = nextAutomaticRecoveryProfile(currentProfile);
+    if (nextProfile === '') {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
+    if (qualityRecoveryProbeState.nextAttemptIndex >= qualityRecoveryProbeDelaysMs.length) {
+      resetSfuVideoQualityRecoveryProbeSeries();
+      return false;
+    }
+    if (!canRunScheduledQualityRecoveryProbe()) {
+      return retrySfuVideoQualityRecoveryProbePrerequisites();
+    }
+
+    const attemptIndex = qualityRecoveryProbeState.nextAttemptIndex;
+    qualityRecoveryProbeState.nextAttemptIndex += 1;
+    const attemptNumber = attemptIndex + 1;
+    const probeReason = qualityRecoveryProbeState.reason || 'automatic_quality_recovery';
+    const probed = probeSfuVideoQualityAfterStableReadback(probeReason, {
+      ...qualityRecoveryProbeState.details,
+      requested_video_quality_profile: nextProfile,
+      bypass_quality_recovery_cooldown: true,
+      automatic_probe_attempt: attemptNumber,
+      automatic_probe_max_attempts: qualityRecoveryProbeDelaysMs.length,
+      automatic_probe_delay_ms: Number(qualityRecoveryProbeDelaysMs[attemptIndex] || 0),
+      automatic_probe_schedule_ms: [...qualityRecoveryProbeDelaysMs],
+    });
+
+    if (probed) {
+      const activeProfile = String(refs.callMediaPrefs.outgoingVideoQualityProfile || '').trim().toLowerCase();
+      if (nextAutomaticRecoveryProfile(activeProfile) === '') {
+        resetSfuVideoQualityRecoveryProbeSeries();
+        return true;
+      }
+    }
+
+    scheduleNextSfuVideoQualityRecoveryProbe();
+    return probed;
+  }
+
   function requestedProfileForDirection(currentProfile, requestedProfile, direction, fallbackProfile) {
     const currentRank = sfuQualityProfileRank[currentProfile];
     const requestedRank = sfuQualityProfileRank[requestedProfile];
@@ -259,7 +413,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     }
     refs.sfuTransportState.sfuAutoQualityRecoveryLastAtMs = nowMs;
 
-    return applySfuVideoQualityProfileSwitch({
+    const didSwitch = applySfuVideoQualityProfileSwitch({
       currentProfile,
       nextProfile,
       reason: normalizedReason,
@@ -271,6 +425,13 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
         failure_count: state.getWlvcEncodeFailureCount(),
       },
     });
+    if (didSwitch && nextAutomaticRecoveryProfile(nextProfile) !== '') {
+      ensureSfuVideoQualityRecoveryProbeSeries(normalizedReason, {
+        ...details,
+        continued_after_profile: nextProfile,
+      });
+    }
+    return didSwitch;
   }
 
   function downgradeSfuVideoQualityAfterEncodePressure(reason = 'encode_pressure', options = {}) {
@@ -301,7 +462,7 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
     }
     refs.sfuTransportState.sfuAutoQualityDowngradeLastAtMs = nowMs;
 
-    return applySfuVideoQualityProfileSwitch({
+    const didSwitch = applySfuVideoQualityProfileSwitch({
       currentProfile,
       nextProfile,
       reason: normalizedReason,
@@ -311,11 +472,21 @@ export function createCallWorkspaceRuntimeSwitchingHelpers({
         failure_count: state.getWlvcEncodeFailureCount(),
       },
     });
+    if (didSwitch) {
+      ensureSfuVideoQualityRecoveryProbeSeries(normalizedReason, {
+        ...options,
+        downgraded_from_profile: currentProfile,
+        downgraded_to_profile: nextProfile,
+      });
+    }
+    return didSwitch;
   }
 
   return {
+    clearSfuVideoQualityRecoveryProbeTimer: resetSfuVideoQualityRecoveryProbeSeries,
     currentSfuVideoProfile,
     downgradeSfuVideoQualityAfterEncodePressure,
+    ensureSfuVideoQualityRecoveryProbeSeries,
     maybeFallbackToNativeRuntime,
     probeSfuVideoQualityAfterStableReadback,
     setMediaRuntimePath,
