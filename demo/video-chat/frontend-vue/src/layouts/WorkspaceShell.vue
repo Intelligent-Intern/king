@@ -852,6 +852,27 @@ function normalizeCallAccessMode(value) {
   return normalized === 'free_for_all' ? 'free_for_all' : 'invite_only';
 }
 
+function normalizeCallParticipantRole(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['owner', 'moderator', 'participant'].includes(normalized) ? normalized : 'participant';
+}
+
+function callParticipantRoleForUser(call, userId) {
+  const normalizedUserId = Number(userId || 0);
+  if (!Number.isInteger(normalizedUserId) || normalizedUserId <= 0) return 'participant';
+
+  const ownerUserId = Number(call?.owner?.user_id || 0);
+  if (Number.isInteger(ownerUserId) && ownerUserId > 0 && ownerUserId === normalizedUserId) {
+    return 'owner';
+  }
+
+  const internalParticipants = Array.isArray(call?.participants?.internal)
+    ? call.participants.internal
+    : [];
+  const participant = internalParticipants.find((row) => Number(row?.user_id || 0) === normalizedUserId);
+  return normalizeCallParticipantRole(participant?.call_role || participant?.callRole || 'participant');
+}
+
 function isoToLocalInput(isoValue) {
   if (typeof isoValue !== 'string' || isoValue.trim() === '') return '';
   const date = new Date(isoValue);
@@ -1280,12 +1301,13 @@ async function refreshCallOwnerContext() {
     if (sequence !== callOwnerContextSeq) return;
 
     const currentUserId = Number(sessionState.userId || 0);
-    const ownerUserId = Number(call?.owner?.user_id || 0);
-    const isOwner = Number.isInteger(currentUserId) && currentUserId > 0 && currentUserId === ownerUserId;
-    callOwnerEditState.visible = isOwner;
+    const currentCallRole = callParticipantRoleForUser(call, currentUserId);
+    const isGlobalAdmin = normalizeRole(sessionState.role) === 'admin';
+    const canManageCall = isGlobalAdmin || currentCallRole === 'owner' || currentCallRole === 'moderator';
+    callOwnerEditState.visible = canManageCall;
     callOwnerEditState.resolvedCallId = String(call?.id || '').trim();
 
-    if (isOwner) {
+    if (canManageCall) {
       hydrateCallOwnerDraftFromCall(call);
       void generateCallOwnerInviteLink();
     } else {
@@ -1721,6 +1743,7 @@ watch(
     String(route.params.callRef || '').trim(),
     Number(sessionState.userId || 0),
     normalizeRole(sessionState.role),
+    Boolean(callLayoutSidebarState.canModerate),
   ],
   () => {
     void refreshCallOwnerContext();

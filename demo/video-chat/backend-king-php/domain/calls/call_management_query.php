@@ -88,6 +88,41 @@ function videochat_can_edit_call(string $authRole, int $authUserId, int $ownerUs
     return $authUserId > 0 && $ownerUserId > 0 && $authUserId === $ownerUserId;
 }
 
+function videochat_user_is_call_moderator(PDO $pdo, string $callId, int $authUserId): bool
+{
+    $normalizedCallId = trim($callId);
+    if ($normalizedCallId === '' || $authUserId <= 0) {
+        return false;
+    }
+
+    $roleQuery = $pdo->prepare(
+        <<<'SQL'
+SELECT call_role
+FROM call_participants
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+LIMIT 1
+SQL
+    );
+    $roleQuery->execute([
+        ':call_id' => $normalizedCallId,
+        ':user_id' => $authUserId,
+    ]);
+
+    $callRole = videochat_normalize_call_participant_role((string) ($roleQuery->fetchColumn() ?: 'participant'));
+    return $callRole === 'owner' || $callRole === 'moderator';
+}
+
+function videochat_can_administer_call(PDO $pdo, string $callId, string $authRole, int $authUserId, int $ownerUserId): bool
+{
+    if (videochat_can_edit_call($authRole, $authUserId, $ownerUserId)) {
+        return true;
+    }
+
+    return videochat_user_is_call_moderator($pdo, $callId, $authUserId);
+}
+
 /**
  * @return array{
  *   internal: array<int, array{
@@ -364,7 +399,14 @@ function videochat_update_call_participant_role(
 
     $isAdmin = videochat_normalize_role_slug($authRole) === 'admin';
     $isOwner = $authUserId > 0 && $authUserId === (int) ($existingCall['owner_user_id'] ?? 0);
-    if (!$isAdmin && !$isOwner) {
+    $canAdministerCall = videochat_can_administer_call(
+        $pdo,
+        (string) ($existingCall['id'] ?? $callId),
+        $authRole,
+        $authUserId,
+        (int) ($existingCall['owner_user_id'] ?? 0)
+    );
+    if (!$canAdministerCall) {
         return [
             'ok' => false,
             'reason' => 'forbidden',

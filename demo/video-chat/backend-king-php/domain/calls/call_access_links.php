@@ -110,7 +110,7 @@ function videochat_create_call_access_link_for_user(
 
     $ownerUserId = (int) (($call['owner']['user_id'] ?? 0));
     $actsForAnotherTarget = $isOpenLinkRequest || $targetUserId !== $authUserId || ($targetUserId <= 0 && $targetEmail !== '');
-    if ($actsForAnotherTarget && !videochat_can_edit_call($authRole, $authUserId, $ownerUserId)) {
+    if ($actsForAnotherTarget && !videochat_can_administer_call($pdo, $normalizedCallId, $authRole, $authUserId, $ownerUserId)) {
         return [
             'ok' => false,
             'reason' => 'forbidden',
