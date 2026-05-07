@@ -83,9 +83,12 @@ assert.match(modalSource, /name="relation"/, 'governance modal must expose an em
 assert.doesNotMatch(modalSource, /<select[\s\S]*relationship/i, 'relation fields must not be rendered as raw selects');
 
 const stackSource = await source('src/modules/governance/components/CrudRelationStack.vue');
+const pickerTableSource = await source('src/modules/governance/components/CrudRelationPickerTable.vue');
+const pickerRowsSource = await source('src/modules/governance/relationPickerRows.js');
 assert.doesNotMatch(stackSource, /AppModalShell/, 'relation stack must not open a second modal shell');
 assert.match(stackSource, /crud-relation-stack/, 'relation stack must render as embedded modal content');
 assert.match(stackSource, /AppPagination/, 'relation stack must paginate selection rows');
+assert.match(stackSource, /CrudRelationPickerTable/, 'relation stack must delegate selection table rendering to the shared picker table');
 assert.match(stackSource, /createDraft/, 'relation stack must support create-in-place through a draft creator');
 assert.match(stackSource, /canCreateDraftForEntity/, 'relation stack must let callers restrict local draft creation');
 assert.match(stackSource, /relationFilter/, 'relation stack must let callers restrict visible nested relation hops');
@@ -96,6 +99,12 @@ assert.match(stackSource, /applyCurrentSelectionToParent/, 'relation stack must 
 assert.match(stackSource, /selection_mode === 'multiple'/, 'relation stack must respect multi-select relation descriptors');
 assert.match(stackSource, /permissionModuleLabel/, 'permission relation rows must be grouped under their owning module');
 assert.match(stackSource, /selectedModuleKeysForPermissionRows/, 'permission relation rows must narrow to selected modules when module context exists');
+assert.match(pickerTableSource, /defineEmits\(\['toggle-row'\]\)/, 'relation picker table must emit row toggles instead of owning selection state');
+assert.match(pickerTableSource, /:type="multiple \? 'checkbox' : 'radio'"/, 'relation picker table must preserve single and multiple selection modes');
+assert.match(pickerTableSource, /crud-relation-empty/, 'relation picker table must own the empty row rendering');
+assert.match(pickerRowsSource, /export function relationRowSections\(rows, currentTargetEntity = ''\)/, 'relation row sectioning must live in a pure helper');
+assert.match(pickerRowsSource, /permissionModuleLabel/, 'permission row sectioning must keep module labels');
+assert.match(pickerRowsSource, /moduleKeyFromRelationRow/, 'module key extraction must be reusable by relation filtering');
 assert.doesNotMatch(stackSource, /@click="\$emit\('close'\)"/, 'relation stack must not render a redundant footer close action');
 assert.match(stackSource, /AppIconButton[\s\S]*icons\/send\.png/, 'relation stack search must use the shared send submit icon');
 assert.match(stackSource, /<form class="crud-relation-toolbar" @submit\.prevent="submitRelationSearch">/, 'relation stack search must submit through a toolbar form');
