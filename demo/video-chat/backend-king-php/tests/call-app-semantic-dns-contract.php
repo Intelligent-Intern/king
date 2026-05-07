@@ -84,6 +84,46 @@ try {
     videochat_call_app_semantic_dns_assert(count($refreshPayloads) >= 1, 'refresh must register service payloads through provided callable');
     videochat_call_app_semantic_dns_assert((bool) (($refresh['registration'] ?? [])['registration_available'] ?? false), 'registration must be available through provided callable');
 
+    $runtimeEnv = [
+        'VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN' => 'apps.kingrt.test',
+        'VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN' => 'mother.kingrt.test',
+        'VIDEOCHAT_CALL_APP_MCP_ENDPOINT' => 'mcp://mother.kingrt.test/call_app.whiteboard.mcp',
+        'VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER' => '1',
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_ID' => 'mother-kingrt-test',
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT' => '55354',
+    ];
+    $runtimeOptions = videochat_call_app_semantic_dns_runtime_options_from_env($runtimeEnv);
+    videochat_call_app_semantic_dns_assert((string) ($runtimeOptions['hostname'] ?? '') === 'apps.kingrt.test', 'runtime public host mismatch');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeOptions['mcp_endpoint'] ?? '') === 'mcp://mother.kingrt.test/call_app.whiteboard.mcp', 'runtime MCP endpoint mismatch');
+    videochat_call_app_semantic_dns_assert((bool) ($runtimeOptions['register'] ?? false), 'runtime registration must be enabled from env');
+    videochat_call_app_semantic_dns_assert((string) (($runtimeOptions['mother_node'] ?? [])['hostname'] ?? '') === 'mother.kingrt.test', 'runtime mother host mismatch');
+    videochat_call_app_semantic_dns_assert((int) (($runtimeOptions['semantic_dns_init'] ?? [])['dns_port'] ?? 0) === 55354, 'runtime DNS port mismatch');
+    videochat_call_app_semantic_dns_assert(videochat_call_app_should_start_semantic_dns_runtime('http', 1, false, $runtimeEnv), 'HTTP worker 1 must start the call-app Mothernode');
+    videochat_call_app_semantic_dns_assert(!videochat_call_app_should_start_semantic_dns_runtime('ws', 1, false, $runtimeEnv), 'WS workers must not start the call-app Mothernode');
+    videochat_call_app_semantic_dns_assert(!videochat_call_app_should_start_semantic_dns_runtime('http', 2, false, $runtimeEnv), 'extra HTTP workers must not start the call-app Mothernode');
+
+    $runtimeServices = [];
+    $runtimeMotherNodes = [];
+    $runtimeRegistration = videochat_call_app_register_runtime_semantic_dns_catalog($root, [
+        'env' => $runtimeEnv,
+        'register_service' => static function (array $servicePayload) use (&$runtimeServices): bool {
+            $runtimeServices[] = $servicePayload;
+            return true;
+        },
+        'register_mother_node' => static function (array $motherNodePayload) use (&$runtimeMotherNodes): bool {
+            $runtimeMotherNodes[] = $motherNodePayload;
+            return true;
+        },
+    ]);
+    videochat_call_app_semantic_dns_assert((bool) ($runtimeRegistration['ok'] ?? false), 'runtime registration must succeed');
+    videochat_call_app_semantic_dns_assert(count($runtimeServices) >= 1, 'runtime registration must register service payloads');
+    videochat_call_app_semantic_dns_assert(count($runtimeMotherNodes) === 1, 'runtime registration must register exactly one Mothernode');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeServices[0]['hostname'] ?? '') === 'apps.kingrt.test', 'runtime service hostname mismatch');
+    videochat_call_app_semantic_dns_assert((string) (($runtimeServices[0]['attributes'] ?? [])['mcp_endpoint'] ?? '') === 'mcp://mother.kingrt.test/call_app.whiteboard.mcp', 'runtime service MCP endpoint mismatch');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['node_id'] ?? '') === 'mother-kingrt-test', 'runtime Mothernode id mismatch');
+    videochat_call_app_semantic_dns_assert((string) ($runtimeMotherNodes[0]['hostname'] ?? '') === 'mother.kingrt.test', 'runtime Mothernode host mismatch');
+    videochat_call_app_semantic_dns_assert((int) ($runtimeMotherNodes[0]['managed_services_count'] ?? 0) >= 1, 'runtime Mothernode must report managed services');
+
     fwrite(STDOUT, "[call-app-semantic-dns-contract] PASS\n");
     exit(0);
 } catch (Throwable $error) {

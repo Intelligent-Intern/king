@@ -62,6 +62,7 @@ require_once __DIR__ . '/domain/realtime/realtime_admin_sync.php';
 require_once __DIR__ . '/domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/domain/realtime/realtime_presence.php';
 require_once __DIR__ . '/domain/realtime/realtime_reaction.php';
+require_once __DIR__ . '/domain/call_apps/call_app_semantic_dns.php';
 require_once __DIR__ . '/domain/realtime/realtime_signaling.php';
 require_once __DIR__ . '/domain/realtime/realtime_typing.php';
 require_once __DIR__ . '/domain/users/user_directory.php';
@@ -122,6 +123,23 @@ if ($bootstrapOnly) {
         (string) ($databaseRuntime['path'] ?? $dbPath)
     ));
     exit(0);
+}
+
+if (videochat_call_app_should_start_semantic_dns_runtime($serverMode, $workerIndex, $bootstrapOnly)) {
+    $semanticDnsRuntime = videochat_call_app_start_semantic_dns_runtime();
+    if ((bool) ($semanticDnsRuntime['ok'] ?? false)) {
+        $registration = is_array($semanticDnsRuntime['registration'] ?? null) ? $semanticDnsRuntime['registration'] : [];
+        $motherNode = is_array($registration['mother_node'] ?? null) ? $registration['mother_node'] : [];
+        $payload = is_array($motherNode['payload'] ?? null) ? $motherNode['payload'] : [];
+        $log(sprintf(
+            'call app Semantic-DNS runtime ready: started=%s mother=%s services=%d',
+            (bool) ($semanticDnsRuntime['started'] ?? false) ? 'yes' : 'no',
+            (string) ($payload['hostname'] ?? 'n/a'),
+            count((array) (($registration['catalog'] ?? [])['service_payloads'] ?? []))
+        ));
+    } else {
+        $log('call app Semantic-DNS runtime failed: ' . (string) ($semanticDnsRuntime['reason'] ?? 'unknown'));
+    }
 }
 
 $activeWebsocketsBySession = [];

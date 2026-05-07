@@ -2,6 +2,7 @@ import { computed, ref } from 'vue';
 
 export const CALL_APP_WORKSPACE_LAYOUT_MODE = 'call_app_workspace';
 export const CALL_APP_WORKSPACE_MINI_LIMIT = 5;
+const CALL_APP_IFRAME_ORIGIN = String(import.meta.env.VITE_VIDEOCHAT_CALL_APP_ORIGIN || '').trim().replace(/\/+$/, '');
 
 function normalizeSession(raw = {}) {
   const session = raw && typeof raw === 'object' ? raw : {};
@@ -62,7 +63,8 @@ export function callAppWorkspaceIframeUrl(session) {
     .map(encodeURIComponent)
     .join('/');
   if (appKey === '' || entrypoint === '') return 'about:blank';
-  return `/call-app/${encodeURIComponent(appKey)}/${entrypoint}`;
+  const path = `/call-app/${encodeURIComponent(appKey)}/${entrypoint}`;
+  return CALL_APP_IFRAME_ORIGIN !== '' ? `${CALL_APP_IFRAME_ORIGIN}${path}` : path;
 }
 
 export function createCallAppWorkspaceState({

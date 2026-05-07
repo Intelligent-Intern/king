@@ -340,6 +340,330 @@ function videochat_call_app_register_semantic_dns_services(array $payloads, ?cal
     ];
 }
 
+function videochat_call_app_semantic_dns_env_value(string $name, ?array $env = null): string
+{
+    if (is_array($env) && array_key_exists($name, $env)) {
+        return trim((string) $env[$name]);
+    }
+
+    $value = getenv($name);
+    return is_string($value) ? trim($value) : '';
+}
+
+/**
+ * @param array<int, string> $names
+ */
+function videochat_call_app_semantic_dns_first_env(array $names, ?array $env = null): string
+{
+    foreach ($names as $name) {
+        $value = videochat_call_app_semantic_dns_env_value($name, $env);
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+}
+
+function videochat_call_app_semantic_dns_bool(mixed $value, bool $default = false): bool
+{
+    if ($value === null || $value === '') {
+        return $default;
+    }
+    if (is_bool($value)) {
+        return $value;
+    }
+
+    return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes', 'on'], true);
+}
+
+function videochat_call_app_semantic_dns_int(mixed $value, int $default, int $min, int $max): int
+{
+    $parsed = filter_var($value, FILTER_VALIDATE_INT);
+    if (!is_int($parsed) || $parsed < $min || $parsed > $max) {
+        return $default;
+    }
+
+    return $parsed;
+}
+
+function videochat_call_app_semantic_dns_float(mixed $value, float $default, float $min, float $max): float
+{
+    $parsed = filter_var($value, FILTER_VALIDATE_FLOAT);
+    if (!is_float($parsed) || $parsed < $min || $parsed > $max) {
+        return $default;
+    }
+
+    return $parsed;
+}
+
+function videochat_call_app_semantic_dns_host_from_url(string $value): string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return '';
+    }
+
+    $withScheme = str_contains($trimmed, '://') ? $trimmed : ('https://' . $trimmed);
+    $host = parse_url($withScheme, PHP_URL_HOST);
+    if (!is_string($host) || trim($host) === '') {
+        return '';
+    }
+
+    return strtolower(trim($host));
+}
+
+function videochat_call_app_semantic_dns_default_mother_host(string $publicHost): string
+{
+    $host = strtolower(trim($publicHost));
+    if ($host === '') {
+        return 'mother.localhost';
+    }
+    if (str_starts_with($host, 'apps.')) {
+        return 'mother.' . substr($host, 5);
+    }
+
+    return 'mother.' . $host;
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_semantic_dns_runtime_options_from_env(?array $env = null): array
+{
+    $publicHost = videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_PUBLIC_HOST',
+        'VIDEOCHAT_CALL_APP_PUBLIC_DOMAIN',
+        'VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN',
+    ], $env);
+    if ($publicHost === '') {
+        $publicHost = videochat_call_app_semantic_dns_host_from_url(videochat_call_app_semantic_dns_first_env([
+            'VITE_VIDEOCHAT_CALL_APP_ORIGIN',
+            'VIDEOCHAT_CALL_APP_IFRAME_ORIGIN',
+        ], $env));
+    }
+    if ($publicHost === '') {
+        $baseHost = videochat_call_app_semantic_dns_host_from_url(videochat_call_app_semantic_dns_first_env([
+            'VIDEOCHAT_FRONTEND_ORIGIN',
+            'VIDEOCHAT_INFRA_PUBLIC_DOMAIN',
+            'VIDEOCHAT_DEPLOY_DOMAIN',
+            'VIDEOCHAT_V1_PUBLIC_HOST',
+        ], $env));
+        $publicHost = $baseHost !== '' ? 'apps.' . $baseHost : 'localhost';
+    }
+    $publicHost = videochat_call_app_semantic_dns_host_from_url($publicHost) ?: 'localhost';
+
+    $motherHost = videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_HOST',
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_DOMAIN',
+        'VIDEOCHAT_DEPLOY_MOTHERNODE_DOMAIN',
+    ], $env);
+    $motherHost = videochat_call_app_semantic_dns_host_from_url($motherHost) ?: videochat_call_app_semantic_dns_default_mother_host($publicHost);
+
+    $mcpEndpoint = videochat_call_app_semantic_dns_first_env(['VIDEOCHAT_CALL_APP_MCP_ENDPOINT'], $env);
+    if ($mcpEndpoint === '') {
+        $mcpEndpoint = 'mcp://' . $motherHost . '/call_app.whiteboard.mcp';
+    }
+
+    $registerEnabled = videochat_call_app_semantic_dns_bool(videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER',
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_ENABLE',
+    ], $env), false);
+    $motherNodeId = videochat_call_app_semantic_dns_first_env(['VIDEOCHAT_CALL_APP_MOTHERNODE_ID'], $env);
+    if ($motherNodeId === '') {
+        $motherNodeId = 'videochat-call-apps-' . preg_replace('/[^a-z0-9-]+/', '-', $motherHost);
+    }
+
+    return [
+        'hostname' => $publicHost,
+        'port' => videochat_call_app_semantic_dns_int(
+            videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_PUBLIC_PORT', $env),
+            443,
+            1,
+            65535
+        ),
+        'mcp_endpoint' => $mcpEndpoint,
+        'register' => $registerEnabled,
+        'mother_node' => [
+            'node_id' => $motherNodeId,
+            'hostname' => $motherHost,
+            'port' => videochat_call_app_semantic_dns_int(
+                videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_MOTHERNODE_PORT', $env),
+                9443,
+                1,
+                65535
+            ),
+            'status' => 'healthy',
+            'managed_services_count' => 0,
+            'trust_score' => videochat_call_app_semantic_dns_float(
+                videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_MOTHERNODE_TRUST_SCORE', $env),
+                1.0,
+                0.0,
+                1.0
+            ),
+        ],
+        'semantic_dns_init' => [
+            'enabled' => true,
+            'bind_address' => videochat_call_app_semantic_dns_first_env(['VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_BIND'], $env) ?: '0.0.0.0',
+            'dns_port' => videochat_call_app_semantic_dns_int(
+                videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_MOTHERNODE_DNS_PORT', $env),
+                55353,
+                1,
+                65535
+            ),
+            'default_record_ttl_sec' => videochat_call_app_semantic_dns_int(
+                videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_SEMANTIC_DNS_TTL_SECONDS', $env),
+                30,
+                1,
+                86400
+            ),
+            'service_discovery_max_ips_per_response' => videochat_call_app_semantic_dns_int(
+                videochat_call_app_semantic_dns_env_value('VIDEOCHAT_CALL_APP_SEMANTIC_DNS_MAX_IPS', $env),
+                16,
+                1,
+                1024
+            ),
+            'semantic_mode_enable' => true,
+            'mothernode_uri' => videochat_call_app_semantic_dns_first_env(['VIDEOCHAT_CALL_APP_MOTHERNODE_URI'], $env) ?: ('mcp://' . $motherHost),
+        ],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_register_semantic_dns_mother_node(array $options, int $managedServicesCount = 0, ?callable $registerMotherNode = null): array
+{
+    $node = is_array($options['mother_node'] ?? null) ? $options['mother_node'] : [];
+    $node['node_id'] = trim((string) ($node['node_id'] ?? 'videochat-call-apps'));
+    $node['hostname'] = trim((string) ($node['hostname'] ?? 'mother.localhost'));
+    $node['port'] = videochat_call_app_semantic_dns_int($node['port'] ?? 9443, 9443, 1, 65535);
+    $node['status'] = in_array((string) ($node['status'] ?? ''), ['healthy', 'degraded', 'unhealthy', 'maintenance', 'unknown'], true)
+        ? (string) $node['status']
+        : 'healthy';
+    $node['managed_services_count'] = max(
+        $managedServicesCount,
+        videochat_call_app_semantic_dns_int($node['managed_services_count'] ?? 0, 0, 0, PHP_INT_MAX)
+    );
+    $node['trust_score'] = videochat_call_app_semantic_dns_float($node['trust_score'] ?? 1.0, 1.0, 0.0, 1.0);
+
+    $registrationAvailable = $registerMotherNode !== null || function_exists('king_semantic_dns_register_mother_node');
+    if ($registerMotherNode === null && function_exists('king_semantic_dns_register_mother_node')) {
+        $registerMotherNode = 'king_semantic_dns_register_mother_node';
+    }
+    if ($registerMotherNode === null) {
+        return [
+            'ok' => true,
+            'registration_available' => false,
+            'registered' => false,
+            'payload' => $node,
+            'errors' => [],
+        ];
+    }
+
+    try {
+        $registered = (bool) $registerMotherNode($node);
+    } catch (Throwable $error) {
+        return [
+            'ok' => false,
+            'registration_available' => $registrationAvailable,
+            'registered' => false,
+            'payload' => $node,
+            'errors' => [['error' => $error->getMessage()]],
+        ];
+    }
+
+    return [
+        'ok' => $registered,
+        'registration_available' => $registrationAvailable,
+        'registered' => $registered,
+        'payload' => $node,
+        'errors' => $registered ? [] : [['error' => 'register_mother_node_returned_false']],
+    ];
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_register_runtime_semantic_dns_catalog(?string $packageRoot = null, array $options = []): array
+{
+    $env = is_array($options['env'] ?? null) ? $options['env'] : null;
+    unset($options['env']);
+    $runtimeOptions = array_replace_recursive(videochat_call_app_semantic_dns_runtime_options_from_env($env), $options);
+    $runtimeOptions['register'] = (bool) ($runtimeOptions['register'] ?? false);
+
+    $refresh = videochat_call_app_refresh_semantic_dns_catalog($packageRoot, $runtimeOptions);
+    $motherNode = videochat_call_app_register_semantic_dns_mother_node(
+        $runtimeOptions,
+        count($refresh['service_payloads'] ?? []),
+        is_callable($runtimeOptions['register_mother_node'] ?? null) ? $runtimeOptions['register_mother_node'] : null
+    );
+
+    return [
+        'ok' => (bool) ($refresh['ok'] ?? false) && (bool) ($motherNode['ok'] ?? false),
+        'runtime_options' => $runtimeOptions,
+        'mother_node' => $motherNode,
+        'catalog' => $refresh,
+        'time' => gmdate('c'),
+    ];
+}
+
+function videochat_call_app_should_start_semantic_dns_runtime(string $serverMode, int $workerIndex, bool $bootstrapOnly = false, ?array $env = null): bool
+{
+    if ($bootstrapOnly || $workerIndex > 1) {
+        return false;
+    }
+    if (!in_array($serverMode, ['all', 'http'], true)) {
+        return false;
+    }
+
+    return videochat_call_app_semantic_dns_bool(videochat_call_app_semantic_dns_first_env([
+        'VIDEOCHAT_CALL_APP_MOTHERNODE_ENABLE',
+        'VIDEOCHAT_CALL_APP_SEMANTIC_DNS_REGISTER',
+    ], $env), false);
+}
+
+/**
+ * @return array<string, mixed>
+ */
+function videochat_call_app_start_semantic_dns_runtime(?string $packageRoot = null, array $options = []): array
+{
+    $env = is_array($options['env'] ?? null) ? $options['env'] : null;
+    unset($options['env']);
+    $runtimeOptions = array_replace_recursive(videochat_call_app_semantic_dns_runtime_options_from_env($env), $options);
+    $initConfig = is_array($runtimeOptions['semantic_dns_init'] ?? null) ? $runtimeOptions['semantic_dns_init'] : [];
+
+    if (!function_exists('king_semantic_dns_init') || !function_exists('king_semantic_dns_start_server')) {
+        return [
+            'ok' => true,
+            'started' => false,
+            'reason' => 'semantic_dns_extension_functions_unavailable',
+            'registration' => videochat_call_app_register_runtime_semantic_dns_catalog($packageRoot, $runtimeOptions),
+        ];
+    }
+
+    try {
+        $initOk = (bool) king_semantic_dns_init($initConfig);
+        $startOk = (bool) king_semantic_dns_start_server();
+    } catch (Throwable $error) {
+        return [
+            'ok' => false,
+            'started' => false,
+            'reason' => $error->getMessage(),
+            'registration' => null,
+        ];
+    }
+
+    $registration = videochat_call_app_register_runtime_semantic_dns_catalog($packageRoot, $runtimeOptions);
+
+    return [
+        'ok' => $initOk && $startOk && (bool) ($registration['ok'] ?? false),
+        'started' => $initOk && $startOk,
+        'init_config' => $initConfig,
+        'registration' => $registration,
+    ];
+}
+
 /**
  * @return array<string, mixed>
  */
