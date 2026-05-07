@@ -169,35 +169,12 @@
         />
       </section>
 
-      <section v-else-if="activeSettingsTile === 'personal.localization'" class="settings-panel">
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>{{ t('settings.language') }}</span>
-            <AppSelect v-model="settingsDraft.language">
-              <option v-for="language in settingsLanguageOptions" :key="language.code" :value="language.code">
-                {{ language.label }}
-              </option>
-            </AppSelect>
-          </label>
-          <label class="settings-field">
-            <span>{{ t('settings.date_format') }}</span>
-            <AppSelect v-model="settingsDraft.dateFormat">
-              <option v-for="option in dateFormatOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </AppSelect>
-          </label>
-        </div>
-        <div class="settings-row">
-          <label class="settings-field">
-            <span>{{ t('settings.time_format') }}</span>
-            <AppSelect v-model="settingsDraft.timeFormat">
-              <option value="24h">24h</option>
-              <option value="12h">12h</option>
-            </AppSelect>
-          </label>
-        </div>
-      </section>
+      <WorkspaceLocalizationSettings
+        v-else-if="activeSettingsTile === 'personal.localization'"
+        :draft="settingsDraft"
+        :language-options="settingsLanguageOptions"
+        :date-format-options="dateFormatOptions"
+      />
 
       <section v-else class="settings-panel">
         <div class="settings-upload-status">{{ t('settings.select_tab') }}</div>
@@ -405,6 +382,7 @@ import AppSelect from '../components/AppSelect.vue';
 import WorkspaceStandardSidebar from './WorkspaceStandardSidebar.vue';
 import WorkspaceAboutSettings from './settings/WorkspaceAboutSettings.vue';
 import WorkspaceCredentialsSettings from './settings/WorkspaceCredentialsSettings.vue';
+import WorkspaceLocalizationSettings from './settings/WorkspaceLocalizationSettings.vue';
 import WorkspaceNotificationSettings from './settings/WorkspaceNotificationSettings.vue';
 import WorkspaceThemeSettings from './settings/WorkspaceThemeSettings.vue';
 import CallWorkspaceLeftSidebar from './CallWorkspaceLeftSidebar.vue';

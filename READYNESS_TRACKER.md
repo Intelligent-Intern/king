@@ -17,6 +17,16 @@ Purpose:
 
 ## Completion Log
 
+- 2026-05-07 Settings localization panel extraction: moved the personal
+  language/date/time settings UI out of `WorkspaceShell.vue` into
+  `WorkspaceLocalizationSettings.vue`. The shell still owns session-backed
+  validation, selected-direction handling, and save payload shaping, while the
+  panel owns the merged language, date-format, and time-format controls without
+  reintroducing text-direction or heading clutter. Proof:
+  `node tests/contract/settings-profile-contract.mjs`,
+  `node tests/contract/localization-settings-contract.mjs`, and
+  `cd demo/video-chat/frontend-vue && npm run build`.
+
 - 2026-05-07 App Configuration email settings extraction: split the
   administration email server tab into `AppConfigurationEmailTab.vue`,
   `AppConfigurationEmailSettingsForm.vue`, and

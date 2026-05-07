@@ -16,6 +16,7 @@ const credentialsPanel = await source('src/layouts/settings/WorkspaceCredentials
 const credentialsLogic = await source('src/layouts/settings/useWorkspaceCredentialsSettings.js');
 const emailSettingsPanel = await source('src/layouts/settings/WorkspaceEmailAddressSettings.vue');
 const passwordSettingsForm = await source('src/layouts/settings/WorkspacePasswordSettingsForm.vue');
+const localizationSettingsPanel = await source('src/layouts/settings/WorkspaceLocalizationSettings.vue');
 const notificationPanel = await source('src/layouts/settings/WorkspaceNotificationSettings.vue');
 
 for (const key of [
@@ -56,9 +57,11 @@ assert.match(sessionStore, /changeSessionPassword/, 'session store must expose p
 
 assert.match(workspaceShell, /import WorkspaceAboutSettings from '\.\/settings\/WorkspaceAboutSettings\.vue'/, 'workspace shell must use extracted about settings panel');
 assert.match(workspaceShell, /import WorkspaceCredentialsSettings from '\.\/settings\/WorkspaceCredentialsSettings\.vue'/, 'workspace shell must use extracted credentials settings panel');
+assert.match(workspaceShell, /import WorkspaceLocalizationSettings from '\.\/settings\/WorkspaceLocalizationSettings\.vue'/, 'workspace shell must use extracted localization settings panel');
 assert.match(workspaceShell, /import WorkspaceNotificationSettings from '\.\/settings\/WorkspaceNotificationSettings\.vue'/, 'workspace shell must use extracted notification settings panel');
 assert.match(workspaceShell, /<WorkspaceAboutSettings[\s\S]*activeSettingsTile === 'personal\.about'/, 'about tab must render extracted component');
 assert.match(workspaceShell, /<WorkspaceCredentialsSettings v-else-if="activeSettingsTile === 'personal\.credentials'"/, 'credentials tab must render extracted component');
+assert.match(workspaceShell, /<WorkspaceLocalizationSettings[\s\S]*activeSettingsTile === 'personal\.localization'/, 'localization tab must render extracted component');
 assert.match(workspaceShell, /<WorkspaceNotificationSettings[\s\S]*activeSettingsTile === 'personal\.notifications'/, 'notifications tab must render extracted component');
 assert.match(workspaceShell, /settingsDraft\.aboutMe = sessionState\.aboutMe \|\| ''/, 'settings draft must load about profile text');
 assert.match(workspaceShell, /settingsDraft\.webAppNotificationsEnabled = sessionState\.webAppNotificationsEnabled === true/, 'settings draft must load web app notification switch');
@@ -94,6 +97,9 @@ assert.match(emailSettingsPanel, /settings\.add_email_address/, 'email settings 
 assert.match(passwordSettingsForm, /type="password"/, 'password settings form must use password fields inside forms');
 assert.match(passwordSettingsForm, /settings\.current_password/, 'password settings form must expose current password');
 assert.match(passwordSettingsForm, /settings\.change_password/, 'password settings form must expose the change password submit action');
+assert.match(localizationSettingsPanel, /settings\.language/, 'localization settings panel must expose language');
+assert.match(localizationSettingsPanel, /settings\.date_format/, 'localization settings panel must expose date format');
+assert.match(localizationSettingsPanel, /settings\.time_format/, 'localization settings panel must expose time format');
 assert.match(notificationPanel, /Notification\.requestPermission/, 'notification panel must request browser notification permission');
 assert.match(notificationPanel, /draft\.webAppNotificationsEnabled/, 'notification panel must expose web app notification master switch');
 assert.match(notificationPanel, /draft\.webAppNotificationCallInvitesEnabled/, 'notification panel must expose call invite notification switch');
