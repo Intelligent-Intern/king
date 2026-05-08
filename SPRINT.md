@@ -1230,8 +1230,8 @@ client role cache data all resolve from current backend membership state.
 - [ ] Registered user with role `Admin` can create own call
 - [ ] Call creator becomes call owner
 - [ ] Call creator receives admin rights in own call
-- [ ] Owner can add users to guest list
-- [ ] Owner can manage guest list
+- [x] Owner can add users to guest list
+- [x] Owner can manage guest list
 - [ ] Owner can admit lobby participants
 - [ ] Owner can remove / kick participants
 - [x] Owner rights can be transferred to another user
@@ -1269,8 +1269,8 @@ passed 3 tests; PHP persistence portions were skipped only where local
 - [x] User can join own call as owner
 - [x] User cannot directly join unrelated foreign call
 - [x] Deleted / disabled user cannot join
-- [ ] Removed guest-list entry revokes direct join access
-- [ ] Newly added guest-list entry grants direct join access
+- [x] Removed guest-list entry revokes direct join access
+- [x] Newly added guest-list entry grants direct join access
 - [x] Permissions are checked server-side
 - [x] Manipulated client role does not grant access
 - [x] Manipulated call ID does not grant access to another call
@@ -1280,12 +1280,17 @@ for system admin, same-organization admin, normal owner, guest-list user,
 foreign-organization admin denial, forged client admin denial, and forged
 system-admin session token denial. `npx playwright test
 tests/e2e/call-access-seed-matrix.spec.js --workers=1 --reporter=list` passed
-9 tests; `npm run test:contract:iam-call-access` passed frontend contracts and
+25 tests; `npm run test:contract:iam-call-access` passed frontend contracts and
 skipped backend SQLite subcontracts because local PHP lacks `pdo_sqlite`.
 The same seed-matrix proof now also binds main journeys for logged-in anonymous
 own-rights, system-admin direct join, guest-list direct join, and normal
 non-guest denial/lobby policy. The focused journey/direct-join run passed 18
 tests.
+`call-guest-list-direct-join-contract.php` was also run under Docker PHP 8.4
+with `pdo_sqlite` and proves owner add/remove/restore, newly added registered
+and temporary users gaining direct join, removed entries losing direct join,
+duplicate adds merging into one row, call/organization scoping, and audit events
+without raw guest identifiers.
 
 Proof: `call-access-deleted-ended-disabled-join-contract` and the integrated
 Playwright run of `call-access-seed-matrix.spec.js` plus
@@ -1764,22 +1769,22 @@ available.
 
 ## 17. Guest List
 
-- [ ] Host can add registered user to guest list
-- [ ] Host can add temporary invited account to guest list
-- [ ] Host can remove guest-list entry
+- [x] Host can add registered user to guest list
+- [x] Host can add temporary invited account to guest list
+- [x] Host can remove guest-list entry
 - [x] User on guest list can directly join
 - [x] User not on guest list cannot directly join
-- [ ] Temporary account on guest list can directly join
-- [ ] Temporary account not on guest list lands in lobby
+- [x] Temporary account on guest list can directly join
+- [x] Temporary account not on guest list lands in lobby
 - [x] Organization admin does not need guest-list entry for own organization call
 - [x] System admin does not need guest-list entry
 - [x] Guest list is call-scoped
 - [x] Guest list of one call grants no rights to another call
-- [ ] Guest list of one organization grants no rights to another organization
-- [ ] Duplicate guest-list entries are prevented or merged
+- [x] Guest list of one organization grants no rights to another organization
+- [x] Duplicate guest-list entries are prevented or merged
 - [x] Removing guest-list entry affects new join attempts immediately
 - [x] Removing guest-list entry during active call follows product rule
-- [ ] Guest-list changes are audit-logged
+- [x] Guest-list changes are audit-logged
 
 ## 18. System Admin
 
@@ -2337,8 +2342,8 @@ unchecked for the separate owner-transfer lane.
 - [x] `e2e_join_006_user_not_on_guest_list_cannot_direct_join`
 - [x] `e2e_join_007_owner_can_join_own_call`
 - [x] `e2e_join_008_disabled_user_cannot_join`
-- [ ] `e2e_join_009_removed_guest_list_entry_revokes_join`
-- [ ] `e2e_join_010_added_guest_list_entry_grants_join`
+- [x] `e2e_join_009_removed_guest_list_entry_revokes_join`
+- [x] `e2e_join_010_added_guest_list_entry_grants_join`
 - [x] `e2e_join_011_manipulated_role_rejected`
 - [x] `e2e_join_012_manipulated_call_id_rejected`
 
