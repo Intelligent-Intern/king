@@ -147,6 +147,44 @@ function videochat_realtime_mark_call_participant_invite_state(
     );
 }
 
+function videochat_realtime_mark_call_participant_removed_from_active_call(
+    callable $openDatabase,
+    string $callId,
+    int $userId
+): bool {
+    $normalizedCallId = videochat_realtime_normalize_call_id($callId, '');
+    if ($normalizedCallId === '' || $userId <= 0) {
+        return false;
+    }
+
+    try {
+        $pdo = $openDatabase();
+        $leftAt = gmdate('c');
+        $statement = $pdo->prepare(
+            <<<'SQL'
+UPDATE call_participants
+SET invite_state = 'invited',
+    left_at = CASE
+        WHEN joined_at IS NOT NULL AND left_at IS NULL THEN :left_at
+        ELSE left_at
+    END
+WHERE call_id = :call_id
+  AND user_id = :user_id
+  AND source = 'internal'
+SQL
+        );
+        $statement->execute([
+            ':left_at' => $leftAt,
+            ':call_id' => $normalizedCallId,
+            ':user_id' => $userId,
+        ]);
+
+        return $statement->rowCount() > 0;
+    } catch (Throwable) {
+        return false;
+    }
+}
+
 function videochat_realtime_mark_call_participant_pending_for_queue(
     callable $openDatabase,
     array $connection
@@ -421,6 +459,22 @@ function videochat_realtime_connection_with_call_context(array $connection, call
         || (bool) ($resolved['can_manage_owner'] ?? false);
 
     return $connection;
+}
+
+function videochat_realtime_connection_removed_from_active_call(array $connection): bool
+{
+    $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? ''), '');
+    if ($roomId === '' || $roomId === 'lobby' || $roomId === videochat_realtime_waiting_room_id()) {
+        return false;
+    }
+
+    if (videochat_realtime_connection_call_id($connection) === '') {
+        return false;
+    }
+
+    $inviteState = videochat_realtime_normalize_call_invite_state($connection['invite_state'] ?? 'invited');
+    $leftAt = trim((string) ($connection['left_at'] ?? ''));
+    return $leftAt !== '' && !in_array($inviteState, ['allowed', 'accepted'], true);
 }
 
 function videochat_realtime_call_context_allows_admission_bypass(array $context): bool

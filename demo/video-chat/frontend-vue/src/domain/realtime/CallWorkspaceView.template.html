@@ -511,8 +511,8 @@
               <button
                 class="icon-mini-btn danger"
                 type="button"
-                :title="t('calls.workspace.remove_from_lobby')"
-                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveFromLobby"
+                :title="row.inLobby ? t('calls.workspace.remove_from_lobby') : t('calls.workspace.remove_user')"
+                :disabled="!canModerate || row.userId === currentUserId || rowActionPending(row.userId) || !row.canRemoveUser"
                 @click="removeLobbyUser(row.userId)"
               >
                   <img src="/assets/orgas/kingrt/icons/remove_user.png" alt="" />
