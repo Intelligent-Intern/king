@@ -110,6 +110,71 @@ function videochat_call_access_duplicate_review_assert_no_needles(string $text, 
     }
 }
 
+$videochatCallAccessDuplicateReviewWorkerProcess = false;
+
+function videochat_call_access_duplicate_review_parallel_worker(
+    string $databasePath,
+    string $accessId,
+    string $startPath,
+    string $resultPath,
+    string $issuedSessionId,
+    int $userId,
+    string $authSessionId,
+    string $label
+): void {
+    global $videochatCallAccessDuplicateReviewWorkerProcess;
+    $videochatCallAccessDuplicateReviewWorkerProcess = true;
+
+    $deadline = microtime(true) + 10.0;
+    while (!is_file($startPath) && microtime(true) < $deadline) {
+        usleep(10_000);
+    }
+
+    try {
+        if (!is_file($startPath)) {
+            throw new RuntimeException('parallel start signal timed out');
+        }
+
+        $workerPdo = videochat_open_sqlite_pdo($databasePath);
+        $issue = videochat_issue_session_for_call_access(
+            $workerPdo,
+            $accessId,
+            static fn (): string => $issuedSessionId,
+            ['client_ip' => '127.0.0.7', 'user_agent' => 'duplicate-parallel-' . $label],
+            [
+                'authenticated_user_id' => $userId,
+                'authenticated_session_id' => $authSessionId,
+                'verified_user_id' => $userId,
+                'verified_session_id' => $authSessionId,
+            ]
+        );
+        $payload = [
+            'ok' => (bool) ($issue['ok'] ?? false),
+            'reason' => (string) ($issue['reason'] ?? ''),
+            'errors' => is_array($issue['errors'] ?? null) ? $issue['errors'] : [],
+            'session_id' => (string) ((($issue['session'] ?? [])['id'] ?? '')),
+            'user_id' => (int) ((($issue['user'] ?? [])['id'] ?? 0)),
+        ];
+        file_put_contents($resultPath, json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        exit(0);
+    } catch (Throwable $error) {
+        file_put_contents($resultPath, json_encode([
+            'ok' => false,
+            'reason' => 'worker_error',
+            'message' => $error->getMessage(),
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+        exit(2);
+    }
+}
+
+function videochat_call_access_duplicate_review_read_parallel_result(string $path, string $label): array
+{
+    videochat_call_access_duplicate_review_assert(is_file($path), "{$label} parallel result should exist");
+    $decoded = json_decode((string) file_get_contents($path), true);
+    videochat_call_access_duplicate_review_assert(is_array($decoded), "{$label} parallel result should decode");
+    return $decoded;
+}
+
 try {
     if (!extension_loaded('pdo_sqlite')) {
         fwrite(STDOUT, "[call-access-duplicate-review-contract] SKIP: pdo_sqlite unavailable\n");
@@ -137,20 +202,26 @@ try {
     $hostName = 'Duplicate Review Host ' . $secret;
     $targetName = 'Duplicate Review Target ' . $secret;
     $secondName = 'Duplicate Review Second ' . $secret;
+    $thirdName = 'Duplicate Review Third ' . $secret;
     $hostEmail = 'host-' . $secret . '@example.test';
     $targetEmail = 'target-' . $secret . '@example.test';
     $secondEmail = 'second-' . $secret . '@example.test';
+    $thirdEmail = 'third-' . $secret . '@example.test';
     $callTitle = 'Duplicate Review Private Call ' . $secret;
 
     $hostUserId = videochat_call_access_duplicate_review_create_user($pdo, $adminRoleId, $hostEmail, $hostName);
     $targetUserId = videochat_call_access_duplicate_review_create_user($pdo, $userRoleId, $targetEmail, $targetName);
     $secondUserId = videochat_call_access_duplicate_review_create_user($pdo, $userRoleId, $secondEmail, $secondName);
+    $thirdUserId = videochat_call_access_duplicate_review_create_user($pdo, $userRoleId, $thirdEmail, $thirdName);
     videochat_tenant_attach_user($pdo, $hostUserId, $defaultTenantId, 'owner');
     videochat_tenant_attach_user($pdo, $targetUserId, $defaultTenantId, 'member');
     videochat_tenant_attach_user($pdo, $secondUserId, $defaultTenantId, 'member');
+    videochat_tenant_attach_user($pdo, $thirdUserId, $defaultTenantId, 'member');
 
     videochat_call_access_duplicate_review_insert_session($pdo, 'sess_duplicate_target', $targetUserId, $defaultTenantId);
     videochat_call_access_duplicate_review_insert_session($pdo, 'sess_duplicate_second', $secondUserId, $defaultTenantId);
+    videochat_call_access_duplicate_review_insert_session($pdo, 'sess_duplicate_target_parallel_auth', $targetUserId, $defaultTenantId);
+    videochat_call_access_duplicate_review_insert_session($pdo, 'sess_duplicate_third_parallel_auth', $thirdUserId, $defaultTenantId);
 
     $createCall = videochat_create_call($pdo, $hostUserId, [
         'title' => $callTitle,
@@ -221,7 +292,7 @@ try {
         return $response;
     };
 
-    $secretNeedles = [$accessId, $hostEmail, $hostName, $targetEmail, $targetName, $secondEmail, $secondName];
+    $secretNeedles = [$accessId, $hostEmail, $hostName, $targetEmail, $targetName, $secondEmail, $secondName, $thirdEmail, $thirdName];
 
     $firstIssue = videochat_issue_session_for_call_access(
         $pdo,
@@ -260,6 +331,8 @@ try {
     videochat_call_access_duplicate_review_assert((string) ($flag['status'] ?? '') === 'open', 'review flag status mismatch');
     videochat_call_access_duplicate_review_assert((int) ($flag['subject_user_id'] ?? 0) === $secondUserId, 'review flag subject user mismatch');
     videochat_call_access_duplicate_review_assert((int) ($flag['target_user_id'] ?? 0) === $targetUserId, 'review flag target user mismatch');
+    videochat_call_access_duplicate_review_assert((int) ($flag['first_seen_user_id'] ?? 0) === $targetUserId, 'review flag should reference the first in-call linked account');
+    videochat_call_access_duplicate_review_assert(trim((string) ($flag['first_seen_at'] ?? '')) !== '', 'review flag should keep first in-call session timestamp');
     videochat_call_access_duplicate_review_assert((string) ($flag['call_id'] ?? '') === $callId, 'review flag call id mismatch');
     videochat_call_access_duplicate_review_assert((string) ($flag['access_fingerprint'] ?? '') === videochat_audit_fingerprint($accessId), 'review flag access fingerprint mismatch');
     videochat_call_access_duplicate_review_assert_no_needles((string) ($flag['payload_json'] ?? ''), $secretNeedles, 'review flag payload');
@@ -328,6 +401,113 @@ try {
     $auditCount = (int) $pdo->query("SELECT COUNT(*) FROM videochat_audit_events WHERE event_type = 'call_access_duplicate_personalized_link_review'")->fetchColumn();
     videochat_call_access_duplicate_review_assert($auditCount >= 1, 'duplicate review must be audit-logged');
 
+    if (function_exists('pcntl_fork')) {
+        $parallelStartPath = $databasePath . '.parallel.start';
+        $parallelTargetPath = $databasePath . '.parallel.target.json';
+        $parallelThirdPath = $databasePath . '.parallel.third.json';
+        @unlink($parallelStartPath);
+        @unlink($parallelTargetPath);
+        @unlink($parallelThirdPath);
+
+        $targetPid = pcntl_fork();
+        videochat_call_access_duplicate_review_assert($targetPid !== -1, 'target parallel worker should fork');
+        if ($targetPid === 0) {
+            videochat_call_access_duplicate_review_parallel_worker(
+                $databasePath,
+                $accessId,
+                $parallelStartPath,
+                $parallelTargetPath,
+                'sess_duplicate_target_parallel_access',
+                $targetUserId,
+                'sess_duplicate_target_parallel_auth',
+                'target'
+            );
+        }
+
+        $thirdPid = pcntl_fork();
+        videochat_call_access_duplicate_review_assert($thirdPid !== -1, 'third-account parallel worker should fork');
+        if ($thirdPid === 0) {
+            videochat_call_access_duplicate_review_parallel_worker(
+                $databasePath,
+                $accessId,
+                $parallelStartPath,
+                $parallelThirdPath,
+                'sess_duplicate_third_should_not_issue_parallel',
+                $thirdUserId,
+                'sess_duplicate_third_parallel_auth',
+                'third'
+            );
+        }
+
+        file_put_contents($parallelStartPath, 'go');
+        $targetStatus = 0;
+        $thirdStatus = 0;
+        pcntl_waitpid($targetPid, $targetStatus);
+        pcntl_waitpid($thirdPid, $thirdStatus);
+        videochat_call_access_duplicate_review_assert(pcntl_wifexited($targetStatus) && pcntl_wexitstatus($targetStatus) === 0, 'target parallel worker should exit cleanly');
+        videochat_call_access_duplicate_review_assert(pcntl_wifexited($thirdStatus) && pcntl_wexitstatus($thirdStatus) === 0, 'third-account parallel worker should exit cleanly');
+
+        $targetParallel = videochat_call_access_duplicate_review_read_parallel_result($parallelTargetPath, 'target');
+        $thirdParallel = videochat_call_access_duplicate_review_read_parallel_result($parallelThirdPath, 'third-account');
+        videochat_call_access_duplicate_review_assert((bool) ($targetParallel['ok'] ?? false), 'linked account parallel reopen should issue');
+        videochat_call_access_duplicate_review_assert((string) ($targetParallel['session_id'] ?? '') === 'sess_duplicate_target_parallel_access', 'linked account parallel session id mismatch');
+        videochat_call_access_duplicate_review_assert((int) ($targetParallel['user_id'] ?? 0) === $targetUserId, 'linked account parallel user mismatch');
+        videochat_call_access_duplicate_review_assert(!(bool) ($thirdParallel['ok'] ?? false), 'foreign account parallel attempt must not issue');
+        videochat_call_access_duplicate_review_assert((string) ($thirdParallel['reason'] ?? '') === 'conflict', 'foreign account parallel attempt should fail closed');
+        videochat_call_access_duplicate_review_assert((string) (($thirdParallel['errors'] ?? [])['auth'] ?? '') === 'session_context_changed', 'foreign account parallel error should preserve verified-context conflict');
+
+        $parallelSessionCount = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_duplicate_target_parallel_access' AND user_id = " . $targetUserId)->fetchColumn();
+        videochat_call_access_duplicate_review_assert($parallelSessionCount === 1, 'parallel linked account session should persist exactly once');
+        $foreignParallelSessionCount = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = 'sess_duplicate_third_should_not_issue_parallel' OR (user_id = " . $thirdUserId . " AND id LIKE 'sess_duplicate_third_should_not_issue%')")->fetchColumn();
+        videochat_call_access_duplicate_review_assert($foreignParallelSessionCount === 0, 'parallel foreign account must not persist a call session');
+        $freshParallelAccess = videochat_fetch_call_access_link($pdo, $accessId, $defaultTenantId);
+        videochat_call_access_duplicate_review_assert(is_array($freshParallelAccess), 'parallel access link should still resolve');
+        videochat_call_access_duplicate_review_assert((int) ($freshParallelAccess['participant_user_id'] ?? 0) === $targetUserId, 'parallel race must not reassign the personalized link');
+        videochat_call_access_duplicate_review_assert(trim((string) ($freshParallelAccess['consumed_at'] ?? '')) !== '', 'parallel race should leave the personalized link consumed');
+
+        $thirdFlagQuery = $pdo->prepare(
+            <<<'SQL'
+SELECT *
+FROM call_access_review_flags
+WHERE access_fingerprint = :access_fingerprint
+  AND reason = 'duplicate_personalized_link'
+  AND subject_user_id = :subject_user_id
+LIMIT 1
+SQL
+        );
+        $thirdFlagQuery->execute([
+            ':access_fingerprint' => videochat_audit_fingerprint($accessId),
+            ':subject_user_id' => $thirdUserId,
+        ]);
+        $thirdFlag = $thirdFlagQuery->fetch();
+        videochat_call_access_duplicate_review_assert(is_array($thirdFlag), 'parallel foreign account should create a duplicate review flag');
+        videochat_call_access_duplicate_review_assert((int) ($thirdFlag['target_user_id'] ?? 0) === $targetUserId, 'parallel review target user mismatch');
+        videochat_call_access_duplicate_review_assert((int) ($thirdFlag['first_seen_user_id'] ?? 0) === $targetUserId, 'parallel review should reference first in-call account');
+        videochat_call_access_duplicate_review_assert(trim((string) ($thirdFlag['first_seen_at'] ?? '')) !== '', 'parallel review should keep first in-call timestamp');
+        videochat_call_access_duplicate_review_assert_no_needles((string) ($thirdFlag['payload_json'] ?? ''), $secretNeedles, 'parallel review flag payload');
+
+        $parallelAudit = $pdo->prepare(
+            <<<'SQL'
+SELECT COUNT(*)
+FROM videochat_audit_events
+WHERE event_type = 'call_access_duplicate_personalized_link_review'
+  AND actor_user_id = :actor_user_id
+  AND call_id = :call_id
+SQL
+        );
+        $parallelAudit->execute([
+            ':actor_user_id' => $thirdUserId,
+            ':call_id' => $callId,
+        ]);
+        videochat_call_access_duplicate_review_assert((int) $parallelAudit->fetchColumn() >= 1, 'parallel duplicate review must be audit-logged');
+
+        @unlink($parallelStartPath);
+        @unlink($parallelTargetPath);
+        @unlink($parallelThirdPath);
+    } else {
+        fwrite(STDOUT, "[call-access-duplicate-review-contract] SKIP: pcntl_fork unavailable for parallel race subcheck\n");
+    }
+
     $alphaTenantId = videochat_call_access_duplicate_review_create_tenant($pdo, 'review-alpha-' . $secret, 'Review Alpha ' . $secret);
     $betaTenantId = videochat_call_access_duplicate_review_create_tenant($pdo, 'review-beta-' . $secret, 'Review Beta ' . $secret);
     $crossOrgAccessId = videochat_generate_call_access_uuid();
@@ -383,7 +563,7 @@ SQL
 } finally {
     putenv('VIDEOCHAT_CALL_ACCESS_HOST_VERIFICATION_LIMIT');
     putenv('VIDEOCHAT_CALL_ACCESS_HOST_VERIFICATION_WINDOW_SECONDS');
-    if (isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
+    if (!$videochatCallAccessDuplicateReviewWorkerProcess && isset($databasePath) && is_string($databasePath) && is_file($databasePath)) {
         @unlink($databasePath);
     }
 }
