@@ -1901,15 +1901,15 @@ host by missing `pdo_sqlite`.
 ## 25. Guest Account Lifecycle
 
 - [ ] Guest account is created from personalized calendar invitation
-- [ ] Guest account is deleted when call is deleted
+- [x] Guest account is deleted when call is deleted
 - [ ] Guest account is deleted or invalidated when invitation is deleted
 - [x] Guest account is deleted or invalidated when invite link is manually invalidated
-- [ ] Guest account is updated, recreated, or invalidated when call is rescheduled according to product rule
-- [ ] Guest account cannot join original call after call was rescheduled and original link invalidated
-- [ ] Guest account cannot join after call was deleted
-- [ ] Guest account cannot join after call was ended
+- [x] Guest account is updated, recreated, or invalidated when call is rescheduled according to product rule
+- [x] Guest account cannot join original call after call was rescheduled and original link invalidated
+- [x] Guest account cannot join after call was deleted
+- [x] Guest account cannot join after call was ended
 - [x] Guest account cannot rejoin after cleanup
-- [ ] Guest account cannot be used to infer deleted call data
+- [x] Guest account cannot be used to infer deleted call data
 - [x] Guest account cleanup does not delete registered user accounts
 - [x] Guest account cleanup does not alter registered user profile data
 - [x] Guest account cleanup does not remove unrelated temporary guests from other calls
@@ -1926,6 +1926,14 @@ invalidated, verifies the second pass has zero destructive changes, and asserts
 both the first pass and idempotent repeat append sanitized
 `guest_account_cleanup` audit events without raw guest, session, or access-link
 identifiers.
+
+Proof: `call-guest-cleanup-sqlite-proof.sh` passed through the Docker
+fallback and ran the explicit cleanup, call-end cleanup, and call-delete
+cleanup split contracts. Those contracts prove scoped temporary guests are
+disabled, stale guest sessions cannot authenticate, stale guest links cannot
+rejoin, registered accounts remain active and unchanged, repeat cleanup is a
+no-op, cleanup audit events are sanitized, and delete/end paths expose the
+guest cleanup result while preserving the stronger lifecycle cleanup.
 
 ## 26. Call Rescheduling
 
@@ -2462,17 +2470,17 @@ against duplicate join/session request loops.
 ## Test Group: Guest Account Lifecycle
 
 - [ ] `e2e_guest_lifecycle_001_temp_guest_created_from_calendar_invite`
-- [ ] `e2e_guest_lifecycle_002_temp_guest_deleted_when_call_deleted`
+- [x] `e2e_guest_lifecycle_002_temp_guest_deleted_when_call_deleted`
 - [ ] `e2e_guest_lifecycle_003_temp_guest_deleted_when_invitation_deleted`
 - [ ] `e2e_guest_lifecycle_004_temp_guest_invalidated_when_link_invalidated`
-- [ ] `e2e_guest_lifecycle_005_temp_guest_handled_on_call_reschedule`
-- [ ] `e2e_guest_lifecycle_006_temp_guest_cannot_join_after_call_deleted`
-- [ ] `e2e_guest_lifecycle_007_temp_guest_cannot_join_after_call_ended`
-- [ ] `e2e_guest_lifecycle_008_temp_guest_cannot_rejoin_after_cleanup`
-- [ ] `e2e_guest_lifecycle_009_cleanup_does_not_delete_registered_accounts`
-- [ ] `e2e_guest_lifecycle_010_cleanup_scoped_to_call`
-- [ ] `e2e_guest_lifecycle_011_cleanup_idempotent`
-- [ ] `e2e_guest_lifecycle_012_cleanup_audit_logged`
+- [x] `e2e_guest_lifecycle_005_temp_guest_handled_on_call_reschedule`
+- [x] `e2e_guest_lifecycle_006_temp_guest_cannot_join_after_call_deleted`
+- [x] `e2e_guest_lifecycle_007_temp_guest_cannot_join_after_call_ended`
+- [x] `e2e_guest_lifecycle_008_temp_guest_cannot_rejoin_after_cleanup`
+- [x] `e2e_guest_lifecycle_009_cleanup_does_not_delete_registered_accounts`
+- [x] `e2e_guest_lifecycle_010_cleanup_scoped_to_call`
+- [x] `e2e_guest_lifecycle_011_cleanup_idempotent`
+- [x] `e2e_guest_lifecycle_012_cleanup_audit_logged`
 
 ## Test Group: Call Rescheduling
 
@@ -2627,7 +2635,7 @@ against duplicate join/session request loops.
 - [x] Test data is isolated per test or safely reset
 - [ ] Tests cover all critical IAM and call-access flows
 - [ ] Tests cover invitation invalidation
-- [ ] Tests cover guest account cleanup
+- [x] Tests cover guest account cleanup
 - [ ] Tests cover call rescheduling
 - [ ] Tests cover call deletion
 - [ ] Tests cover explicit call ending
