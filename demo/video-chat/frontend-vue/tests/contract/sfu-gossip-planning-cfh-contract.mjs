@@ -35,6 +35,11 @@ async function main() {
   requireContains(runtimeHealth, 'recoverSfuPublisherBeforeReconnect', 'stall monitor has a targeted recovery step before reconnect');
   requireContains(runtimeHealth, "recovery_ladder_step: 'keyframe'", 'stall recovery requests keyframes as a ladder step');
   requireContains(runtimeHealth, "type: 'call/media-security-sync-request'", 'stall recovery can request security resync before reconnect');
+  const runtimeConfig = read('src/domain/realtime/workspace/callWorkspace/runtimeConfig.ts');
+  const socketLifecycle = read('src/domain/realtime/workspace/callWorkspace/socketLifecycle.ts');
+  requireContains(runtimeConfig, "'call/media-security-sync-request'", 'media-security sync request must be an allowed call-state signal');
+  requireContains(socketLifecycle, 'MEDIA_SECURITY_SYNC_REQUEST_SIGNAL_TYPE', 'socket lifecycle must route media-security sync requests');
+  requireContains(socketLifecycle, "eventType: 'media_security_sync_request_received'", 'socket lifecycle must persist media-security sync request diagnostics');
   requireContains(runtimeHealth, '&& !targetedFrozenRecovery.recovered', 'frozen-video reconnect is gated behind targeted recovery');
   requireContains(runtimeHealth, '&& !targetedStallRecovery.recovered', 'never-started reconnect is gated behind targeted recovery');
 

@@ -21,6 +21,7 @@ type WLVCModule = {
   Encoder: new (...args: any[]) => WasmEncoder
   Decoder: new (...args: any[]) => WasmDecoder
   AudioProcessor: new (sampleRate: number, gateThresh: number, compThresh: number) => WasmAudioProcessor
+  BackgroundMatteRefiner?: new (width: number, height: number, preset: number) => WasmBackgroundMatteRefiner
 }
 
 interface WasmEncoder {
@@ -39,6 +40,22 @@ interface WasmAudioProcessor {
   process(samples: Float32Array): void
   reset(): void
   delete(): void
+}
+
+interface WasmBackgroundMatteRefiner {
+  refine(rgbaMask: Uint8Array | Uint8ClampedArray): Uint8Array | null
+  segment(rgba: Uint8Array | Uint8ClampedArray): Uint8Array | null
+  reset(): void
+  delete(): void
+}
+
+export type KingBackgroundMattePreset = 'weak_blur' | 'hard_blur' | 'replace'
+
+export interface KingBackgroundMatteRefiner {
+  refine(rgbaMask: Uint8Array | Uint8ClampedArray): Uint8ClampedArray | null
+  segment(rgba: Uint8Array | Uint8ClampedArray): Uint8ClampedArray | null
+  reset(): void
+  destroy(): void
 }
 
 function isBindingMismatchError(error: unknown, className: string): boolean {
@@ -416,6 +433,42 @@ export async function createWasmDecoder(
   const decoder = new WasmWaveletVideoDecoder(config)
   const ok = await decoder.init()
   return ok ? decoder : null
+}
+
+const backgroundMattePresetToNum: Record<KingBackgroundMattePreset, number> = {
+  weak_blur: 0,
+  hard_blur: 1,
+  replace: 2,
+}
+
+export async function createKingBackgroundMatteRefiner(config: {
+  width: number
+  height: number
+  preset?: KingBackgroundMattePreset
+}): Promise<KingBackgroundMatteRefiner | null> {
+  const mod = await loadWasmModule()
+  if (!mod || typeof mod.BackgroundMatteRefiner !== 'function') return null
+
+  const width = Math.max(1, Math.round(Number(config.width || 1)))
+  const height = Math.max(1, Math.round(Number(config.height || 1)))
+  const preset = backgroundMattePresetToNum[config.preset || 'weak_blur'] ?? 0
+  const refiner = new mod.BackgroundMatteRefiner(width, height, preset)
+  return {
+    refine(rgbaMask) {
+      const refined = refiner.refine(rgbaMask)
+      return refined ? new Uint8ClampedArray(refined) : null
+    },
+    segment(rgba) {
+      const segmented = refiner.segment(rgba)
+      return segmented ? new Uint8ClampedArray(segmented) : null
+    },
+    reset() {
+      refiner.reset()
+    },
+    destroy() {
+      refiner.delete()
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------

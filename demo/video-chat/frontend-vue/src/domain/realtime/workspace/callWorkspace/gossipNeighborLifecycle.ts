@@ -6,6 +6,11 @@ const GOSSIP_NEIGHBOR_SIGNAL_KINDS = Object.freeze({
   answer: 'gossip_neighbor_answer',
   ice: 'gossip_neighbor_ice',
 });
+const LEGACY_GOSSIP_WEBRTC_SIGNAL_KINDS = Object.freeze([
+  'gossip_webrtc_offer',
+  'gossip_webrtc_answer',
+  'gossip_webrtc_ice',
+]);
 
 function safePeerId(value) {
   return String(value || '').trim();
@@ -24,6 +29,7 @@ function isGossipNeighborPayload(payload) {
   const kind = String(payload.kind || '').trim().toLowerCase();
   const runtimePath = String(payload.runtime_path || '').trim().toLowerCase();
   return Object.values(GOSSIP_NEIGHBOR_SIGNAL_KINDS).includes(kind)
+    || LEGACY_GOSSIP_WEBRTC_SIGNAL_KINDS.includes(kind)
     || runtimePath === GOSSIP_NEIGHBOR_RUNTIME_PATH;
 }
 
@@ -36,6 +42,8 @@ export function createGossipNeighborLifecycle({
     captureClientDiagnostic = () => {},
     currentUserId,
     getDataTransport = () => null,
+    getIceServers = () => DEFAULT_NATIVE_ICE_SERVERS,
+    onPeerConnectionState = () => false,
     sendSocketFrame = () => false,
   } = callbacks;
 
@@ -56,8 +64,9 @@ export function createGossipNeighborLifecycle({
   }
 
   function peerConnectionConfig() {
+    const iceServers = getIceServers();
     return {
-      iceServers: DEFAULT_NATIVE_ICE_SERVERS,
+      iceServers: Array.isArray(iceServers) && iceServers.length > 0 ? iceServers : DEFAULT_NATIVE_ICE_SERVERS,
       iceCandidatePoolSize: 2,
     };
   }
@@ -111,6 +120,7 @@ export function createGossipNeighborLifecycle({
 
     pc.addEventListener('connectionstatechange', () => {
       const state = String(pc.connectionState || '').trim().toLowerCase();
+      onPeerConnectionState(normalizedPeerId, state, 'connectionstatechange');
       captureClientDiagnostic({
         category: 'media',
         level: state === 'failed' ? 'warning' : 'info',

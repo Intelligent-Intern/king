@@ -599,7 +599,7 @@ test('admin layout controls react to activity and pinning overrides active-speak
 
     await layoutControls.getByLabel('Activity strategy').selectOption('manual_pinned');
     await expect(layoutControls.getByLabel('Activity strategy')).toHaveValue('manual_pinned');
-    await admin.page.locator('.user-row', { hasText: 'Active User' }).locator('button[title="Pin user"]').click();
+    await admin.page.locator('.user-row', { hasText: 'Active User' }).getByRole('button', { name: 'Pin locally' }).click();
     await admin.page.evaluate(() => window.__matrixEmitActivity(1, 99));
     await expect(admin.page.locator('.workspace-mini-title')).toContainText('Layout Admin');
   } finally {

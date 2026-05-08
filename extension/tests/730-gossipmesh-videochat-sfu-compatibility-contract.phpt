@@ -62,7 +62,8 @@ $gatewayNeedles = [
     'videochat_sfu_decode_client_frame($msgJson, $roomId)',
     '\'sfu_room_mismatch\'',
     'videochat_sfu_bootstrap($sfuDatabase)',
-    'videochat_sfu_upsert_publisher($sfuDatabase, $roomId, $clientId, $userIdString, $userName)',
+    '$roomStateKey = videochat_presence_room_key($roomId, $tenantId);',
+    'videochat_sfu_upsert_publisher($sfuDatabase, $roomStateKey, $clientId, $userIdString, $userName)',
     'videochat_sfu_poll_broker(',
     'videochat_sfu_sqlite_frame_buffer_poll(',
     'videochat_sfu_live_frame_relay_publish(',
@@ -152,7 +153,7 @@ $runtimeContractNeedles = [
     'SFU live frame relay must preserve protected frame and codec/runtime metadata',
     'SFU live frame relay should skip publishers that are local to the subscriber worker',
     'SFU media frames must use the bounded SQLite frame buffer for cross-worker replay',
-    'SFU cross-worker media fanout must keep bounded live relay and SQLite frame-buffer replay',
+    'SFU media fanout must keep bounded RAM live relay and SQLite cross-worker frame-buffer replay',
     'SFU reconnect should recover publishers from store',
 ];
 foreach ($runtimeContractNeedles as $needle) {

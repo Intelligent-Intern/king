@@ -1,5 +1,4 @@
 import { createSinetWasmSegmentationBackend } from './backendSinetWasm';
-import { acquireWorkerSegmenterBackendLease } from './backendWorkerSegmenter';
 import { toNumber } from './math';
 import { createBackgroundPipelineController } from './pipeline/controller';
 import { createBackgroundCompositorStage } from './pipeline/compositorStage';
@@ -15,7 +14,6 @@ const BACKGROUND_SEGMENTER_INIT_RETRY_MS = 60000;
 const BACKGROUND_SEGMENTER_WARN_THROTTLE_MS = 10000;
 
 let sinetSegmenterUnavailableUntil = 0;
-let workerSegmenterUnavailableUntil = 0;
 
 function epochNowMs() {
   return Date.now();
@@ -54,11 +52,19 @@ function normalizeBackgroundFilterRuntimeConfig(options = {}) {
     backgroundImageUrl: String(options.backgroundImageUrl ?? '').trim(),
     blurPx: Math.max(1, Math.min(28, Math.round(toNumber(options.blurPx, 3)))),
     detectIntervalMs: Math.max(1, Math.min(1200, Math.round(toNumber(options.detectIntervalMs, 1)))),
+    alphaGamma: Math.max(0.4, Math.min(2.5, toNumber(options.alphaGamma, 0.8))),
+    averageRadius: Math.max(0, Math.min(12, Math.round(toNumber(options.averageRadius, 6)))),
+    holeFillRadius: Math.max(0, Math.min(4, Math.round(toNumber(options.holeFillRadius, 0)))),
+    maskContrast: Math.max(0.25, Math.min(4, toNumber(options.maskContrast, 0.75))),
+    mattePreset: String(options.mattePreset || '').trim(),
     mode,
     overloadConsecutiveFrames: Math.max(3, Math.min(60, Math.round(toNumber(options.overloadConsecutiveFrames, 12)))),
     overloadFrameMs: Math.max(40, Math.min(400, toNumber(options.overloadFrameMs, 90))),
     sourceActive: options.sourceActive !== false,
+    showSourceUntilMask: options.showSourceUntilMask === true,
     statsIntervalMs: Math.max(500, Math.min(5e3, Math.round(toNumber(options.statsIntervalMs, 1e3)))),
+    temporalFall: Math.max(0, Math.min(1, toNumber(options.temporalFall, 0.6))),
+    temporalRise: Math.max(0, Math.min(1, toNumber(options.temporalRise, 0.7))),
   };
 }
 async function waitForVideoReady(video) {
@@ -161,7 +167,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   const targetFps = Math.max(8, Math.min(30, Math.round(fps)));
   let segmentationBackend = null;
   let segmentationBackendInitPromise = null;
-  let segmentationBackendLease = null;
   let segmentationBackendKind = 'none';
   let segmentationBackendInitFailed = false;
   let segmentationBackendLastFailures = [];
@@ -193,6 +198,8 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       getBackgroundColor: () => runtimeConfig.backgroundColor,
       getBackgroundImageUrl: () => runtimeConfig.backgroundImageUrl,
       getBlurPx: () => runtimeConfig.blurPx,
+      getMattePreset: () => runtimeConfig.mattePreset,
+      getShowSourceUntilMask: () => runtimeConfig.showSourceUntilMask,
       preferWebGl: true,
       video,
     });
@@ -233,13 +240,8 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     compositorStage.reset();
   }
 
-  function releaseSegmentationBackend({ keepWarm = true } = {}) {
-    if (segmentationBackendLease) {
-      segmentationBackendLease.release?.({ keepWarm });
-    } else {
-      segmentationBackend?.dispose?.({ keepWarm });
-    }
-    segmentationBackendLease = null;
+  function releaseSegmentationBackend() {
+    segmentationBackend?.dispose?.();
     segmentationBackend = null;
     segmentationBackendKind = 'none';
     segmentationBackendInitFailed = false;
@@ -253,7 +255,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     lastSegmentationBackendWarningAt = nowMs;
     console.warn('[BackgroundFilter] Segmentation backend failed to initialize', {
       selected: segmentationBackendKind,
-      requested: 'sinet_wasm, worker-segmenter',
+      requested: 'sinet-wasm',
       failures,
     });
   }
@@ -269,13 +271,20 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       if (!isSegmenterCoolingDown(sinetSegmenterUnavailableUntil)) {
         try {
           segmentationBackend = await createSinetWasmSegmentationBackend({
+            alphaGamma: runtimeConfig.alphaGamma,
+            averageRadius: runtimeConfig.averageRadius,
             detectIntervalMs: runtimeConfig.detectIntervalMs,
+            holeFillRadius: runtimeConfig.holeFillRadius,
+            maskContrast: runtimeConfig.maskContrast,
+            mattePreset: runtimeConfig.mattePreset,
+            temporalFall: runtimeConfig.temporalFall,
+            temporalRise: runtimeConfig.temporalRise,
           });
           if (!segmentationBackend) {
             throw new Error('SINet backend unavailable');
           }
           if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
-            releaseSegmentationBackend({ keepWarm: false });
+            releaseSegmentationBackend();
           }
         } catch (error) {
           initFailures.push(formatInitFailure('sinet_wasm', error));
@@ -284,27 +293,6 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
         }
       } else {
         initFailures.push('sinet_wasm: cooling_down');
-      }
-      if (!segmentationBackend && !disposed && runtimeConfig.mode !== 'off' && runtimeConfig.sourceActive) {
-        if (!isSegmenterCoolingDown(workerSegmenterUnavailableUntil)) {
-          try {
-            segmentationBackendLease = await acquireWorkerSegmenterBackendLease({
-              delegate: 'CPU',
-              detectIntervalMs: runtimeConfig.detectIntervalMs,
-              ownerId: `background-filter-${performance.now().toFixed(3)}`,
-            });
-            segmentationBackend = segmentationBackendLease.backend;
-            if (disposed || runtimeConfig.mode === 'off' || !runtimeConfig.sourceActive) {
-              releaseSegmentationBackend({ keepWarm: true });
-            }
-          } catch (error) {
-            initFailures.push(formatInitFailure('worker-segmenter', error));
-            workerSegmenterUnavailableUntil = epochNowMs() + BACKGROUND_SEGMENTER_INIT_RETRY_MS;
-            segmentationBackend = null;
-          }
-        } else {
-          initFailures.push('worker-segmenter: cooling_down');
-        }
       }
       segmentationBackendKind = segmentationBackend?.kind || 'none';
       if (segmentationBackendKind === 'none' && initFailures.length > 0) {
@@ -364,11 +352,38 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
   }
 
   function applyConfigUpdate(nextOptions = {}) {
+    const previousSegmentationConfig = [
+      runtimeConfig.alphaGamma,
+      runtimeConfig.averageRadius,
+      runtimeConfig.detectIntervalMs,
+      runtimeConfig.holeFillRadius,
+      runtimeConfig.maskContrast,
+      runtimeConfig.mattePreset,
+      runtimeConfig.temporalFall,
+      runtimeConfig.temporalRise,
+    ].join('|');
     const nextConfig = normalizeBackgroundFilterRuntimeConfig(nextOptions);
     if (!Object.prototype.hasOwnProperty.call(nextOptions, 'sourceActive')) {
       nextConfig.sourceActive = runtimeConfig.sourceActive;
     }
+    if (!Object.prototype.hasOwnProperty.call(nextOptions, 'showSourceUntilMask')) {
+      nextConfig.showSourceUntilMask = runtimeConfig.showSourceUntilMask;
+    }
     Object.assign(runtimeConfig, nextConfig);
+    const nextSegmentationConfig = [
+      runtimeConfig.alphaGamma,
+      runtimeConfig.averageRadius,
+      runtimeConfig.detectIntervalMs,
+      runtimeConfig.holeFillRadius,
+      runtimeConfig.maskContrast,
+      runtimeConfig.mattePreset,
+      runtimeConfig.temporalFall,
+      runtimeConfig.temporalRise,
+    ].join('|');
+    if (segmentationBackend && previousSegmentationConfig !== nextSegmentationConfig) {
+      segmenterStage.reset();
+      releaseSegmentationBackend();
+    }
     if (pipelineController) {
       pipelineController.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.CONFIG_UPDATE, {
         mode: runtimeConfig.mode,
@@ -378,7 +393,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     }
     if (runtimeConfig.mode === 'off') {
       segmenterStage.reset();
-      releaseSegmentationBackend({ keepWarm: true });
+      releaseSegmentationBackend();
     }
     syncPipelineStageStates();
   }
@@ -389,7 +404,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
     if (!runtimeConfig.sourceActive) {
       segmenterStage.reset();
       compositorStage.reset();
-      releaseSegmentationBackend({ keepWarm: true });
+      releaseSegmentationBackend();
     }
     if (pipelineController) {
       pipelineController.emit(
@@ -530,7 +545,7 @@ async function createBackgroundFilterStreamLegacy(sourceStream, options = {}) {
       } catch {
       }
     }
-    releaseSegmentationBackend({ keepWarm: true });
+    releaseSegmentationBackend();
     compositorStage.reset();
     segmenterStage.reset();
     pipelineController?.emit(BACKGROUND_PIPELINE_MESSAGE_TYPES.PIPELINE_STOP, {});

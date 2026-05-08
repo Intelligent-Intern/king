@@ -806,8 +806,12 @@ export function createCallWorkspaceMediaSecurityRuntime({
       && shouldRecoverMediaSecurityFromFrameError(error);
   }
 
-  function shouldSendTransportOnlySfuFrame(error) {
+  function shouldSendTransportOnlySfuFrame(error = null) {
+    const session = mediaSecuritySessionRef.value || null;
+    const policy = String(session?.policy || 'preferred').trim().toLowerCase();
+    if (policy === 'required') return false;
     const message = String(error?.message || error || '').trim().toLowerCase();
+    if (message === '') return true;
     return message.includes('unsupported_capability')
       || message.includes('blocked_capability');
   }

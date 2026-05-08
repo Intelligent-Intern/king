@@ -37,6 +37,7 @@ function require_order(string $path, string $before, string $after): void
 
 $sfuClient = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuClient.ts';
 $sfuMessageHandler = 'demo/video-chat/frontend-vue/src/lib/sfu/sfuMessageHandler.ts';
+$sfuSessionProtocol = 'demo/video-chat/frontend-vue/src/lib/sfu/sessionProtocol.ts';
 $inboundFrameAssembler = 'demo/video-chat/frontend-vue/src/lib/sfu/inboundFrameAssembler.ts';
 $backendOrigin = 'demo/video-chat/frontend-vue/src/support/backendOrigin.ts';
 $gateway = 'demo/video-chat/backend-king-php/domain/realtime/realtime_sfu_gateway.php';
@@ -57,7 +58,8 @@ $clientNeedles = [
     "if (/^[A-Za-z0-9._-]{1,200}$/.test(normalizedCallId)) {",
     "query.set('call_id', normalizedCallId)",
     "this.send({ type: 'sfu/join', room_id: roomId, role: 'publisher' })",
-    "this.send({ type: 'sfu/publish', track_id: t.id, kind: t.kind, label: t.label })",
+    'buildSfuTrackPublishPayload,',
+    'this.send(buildSfuTrackPublishPayload(t, this.sessionAccepted))',
     'const normalizedPublisherId = stringField(publisherId)',
     'this.trackSubscribedPublisher(normalizedPublisherId)',
     "this.send({ type: 'sfu/subscribe', publisher_id: normalizedPublisherId })",
@@ -89,6 +91,19 @@ $messageHandlerNeedles = [
 ];
 foreach ($messageHandlerNeedles as $needle) {
     require_contains($sfuMessageHandler, $needle);
+}
+
+$sessionProtocolNeedles = [
+    'export function buildSfuTrackPublishPayload(',
+    "type: 'sfu/publish'",
+    'track_id: track.id',
+    'kind: track.kind',
+    'label: track.label',
+    'session_protocol: SFU_SESSION_PROTOCOL',
+    'session_protocol_version: sessionAccepted?.protocolVersion || 1',
+];
+foreach ($sessionProtocolNeedles as $needle) {
+    require_contains($sfuSessionProtocol, $needle);
 }
 
 require_contains($inboundFrameAssembler, 'export function stringField(...values: unknown[]): string');

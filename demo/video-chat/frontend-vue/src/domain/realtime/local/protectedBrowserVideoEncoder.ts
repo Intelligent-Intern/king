@@ -696,7 +696,29 @@ export async function createProtectedBrowserVideoEncoderPublisher({
     if (constants.protectedMediaEnabled) {
       if (!canProtectCurrentSfuTargets()) {
         forceNextSecurityKeyframe = true;
-        reportNonCriticalDrop('sfu_browser_encoder_security_gate_waiting', {
+        markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+        outgoingFrame.transportMetrics = {
+          ...outgoingFrame.transportMetrics,
+          ...publisherFrameTraceMetrics(trace),
+          protected_media_fallback: 'transport_only_until_sender_key_ready',
+        };
+        if ((timestamp - lastSecurityGateDiagnosticAtMs) >= 1000) {
+          lastSecurityGateDiagnosticAtMs = timestamp;
+          captureClientDiagnostic({
+            category: 'media',
+            level: 'warning',
+            eventType: 'sfu_publish_transport_only_until_media_security',
+            code: 'sfu_publish_transport_only_until_media_security',
+            message: 'SFU video publishing is continuing with transport-only frames until media-security sender keys are active.',
+            payload: {
+              codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+              track_id: videoTrack.id,
+              video_layer: normalizedVideoLayer,
+              media_runtime_path: refs.mediaRuntimePathRef.value,
+            },
+          });
+        }
+        reportNonCriticalDrop('sfu_browser_encoder_security_gate_transport_only', {
           track_id: videoTrack.id,
           video_layer: normalizedVideoLayer,
         });
@@ -705,9 +727,13 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           media_runtime_path: refs.mediaRuntimePathRef.value,
           codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         });
-        return true;
-      }
-      try {
+        hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
+          track_id: videoTrack.id,
+          media_runtime_path: refs.mediaRuntimePathRef.value,
+          codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
+        });
+      } else {
+        try {
         const mediaSecurity = ensureMediaSecuritySession();
         const protectStartedAtMs = highResolutionNowMs();
         const protectedFrame = await mediaSecurity.protectFrame({
@@ -761,10 +787,16 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           throw securityError;
         }
         forceNextSecurityKeyframe = true;
+        markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
+        outgoingFrame.transportMetrics = {
+          ...outgoingFrame.transportMetrics,
+          ...publisherFrameTraceMetrics(trace),
+          protected_media_fallback: 'transport_only_after_protect_unavailable',
+        };
         reportNonCriticalDrop(
           critical
-            ? 'sfu_browser_encoder_security_gate_waiting_after_protect'
-            : 'sfu_browser_thumbnail_security_gate_waiting_after_protect',
+            ? 'sfu_browser_encoder_security_gate_transport_only_after_protect'
+            : 'sfu_browser_thumbnail_security_gate_transport_only_after_protect',
           {
             error_name: String(securityError?.name || ''),
             error_message: String(securityError?.message || ''),
@@ -776,7 +808,7 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           media_runtime_path: refs.mediaRuntimePathRef.value,
           codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         });
-        return true;
+        }
       }
     } else {
       markPublisherFrameTraceStage(trace, 'protected_frame_skipped', 0);
@@ -857,9 +889,9 @@ export async function createProtectedBrowserVideoEncoderPublisher({
           captureClientDiagnostic({
             category: 'media',
             level: 'warning',
-            eventType: 'sfu_publish_waiting_for_media_security',
-            code: 'sfu_publish_waiting_for_media_security',
-            message: 'SFU video publishing is paused until media-security sender keys are active for the receiver set.',
+            eventType: 'sfu_publish_transport_only_until_media_security',
+            code: 'sfu_publish_transport_only_until_media_security',
+            message: 'SFU video publishing is continuing with transport-only frames until media-security sender keys are active.',
             payload: {
               codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
               track_id: videoTrack.id,
@@ -867,12 +899,11 @@ export async function createProtectedBrowserVideoEncoderPublisher({
             },
           });
         }
-        hintMediaSecuritySync('sfu_publish_security_gate_waiting', {
+        hintMediaSecuritySync('sfu_publish_security_gate_transport_only', {
           track_id: videoTrack.id,
           media_runtime_path: refs.mediaRuntimePathRef.value,
           codec_id: PROTECTED_BROWSER_VIDEO_CODEC_ID,
         });
-        return;
       }
       const bufferedAmount = getSfuClientBufferedAmount();
       if (shouldDelayWlvcFrameForBackpressure(bufferedAmount)) {

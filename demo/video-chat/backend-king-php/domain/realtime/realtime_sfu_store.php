@@ -1221,7 +1221,7 @@ function videochat_sfu_decode_client_frame(string $frame, string $boundRoomId): 
     }
 
     $type = strtolower(trim((string) ($decoded['type'] ?? '')));
-    if (!in_array($type, ['sfu/session-hello', 'sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/media-recovery-request', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/leave'], true)) {
+    if (!in_array($type, ['sfu/session-hello', 'sfu/join', 'sfu/publish', 'sfu/layer-preference', 'sfu/media-recovery-request', 'sfu/subscribe', 'sfu/unpublish', 'sfu/frame', 'sfu/frame-chunk', 'sfu/iibin-control', 'sfu/leave'], true)) {
         return [
             'ok' => false,
             'type' => $type,

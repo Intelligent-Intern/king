@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "backgrounds": [
+    {
+      "id": "seed-dino-background-8a1bf0cb0786efb8",
+      "label": "Dino background",
+      "file": "background-8a1bf0cb0786efb8.png",
+      "mime_type": "image/png",
+      "file_size": 4461643,
+      "created_at": "2026-05-08T01:37:05+00:00",
+      "updated_at": "2026-05-08T01:37:05+00:00"
+    },
+    {
+      "id": "seed-castle-background-4b6c85963ef58386",
+      "label": "Castle background",
+      "file": "background-4b6c85963ef58386.png",
+      "mime_type": "image/png",
+      "file_size": 1177564,
+      "created_at": "2026-05-08T05:45:00+00:00",
+      "updated_at": "2026-05-08T05:45:00+00:00"
+    },
+    {
+      "id": "seed-rushmore-background-b74aad87e72eb08e",
+      "label": "Rushmore background",
+      "file": "background-b74aad87e72eb08e.png",
+      "mime_type": "image/png",
+      "file_size": 3694003,
+      "created_at": "2026-05-08T05:45:00+00:00",
+      "updated_at": "2026-05-08T05:45:00+00:00"
+    },
+    {
+      "id": "seed-screenshot-2026-05-07-20-50-49-9184136da45925dd",
+      "label": "Screenshot from 2026-05-07 20-50-49",
+      "file": "background-9184136da45925dd.jpg",
+      "original_file": "background-original-cde4b12be962a8fd.jpg",
+      "mime_type": "image/jpeg",
+      "file_size": 195872,
+      "created_at": "2026-05-07T18:51:37+00:00",
+      "updated_at": "2026-05-07T18:51:37+00:00"
+    },
+    {
+      "id": "seed-screenshot-2026-05-07-10-00-00-4a4ec734e9ea67cc",
+      "label": "Screenshot from 2026-05-07 10-00-00",
+      "file": "background-4a4ec734e9ea67cc.jpg",
+      "original_file": "background-original-bbd1b131ecd0138d.jpg",
+      "mime_type": "image/jpeg",
+      "file_size": 226681,
+      "created_at": "2026-05-07T08:01:32+00:00",
+      "updated_at": "2026-05-07T08:01:32+00:00"
+    },
+    {
+      "id": "seed-screenshot-2026-05-06-11-46-58-420e57c0d7804beb",
+      "label": "Screenshot from 2026-05-06 11-46-58",
+      "file": "background-420e57c0d7804beb.jpg",
+      "mime_type": "image/jpeg",
+      "file_size": 190871,
+      "created_at": "2026-05-06T18:04:29+00:00",
+      "updated_at": "2026-05-06T18:04:29+00:00"
+    },
+    {
+      "id": "seed-screenshot-2026-05-06-11-46-54-16538dcd3c6a354f",
+      "label": "Screenshot from 2026-05-06 11-46-54",
+      "file": "background-16538dcd3c6a354f.jpg",
+      "mime_type": "image/jpeg",
+      "file_size": 169548,
+      "created_at": "2026-05-06T18:04:13+00:00",
+      "updated_at": "2026-05-06T18:04:13+00:00"
+    }
+  ]
+}

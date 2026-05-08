@@ -178,5 +178,8 @@ for (const contract of [
 ]) {
   assert(sqliteRuntimeProof.includes(contract), `SQLite runtime proof must run ${contract}`)
 }
+const viteConfig = read('demo/video-chat/frontend-vue/vite.config.js')
+assert(viteConfig.includes('callAppStaticPlugin()'), 'frontend build must install the Call App static publishing plugin')
+assert(viteConfig.includes('fileName: `call-app/${relativePath}`'), 'frontend build must emit Call App package files into dist/call-app')
 
 console.log('[call-app-package-layout-contract] PASS')

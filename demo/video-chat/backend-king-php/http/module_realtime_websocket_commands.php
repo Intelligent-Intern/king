@@ -953,7 +953,10 @@ function videochat_realtime_apply_successful_lobby_command(
             $lobbyState,
             $presenceState,
             $lobbyResultRoomId,
-            $lobbyStateName === 'already_queued' ? 'already_queued' : 'queued'
+            $lobbyStateName === 'already_queued' ? 'already_queued' : 'queued',
+            null,
+            null,
+            is_numeric($presenceConnection['tenant_id'] ?? null) ? (int) $presenceConnection['tenant_id'] : null
         );
     } elseif ($lobbyAction === 'lobby/queue/cancel') {
         videochat_realtime_mark_call_participant_invite_state($openDatabase, $presenceConnection, 'invited', ['pending']);

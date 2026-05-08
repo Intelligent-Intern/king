@@ -34,6 +34,9 @@ async function main() {
 
   requireContains(exportsSource, '.constructor<int, int, int, int, int, int, int, int, bool>()', 'encoder embind constructor');
   requireContains(exportsSource, '.constructor<int, int, int, int, int, int, int>()', 'decoder embind constructor');
+  requireContains(exportsSource, 'class_<BackgroundMatteRefinerJS>("BackgroundMatteRefiner")', 'background matte embind class');
+  requireContains(exportsSource, '.function("segment", &BackgroundMatteRefinerJS::segment)', 'background matte segment export');
+  requireContains(exportsSource, '.function("refine", &BackgroundMatteRefinerJS::refine)', 'background matte refine export');
   requireContains(codecCppSource, 'w8(2);                                    // version', 'native header v2');
   requireContains(codecCppSource, 'w8(static_cast<uint8_t>(cfg_.wavelet_type));', 'native wavelet header field');
   requireContains(codecCppSource, 'w8(static_cast<uint8_t>(cfg_.color_space));', 'native colorspace header field');
@@ -108,11 +111,41 @@ async function main() {
     audio.process(samples);
     assert.equal(samples.length, 8, 'audio processor should operate in-place on sample buffers');
 
+    const matte = new mod.BackgroundMatteRefiner(8, 8, 1);
+    const portraitRgba = new Uint8Array(8 * 8 * 4);
+    for (let i = 0; i < portraitRgba.length; i += 4) {
+      const pixel = i / 4;
+      const x = pixel % 8;
+      const y = Math.floor(pixel / 8);
+      const centered = x >= 2 && x <= 5 && y >= 1 && y <= 6;
+      portraitRgba[i] = centered ? 210 : 20;
+      portraitRgba[i + 1] = centered ? 150 : 30;
+      portraitRgba[i + 2] = centered ? 105 : 60;
+      portraitRgba[i + 3] = 255;
+    }
+    const segmented = matte.segment(portraitRgba);
+    assert.ok(segmented instanceof Uint8Array, 'background matte segment should return Uint8Array');
+    assert.equal(segmented.length, 64, 'background matte segment should return one alpha byte per pixel');
+    assert.ok(segmented.some((value) => value > 0), 'background matte segment should produce non-empty foreground');
+
+    const maskRgba = new Uint8Array(8 * 8 * 4);
+    for (let i = 0; i < segmented.length; i += 1) {
+      const p = i * 4;
+      maskRgba[p] = segmented[i];
+      maskRgba[p + 1] = segmented[i];
+      maskRgba[p + 2] = segmented[i];
+      maskRgba[p + 3] = segmented[i];
+    }
+    const refined = matte.refine(maskRgba);
+    assert.ok(refined instanceof Uint8Array, 'background matte refine should return Uint8Array');
+    assert.equal(refined.length, 64, 'background matte refine should return one alpha byte per pixel');
+
     encoder.delete();
     decoder.delete();
     motionEncoder.delete();
     motionDecoder.delete();
     audio.delete();
+    matte.delete();
   } finally {
     globalThis.fetch = originalFetch;
   }

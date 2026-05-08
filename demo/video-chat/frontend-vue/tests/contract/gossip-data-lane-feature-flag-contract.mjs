@@ -28,6 +28,12 @@ assert(
   'feature flag must be driven by a Vite environment key',
 )
 assert(
+  /VIDEOCHAT_MEDIA_CARRIER_CONFIG/.test(featureFlags)
+    && /VideochatMediaCarrierConfig/.test(featureFlags)
+    && /VideochatMediaCarrierMode/.test(featureFlags),
+  'feature flag module must re-export the authoritative media carrier runtime config',
+)
+assert(
   /return 'off'/.test(featureFlags),
   'gossip data lane must default to off',
 )

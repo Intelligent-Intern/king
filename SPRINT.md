@@ -24,6 +24,32 @@ Status:
   sprint.
 - Open non-active Governance, admin UX, and broad refactoring work was moved to
   `BACKLOG.md`.
+- [x] `[real-media-plane-contract]` remains closed by
+  `documentation/dev/video-chat/real-media-plane-architecture.md` while this
+  sprint moves the carrier from SFU-first fallback toward Gossip-primary media.
+- [x] `[sfu-control-data-plane-split]` remains closed by the SFU control/data
+  split contracts and documentation.
+- 4. [x] `[packet-layer-sfu-forwarder]` remains closed by the recovery-control
+  routing and packet/layer forwarding contracts.
+- 5. [x] `[native-render-and-jitter-buffer]` remains closed by the receiver
+  jitter-buffer contracts.
+- 6. [x] `[end-to-end-media-pressure-observability]` remains closed by the
+  end-to-end media pressure diagnostics contracts.
+- [x] GSP-02 Publisher pipeline decoupling remains closed by
+  `gossip-publisher-pipeline-decoupling-contract.mjs`.
+- [x] GSP-03 Join/snapshot/churn topology hints remains closed by
+  `gossip-room-state-topology-contract.mjs`.
+- [x] GSP-04 Dedicated bounded neighbor lifecycle remains closed by
+  `gossip-dedicated-neighbor-lifecycle-contract.mjs`.
+- [x] GSP-07 Gossip-native recovery remains closed by
+  `gossip-native-recovery-contract.mjs`; backend recovery routing stays ops-only
+  with no media fanout.
+- [x] GSP-08 Server no-normal-media-fanout guard remains closed by
+  `gossip-server-no-media-fanout-contract.mjs`; normal media fanout is rejected
+  as `normal_media_fanout_forbidden`.
+- [x] GSP-09 Integration contracts and smoke checks remains closed by
+  `gossip-media-carrier-integration-smoke-contract.mjs`; smoke covers
+  `gossip_primary`, `sfu_first`, and `sfu_mirror`.
 
 Sprint goal:
 - Make the Whiteboard Call App the first production-usable CRDT Call App for

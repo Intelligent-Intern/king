@@ -107,6 +107,7 @@ function videochat_handle_workspace_administration_routes(
         try {
             $pdo = $openDatabase();
             $tenantId = videochat_workspace_effective_tenant_id($pdo, videochat_tenant_id_from_auth_context($apiAuthContext));
+            videochat_workspace_seed_background_images($pdo, $tenantId, $brandingStorageRoot);
             $listing = videochat_workspace_list_background_images(
                 $pdo,
                 $tenantId,
@@ -325,6 +326,7 @@ function videochat_handle_workspace_administration_routes(
                 ]);
             }
             try {
+                videochat_workspace_seed_background_images($pdo, $tenantId, $brandingStorageRoot);
                 $listing = videochat_workspace_list_background_images(
                     $pdo,
                     $tenantId,

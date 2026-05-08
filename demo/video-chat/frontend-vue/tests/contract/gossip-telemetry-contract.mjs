@@ -61,7 +61,8 @@ requireContains(controller, 'last_hop_sent_at_ms: forwardedAtMs', 'forwarding mu
 requireContains(controller, 'recordTransportTelemetry(peerId: string, counter: keyof GossipTelemetryCounters', 'controller must expose read-only transport telemetry intake')
 requireContains(controller, 'createTelemetrySnapshot(peerId: string', 'controller must expose sanitized telemetry snapshots for ops-lane emission')
 requireContains(controller, "kind: 'gossip_telemetry_snapshot'", 'telemetry snapshots must use a dedicated sanitized snapshot kind')
-requireContains(controller, "rolloutStrategy || 'sfu_first_explicit'", 'telemetry snapshots must keep the rollout strategy explicitly SFU-first')
+requireContains(controller, 'media_carrier_mode: options.mediaCarrierMode', 'telemetry snapshots must include the explicit media carrier mode')
+requireContains(controller, "rolloutStrategy || options.mediaCarrierMode || 'sfu_first'", 'telemetry snapshots must default to conservative SFU-first carrier rollout')
 requireContains(controller, 'counters: { ...peer.telemetry }', 'telemetry snapshots must include counters without media payloads')
 
 requireContains(rtcTransport, "readonly kind = 'rtc_datachannel' as const", 'RTC transport must carry a transport kind label')
@@ -74,7 +75,8 @@ requireContains(workspaceGossip, "controller?.recordTransportTelemetry?.(localPe
 requireContains(workspaceGossip, 'function emitGossipTelemetrySnapshot', 'workspace data lane must send sanitized gossip telemetry snapshots')
 requireContains(workspaceGossip, "type: 'gossip/telemetry/snapshot'", 'workspace telemetry snapshots must go over the ops-lane websocket command type')
 requireContains(workspaceGossip, "lane: 'ops'", 'workspace telemetry snapshots must declare the ops lane')
-requireContains(workspaceGossip, "rolloutStrategy: 'sfu_first_explicit'", 'workspace telemetry snapshots must preserve explicit SFU-first rollout')
+requireContains(workspaceGossip, 'mediaCarrierMode: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode', 'workspace telemetry snapshots must send the explicit media carrier mode')
+requireContains(workspaceGossip, 'rolloutStrategy: VIDEOCHAT_MEDIA_CARRIER_CONFIG.mode', 'workspace telemetry snapshots must bind rollout strategy to the active media carrier')
 requireContains(workspaceGossip, 'if (!GOSSIP_DATA_LANE_CONFIG.enabled || !GOSSIP_DATA_LANE_CONFIG.publish || !GOSSIP_DATA_LANE_CONFIG.receive) return false;', 'telemetry snapshots must only emit in explicit active rollout mode')
 assert(!/gossip\/telemetry\/snapshot[\s\S]{0,400}(protected_frame|data_base64|sdp|ice_candidate|raw_media_key)/.test(workspaceGossip), 'workspace telemetry snapshot send path must not attach media/signaling/secret fields')
 

@@ -4,6 +4,32 @@ import { emitCallAppDiagnostic } from './callAppDiagnostics.js';
 export const CALL_APP_IFRAME_BRIDGE_PROTOCOL = 'king.call_app.iframe.v1';
 export const CALL_APP_IFRAME_OPAQUE_ORIGIN = 'null';
 
+export function sanitizeCallAppBridgePayload(value, depth = 0) {
+  if (depth > 8) return null;
+  if (value === null || value === undefined) return null;
+  const valueType = typeof value;
+  if (valueType === 'string' || valueType === 'boolean') return value;
+  if (valueType === 'number') return Number.isFinite(value) ? value : 0;
+  if (valueType === 'bigint') return value.toString();
+  if (valueType !== 'object') return null;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeCallAppBridgePayload(item, depth + 1));
+  }
+
+  const out = {};
+  for (const key of Object.keys(value)) {
+    const normalizedKey = String(key || '').trim();
+    if (normalizedKey === '') continue;
+    try {
+      out[normalizedKey] = sanitizeCallAppBridgePayload(value[key], depth + 1);
+    } catch {
+      out[normalizedKey] = null;
+    }
+  }
+  return out;
+}
+
 function normalizeLaunchResponse(payload) {
   const result = payload?.result && typeof payload.result === 'object' ? payload.result : {};
   const context = result.context && typeof result.context === 'object' ? result.context : {};
@@ -101,7 +127,16 @@ export function createCallAppIframeBridge({
     const session = activeSession?.value || null;
     if (!frameWindow || !session || !launch.value?.token) return false;
 
-    frameWindow.postMessage(safePostMessagePayload(session, launch.value, { participantDisplayName }), '*');
+    try {
+      frameWindow.postMessage(
+        sanitizeCallAppBridgePayload(safePostMessagePayload(session, launch.value, { participantDisplayName })),
+        '*',
+      );
+    } catch (postError) {
+      status.value = 'error';
+      error.value = postError instanceof Error ? postError.message : 'Call App launch message could not be sent.';
+      return false;
+    }
     status.value = 'launch_sent';
     return true;
   }

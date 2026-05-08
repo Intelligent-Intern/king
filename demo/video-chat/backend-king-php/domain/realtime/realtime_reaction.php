@@ -106,14 +106,16 @@ function videochat_reaction_broadcast_payload(
     array $presenceState,
     string $roomId,
     array $event,
-    ?callable $sender = null
+    ?callable $sender = null,
+    ?int $tenantId = null
 ): int {
     return videochat_presence_broadcast_room_event(
         $presenceState,
         $roomId,
         $event,
         null,
-        $sender
+        $sender,
+        $tenantId
     );
 }
 
@@ -122,7 +124,8 @@ function videochat_reaction_deliver_payload(
     string $roomId,
     array $event,
     ?callable $sender = null,
-    ?callable $broker = null
+    ?callable $broker = null,
+    ?int $tenantId = null
 ): int {
     if ($broker !== null) {
         try {
@@ -132,7 +135,7 @@ function videochat_reaction_deliver_payload(
         }
     }
 
-    return videochat_reaction_broadcast_payload($presenceState, $roomId, $event, $sender);
+    return videochat_reaction_broadcast_payload($presenceState, $roomId, $event, $sender, $tenantId);
 }
 
 function videochat_reaction_flush_flood_buffer(
@@ -144,7 +147,8 @@ function videochat_reaction_flush_flood_buffer(
     bool $flushPartial,
     ?callable $sender = null,
     ?int $nowUnixMs = null,
-    ?callable $broker = null
+    ?callable $broker = null,
+    ?int $tenantId = null
 ): array {
     $sentCount = 0;
     $lastEvent = null;
@@ -165,7 +169,7 @@ function videochat_reaction_flush_flood_buffer(
             $chunkUnixMs = $effectiveNowUnixMs;
         }
         $event = videochat_reaction_batch_event_payload($roomId, $senderPayload, $chunk, 'flood', $chunkUnixMs);
-        $delivered = videochat_reaction_deliver_payload($presenceState, $roomId, $event, $sender, $broker);
+        $delivered = videochat_reaction_deliver_payload($presenceState, $roomId, $event, $sender, $broker, $tenantId);
         if ($delivered <= 0) {
             return [
                 'ok' => false,
@@ -198,15 +202,17 @@ function videochat_reaction_clear_for_connection(array &$reactionState, array $c
     if ($roomId === '') {
         return false;
     }
+    $roomKey = videochat_presence_room_key_for_connection($connection, $roomId);
+    $reactionRoomKey = $roomKey !== '' ? $roomKey : $roomId;
 
     $userKey = (string) $userId;
-    if (!isset($reactionState['rooms'][$roomId][$userKey]) || !is_array($reactionState['rooms'][$roomId][$userKey])) {
+    if (!isset($reactionState['rooms'][$reactionRoomKey][$userKey]) || !is_array($reactionState['rooms'][$reactionRoomKey][$userKey])) {
         return false;
     }
 
-    unset($reactionState['rooms'][$roomId][$userKey]);
-    if (($reactionState['rooms'][$roomId] ?? []) === []) {
-        unset($reactionState['rooms'][$roomId]);
+    unset($reactionState['rooms'][$reactionRoomKey][$userKey]);
+    if (($reactionState['rooms'][$reactionRoomKey] ?? []) === []) {
+        unset($reactionState['rooms'][$reactionRoomKey]);
     }
 
     return true;
@@ -255,8 +261,11 @@ function videochat_reaction_publish(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $roomKey = videochat_presence_room_key_for_connection($connection, $roomId);
+    $reactionRoomKey = $roomKey !== '' ? $roomKey : $roomId;
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
-    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $roomConnections = $presenceState['rooms'][$roomKey] ?? null;
     if (
         $connectionId === ''
         || !is_array($roomConnections)
@@ -279,12 +288,12 @@ function videochat_reaction_publish(
     $floodThreshold = videochat_reaction_flood_threshold_per_window();
     $floodBatchSize = videochat_reaction_flood_batch_size();
 
-    if (!isset($reactionState['rooms'][$roomId]) || !is_array($reactionState['rooms'][$roomId])) {
-        $reactionState['rooms'][$roomId] = [];
+    if (!isset($reactionState['rooms'][$reactionRoomKey]) || !is_array($reactionState['rooms'][$reactionRoomKey])) {
+        $reactionState['rooms'][$reactionRoomKey] = [];
     }
 
     $userKey = (string) $senderUserId;
-    $entry = $reactionState['rooms'][$roomId][$userKey] ?? null;
+    $entry = $reactionState['rooms'][$reactionRoomKey][$userKey] ?? null;
     if (!is_array($entry)) {
         $entry = [
             'window_started_ms' => $effectiveNowMs,
@@ -314,7 +323,8 @@ function videochat_reaction_publish(
             true,
             $sender,
             $effectiveNowMs,
-            $broker
+            $broker,
+            $tenantId
         );
         if (!(bool) ($flushRollover['ok'] ?? false)) {
             return [
@@ -336,7 +346,7 @@ function videochat_reaction_publish(
 
     $reactionItems = videochat_reaction_normalize_command_items($connection, $command, $roomId, $effectiveNowMs);
     if ($reactionItems === []) {
-        $reactionState['rooms'][$roomId][$userKey] = [
+        $reactionState['rooms'][$reactionRoomKey][$userKey] = [
             'window_started_ms' => $windowStartedMs,
             'count' => $countInWindow,
             'flood_buffer' => $floodBuffer,
@@ -365,7 +375,8 @@ function videochat_reaction_publish(
                 false,
                 $sender,
                 $reactionUnixMs,
-                $broker
+                $broker,
+                $tenantId
             );
             if (!(bool) ($flushFullBatches['ok'] ?? false)) {
                 return [
@@ -385,7 +396,7 @@ function videochat_reaction_publish(
         }
 
         $event = videochat_reaction_single_event_payload($roomId, $senderPayload, $reactionItem);
-        $delivered = videochat_reaction_deliver_payload($presenceState, $roomId, $event, $sender, $broker);
+        $delivered = videochat_reaction_deliver_payload($presenceState, $roomId, $event, $sender, $broker, $tenantId);
         if ($delivered <= 0) {
             return [
                 'ok' => false,
@@ -401,7 +412,7 @@ function videochat_reaction_publish(
         $lastEvent = $event;
     }
 
-    $reactionState['rooms'][$roomId][$userKey] = [
+    $reactionState['rooms'][$reactionRoomKey][$userKey] = [
         'window_started_ms' => $windowStartedMs,
         'count' => $countInWindow,
         'flood_buffer' => $floodBuffer,

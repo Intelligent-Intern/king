@@ -114,13 +114,25 @@ export function createParticipantActivityState({
     const isSpeaking = Boolean(activity?.is_speaking ?? activity?.isSpeaking ?? false);
     const previousLastSpeakingAtMs = Number(existing.speakingLastAtMs || existing.lastSpeakingAtMs || 0);
     const previousSpeakingStartedAtMs = Number(existing.speakingStartedAtMs || existing.speakingSinceMs || 0);
+    const explicitSpeakingStartedAtMs = Number(
+      activity?.speaking_started_at_ms
+      ?? activity?.speakingStartedAtMs
+      ?? activity?.speaking_since_ms
+      ?? activity?.speakingSinceMs
+      ?? 0
+    );
+    const explicitSpeakingLastAtMs = Number(activity?.speaking_last_at_ms ?? activity?.speakingLastAtMs ?? 0);
     const speakingWasContinuous = Boolean(existing.isSpeaking)
       && previousLastSpeakingAtMs > 0
       && (normalizedUpdatedAtMs - previousLastSpeakingAtMs) <= ACTIVITY_SPEAKING_SIGNAL_GRACE_MS;
     const speakingStartedAtMs = isSpeaking
-      ? (speakingWasContinuous && previousSpeakingStartedAtMs > 0 ? previousSpeakingStartedAtMs : normalizedUpdatedAtMs)
+      ? (explicitSpeakingStartedAtMs > 0
+        ? explicitSpeakingStartedAtMs
+        : (speakingWasContinuous && previousSpeakingStartedAtMs > 0 ? previousSpeakingStartedAtMs : normalizedUpdatedAtMs))
       : 0;
-    const speakingLastAtMs = isSpeaking ? normalizedUpdatedAtMs : previousLastSpeakingAtMs;
+    const speakingLastAtMs = isSpeaking
+      ? (explicitSpeakingLastAtMs > 0 ? explicitSpeakingLastAtMs : normalizedUpdatedAtMs)
+      : previousLastSpeakingAtMs;
     const deltaStats = nextActivityDeltaStats(existing, normalizedUpdatedAtMs, options.countDelta !== false);
     participantActivityByUserId[normalizedUserId] = {
       ...existing,

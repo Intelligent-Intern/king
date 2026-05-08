@@ -72,12 +72,16 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     return inertGateState('forbidden_media_or_signaling_field');
   }
 
-  const thresholds = { ...DEFAULT_THRESHOLDS, ...(options.thresholds || {}) };
   const requestedMode = normalizeMode(options.mode || input.data_lane_mode || input.mode);
   const mediaCarrierMode = normalizeMediaCarrierMode(
     options.mediaCarrierMode || options.media_carrier_mode || input.media_carrier_mode || input.mediaCarrierMode,
   );
   const gossipPrimary = mediaCarrierMode === 'gossip_primary';
+  const thresholds = { ...DEFAULT_THRESHOLDS, ...(options.thresholds || {}) };
+  if (gossipPrimary) {
+    thresholds.minPeerCount = Math.min(thresholds.minPeerCount, 2);
+    thresholds.minNeighborCount = Math.min(thresholds.minNeighborCount, 1);
+  }
   if (requestedMode === 'off') {
     return {
       ...inertGateState('data_lane_off'),
@@ -125,7 +129,19 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     && aggregate.rtc_peer_count >= aggregate.peer_count
     && aggregate.min_neighbor_count >= thresholds.minNeighborCount
     && aggregate.max_topology_epoch > 0;
+  const gossipTrafficSampleCount = aggregate.totals.sent
+    + aggregate.totals.received
+    + aggregate.totals.forwarded
+    + aggregate.totals.duplicates
+    + aggregate.totals.ttl_exhausted
+    + aggregate.totals.late_drops
+    + aggregate.totals.topology_repairs_requested;
+  const topologyOnlyGossipPrimaryReady = gossipPrimary
+    && rtcReady
+    && aggregate.max_topology_epoch > 0
+    && gossipTrafficSampleCount === 0;
   const telemetryReady = Boolean(backendGate?.telemetry_ready)
+    || topologyOnlyGossipPrimaryReady
     || ((aggregate.totals.sent + aggregate.totals.received) > 0
       && duplicateRate <= thresholds.maxDuplicateRate
       && ttlExhaustionRate <= thresholds.maxTtlExhaustionRate
@@ -141,6 +157,7 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     && staleTargetPruneRate <= thresholds.maxStaleTargetPruneRate
     && encoderLifecycleCloseRate <= thresholds.maxEncoderLifecycleCloseRate
     && sendBackpressureAbortRate <= thresholds.maxSendBackpressureAbortRate;
+  const gossipMediaHealthy = gossipTopologyHealthy && mediaSecurityRecoveryReady;
   const gossipTopologyBuckets = [];
   if (!rtcReady) gossipTopologyBuckets.push('rtc_topology_unready');
   if (!telemetryReady) gossipTopologyBuckets.push('gossip_telemetry_noisy');
@@ -177,12 +194,13 @@ export function deriveGossipRolloutGateState(input = {}, options = {}) {
     active_allowed: activeAllowed,
     observational_only: requestedMode !== 'active' || !activeAllowed,
     sfu_first: !gossipPrimary && !activeAllowed,
-    gossip_topology_healthy: gossipTopologyHealthy,
     sfu_baseline_required_for_active: sfuBaselineRequiredForActive,
-    sfu_fallback_healthy: sfuBaselineHealthy,
     rtc_ready: rtcReady,
     telemetry_ready: telemetryReady,
+    gossip_topology_healthy: gossipTopologyHealthy,
+    gossip_media_healthy: gossipMediaHealthy,
     sfu_baseline_healthy: sfuBaselineHealthy,
+    sfu_fallback_healthy: sfuBaselineHealthy,
     media_security_recovery_ready: mediaSecurityRecoveryReady,
     blocking_buckets: blockingBuckets,
     gossip_topology_buckets: gossipTopologyBuckets,
@@ -217,12 +235,13 @@ function inertGateState(reason) {
     active_allowed: false,
     observational_only: true,
     sfu_first: true,
-    gossip_topology_healthy: false,
     sfu_baseline_required_for_active: true,
-    sfu_fallback_healthy: false,
     rtc_ready: false,
     telemetry_ready: false,
+    gossip_topology_healthy: false,
+    gossip_media_healthy: false,
     sfu_baseline_healthy: false,
+    sfu_fallback_healthy: false,
     media_security_recovery_ready: false,
     blocking_buckets: [reason],
     gossip_topology_buckets: [reason],

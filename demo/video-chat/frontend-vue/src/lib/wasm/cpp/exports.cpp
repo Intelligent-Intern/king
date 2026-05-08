@@ -4,7 +4,7 @@
  * Compiled with:
  *   emcc -O3 -msimd128 --bind -s WASM=1 -s ALLOW_MEMORY_GROWTH=1 \
  *        -s ENVIRONMENT=web -o wlvc.js exports.cpp codec.cpp dwt.cpp \
- *        quantize.cpp entropy.cpp motion.cpp audio.cpp
+ *        quantize.cpp entropy.cpp motion.cpp audio.cpp background_segmenter.cpp
  *
  * JavaScript usage:
  *   const Module = await createWLVCModule();
@@ -18,6 +18,7 @@
  */
 
 #include "codec.h"
+#include "background_segmenter.h"
 #include <emscripten/bind.h>
 #include <emscripten/val.h>
 #include <limits>
@@ -206,6 +207,62 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Background matte refinement wrapper
+// ---------------------------------------------------------------------------
+
+class BackgroundMatteRefinerJS {
+public:
+    BackgroundMatteRefinerJS(int w, int h, int preset)
+        : width_(std::max(1, w))
+        , height_(std::max(1, h))
+        , preset_(preset)
+    {}
+
+    /**
+     * Convert an RGBA probability mask into a single-channel foreground alpha
+     * matte. This is the King-owned C++/WASM surface used by the call blur
+     * pipeline; neural inference will plug in behind this same native surface.
+     */
+    val refine(val rgba_mask_js) {
+        const auto len = rgba_mask_js["byteLength"].as<unsigned>();
+        std::vector<uint8_t> rgba(len);
+        val memoryView = val(typed_memory_view(len, rgba.data()));
+        memoryView.call<void>("set", rgba_mask_js);
+
+        kingbg::MatteConfig cfg;
+        cfg.width = width_;
+        cfg.height = height_;
+        cfg.preset = static_cast<kingbg::MattePreset>(std::max(0, std::min(2, preset_)));
+
+        alpha_out_ = kingbg::refine_mask_rgba(rgba.data(), static_cast<int>(rgba.size()), cfg);
+        return val(typed_memory_view(alpha_out_.size(), alpha_out_.data()));
+    }
+
+    val segment(val rgba_js) {
+        const auto len = rgba_js["byteLength"].as<unsigned>();
+        std::vector<uint8_t> rgba(len);
+        val memoryView = val(typed_memory_view(len, rgba.data()));
+        memoryView.call<void>("set", rgba_js);
+
+        kingbg::MatteConfig cfg;
+        cfg.width = width_;
+        cfg.height = height_;
+        cfg.preset = static_cast<kingbg::MattePreset>(std::max(0, std::min(2, preset_)));
+
+        alpha_out_ = kingbg::segment_portrait_rgba(rgba.data(), static_cast<int>(rgba.size()), cfg);
+        return val(typed_memory_view(alpha_out_.size(), alpha_out_.data()));
+    }
+
+    void reset() { alpha_out_.clear(); }
+
+private:
+    int width_;
+    int height_;
+    int preset_;
+    std::vector<uint8_t> alpha_out_;
+};
+
+// ---------------------------------------------------------------------------
 // Embind declarations
 // ---------------------------------------------------------------------------
 
@@ -224,4 +281,10 @@ EMSCRIPTEN_BINDINGS(wlvc_module) {
         .constructor<float, float, float>()
         .function("process", &AudioProcessorJS::process)
         .function("reset",   &AudioProcessorJS::reset);
+
+    class_<BackgroundMatteRefinerJS>("BackgroundMatteRefiner")
+        .constructor<int, int, int>()
+        .function("refine", &BackgroundMatteRefinerJS::refine)
+        .function("segment", &BackgroundMatteRefinerJS::segment)
+        .function("reset", &BackgroundMatteRefinerJS::reset);
 }

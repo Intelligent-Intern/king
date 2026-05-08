@@ -59,6 +59,7 @@ function videochat_signaling_decode_client_frame(string $frame): array
         'call-app/grants-updated',
         'call-app/presence',
         'call/media-quality-pressure',
+        'call/media-security-sync-request',
         'call/moderation-state',
         'call/media-security-sync-request',
         'media-security/hello',

@@ -37,7 +37,10 @@ function videochat_realtime_reset_waiting_connection_invite(
             $lobbyState,
             $presenceState,
             $pendingRoomId,
-            trim($reason) === '' ? 'presence_left' : trim($reason)
+            trim($reason) === '' ? 'presence_left' : trim($reason),
+            null,
+            null,
+            is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null
         );
     }
 
@@ -218,7 +221,9 @@ function videochat_handle_realtime_websocket_route(
                 $disconnectedRoomId,
                 $openDatabase,
                 'participant_disconnected',
-                $connectionId
+                $connectionId,
+                null,
+                is_numeric($disconnectedConnection['tenant_id'] ?? null) ? (int) $disconnectedConnection['tenant_id'] : null
             );
         };
 
@@ -304,6 +309,7 @@ function videochat_handle_realtime_websocket_route(
                         'media_security_sync_request' => 'call/media-security-sync-request',
                         'media_security_hello' => 'media-security/hello',
                         'media_security_sender_key' => 'media-security/sender-key',
+                        'media_security_sync_request' => 'call/media-security-sync-request',
                         'ack' => 'call/ack',
                     ],
                     'admin_sync' => [
@@ -617,7 +623,9 @@ function videochat_handle_realtime_websocket_route(
                         $leavingRoomId,
                         $openDatabase,
                         'participant_left',
-                        $connectionId
+                        $connectionId,
+                        null,
+                        is_numeric($leavingConnection['tenant_id'] ?? null) ? (int) $leavingConnection['tenant_id'] : null
                     );
                     continue;
                 }
@@ -769,7 +777,10 @@ function videochat_handle_realtime_websocket_route(
                                 $lobbyState,
                                 $presenceState,
                                 $targetRoomId,
-                                'admission_consumed'
+                                'admission_consumed',
+                                null,
+                                null,
+                                is_numeric($presenceConnection['tenant_id'] ?? null) ? (int) $presenceConnection['tenant_id'] : null
                             );
                         }
                     }

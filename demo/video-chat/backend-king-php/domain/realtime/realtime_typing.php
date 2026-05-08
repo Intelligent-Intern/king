@@ -99,10 +99,11 @@ function videochat_typing_broadcast(
     string $roomId,
     array $payload,
     int $excludeUserId,
-    ?callable $sender = null
+    ?callable $sender = null,
+    ?int $tenantId = null
 ): int {
     $normalizedRoomId = videochat_presence_normalize_room_id($roomId);
-    $roomConnections = $presenceState['rooms'][$normalizedRoomId] ?? null;
+    $roomConnections = $presenceState['rooms'][videochat_presence_room_key($normalizedRoomId, $tenantId)] ?? null;
     if (!is_array($roomConnections) || $roomConnections === []) {
         return 0;
     }
@@ -169,8 +170,10 @@ function videochat_typing_apply_command(
     }
 
     $roomId = videochat_presence_normalize_room_id((string) ($connection['room_id'] ?? 'lobby'));
+    $roomKey = videochat_presence_room_key_for_connection($connection, $roomId);
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
     $connectionId = trim((string) ($connection['connection_id'] ?? ''));
-    $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+    $roomConnections = $presenceState['rooms'][$roomKey] ?? null;
     if (
         $connectionId === ''
         || !is_array($roomConnections)
@@ -185,8 +188,9 @@ function videochat_typing_apply_command(
         ];
     }
 
-    if (!isset($typingState['rooms'][$roomId]) || !is_array($typingState['rooms'][$roomId])) {
-        $typingState['rooms'][$roomId] = [];
+    $typingRoomKey = $roomKey !== '' ? $roomKey : $roomId;
+    if (!isset($typingState['rooms'][$typingRoomKey]) || !is_array($typingState['rooms'][$typingRoomKey])) {
+        $typingState['rooms'][$typingRoomKey] = [];
     }
 
     $nowMs = is_int($nowUnixMs) && $nowUnixMs > 0
@@ -194,7 +198,7 @@ function videochat_typing_apply_command(
         : (int) floor(microtime(true) * 1000);
     $nowIso = gmdate('c', (int) floor($nowMs / 1000));
 
-    $entry = $typingState['rooms'][$roomId][$userId] ?? null;
+    $entry = $typingState['rooms'][$typingRoomKey][$userId] ?? null;
     $commandType = (string) ($command['type'] ?? '');
 
     if ($commandType === 'typing/stop') {
@@ -208,9 +212,9 @@ function videochat_typing_apply_command(
             ];
         }
 
-        unset($typingState['rooms'][$roomId][$userId]);
-        if ($typingState['rooms'][$roomId] === []) {
-            unset($typingState['rooms'][$roomId]);
+        unset($typingState['rooms'][$typingRoomKey][$userId]);
+        if ($typingState['rooms'][$typingRoomKey] === []) {
+            unset($typingState['rooms'][$typingRoomKey]);
         }
 
         $sentCount = videochat_typing_broadcast(
@@ -226,7 +230,8 @@ function videochat_typing_apply_command(
                 'time' => $nowIso,
             ],
             $userId,
-            $sender
+            $sender,
+            $tenantId
         );
 
         return [
@@ -245,7 +250,7 @@ function videochat_typing_apply_command(
     $lastStartEmittedMs = is_array($entry) ? (int) ($entry['last_start_emitted_ms'] ?? 0) : 0;
     $shouldEmitStart = !is_array($entry) || ($nowMs - $lastStartEmittedMs) >= $debounceMs;
 
-    $typingState['rooms'][$roomId][$userId] = [
+    $typingState['rooms'][$typingRoomKey][$userId] = [
         'user_id' => $userId,
         'display_name' => (string) ($connection['display_name'] ?? ''),
         'role' => videochat_normalize_role_slug((string) ($connection['role'] ?? 'user')),
@@ -276,7 +281,8 @@ function videochat_typing_apply_command(
             'time' => $nowIso,
         ],
         $userId,
-        $sender
+        $sender,
+        $tenantId
     );
 
     return [
@@ -311,14 +317,17 @@ function videochat_typing_clear_for_connection(
     if ($roomId === '') {
         return ['cleared' => false, 'sent_count' => 0];
     }
+    $roomKey = videochat_presence_room_key_for_connection($connection, $roomId);
+    $typingRoomKey = $roomKey !== '' ? $roomKey : $roomId;
+    $tenantId = is_numeric($connection['tenant_id'] ?? null) ? (int) $connection['tenant_id'] : null;
 
-    if (!isset($typingState['rooms'][$roomId][$userId]) || !is_array($typingState['rooms'][$roomId][$userId])) {
+    if (!isset($typingState['rooms'][$typingRoomKey][$userId]) || !is_array($typingState['rooms'][$typingRoomKey][$userId])) {
         return ['cleared' => false, 'sent_count' => 0];
     }
 
-    unset($typingState['rooms'][$roomId][$userId]);
-    if (($typingState['rooms'][$roomId] ?? []) === []) {
-        unset($typingState['rooms'][$roomId]);
+    unset($typingState['rooms'][$typingRoomKey][$userId]);
+    if (($typingState['rooms'][$typingRoomKey] ?? []) === []) {
+        unset($typingState['rooms'][$typingRoomKey]);
     }
 
     $nowMs = is_int($nowUnixMs) && $nowUnixMs > 0
@@ -339,7 +348,8 @@ function videochat_typing_clear_for_connection(
             'time' => $nowIso,
         ],
         $userId,
-        $sender
+        $sender,
+        $tenantId
     );
 
     return [
@@ -360,15 +370,20 @@ function videochat_typing_sweep_expired(
     $nowIso = gmdate('c', (int) floor($nowMs / 1000));
 
     $sentCount = 0;
-    foreach (array_keys($typingState['rooms'] ?? []) as $roomId) {
-        $roomEntries = $typingState['rooms'][$roomId] ?? null;
+    foreach (array_keys($typingState['rooms'] ?? []) as $roomStorageKey) {
+        $roomEntries = $typingState['rooms'][$roomStorageKey] ?? null;
         if (!is_array($roomEntries) || $roomEntries === []) {
-            unset($typingState['rooms'][$roomId]);
+            unset($typingState['rooms'][$roomStorageKey]);
             continue;
         }
 
+        $parsedRoomKey = videochat_presence_parse_room_key((string) $roomStorageKey);
+        $roomId = is_array($parsedRoomKey)
+            ? (string) $parsedRoomKey['room_id']
+            : videochat_presence_normalize_room_id((string) $roomStorageKey);
+        $tenantId = is_array($parsedRoomKey) ? (int) $parsedRoomKey['tenant_id'] : null;
         $presentUserIds = [];
-        $roomConnections = $presenceState['rooms'][$roomId] ?? null;
+        $roomConnections = $presenceState['rooms'][$roomStorageKey] ?? null;
         if (is_array($roomConnections)) {
             foreach ($roomConnections as $connectionId => $_socket) {
                 if (!is_string($connectionId) || $connectionId === '') {
@@ -386,9 +401,9 @@ function videochat_typing_sweep_expired(
         }
 
         foreach (array_keys($roomEntries) as $userIdKey) {
-            $entry = $typingState['rooms'][$roomId][$userIdKey] ?? null;
+            $entry = $typingState['rooms'][$roomStorageKey][$userIdKey] ?? null;
             if (!is_array($entry)) {
-                unset($typingState['rooms'][$roomId][$userIdKey]);
+                unset($typingState['rooms'][$roomStorageKey][$userIdKey]);
                 continue;
             }
 
@@ -399,7 +414,7 @@ function videochat_typing_sweep_expired(
                 continue;
             }
 
-            unset($typingState['rooms'][$roomId][$userIdKey]);
+            unset($typingState['rooms'][$roomStorageKey][$userIdKey]);
             $payload = [
                 'type' => 'typing/stop',
                 'room_id' => videochat_presence_normalize_room_id((string) $roomId),
@@ -418,12 +433,13 @@ function videochat_typing_sweep_expired(
                 (string) $roomId,
                 $payload,
                 $userId,
-                $sender
+                $sender,
+                $tenantId
             );
         }
 
-        if (($typingState['rooms'][$roomId] ?? []) === []) {
-            unset($typingState['rooms'][$roomId]);
+        if (($typingState['rooms'][$roomStorageKey] ?? []) === []) {
+            unset($typingState['rooms'][$roomStorageKey]);
         }
     }
 

@@ -24,6 +24,17 @@
       >
         <img class="call-left-blur-icon" src="/assets/orgas/kingrt/icons/blurmore.png" alt="" />
       </button>
+      <button
+        class="call-left-blur-btn"
+        :class="{ active: isCallBackgroundPresetActive('exclusion') }"
+        type="button"
+        :aria-pressed="isCallBackgroundPresetActive('exclusion')"
+        aria-label="Blue background"
+        title="Blue background"
+        @click="applyCallBackgroundPreset('exclusion')"
+      >
+        <img class="call-left-blur-icon call-left-solid-background-icon" src="/assets/orgas/kingrt/icons/solid.png" alt="" />
+      </button>
     </div>
   </section>
 </template>

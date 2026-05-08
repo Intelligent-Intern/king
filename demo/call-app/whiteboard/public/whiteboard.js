@@ -81,15 +81,20 @@
     }
   }
 
+  function cloneBridgePayload(payload) {
+    return JSON.parse(JSON.stringify(payload));
+  }
+
   function emit(type, payload = {}) {
     if (!parentOrigin || !window.parent) return;
-    window.parent.postMessage({
+    const message = cloneBridgePayload({
       type,
       bridge_protocol: bridgeProtocol,
       app_key: appKey,
       app_session_id: appSessionId,
       ...payload,
-    }, parentOrigin);
+    });
+    window.parent.postMessage(message, parentOrigin);
   }
 
   function requestBootstrap(afterClock = 0) {

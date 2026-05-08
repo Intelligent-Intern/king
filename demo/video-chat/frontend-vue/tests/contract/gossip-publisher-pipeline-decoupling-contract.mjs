@@ -56,6 +56,10 @@ assert(
   'optional SFU failure must return success based on Gossip publication',
 )
 assert(
+  /VIDEOCHAT_MEDIA_CARRIER_CONFIG\.gossipPrimary && gossipPublished[\s\S]*sfuFallbackSkipped:\s*true/.test(helper),
+  'gossip_primary must skip optional SFU fallback after successful Gossip publication',
+)
+assert(
   /publisherRequiresSfuBeforeEncode\(\) && !currentOpenSfuClient\(\)/.test(publisherPipeline)
     && /dispatchWlvcPublisherFrame\(\{[\s\S]*handleWlvcFrameSendFailure,[\s\S]*publishLocalEncodedFrameToGossip/.test(publisherPipeline),
   'WLVC publisher pipeline must stop requiring SFU before encode except in sfu_first and dispatch through the carrier helper with SFU failure handling wired',

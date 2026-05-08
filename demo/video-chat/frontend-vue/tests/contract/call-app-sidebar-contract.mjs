@@ -119,6 +119,18 @@ assert.match(
 
 assert.match(
   sidebarSource,
+  /aria-label="Select Call App"[\s\S]*@update:model-value="selectAppByKey"[\s\S]*v-for="app in availableApps"/,
+  'Call Apps sidebar must provide an explicit installed-app select control in addition to the button list',
+);
+
+assert.match(
+  sidebarSource,
+  /function reconcileSelectedAppAfterLoad\(\)[\s\S]*availableApps\.value\.length === 1[\s\S]*selectApp\(availableApps\.value\[0\]\)/,
+  'Call Apps sidebar must auto-select the only available installed app after loading availability',
+);
+
+assert.match(
+  sidebarSource,
   /pagination\.has_prev[\s\S]*pagination\.has_next/s,
   'Call Apps sidebar must paginate the available app list',
 );
