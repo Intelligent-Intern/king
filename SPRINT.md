@@ -1731,6 +1731,9 @@ session validation. `call-access-session-route-guard-contract` proves the real
 `/api/call-access/{id}/session` route passes authenticated and verified
 user/session context into that guard, rejects wrong logged-in accounts and
 session switches safely, and preserves anonymous personalized/open-link issuance.
+It also keeps logged-in anonymous/open links bound to the authenticated account
+without creating a temporary guest identity, matching the anonymous-link product
+rule.
 `call-access-verified-context-ui-contract` adds the frontend half of that
 contract by proving the browser join flow forwards the verified context and
 current bearer token into session issuance instead of trusting mutable local
@@ -2017,7 +2020,7 @@ host by missing `pdo_sqlite`.
 
 - [x] Guest account is created from personalized calendar invitation
 - [x] Guest account is deleted when call is deleted
-- [ ] Guest account is deleted or invalidated when invitation is deleted
+- [x] Guest account is deleted or invalidated when invitation is deleted
 - [x] Guest account is deleted or invalidated when invite link is manually invalidated
 - [x] Guest account is updated, recreated, or invalidated when call is rescheduled according to product rule
 - [x] Guest account cannot join original call after call was rescheduled and original link invalidated
@@ -2033,7 +2036,7 @@ host by missing `pdo_sqlite`.
 - [x] Guest account cleanup is audit-logged
 - [x] Old guest account cannot be revived through old personalized link
 - [x] Old guest account cannot be revived through stale browser state
-- [ ] Old guest account cannot be revived after application restart
+- [x] Old guest account cannot be revived after application restart
 
 Proof: `demo/video-chat/backend-king-php/tests/call-guest-lifecycle-contract.php`
 now repeats personalized guest cleanup after the account/session were already
@@ -2049,6 +2052,14 @@ disabled, stale guest sessions cannot authenticate, stale guest links cannot
 rejoin, registered accounts remain active and unchanged, repeat cleanup is a
 no-op, cleanup audit events are sanitized, and delete/end paths expose the
 guest cleanup result while preserving the stronger lifecycle cleanup.
+
+Proof: `call-guest-cleanup-sqlite-proof.sh` now also runs the invitation-delete,
+restart, and remaining lifecycle cleanup splits. Those contracts prove
+invitation deletion disables only the scoped temporary guest and revokes only
+that access session, registered invite invalidation does not run destructive
+guest cleanup, old personalized guest links cannot allocate a new session after
+a reopened database connection, and delete/end cleanup covers lobby, admitted,
+registered, and anonymous temporary participant states.
 
 ## 26. Call Rescheduling
 
@@ -2081,19 +2092,19 @@ the rescheduled stale-link safe-screen case.
 ## 27. Call Deletion
 
 - [ ] Owner deletes call before any guest joins
-- [ ] Owner deletes call while guests are in lobby
-- [ ] Owner deletes call while registered users are inside
+- [x] Owner deletes call while guests are in lobby
+- [x] Owner deletes call while registered users are inside
 - [x] Owner deletes call while temporary guests are inside
 - [x] Owner deletes call while anonymous guests are inside
 - [x] Deleted call cannot be joined by owner
 - [ ] Deleted call cannot be joined by organization admin
-- [ ] Deleted call cannot be joined by system admin through normal join flow
-- [ ] Deleted call cannot be joined through personalized invite link
+- [x] Deleted call cannot be joined by system admin through normal join flow
+- [x] Deleted call cannot be joined through personalized invite link
 - [x] Deleted call cannot be joined through anonymous join link
 - [x] Deleted call cannot be rejoined by previously admitted guest
 - [x] Deleted call removes or invalidates temporary guest accounts
-- [ ] Deleted call clears lobby entries
-- [ ] Deleted call clears admitted temporary participant state
+- [x] Deleted call clears lobby entries
+- [x] Deleted call clears admitted temporary participant state
 - [x] Deleted call preserves audit log
 - [x] Deleted call does not delete registered user accounts
 - [x] Deleted call does not delete unrelated calls
@@ -2107,6 +2118,10 @@ link safely, revokes the guest session, clears presence, disables only the
 scoped temporary guest, preserves unrelated calls and unrelated guests, and
 emits sanitized delete/guest-cleanup audit events. `call-access-lifecycle-
 stale-links.spec.js` passed the deleted stale-link safe-screen case.
+`call-guest-cleanup-lifecycle-remaining-contract` additionally deletes a call
+with a pending lobby guest, an admitted temporary guest, and an active
+registered participant, proving guest cleanup, registered account preservation,
+access-link removal, and lobby/participant state clearing.
 
 ## 28. Explicit Call Ending
 
@@ -2114,7 +2129,7 @@ stale-links.spec.js` passed the deleted stale-link safe-screen case.
 - [ ] Owner leaves call and product treats this as explicit call end
 - [x] Active registered participants receive ended state
 - [x] Active temporary guests receive ended state
-- [ ] Active anonymous guests receive ended state
+- [x] Active anonymous guests receive ended state
 - [x] New joins are blocked after explicit end
 - [x] Rejoins are blocked after explicit end
 - [x] Personalized invite links are invalidated after explicit end
@@ -2137,6 +2152,10 @@ resolution path, and emits sanitized end/guest-cleanup audit events.
 safe-screen case. `call-access-seed-matrix.spec.js` passed the explicit-ended
 direct-join denial cases for system admin and organization admin as part of the
 24-test integrated run.
+`call-guest-cleanup-lifecycle-remaining-contract` marks an anonymous open-link
+guest as active, ends the call, and proves the participant receives cancelled
+plus `left_at` state while the temporary account and stale open link are
+invalidated.
 
 ## 29. Implicit Call Ending by Owner Absence
 
@@ -2627,8 +2646,8 @@ access/session fingerprints and safe counts remain.
 
 - [x] `e2e_guest_lifecycle_001_temp_guest_created_from_calendar_invite`
 - [x] `e2e_guest_lifecycle_002_temp_guest_deleted_when_call_deleted`
-- [ ] `e2e_guest_lifecycle_003_temp_guest_deleted_when_invitation_deleted`
-- [ ] `e2e_guest_lifecycle_004_temp_guest_invalidated_when_link_invalidated`
+- [x] `e2e_guest_lifecycle_003_temp_guest_deleted_when_invitation_deleted`
+- [x] `e2e_guest_lifecycle_004_temp_guest_invalidated_when_link_invalidated`
 - [x] `e2e_guest_lifecycle_005_temp_guest_handled_on_call_reschedule`
 - [x] `e2e_guest_lifecycle_006_temp_guest_cannot_join_after_call_deleted`
 - [x] `e2e_guest_lifecycle_007_temp_guest_cannot_join_after_call_ended`
@@ -2656,8 +2675,8 @@ access/session fingerprints and safe counts remain.
 ## Test Group: Call Deletion
 
 - [ ] `e2e_delete_001_owner_deletes_call_before_guests_join`
-- [ ] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
-- [ ] `e2e_delete_003_owner_deletes_call_with_registered_users_inside`
+- [x] `e2e_delete_002_owner_deletes_call_with_guests_in_lobby`
+- [x] `e2e_delete_003_owner_deletes_call_with_registered_users_inside`
 - [x] `e2e_delete_004_owner_deletes_call_with_temp_guests_inside`
 - [x] `e2e_delete_005_owner_deletes_call_with_anonymous_guests_inside`
 - [x] `e2e_delete_006_deleted_call_blocks_owner_join`
@@ -2667,7 +2686,7 @@ access/session fingerprints and safe counts remain.
 - [x] `e2e_delete_010_deleted_call_blocks_anonymous_link`
 - [x] `e2e_delete_011_deleted_call_blocks_admitted_guest_rejoin`
 - [x] `e2e_delete_012_deleted_call_cleans_temp_guests`
-- [ ] `e2e_delete_013_deleted_call_clears_lobby`
+- [x] `e2e_delete_013_deleted_call_clears_lobby`
 - [x] `e2e_delete_014_deleted_call_preserves_audit_log`
 - [x] `e2e_delete_015_deleted_call_does_not_affect_unrelated_calls`
 
@@ -2677,7 +2696,7 @@ access/session fingerprints and safe counts remain.
 - [ ] `e2e_end_explicit_002_owner_leave_treated_as_call_end_if_configured`
 - [x] `e2e_end_explicit_003_registered_participants_receive_ended_state`
 - [x] `e2e_end_explicit_004_temp_guests_receive_ended_state`
-- [ ] `e2e_end_explicit_005_anonymous_guests_receive_ended_state`
+- [x] `e2e_end_explicit_005_anonymous_guests_receive_ended_state`
 - [x] `e2e_end_explicit_006_new_joins_blocked_after_end`
 - [x] `e2e_end_explicit_007_rejoins_blocked_after_end`
 - [x] `e2e_end_explicit_008_personalized_links_invalidated_after_end`

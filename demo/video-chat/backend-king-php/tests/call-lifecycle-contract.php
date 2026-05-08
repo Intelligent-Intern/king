@@ -8,6 +8,7 @@ require_once __DIR__ . '/../domain/audit/audit_events.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/realtime/realtime_presence.php';
+require_once __DIR__ . '/../domain/realtime/realtime_connection_contract.php';
 require_once __DIR__ . '/../domain/realtime/realtime_call_presence_db.php';
 require_once __DIR__ . '/../http/module_calls.php';
 
@@ -534,6 +535,11 @@ try {
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endGuestId, (string) ($endGuest['email'] ?? ''), (string) ($endGuest['display_name'] ?? ''), 'allowed');
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endPendingGuestId, (string) ($endPendingGuest['email'] ?? ''), (string) ($endPendingGuest['display_name'] ?? ''), 'pending');
     videochat_ensure_internal_call_participant($pdo, $endCallId, $endAdmittedGuestId, (string) ($endAdmittedGuest['email'] ?? ''), (string) ($endAdmittedGuest['display_name'] ?? ''), 'allowed');
+    $pdo->prepare('UPDATE call_participants SET invite_state = :invite_state WHERE call_id = :call_id AND user_id = :user_id')->execute([
+        ':invite_state' => 'pending',
+        ':call_id' => $endCallId,
+        ':user_id' => $endPendingGuestId,
+    ]);
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $registeredUserId, 'allowed');
     videochat_call_lifecycle_contract_mark_joined($pdo, $endCallId, $endGuestId, 'allowed');
     $endRegisteredAccessId = videochat_call_lifecycle_contract_create_personal_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
@@ -573,7 +579,7 @@ try {
     videochat_call_lifecycle_contract_assert((string) ($endedAdmittedParticipant['invite_state'] ?? '') === 'cancelled', 'end should cancel admitted lobby participant');
     $endedOwnerDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $adminUserId, 'admin', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedOwnerDecision['allowed'] ?? true), 'ended call should deny owner/admin join');
-    videochat_call_lifecycle_contract_assert((string) ($endedOwnerDecision['reason'] ?? '') === 'call_not_joinable', 'ended owner denial reason mismatch');
+    videochat_call_lifecycle_contract_assert((string) ($endedOwnerDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended owner denial reason mismatch');
     $endedResolvePath = '/api/calls/resolve/' . $endCallId;
     $endedResolveResponse = videochat_handle_call_routes(
         $endedResolvePath,
@@ -599,8 +605,12 @@ try {
     videochat_call_lifecycle_contract_assert(!str_contains((string) ($endedResolveResponse['body'] ?? ''), 'Lifecycle End Call'), 'ended direct resolve must not leak title');
     $endedRegisteredDecision = videochat_decide_call_access_for_user($pdo, $endCallId, $registeredUserId, 'user', $tenantId);
     videochat_call_lifecycle_contract_assert(!(bool) ($endedRegisteredDecision['allowed'] ?? true), 'ended call should deny active participant join');
-    videochat_call_lifecycle_contract_assert((string) ($endedRegisteredDecision['reason'] ?? '') === 'call_not_joinable', 'ended participant denial reason mismatch');
+    videochat_call_lifecycle_contract_assert((string) ($endedRegisteredDecision['reason'] ?? '') === 'call_not_joinable_from_status', 'ended participant denial reason mismatch');
     $lateEndedAccessId = videochat_call_lifecycle_contract_insert_late_retained_link($pdo, $endCallId, $adminUserId, $registeredUserId, $tenantId);
+    $pdo->prepare('UPDATE call_access_links SET participant_user_id = NULL, participant_email = :participant_email WHERE id = :id')->execute([
+        ':participant_email' => 'late-ended-retained@example.test',
+        ':id' => $lateEndedAccessId,
+    ]);
     $lateEndedResolve = videochat_resolve_call_access_public($pdo, $lateEndedAccessId);
     videochat_call_lifecycle_contract_assert(!(bool) ($lateEndedResolve['ok'] ?? true), 'late retained ended link must not resolve');
     videochat_call_lifecycle_contract_assert((string) ($lateEndedResolve['reason'] ?? '') === 'conflict', 'late retained ended link should expose safe ended-call conflict');

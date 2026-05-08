@@ -149,6 +149,7 @@ SQLITE_BACKEND_CONTRACTS=(
   "tests/realtime-lobby-security-contract.sh"
   "tests/realtime-reconnect-backfill-contract.sh"
   "tests/call-access-owner-timeout-contract.sh"
+  "tests/call-guest-cleanup-sqlite-proof.sh"
 )
 
 run_static_gate() {
