@@ -1668,14 +1668,14 @@ admission.
 ## 15. Security and Manipulation Cases
 
 - [x] Personalized link with modified link ID is rejected
-- [ ] Personalized link with modified call ID is rejected
-- [ ] Anonymous link with modified call ID is rejected
+- [x] Personalized link with modified call ID is rejected
+- [x] Anonymous link with modified call ID is rejected
 - [x] Expired link is rejected
 - [ ] Disabled link is rejected
 - [x] Deleted temporary account cannot be revived through old link
-- [ ] API request with forged user ID is rejected
+- [x] API request with forged user ID is rejected
 - [x] API request with forged role parameter is rejected
-- [ ] API request with forged organization parameter is rejected
+- [x] API request with forged organization parameter is rejected
 - [x] API request with foreign call ID is rejected
 - [x] Owner transfer request without owner/admin right is rejected
 - [x] Lobby admission request without moderator right is rejected
@@ -1684,17 +1684,17 @@ admission.
 - [x] Replay of old email confirmation link is prevented
 - [x] Email confirmation link is one-time use
 - [ ] Email confirmation link is time-limited
-- [ ] CSRF protection works for account-data change
+- [x] CSRF protection works for account-data change
 - [x] Session fixation during link opening is prevented
 - [x] Login switch during link verification does not cause wrong account binding
 - [x] Logout during link verification causes no data leak
-- [ ] Parallel tabs with different accounts cause no incorrect merge
+- [x] Parallel tabs with different accounts cause no incorrect merge
 - [x] Permission changes during active call are applied correctly
 - [x] Owner transfer during active call is applied correctly
 - [x] Guest-list change during active call is applied correctly
 - [ ] Kick during active call removes user
-- [ ] Deleted call cannot be entered
-- [ ] Ended call cannot be entered
+- [x] Deleted call cannot be entered
+- [x] Ended call cannot be entered
 
 Proof: `call-access-session-fixation-contract` rejects reuse of an existing
 session ID for a new call-access binding, rejects login/account switches between
@@ -1722,6 +1722,14 @@ stale moderation and direct call binding, and owner transfer revalidates old and
 new owner rights without trusting stale connection fields. The Docker PHP 8.4
 runtime proof passed with `pdo_sqlite`; host PHP reports the same proof as
 skipped because the local extension is unavailable.
+`call-access-security-manipulation-contract` and
+`call-access-security-manipulation.spec.js` prove call-access routes reject
+client-supplied call/user/org/role authority fields, bind call-access sessions
+to their original call/access id, block cross-origin account-update request and
+confirmation attempts, deny ended/deleted call-access sessions, and keep two
+parallel authenticated browser contexts from merging issued call-access
+sessions. Static and Docker PHP 8.4 runtime proofs passed; host PHP skips the
+SQLite backend leg because `pdo_sqlite` is unavailable.
 
 ## 16. Email Confirmation for Account Data Update
 
@@ -2482,13 +2490,13 @@ against duplicate join/session request loops.
 - [ ] `e2e_privacy_005_browser_network_response_no_foreign_data`
 - [ ] `e2e_privacy_006_audit_logs_minimize_sensitive_data`
 - [x] `e2e_security_001_modified_personalized_link_id_rejected`
-- [ ] `e2e_security_002_modified_call_id_rejected`
-- [ ] `e2e_security_003_forged_user_id_rejected`
-- [ ] `e2e_security_004_forged_role_rejected`
-- [ ] `e2e_security_005_forged_org_id_rejected`
-- [ ] `e2e_security_006_csrf_account_update_protected`
+- [x] `e2e_security_002_modified_call_id_rejected`
+- [x] `e2e_security_003_forged_user_id_rejected`
+- [x] `e2e_security_004_forged_role_rejected`
+- [x] `e2e_security_005_forged_org_id_rejected`
+- [x] `e2e_security_006_csrf_account_update_protected`
 - [ ] `e2e_security_007_session_fixation_prevented`
-- [ ] `e2e_security_008_parallel_tabs_no_wrong_merge`
+- [x] `e2e_security_008_parallel_tabs_no_wrong_merge`
 
 ## Test Group: Email Confirmation
 
