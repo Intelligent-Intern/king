@@ -28,6 +28,8 @@ for (const endpoint of [
   '/api/runtime',
   '/api/version',
   '/api/marketplace/call-apps',
+  '/public/index.html',
+  '/call-app/whiteboard/public/index.html',
 ]) {
   assert.ok(script.includes(endpoint), `prod-debug must inspect ${endpoint}`);
 }
@@ -37,10 +39,19 @@ for (const label of [
   'sfu websocket',
   'marketplace apps',
   'call-app host',
+  'Call-App CSP Header Proof',
+  'call-app whiteboard host CSP',
+  'call-app whiteboard path CSP',
   'filtered recent logs',
 ]) {
   assert.ok(script.includes(label), `prod-debug must include ${label}`);
 }
+
+assert.match(
+  script,
+  /Content-Security-Policy[\s\S]*Allow-CSP-From[\s\S]*X-Frame-Options[\s\S]*nested \*\.\$\{DEPLOY_APP_DOMAIN\} service origins/,
+  'prod-debug must prove Whiteboard Call App CSP, Embedded-CSP, frame-option absence, and nested-origin absence',
+);
 
 assert.match(script, /docker compose[\s\S]* ps/, 'remote probe must inspect compose container status');
 assert.match(script, /docker compose[\s\S]* logs --no-color --tail/, 'remote probe must collect bounded recent container logs');
@@ -70,6 +81,12 @@ assert.match(
   readme,
   /read-only[\s\S]*prod-debug\.sh[\s\S]*does not deploy,\s*restart,\s*write DB data,\s*change DNS,\s*or use admin actions/i,
   'README must document prod-debug as read-only and non-mutating',
+);
+
+assert.match(
+  readme,
+  /Whiteboard Call App CSP\/`Allow-CSP-From` frame headers[\s\S]*\/public\/index\.html[\s\S]*\/call-app\/whiteboard\/public\/index\.html[\s\S]*absence[\s\S]*of `X-Frame-Options`[\s\S]*absence of nested `\*\.app\.kingrt\.com` service origins/s,
+  'README must document the read-only Call App frame-header proof',
 );
 
 process.stdout.write('[prod-debug-observability-contract] PASS\n');
