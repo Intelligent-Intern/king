@@ -28,7 +28,7 @@ assert.match(
 );
 assert.match(
   joinView,
-  /isStrongPersonalizedMismatchPayload\(payload\)[\s\S]*strongMismatchFlow\.show\(\)/,
+  /isStrongPersonalizedMismatchPayload\(errorPayload\)[\s\S]*strongMismatchFlow\.show\(\)/,
   'JoinView must turn safe strong-mismatch 403 responses into the host-name warning flow',
 );
 assert.match(
