@@ -163,6 +163,14 @@
     render();
   }
 
+  function removePresenceForActor(sourceActorId = '') {
+    const normalizedActorId = String(sourceActorId || '').trim();
+    if (!normalizedActorId) return;
+    state.cursors.delete(normalizedActorId);
+    state.selections.delete(normalizedActorId);
+    render();
+  }
+
   function publishPresence(payloadType, payload) {
     if (!canPublishPresence()) return false;
     const now = Date.now();
@@ -766,6 +774,8 @@
       if (message.result?.operation) applyEnvelope(message.result.operation);
     } else if (message.type === 'call_app.presence.update') {
       applyPresence(String(message.payload_type || ''), message.payload || {}, String(message.actor_id || ''));
+    } else if (message.type === 'call_app.presence.leave') {
+      removePresenceForActor(message.actor_id || message.payload?.actor_id || '');
     } else if (message.type === 'call_app.crdt.error') {
       applyAccessState(message);
       const reason = String(message.reason || '').trim();
