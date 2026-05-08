@@ -1739,11 +1739,18 @@ browser path and waiting-for-host state.
 - [x] Guest account cleanup does not alter registered user profile data
 - [x] Guest account cleanup does not remove unrelated temporary guests from other calls
 - [x] Guest account cleanup is scoped to affected call / invitation
-- [ ] Guest account cleanup is idempotent
-- [ ] Guest account cleanup is audit-logged
+- [x] Guest account cleanup is idempotent
+- [x] Guest account cleanup is audit-logged
 - [x] Old guest account cannot be revived through old personalized link
 - [x] Old guest account cannot be revived through stale browser state
 - [ ] Old guest account cannot be revived after application restart
+
+Proof: `demo/video-chat/backend-king-php/tests/call-guest-lifecycle-contract.php`
+now repeats personalized guest cleanup after the account/session were already
+invalidated, verifies the second pass has zero destructive changes, and asserts
+both the first pass and idempotent repeat append sanitized
+`guest_account_cleanup` audit events without raw guest, session, or access-link
+identifiers.
 
 ## 26. Call Rescheduling
 
