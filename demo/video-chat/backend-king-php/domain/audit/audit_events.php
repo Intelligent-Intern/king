@@ -326,6 +326,41 @@ function videochat_audit_record_call_access_invitation_invalidated(
     ]);
 }
 
+function videochat_audit_record_call_access_link_disabled(
+    PDO $pdo,
+    array $accessLink,
+    array $call = [],
+    ?int $actorUserId = null,
+    array $context = []
+): array {
+    $accessId = trim((string) ($accessLink['id'] ?? ''));
+    $reason = strtolower(trim((string) ($context['invalidation_reason'] ?? 'anonymous_link_disabled')));
+    if ($reason === '' || preg_match('/^[a-z0-9_.:-]{1,120}$/', $reason) !== 1) {
+        $reason = 'anonymous_link_disabled';
+    }
+
+    return videochat_audit_record_event($pdo, [
+        'tenant_id' => is_numeric($accessLink['tenant_id'] ?? null) ? (int) $accessLink['tenant_id'] : null,
+        'event_type' => 'call_access_link_disabled',
+        'actor_user_id' => $actorUserId,
+        'call_id' => (string) ($call['id'] ?? ($accessLink['call_id'] ?? '')),
+        'resource_type' => 'call_access_link',
+        'resource_fingerprint' => videochat_audit_fingerprint($accessId),
+        'payload' => [
+            'audit_scope' => 'iam_call_access',
+            'action' => 'disable_anonymous_link',
+            'invalidation_reason' => $reason,
+            'link_kind' => function_exists('videochat_call_access_link_kind') ? videochat_call_access_link_kind($accessLink) : 'unknown',
+            'call_status' => strtolower(trim((string) ($call['status'] ?? ''))) ?: 'unknown',
+            'had_effect' => (bool) ($context['had_effect'] ?? true),
+            'access_session_count' => max(0, (int) ($context['access_session_count'] ?? 0)),
+            'raw_link_identifier_logged' => false,
+            'raw_credential_identifier_logged' => false,
+            'raw_guest_identity_logged' => false,
+        ],
+    ]);
+}
+
 function videochat_audit_record_call_participant_presence(
     PDO $pdo,
     string $eventType,
