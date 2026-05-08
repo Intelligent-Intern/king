@@ -3181,8 +3181,8 @@ the IAM CI surface.
 - [ ] `e2e_journey_013_org_admin_foreign_org_denied`
 - [x] `e2e_journey_014_normal_guest_list_user_joins_foreign_call`
 - [x] `e2e_journey_015_normal_non_guest_user_lobby_or_denied`
-- [ ] `e2e_journey_016_normal_user_owner_transfer_loses_admin`
-- [ ] `e2e_journey_017_org_admin_owner_transfer_keeps_admin`
+- [x] `e2e_journey_016_normal_user_owner_transfer_loses_admin`
+- [x] `e2e_journey_017_org_admin_owner_transfer_keeps_admin`
 - [x] `e2e_journey_018_temp_user_kicked_cannot_rejoin_directly`
 - [ ] `e2e_journey_019_removed_org_member_invite_becomes_call_scoped_guest`
 - [x] `e2e_journey_020_invalidated_invite_link_denied`
@@ -3191,6 +3191,15 @@ the IAM CI surface.
 - [x] `e2e_journey_023_explicit_call_end_revokes_all_join_paths`
 - [x] `e2e_journey_024_owner_absence_countdown_then_auto_end`
 - [x] `e2e_journey_025_owner_absence_countdown_then_reconnect_cancels_end`
+
+Proof: `call-owner-transfer-contract` covers `e2e_journey_016` and
+`e2e_journey_017`: a normal user transfers ownership and revalidates as a
+participant without call-admin, moderation, or owner-management rights; an
+organization-admin owner transfers ownership, revalidates as a participant with
+effective moderator/call-admin rights preserved, loses owner-management rights,
+and can still perform non-owner call-admin moderation. The same contract asserts
+the new owner receives owner/admin rights, the transfer leaves exactly one
+current owner, and the mutation writes the owner-transfer audit row.
 
 ---
 
