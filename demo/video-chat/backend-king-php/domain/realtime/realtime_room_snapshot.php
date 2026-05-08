@@ -116,7 +116,14 @@ function videochat_realtime_db_room_has_joined_user(
             return true;
         }
 
-        $context = videochat_realtime_call_role_context_for_room_user($pdo, $normalizedRoomId, $targetUserId, $callId);
+        $context = videochat_realtime_call_role_context_for_room_user(
+            $pdo,
+            $normalizedRoomId,
+            $targetUserId,
+            $callId,
+            (string) ($connection['role'] ?? 'user'),
+            videochat_realtime_connection_tenant_id($connection)
+        );
         if ((bool) ($context['can_moderate'] ?? false)) {
             return true;
         }
