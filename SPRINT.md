@@ -189,6 +189,20 @@ Tickets:
   - Verify a real call in Chrome/Chromium and Firefox with camera, audio,
     screenshare, reconnect, and background filter transitions.
   - Record proof commands and results in this sprint before closing.
+  - Proof 2026-05-08 (non-deploy support checks actually run; deploy/browser
+    proof remains open): `bash -n demo/video-chat/scripts/prod-debug.sh &&
+    bash -n demo/video-chat/scripts/deploy-smoke.sh` PASS;
+    `VIDEOCHAT_PROD_DEBUG_DRY_RUN=1 VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1
+    demo/video-chat/scripts/prod-debug.sh` PASS; `(cd
+    demo/video-chat/frontend-vue && npm run test:contract:background-filter)`
+    PASS; `(cd demo/video-chat/frontend-vue && node
+    tests/contract/prod-debug-observability-contract.mjs)` PASS; `(cd
+    demo/video-chat/frontend-vue && npm ci && npm run build)` PASS;
+    `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com VIDEOCHAT_DEPLOY_SMOKE_SKIP_REMOTE=1
+    VIDEOCHAT_DEPLOY_SMOKE_SKIP_ADMIN=1 demo/video-chat/scripts/deploy-smoke.sh`
+    PASS; `VIDEOCHAT_DEPLOY_DOMAIN=kingrt.com
+    VIDEOCHAT_PROD_DEBUG_SKIP_REMOTE=1 demo/video-chat/scripts/prod-debug.sh`
+    PASS.
 
 - [x] BGF-08 KingRT Domain Contract Cutover
   - Split deploy configuration into `kingrt.com` as the base domain and

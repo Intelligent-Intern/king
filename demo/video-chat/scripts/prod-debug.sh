@@ -48,6 +48,7 @@ load_local_env() {
     VIDEOCHAT_DEPLOY_API_DOMAIN DEPLOY_API_DOMAIN
     VIDEOCHAT_DEPLOY_WS_DOMAIN DEPLOY_WS_DOMAIN
     VIDEOCHAT_DEPLOY_SFU_DOMAIN DEPLOY_SFU_DOMAIN
+    VIDEOCHAT_DEPLOY_TURN_DOMAIN DEPLOY_TURN_DOMAIN
     VIDEOCHAT_DEPLOY_CDN_DOMAIN DEPLOY_CDN_DOMAIN
     VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN DEPLOY_CALL_APP_DOMAIN
     VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN DEPLOY_REGISTRY_DOMAIN
@@ -70,7 +71,7 @@ load_local_env() {
   set +a
   if [[ -n "${preserved_values[VIDEOCHAT_DEPLOY_DOMAIN]+x}" || -n "${preserved_values[DEPLOY_DOMAIN]+x}" ]]; then
     local service_prefix
-    for service_prefix in APP API WS SFU CDN CALL_APP REGISTRY; do
+    for service_prefix in APP API WS SFU TURN CDN CALL_APP REGISTRY; do
       if [[ -z "${preserved_values[VIDEOCHAT_DEPLOY_${service_prefix}_DOMAIN]+x}" && -z "${preserved_values[DEPLOY_${service_prefix}_DOMAIN]+x}" ]]; then
         unset "VIDEOCHAT_DEPLOY_${service_prefix}_DOMAIN" "DEPLOY_${service_prefix}_DOMAIN"
       fi
@@ -88,6 +89,7 @@ normalize_domains() {
   DEPLOY_API_DOMAIN="${VIDEOCHAT_DEPLOY_API_DOMAIN:-${DEPLOY_API_DOMAIN:-api.${DEPLOY_DOMAIN}}}"
   DEPLOY_WS_DOMAIN="${VIDEOCHAT_DEPLOY_WS_DOMAIN:-${DEPLOY_WS_DOMAIN:-ws.${DEPLOY_DOMAIN}}}"
   DEPLOY_SFU_DOMAIN="${VIDEOCHAT_DEPLOY_SFU_DOMAIN:-${DEPLOY_SFU_DOMAIN:-sfu.${DEPLOY_DOMAIN}}}"
+  DEPLOY_TURN_DOMAIN="${VIDEOCHAT_DEPLOY_TURN_DOMAIN:-${DEPLOY_TURN_DOMAIN:-turn.${DEPLOY_DOMAIN}}}"
   DEPLOY_CDN_DOMAIN="${VIDEOCHAT_DEPLOY_CDN_DOMAIN:-${DEPLOY_CDN_DOMAIN:-cdn.${DEPLOY_DOMAIN}}}"
   DEPLOY_CALL_APP_DOMAIN="${VIDEOCHAT_DEPLOY_CALL_APP_DOMAIN:-${DEPLOY_CALL_APP_DOMAIN:-whiteboard.${DEPLOY_DOMAIN}}}"
   DEPLOY_REGISTRY_DOMAIN="${VIDEOCHAT_DEPLOY_REGISTRY_DOMAIN:-${DEPLOY_REGISTRY_DOMAIN:-registry.${DEPLOY_DOMAIN}}}"
@@ -99,6 +101,22 @@ normalize_domains() {
 
 section() {
   printf '\n## %s\n' "$1"
+}
+
+assert_domain_contract() {
+  local nested=".${DEPLOY_APP_DOMAIN}" label var host
+  for label in app:DEPLOY_APP_DOMAIN api:DEPLOY_API_DOMAIN ws:DEPLOY_WS_DOMAIN sfu:DEPLOY_SFU_DOMAIN turn:DEPLOY_TURN_DOMAIN cdn:DEPLOY_CDN_DOMAIN registry:DEPLOY_REGISTRY_DOMAIN whiteboard:DEPLOY_CALL_APP_DOMAIN; do
+    var="${label#*:}"
+    host="${!var}"
+    [[ -n "${host}" ]] || fail "${var} must not be empty"
+    case "${host}" in
+      *"${nested}"|*.app.kingrt.com) fail "${var} must not be nested under app.kingrt.com: ${host}" ;;
+    esac
+  done
+  if [[ "${DEPLOY_DOMAIN}" == "kingrt.com" ]]; then
+    [[ "${DEPLOY_APP_DOMAIN}" == "app.kingrt.com" && "${DEPLOY_API_DOMAIN}" == "api.kingrt.com" && "${DEPLOY_WS_DOMAIN}" == "ws.kingrt.com" && "${DEPLOY_SFU_DOMAIN}" == "sfu.kingrt.com" && "${DEPLOY_TURN_DOMAIN}" == "turn.kingrt.com" && "${DEPLOY_CDN_DOMAIN}" == "cdn.kingrt.com" && "${DEPLOY_REGISTRY_DOMAIN}" == "registry.kingrt.com" && "${DEPLOY_CALL_APP_DOMAIN}" == "whiteboard.kingrt.com" ]] || fail "kingrt.com production domains must use app/api/ws/sfu/turn/cdn/registry/whiteboard kingrt.com hosts"
+  fi
+  log "domain contract: app/api/ws/sfu/cdn/turn/registry/whiteboard rooted at ${DEPLOY_DOMAIN}; no nested .app.kingrt.com domains"
 }
 
 http_probe() {
@@ -324,9 +342,10 @@ main() {
   log "env source: ${LOCAL_ENV_FILE} if present; values are used only for domains and SSH target"
 
   section "Domains"
-  printf 'root=%s\napp=%s\napi=%s\nws=%s\nsfu=%s\ncdn=%s\ncall_app=%s\nregistry=%s\n' \
+  assert_domain_contract
+  printf 'root=%s\napp=%s\napi=%s\nws=%s\nsfu=%s\nturn=%s\ncdn=%s\nwhiteboard=%s\nregistry=%s\n' \
     "${DEPLOY_DOMAIN}" "${DEPLOY_APP_DOMAIN}" "${DEPLOY_API_DOMAIN}" "${DEPLOY_WS_DOMAIN}" \
-    "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" \
+    "${DEPLOY_SFU_DOMAIN}" "${DEPLOY_TURN_DOMAIN}" "${DEPLOY_CDN_DOMAIN}" "${DEPLOY_CALL_APP_DOMAIN}" "${DEPLOY_REGISTRY_DOMAIN}" \
     | redact_stream
 
   section "Public Runtime And Asset Version"
@@ -334,6 +353,11 @@ main() {
   http_probe "api version" "https://${DEPLOY_API_DOMAIN}/api/version"
   http_probe "app shell" "https://${DEPLOY_APP_DOMAIN}/" HEAD
   http_probe "cdn asset root" "https://${DEPLOY_CDN_DOMAIN}/" HEAD
+  http_probe "cdn mediapipe model" "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/models/selfie_multiclass_256x256.tflite" HEAD
+  http_probe "cdn tasks vision" "https://${DEPLOY_CDN_DOMAIN}/cdn/vendor/mediapipe/tasks-vision/vision_bundle.mjs" HEAD
+  http_probe "cdn tasks wasm" "https://${DEPLOY_CDN_DOMAIN}/wasm/vision_wasm_internal.js" HEAD
+  http_probe "background modal icon" "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/icons/solid.png" HEAD
+  http_probe "background avatar asset" "https://${DEPLOY_APP_DOMAIN}/assets/orgas/kingrt/avatar-placeholder.svg" HEAD
 
   section "API, WS, SFU, Marketplace, Call-App Reachability"
   http_probe "marketplace apps" "https://${DEPLOY_API_DOMAIN}/api/marketplace/call-apps"
