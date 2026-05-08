@@ -11,6 +11,7 @@ async function read(relativePath) {
 
 const [
   sidebarSource,
+  sidebarStyles,
   leftSidebarSource,
   callWorkspaceSource,
   tabsComposableSource,
@@ -19,6 +20,7 @@ const [
   sprintSource,
 ] = await Promise.all([
   read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.vue'),
+  read('demo/video-chat/frontend-vue/src/domain/realtime/callApps/CallAppsSidebarPanel.css'),
   read('demo/video-chat/frontend-vue/src/layouts/CallWorkspaceLeftSidebar.vue'),
   read('demo/video-chat/frontend-vue/src/domain/realtime/CallWorkspaceView.vue'),
   read('demo/video-chat/frontend-vue/src/layouts/useCallLeftSidebarTabs.js'),
@@ -26,6 +28,7 @@ const [
   read('demo/video-chat/frontend-vue/src/stores/callAppsCatalogStore.js'),
   read('SPRINT.md'),
 ]);
+const sidebarCombinedSource = `${sidebarSource}\n${sidebarStyles}`;
 
 assert.match(
   shellSource,
@@ -112,7 +115,7 @@ assert.match(
 );
 
 assert.match(
-  sidebarSource,
+  sidebarCombinedSource,
   /\.call-apps-sidebar[\s\S]*container-type:\s*inline-size[\s\S]*\.call-apps-search[\s\S]*flex-direction:\s*row-reverse[\s\S]*gap:\s*clamp\([\s\S]*padding:\s*clamp\(/s,
   'Call Apps sidebar search must keep the submit icon right-aligned with responsive spacing',
 );
@@ -142,7 +145,7 @@ assert.match(
 );
 
 assert.match(
-  sidebarSource,
+  sidebarCombinedSource,
   /\.call-apps-pagination[\s\S]*justify-content:\s*flex-end[\s\S]*flex-wrap:\s*wrap[\s\S]*gap:\s*clamp\([\s\S]*padding:\s*clamp\(/s,
   'Call Apps sidebar pagination must use right-aligned responsive action spacing',
 );
@@ -172,7 +175,7 @@ assert.match(
 );
 
 assert.match(
-  sidebarSource,
+  sidebarCombinedSource,
   /@container\s*\(min-width:\s*380px\)[\s\S]*\.call-apps-list-item[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto[\s\S]*\.call-apps-detail-grid[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/s,
   'Call Apps sidebar must adapt list and detail grids at wider container sizes',
 );
