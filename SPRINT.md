@@ -1442,8 +1442,8 @@ rejoin with the same call-access session/user binding. Docker PHP 8.4 with
 - [x] Logged-in account remains active
 - [x] Temporary link account does not replace active session
 - [x] Link account is compared with logged-in account
-- [ ] No mismatch does not show warning modal
-- [ ] Light mismatch does not show strong foreign-link warning
+- [x] No mismatch does not show warning modal
+- [x] Light mismatch does not show strong foreign-link warning
 - [x] Logged-in account is used for call
 - [x] Temporary account is not set as active session
 - [x] Permission check uses logged-in account
@@ -1461,28 +1461,35 @@ call-access session issuance, and fails safely with `call_access_conflict` if
 the verified context remains after local logout. Backend route-guard proof keeps
 the authenticated account authoritative for the issued session.
 
+Proof: `call-access-identity-mismatch-review-flow-contract` classifies matching
+display names as no mismatch, middle-name/spacing drift as light mismatch, and
+first-name/last-name/full-name drift as strong mismatch. The Docker PHP 8.4
+contract proves no/light mismatch resolves without the strong warning contract,
+sanitizes link-target data, and issues the call-access session to the current
+logged-in account.
+
 ## 7. Personalized Link: Logged-In User, Strong Mismatch
 
 - [x] Logged-in user opens personalized link with strongly different link data
-- [ ] Strong mismatch is detected when first name differs
-- [ ] Strong mismatch is detected when last name differs
-- [ ] Strong mismatch is detected when first and last name differ
-- [ ] Warning modal is displayed
-- [ ] Warning modal explains link may have been issued for someone else
-- [ ] Warning modal explains link data differs from account data
-- [ ] Warning modal asks for host name
+- [x] Strong mismatch is detected when first name differs
+- [x] Strong mismatch is detected when last name differs
+- [x] Strong mismatch is detected when first and last name differ
+- [x] Warning modal is displayed
+- [x] Warning modal explains link may have been issued for someone else
+- [x] Warning modal explains link data differs from account data
+- [x] Warning modal asks for host name
 - [x] Link data of other person is not displayed
 - [x] Differing link data is not exposed in clear text
 - [x] Host name is verified server-side
 - [x] Wrong host name grants no direct access
 - [x] Wrong host name does not reveal foreign data
-- [ ] Wrong host name may lead to lobby / manual review
-- [ ] Correct host name is accepted
-- [ ] Correct host name shows success confirmation
-- [ ] After correct host name, user is asked whether account data should be updated
-- [ ] User can decline update
-- [ ] Declining update leaves logged-in account unchanged
-- [ ] Declining update continues with logged-in account
+- [x] Wrong host name may lead to lobby / manual review
+- [x] Correct host name is accepted
+- [x] Correct host name shows success confirmation
+- [x] After correct host name, user is asked whether account data should be updated
+- [x] User can decline update
+- [x] Declining update leaves logged-in account unchanged
+- [x] Declining update continues with logged-in account
 - [x] User can request account update
 - [x] User must re-enter differing values manually
 - [x] System does not show differing link values
@@ -1494,9 +1501,9 @@ the authenticated account authoritative for the issued session.
 - [x] After update, user remains logged in as original account
 - [x] Update does not modify temporary foreign account
 - [x] Update does not modify other registered accounts
-- [ ] Flow is audit-logged
+- [x] Flow is audit-logged
 - [x] Host-name brute force is rate-limited
-- [ ] Repeated wrong host names trigger lock / review if configured
+- [x] Repeated wrong host names trigger lock / review if configured
 - [x] Host-name error messages leak no host data
 
 Proof: `call-access-strong-mismatch-privacy-contract` pins the focused browser
@@ -1517,6 +1524,15 @@ persisted.
 path by requiring manually re-entered values, sending confirmation only to the
 logged-in account, refusing updates before confirmation, and confirming only
 the re-entered fields without adopting the link-target session.
+
+Proof: `call-access-identity-mismatch-review-flow-contract.mjs` pins the
+frontend warning panel and host-name challenge wiring without exposing
+link-target fields. Docker PHP 8.4
+`call-access-identity-mismatch-review-flow-contract.php` proves wrong-host
+denial, no direct session issuance, correct-host acceptance for the current
+account, sanitized correct-host payloads, successful/failed host verification
+audit events, and repeated host attempts feeding the duplicate-review/rate-limit
+path. Validated with `demo/video-chat/scripts/iam-call-access-ci-gate.sh --static`.
 
 ## 8. Duplicate Personalized Link / Abuse Detection
 
@@ -1780,8 +1796,8 @@ lacks `pdo_sqlite`.
 ## 14. Privacy and Data Minimization
 
 - [x] Foreign link data is not shown on strong mismatch
-- [ ] Differing data is not shown as comparison list
-- [ ] User must re-enter differing data manually
+- [x] Differing data is not shown as comparison list
+- [x] User must re-enter differing data manually
 - [x] Guessed link reveals no personal data
 - [x] Invalid link reveals no personal data
 - [x] Wrong host name reveals no personal data
@@ -1789,14 +1805,14 @@ lacks `pdo_sqlite`.
 - [x] Email confirmation goes only to logged-in account
 - [ ] Temporary account data is not persisted unnecessarily
 - [ ] Temporary accounts are removed when logged-in user uses anonymous link
-- [ ] Temporary accounts are not merged with wrong registered account
+- [x] Temporary accounts are not merged with wrong registered account
 - [x] Audit logs contain only necessary personal data
 - [x] Frontend state contains no foreign link data
 - [x] API responses contain no foreign link data
 - [x] Browser DevTools / network response contains no foreign link data
 - [x] Error messages contain no foreign link data
 - [x] Email texts contain no foreign link data unless explicitly safe and necessary
-- [ ] Host-name verification does not allow host enumeration
+- [x] Host-name verification does not allow host enumeration
 - [x] Rate limits protect sensitive verification paths
 - [x] Privacy-relevant actions are logged
 
@@ -2474,7 +2490,7 @@ no call, invitee, host, link, or session leakage.
 - [ ] Link-account vs logged-in-account comparison is logged
 - [x] Strong mismatch is logged
 - [x] Host-name verification is logged
-- [ ] Successful host-name verification is logged
+- [x] Successful host-name verification is logged
 - [x] Failed host-name verification is logged
 - [x] Account-update request is logged
 - [x] Confirmation email dispatch is logged
@@ -2523,10 +2539,10 @@ tokens, SDP, ICE, and account emails.
 - [ ] New unregistered guest books appointment through calendar, receives personalized link, opens logged out, lands in lobby, is admitted, joins, leaves, rejoins without approval
 - [x] Registered but logged-out guest books appointment, opens personalized link logged out, temporary account is used, no automatic account takeover
 - [x] Registered logged-in guest opens own personalized link with matching data, remains logged in, joins as registered user
-- [ ] Registered logged-in guest opens personalized link with light mismatch, remains logged in, joins after permission check
-- [ ] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
-- [ ] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
-- [ ] Registered logged-in user opens personalized link with strong mismatch, enters correct host name, re-enters data, confirms email, account is updated
+- [x] Registered logged-in guest opens personalized link with light mismatch, remains logged in, joins after permission check
+- [x] Registered logged-in user opens foreign personalized link with strong mismatch, sees warning modal, enters wrong host name, receives no foreign data
+- [x] Registered logged-in user opens foreign personalized link with strong mismatch, enters correct host name, declines data update, remains unchanged
+- [x] Registered logged-in user opens personalized link with strong mismatch, enters correct host name, re-enters data, confirms email, account is updated
 - [x] Same personalized link is opened by second logged-in account and review flag is created
 - [ ] Logged-in user opens anonymous link and joins as logged-in user with own rights
 - [x] Not logged-in user opens anonymous link, temporary account is created, user lands in lobby, is admitted, can rejoin
@@ -2648,33 +2664,33 @@ against duplicate join/session request loops.
 
 ## Test Group: Personalized Link Logged In Without Strong Mismatch
 
-- [ ] `e2e_personalized_logged_in_001_logged_in_session_preserved`
-- [ ] `e2e_personalized_logged_in_002_temp_account_does_not_replace_session`
-- [ ] `e2e_personalized_logged_in_003_matching_data_no_warning_modal`
-- [ ] `e2e_personalized_logged_in_004_light_mismatch_no_foreign_link_warning`
-- [ ] `e2e_personalized_logged_in_005_logged_in_account_used_for_permission_check`
-- [ ] `e2e_personalized_logged_in_006_no_auto_account_data_overwrite`
-- [ ] `e2e_personalized_logged_in_007_no_link_data_exposed`
+- [x] `e2e_personalized_logged_in_001_logged_in_session_preserved`
+- [x] `e2e_personalized_logged_in_002_temp_account_does_not_replace_session`
+- [x] `e2e_personalized_logged_in_003_matching_data_no_warning_modal`
+- [x] `e2e_personalized_logged_in_004_light_mismatch_no_foreign_link_warning`
+- [x] `e2e_personalized_logged_in_005_logged_in_account_used_for_permission_check`
+- [x] `e2e_personalized_logged_in_006_no_auto_account_data_overwrite`
+- [x] `e2e_personalized_logged_in_007_no_link_data_exposed`
 - [ ] `e2e_personalized_logged_in_008_same_account_reopen_no_duplicate_flag`
 
 ## Test Group: Personalized Link Strong Mismatch
 
-- [ ] `e2e_strong_mismatch_001_first_name_mismatch_detected`
-- [ ] `e2e_strong_mismatch_002_last_name_mismatch_detected`
-- [ ] `e2e_strong_mismatch_003_full_name_mismatch_detected`
-- [ ] `e2e_strong_mismatch_004_warning_modal_displayed`
-- [ ] `e2e_strong_mismatch_005_foreign_link_data_not_displayed`
-- [ ] `e2e_strong_mismatch_006_wrong_host_name_no_access`
-- [ ] `e2e_strong_mismatch_007_wrong_host_name_no_data_leak`
-- [ ] `e2e_strong_mismatch_008_correct_host_name_accepted`
-- [ ] `e2e_strong_mismatch_009_decline_account_update_keeps_account_unchanged`
+- [x] `e2e_strong_mismatch_001_first_name_mismatch_detected`
+- [x] `e2e_strong_mismatch_002_last_name_mismatch_detected`
+- [x] `e2e_strong_mismatch_003_full_name_mismatch_detected`
+- [x] `e2e_strong_mismatch_004_warning_modal_displayed`
+- [x] `e2e_strong_mismatch_005_foreign_link_data_not_displayed`
+- [x] `e2e_strong_mismatch_006_wrong_host_name_no_access`
+- [x] `e2e_strong_mismatch_007_wrong_host_name_no_data_leak`
+- [x] `e2e_strong_mismatch_008_correct_host_name_accepted`
+- [x] `e2e_strong_mismatch_009_decline_account_update_keeps_account_unchanged`
 - [x] `e2e_strong_mismatch_010_update_requires_manual_reentry`
 - [x] `e2e_strong_mismatch_011_confirmation_email_sent_to_logged_in_account`
 - [x] `e2e_strong_mismatch_012_email_not_sent_to_temp_account`
 - [x] `e2e_strong_mismatch_013_no_update_without_email_confirmation`
 - [x] `e2e_strong_mismatch_014_confirmed_update_changes_only_confirmed_fields`
 - [x] `e2e_strong_mismatch_015_rate_limit_host_name_attempts`
-- [ ] `e2e_strong_mismatch_016_audit_logged`
+- [x] `e2e_strong_mismatch_016_audit_logged`
 
 ## Test Group: Duplicate Personalized Link
 
@@ -3005,10 +3021,10 @@ and the IAM CI static gate.
 - [ ] `e2e_journey_001_unregistered_calendar_guest_lobby_admit_join_leave_rejoin`
 - [x] `e2e_journey_002_registered_logged_out_invitee_uses_temp_account`
 - [x] `e2e_journey_003_registered_logged_in_matching_invitee_joins_as_account`
-- [ ] `e2e_journey_004_registered_logged_in_light_mismatch_joins_after_permission_check`
-- [ ] `e2e_journey_005_foreign_personalized_link_wrong_host_no_data_leak`
-- [ ] `e2e_journey_006_foreign_personalized_link_correct_host_decline_update`
-- [ ] `e2e_journey_007_foreign_personalized_link_correct_host_update_confirm_email`
+- [x] `e2e_journey_004_registered_logged_in_light_mismatch_joins_after_permission_check`
+- [x] `e2e_journey_005_foreign_personalized_link_wrong_host_no_data_leak`
+- [x] `e2e_journey_006_foreign_personalized_link_correct_host_decline_update`
+- [x] `e2e_journey_007_foreign_personalized_link_correct_host_update_confirm_email`
 - [x] `e2e_journey_008_duplicate_personalized_link_review_flag`
 - [x] `e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights`
 - [x] `e2e_journey_010_logged_out_user_anonymous_link_lobby_admit_rejoin`
