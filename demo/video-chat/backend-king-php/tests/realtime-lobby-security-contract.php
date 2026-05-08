@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../support/auth.php';
 require_once __DIR__ . '/../domain/realtime/realtime_lobby.php';
 require_once __DIR__ . '/../http/module_realtime.php';
 
@@ -47,6 +48,7 @@ SQL
         <<<'SQL'
 CREATE TABLE calls (
     id TEXT PRIMARY KEY,
+    tenant_id INTEGER,
     room_id TEXT NOT NULL,
     title TEXT NOT NULL DEFAULT 'Lobby Security Contract',
     access_mode TEXT NOT NULL DEFAULT 'invite_only',

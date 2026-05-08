@@ -118,7 +118,7 @@ assert.match(
 );
 assert.match(
   anonymousLobbyContract,
-  /system admin should see the waiting participant in lobby snapshot/,
+  /system admin should see waiting participants in lobby snapshot/,
   'anonymous-lobby contract must prove system admins can see waiting participants',
 );
 

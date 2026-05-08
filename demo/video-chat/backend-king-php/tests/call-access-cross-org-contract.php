@@ -421,7 +421,7 @@ try {
         ]
     );
     videochat_call_access_cross_org_assert(!(bool) ($foreignTargetSession['ok'] ?? true), 'organization A user must not consume organization B personalized link issued for another account');
-    videochat_call_access_cross_org_assert((string) ($foreignTargetSession['reason'] ?? '') === 'conflict', 'foreign personalized-link mismatch denial reason mismatch');
+    videochat_call_access_cross_org_assert((string) ($foreignTargetSession['reason'] ?? '') === 'forbidden', 'foreign personalized-link mismatch should be forbidden');
     videochat_call_access_cross_org_assert(videochat_call_access_session_id_available($pdo, 'sess_cross_org_a_user_b_wrong_personal'), 'foreign mismatch denial should not persist a session');
 
     $ownOrgAccess = videochat_get_call_for_user($pdo, $orgACallId, $orgAUserId, 'user', $tenantAId);

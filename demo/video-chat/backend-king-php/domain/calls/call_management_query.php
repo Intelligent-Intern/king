@@ -699,7 +699,7 @@ SQL
         ]);
         $participantInviteState = $participantCheck->fetchColumn();
         $isInternalParticipant = is_string($participantInviteState) || is_numeric($participantInviteState)
-            ? !in_array(videochat_normalize_call_invite_state($participantInviteState), ['declined', 'cancelled'], true)
+            ? !in_array(videochat_normalize_call_invite_state($participantInviteState), ['pending', 'declined', 'cancelled'], true)
             : false;
 
         $isFreeForAll = videochat_normalize_call_access_mode($call['access_mode'] ?? 'invite_only') === 'free_for_all';

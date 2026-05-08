@@ -129,6 +129,28 @@ function expectNoSafeScreenLeakage(text, needles, label) {
   }
 }
 
+function expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, label) {
+  expect(sessionPayload?.result?.access_link?.link_kind, `${label} link kind`).toBe('open');
+  expect(sessionPayload?.result?.access_link?.participant_user_id ?? null, `${label} participant_user_id`).toBeNull();
+  expect(sessionPayload?.result?.access_link?.participant_email ?? null, `${label} participant_email`).toBeNull();
+}
+
+function expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, user, label) {
+  const expectedInternalIds = [
+    getSeedUser(call.owner_user_key).id,
+    ...(Array.isArray(call.guest_list_user_keys) ? call.guest_list_user_keys : []).map((userKey) => getSeedUser(userKey).id),
+  ];
+  const internalIds = ((sessionPayload?.result?.call?.participants?.internal || [])
+    .map((participant) => Number(participant?.user_id || 0))
+    .filter((userId) => userId > 0));
+  expect(internalIds.sort((a, b) => a - b), `${label} guest-list ids`).toEqual(
+    [...expectedInternalIds].sort((a, b) => a - b),
+  );
+  if (!expectedInternalIds.includes(user.id)) {
+    expect(internalIds, `${label} must not add current user to guest list`).not.toContain(user.id);
+  }
+}
+
 test('IAM call-access seed matrix covers required principals without temporary admin elevation', () => {
   expect(seedUserKeys()).toEqual(expect.arrayContaining([
     'system_admin',
@@ -363,7 +385,7 @@ test('deleted personalized call-access link is denied without leaking call paylo
 
     const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
     await expect(joinDialog).toBeVisible({ timeout: 20_000 });
-    await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid/i);
+    await expect(joinDialog).toContainText(/call link is invalid|call access id is invalid|call link does not exist/i);
     await expect(joinDialog.getByRole('button', { name: /^Join call$/ })).toHaveCount(0);
     expectTextDoesNotContain(
       await joinDialog.innerText(),
@@ -633,6 +655,12 @@ async function expectOpenLinkWaitsForHost({ browser, scenarioKey, storedSessionU
     }
     expect(sessionPayload?.result?.call?.id).toBe(call.id);
     expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('pending');
+    if (scenario.expected?.must_not_create_personalized_binding) {
+      expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, scenarioKey);
+    }
+    if (scenario.expected?.must_not_modify_guest_list) {
+      expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, expectedUser, scenarioKey);
+    }
     expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(false);
     expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(false);
     expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
@@ -657,6 +685,66 @@ async function expectOpenLinkWaitsForHost({ browser, scenarioKey, storedSessionU
   }
 }
 
+async function expectOpenLinkJoinsWithOwnRights({ browser, scenarioKey, storedSessionUserKey, guestName }) {
+  const baseURL = test.info().project.use.baseURL || 'http://127.0.0.1:4174';
+  const scenario = getSeedScenario(scenarioKey);
+  const link = getSeedAccessLink(scenario.link_key);
+  const call = getSeedCall(link.call_key);
+  const expectedUser = getSeedUser(scenario.principal_user_key);
+  const accessId = accessIdFromJoinPath(link.join_path);
+  const expectedDecision = directJoinDecisionForSeedUser(scenario.principal_user_key, link.call_key);
+
+  expect(accessId, 'join path must contain the backend-issued access id').not.toBe('');
+  expect(expectedDecision.allowed).toBe(true);
+  expect(expectedDecision.source).toBe(scenario.expected.decision_source);
+  expect(expectedDecision.can_manage_lobby).toBe(scenario.expected.can_manage_lobby);
+
+  const { context, page } = await createCallAccessMatrixPage(browser, baseURL, {
+    scenarioKey: scenario.key,
+    storedSessionUserKey,
+    storedSessionCallKey: link.call_key,
+  });
+  try {
+    const joinResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/join`)
+      && response.request().method() === 'GET'
+    ));
+    await page.goto(link.join_path);
+    const joinResponse = await joinResponsePromise;
+    expect(joinResponse.status()).toBe(200);
+
+    const joinDialog = page.getByRole('dialog', { name: 'Join video call' });
+    await expect(joinDialog).toBeVisible({ timeout: 20_000 });
+    await joinDialog.getByPlaceholder('Enter your display name').fill(guestName);
+
+    const sessionResponsePromise = page.waitForResponse((response) => (
+      response.url().includes(`/api/call-access/${accessId}/session`)
+      && response.request().method() === 'POST'
+    ));
+    await joinDialog.getByRole('button', { name: /^Join call$/ }).click();
+    const sessionResponse = await sessionResponsePromise;
+    expect(sessionResponse.status()).toBe(200);
+    const sessionPayload = await sessionResponse.json();
+    expect(sessionPayload?.status).toBe('ok');
+    expect(sessionPayload?.result?.link_kind).toBe('open');
+    expect(sessionPayload?.result?.user?.id).toBe(expectedUser.id);
+    expect(sessionPayload?.result?.user?.account_type).toBe('account');
+    expect(sessionPayload?.result?.call?.id).toBe(call.id);
+    expect(sessionPayload?.result?.call?.my_participation?.invite_state).toBe('allowed');
+    expect(sessionPayload?.result?.tenant?.permissions?.platform_admin ?? false).toBe(scenario.expected.platform_admin);
+    expect(sessionPayload?.result?.tenant?.permissions?.tenant_admin ?? false).toBe(scenario.expected.tenant_admin);
+    expect(sessionPayload?.result?.tenant?.permissions?.manage_lobby ?? false).toBe(false);
+    expectOpenLinkCreatesNoPersonalizedBinding(sessionPayload, scenarioKey);
+    expectOpenLinkDoesNotModifyGuestList(sessionPayload, call, expectedUser, scenarioKey);
+
+    await expect(page).toHaveURL(new RegExp(`/workspace/call/${escapeRegExp(call.id)}(?:[/?#].*)?$`), { timeout: 20_000 });
+    const socketFrames = await page.evaluate(() => window.__iamCallAccessSocketFrames || []);
+    expect(socketFrames.some((frame) => frame?.type === 'lobby/queue/join')).toBe(false);
+  } finally {
+    await context.close();
+  }
+}
+
 test('e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights: anonymous open link keeps a logged-in user on their own account and waits for host admission', async ({ browser }) => {
   test.setTimeout(60_000);
   await expectOpenLinkWaitsForHost({
@@ -664,6 +752,36 @@ test('e2e_journey_009_logged_in_user_anonymous_link_uses_own_rights: anonymous o
     scenarioKey: 'anonymous_open_logged_in_uses_own_account_waits_for_host',
     storedSessionUserKey: 'alpha_normal_user',
     guestName: 'Ignored Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_005 org admin joins own organization call through anonymous link without guest-list mutation', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkJoinsWithOwnRights({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_org_admin_own_org_direct',
+    storedSessionUserKey: 'alpha_org_admin',
+    guestName: 'Ignored Org Admin Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_006 org admin cannot direct-join a foreign organization call through anonymous link', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkWaitsForHost({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_org_admin_foreign_org_lobby',
+    storedSessionUserKey: 'alpha_org_admin',
+    guestName: 'Ignored Foreign Org Admin Guest Name',
+  });
+});
+
+test('e2e_anon_logged_in_007 guest-list user joins through anonymous link without personalized binding', async ({ browser }) => {
+  test.setTimeout(60_000);
+  await expectOpenLinkJoinsWithOwnRights({
+    browser,
+    scenarioKey: 'anonymous_open_logged_in_guest_list_user_direct',
+    storedSessionUserKey: 'registered_guest',
+    guestName: 'Ignored Guest List Name',
   });
 });
 

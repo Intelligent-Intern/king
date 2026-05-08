@@ -400,6 +400,17 @@
       "direct_guest_list_entry": false
     },
     {
+      "key": "beta_open",
+      "id": "10000000-0000-4000-8000-000000000107",
+      "link_kind": "open",
+      "call_key": "beta_active",
+      "target_user_key": null,
+      "anonymous_user_key": "temporary_anonymous_guest",
+      "join_path": "/join/10000000-0000-4000-8000-000000000107",
+      "requires_admission": true,
+      "direct_guest_list_entry": false
+    },
+    {
       "key": "alpha_open_disabled",
       "id": "10000000-0000-4000-8000-000000000105",
       "link_kind": "open",
@@ -901,7 +912,70 @@
         "system_admin": false,
         "tenant_admin": false,
         "platform_admin": false,
-        "must_not_create_temporary_identity": true
+        "must_not_create_temporary_identity": true,
+        "must_not_modify_guest_list": true,
+        "must_not_create_personalized_binding": true
+      }
+    },
+    {
+      "key": "anonymous_open_logged_in_org_admin_own_org_direct",
+      "journey_key": "e2e_anon_logged_in_005_org_admin_can_join_own_org_call",
+      "sprint_groups": ["9"],
+      "link_key": "alpha_open",
+      "principal_user_key": "alpha_org_admin",
+      "expected": {
+        "temporary": false,
+        "uses_authenticated_account": true,
+        "requires_admission": false,
+        "decision_source": "organization_admin",
+        "can_manage_lobby": true,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false,
+        "must_not_create_temporary_identity": true,
+        "must_not_modify_guest_list": true,
+        "must_not_create_personalized_binding": true
+      }
+    },
+    {
+      "key": "anonymous_open_logged_in_org_admin_foreign_org_lobby",
+      "journey_key": "e2e_anon_logged_in_006_org_admin_cannot_join_foreign_org_call",
+      "sprint_groups": ["9"],
+      "link_key": "beta_open",
+      "principal_user_key": "alpha_org_admin",
+      "expected": {
+        "temporary": false,
+        "uses_authenticated_account": true,
+        "requires_admission": true,
+        "decision_source": "none",
+        "decision_reason": "not_on_guest_list",
+        "can_manage_lobby": false,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false,
+        "must_not_create_temporary_identity": true,
+        "must_not_modify_guest_list": true,
+        "must_not_create_personalized_binding": true
+      }
+    },
+    {
+      "key": "anonymous_open_logged_in_guest_list_user_direct",
+      "journey_key": "e2e_anon_logged_in_007_guest_list_user_can_join",
+      "sprint_groups": ["9"],
+      "link_key": "alpha_open",
+      "principal_user_key": "registered_guest",
+      "expected": {
+        "temporary": false,
+        "uses_authenticated_account": true,
+        "requires_admission": false,
+        "decision_source": "guest_list",
+        "can_manage_lobby": false,
+        "system_admin": false,
+        "tenant_admin": false,
+        "platform_admin": false,
+        "must_not_create_temporary_identity": true,
+        "must_not_modify_guest_list": true,
+        "must_not_create_personalized_binding": true
       }
     },
     {
