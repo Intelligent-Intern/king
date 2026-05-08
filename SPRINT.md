@@ -1616,8 +1616,14 @@ does not render foreign response data, and does not replace local session state.
 - [x] Normal user loses call-admin rights when transferring ownership
 - [x] Normal user cannot perform owner actions after owner transfer
 - [x] Normal user keeps no hidden admin rights after owner transfer
-- [ ] Normal user cannot receive admin rights through anonymous link
-- [ ] Normal user cannot receive admin rights through personalized link
+- [x] Normal user cannot receive admin rights through anonymous link
+- [x] Normal user cannot receive admin rights through personalized link
+
+Proof: `call-access-admin-prevention-contract` issues a personalized link for a
+normal user and an anonymous/open link while a normal user context is present,
+then authenticates the issued sessions and proves role, tenant-admin,
+system-admin, moderator, owner-management, and call-admin checks all remain
+false.
 
 ## 21. Cross-Organization Cases
 
