@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../support/database.php';
 require_once __DIR__ . '/../support/auth.php';
+require_once __DIR__ . '/../domain/audit/audit_events.php';
 require_once __DIR__ . '/../domain/calls/call_management.php';
 require_once __DIR__ . '/../domain/calls/call_access.php';
 require_once __DIR__ . '/../domain/calls/call_guest_lifecycle.php';
@@ -24,6 +25,16 @@ function videochat_call_guest_lifecycle_user(PDO $pdo, int $userId): array
     $query->execute([':id' => $userId]);
     $row = $query->fetch(PDO::FETCH_ASSOC);
     return is_array($row) ? $row : [];
+}
+
+function videochat_call_guest_lifecycle_cleanup_events(PDO $pdo, int $tenantId, string $callId): array
+{
+    return videochat_audit_fetch_events($pdo, [
+        'tenant_id' => $tenantId,
+        'call_id' => $callId,
+        'event_type' => 'guest_account_cleanup',
+        'limit' => 20,
+    ]);
 }
 
 try {
@@ -114,6 +125,17 @@ try {
     videochat_call_guest_lifecycle_assert(in_array($personalGuestId, $personalCleanup['guest_user_ids'] ?? [], true), 'personal cleanup should include guest user');
     videochat_call_guest_lifecycle_assert((int) ($personalCleanup['invalidated_guests'] ?? 0) === 1, 'personal cleanup should invalidate exactly one guest');
     videochat_call_guest_lifecycle_assert((int) ($personalCleanup['revoked_sessions'] ?? 0) === 1, 'personal cleanup should revoke stale guest session');
+    videochat_call_guest_lifecycle_assert((bool) (((($personalCleanup['audit_events'] ?? [])[0] ?? [])['ok'] ?? false)), 'personal cleanup should return successful audit metadata');
+
+    $personalCleanupEvents = videochat_call_guest_lifecycle_cleanup_events($pdo, $tenantId, $personalCallId);
+    videochat_call_guest_lifecycle_assert(count($personalCleanupEvents) === 1, 'personal cleanup should persist one audit event');
+    $personalCleanupPayload = is_array(($personalCleanupEvents[0] ?? [])['payload'] ?? null) ? $personalCleanupEvents[0]['payload'] : [];
+    videochat_call_guest_lifecycle_assert((string) ($personalCleanupPayload['cleanup_result'] ?? '') === 'invalidated', 'personal cleanup audit result mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['guest_user_count'] ?? 0) === 1, 'personal cleanup audit guest count mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['invalidated_guest_count'] ?? 0) === 1, 'personal cleanup audit invalidated count mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($personalCleanupPayload['revoked_session_count'] ?? 0) === 1, 'personal cleanup audit revoked session count mismatch');
+    videochat_call_guest_lifecycle_assert((bool) ($personalCleanupPayload['had_effect'] ?? false), 'personal cleanup audit should show destructive effect');
+    videochat_call_guest_lifecycle_assert((bool) ($personalCleanupPayload['idempotent_safe'] ?? false), 'personal cleanup audit should document idempotent-safe behavior');
 
     $personalGuestAfterCleanup = videochat_call_guest_lifecycle_user($pdo, $personalGuestId);
     videochat_call_guest_lifecycle_assert((string) ($personalGuestAfterCleanup['status'] ?? '') === 'disabled', 'personal guest must remain invalidated after cleanup');
@@ -139,6 +161,43 @@ try {
     videochat_call_guest_lifecycle_assert((string) ($stalePersonalLink['reason'] ?? '') === 'not_found', 'stale personalized link should fail as missing inactive target');
     $personalGuestAfterRetry = videochat_call_guest_lifecycle_user($pdo, $personalGuestId);
     videochat_call_guest_lifecycle_assert((string) ($personalGuestAfterRetry['status'] ?? '') === 'disabled', 'personal guest must stay disabled after stale link retry');
+
+    $personalCleanupRepeat = videochat_invalidate_guest_accounts_for_call($pdo, $personalCallId, $tenantId);
+    videochat_call_guest_lifecycle_assert((bool) ($personalCleanupRepeat['ok'] ?? false), 'repeat personal cleanup should succeed');
+    videochat_call_guest_lifecycle_assert((string) ($personalCleanupRepeat['reason'] ?? '') === 'no_guest_accounts', 'repeat personal cleanup should be a no-op');
+    videochat_call_guest_lifecycle_assert((array) ($personalCleanupRepeat['guest_user_ids'] ?? []) === [], 'repeat personal cleanup should not rediscover disabled guests');
+    videochat_call_guest_lifecycle_assert((int) ($personalCleanupRepeat['invalidated_guests'] ?? -1) === 0, 'repeat personal cleanup should not invalidate again');
+    videochat_call_guest_lifecycle_assert((int) ($personalCleanupRepeat['revoked_sessions'] ?? -1) === 0, 'repeat personal cleanup should not revoke sessions again');
+    videochat_call_guest_lifecycle_assert((bool) (((($personalCleanupRepeat['audit_events'] ?? [])[0] ?? [])['ok'] ?? false)), 'repeat personal cleanup should still be audit-logged');
+    videochat_call_guest_lifecycle_assert((string) (videochat_call_guest_lifecycle_user($pdo, $personalGuestId)['status'] ?? '') === 'disabled', 'repeat cleanup must keep guest disabled');
+    $personalSessionRevokedCount = (int) $pdo->query("SELECT COUNT(*) FROM sessions WHERE id = " . $pdo->quote($personalGuestSessionId) . " AND revoked_at IS NOT NULL AND revoked_at <> ''")->fetchColumn();
+    videochat_call_guest_lifecycle_assert($personalSessionRevokedCount === 1, 'repeat cleanup must leave exactly one revoked guest session row');
+
+    $personalCleanupEventsAfterRepeat = videochat_call_guest_lifecycle_cleanup_events($pdo, $tenantId, $personalCallId);
+    videochat_call_guest_lifecycle_assert(count($personalCleanupEventsAfterRepeat) === 2, 'repeat personal cleanup should append exactly one audit event');
+    $repeatPayload = is_array(($personalCleanupEventsAfterRepeat[1] ?? [])['payload'] ?? null) ? $personalCleanupEventsAfterRepeat[1]['payload'] : [];
+    videochat_call_guest_lifecycle_assert((string) ($repeatPayload['cleanup_result'] ?? '') === 'no_guest_accounts', 'repeat cleanup audit result mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($repeatPayload['guest_user_count'] ?? -1) === 0, 'repeat cleanup audit guest count mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($repeatPayload['invalidated_guest_count'] ?? -1) === 0, 'repeat cleanup audit invalidated count mismatch');
+    videochat_call_guest_lifecycle_assert((int) ($repeatPayload['revoked_session_count'] ?? -1) === 0, 'repeat cleanup audit revoked session count mismatch');
+    videochat_call_guest_lifecycle_assert(!(bool) ($repeatPayload['had_effect'] ?? true), 'repeat cleanup audit should show no destructive effect');
+    videochat_call_guest_lifecycle_assert((bool) ($repeatPayload['idempotent_safe'] ?? false), 'repeat cleanup audit should document idempotent-safe behavior');
+
+    $encodedPersonalCleanupEvents = json_encode($personalCleanupEventsAfterRepeat, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    videochat_call_guest_lifecycle_assert(is_string($encodedPersonalCleanupEvents), 'personal cleanup audit events should encode');
+    foreach ([$personalGuestSessionId, $personalGuestAccessId, (string) ($personalGuest['email'] ?? '')] as $forbiddenAuditText) {
+        if ($forbiddenAuditText === '') {
+            continue;
+        }
+        videochat_call_guest_lifecycle_assert(
+            !str_contains($encodedPersonalCleanupEvents, $forbiddenAuditText),
+            'guest cleanup audit must not leak raw guest/session/access identifiers: ' . $forbiddenAuditText
+        );
+    }
+    videochat_call_guest_lifecycle_assert(
+        str_contains($encodedPersonalCleanupEvents, videochat_audit_fingerprint($personalCallId)),
+        'guest cleanup audit should retain call fingerprint for audit correlation'
+    );
 
     $registeredAfterPersonalCleanup = videochat_call_guest_lifecycle_user($pdo, $registeredUserId);
     videochat_call_guest_lifecycle_assert((string) ($registeredAfterPersonalCleanup['status'] ?? '') === 'active', 'guest cleanup must not disable registered user');
@@ -191,6 +250,7 @@ try {
     videochat_call_guest_lifecycle_assert((bool) ($openCleanup['ok'] ?? false), 'open call guest cleanup should succeed');
     videochat_call_guest_lifecycle_assert(in_array($oldOpenGuestId, $openCleanup['guest_user_ids'] ?? [], true), 'open cleanup should include old open guest');
     videochat_call_guest_lifecycle_assert((int) ($openCleanup['invalidated_guests'] ?? 0) === 1, 'open cleanup should invalidate exactly one guest');
+    videochat_call_guest_lifecycle_assert((bool) (((($openCleanup['audit_events'] ?? [])[0] ?? [])['ok'] ?? false)), 'open cleanup should return successful audit metadata');
 
     $staleOpenAuth = videochat_authenticate_request(
         $pdo,
